@@ -263,7 +263,7 @@ type SettingsWrite = {
   context: SettingsRuntimeContext;
   changes: Partial<DesktopSettings>;
 };
-type SettingsWriteResult = { ok: boolean };
+type SettingsWriteResult = { ok: boolean; settings?: DesktopSettings };
 type SettingsMutation = { revision: number; changes: Partial<DesktopSettings> };
 type SettingsOperation = { revision: number };
 
@@ -627,6 +627,7 @@ export const syncDesktopSettings = async (options?: { bootstrap?: boolean; adopt
 
 async function _flushSettingsUpdate({ keepalive = false }: { keepalive?: boolean } = {}): Promise<void> {
   let ok = false;
+  let settings: DesktopSettings | undefined;
   const changes = _pendingSettingsChanges;
   const context = _pendingSettingsContext;
   const revision = _pendingSettingsRevision;
@@ -652,9 +653,11 @@ async function _flushSettingsUpdate({ keepalive = false }: { keepalive?: boolean
       const runtimeSettings = getRuntimeSettingsAPI();
       if (runtimeSettings) {
         try {
-          const updated = sanitizeWebSettings(await runtimeSettings.save(changes));
+          const payload = await runtimeSettings.save(changes);
+          const updated = sanitizeWebSettings(payload);
           if (!isSettingsRuntimeContextCurrent(context)) return;
           if (updated) {
+            settings = updated;
             rememberServerSettings(updated);
             const reconciled = _settingsMutationTracker.reconcile(updated, operation);
             applyServerSettings(reconciled);
@@ -691,9 +694,11 @@ async function _flushSettingsUpdate({ keepalive = false }: { keepalive?: boolean
           return;
         }
 
-        const updated = sanitizeWebSettings(await response.json().catch(() => null));
+        const payload = await response.json().catch(() => null);
+        const updated = sanitizeWebSettings(payload);
         if (!isSettingsRuntimeContextCurrent(context)) return;
         if (updated) {
+          settings = updated;
           rememberServerSettings(updated);
           const reconciled = _settingsMutationTracker.reconcile(updated, operation);
           applyServerSettings(reconciled);
@@ -717,7 +722,7 @@ async function _flushSettingsUpdate({ keepalive = false }: { keepalive?: boolean
       _settingsMutationTracker.finish(operation);
     }
   } finally {
-    waiters.forEach((resolve) => resolve({ ok }));
+    waiters.forEach((resolve) => resolve(settings ? { ok, settings } : { ok }));
   }
 }
 

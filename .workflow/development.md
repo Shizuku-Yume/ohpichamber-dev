@@ -4,6 +4,30 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The initial-draft selection failure is reproduced on Linux with a scratch Git
+project reached through a symlink. Host settings canonicalize its path, but Add
+project returned the original entry to the dialog, which opened a draft against
+the alias. The first create/run succeeds and the transcript persists; session
+admission then clears the unrecognized alias selection and the composer returns
+to Choose project. The non-alias control keeps its selection, so startup 503s
+and a delayed prepare alone do not explain the failure. The supplied macOS
+capture does not include the settings/path normalization response, so that
+platform's alias or casing difference remains to be verified. Project additions
+now consume the existing settings acknowledgement, including its canonical active
+project ID, before publishing the returned draft target. This is shared by Web/PWA,
+Electron, hosted mobile and Capacitor through their existing Host settings
+transport; Guest MessagePort and Canonical delivery contracts are unchanged.
+The focused persistence, project, draft-promotion, creation and sidebar-selection
+suites pass 119 tests; UI type-check and focused lint pass. A fresh native OMP
+run through the alias, with startup readiness 503 and 20 seconds between Add
+project and Send, keeps session `7197f88d-19d9-4605-8343-d56a1e376c57` selected
+through the completed fixture response. History returns the exact prompt and
+5,742 assistant characters. Before/after evidence lives in
+`/home/ubuntu/sync-notes/initial-send-native-8oaZJC/{add,send}.png` and
+`/home/ubuntu/sync-notes/initial-send-native-2Gy1OQ/{add,send,completed}.png`;
+the latter directory also contains `post-send-evidence.json`. This is Linux
+Web/Host/OMP verification, not macOS packaged-app or real-provider certification.
+
 Desktop update checks now reject missing GitHub releases, missing manifests and
 network failures instead of reporting that the installed version is current.
 The existing error formatter exposes the failed check; downloaded pending
@@ -30,8 +54,9 @@ to main; runner policy stays unchanged. The maintainer accepted this as a
 pre-existing fork CI condition and directed local gates to be authoritative.
 Fresh full lint passes in all workspaces with existing React-hook warnings.
 Remaining local guard findings include five translation-only errors, two CSS
-tokens, and stale drift/gap ledgers; the initial Gemini/macOS draft report is
-parked awaiting the tester's console and network evidence.
+tokens, and stale drift/gap ledgers. The macOS first-send report is no longer
+parked; its Host-normalization fix has Linux real-path evidence above and still
+needs the tester's packaged-app confirmation.
 
 The desktop authentication smoke investigation reproduced two separate bundled
 UI failures in the unchanged AppImage: the renderer sees `/auth/session` 401

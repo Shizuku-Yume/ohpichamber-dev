@@ -486,18 +486,22 @@ export const useProjectsStore = create<ProjectsStore>()(
       // project that has not landed in the settings document yet.
       const persisted = await persistProjects(nextProjects, entry.id);
       if (!persisted.ok) return null;
-      set({ projects: nextProjects });
+      const savedProjects = persisted.settings ? sanitizeProjects(persisted.settings.projects) : nextProjects;
+      const savedProjectId = persisted.settings?.activeProjectId ?? entry.id;
+      const savedProject = savedProjects.find((project) => project.id === savedProjectId);
+      if (!savedProject) return null;
+      set({ projects: savedProjects });
 
       if (streamDebugEnabled()) {
-        console.info('[ProjectsStore] Added project', entry);
+        console.info('[ProjectsStore] Added project', savedProject);
       }
 
-      get().setActiveProject(entry.id);
-      await get().discoverProjectIcon(entry.id);
+      get().setActiveProject(savedProject.id);
+      await get().discoverProjectIcon(savedProject.id);
       // Dynamic import to avoid circular dependency between ProjectsStore and GlobalSessionsStore.
       const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
-      await useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]);
-      return entry;
+      await useGlobalSessionsStore.getState().refreshSessionsForDirectories([savedProject.path]);
+      return savedProject;
     },
 
     addProjects: async (paths: string[]) => {
@@ -536,18 +540,22 @@ export const useProjectsStore = create<ProjectsStore>()(
       // only for projects already in the settings document.
       const persisted = await persistProjects(nextProjects, entries[0].id);
       if (!persisted.ok) return [];
-      set({ projects: nextProjects });
+      const savedProjects = persisted.settings ? sanitizeProjects(persisted.settings.projects) : nextProjects;
+      const existingIds = new Set(current.projects.map((project) => project.id));
+      const savedAdded = savedProjects.filter((project) => !existingIds.has(project.id));
+      if (savedAdded.length === 0) return [];
+      set({ projects: savedProjects });
 
       if (streamDebugEnabled()) {
-        console.info('[ProjectsStore] Added projects', entries);
+        console.info('[ProjectsStore] Added projects', savedAdded);
       }
 
-      get().setActiveProject(entries[0].id);
-      for (const entry of entries) {
+      get().setActiveProject(savedAdded[0].id);
+      for (const entry of savedAdded) {
         void get().discoverProjectIcon(entry.id);
       }
-      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories(entries.map((entry) => entry.path)));
-      return entries;
+      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories(savedAdded.map((entry) => entry.path)));
+      return savedAdded;
     },
 
     removeProject: (id: string) => {

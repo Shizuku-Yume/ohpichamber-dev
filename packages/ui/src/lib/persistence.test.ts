@@ -26,6 +26,7 @@ import {
   type SettingsSyncedDetail,
 } from './persistence';
 import { switchRuntimeEndpoint } from './runtime-switch';
+import { createProjectIdFromPath } from './projectId';
 
 type TestWindow = {
   __OPENCHAMBER_HOME__?: string;
@@ -201,6 +202,22 @@ describe('updateDesktopSettings', () => {
       applyScope: originalInputHistoryApplyScope,
     });
   });
+
+  for (const transport of ['runtime', 'http'] as const) {
+    test(`returns the Host-normalized settings acknowledgement over ${transport}`, async () => {
+      const settings = { projects: [{ id: 'project', path: '/private/tmp/project' }] };
+      if (transport === 'runtime') {
+        registerSettingsSave(async () => settings);
+      } else {
+        globalThis.fetch = async () => Response.json(settings);
+      }
+
+      const result = await updateDesktopSettings({ projects: [{ id: 'project', path: '/tmp/project' }] });
+
+      expect(result.ok).toBe(true);
+      expect(result.settings?.projects).toEqual([{ id: createProjectIdFromPath('/private/tmp/project'), path: '/private/tmp/project' }]);
+    });
+  }
 
   test('waits for the debounced settings save to finish before resolving', async () => {
     let saveStarted = false;

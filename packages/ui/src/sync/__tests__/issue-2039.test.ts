@@ -7,6 +7,8 @@ import { hostFilesystem } from '@/lib/host-filesystem'
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from "@/lib/runtime-switch"
 import * as branchNames from "@/lib/git/branchNameGenerator"
 import * as openchamberConfig from "@/lib/openchamberConfig"
+import * as persistence from "@/lib/persistence"
+import { createProjectIdFromPath } from "@/lib/projectId"
 import * as trustConfirmation from "@/lib/sharedTrustConfirmation"
 import * as worktreeCreate from "@/lib/worktrees/worktreeCreate"
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from "@/stores/globalSessions"
@@ -22,6 +24,7 @@ import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { ChildStoreManager } from "../child-store"
 import { setActionRefs } from "../session-actions"
 import { setImperativeSessionMessageLoader } from "../session-message-loader"
+import { subscribeSessionAdmission } from "../session-admission"
 import { nativeSnapshot } from "../session-message-loader-test-fixtures"
 import { setSyncRefs } from "../sync-refs"
 import { materializeOpenDraftSession, useSessionUIStore } from "../session-ui-store"
@@ -180,6 +183,55 @@ afterEach(() => {
 })
 
 describe("issue 2039 draft auto-accept", () => {
+  test("keeps the initial automatic draft selected after Host path normalization and delayed project discovery", async () => {
+    const discoveryStarted = Promise.withResolvers<void>()
+    const discovered = Promise.withResolvers<void>()
+    spyOn(persistence, "updateDesktopSettings").mockImplementation(async changes => {
+      if (!changes.projects) return { ok: true }
+      const settings = {
+        ...changes,
+        projects: changes.projects.map(project => {
+          const path = project.path.replace(/^\/tmp\//, "/private/tmp/")
+          return { ...project, path, id: createProjectIdFromPath(path) }
+        }),
+        activeProjectId: changes.activeProjectId
+          ? createProjectIdFromPath(changes.projects.find(project => project.id === changes.activeProjectId)!.path.replace(/^\/tmp\//, "/private/tmp/"))
+          : changes.activeProjectId,
+      }
+      useProjectsStore.getState().synchronizeFromSettings(settings, { adoptActiveProject: false })
+      return { ok: true, settings }
+    })
+    spyOn(useProjectsStore.getState(), "discoverProjectIcon").mockResolvedValue({ status: "no-favicon-found" })
+    spyOn(useGlobalSessionsStore.getState(), "refreshSessionsForDirectories").mockImplementation(async () => {
+      discoveryStarted.resolve()
+      await discovered.promise
+      return { activeSessions: [], archivedSessions: [] }
+    })
+
+    const adding = useProjectsStore.getState().addProject("/tmp/first-project")
+    await discoveryStarted.promise
+    useSessionUIStore.getState().openNewSessionDraft({ automatic: true })
+    expect(useGlobalSessionsStore.getState().entityById.size).toBe(0)
+    discovered.resolve()
+    const project = await adding
+    if (!project) throw new Error("Project was not added")
+    useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: project.id, directoryOverride: project.path })
+
+    const stopAdmission = subscribeSessionAdmission()
+    try {
+      const created = await materializeOpenDraftSession({ providerId: "provider", modelId: "model" })
+
+      expect(created?.sessionId).toBe("ses_issue_2039")
+      expect(useSessionUIStore.getState().currentSessionId).toBe("ses_issue_2039")
+      expect(useSessionUIStore.getState().currentSessionDirectory).toBe("/private/tmp/first-project")
+      expect(resolveWorkspaceCalls.length).toBeGreaterThan(0)
+      expect([...new Set(resolveWorkspaceCalls)]).toEqual(["/private/tmp/first-project"])
+      expect(useProjectsStore.getState().activeProjectId).toBe(project.id)
+    } finally {
+      stopAdmission()
+    }
+  })
+
   test("cycles the draft mode before a session exists", () => {
     const setDraftPermissionMode = mock(() => undefined)
     const setSessionMode = mock(async () => undefined)

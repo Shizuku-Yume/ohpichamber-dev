@@ -297,6 +297,15 @@ Membership, fork handling, fusion and legacy compatibility are owned by
 
 `useProjectsStore.hasServerSnapshot` distinguishes a server-confirmed project list from persisted startup hints; `serverSnapshotFailed` records a failed settings sync without clearing the last confirmed list. Successful settings adoption clears that failure even for an unchanged list. Runtime switching clears both flags. Extension project subscriptions consume these flags and project records without changing active selection.
 
+Project additions return the Host-acknowledged path, not the submitted spelling.
+Settings persistence resolves symlinks and filesystem casing and acknowledges
+the corresponding path-derived project IDs. The UI uses that acknowledgement,
+including the active ID, before icon/session discovery and before callers open
+a draft. Otherwise an Add project
+draft can point at an alias which session admission does not recognize, clearing
+the selection during its first promotion. Both single and batch additions use
+the canonical entries; failed writes and authoritative omissions open no draft.
+
 Project parsing, project selection, directory navigation, mobile session paths, and the SDK adapter share `lib/pathNormalization.ts` for request paths. Tilde expansion happens before normalization. Windows drive roots retain their slash, and parent navigation stops at drive and UNC share roots. Selecting a spelling variant of the current directory preserves history and its forward entries. Bare drive-relative paths such as `C:` stay distinct from `C:/`; normalization does not guess their filesystem target.
 
 Examples:
