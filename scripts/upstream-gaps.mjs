@@ -2,7 +2,7 @@
 /**
  * scripts/upstream-gaps.mjs
  *
- * Guardrail comparing upstream bc50ba56a with the working tree on:
+ * Guardrail comparing the pinned upstream baseline with the working tree on:
  * - route registrations and runtime deps
  * - runtime constructors (create*) that exist only upstream
  * - uncalled route functions (an import is not a call)
@@ -32,7 +32,8 @@ function getFlag(name, fallback) {
   return fallback;
 }
 
-const UPSTREAM_REF = getFlag('--upstream-ref', 'bc50ba56a');
+const UPSTREAM_REF = getFlag('--upstream-ref', null)
+  ?? JSON.parse(fs.readFileSync(path.join(REPO_ROOT, '.workflow/upstream-baseline.json'), 'utf8')).upstream.revision;
 const ALLOWLIST_PATH = path.resolve(getFlag('--allowlist', path.join(REPO_ROOT, 'scripts/upstream-gaps.allowlist.tsv')));
 const DECISIONS_PATH = path.join(REPO_ROOT, '.workflow/decisions.md');
 

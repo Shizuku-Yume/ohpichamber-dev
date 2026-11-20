@@ -107,6 +107,85 @@ test('an unchanged fork passes the guardrail', () => {
   assert.match(result.output, /PASSED/);
 });
 
+test('TypeScript route owners count through JavaScript import specifiers without counting imports as mounting', () => {
+  const files = baseFiles();
+  files['packages/web/server/index.js'] = `import './lib/server-frame/bootstrap.js';\n`;
+  files['packages/web/server/lib/server-frame/bootstrap.ts'] = INDEX.replace("'./lib/", "'../").replace("'./lib/", "'../");
+  files['packages/web/server/lib/trackers/routes.ts'] = files['packages/web/server/lib/trackers/routes.js'];
+  delete files['packages/web/server/lib/trackers/routes.js'];
+  const fixture = makeFixture(files);
+  const covered = runGuardrail(fixture);
+  assert.equal(covered.status, 0, covered.output);
+  fixture.fork('packages/web/server/lib/server-frame/bootstrap.ts', files['packages/web/server/lib/server-frame/bootstrap.ts'].replace('registerTrackerRoutes(app);', ''));
+  const missing = runGuardrail(fixture);
+  assert.equal(missing.status, 1, missing.output);
+  assert.match(missing.output, /\[ui-call-no-route\] \/api\/tracker\/things/);
+  assert.match(missing.output, /\[unused-route-fn\] registerTrackerRoutes/);
+});
+
+test('the default comparison uses the committed upstream pin instead of a historical literal', () => {
+  const fixture = makeFixture(baseFiles());
+  fixture.fork('.workflow/upstream-baseline.json', JSON.stringify({ upstream: { revision: fixture.upstreamRef } }));
+  const result = spawnSync('node', ['scripts/upstream-gaps.mjs', '--check'], { cwd: fixture.root, encoding: 'utf8' });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+});
+
+test('a public Host constructor can be owned by Electron without an unused-export exemption', () => {
+  const files = baseFiles();
+  files['packages/web/server/lib/native-host.js'] = 'export const createNativeHost = () => ({});\n';
+  files['packages/electron/main.mjs'] = `import { createNativeHost } from '../web/server/lib/native-host.js';\ncreateNativeHost();\n`;
+  const fixture = makeFixture(files);
+  const covered = runGuardrail(fixture);
+  assert.equal(covered.status, 0, covered.output);
+  fixture.fork('packages/electron/main.mjs', files['packages/electron/main.mjs'].replace('createNativeHost();', ''));
+  const missing = runGuardrail(fixture);
+  assert.equal(missing.status, 1, missing.output);
+  assert.match(missing.output, /\[unused-route-fn\] createNativeHost/);
+});
+
+test('settings sanitizer coverage follows its TypeScript owner after relocation', () => {
+  const files = baseFiles();
+  files['packages/ui/src/lib/settings/registry.ts'] = `export const SETTINGS_REGISTRY = {
+  terminalCloseOnExit: field({scope: 'profile', effect: ['ui'], ui: uiStore('terminalCloseOnExit')}),
+};\n`;
+  const registry = JSON.stringify({fields: {terminalCloseOnExit: {type: 'boolean'}}});
+  const helpers = `export const sanitizeSettingsUpdate = (candidate) => {
+  const result = {};
+  if (typeof candidate.terminalCloseOnExit === 'boolean') result.terminalCloseOnExit = candidate.terminalCloseOnExit;
+  return result;
+};\n`;
+  files['packages/web/server/lib/host/settings-registry.json'] = registry;
+  files['packages/web/server/lib/host/settings-helpers.js'] = helpers;
+  const fixture = makeFixture(files);
+  fixture.fork('packages/web/server/lib/settings/settings-registry.json', registry);
+  fixture.fork('packages/web/server/lib/settings/settings-helpers.ts', helpers);
+  fixture.remove('packages/web/server/lib/host/settings-registry.json');
+  fixture.remove('packages/web/server/lib/host/settings-helpers.js');
+  const covered = runGuardrail(fixture);
+  assert.equal(covered.status, 0, covered.output);
+  fixture.fork('packages/web/server/lib/settings/settings-helpers.ts', 'export const sanitizeSettingsUpdate = () => ({});\n');
+  const missing = runGuardrail(fixture);
+  assert.equal(missing.status, 1, missing.output);
+  assert.match(missing.output, /missing from settings-helpers.js sanitizer/);
+});
+
+test('split store types, setters and persistence remain audited', () => {
+  const fixture = makeFixture(baseFiles());
+  fixture.fork('packages/ui/src/stores/useUIStore.ts', `import type { UIStore } from './ui/types';
+import { createActions } from './ui/actions';
+import { persistOptions } from './ui/persistence';
+export const useUIStore = create<UIStore>()(persist((set) => ({terminalCloseOnExit: true, ...createActions(set)}), persistOptions));\n`);
+  fixture.fork('packages/ui/src/stores/ui/types.ts', UI_STORE.slice(0, UI_STORE.indexOf('export const useUIStore')));
+  fixture.fork('packages/ui/src/stores/ui/actions.ts', 'export const createActions = (set) => ({setTerminalCloseOnExit: (value) => set({terminalCloseOnExit: value})});\n');
+  fixture.fork('packages/ui/src/stores/ui/persistence.ts', 'export const persistOptions = {partialize: (state) => ({terminalCloseOnExit: state.terminalCloseOnExit})};\n');
+  const covered = runGuardrail(fixture);
+  assert.equal(covered.status, 0, covered.output);
+  fixture.fork('packages/ui/src/stores/ui/actions.ts', 'export const createActions = () => ({});\n');
+  const missing = runGuardrail(fixture);
+  assert.equal(missing.status, 1, missing.output);
+  assert.match(missing.output, /setter is declared in the store type without an implementation/);
+});
+
 test('mounted canonical router prefixes match callers with native filesystem paths', () => {
   const files = baseFiles();
   const routes = [

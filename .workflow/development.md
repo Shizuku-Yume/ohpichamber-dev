@@ -4,6 +4,15 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The gap audit now compares the pinned v2.7.3 revision rather than its historical
+v2.7.0 literal, follows TypeScript source behind JavaScript import specifiers,
+checks relocated settings sanitizers and composed store owners, and recognizes
+Electron consumers of public Host factories. Twenty Git-fixture regressions
+pass, including missing setters and imported-but-unmounted routes. The guard
+still fails honestly: 224 unallowlisted findings, 112 stale rows and 12 stale
+owner citations need reconciliation; they are not runtime acceptance evidence.
+Full branch and origin/main suite comparisons are running in isolated homes.
+
 The error-cause and CSS guards pass after five retained UI error paths preserve
 their caught cause with `problemMessage`, file-artifact notices use the existing
 `typography-ui-label` token, and an unconsumed diff-toolbar class is removed.

@@ -68,7 +68,8 @@ function methodMatches(route, method) {
 function resolveLocalImport(fromFile, spec) {
   if (!spec.startsWith('.')) return null;
   const base = path.resolve(path.dirname(fromFile), spec);
-  const candidates = [base, `${base}.js`, `${base}.mjs`, `${base}.cjs`, path.join(base, 'index.js')];
+  const stem = base.replace(/\.[cm]?js$/, '');
+  const candidates = [base, ...['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts'].flatMap((ext) => [`${base}${ext}`, `${stem}${ext}`]), path.join(base, 'index.js'), path.join(base, 'index.ts')];
   for (const c of candidates) {
     if (fs.existsSync(c) && fs.statSync(c).isFile()) return c;
   }

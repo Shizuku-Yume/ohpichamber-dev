@@ -238,38 +238,27 @@ function extractCalls(src, fileLabel) {
   return results;
 }
 
-const FILES = [
-  {
-    role: 'server-index',
-    fork: 'packages/web/server/index.js',
-    upstream: 'packages/web/server/index.js',
-    premerge: 'packages/web/server/index.js',
-  },
-  {
-    role: 'feature-routes-runtime',
-    fork: 'packages/web/server/lib/host/feature-routes-runtime.js',
-    upstream: 'packages/web/server/lib/opencode/feature-routes-runtime.js',
-    premerge: 'packages/web/server/lib/host/feature-routes-runtime.js',
-  },
-  {
-    role: 'bootstrap-runtime',
-    fork: 'packages/web/server/lib/host/bootstrap-runtime.js',
-    upstream: 'packages/web/server/lib/opencode/bootstrap-runtime.js',
-    premerge: 'packages/web/server/lib/host/bootstrap-runtime.js',
-  },
-  {
-    role: 'startup-pipeline-runtime',
-    fork: 'packages/web/server/lib/host/startup-pipeline-runtime.js',
-    upstream: 'packages/web/server/lib/opencode/startup-pipeline-runtime.js',
-    premerge: 'packages/web/server/lib/host/startup-pipeline-runtime.js',
-  },
-];
-
 const callsBySide = { upstream: [], fork: [], premerge: [] };
-for (const f of FILES) {
-  callsBySide.fork.push(...extractCalls(readWorktree(f.fork), f.fork));
-  callsBySide.upstream.push(...extractCalls(gitShow(UPSTREAM_REF, f.upstream), f.upstream));
-  callsBySide.premerge.push(...extractCalls(gitShow(PREMERGE_REF, f.premerge), f.premerge));
+const productionSource = (file) => /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file)
+  && !/(?:^|\/)(?:node_modules|fixtures|__tests__|test-support|dist|build)\//.test(file)
+  && !/\.(?:test|spec|fixture|test-support|d)\.[^.]+$/.test(file);
+for (const [side, ref] of [['upstream', UPSTREAM_REF], ['premerge', PREMERGE_REF]]) {
+  let files;
+  try {
+    files = execFileSync('git', ['ls-tree', '-r', '--name-only', ref, '--', 'packages/web/server', 'packages/web/bin'], {
+      cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+    }).split('\n').filter(productionSource);
+  } catch (error) {
+    if (side !== 'premerge') throw error;
+    files = [];
+  }
+  for (const file of files) callsBySide[side].push(...extractCalls(gitShow(ref, file), file));
+}
+for (const dir of ['packages/web/server', 'packages/web/bin']) {
+  for (const file of walkJsFiles(path.join(REPO_ROOT, dir))) {
+    const rel = path.relative(REPO_ROOT, file);
+    callsBySide.fork.push(...extractCalls(readWorktree(rel), rel));
+  }
 }
 
 const isRegisterCall = (c) => /^register|Routes$|^register[A-Z]/.test(c.shortName) || c.name.endsWith('.registerRoutes') || c.name.endsWith('.register') || c.name.endsWith('.registerApiRoute');
@@ -298,10 +287,9 @@ function walkJsFiles(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'node_modules' || entry.name === 'fixtures' || entry.name === 'test-support') continue;
+      if (['node_modules', 'fixtures', '__tests__', 'test-support', 'dist', 'build'].includes(entry.name)) continue;
       out.push(...walkJsFiles(full));
-    } else if (entry.isFile() && /\.(js|mjs|cjs)$/.test(entry.name)) {
-      if (/\.(test|spec)\.(js|mjs|cjs)$/.test(entry.name) || /\.test-support\./.test(entry.name) || /\.fixture\./.test(entry.name)) continue;
+    } else if (entry.isFile() && productionSource(full)) {
       out.push(full);
     }
   }
@@ -312,6 +300,7 @@ const serverFiles = walkJsFiles(path.join(REPO_ROOT, 'packages/web/server'));
 const allProductionFiles = [
   ...serverFiles,
   ...walkJsFiles(path.join(REPO_ROOT, 'packages/web/bin')),
+  ...walkJsFiles(path.join(REPO_ROOT, 'packages/electron')),
 ];
 
 const fileContents = new Map();
