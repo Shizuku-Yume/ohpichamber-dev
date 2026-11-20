@@ -19,6 +19,10 @@ afterEach(async () => {
   }
 });
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim();
+const pathKey = (directory) => {
+  const resolved = path.resolve(directory);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+};
 
 describe('Host-owned worktree archive capture', () => {
   it('captures every admitted nested scope independently of a client session list and preserves earlier archive state', async () => {
@@ -29,6 +33,7 @@ describe('Host-owned worktree archive capture', () => {
     fs.mkdirSync(project);
     fs.mkdirSync(agent);
     git(project, 'init', '-q');
+    git(project, 'config', 'core.autocrlf', 'false');
     git(project, '-c', 'user.name=Archive test', '-c', 'user.email=archive@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'base');
     git(project, 'worktree', 'add', '-q', '-b', 'archive-fixture', checkout);
     const nested = path.join(checkout, 'nested');
@@ -54,11 +59,11 @@ describe('Host-owned worktree archive capture', () => {
     }))
       .rejects.toThrow('deletion is in progress');
     store.releaseSessionDelete(deleting);
-    const scopes = new Map([[project, projectScope], [checkout, checkoutScope], [nested, nestedScope]]);
+    const scopes = new Map([[pathKey(project), projectScope], [pathKey(checkout), checkoutScope], [pathKey(nested), nestedScope]]);
     const service = createOpenChamberSessionService({
       service: { request: async () => { throw new Error('Native runtime must not be contacted for Host archive capture'); } },
       agentScopeStore: store,
-      resolveWorkspaceDirectory: async (directory) => scopes.get(directory) ?? null,
+      resolveWorkspaceDirectory: async (directory) => scopes.get(pathKey(directory)) ?? null,
       resolveWorkspaceScope: (id) => store.getWorkspace(id),
       resolveSessionScope: (id) => store.getSession(id),
       resolveHostSessionScope: (id) => store.getSession(id),
@@ -108,7 +113,7 @@ describe('Host-owned worktree archive capture', () => {
     git(project, 'worktree', 'add', '-q', '-b', 'second-fixture', second);
     fs.writeFileSync(path.join(second, 'second.txt'), 'pending\n');
     const secondScope = await register(second);
-    scopes.set(second, secondScope);
+    scopes.set(pathKey(second), secondScope);
     await store.bindSession({ sessionId: 'second-active', rootSessionId: 'second-active', workspaceId: secondScope.workspaceId });
     const failing = { ...service, prepareWorktreeArchiveRemoval: async () => { throw new Error('recheck unavailable'); } };
     await expect(archiveWorktree(project, { directory: second, id: 'recheck-failure' }, {
@@ -123,7 +128,7 @@ describe('Host-owned worktree archive capture', () => {
       git(project, 'worktree', 'add', '-q', '-b', 'partial-fixture', third);
       fs.writeFileSync(path.join(third, 'partial.txt'), 'pending\n');
       const thirdScope = await register(third);
-      scopes.set(third, thirdScope);
+      scopes.set(pathKey(third), thirdScope);
       for (const id of ['partial-active', 'partial-archived'])
         await store.bindSession({ sessionId: id, rootSessionId: id, workspaceId: thirdScope.workspaceId });
       await owner.archiveStore.archive(['partial-archived'], 2345);
@@ -151,13 +156,13 @@ describe('Host-owned worktree archive capture', () => {
     git(emptySource, 'add', '.gitignore');
     git(emptySource, '-c', 'user.name=Archive test', '-c', 'user.email=archive@example.invalid', 'commit', '-q', '-m', 'ignore setup');
     fs.writeFileSync(path.join(emptySource, 'restored.txt'), 'saved change\n');
-    scopes.set(emptySource, await register(emptySource));
+    scopes.set(pathKey(emptySource), await register(emptySource));
     await archiveWorktree(project, { directory: emptySource, id: 'restore-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
     const restoreTarget = path.join(root, 'restore-target');
     git(project, 'worktree', 'add', '-q', restoreTarget, 'restore-fixture');
-    scopes.set(restoreTarget, await register(restoreTarget));
+    scopes.set(pathKey(restoreTarget), await register(restoreTarget));
     fs.mkdirSync(path.join(restoreTarget, 'node_modules'));
     fs.writeFileSync(path.join(restoreTarget, 'node_modules', 'dep.txt'), 'module\n');
     fs.writeFileSync(path.join(restoreTarget, 'ignored.txt'), 'ignored content\n');
@@ -172,13 +177,13 @@ describe('Host-owned worktree archive capture', () => {
     const recoverySource = path.join(root, 'recovery-source');
     git(project, 'worktree', 'add', '-q', '-b', 'recovery-fixture', recoverySource);
     fs.writeFileSync(path.join(recoverySource, 'recovered.txt'), 'recovery change\n');
-    scopes.set(recoverySource, await register(recoverySource));
+    scopes.set(pathKey(recoverySource), await register(recoverySource));
     await archiveWorktree(project, { directory: recoverySource, id: 'recovery-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
     const previousTarget = path.join(root, 'recovery-previous');
     git(project, 'worktree', 'add', '-q', previousTarget, 'recovery-fixture');
-    scopes.set(previousTarget, await register(previousTarget));
+    scopes.set(pathKey(previousTarget), await register(previousTarget));
     const crashing = {
       ...service, markWorktreeArchiveRestoreAttempted: async (...args) => {
         await service.markWorktreeArchiveRestoreAttempted(...args);
@@ -195,7 +200,7 @@ describe('Host-owned worktree archive capture', () => {
     const pending = await store.getWorktreeArchive({ hostProjectId: 'settings-project', archiveId: 'recovery-fixture' });
     const nextTarget = path.join(root, 'recovery-next');
     git(project, 'worktree', 'add', '-q', '--detach', nextTarget, pending.preapplyHead);
-    scopes.set(nextTarget, await register(nextTarget));
+    scopes.set(pathKey(nextTarget), await register(nextTarget));
     const recovery = await request(app).post('/api/git/worktrees/archives/restore').query({ directory: nextTarget })
       .send({ id: 'recovery-fixture', recovery: { mode: 'new_checkout', revision: pending.revision } });
     expect(recovery.status, JSON.stringify(recovery.body)).toBe(200);
@@ -204,13 +209,13 @@ describe('Host-owned worktree archive capture', () => {
     const resumeSource = path.join(root, 'resume-source');
     git(project, 'worktree', 'add', '-q', '-b', 'resume-fixture', resumeSource);
     fs.writeFileSync(path.join(resumeSource, 'resume.txt'), 'applied once\n');
-    scopes.set(resumeSource, await register(resumeSource));
+    scopes.set(pathKey(resumeSource), await register(resumeSource));
     await archiveWorktree(project, { directory: resumeSource, id: 'resume-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
     const resumeTarget = path.join(root, 'resume-target');
     git(project, 'worktree', 'add', '-q', resumeTarget, 'resume-fixture');
-    scopes.set(resumeTarget, await register(resumeTarget));
+    scopes.set(pathKey(resumeTarget), await register(resumeTarget));
     const afterApply = { ...service, finishWorktreeArchiveRestore: async () => { throw new Error('crash after Git apply'); } };
     const afterApplyApp = express(); afterApplyApp.use(express.json());
     registerGitRoutes(afterApplyApp, { worktreeArchiveSessionService: afterApply });
@@ -223,13 +228,13 @@ describe('Host-owned worktree archive capture', () => {
     expect(fs.readFileSync(path.join(resumeTarget, 'resume.txt'), 'utf8')).toBe('applied once\n');
     const overlapSource = path.join(root, 'overlap-source');
     git(project, 'worktree', 'add', '-q', '-b', 'overlap-fixture', overlapSource);
-    scopes.set(overlapSource, await register(overlapSource));
+    scopes.set(pathKey(overlapSource), await register(overlapSource));
     await archiveWorktree(project, { directory: overlapSource, id: 'overlap-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
     const overlapTarget = path.join(root, 'overlap-target');
     git(project, 'worktree', 'add', '-q', overlapTarget, 'overlap-fixture');
-    scopes.set(overlapTarget, await register(overlapTarget));
+    scopes.set(pathKey(overlapTarget), await register(overlapTarget));
     const overlapCrash = await request(afterApplyApp).post('/api/git/worktrees/archives/restore').query({ directory: overlapTarget }).send({ id: 'overlap-fixture' });
     expect(overlapCrash.status).toBe(500);
     const overlap = await store.getWorktreeArchive({ hostProjectId: 'settings-project', archiveId: 'overlap-fixture' });
@@ -241,13 +246,13 @@ describe('Host-owned worktree archive capture', () => {
     const finalSource = path.join(root, 'final-source');
     git(project, 'worktree', 'add', '-q', '-b', 'final-fixture', finalSource);
     fs.writeFileSync(path.join(finalSource, 'final.txt'), 'retained change\n');
-    scopes.set(finalSource, await register(finalSource));
+    scopes.set(pathKey(finalSource), await register(finalSource));
     await archiveWorktree(project, { directory: finalSource, id: 'final-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
     const finalTarget = path.join(root, 'final-target');
     git(project, 'worktree', 'add', '-q', finalTarget, 'final-fixture');
-    scopes.set(finalTarget, await register(finalTarget));
+    scopes.set(pathKey(finalTarget), await register(finalTarget));
     const beforeCleanup = { ...service, cleanupWorktreeArchiveRestore: async () => { throw new Error('crash before binding cleanup'); } };
     const cleanupApp = express(); cleanupApp.use(express.json());
     registerGitRoutes(cleanupApp, { worktreeArchiveSessionService: beforeCleanup });
@@ -268,13 +273,13 @@ describe('Host-owned worktree archive capture', () => {
     const retrySource = path.join(root, 'retry-source');
     git(project, 'worktree', 'add', '-q', '-b', 'retry-fixture', retrySource);
     fs.writeFileSync(path.join(retrySource, 'retry.txt'), 'retry change\n');
-    scopes.set(retrySource, await register(retrySource));
+    scopes.set(pathKey(retrySource), await register(retrySource));
     await archiveWorktree(project, { directory: retrySource, id: 'retry-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
     const retryTarget = path.join(root, 'retry-target');
     git(project, 'worktree', 'add', '-q', retryTarget, 'retry-fixture');
-    scopes.set(retryTarget, await register(retryTarget));
+    scopes.set(pathKey(retryTarget), await register(retryTarget));
     const beforeCas = { ...service, markWorktreeArchiveRestoreCasStarted: async () => { throw new Error('crash before cas'); } };
     const casApp = express(); casApp.use(express.json());
     registerGitRoutes(casApp, { worktreeArchiveSessionService: beforeCas });
@@ -304,7 +309,7 @@ describe('Host-owned worktree archive capture', () => {
     const deleteSource = path.join(root, 'delete-source');
     git(project, 'worktree', 'add', '-q', '-b', 'delete-fixture', deleteSource);
     fs.writeFileSync(path.join(deleteSource, 'discarded.txt'), 'saved change\n');
-    scopes.set(deleteSource, await register(deleteSource));
+    scopes.set(pathKey(deleteSource), await register(deleteSource));
     await archiveWorktree(project, { directory: deleteSource, id: 'delete-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
