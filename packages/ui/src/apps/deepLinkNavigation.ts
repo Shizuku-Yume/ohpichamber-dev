@@ -2,8 +2,7 @@ import React from 'react';
 
 import { isCapacitorApp } from '@/lib/platform';
 import type { PairingConnectionPayload } from '@/lib/connectionPayload';
-import { useQuotaStore } from '@/stores/useQuotaStore';
-import type { QuotaProviderId } from '@/types';
+import { useUsageStatsStore } from '@/components/views/usage/usageStatsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { openSession } from '@/lib/router/openSessionFromRoute';
 
@@ -21,7 +20,6 @@ let handlers: DeepLinkHandlers = {};
 let ready = false;
 type NavigationIntent = Exclude<DeepLinkIntent, { type: 'pairing' }>;
 let pending: NavigationIntent | null = null;
-const launchUrlConsumed = false;
 
 const execute = (intent: NavigationIntent): boolean => {
   switch (intent.type) {
@@ -66,9 +64,7 @@ const execute = (intent: NavigationIntent): boolean => {
     case 'settings':
       if (!handlers.openSettings) return false;
       if (intent.section === 'usage' && intent.providerId) {
-        // SAFETY: parseDeepLink admits only well-formed provider ids, and the widgets send ids
-        // taken from the quota store's own results.
-        useQuotaStore.getState().setSelectedProvider(intent.providerId as QuotaProviderId);
+        useUsageStatsStore.getState().setSelectedProvider(intent.providerId);
       }
       handlers.openSettings(intent.section);
       return true;

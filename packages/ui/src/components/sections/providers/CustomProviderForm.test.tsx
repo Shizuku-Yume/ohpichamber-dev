@@ -1,7 +1,7 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
-import type { CustomProviderFormState } from './custom-provider-form';
+import type { ProviderConfigurationRead } from '@openchamber/agent-contract';
 
 const dom = new Window({ url: 'http://localhost' });
 Object.assign(globalThis, {
@@ -16,29 +16,37 @@ const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { CustomProviderForm } = await import('./CustomProviderForm');
 
-const savedProvider: CustomProviderFormState = {
-  providerID: 'campus-llm',
-  name: 'Campus LLM',
-  icon: null,
-  logo: null,
-  protocol: 'openai-chat',
-  baseURL: 'https://llm.example.edu/v1',
-  apiKey: '',
+const savedProvider: ProviderConfigurationRead = {
+  revision: '0',
+  configuration: {
+    providerId: 'campus-llm',
+    name: 'Campus LLM',
+    endpoint: 'https://llm.example.edu/v1',
+    protocol: 'chat-completions',
+    credentialRef: null,
+  },
   models: [{
-    row: 'saved-1',
-    id: 'fast',
+    provider: 'campus-llm',
+    modelId: 'fast',
     name: 'Fast',
-    contextWindow: '128000',
-    maxOutputTokens: '16384',
-    inputCapabilities: ['text', 'image'],
-    outputCapabilities: ['text'],
-    tools: true,
-    capabilitiesKnown: true,
-    variants: '',
-    savedVariants: {},
+    contextWindow: 128000,
+    maxOutputTokens: 16384,
+    modalities: ['text', 'image'],
+    toolsSupported: true,
+    reasoningEffortSupported: false,
+    reasoningOptions: [],
+    variants: [],
+    pricing: null,
   }],
-  headers: [{ row: 'header-1', key: '', value: '' }],
-  tls: { cert: '', key: '', passphrase: '' },
+  headerNames: [],
+  imageModels: [],
+};
+const formProps = {
+  workspaceId: 'ws_test',
+  revision: '0',
+  existingProviderIDs: new Set<string>(),
+  onSubmit: async () => {},
+  onCancel: () => {},
 };
 
 const cleanups: Array<() => void> = [];
@@ -66,7 +74,7 @@ const buttonByText = (container: HTMLElement, text: string) => {
 
 test('saved models start collapsed with a one-line summary and open on click', async () => {
   const container = await render(
-    <CustomProviderForm existingProviderIDs={new Set()} mode="edit" initialValues={savedProvider} onSubmit={() => {}} />,
+    <CustomProviderForm {...formProps} initial={savedProvider} />,
   );
   const row = buttonByText(container, 'Fast');
   expect(row.getAttribute('aria-expanded')).toBe('false');
@@ -79,59 +87,33 @@ test('saved models start collapsed with a one-line summary and open on click', a
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Context window"]')?.value).toBe('128000');
 });
 
-test('the client certificate stays folded until opened, and opens by itself for a saved one or an error', async () => {
-  const certificateInput = (container: HTMLElement) => container.querySelector<HTMLInputElement>('input[aria-label="Certificate file"]');
-  const folded = await render(<CustomProviderForm existingProviderIDs={new Set()} onSubmit={() => {}} />);
-  expect(certificateInput(folded)).toBeNull();
-  await act(async () => buttonByText(folded, 'Client certificate').click());
-  expect(certificateInput(folded)).not.toBeNull();
-
-  const saved = await render(
-    <CustomProviderForm existingProviderIDs={new Set()} mode="edit" onSubmit={() => {}}
-      initialValues={{ ...savedProvider, tls: { cert: '/etc/client.pem', key: '/etc/client.key', passphrase: '' } }} />,
-  );
-  expect(certificateInput(saved)?.value).toBe('/etc/client.pem');
-
-  const broken = await render(
-    <CustomProviderForm existingProviderIDs={new Set()} mode="edit" onSubmit={() => {}}
-      initialValues={{ ...savedProvider, apiKey: 'sk-test', tls: { cert: '', key: '', passphrase: 'secret' } }} />,
-  );
-  // A passphrase alone is a saved certificate too, so the section is open; fold it, then let Save open it.
-  await act(async () => buttonByText(broken, 'Client certificate').click());
-  expect(certificateInput(broken)).toBeNull();
-  await act(async () => buttonByText(broken, 'Update provider').click());
-  expect(certificateInput(broken)).not.toBeNull();
-});
-
 test('a new provider opens its first blank model row for editing', async () => {
-  const container = await render(<CustomProviderForm existingProviderIDs={new Set()} onSubmit={() => {}} />);
+  const container = await render(<CustomProviderForm {...formProps} />);
   expect(buttonByText(container, 'New model').getAttribute('aria-expanded')).toBe('true');
 });
 
 test('found models are reviewed once and added as collapsed rows next to the saved ones', async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = Object.assign(async () => Response.json({
+  const { canonicalClient } = await import('@/api/canonicalClient');
+  const discover = spyOn(canonicalClient, 'discoverProviderModels').mockResolvedValue({
     models: [
-      { id: 'fast', name: 'fast' },
-      { id: 'vision-pro', name: 'Vision Pro', limit: { context: 200000 } },
-      { id: 'tiny', name: 'tiny' },
+      { modelId: 'fast', name: 'fast' },
+      { modelId: 'vision-pro', name: 'Vision Pro', contextWindow: 200000 },
+      { modelId: 'tiny', name: 'tiny' },
     ],
-    enrichment: { requested: true, available: true },
-  }), originalFetch);
-  cleanups.push(() => { globalThis.fetch = originalFetch; });
+  });
+  cleanups.push(() => discover.mockRestore());
 
   const container = await render(
-    <CustomProviderForm existingProviderIDs={new Set()} mode="edit" initialValues={savedProvider} onSubmit={() => {}} />,
+    <CustomProviderForm {...formProps} initial={savedProvider} />,
   );
   await act(async () => buttonByText(container, 'Find models').click());
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
-  // The saved model reads as already added; the other two start selected.
-  expect(container.textContent).toContain('Models found');
-  expect(container.textContent).toContain('Already added');
-  await act(async () => buttonByText(container, 'Add selected (2)').click());
+  // The saved model reads as already added; the other two can be added.
+  expect(document.body.textContent).toContain('Models found');
+  expect(document.body.textContent).toContain('Already added');
+  await act(async () => buttonByText(document.body, 'Add all models (2)').click());
 
-  expect(container.textContent).not.toContain('Models found');
   const added = buttonByText(container, 'Vision Pro');
   expect(added.getAttribute('aria-expanded')).toBe('false');
   expect(added.textContent).toContain('200K');

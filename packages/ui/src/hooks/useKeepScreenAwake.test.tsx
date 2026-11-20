@@ -27,7 +27,7 @@ const held = () => sentinels.filter((sentinel) => !sentinel.released).length;
 const settle = () => act(async () => { await new Promise((resolve) => { setTimeout(resolve, 0); }); });
 const setMode = (mode: 'off' | 'working' | 'always') => act(async () => { useUIStore.setState({ mobileKeepScreenAwake: mode }); });
 const running = (...sessionIds: string[]) => act(async () => {
-  replaceGlobalSessionStatusById(new Map(sessionIds.map((id) => [id, { status: { type: 'busy' }, directory: '/project' }])));
+  replaceGlobalSessionStatusById(new Map(sessionIds.map((id) => [id, { status: 'running' as const, directory: '/project' }])));
 });
 const changeVisibility = (next: DocumentVisibilityState) => {
   visibility = next;

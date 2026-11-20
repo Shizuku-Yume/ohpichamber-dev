@@ -61,7 +61,7 @@ export const useGuestMarksSync = (): void => {
         if (state.availableWorktreesByProject !== previous.availableWorktreesByProject) followPlaces();
       }),
       subscribeOpenchamberEvents((event) => {
-        if (event.type !== 'guest-marks-changed' && event.type !== 'event-stream-ready') return;
+        if (event.type !== 'guests-changed' && event.type !== 'event-stream-ready') return;
         if (showing !== '') void reloadGuestMarks();
       }),
     ];

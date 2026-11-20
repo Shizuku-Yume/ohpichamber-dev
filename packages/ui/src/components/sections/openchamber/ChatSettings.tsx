@@ -249,7 +249,7 @@ const MessagesTab: React.FC = () => {
             aria-label={t('settings.openchamber.visual.field.chatWidth')}
           />
         </SettingsFieldRow>
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={'space-y-2'}>
           <SettingsCheckboxRow
             checked={streamingAutoFollowEnabled}
             onChange={setStreamingAutoFollowEnabled}
@@ -426,6 +426,9 @@ const MessagesTab: React.FC = () => {
 };
 
 const ComposerTab: React.FC = () => {
+  const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('chat');
+  const composerSettings = getSectionSettings('composer');
+  const btwSettings = getSectionSettings('btw');
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
   const enterToSend = useUIStore((state) => state.enterToSend);
@@ -438,8 +441,6 @@ const ComposerTab: React.FC = () => {
   const setLargeTextPasteBehavior = useUIStore((state) => state.setLargeTextPasteBehavior);
   const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
   const setAllowPromptingSubagentSessions = useUIStore((state) => state.setAllowPromptingSubagentSessions);
-  const mobileReturnKeySends = useUIStore((state) => state.mobileReturnKeySends);
-  const setMobileReturnKeySends = useUIStore((state) => state.setMobileReturnKeySends);
   const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
   const setInputSpellcheckEnabled = useUIStore((state) => state.setInputSpellcheckEnabled);
   const persistChatDraft = useUIStore((state) => state.persistChatDraft);
@@ -459,10 +460,6 @@ const ComposerTab: React.FC = () => {
     setEnterToSend(enabled);
     setEnterToSendConfigured(true);
     void updateDesktopSettings({ enterToSend: enabled, enterToSendConfigured: true });
-  };
-  const handleMobileReturnKeySendsChange = (enabled: boolean) => {
-    setMobileReturnKeySends(enabled);
-    void updateDesktopSettings({ mobileReturnKeySends: enabled });
   };
 
 

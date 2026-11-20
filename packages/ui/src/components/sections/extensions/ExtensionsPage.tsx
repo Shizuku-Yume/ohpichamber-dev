@@ -51,7 +51,7 @@ import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { checkGuestUpdates, updateGuest } from '@/lib/guests/updates';
 import type { GuestSource, InstalledGuest, UnreadableGuest } from '@/lib/guests/types';
 import { useGuestsStore } from '@/lib/guests/store';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n, type I18nKey, type Locale } from '@/lib/i18n';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { cn } from '@/lib/utils';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
@@ -275,7 +275,7 @@ const ExtensionCard: React.FC<ExtensionHandlers & { guest: InstalledGuest; onOpe
     }] : []),
     ...(state.enterpriseBlocked ? [] : [{
       label: state.enabled ? t('settings.extensions.actions.disable') : t('settings.extensions.actions.enable'),
-      icon: enabledToggleIcon(state.enabled),
+      icon: state.enabled ? 'eye-off' as const : 'eye' as const,
       onSelect: () => void onSetEnabled(guest.id, guest.name, !state.enabled),
     }]),
     ...(state.sourceUrl ? [{
@@ -565,7 +565,7 @@ const UnreadableExtensionCard: React.FC<{
 };
 
 export const ExtensionsPage: React.FC = () => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const guests = useGuestsStore((state) => state.guests);
   const updatable = React.useMemo(() => guests.filter((guest) => guest.source === 'git' && guest.update), [guests]);
   const unreadable = useGuestsStore((state) => state.unreadable);
@@ -1135,7 +1135,7 @@ export const ExtensionsPage: React.FC = () => {
                 size="sm"
                 className="h-9 shrink-0 gap-1.5"
                 data-settings-item="extensions.browse"
-                title={t('settings.extensions.browse.hint')}
+                title={t('settings.extensions.browse.label')}
                 onClick={() => void openExternalUrl(communityExtensionsUrl(locale))}
               >
                 <Icon name="compass-3" className="size-4" />

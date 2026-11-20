@@ -5,12 +5,17 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { ChildStoreManager } from '@/sync/child-store';
 import { activeSessionsInWorktreeNow, readSessionsInWorktree, subscribeSessionsInWorktree, withSessionsNowInWorktree } from './worktreeUse';
 
-const session = (sessionId: string, workspaceId: string): Session => ({
-  sessionId, projectId: 'project', workspaceId, displayPath: 'session',
-  rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  metadata: null, metadataRevision: '0', archiveRevision: '0',
-});
+const session = (sessionId: string, workspaceOrDirectory: string): Session => {
+  const isDirectory = /[/\\]/.test(workspaceOrDirectory);
+  const workspaceId = isDirectory ? `ws:${workspaceOrDirectory}` : workspaceOrDirectory;
+  if (isDirectory) registerWorkspaceDirectory(workspaceId, workspaceOrDirectory);
+  return {
+    sessionId, projectId: 'project', workspaceId, displayPath: 'session',
+    rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0',
+    runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
+  };
+};
 
 const initialGlobalSessions = useGlobalSessionsStore.getState();
 beforeEach(() => {
@@ -43,7 +48,7 @@ describe('activeSessionsInWorktreeNow', () => {
     useGlobalSessionsStore.setState({
       activeSessions: [session('ses_listed', '/repo-feature'), session('ses_elsewhere', '/repo')],
     });
-    const archived = { ...session('ses_archived', '/repo-feature'), time: { created: 1, updated: 1, archived: 2 } };
+    const archived = { ...session('ses_archived', '/repo-feature'), archivedAt: 2 };
 
     const ids = activeSessionsInWorktreeNow('/repo-feature', [
       session('ses_listed', '/repo-feature'),
@@ -56,7 +61,7 @@ describe('activeSessionsInWorktreeNow', () => {
   });
 
   test('a session the global list places in another worktree stays out, whatever a stale live copy says', () => {
-    useGlobalSessionsStore.setState({ activeSessions: [{ ...session('ses_moved', '/repo-other'), time: { created: 1, updated: 2 } }] });
+    useGlobalSessionsStore.setState({ activeSessions: [{ ...session('ses_moved', '/repo-other'), updatedAt: 2 }] });
 
     const ids = activeSessionsInWorktreeNow('/repo-feature', [session('ses_moved', '/repo-feature')]).map((entry) => entry.sessionId);
 

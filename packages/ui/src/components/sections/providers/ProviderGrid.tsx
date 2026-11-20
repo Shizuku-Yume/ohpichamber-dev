@@ -1,6 +1,5 @@
-import { runtimeFetch } from '@/lib/runtime-fetch';
 import React from 'react';
-import type { Integration as Model, Provider } from '@openchamber/agent-contract';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -83,36 +82,6 @@ const EnvironmentPill: React.FC<{ environment: ProviderEnvironmentStatus | null 
   return <SettingsCardPill tone="neutral">{label}</SettingsCardPill>;
 };
 
-const useProjectProviderIds = (providers: readonly GridProvider[], directory: string | null): ReadonlySet<string> => {
-  const [projectIds, setProjectIds] = React.useState<ReadonlySet<string>>(() => new Set());
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-    void Promise.all(providers.map(async (provider) => {
-      try {
-        const response = await runtimeFetch(`/api/provider/${encodeURIComponent(provider.id)}/source${query}`, {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) return null;
-        const payload = await response.json().catch(() => null);
-        const sources = payload?.sources ?? payload?.data?.sources;
-        return sources?.project?.exists === true ? provider.id : null;
-      } catch {
-        return null;
-      }
-    })).then((ids) => {
-      if (!cancelled) setProjectIds(new Set(ids.filter((id): id is string => id !== null)));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [directory, providers]);
-
-  return projectIds;
-};
-
 const StatusPill: React.FC<{ status: ProviderCardStatus }> = ({ status }) => {
   const { t } = useI18n();
   if (status.kind === 'environment') {
@@ -157,7 +126,11 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
 }) => {
   const { t } = useI18n();
   const [query, setQuery] = React.useState('');
-  const projectIds = useProjectProviderIds(providers, directory);
+  const modelCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const model of models) counts.set(model.provider, (counts.get(model.provider) ?? 0) + 1);
+    return counts;
+  }, [models]);
   const alphabetical = React.useMemo(() => [...providers].sort((a, b) =>
     (a.name || a.providerId).localeCompare(b.name || b.providerId, undefined, { sensitivity: 'base' })), [providers]);
   const filtered = rankByQuery(alphabetical, query, (provider) => [provider.name || provider.providerId, provider.providerId]);
@@ -203,20 +176,18 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
         {hasQuery ? null : <ClassificationCard onOpen={onOpenClassification} />}
         {filtered.map((provider) => {
           const status = getProviderCardStatus(provider);
-          const count = modelCounts[provider.providerId] ?? 0;
+          const count = modelCounts.get(provider.providerId) ?? 0;
           // An environment-backed credential can still be outranked by a key
           // saved here, so those cards offer the key form directly. Enterprise
           // mode refuses credential writes, so the way in stays hidden.
           const offerKey = !locked && keyProviders.has(provider.providerId);
           const name = provider.name || provider.providerId;
-          const billingKey = BILLING_KEY_BY_PROVIDER.get(provider.providerId);
           return (
             <SettingsCard
               key={provider.providerId}
               icon={<ProviderLogo providerId={provider.providerId} className="size-5" />}
               title={name}
-              description={billingKey ? t(billingKey) : undefined}
-              badges={status ? <StatusPills status={status} /> : null}
+              badges={status ? <StatusPill status={status} /> : null}
               footer={(
                 <span
                   className="inline-flex items-center gap-1"

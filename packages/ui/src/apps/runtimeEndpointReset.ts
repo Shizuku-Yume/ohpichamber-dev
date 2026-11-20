@@ -86,7 +86,6 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   replaceGlobalSessionStatusById(new Map());
   resetGlobalBlockingRequests();
   resetBackgroundShells();
-  resetBackgroundImages();
   resetSessionLiveWork();
   resetSessionOrdering();
   resetSessionActivityTiming();

@@ -30,12 +30,13 @@ export const EMPTY_MULTI_RUN_INDEX: MultiRunIndex = Object.freeze({
   runKeyBySessionId: new Map(),
 });
 
-const identityCache = new WeakMap<Session, { scoped: boolean; scope: string | null; identity: MultiRunIdentity | null }>();
+const identityCache = new WeakMap<Session, { scope: string | null; identity: MultiRunIdentity | null }>();
 
 export const readMultiRunIdentityWith = (
   session: Session,
   resolveScope: (session: Session) => string | null,
 ): MultiRunIdentity | null => {
+  const scope = resolveScope(session);
   const cached = identityCache.get(session);
   if (cached && cached.scope === scope) return cached.identity;
   const identity = getMultiRunIdentity(session, scope ?? session.workspaceId);
@@ -56,7 +57,7 @@ export const multiRunVariantLabel = (runGroup: string | undefined): string => {
 
 type IndexedMember = { session: Session; identity: MultiRunIdentity };
 
-const lastIndexed: { members: IndexedMember[]; index: MultiRunIndex } | null = null;
+let lastIndexed: { members: IndexedMember[]; index: MultiRunIndex } | null = null;
 
 const sameMembers = (left: readonly IndexedMember[], right: readonly IndexedMember[]): boolean => (
   left.length === right.length
@@ -72,11 +73,21 @@ export function buildMultiRunIndex(
   for (const session of sessions) {
     if (seen.has(session.sessionId) || session.archivedAt || session.parentSessionId) continue;
     seen.add(session.sessionId);
-    const identity = readMultiRunIdentity(session, resolveLegacyScope(session));
-    if (!identity) continue;
-    const list = members.get(identity.key);
-    if (list) list.push({ session, identity });
-    else members.set(identity.key, [{ session, identity }]);
+    const identity = readMultiRunIdentityWith(session, resolveLegacyScope);
+    if (identity) indexed.push({ session, identity });
+  }
+  if (lastIndexed && sameMembers(lastIndexed.members, indexed)) return lastIndexed.index;
+  const index = indexMembers(indexed);
+  lastIndexed = { members: indexed, index };
+  return index;
+}
+
+function indexMembers(indexed: readonly IndexedMember[]): MultiRunIndex {
+  const members = new Map<string, IndexedMember[]>();
+  for (const member of indexed) {
+    const list = members.get(member.identity.key);
+    if (list) list.push(member);
+    else members.set(member.identity.key, [member]);
   }
 
   const runs = new Map<string, MultiRunSummary>();

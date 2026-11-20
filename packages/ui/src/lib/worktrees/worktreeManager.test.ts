@@ -80,9 +80,11 @@ const EMPTY_PROJECT_SETUP = {
   },
 };
 
+let createCommand = '';
 const realOpenchamberConfig = await import('@/lib/openchamberConfig');
 mock.module('@/lib/openchamberConfig', () => ({
   ...realOpenchamberConfig,
+  getWorktreeCreateCommand: async () => createCommand,
   substituteCommandVariables: (command: string) => command,
   // Removal asks the project what to run before the worktree goes; nothing
   // configured means no teardown, and no trust prompt either.

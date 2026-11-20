@@ -35,9 +35,9 @@ const Banner: React.FC<{ title: string; children: React.ReactNode }> = ({ title,
 export const AboutUpdateBanners: React.FC<AboutUpdateBannersProps> = ({ main, remoteHost, appDownload, describeVersion }) => {
   const { t } = useI18n();
   const versionOf = (info: UpdateInfo | null) => describeVersion(info?.version || '', info?.currentVersion);
-  const updateButton = ({ info, onUpdate }: OfferedUpdate) => (
-    <Button size="sm" variant="default" onClick={onUpdate} disabled={info?.installBlocked === 'opencode-version'}>
-      {t('settings.openchamber.about.actions.update')}
+  const updateButton = ({ onUpdate }: OfferedUpdate) => (
+    <Button size="sm" variant="default" onClick={onUpdate}>
+      {t('updateDialog.actions.downloadUpdate')}
     </Button>
   );
   if (!main && !remoteHost && !appDownload) return null;

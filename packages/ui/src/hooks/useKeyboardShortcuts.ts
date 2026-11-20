@@ -58,6 +58,17 @@ const dropdownTargetSelector = [
   '[data-radix-popper-content-wrapper]',
 ].join(',');
 
+function hasOverlayOpen(): boolean {
+  const state = useUIStore.getState();
+  return state.isCommandPaletteOpen
+    || state.isHelpDialogOpen
+    || state.isProjectActionsDialogOpen
+    || state.isSessionSwitcherOpen
+    || state.isAboutDialogOpen
+    || state.isSettingsDialogOpen
+    || state.runOverviewKey !== null
+    || state.isImagePreviewOpen;
+}
 export const useKeyboardShortcuts = () => {
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
   const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
@@ -460,47 +471,6 @@ export const useKeyboardShortcuts = () => {
         resetAbortPriming();
         return;
       }
-      const hasOverlay = state.isCommandPaletteOpen
-        || state.isHelpDialogOpen
-        || state.isSessionSwitcherOpen
-        || state.isAboutDialogOpen
-        || state.runOverviewKey !== null
-        || state.isImagePreviewOpen;
-      // Escape pressed inside a chat pinned in the side panel stops that
-      // chat's session, which the column names on its root; anywhere else it
-      // stops the main chat's.
-      const pinnedColumn = target?.closest<HTMLElement>('[data-chat-column="pinned"]') ?? null;
-      const abortSessionId = pinnedColumn ? pinnedColumn.dataset.chatSessionId ?? null : currentSessionId;
-      const abortable = pinnedColumn ? pinnedColumn.dataset.chatWorking === 'true' : sessionPhase !== 'idle';
-      if (
-        hasOverlay
-        || !abortable
-        || !abortSessionId
-      ) {
-        resetAbortPriming();
-        return;
-      }
-      const now = Date.now();
-      if (abortPrimedUntilRef.current && now < abortPrimedUntilRef.current && abortPrimedSessionRef.current === abortSessionId) {
-        resetAbortPriming();
-        if (pinnedColumn) {
-          event.preventDefault();
-          void sessionActions.abortCurrentOperation(abortSessionId);
-        } else if (invokeRegistered('abort_run', event)) {
-          event.preventDefault();
-        }
-        return;
-      }
-      event.preventDefault();
-      const expiresAt = armAbortPrompt(3000, abortSessionId) ?? now + 3000;
-      abortPrimedUntilRef.current = expiresAt;
-      abortPrimedSessionRef.current = abortSessionId;
-      if (abortPrimedTimeoutRef.current) clearTimeout(abortPrimedTimeoutRef.current);
-      abortPrimedTimeoutRef.current = setTimeout(() => {
-        if (abortPrimedUntilRef.current && Date.now() >= abortPrimedUntilRef.current) {
-          resetAbortPriming();
-        }
-      }, Math.max(expiresAt - now, 0));
     };
     const handleActivePrefixKeyDownCapture = (event: KeyboardEvent) => {
       if (isTerminalEventTarget(event.target)) return;
@@ -606,6 +576,7 @@ export const useKeyboardShortcuts = () => {
     window.addEventListener('keydown', handleTerminalShortcutCapture, true);
     window.addEventListener('keydown', handleEscapeKeyDownCapture, true);
     window.addEventListener('keydown', handleActivePrefixKeyDownCapture, true);
+    window.addEventListener('keydown', handleAbortEscapeKeyDown);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('blur', handleBlur);
     return () => {
@@ -615,10 +586,11 @@ export const useKeyboardShortcuts = () => {
       window.removeEventListener('keydown', handleTerminalShortcutCapture, true);
       window.removeEventListener('keydown', handleEscapeKeyDownCapture, true);
       window.removeEventListener('keydown', handleActivePrefixKeyDownCapture, true);
+      window.removeEventListener('keydown', handleAbortEscapeKeyDown);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [armAbortPrompt, currentSessionId, dispatcher, effectiveDirectory, resetAbortPriming, selectionToolbarDispatcher, sessionPhase]);
+  }, [currentSessionId, dispatcher, effectiveDirectory, handleAbortEscapeKeyDown, resetAbortPriming, selectionToolbarDispatcher, sessionPhase]);
 
   React.useEffect(() => () => resetAbortPriming(), [resetAbortPriming]);
 };

@@ -144,12 +144,14 @@ describe('unconfirmedSends', () => {
     expect(stored()).toEqual([pending]);
   });
 
-  test('a command that left has no id to confirm and is dropped', async () => {
+  test('a command that left without a confirmation id stays pending', async () => {
     const runtime = nextRuntime();
-    store(record(runtime, { left: true, text: '/review' }));
+    const pending = record(runtime, { left: true, text: '/review' });
+    store(pending);
     const { server } = fakeServer();
 
     expect([...await recoverInto(runtime, server)]).toEqual([]);
+    expect(stored()).toEqual([pending]);
   });
 
   test('a first send whose session was never created goes back to the draft', async () => {

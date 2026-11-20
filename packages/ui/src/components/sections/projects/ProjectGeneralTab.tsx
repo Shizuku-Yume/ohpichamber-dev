@@ -1,4 +1,4 @@
-import { selectIsModelMissingFromCatalog } from '@/stores/config/selectors';
+import { parseModelSelector } from '@openchamber/agent-contract';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,7 @@ import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { selectCatalogLoadedForDirectory, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 
 import { updateProjectSetup, updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -39,10 +38,12 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
   const { parsedDefaultModel, defaultVariant } = form;
   const modelUnavailableNote = useConfigStore((state) => {
     const directory = form.project?.path;
-    if (!selectIsModelMissingFromCatalog(state, directory, parsedDefaultModel.providerId, parsedDefaultModel.modelId)) return null;
-    const global = parseModelIdentifier(state.settingsDefaultModel);
-    const globalRuns = global !== null
-      && !selectIsModelMissingFromCatalog(state, directory, global.providerId, global.modelId);
+    if (!parsedDefaultModel.providerId || !parsedDefaultModel.modelId || !selectCatalogLoadedForDirectory(state, 'models', directory)) return null;
+    const hasModel = (providerId: string, modelId: string) => providers.some((provider) =>
+      provider.providerId === providerId && provider.models.some((model) => model.modelId === modelId));
+    if (hasModel(parsedDefaultModel.providerId, parsedDefaultModel.modelId)) return null;
+    const global = parseModelSelector(state.settingsDefaultModel);
+    const globalRuns = global !== null && hasModel(global.providerId, global.modelId);
     return globalRuns
       ? 'settings.projects.page.field.projectModelUnavailableUsesGlobal' as const
       : 'settings.projects.page.field.projectModelUnavailable' as const;
@@ -251,7 +252,7 @@ const NotesTodosSection: React.FC<{ projectRef: ProjectRef; setupState: ProjectS
         disabled={busy}
         onChange={(next) => void toggle(next)}
         label={t('settings.projects.notesTodos.inRepository')}
-        description={t('settings.projects.notesTodos.inRepositoryDescription')}
+        info={t('settings.projects.notesTodos.inRepositoryDescription')}
       />
     </SettingsSection>
   );

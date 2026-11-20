@@ -3,7 +3,7 @@ import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
 import type { Message, Part, ToolCallPart } from '@openchamber/agent-contract';
 
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSessionCompacting, useSessionMessages, useSessionPermissions } from '@/sync/sync-context';
+import { useDirectorySync, useSessionCompacting, useSessionForms, useSessionMessages, useSessionPermissions } from '@/sync/sync-context';
 import { useSessionActivity } from './useSessionActivity';
 import type { AgentStatus } from '@/lib/agentStatus';
 import { normalizeIntent, toolPresentation } from '@/lib/toolPresentation';
@@ -218,14 +218,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     );
 
     const sessionPermissionRequests = useSessionPermissions(currentSessionId ?? '', currentSessionDirectory ?? undefined);
-    // external: #5391 a form whose tool call has ended leaves the turn running.
-    const releasedForms = useRecoverableQuestionsStore((state) => state.releasedForms);
-    const formHoldsTurn = useDirectorySync(
-        React.useCallback((state) => (
-            state.form[currentSessionId ?? '']?.some((form) => formTurnHold(form, state.part, releasedForms) !== 'released') ?? false
-        ), [currentSessionId, releasedForms]),
-        currentSessionDirectory ?? undefined,
-    );
+    const formHoldsTurn = useSessionForms(currentSessionId ?? '', currentSessionDirectory ?? undefined).length > 0;
 
     const sessionAbortRecord = useSessionUIStore(
         React.useCallback((state) => {

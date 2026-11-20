@@ -1,15 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isBackgroundReportEntry } from '@/components/chat/lib/timelineRoles';
-import type { SyntheticMessage } from '@/lib/opencode/model';
-import { readSessionNotice } from '@/lib/opencode/session-notices';
-import { isTurnBoundary } from '@/sync/transcript-cut';
 import { readShareAnswer } from './answer';
 
 // The shape `web/server/lib/share-pages` admits into the session that shared the page.
-const synthetic = (text: string, metadata: SyntheticMessage['metadata']): SyntheticMessage => ({
-  id: 'msg_1', sessionID: 'ses_1', role: 'synthetic', text, description: 'Yulia answered', metadata, time: { created: 1 },
-});
+const synthetic = (text: string, metadata: object) => ({ role: 'synthetic', text, metadata });
 
 describe('a shared page answer', () => {
   test('reads who answered which call, without the envelope', () => {
@@ -25,10 +19,6 @@ describe('a shared page answer', () => {
       summary: 'Schema: B\nWhen: Friday',
       output: '```json\n{\n  "value": "b"\n}\n```',
     });
-    // Its own row opening a turn, like a workflow report: never a plugin notice, and a fork after it starts there.
-    expect(isBackgroundReportEntry(message)).toBe(true);
-    expect(readSessionNotice(message)).toBeUndefined();
-    expect(isTurnBoundary(message)).toBe(true);
   });
 
   test('keeps a body without a summary line whole', () => {

@@ -150,7 +150,7 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
       const directory = sessionDirectory
         || (typeof detail?.directory === 'string' && detail.directory.trim().length > 0 ? detail.directory.trim() : null);
       void sync.ensureSessionRenderable(sessionId, false, directory ?? undefined);
-      void openSession(sessionId, directory);
+      void openSession(sessionId, { directory });
       sessionBootstrappedRef.current = true;
     };
     window.addEventListener('openchamber:open-session', onOpenSession);

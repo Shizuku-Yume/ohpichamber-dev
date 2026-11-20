@@ -8,8 +8,6 @@ const pick = <T>(lines: readonly T[], seed: number): T | null => (
   lines.length === 0 ? null : lines[Math.abs(Math.trunc(seed)) % lines.length]
 );
 
-type DraftMoment = Occasion | 'deepNight' | 'everyday';
-
 export const draftMomentAt = (date: Date): DraftMoment => (
   occasionOf(date) ?? (isDeepNight(date) ? 'deepNight' : 'everyday')
 );

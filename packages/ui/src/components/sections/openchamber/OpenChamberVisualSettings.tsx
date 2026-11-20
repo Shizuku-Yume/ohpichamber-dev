@@ -690,7 +690,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             </SettingsStackedField>
 
                             {(shouldShow('timeFormat') || shouldShow('weekStart')) && (
-                                <div className={SETTINGS_FIELDS_STACK_CLASS}>
+                                <div className={SETTINGS_SPACE_ROW_CLASS}>
                                     {shouldShow('timeFormat') && (
                                         <SettingsStackedField
                                             label={t('settings.openchamber.visual.field.timeFormat')}
@@ -788,7 +788,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 )}
 
                 {(showPwaInstallNameSetting || showPwaOrientationSetting || showMobileKeyboardModeSetting) && (
-                    <SettingsSection title={t('settings.openchamber.visual.section.appInstall')} contentClassName={SETTINGS_FIELDS_STACK_CLASS}>
+                    <SettingsSection title={t('settings.openchamber.visual.section.appInstall')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
 
                     {showPwaInstallNameSetting && (
                         <SettingsFieldRow

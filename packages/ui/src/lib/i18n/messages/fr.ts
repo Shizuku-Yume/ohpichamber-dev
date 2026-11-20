@@ -84,7 +84,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
-export const dict = {
+const part1 = {
   'quota.family.zen': 'Modèles Zen',
   'quota.value.requests': 'Requêtes : {count}',
   'quota.value.spent': '{spent} dépensés',
@@ -2385,6 +2385,9 @@ export const dict = {
   'chat.messageSelection.toast.copyFailed': 'Impossible de copier dans le presse-papiers',
   'chat.messageSelection.toast.missing': 'Certains messages sélectionnés ne sont plus dans ce chat et ont été désélectionnés. Vérifiez la sélection et réessayez.',
   "chat.messageBody.actions.saveAsPlan": "Enregistrer comme plan",
+} as const;
+
+const part2 = {
   "chat.messageBody.actions.startNewSession": "Démarrer une nouvelle session à partir de cette réponse",
   "chat.messageBody.actions.startNewMultiRun": "Démarrer une nouvelle exécution multiple à partir de cette réponse",
   "chat.messageBody.actions.branchMenu": "Continuer à partir de cette réponse",
@@ -4685,6 +4688,9 @@ export const dict = {
   "settings.gitIdentities.editor.auth.ssh": "SSH",
   "settings.gitIdentities.editor.auth.anonymousHint": "Lit les dépôts publics en HTTPS sans connexion et ne peut pas pousser. Les issues et pull requests passent toujours par le compte.",
   "settings.gitIdentities.page.incomplete": "Il lui faut un compte ou une clé avant qu'un dépôt puisse l'utiliser",
+} as const;
+
+const part3 = {
   "settings.gitIdentities.page.accountGone": "Le compte utilisé par cette identité n'est plus connecté",
   "settings.gitIdentities.page.cliAccountInactive": "Passez au compte GitHub CLI dans Intégrations",
   "settings.gitIdentities.editor.toast.accountRequired": "Choisissez le compte au nom duquel agit cette identité.",
@@ -6681,6 +6687,7 @@ export const dict = {
   "settings.extensions.add.placeholder": "/chemin/vers/le/panneau ou https://github.com/org/panel.git",
   "settings.extensions.add.action": "Ajouter",
   "settings.extensions.add.aria": "Ajouter une extension depuis un dossier, un ZIP ou une URL",
+  "settings.extensions.browse.label": "Parcourir les extensions",
   "settings.extensions.add.browseFolder": "Parcourir le dossier",
   "settings.extensions.add.browseFolder.aria": "Parcourir le dossier",
   "settings.extensions.add.browseZip": "Parcourir l’archive ZIP",
@@ -6985,6 +6992,9 @@ export const dict = {
   "references.picker.actions.choose": "Choisir",
   "references.picker.actions.back": "Retour",
   "references.picker.actions.select": "Sélectionner",
+} as const;
+
+const part4 = {
   "references.picker.actions.unselect": "Désélectionner",
   "references.picker.row.selectAria": "Sélectionner {id}",
   "references.picker.footer.selected": "Sélection : {count}",
@@ -9335,6 +9345,19 @@ export const dict = {
   "gitIdentities.state.unknown": "Les identités Git ne sont pas encore chargées.",
   "settings.usage.state.unknown": "L'utilisation n'est pas encore chargée.",
   "settings.usage.state.error": "Échec du chargement de l'utilisation.",
+  'mcpDropdown.title': 'Serveurs MCP',
+  'mcpDropdown.actions.refreshAria': 'Rafraîchir',
+  'mcpDropdown.actions.openAria': 'Serveurs MCP',
+  'mcpDropdown.statusAria': 'Statut MCP',
+  'mcpDropdown.status.unknown': 'Inconnu',
+  'mcpDropdown.status.connected': 'Connecté',
+  'mcpDropdown.status.failed': 'Échec : {error}',
+  'mcpDropdown.status.unknownError': 'Erreur inconnue',
+  'mcpDropdown.status.needsAuth': 'Nécessite une authentification',
+  'mcpDropdown.empty.configureInConfig': 'Configurez les serveurs MCP dans la configuration OpenCode.',
   "chat.workStatus.mcp.unknown": "Les serveurs MCP ne sont pas encore chargés.",
   ...effortI18n.fr
 } as const;
+
+type MessageKey = keyof typeof part1 | keyof typeof part2 | keyof typeof part3 | keyof typeof part4;
+export const dict: Readonly<Record<MessageKey, string>> = { ...part1, ...part2, ...part3, ...part4 };

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { Session, SessionMoveToWorktreeRequest, SessionMoveToWorktreeResult, SessionRuntimeStatus } from '@openchamber/agent-contract';
+import type { Session, SessionSnapshot, SessionMoveToWorktreeRequest, SessionMoveToWorktreeResult, SessionRuntimeStatus } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import type { State } from '@/sync/types';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
@@ -39,11 +40,6 @@ type DeferredVoid = {
   resolve: () => void;
   reject: (error: Error) => void;
 };
-type IncompleteRollbackCause = {
-  moveError: Error;
-  rollbackFailures: Array<{ sessionId: string; error: Error }>;
-};
-
 const removeWorktreeCalls: RemoveProjectWorktreeCall[] = [];
 const moveToWorktreeCalls: Array<{ sessionId: string; request: MoveToWorktreeRequest }> = [];
 const listWorktreesCalls: string[] = [];
@@ -177,26 +173,7 @@ mock.module('@/lib/gitApi', () => ({
   },
 }));
 
-// The server's map of running sessions; null is a failed read, the default.
-let hostActiveSessions: Record<string, SessionStatus> | null = null;
-const hostStatusReads: string[] = [];
-
-// The server's answer to where a session is; by default a move shows as soon as it was requested.
-const serverSessionReads: { sessionId: string; directory: string }[] = [];
-// The folder each read went through: it picks the server asked.
-const sessionReadFolders: (string | null)[] = [];
-const defaultServerDirectory = (sessionId: string): string => (
-  [...moveCalls].reverse().find((call) => call.sessionId === sessionId)?.destinationDirectory ?? '/not-moved'
-);
-let serverDirectoryImplementation = defaultServerDirectory;
-// Holds a session read open, for a server that does not answer; gets the read's abort signal.
-let sessionReadGate: ((signal: AbortSignal | undefined) => Promise<void>) | null = null;
-// Runs before the server's map of running sessions answers, for a read that is still in flight.
-let hostStatusReadGate: ((read: number) => Promise<void>) | null = null;
-// Sessions whose move reached the local stores: the real move publishes only while its caller's server is current.
-const publishedMoves: string[] = [];
-
-
+let readSession: (sessionId: string) => Promise<SessionSnapshot>;
 
 mock.module('@/lib/openchamberConfig', () => ({
   getWorktreeCreateCommand: async () => '',
@@ -215,8 +192,11 @@ mock.module('@/lib/worktreeSessionCreator', () => ({
 
 // The Host makes the checkout and moves the session; this client asks once and
 // adopts what it answers.
+const realCanonicalModule = await import('@/api/canonicalClient');
 mock.module('@/api/canonicalClient', () => ({
+  ...realCanonicalModule,
   canonicalClient: {
+    getSession: (sessionId: string) => readSession(sessionId),
     moveSessionToWorktree: (sessionId: string, request: MoveToWorktreeRequest) => {
       moveToWorktreeCalls.push({ sessionId, request });
       return moveToWorktreeImplementation(sessionId, request);
@@ -297,15 +277,13 @@ const {
   moveSessionTreeToExistingWorktree,
   moveWorktreeSessionsThenRemove,
   requestSessionTreeMove,
-  SessionMoveOutcomeUnknownError,
 } = await import('./sessionWorktreeMove');
-const { WorktreeKeepStoppedError } = await import('./worktreeRemovalFlow');
 const { switchRuntimeEndpoint } = await import('@/lib/runtime-switch');
 
-const makeSession = (sessionId: string): Session => ({
+const makeSession = (sessionId: string, directory?: string): Session => ({
   sessionId,
   projectId: 'project-1',
-  workspaceId: 'workspace-1',
+  workspaceId: directory ?? 'workspace-1',
   displayPath: '.',
   rootSessionId: sessionId,
   createdAt: 0,
@@ -369,41 +347,6 @@ const deferred = (): DeferredVoid => {
   return { promise, resolve, reject };
 };
 
-const getIncompleteRollbackCause = (error: Error): IncompleteRollbackCause => {
-  const cause = error.cause;
-  if (!cause || !(cause instanceof Object)) {
-    throw new Error('Expected rollback error cause details');
-  }
-
-  // SAFETY: createIncompleteRollbackError in the module under test attaches
-  // this exact cause shape when rollback reporting fails.
-  const parsed = cause as Partial<IncompleteRollbackCause>;
-  if (!(parsed.moveError instanceof Error)) {
-    throw new Error('Expected rollback moveError cause');
-  }
-  if (!Array.isArray(parsed.rollbackFailures)) {
-    throw new Error('Expected rollback failures in cause');
-  }
-
-  const rollbackFailures = parsed.rollbackFailures.map((entry) => {
-    if (!entry || !(entry instanceof Object)) {
-      throw new Error('Expected rollback failure entry');
-    }
-    // SAFETY: the same helper populates every rollback entry with a string ID
-    // and Error instance before this test helper reads it back.
-    const failure = entry as { sessionId: string; error: Error };
-    if (!(failure.error instanceof Error)) {
-      throw new Error('Expected rollback failure error');
-    }
-    return { sessionId: failure.sessionId, error: failure.error };
-  });
-
-  return {
-    moveError: parsed.moveError,
-    rollbackFailures,
-  };
-};
-
 describe('moveSessionTreeToExistingWorktree', () => {
   beforeEach(() => {
     moveCalls.length = 0;
@@ -448,7 +391,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
     console.warn = originalConsoleWarn;
   });
 
-  test('moves descendants before the root and refreshes both directories', async () => {
+  test('requests one family relocation and refreshes both directories', async () => {
     const root = makeSession('root');
     const child = makeSession('child');
     const previousRootMetadata = makeWorktreeMetadata({ path: '/old-root', label: 'Old root' });
@@ -467,7 +410,6 @@ describe('moveSessionTreeToExistingWorktree', () => {
 
     expect(result).toBe('/destination');
     expect(moveCalls).toEqual([
-      { sessionId: 'child', sourceDirectory: '/source', destinationDirectory: '/destination' },
       { sessionId: 'root', sourceDirectory: '/source', destinationDirectory: '/destination' },
     ]);
     expect(metadataWrites).toEqual([
@@ -627,165 +569,6 @@ describe('moveSessionTreeToExistingWorktree', () => {
     expect(moveCalls).toHaveLength(1);
   });
 
-  test('rolls back completed moves in reverse order, restores previous metadata, and never removes an existing destination', async () => {
-    const root = makeSession('root');
-    const childA = makeSession('child-a');
-    const childB = makeSession('child-b');
-    const previousRootMetadata = makeWorktreeMetadata({ path: '/old-root', label: 'Old root' });
-    const previousChildAMetadata = makeWorktreeMetadata({ path: '/old-child-a', label: 'Old child A' });
-    const previousChildBMetadata = makeWorktreeMetadata({ path: '/old-child-b', label: 'Old child B' });
-    setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
-    storedMetadata.set(root.sessionId, previousRootMetadata);
-    storedMetadata.set(childA.sessionId, previousChildAMetadata);
-    storedMetadata.set(childB.sessionId, previousChildBMetadata);
-    moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.sessionId === 'child-b' && sourceDirectory === '/source') {
-        throw new Error('child-b failed');
-      }
-    };
-
-    await expect(moveSessionTreeToExistingWorktree({
-      root,
-      descendants: [childA, childB],
-      sourceDirectory: '/source',
-      destination: makeWorktreeMetadata(),
-    })).rejects.toThrow('child-b failed');
-
-    expect(moveCalls).toEqual([
-      { sessionId: 'child-a', sourceDirectory: '/source', destinationDirectory: '/destination' },
-      { sessionId: 'child-b', sourceDirectory: '/source', destinationDirectory: '/destination' },
-      { sessionId: 'child-a', sourceDirectory: '/destination', destinationDirectory: '/source' },
-    ]);
-    expect(metadataWrites).toEqual([
-      { sessionId: 'child-a', metadata: latestMetadataResult },
-      { sessionId: 'child-a', metadata: previousChildAMetadata },
-    ]);
-    expect(storedMetadata.get(root.sessionId)).toBe(previousRootMetadata);
-    expect(storedMetadata.get(childA.sessionId)).toBe(previousChildAMetadata);
-    expect(storedMetadata.get(childB.sessionId)).toBe(previousChildBMetadata);
-    expect(removeWorktreeCalls).toEqual([]);
-    expect(refreshCalls).toEqual([]);
-  });
-
-  test('rolls back an earlier child and never moves a later descendant that becomes busy', async () => {
-    const root = makeSession('root');
-    const childA = makeSession('child-a');
-    const childB = makeSession('child-b');
-    const childAMove = deferred();
-    const previousRootMetadata = makeWorktreeMetadata({ path: '/old-root', label: 'Old root' });
-    const previousChildAMetadata = makeWorktreeMetadata({ path: '/old-child-a', label: 'Old child A' });
-    const previousChildBMetadata = makeWorktreeMetadata({ path: '/old-child-b', label: 'Old child B' });
-    setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
-    setStatuses('/destination', {});
-    storedMetadata.set(root.sessionId, previousRootMetadata);
-    storedMetadata.set(childA.sessionId, previousChildAMetadata);
-    storedMetadata.set(childB.sessionId, previousChildBMetadata);
-    moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.sessionId === 'child-a' && sourceDirectory === '/source') {
-        return childAMove.promise;
-      }
-    };
-
-    const movePromise = moveSessionTreeToExistingWorktree({
-      root,
-      descendants: [childA, childB],
-      sourceDirectory: '/source',
-      destination: makeWorktreeMetadata(),
-    });
-
-    await waitFor(() => moveCalls.length === 1);
-    setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'running' });
-    setStatuses('/destination', { 'child-a': 'idle' });
-    childAMove.resolve();
-
-    await expect(movePromise).rejects.toThrow('Session is not idle');
-
-    expect(moveCalls).toEqual([
-      { sessionId: 'child-a', sourceDirectory: '/source', destinationDirectory: '/destination' },
-      { sessionId: 'child-a', sourceDirectory: '/destination', destinationDirectory: '/source' },
-    ]);
-    expect(metadataWrites).toEqual([
-      { sessionId: 'child-a', metadata: latestMetadataResult },
-      { sessionId: 'child-a', metadata: previousChildAMetadata },
-    ]);
-    expect(storedMetadata.get(root.sessionId)).toBe(previousRootMetadata);
-    expect(storedMetadata.get(childA.sessionId)).toBe(previousChildAMetadata);
-    expect(storedMetadata.get(childB.sessionId)).toBe(previousChildBMetadata);
-    expect(removeWorktreeCalls).toEqual([]);
-    expect(refreshCalls).toEqual([]);
-  });
-
-  test('reports an incomplete rollback explicitly and still does not remove the existing destination', async () => {
-    const root = makeSession('root');
-    const childA = makeSession('child-a');
-    const childB = makeSession('child-b');
-    setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
-    moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.sessionId === 'child-b' && sourceDirectory === '/source') {
-        throw new Error('child-b failed');
-      }
-      if (session.sessionId === 'child-a' && sourceDirectory === '/destination') {
-        throw new Error('rollback failed');
-      }
-    };
-
-    const error = await moveSessionTreeToExistingWorktree({
-      root,
-      descendants: [childA, childB],
-      sourceDirectory: '/source',
-      destination: makeWorktreeMetadata(),
-    }).catch((rejection) => rejection);
-
-    expect(error).toBeInstanceOf(Error);
-    if (!(error instanceof Error)) {
-      throw error;
-    }
-    expect(error.message.includes('could not be fully rolled back')).toBe(true);
-    const cause = getIncompleteRollbackCause(error);
-    expect(cause.moveError.message).toBe('child-b failed');
-    expect(cause.rollbackFailures).toEqual([{ sessionId: 'child-a', error: new Error('rollback failed') }]);
-
-    expect(removeWorktreeCalls).toEqual([]);
-  });
-
-  const expectBusyOrRetryRollbackBlock = async (status: Extract<SessionRuntimeStatus, 'running' | 'awaiting_input'>): Promise<void> => {
-    const root = makeSession('root');
-    const childA = makeSession('child-a');
-    const childB = makeSession('child-b');
-    setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
-    setStatuses('/destination', {});
-    moveSessionImplementation = async (session, sourceDirectory) => {
-      if (sourceDirectory === '/source' && session.sessionId === 'child-a') {
-        setStatuses('/destination', { 'child-a': status });
-        return;
-      }
-      if (sourceDirectory === '/source' && session.sessionId === 'child-b') {
-        throw new Error('child-b failed');
-      }
-    };
-
-    await expect(moveSessionTreeToExistingWorktree({
-      root,
-      descendants: [childA, childB],
-      sourceDirectory: '/source',
-      destination: makeWorktreeMetadata(),
-    })).rejects.toThrow('could not be fully rolled back');
-
-    expect(moveCalls).toEqual([
-      { sessionId: 'child-a', sourceDirectory: '/source', destinationDirectory: '/destination' },
-      { sessionId: 'child-b', sourceDirectory: '/source', destinationDirectory: '/destination' },
-    ]);
-    expect(removeWorktreeCalls).toEqual([]);
-  };
-
-  test('does not attempt rollback for a moved child that becomes running in the destination', async () => {
-    await expectBusyOrRetryRollbackBlock('running');
-  });
-
-  test('does not attempt rollback for a moved child that becomes awaiting input in the destination', async () => {
-    await expectBusyOrRetryRollbackBlock('awaiting_input');
-  });
-
   test('keeps the move successful when the post-move refresh fails', async () => {
     const root = makeSession('root');
     setStatuses('/source', { root: 'idle' });
@@ -880,29 +663,6 @@ describe('moveSessionTreeToExistingWorktree', () => {
   });
 
 
-  test('does not move the root when a descendant fails', async () => {
-    const root = makeSession('root');
-    const child = makeSession('child');
-    setStatuses('/source', { root: 'idle', child: 'idle' });
-    setStatuses('/destination', { root: 'idle' });
-    moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.sessionId === 'child' && sourceDirectory === '/source') {
-        throw new Error('child failed');
-      }
-    };
-
-    await expect(moveSessionTreeToExistingWorktree({
-      root,
-      descendants: [child],
-      sourceDirectory: '/source',
-      destination: makeWorktreeMetadata(),
-    })).rejects.toThrow('child failed');
-
-    expect(moveCalls).toEqual([
-      { sessionId: 'child', sourceDirectory: '/source', destinationDirectory: '/destination' },
-    ]);
-  });
-
   // A move whose answer was lost may still have happened, so the UI must say
   // so rather than claim either outcome; the checkout stays with the Host.
   test('names a lost answer instead of claiming the move failed', async () => {
@@ -994,236 +754,82 @@ describe('moveSessionTreeToExistingWorktree', () => {
 });
 
 describe('moveWorktreeSessionsThenRemove', () => {
-  const WORKTREE = '/worktrees/feature';
+  const worktreePath = '/worktrees/feature';
+  const projectDirectory = '/repo';
+  const root = makeSession('root', 'source-workspace');
+  const child = { ...makeSession('child', 'source-workspace'), parentSessionId: 'root', rootSessionId: 'root' };
+  let moved = false;
   let removals = 0;
+  let readIds: string[];
+  let serverMember: (session: Session) => Session;
 
-  const stopReason = async (run: Promise<{ removed: boolean }>): Promise<string> => {
-    try {
-      await run;
-      return 'resolved';
-    } catch (error) {
-      return error instanceof WorktreeKeepStoppedError ? error.reason : String(error);
-    }
-  };
-
-  const keep = (sessions: Session[]) => moveWorktreeSessionsThenRemove({
-    worktreePath: WORKTREE,
-    projectDirectory: '/repo',
-    // The global list after the moves: only sessions not moved yet are still in the worktree.
-    readSessions: () => sessions.filter((session) => !moveCalls.some((call) => call.sessionId === session.sessionId)),
-    removeWorktree: async () => {
-      removals += 1;
-      return true;
-    },
+  const keep = () => moveWorktreeSessionsThenRemove({
+    worktreePath, projectDirectory, readSessions: () => moved ? [] : [root, child],
+    removeWorktree: async () => { removals += 1; return true; },
   });
 
   beforeEach(() => {
-    moveCalls.length = 0;
-    refreshCalls.length = 0;
-    metadataWrites.length = 0;
-    hostStatusReads.length = 0;
-    serverSessionReads.length = 0;
-    sessionReadFolders.length = 0;
-    serverDirectoryImplementation = defaultServerDirectory;
-    directoryStates.clear();
-    storedMetadata.clear();
-    hostActiveSessions = {};
-    removals = 0;
-    moveSessionImplementation = async () => {};
-    refreshImplementation = async () => {};
-    resolveProjectRefImplementation = () => ({ id: 'project-1', path: '/repo' });
-    sessionReadGate = null;
-    hostStatusReadGate = null;
-    publishedMoves.length = 0;
     switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime-a.test', runtimeKey: 'runtime-a' });
-    console.warn = () => {};
-  });
-
-  afterEach(() => {
-    console.warn = originalConsoleWarn;
-    hostActiveSessions = null;
-    sessionReadGate = null;
-    hostStatusReadGate = null;
-  });
-
-  const switchAway = () => switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime-b.test', runtimeKey: 'runtime-b' });
-  const switchBack = () => switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime-a.test', runtimeKey: 'runtime-a' });
-  const tree = () => [{ ...makeSession('child', WORKTREE), parentID: 'root' }, makeSession('root', WORKTREE)];
-
-  // Nothing of the old server reaches the new one: no request, no store write, no rollback.
-  const expectNothingAfterSwitch = (movedBeforeSwitch: string[]) => {
-    expect(moveCalls.map((call) => call.sessionId)).toEqual(movedBeforeSwitch);
-    expect(publishedMoves).toEqual([]);
-    expect(metadataWrites).toEqual([]);
-    expect(refreshCalls).toEqual([]);
-    expect(serverSessionReads).toEqual([]);
-    expect(removals).toBe(0);
-  };
-
-  test('a server switch while the tree move reads whether its sessions run stops before any move', async () => {
-    // Read 1 is the delete's own check; read 2 the tree move's.
-    hostStatusReadGate = async (read) => {
-      if (read === 2) switchAway();
+    registerWorkspaceDirectory('source-workspace', worktreePath);
+    registerWorkspaceDirectory('destination-workspace', projectDirectory);
+    moved = false;
+    removals = 0;
+    readIds = [];
+    moveCalls.length = 0;
+    metadataWrites.length = 0;
+    directoryStates.clear();
+    resolveProjectRefImplementation = () => ({ id: 'project-1', path: projectDirectory });
+    moveSessionImplementation = async () => { moved = true; };
+    refreshImplementation = async () => {};
+    serverMember = (session) => ({ ...session, workspaceId: moved ? 'destination-workspace' : 'source-workspace' });
+    readSession = async (sessionId) => {
+      readIds.push(sessionId);
+      const session = serverMember(sessionId === root.sessionId ? root : child);
+      return {
+        session, activeRun: null, cursor: 'epoch-1:0',
+        branch: { branchId: 'branch', branchVersion: '0', leafMessageId: null },
+        window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
+        messages: [], turns: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
+      };
     };
-
-    expect(await stopReason(keep(tree()))).toBe('switched');
-    expect(hostStatusReads).toHaveLength(2);
-    expectNothingAfterSwitch([]);
   });
 
-  test('a server switch while the first subsession move is pending stops the tree and rolls nothing back', async () => {
-    moveSessionImplementation = async (session) => {
-      if (session.sessionId === 'child') switchAway();
-    };
+  afterEach(() => resetWorkspaceDirectories());
 
-    expect(await stopReason(keep(tree()))).toBe('switched');
-    expectNothingAfterSwitch(['child']);
-  });
-
-  test('switching away and back while a move is pending still stops it: the round trip is another instance', async () => {
-    moveSessionImplementation = async (session) => {
-      if (session.sessionId !== 'child') return;
-      switchAway();
-      switchBack();
-    };
-
-    expect(await stopReason(keep(tree()))).toBe('switched');
-    expectNothingAfterSwitch(['child']);
-  });
-
-  test('a confirmation read the server never answers ends at the deadline and keeps the worktree', async () => {
-    const signals: (AbortSignal | undefined)[] = [];
-    // Never settles, not even on abort: the deadline must not wait for the read.
-    sessionReadGate = (signal) => {
-      signals.push(signal);
-      return new Promise(() => {});
-    };
-    // The ten-second deadline, shortened; the poll interval stays.
-    const realSetTimeout = globalThis.setTimeout;
-    globalThis.setTimeout = Object.assign(
-      (handler: () => void, ms?: number) => realSetTimeout(handler, ms === 10_000 ? 20 : ms),
-      realSetTimeout,
-    );
-    try {
-      expect(await stopReason(keep([makeSession('root', WORKTREE)]))).toBe('unconfirmed');
-    } finally {
-      globalThis.setTimeout = realSetTimeout;
-    }
-    expect(signals).toHaveLength(1);
-    expect(signals[0]?.aborted).toBe(true);
-    expect(removals).toBe(0);
-  });
-
-  // No child store covers a worktree that was not opened since the page
-  // loaded, so the server's map answers for it.
-  test('moves a tree whose folder has no status store when the host lists nothing running', async () => {
-    const result = await keep([makeSession('child', WORKTREE), makeSession('root', WORKTREE)].map((session) => (
-      session.sessionId === 'child' ? { ...session, parentID: 'root' } : session
-    )));
-
-    expect(moveCalls).toEqual([
-      { sessionId: 'child', sourceDirectory: WORKTREE, destinationDirectory: '/repo' },
-      { sessionId: 'root', sourceDirectory: WORKTREE, destinationDirectory: '/repo' },
-    ]);
-    expect(result).toEqual({ removed: true });
+  test('moves once without a local status store, then confirms every member before removing', async () => {
+    await expect(keep()).resolves.toEqual({ removed: true });
+    expect(moveCalls.map((move) => move.sessionId)).toEqual(['root']);
+    expect(readIds.slice(-2).sort()).toEqual(['child', 'root']);
     expect(removals).toBe(1);
-    // Once before anything moves, then before each move, for the worktree's folder.
-    expect(hostStatusReads).toEqual([WORKTREE, WORKTREE, WORKTREE, WORKTREE]);
   });
 
-  test('a session the host reports running keeps the worktree and moves nothing', async () => {
-    hostActiveSessions = { root: { type: 'busy' } };
+  test('leaves the checkout intact when a child is still in its source workspace', async () => {
+    serverMember = (session) => ({ ...session, workspaceId: moved && session.sessionId === 'root' ? 'destination-workspace' : 'source-workspace' });
+    await expect(keep()).rejects.toMatchObject({ reason: 'unconfirmed' });
+    expect(removals).toBe(0);
+  });
 
-    expect(await stopReason(keep([makeSession('root', WORKTREE)]))).toBe('busy');
+  test('leaves the checkout intact when Canonical reports that a member is running', async () => {
+    serverMember = (session) => session.sessionId === 'child' ? { ...session, runtimeStatus: 'running' } : session;
+    await expect(keep()).rejects.toMatchObject({ reason: 'busy' });
     expect(moveCalls).toEqual([]);
     expect(removals).toBe(0);
   });
 
-  test('a session that starts running between two moves stops the second one', async () => {
-    moveSessionImplementation = async (session) => {
-      if (session.sessionId === 'first') hostActiveSessions = { second: { type: 'busy' } };
-    };
-
-    expect(await stopReason(keep([makeSession('first', WORKTREE), makeSession('second', `${WORKTREE}/sub`)]))).toBe('busy');
-    expect(moveCalls.map((call) => call.sessionId)).toEqual(['first']);
-    expect(removals).toBe(0);
-  });
-
-  test('a failed status read keeps the worktree as unknown', async () => {
-    hostActiveSessions = null;
-
-    expect(await stopReason(keep([makeSession('root', WORKTREE)]))).toBe('unknown');
+  test('does not treat a failed status read as idle', async () => {
+    readSession = async () => { throw new Error('offline'); };
+    await expect(keep()).rejects.toMatchObject({ reason: 'unknown' });
     expect(moveCalls).toEqual([]);
     expect(removals).toBe(0);
   });
 
-  test('a project registered inside the worktree is passed over for the worktree\'s project', async () => {
-    resolveProjectRefImplementation = () => ({ id: 'inside', path: `${WORKTREE}/ai` });
-
-    await keep([makeSession('root', `${WORKTREE}/ai`)]);
-
-    expect(moveCalls).toEqual([{ sessionId: 'root', sourceDirectory: `${WORKTREE}/ai`, destinationDirectory: '/repo' }]);
-  });
-
-  test('a move that loses its answer keeps the worktree and says the outcome is unknown', async () => {
+  test('does not publish or remove after switching away and back during relocation', async () => {
     moveSessionImplementation = async () => {
-      throw new Error('Request timed out');
+      switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime-b.test', runtimeKey: 'runtime-b' });
+      switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime-a.test', runtimeKey: 'runtime-a' });
     };
-
-    await expect(keep([makeSession('root', WORKTREE)])).rejects.toBeInstanceOf(SessionMoveOutcomeUnknownError);
-    expect(removals).toBe(0);
-    expect(refreshCalls).toEqual([[WORKTREE, '/repo']]);
-  });
-
-  // OpenCode answers a move once it is queued; removing the folder before a
-  // runner there applies it left the session in the deleted folder.
-  test('removes the worktree only once the server places every moved session in the project', async () => {
-    let readsBeforeApplied = 2;
-    serverDirectoryImplementation = (sessionId) => {
-      if (sessionId === 'root' && readsBeforeApplied > 0) {
-        readsBeforeApplied -= 1;
-        return WORKTREE;
-      }
-      return defaultServerDirectory(sessionId);
-    };
-    let readsAtRemoval = -1;
-    const result = await moveWorktreeSessionsThenRemove({
-      worktreePath: WORKTREE,
-      projectDirectory: '/repo',
-      readSessions: () => [makeSession('root', WORKTREE)].filter((session) => !moveCalls.some((call) => call.sessionId === session.sessionId)),
-      removeWorktree: async () => {
-        readsAtRemoval = serverSessionReads.length;
-        return true;
-      },
-    });
-
-    expect(result).toEqual({ removed: true });
-    expect(serverSessionReads).toEqual([
-      { sessionId: 'root', directory: WORKTREE },
-      { sessionId: 'root', directory: WORKTREE },
-      { sessionId: 'root', directory: '/repo' },
-    ]);
-    expect(readsAtRemoval).toBe(3);
-    // Through the destination, never the folder on screen, which can be an isolated space.
-    expect(sessionReadFolders).toEqual(['/repo', '/repo', '/repo']);
-  });
-
-  test('a move the server has not applied in time keeps the worktree', async () => {
-    // Each read takes five seconds of the clock, so the wait gives up on the second.
-    const realNow = Date.now;
-    let clock = realNow();
-    Date.now = () => clock;
-    serverDirectoryImplementation = () => {
-      clock += 5_000;
-      return WORKTREE;
-    };
-    try {
-      expect(await stopReason(keep([makeSession('root', WORKTREE)]))).toBe('unconfirmed');
-    } finally {
-      Date.now = realNow;
-    }
-    expect(moveCalls.map((call) => call.sessionId)).toEqual(['root']);
-    expect(serverSessionReads).toHaveLength(2);
+    await expect(keep()).rejects.toMatchObject({ reason: 'switched' });
+    expect(metadataWrites).toEqual([]);
     expect(removals).toBe(0);
   });
 });

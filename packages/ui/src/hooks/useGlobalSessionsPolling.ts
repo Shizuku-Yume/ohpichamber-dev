@@ -11,8 +11,8 @@ import { subscribeFirstServerConnect } from '@/sync/first-server-connect';
 import { subscribeStreamGap } from '@/sync/stream-gap';
 import { isDesktopShell } from '@/lib/desktop';
 
-export const GLOBAL_SESSIONS_REFRESH_INTERVAL_MS = 45_000;
-const GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS = 10 * 60_000;
+export const GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS = 10 * 60_000;
+export const GLOBAL_SESSIONS_RETRY_INTERVAL_MS = 45_000;
 const STARTUP_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
 
 type ScheduleTimeout = (callback: () => void, delay: number) => number;
@@ -97,22 +97,29 @@ export const startGlobalSessionsPolling = (
   let running = false;
   let readyDuringRun = false;
   let fullRefreshPending = false;
-  // A refresh came due while the app was hidden and has not run yet.
-  let missedWhileHidden = false;
+  let gapDuringRun = false;
+  let fullRetryAt: number | null = null;
+  let headRetryAt: number | null = null;
   let lastFullRefreshAt = Number.NEGATIVE_INFINITY;
-  /** Schedules the next pass; the caller decided its delay. */
-  const scheduleNext = (retryDelay?: number, delay = GLOBAL_SESSIONS_REFRESH_INTERVAL_MS) => {
+  const fullDueAt = () => fullRetryAt ?? lastFullRefreshAt + GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS;
+  const scheduleNext = (startupRetryDelay: number | undefined) => {
+    if (timeoutId !== undefined) clearScheduledTimeout(timeoutId);
+    const delay = startupRetryDelay
+      ?? (!hasSucceeded
+        ? GLOBAL_SESSIONS_RETRY_INTERVAL_MS
+        : Math.max(0, Math.min(fullDueAt(), headRetryAt ?? Number.POSITIVE_INFINITY) - now()));
     timeoutId = scheduleTimeout(() => {
       timeoutId = undefined;
       if (visibility.isHidden()) {
-        // A refresh that came due is owed, not dropped: becoming visible runs
-        // it once, and an app that never hides still sees its own cadence.
-        missedWhileHidden = true;
         return;
       }
-      const fullDue = !hasSucceeded || now() - lastFullRefreshAt >= GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS;
-      void run(fullDue ? refresh : headCheck, fullDue);
-    }, retryDelay ?? delay);
+      if (hasSucceeded && now() < fullDueAt() && headRetryAt !== null) {
+        headRetryAt = null;
+        void run(headCheck, false);
+        return;
+      }
+      void run(refresh);
+    }, delay);
   };
   const run = async (load: () => Promise<boolean>, full = true) => {
     running = true;
@@ -142,22 +149,19 @@ export const startGlobalSessionsPolling = (
       void run(refresh);
       return;
     }
-    const retryDelay = !hasSucceeded ? STARTUP_RETRY_DELAYS_MS[startupRetries] : undefined;
-    if (retryDelay !== undefined) startupRetries += 1;
-    const untilFullRefresh = GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS - (now() - lastFullRefreshAt);
-    const delay = untilFullRefresh > 0
-      ? Math.min(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS, untilFullRefresh)
-      : full ? GLOBAL_SESSIONS_REFRESH_INTERVAL_MS : 0;
-    scheduleNext(retryDelay, delay);
+    if (gapDuringRun && hasSucceeded) {
+      gapDuringRun = false;
+      void run(headCheck, false);
+      return;
+    }
+    const startupRetryDelay = !hasSucceeded ? STARTUP_RETRY_DELAYS_MS[startupRetries] : undefined;
+    if (startupRetryDelay !== undefined) startupRetries += 1;
+    scheduleNext(startupRetryDelay);
   };
   const stopListening = visibility.onVisible(() => {
-    if (disposed) return;
+    if (disposed || (hasSucceeded && timeoutId !== undefined && now() < fullDueAt())) return;
     if (timeoutId !== undefined) clearScheduledTimeout(timeoutId);
     timeoutId = undefined;
-    // Only a refresh the reader missed is owed; nothing was due while the app
-    // was visible, so coming back to it asks for nothing.
-    if (!missedWhileHidden) { if (!running) scheduleNext(); return; }
-    missedWhileHidden = false;
     if (running) { fullRefreshPending = true; return; }
     void run(refresh);
   });
@@ -174,7 +178,9 @@ export const startGlobalSessionsPolling = (
   const stopGapListening = subscribeStreamGapListener(() => {
     if (disposed) return;
     if (running) { gapDuringRun = true; return; }
-    if (!hasSucceeded) return;
+    if (!hasSucceeded || visibility.isHidden()) return;
+    if (timeoutId !== undefined) clearScheduledTimeout(timeoutId);
+    timeoutId = undefined;
     void run(headCheck, false);
   });
   void run(initialLoad);

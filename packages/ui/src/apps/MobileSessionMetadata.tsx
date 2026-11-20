@@ -222,7 +222,9 @@ const SessionMetadataOverlay: React.FC<{
             >
               {contextDisplay.state === 'pending' ? null : (
                 <span className="inline-flex items-baseline gap-1.5 tabular-nums">
-                  <span className={cn('font-semibold', contextDisplay.colorClass)}>{contextDisplay.percentage.toFixed(1)}%</span>
+                  {contextDisplay.state === 'measured' ? (
+                    <span className={cn('font-semibold', contextDisplay.colorClass)}>{contextDisplay.percentage.toFixed(1)}%</span>
+                  ) : null}
                   <span className="text-muted-foreground">{contextDisplay.tokens}</span>
                 </span>
               )}

@@ -1,4 +1,4 @@
-import { WorktreeKeepStoppedError } from '@/lib/worktrees/worktreeRemovalFlow';
+import { WorktreeKeepStoppedError, moveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
 import type { WorktreeKeepStop } from '@/lib/worktrees/worktreeRemovalFlow';
 import type { Session, SessionMoveToWorktreeResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
@@ -13,10 +13,12 @@ import { checkoutHoldsDirectory, findWorktreeHoldingDirectory } from '@/lib/work
 import { resolveWorktreeStartDirectory } from '@/lib/worktrees/worktreeStartDirectory';
 import { refreshGlobalSessionsForDirectories } from '@/stores/useGlobalSessionsStore';
 import { isAmbiguousSendFailure } from '@/sync/send-failure-classification';
-import { getSessionLiveActivity, isSessionBusyNow, moveSessionToDirectory } from '@/sync/session-actions';
+import { getSessionLiveActivity, moveSessionToDirectory } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { create } from 'zustand';
+import { captureRuntimeInstance, getRuntimeKey } from '@/lib/runtime-switch';
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 
 export type SessionTreeMoveMessages = {
   success: string;
@@ -65,7 +67,6 @@ export type SessionTreeMoveIntent =
       messages: SessionTreeMoveMessages;
     };
 
-// external: https://github.com/anomalyco/opencode/blob/v2.3.0/packages/core/src/session/move.ts OpenCode session moves leave uncommitted changes in the source worktree.
 type SessionMoveState = {
   pendingSessionIds: Set<string>;
 };
@@ -121,64 +122,6 @@ const assertSessionsIdle = (sessions: Session[]): void => {
   }
 };
 
-type RollbackFailure = {
-  sessionId: string;
-  error: Error;
-};
-
-class IncompleteRollbackError extends Error {
-  readonly moveError: Error;
-
-  constructor(message: string, cause: { moveError: Error; rollbackFailures: RollbackFailure[] }) {
-    super(message, { cause });
-    this.name = 'IncompleteRollbackError';
-    this.moveError = cause.moveError;
-  }
-}
-
-const createIncompleteRollbackError = (moveError: Error, rollbackFailures: RollbackFailure[]): Error => {
-  const rollbackSummary = rollbackFailures
-    .map(({ sessionId, error }) => `${sessionId}: ${error.message}`)
-    .join(', ');
-  return new IncompleteRollbackError(
-    `Session move partially failed and could not be fully rolled back: ${moveError.message}. Rollback failures: ${rollbackSummary}`,
-    { moveError, rollbackFailures },
-  );
-};
-
-class TreeMoveOwnerChangedError extends Error {
-  constructor() {
-    super('The server changed during the session move');
-    this.name = 'TreeMoveOwnerChangedError';
-  }
-}
-
-const rollbackMovedSessions = async (
-  sessions: Session[],
-  sourceDirectory: string,
-  worktreeDirectory: string,
-  previousMetadata: ReadonlyMap<string, WorktreeMetadata | undefined>,
-  isCurrent: () => boolean,
-): Promise<RollbackFailure[]> => {
-  const failures: RollbackFailure[] = [];
-  for (const session of [...sessions].reverse()) {
-    if (isSessionBusyNow(session.sessionId)) {
-      failures.push({ sessionId: session.sessionId, error: new Error('Session is not idle') });
-      continue;
-    }
-    try {
-      await moveSessionToDirectory(session, worktreeDirectory, sourceDirectory);
-      useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, previousMetadata.get(session.sessionId) ?? null, sourceDirectory);
-    } catch (error) {
-      failures.push({
-        sessionId: session.sessionId,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-    }
-  }
-  return failures;
-};
-
 const refreshMovedDirectories = async (sourceDirectory: string, destinationDirectory: string | undefined): Promise<void> => {
   const directories = destinationDirectory ? [sourceDirectory, destinationDirectory] : [sourceDirectory];
   try {
@@ -189,88 +132,44 @@ const refreshMovedDirectories = async (sourceDirectory: string, destinationDirec
 };
 
 const moveSessionTreeTransaction = async (
-  input: {
-    root: Session;
-    descendants: Session[];
-    sourceDirectory: string;
-  },
-  prepareDestination: () => Promise<{
-    directory: string;
-    metadata: WorktreeMetadata | null;
-    onMoveFailure?: (error: Error) => Promise<never>;
-  }>,
-  options: {
-    assertIdle?: (sessions: Session[]) => Promise<void>;
-    isCurrent?: () => boolean;
-  } = {},
+  input: { root: Session; descendants: Session[]; sourceDirectory: string },
+  prepareDestination: () => Promise<{ directory: string; metadata: WorktreeMetadata | null }>,
+  isCurrent = captureRuntimeInstance(),
+  assertIdle: (sessions: Session[]) => void | Promise<void> = assertSessionsIdle,
 ): Promise<string> => {
-  if (useSessionMoveState.getState().pendingSessionIds.has(input.root.sessionId)) {
+  const runtimeKey = getRuntimeKey();
+  const familyId = input.root.rootSessionId;
+  if (useSessionMoveState.getState().pendingSessionIds.has(familyId)) {
     throw new Error('Session move already in progress');
   }
-  setSessionMovePending(input.root.sessionId, true);
+  setSessionMovePending(familyId, true);
 
   try {
     const sessions = [...input.descendants, input.root];
-    const previousMetadata = new Map(
-      sessions.map((session) => [
-        session.sessionId,
-        useSessionUIStore.getState().getWorktreeMetadata(session.sessionId),
-      ]),
-    );
-    assertSessionsIdle(sessions);
-
-    let destination: Awaited<ReturnType<typeof prepareDestination>> | null = null;
-    const moved: Session[] = [];
-    let moveOutcomeUnknown = false;
+    const destination = await prepareDestination();
+    if (!isCurrent()) throw new WorktreeKeepStoppedError('switched');
+    await assertIdle(sessions);
+    if (!isCurrent()) throw new WorktreeKeepStoppedError('switched');
     try {
-      destination = await prepareDestination();
-      for (const [index, session] of sessions.entries()) {
-        // Setup and earlier moves can take long enough for a not-yet-moved
-        // session to start running, so re-check the remaining source tree
-        // immediately before each move. The root moves last.
-        assertSessionsIdle(sessions.slice(index));
-        try {
-          await moveSessionToDirectory(session, input.sourceDirectory, destination.directory, isCurrent);
-        } catch (error) {
-          if (isAmbiguousSendFailure(error)) moveOutcomeUnknown = true;
-          throw error;
-        }
-        moved.push(session);
-        if (session.sessionId === input.root.sessionId) continue;
-        useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
-      }
+      // Canonical relocation moves the complete family atomically on the Host.
+      await moveSessionToDirectory(input.root, input.sourceDirectory, destination.directory, runtimeKey);
     } catch (error) {
-      const moveError = error instanceof Error ? error : new Error(String(error));
-      if (!isCurrent()) throw new TreeMoveOwnerChangedError();
-      const rollbackFailures = await rollbackMovedSessions(
-        moved,
-        input.sourceDirectory,
-        destination?.directory ?? input.sourceDirectory,
-        previousMetadata,
-        isCurrent,
-      );
-      if (!isCurrent()) throw new TreeMoveOwnerChangedError();
-      if (moveOutcomeUnknown) {
-        await refreshMovedDirectories(input.sourceDirectory, destination?.directory);
+      if (!isCurrent()) throw new WorktreeKeepStoppedError('switched');
+      if (error instanceof Error && isAmbiguousSendFailure(error)) {
+        await refreshMovedDirectories(input.sourceDirectory, destination.directory);
+        throw new SessionMoveOutcomeUnknownError(error);
       }
-      if (rollbackFailures.length > 0) {
-        throw createIncompleteRollbackError(moveError, rollbackFailures);
-      }
-      // external: https://github.com/anomalyco/opencode/blob/v2.3.0/packages/core/src/session/move.ts A lost response does not cancel an admitted OpenCode session move.
-      if (destination?.onMoveFailure && !moveOutcomeUnknown) {
-        return destination.onMoveFailure(moveError);
-      }
-      if (destination?.onMoveFailure && moveOutcomeUnknown) {
-        throw new SessionMoveOutcomeUnknownError(moveError);
-      }
-      throw moveError;
+      throw error;
     }
-    useSessionUIStore.getState().setWorktreeMetadata(input.root.sessionId, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
-
+    if (!isCurrent()) throw new WorktreeKeepStoppedError('switched');
+    const metadata = destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null;
+    for (const session of sessions) {
+      useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, metadata, destination.directory);
+    }
     await refreshMovedDirectories(input.sourceDirectory, destination.directory);
     return destination.directory;
   } finally {
-    setSessionMovePending(input.root.sessionId, false);
+    setSessionMovePending(familyId, false);
   }
 };
 
@@ -411,6 +310,64 @@ const executeSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
 export const requestSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
   if (useSessionMoveState.getState().pendingSessionIds.has(intent.root.sessionId)) return;
   executeSessionTreeMove(intent);
+};
+
+const WORKTREE_SESSION_READ_TIMEOUT_MS = 10_000;
+
+const readWorktreeSession = async (sessionId: string) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      canonicalClient.getSession(sessionId).then(({ session }) => session).catch(() => null),
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), WORKTREE_SESSION_READ_TIMEOUT_MS); }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+};
+
+const readWorktreeActivity = async (sessions: readonly Session[]) => {
+  if (sessions.some((session) => getSessionLiveActivity(session.sessionId) === 'active')) return 'active';
+  const current = await Promise.all(sessions.map((session) => readWorktreeSession(session.sessionId)));
+  if (current.some((session) => session && session.runtimeStatus !== 'idle' && session.runtimeStatus !== 'unavailable')) return 'active';
+  if (current.some((session) => !session || session.activeRunId !== null)) return 'unknown';
+  return 'idle';
+};
+
+export const moveWorktreeSessionsThenRemove = (input: {
+  worktreePath: string;
+  projectDirectory: string;
+  readSessions: () => readonly Session[];
+  removeWorktree: () => Promise<boolean>;
+}): Promise<{ removed: boolean }> => {
+  const isCurrent = captureRuntimeInstance();
+  const worktreePath = normalizePath(input.worktreePath) ?? input.worktreePath;
+  return moveSessionsThenRemoveWorktree({
+    worktreePath,
+    readSessions: input.readSessions,
+    readActivity: readWorktreeActivity,
+    resolveDestination: async (directory) => {
+      const destination = normalizePath((await resolveFolderProjectRef(directory))?.path);
+      return destination && !checkoutHoldsDirectory(worktreePath, destination) ? destination : input.projectDirectory;
+    },
+    moveTree: async (tree) => {
+      await moveSessionTreeTransaction(tree, async () => ({ directory: tree.projectDirectory, metadata: null }), isCurrent, async (sessions) => {
+        const activity = await readWorktreeActivity(sessions);
+        if (!isCurrent()) throw new WorktreeKeepStoppedError('switched');
+        if (activity !== 'idle') throw new WorktreeKeepStoppedError(activity === 'active' ? 'busy' : 'unknown');
+      });
+    },
+    confirmMoves: async (moves) => {
+      if (!isCurrent()) return false;
+      const confirmed = await Promise.all(moves.flatMap((move) => [move.root, ...move.descendants].map(async ({ sessionId }) => {
+        const session = await readWorktreeSession(sessionId);
+        return session !== null && resolveWorkspaceDirectory(session.workspaceId) === normalizePath(move.projectDirectory);
+      })));
+      return isCurrent() && confirmed.every(Boolean);
+    },
+    removeWorktree: input.removeWorktree,
+    isCurrent,
+  });
 };
 
 const KEEP_STOP_KEYS = {

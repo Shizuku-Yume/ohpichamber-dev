@@ -1,7 +1,7 @@
 import { parseMetadata } from '@/lib/metadataParse';
 import { z } from 'zod';
 
-import type { Session } from '@openchamber/agent-contract';
+import type { Session, SessionMetadata as Metadata } from '@openchamber/agent-contract';
 
 const workflowAgentMarkSchema = z.object({ openchamber: z.object({ kind: z.literal('workflow-agent') }) });
 const workflowAgentLinkSchema = z.object({

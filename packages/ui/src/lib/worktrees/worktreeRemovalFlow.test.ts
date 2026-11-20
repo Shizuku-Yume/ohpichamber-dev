@@ -1,3 +1,4 @@
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { describe, expect, test } from 'bun:test';
 import { GitWorktreeRequestError } from '@/lib/api/types';
 import type { Session } from '@openchamber/agent-contract';
@@ -100,16 +101,16 @@ describe('archiveSessionsThenRemoveWorktree', () => {
 
 const WORKTREE = '/repo-worktrees/feature';
 
-const session = (id: string, directory: string, parentID?: string): Session => ({
-  sessionId: id,
-  directory,
-  parentID,
-  projectID: 'project',
-  title: id,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-});
+const session = (id: string, directory: string, parentSessionId?: string): Session => {
+  const workspaceId = `workspace:${directory}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId: id, projectId: 'project', workspaceId, displayPath: '.', parentSessionId,
+    rootSessionId: parentSessionId ?? id, createdAt: 1, updatedAt: 1,
+    epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    mode: { kind: 'main' }, title: id, metadata: null, metadataRevision: '0', archiveRevision: '0',
+  };
+};
 
 type FlowOptions = Parameters<typeof moveSessionsThenRemoveWorktree>[0];
 

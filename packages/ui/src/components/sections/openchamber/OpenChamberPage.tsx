@@ -1,12 +1,12 @@
 import React from 'react';
-import { OpenChamberVisualSettings } from './OhPiChamberVisualSettings';
+import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
 import { ChatSettings } from './ChatSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
 import { MergedWorktreeCleanupSettings } from './MergedWorktreeCleanupSettings';
 import { SessionWorkSettings } from './SessionWorkSettings';
 import { PasskeySettings } from './PasskeySettings';
 import { AppLinkSecuritySettings } from './AppLinkSecuritySettings';
-import { DefaultsSettings, SessionContextSettings } from './DefaultsSettings';
+import { DefaultsSettings } from './DefaultsSettings';
 import { GitSettings } from './GitSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { VoiceSettings } from './VoiceSettings';
@@ -162,7 +162,6 @@ const SessionsSectionContent: React.FC<{ runtimeEndpointEpoch: number }> = ({ ru
             <SessionWorkSettings />
             <SessionRetentionSettings />
             <MergedWorktreeCleanupSettings />
-            <SessionContextSettings key={`context-${runtimeEndpointEpoch}`} />
         </>
     );
 };
