@@ -9,7 +9,7 @@ test('Node source consumers resolve converted server modules through unchanged p
   const result = spawnSync(process.execPath, [
     '--import', fileURLToPath(new URL('./register-server-sources.mjs', import.meta.url)),
     '--conditions=openchamber-source', '--input-type=module', '-e', `
-      const { collectSshBufferDiagnostics } = await import('@openchamber/web/server/lib/diagnostics/local-files.js');
+      const { collectSshBufferDiagnostics } = await import('ohpichamber/server/lib/diagnostics/local-files.js');
       console.log(JSON.stringify(collectSshBufferDiagnostics({
         entries: [{ lines: ['[1781000000000] [INFO] Starting SSH connection'] }],
         omittedSources: 0,
@@ -53,12 +53,12 @@ test('the plain Node source entry initializes its own resolver before loading th
   expect(result.stdout).toContain('source entry ready');
 });
 
-test('the source CLI serves diagnostic routes under Node without Bun', () => {
+test('the source CLI serves Host health and Canonical readiness under Node', () => {
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('./smoke-server-build.mjs', import.meta.url)), '--source-cli',
   ], { encoding: 'utf8', timeout: 90_000, windowsHide: true });
   expect(result.status, result.stdout + result.stderr).toBe(0);
   expect(result.stdout).toContain('Node source CLI /health: 200');
-  expect(result.stdout).toContain('Node source CLI /api/diagnostics/local-files: 200');
+  expect(result.stdout).toContain('Node source CLI /api/agent/v1/ready: 200');
   expect(result.stdout).toContain('Server stopped; isolated data removed.');
 }, 95_000);

@@ -4,8 +4,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
+import { resolveBunExecutable } from '../../../scripts/lib/bun-executable.mjs';
 
-test('the VS Code bundler includes a converted server module behind a .js specifier', () => {
+test('Node-target bundling includes a converted server module behind a .js specifier', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-ts-server-bundle-'));
   try {
     const entry = path.join(root, 'entry.mjs');
@@ -15,8 +16,8 @@ test('the VS Code bundler includes a converted server module behind a .js specif
       import { classifyLogLine } from ${JSON.stringify(module)};
       console.log(JSON.stringify(classifyLogLine('2026-09-28T10:00:00Z [info] [electron] app starting', 'desktop')));
     `);
-    const bundled = spawnSync(fileURLToPath(new URL('../../vscode/node_modules/.bin/esbuild', import.meta.url)), [
-      entry, '--bundle', `--outfile=${output}`, '--external:vscode', '--format=cjs', '--platform=node', '--minify', '--main-fields=module,main',
+    const bundled = spawnSync(resolveBunExecutable(), [
+      'build', entry, `--outfile=${output}`, '--format=cjs', '--target=node', '--minify',
     ], { encoding: 'utf8' });
     expect(bundled.status, bundled.stderr).toBe(0);
     const executed = spawnSync(process.execPath, [output], { encoding: 'utf8' });

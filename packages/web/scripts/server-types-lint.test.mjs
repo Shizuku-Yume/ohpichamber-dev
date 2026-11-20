@@ -31,8 +31,8 @@ test('server TypeScript lint rejects unsafe syntax and undocumented suppression'
       export const lazy = () => import('./lazy.ts');
       export type Imported = import('./types').Value;
     `);
-    const run = () => spawnSync(path.join(repoRoot, 'node_modules/.bin/oxlint'), [
-      '-c', config, '-f', 'json', file,
+    const run = (input = file) => spawnSync(path.join(repoRoot, 'node_modules/.bin/oxlint'), [
+      '-c', config, '-f', 'json', input,
     ], { cwd: root, encoding: 'utf8' });
     const invalid = run();
     expect(invalid.status, invalid.stderr).not.toBe(0);
@@ -53,6 +53,10 @@ test('server TypeScript lint rejects unsafe syntax and undocumented suppression'
     `);
     const documented = run();
     expect(documented.status, documented.stdout + documented.stderr).toBe(0);
+    const carried = path.join(root, 'packages/web/server/runtime.ts');
+    fs.writeFileSync(carried, "export const required = ['value'][0]!;\n");
+    const legacy = run(carried);
+    expect(legacy.status, legacy.stdout + legacy.stderr).toBe(0);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

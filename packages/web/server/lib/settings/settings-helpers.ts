@@ -223,7 +223,7 @@ const shortcutOverridesRecordSchema = z.record(z.string(), z.unknown());
 
 const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
   'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard', 'worktreeArchiveOnDoneEnabled',
-  'agentKnowledgeToolEnabled', 'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends',
+  'agentKnowledgeToolEnabled', 'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'questionsInChat',
   // Commit-message controls. `lib/gitCommitSettings.ts` owns their defaults;
   // the server only records what the user chose, so an absent key stays absent.
   'generateCommitMessages', 'commitMessageReasoning', 'commitMessageNotes', 'commitMessageChangeId',

@@ -17,7 +17,7 @@ const withPlanView = async (run: (fixture: PlanFixture) => Promise<void>, option
   for (const [name, value] of Object.entries({
     window: dom, document: dom.document, navigator: dom.navigator, location: dom.location, localStorage: dom.localStorage,
     Element: dom.Element, HTMLElement: dom.HTMLElement, HTMLInputElement: dom.HTMLInputElement, Node: dom.Node,
-    Document: dom.Document, Text: dom.Text, Range: dom.Range,
+    Document: dom.Document, Text: dom.Text, Range: dom.Range, Window: dom.Window,
     customElements: dom.customElements, CSSStyleSheet: dom.CSSStyleSheet,
     Event: dom.Event, CustomEvent: dom.CustomEvent, KeyboardEvent: dom.KeyboardEvent, MouseEvent: dom.MouseEvent,
     MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,

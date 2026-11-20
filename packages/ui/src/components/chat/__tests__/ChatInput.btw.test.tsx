@@ -22,6 +22,7 @@ Object.assign(globalThis, {
   localStorage: browser.localStorage,
   sessionStorage: browser.sessionStorage,
   Node: browser.Node,
+  Window: browser.Window,
   Text: browser.Text,
   Element: browser.Element,
   HTMLElement: browser.HTMLElement,

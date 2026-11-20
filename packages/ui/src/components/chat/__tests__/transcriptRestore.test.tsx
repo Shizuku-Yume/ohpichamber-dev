@@ -121,7 +121,7 @@ describe('restored transcript composition', () => {
         const win = new Window({ url: 'http://localhost', settings: { device: { prefersReducedMotion: 'reduce' } } });
         const globals = {
             window: win, document: win.document, navigator: win.navigator, localStorage: win.localStorage,
-            customElements: win.customElements,
+            customElements: win.customElements, Window: win.Window, Event: win.Event, CustomEvent: win.CustomEvent,
             Node: win.Node, NodeList: win.NodeList, Element: win.Element, HTMLElement: win.HTMLElement, SVGElement: win.SVGElement,
             HTMLAnchorElement: win.HTMLAnchorElement, DOMParser: win.DOMParser, DOMRect: win.DOMRect,
             MutationObserver: win.MutationObserver, ResizeObserver: win.ResizeObserver,

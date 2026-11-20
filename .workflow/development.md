@@ -26,10 +26,33 @@ The gap audit now compares the pinned v2.7.3 revision rather than its historical
 v2.7.0 literal, follows TypeScript source behind JavaScript import specifiers,
 checks relocated settings sanitizers and composed store owners, and recognizes
 Electron consumers of public Host factories. Twenty Git-fixture regressions
-pass, including missing setters and imported-but-unmounted routes. The guard
-still fails honestly: 224 unallowlisted findings, 112 stale rows and 12 stale
-owner citations need reconciliation; they are not runtime acceptance evidence.
-Full branch and origin/main suite comparisons are running in isolated homes.
+pass, including missing setters and imported-but-unmounted routes. Sanitizer
+ownership now excludes unrelated helpers and recognizes typed key arrays only
+when the sanitizer iterates them. The guard still fails honestly: 214
+unallowlisted findings, 113 stale rows and 12 stale owner citations need
+reconciliation; they are not runtime acceptance evidence.
+
+The completed origin/main comparison passes all 8,575 Web tests and all UI,
+SDK, Electron and Agent Service suites. Only three scripts tests fail on
+unavailable kernel PIDFD isolation. Integration-only Web/UI failures remain.
+Host settings now preserve question placement, packed-package tests use emitted
+settings modules, retry commands name the fork binary, and Node fixtures track
+current modules and retained scripts. The built-in extension builder initializes
+the Node source resolver before loading converted Host modules; its five build
+tests and real Bun entry pass. Strict server lint applies to new/upstream
+TypeScript, with only the committed typing-port list exempting non-null assertions.
+Six focused Host verification files pass 88 tests; the Node-entry file passes
+21 tests after removing two tests for retired scripts.
+
+Browser fixtures now install matching DOM constructors: 23 focused tests pass.
+Empty and heading-only plans open for editing. The combined plan/router/Node-entry
+run passes its 27 tests but fails overall on home initialization calling
+an unavailable persistence export. A speculative deferred import did not resolve
+that failure and was removed; home initialization behavior is unchanged.
+This failure is not dismissed as pre-existing. The UI changes are visually
+unverified. PR #60 also has all four actual CI jobs pending, while its Devin
+Review passed. PR #61's failed Review exposes no job ID, reviews or review
+comments through the PR API, so no actionable review text is available there.
 
 The error-cause and CSS guards pass after five retained UI error paths preserve
 their caught cause with `problemMessage`, file-artifact notices use the existing
@@ -45,7 +68,7 @@ and binding authority checks: non-repositories make no binding request, and a
 board handoff cannot replay an obsolete account/revision after a rebind. The
 three failing PR-diff cases pass without changing their tests. DiffView and
 binding suites pass 26 tests; UI type-check and focused lint pass. Full root
-lint also exits 0. The root check's type step passes (4,538 files, five projects),
+lint also exits 0. The root check's type step passes (4,539 files, five projects),
 but drift and upstream-gaps remain failing; full suite/baseline
 acceptance is not complete. DiffView rendering was not visually rechecked.
 

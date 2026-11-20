@@ -24,6 +24,8 @@ stores own durable state and shared caches.
 
 - A saved plan carries its owner explicitly. An open plan can outlive a directory
   switch, and a managed-chat owner has no registered project to infer by folder.
+- A blank or heading-only plan starts in edit mode even when preview is preferred.
+  This is an initial-load choice, not a mode switch while the user is typing.
 - Load and save effects use primitive document identity. Rebuilding an equivalent
   owner object cannot reload the document or flush its buffer.
 - Managed-chat plans cannot start Improve or Implement through `createSession`.

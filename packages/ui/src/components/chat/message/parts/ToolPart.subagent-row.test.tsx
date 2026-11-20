@@ -53,6 +53,7 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
     window: happyWindow, document: happyWindow.document, navigator: happyWindow.navigator,
     localStorage: happyWindow.localStorage, customElements: happyWindow.customElements,
     Node: happyWindow.Node, Text: happyWindow.Text, NodeList: happyWindow.NodeList,
+    Window: happyWindow.Window, Event: happyWindow.Event, CustomEvent: happyWindow.CustomEvent,
     Element: happyWindow.Element, HTMLElement: happyWindow.HTMLElement, HTMLAnchorElement: happyWindow.HTMLAnchorElement, SVGElement: happyWindow.SVGElement,
     requestAnimationFrame: happyWindow.requestAnimationFrame.bind(happyWindow),
     cancelAnimationFrame: happyWindow.cancelAnimationFrame.bind(happyWindow),

@@ -554,6 +554,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       setContent('');
       setSaveError(null);
       setLoadError(null);
+      setStartsEmpty(false);
 
       if (savedPlanId && savedPlanProjectRef && savedPlanKey) {
         // A plan re-opened while its own flush is still writing must read the
@@ -583,6 +584,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
             runtimeKey: activeRuntimeKey,
           };
           setContent(plan.raw);
+          setStartsEmpty(plan.raw.replace(LEADING_HEADING, '').trim().length === 0);
           setLoadedProjectPlanId(savedPlanId);
           setLoadedProjectPlanPath(plan.path ?? null);
         } catch (error) {
@@ -613,6 +615,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           };
           setResolvedPath(targetPath);
           setContent(text);
+          setStartsEmpty(text.replace(LEADING_HEADING, '').trim().length === 0);
         } catch {
           if (cancelled) return;
           setResolvedPath(null);

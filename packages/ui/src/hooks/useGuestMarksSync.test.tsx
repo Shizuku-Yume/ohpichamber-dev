@@ -36,7 +36,7 @@ const mark = (text: string): GuestMarkEntry => ({
 });
 
 // Real mounted hook, event module, loader and stores; only the browser stream and the server's answer are fixtures.
-test('reads the marks when an extension may show them, on each announced change and on a reconnect, and never otherwise', async () => {
+test('reads marks for eligible guests and reconnects without relying on an unproduced marks event', async () => {
   const dom = new Window({ url: 'http://marks-sync.test' });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   for (const [name, value] of Object.entries({
@@ -90,13 +90,13 @@ test('reads the marks when an extension may show them, on each announced change 
     await catalog([guest('ci', { name: 'CI Watch' })]);
     expect(reads).toBe(1);
 
-    // A service set a mark: the list is read again.
+    // Dedicated marks announcements have no Host producer yet.
     served = [mark('Checks failed')];
     await act(async () => source.emit('openchamber:guest-marks-changed'));
-    expect(reads).toBe(2);
-    expect(shown()).toEqual(['Checks failed']);
+    expect(reads).toBe(1);
+    expect(shown()).toEqual(['Checks passed']);
 
-    // A reconnect reads again too; an unrelated event does not.
+    // Catalog changes and reconnects refresh marks through existing Host events.
     await act(async () => source.emit('openchamber:guests-changed'));
     expect(reads).toBe(2);
     served = [mark('Checks passed')];

@@ -67,6 +67,17 @@ const createTestHelpersWithRealSanitizers = () => {
 };
 
 describe('settings helpers', () => {
+  it('persists either question presentation and rejects non-boolean values', () => {
+    const helpers = createTestHelpers();
+    for (const questionsInChat of [true, false]) {
+      expect(helpers.sanitizeSettingsUpdate({ questionsInChat })).toEqual({ questionsInChat });
+    }
+    for (const questionsInChat of [undefined, null, 'true', 1, {}]) {
+      expect(helpers.sanitizeSettingsUpdate({ questionsInChat })).toEqual({});
+    }
+    expect(helpers.sanitizeSettingsUpdate({})).toEqual({});
+  });
+
   it('sanitizes the optional GitLab OAuth client ID', () => {
     const helpers = createTestHelpers();
     expect(helpers.sanitizeSettingsUpdate({ gitlabClientId: ' client-id ' })).toEqual({ gitlabClientId: 'client-id' });
@@ -156,7 +167,7 @@ describe('settings helpers', () => {
       linkModules(join(packagesWebDir, '..', '..', 'node_modules'), join(extractDir, 'node_modules'));
 
       const extractedModule = await import(
-        pathToFileURL(join(extractDir, 'package', 'server', 'lib', 'host', 'settings-helpers.js')).href
+        pathToFileURL(join(extractDir, 'package', 'build', 'server', 'lib', 'settings', 'settings-helpers.js')).href
       );
 
       const helpers = extractedModule.createSettingsHelpers({
@@ -885,7 +896,7 @@ describe('settings registry gate', () => {
     layoutAnimations: true, openLinksInBrowserPanel: false, liveBrowserTabLimit: 8,
     openTrackerLinksOnBoard: true, worktreeArchiveOnDoneEnabled: false,
     agentKnowledgeToolEnabled: false, agentRenderToolEnabled: false, agentWorkflowToolEnabled: false,
-    mobileReturnKeySends: true,
+    mobileReturnKeySends: true, questionsInChat: true,
     responseStyleInstruction: 'Keep replies short.',
     responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'Be brief.',
     // Registry keys whose server branch is a pass-through: the registry parser

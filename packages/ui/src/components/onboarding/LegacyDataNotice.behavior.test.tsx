@@ -19,7 +19,7 @@ const { SettingsView } = await import('@/components/views/SettingsView');
 type HappyDomWindow = InstanceType<typeof Window>;
 const originalFetch = globalThis.fetch;
 const originalDescriptors = new Map();
-const globalNames = ['window', 'document', 'navigator', 'localStorage', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'IS_REACT_ACT_ENVIRONMENT'] as const;
+const globalNames = ['window', 'document', 'navigator', 'localStorage', 'HTMLElement', 'Element', 'Node', 'Event', 'CustomEvent', 'MouseEvent', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'IS_REACT_ACT_ENVIRONMENT'] as const;
 const storageKeys = ['legacy-data-notice-dismissed:task20-rendered', 'legacy-data-notice-dismissed:task20-configure', 'legacy-data-notice-dismissed:task20-mobile'];
 let browser: HappyDomWindow | undefined;
 let root: Root | undefined;
@@ -29,7 +29,7 @@ const installBrowser = () => {
   browser = new Window({ url: 'http://localhost' });
   const values = {
     window: browser, document: browser.document, navigator: browser.navigator, localStorage: browser.localStorage,
-    HTMLElement: browser.HTMLElement, Element: browser.Element, Node: browser.Node, Event: browser.Event,
+    HTMLElement: browser.HTMLElement, Element: browser.Element, Node: browser.Node, Event: browser.Event, CustomEvent: browser.CustomEvent,
     MouseEvent: browser.MouseEvent, getComputedStyle: browser.getComputedStyle.bind(browser), IS_REACT_ACT_ENVIRONMENT: true,
     requestAnimationFrame: browser.requestAnimationFrame.bind(browser), cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
   };
