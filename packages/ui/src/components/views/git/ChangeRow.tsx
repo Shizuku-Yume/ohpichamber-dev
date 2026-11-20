@@ -12,7 +12,6 @@ import { changedPathName } from './changesTree';
 import { ChangedPathLabel } from './ChangedPathLabel';
 import { DiffCount } from '@/components/ui/diff-count';
 
-<<<<<<< HEAD
 /** Line counts of a changed file; the side with nothing to say stays out on a narrow row. */
 const ChangeStats: React.FC<{ insertions: number; deletions: number; hideZero?: boolean }> = ({ insertions, deletions, hideZero = false }) => (
   <span className="shrink-0 typography-micro tabular-nums">
@@ -20,18 +19,6 @@ const ChangeStats: React.FC<{ insertions: number; deletions: number; hideZero?: 
     {hideZero ? (insertions > 0 && deletions > 0 ? ' ' : null) : <span className="text-muted-foreground mx-0.5">/</span>}
     {hideZero && deletions === 0 ? null : <span style={{ color: 'var(--status-error)' }}>-{deletions}</span>}
   </span>
-||||||| bc50ba56aa
-/** Line counts of a changed file; the side with nothing to say stays out on a narrow row. */
-export const ChangeStats: React.FC<{ insertions: number; deletions: number; hideZero?: boolean }> = ({ insertions, deletions, hideZero = false }) => (
-  <span className="shrink-0 typography-micro tabular-nums">
-    {hideZero && insertions === 0 ? null : <span style={{ color: 'var(--status-success)' }}>+{insertions}</span>}
-    {hideZero ? (insertions > 0 && deletions > 0 ? ' ' : null) : <span className="text-muted-foreground mx-0.5">/</span>}
-    {hideZero && deletions === 0 ? null : <span style={{ color: 'var(--status-error)' }}>-{deletions}</span>}
-  </span>
-=======
-export const ChangeStats: React.FC<{ insertions: number; deletions: number; hideZero?: boolean }> = ({ insertions, deletions, hideZero = false }) => (
-  <DiffCount added={insertions} removed={deletions} hideZero={hideZero} className="typography-micro" />
->>>>>>> upstream/main
 );
 
 interface ChangeRowProps {
@@ -154,7 +141,6 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
       {...(isMobile && showRevert && !isReverting ? longPressHandlers(onRevert) : null)}
       style={indentPx > 0 ? { paddingInlineStart: `${indentPx}px` } : undefined}
     >
-<<<<<<< HEAD
       {actionAtStart ? actionButton : null}
       <span
         className="typography-micro font-semibold w-4 text-center uppercase"
@@ -196,117 +182,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
               isReverting ? 'md:invisible' : 'md:group-hover:invisible md:group-focus-within:invisible'
             )}
           >
-||||||| bc50ba56aa
-        {actionAtStart ? actionButton : null}
-        <span
-          className="typography-micro font-semibold w-4 text-center uppercase"
-          style={{ color: descriptor.color }}
-          title={indicatorLabel}
-          aria-label={indicatorLabel}
-        >
-          {descriptor.code}
-        </span>
-        <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 shrink-0" />
-        {(() => {
-          const lastSlash = file.path.lastIndexOf('/');
-          if (lastSlash === -1 || nameOnly) {
-            return (
-              <span
-                className="oc-ui-start-align flex-1 min-w-0 truncate typography-ui-label text-foreground"
-                style={{ direction: 'rtl', unicodeBidi: 'plaintext' }}
-                title={file.path}
-              >
-                {changedPathName(file.path)}
-              </span>
-            );
-          }
-          return <ChangedPathLabel path={file.path} nameFirst={isMobile} className="flex-1 typography-ui-label" />;
-        })()}
-        {actionAtStart ? (
-          <>
-=======
-        {actionAtStart ? actionButton : null}
-        <span
-          className="typography-micro font-semibold w-4 text-center uppercase"
-          style={{ color: descriptor.color }}
-          title={indicatorLabel}
-          aria-label={indicatorLabel}
-        >
-          {descriptor.code}
-        </span>
-        <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 shrink-0" />
-        {nameOnly ? (
-          <span
-            className="oc-ui-start-align flex-1 min-w-0 truncate typography-ui-label"
-            style={{ direction: 'rtl', unicodeBidi: 'plaintext' }}
-            title={file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}
-          >
-            {file.previousPath ? (
-              <span className="text-muted-foreground">{changedPathName(file.previousPath)}{' → '}</span>
-            ) : null}
-            <span className="text-foreground">{changedPathName(file.path)}</span>
-          </span>
-        ) : (
-          <ChangedPathLabel
-            path={file.path}
-            from={file.previousPath}
-            nameFirst={isMobile}
-            className="flex-1 typography-ui-label"
-          />
-        )}
-        {actionAtStart ? (
-          <>
->>>>>>> upstream/main
             {statsLabel}
-<<<<<<< HEAD
-||||||| bc50ba56aa
-            {revertButton}
-          </>
-        ) : (
-          // Tree view: on hover the actions take the place of the stats, so
-          // nothing in the row moves. Narrow (touch) layouts have no hover and
-          // show both side by side.
-          <span className="flex shrink-0 items-center justify-items-end gap-2 md:grid">
-            <span
-              className={cn(
-                'md:col-start-1 md:row-start-1',
-                isReverting ? 'md:invisible' : 'md:group-hover:invisible md:group-focus-within:invisible'
-              )}
-            >
-              {statsLabel}
-            </span>
-            <span
-              className={cn(
-                'flex items-center gap-2 md:col-start-1 md:row-start-1',
-                !isReverting && 'md:invisible md:group-hover:visible md:group-focus-within:visible'
-              )}
-            >
-              {revertButton}
-              {actionButton}
-            </span>
-=======
-            {revertButton}
-          </>
-        ) : (
-          <span className="flex shrink-0 items-center justify-items-end gap-2 md:grid">
-            <span
-              className={cn(
-                'md:col-start-1 md:row-start-1',
-                isReverting ? 'md:invisible' : 'md:group-hover:invisible md:group-focus-within:invisible'
-              )}
-            >
-              {statsLabel}
-            </span>
-            <span
-              className={cn(
-                'flex items-center gap-2 md:col-start-1 md:row-start-1',
-                !isReverting && 'md:invisible md:group-hover:visible md:group-focus-within:visible'
-              )}
-            >
-              {revertButton}
-              {actionButton}
-            </span>
->>>>>>> upstream/main
           </span>
           <span
             className={cn(

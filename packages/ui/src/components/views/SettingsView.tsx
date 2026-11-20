@@ -52,7 +52,7 @@ import { IntegrationsPage } from '@/components/sections/integrations/Integration
 import { RoutingPage } from '@/components/sections/routing/RoutingPage';
 import { ExtensionsPage } from '@/components/sections/extensions/ExtensionsPage';
 import type { OpenChamberSection } from '@/components/sections/openchamber/types';
-import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPage';
+import { OpenChamberPage } from '@/components/sections/openchamber/OhPiChamberPage';
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsScrollbarTopClearanceContext } from '@/components/sections/shared/settingsScrollbarClearance';
@@ -83,12 +83,6 @@ import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS, MOBILE_HEADER_TITLE_CL
 const SETTINGS_SPLIT_SIDEBAR_WIDTH = 280;
 const SETTINGS_CLOSE_BUTTON_CLEARANCE = 32;
 const SETTINGS_DETAIL_HISTORY_KEY = '__openchamberSettingsDetail';
-<<<<<<< HEAD
-/** Pages that show one tab at a time (Chat, OMP, the Appearance theme list): open the one that holds the item. */
-||||||| bc50ba56aa
-/** Pages that show one tab at a time (Chat, the Appearance theme list): open the one that holds the item. */
-=======
->>>>>>> upstream/main
 const openSettingsTabFor = (itemId: string): void => {
   const chatTab = chatSettingsTabForSearchTarget(itemId);
   if (chatTab) useChatSettingsTabStore.getState().setTab(chatTab);
@@ -141,14 +135,7 @@ const pageOrder: SettingsPageSlug[] = [
   'remote-instances',
   'tunnel',
   'git',
-<<<<<<< HEAD
   // 'agent' group
-||||||| bc50ba56aa
-  'isolated-spaces',
-  // 'opencode' group — OpenCode
-=======
-  'isolated-spaces',
->>>>>>> upstream/main
   'providers',
   'web-search',
   'tools',
@@ -330,17 +317,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (settingsSlug === 'snippets') {
       void useSnippetsStore.getState().loadSnippets();
     }
-<<<<<<< HEAD
     // `activeProjectId` still matters: the settings directory follows the active
     // project until the user picks another one in the Settings selector.
   }, [activeProjectId, isSettingsDialogOpen, isWindowed, settingsDirectory, settingsSlug]);
-||||||| bc50ba56aa
-    // `activeProjectId` still matters: the settings directory follows the active
-    // project until the user picks another one in the Settings selector.
-  }, [activeProjectId, isSettingsDialogOpen, isWindowed, runtimeCtx.isVSCode, settingsDirectory, settingsSlug]);
-=======
-  }, [activeProjectId, catalogReloadRevision, isSettingsDialogOpen, isWindowed, runtimeCtx.isVSCode, settingsDirectory, settingsSlug]);
->>>>>>> upstream/main
 
   const openPage = React.useCallback((slug: SettingsPageSlug) => {
     setSettingsPage(slug);
@@ -854,13 +833,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               placeholder={t('settings.view.search.placeholder')}
               aria-label={t('settings.view.search.aria')}
               data-settings-search=""
-<<<<<<< HEAD
               className={cn(isMobile && 'typography-meta', 'min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground')}
-||||||| bc50ba56aa
-              className={cn(isMobile ? 'typography-meta' : 'typography-ui', 'min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground')}
-=======
-              className={cn(isMobile ? 'typography-meta' : 'typography-ui-label', 'min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground')}
->>>>>>> upstream/main
             />
             {hasSearchQuery && (
               <button
@@ -1128,7 +1101,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             </div>
           )}
 
-<<<<<<< HEAD
           {onClose && (
             <div className={cn('absolute right-0.5 z-50', isWindowed ? 'top-0.5' : 'top-1')}>
               <button
@@ -1142,35 +1114,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               </button>
             </div>
           )}
-||||||| bc50ba56aa
-      {onClose && (
-        <div className={cn('absolute inset-e-0.5 z-50', isWindowed ? 'top-0.5' : 'top-1')}>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('settings.view.actions.closeSettings')}
-            title={closeSettingsTitle}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md p-0.5 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Icon name="close" className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-=======
-      {onClose && (
-        <div className={cn('absolute inset-e-0.5 z-50', isWindowed ? 'top-0.5' : 'top-1')}>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('settings.view.actions.closeSettings')}
-            title={closeSettingsTitle}
-            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Icon name="close" className="size-4" />
-          </button>
-        </div>
-      )}
->>>>>>> upstream/main
         </>
       )}
 

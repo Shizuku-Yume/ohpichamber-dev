@@ -5,7 +5,6 @@ import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-<<<<<<< HEAD
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -15,22 +14,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController } from '@/components/comments';
-||||||| bc50ba56aa
-import { ActionToolbar } from '@/components/ui/action-toolbar';
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController, useLineNumberDragSelection } from '@/components/comments';
-=======
-import { ActionToolbar, type ToolbarAction } from '@/components/ui/action-toolbar';
-import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Icon } from '@/components/icon/Icon';
-import { PlanProgressLabel } from '@/components/session/project-context/PlansSection';
-import { usePlanActions } from '@/components/session/project-context/usePlanActions';
-import { useSessionKnowledgePins } from '@/components/session/project-context/useSessionKnowledgePins';
-import { PlanTodos } from '@/components/session/project-context/PlanTodos';
-import { registerOpenPlan } from '@/components/session/project-context/openPlanViews';
-import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController, useLineNumberDragSelection } from '@/components/comments';
->>>>>>> upstream/main
 
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
@@ -69,55 +52,16 @@ import { Icon } from "@/components/icon/Icon";
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
 import { useI18n } from '@/lib/i18n';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { ContextPanelHeaderToolbar } from '@/components/layout/contextPanelHeaderSlot';
-import { useInContextPanelHeader } from '@/components/layout/contextPanelHeaderSlotContext';
-import { cn } from '@/lib/utils';
-import { useMarkdownLocalAssets } from './files/previews/useMarkdownLocalAssets';
-import { watchFileOnScreen } from '@/lib/watchedFiles';
-
-/** The open plan's check while OpenCode watches its file: only for a watch lost on an OpenCode restart. */
-const WATCHED_PLAN_POLL_MS = 30_000;
-=======
-import { ContextPanelHeaderToolbar } from '@/components/layout/contextPanelHeaderSlot';
-import { useInContextPanelHeader } from '@/components/layout/contextPanelHeaderSlotContext';
-import { cn } from '@/lib/utils';
-import { useMarkdownLocalAssets } from './files/previews/useMarkdownLocalAssets';
-import { watchFileOnScreen } from '@/lib/watchedFiles';
-
-const WATCHED_PLAN_POLL_MS = 30_000;
->>>>>>> upstream/main
 
 type PlanViewProps = {
-<<<<<<< HEAD
   targetPath?: string | null;
   /** Saved project plan to open, with the project that owns it. The owner is
       part of the prop so the view never guesses it from the current directory:
       plan tabs outlive directory changes (persisted context tabs, mobile
       overlays), and for managed chats the owner is not a registered project a
       directory lookup could ever find. */
-||||||| bc50ba56aa
-  /** False while the panel holding the view is closed: nothing to keep fresh. */
-  visible?: boolean;
-  /** Saved project plan to open, with the project that owns it. The owner is
-      part of the prop so the view never guesses it from the current directory:
-      the Project knowledge panel and the mobile plan overlay keep a plan open
-      across directory changes, and for managed chats the owner is not a
-      registered project a directory lookup could ever find. */
-=======
-  visible?: boolean;
->>>>>>> upstream/main
   savedProjectPlan?: SavedProjectPlanTarget | null;
   onNavigatedToChat?: () => void;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  /** Rendered before the title, e.g. the project knowledge panel's back control. */
-  leading?: React.ReactNode;
-=======
-  leading?: React.ReactNode;
-  onClose?: () => void;
->>>>>>> upstream/main
 };
 
 const NO_PROJECT = { id: '', path: '' };
@@ -198,16 +142,10 @@ type SelectedLineRange = {
   end: number;
 };
 
-<<<<<<< HEAD
 /** The poll only covers a change no event announced. */
 const WATCHED_PLAN_POLL_MS = 2_000;
 
 export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProjectPlan = null, onNavigatedToChat }) => {
-||||||| bc50ba56aa
-export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProjectPlan = null, onNavigatedToChat, leading }) => {
-=======
-export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProjectPlan = null, onNavigatedToChat, leading, onClose }) => {
->>>>>>> upstream/main
   const { t } = useI18n();
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const createSession = useSessionUIStore((state) => state.createSession);
@@ -273,15 +211,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
   const [pendingPlanSend, setPendingPlanSend] = React.useState<PendingPlanSend | null>(null);
   const [isPlanSendSubmitting, setIsPlanSendSubmitting] = React.useState(false);
 
-<<<<<<< HEAD
   const [resolvedPath, setResolvedPath] = React.useState<string | null>(null);
   // Set once a saved project plan has actually loaded. Kept separate from
   // `resolvedPath` so nothing downstream can mistake a project plan for a file
   // the user could open, edit, or be shown a path for.
-||||||| bc50ba56aa
-  // Set once a saved project plan has actually loaded.
-=======
->>>>>>> upstream/main
   const [loadedProjectPlanId, setLoadedProjectPlanId] = React.useState<string | null>(null);
   const [loadedProjectPlanPath, setLoadedProjectPlanPath] = React.useState<string | null>(null);
   const hasDocument = Boolean(resolvedPath) || Boolean(loadedProjectPlanId);
@@ -296,20 +229,11 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
   const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
-<<<<<<< HEAD
   const planFileLabel = React.useMemo(() => {
     return displayPath ? displayPath.split('/').pop() || t('planView.file.defaultName') : t('planView.file.defaultName');
   }, [displayPath, t]);
   // Comments name the plan by its full path, as Files does for a file.
   const commentFileLabel = resolvedPath ?? loadedProjectPlanPath ?? planFileLabel;
-||||||| bc50ba56aa
-  const planFileLabel = t('planView.file.defaultName');
-  // Comments name the plan by its full path, as Files does for a file.
-  const commentFileLabel = loadedProjectPlanPath ?? planFileLabel;
-=======
-  const planFileLabel = t('planView.file.defaultName');
-  const commentFileLabel = loadedProjectPlanPath ?? planFileLabel;
->>>>>>> upstream/main
   const parsedTitle = React.useMemo(() => {
     if (!content.trim()) {
       return t('planView.title.default');
@@ -330,40 +254,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
   const editorViewRef = React.useRef<EditorView | null>(null);
   const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
   const previewRef = React.useRef<HTMLDivElement | null>(null);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  const setPreviewContainer = React.useCallback((node: HTMLDivElement | null) => {
-    previewRef.current = node;
-  }, []);
-
-  const openLinkedFile = React.useCallback((absolutePath: string) => {
-    if (!savedPlanProjectRef?.path) return;
-    useUIStore.getState().openContextFile(savedPlanProjectRef.path, absolutePath);
-  }, [savedPlanProjectRef]);
-  const markdownDocumentAssets = useMarkdownLocalAssets({
-    filePath: loadedProjectPlanPath,
-    workspaceRoot: savedPlanProjectRef?.path ?? null,
-    onOpenFile: openLinkedFile,
-    enabled: mdViewMode === 'preview' && hasDocument,
-    colorScheme: currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
-  });
-=======
-  const setPreviewContainer = React.useCallback((node: HTMLDivElement | null) => {
-    previewRef.current = node;
-  }, []);
-
-  const openLinkedFile = React.useCallback((absolutePath: string) => {
-    if (!savedPlanProjectRef?.path) return;
-    useUIStore.getState().openContextFile(savedPlanProjectRef.path, absolutePath);
-  }, [savedPlanProjectRef]);
-  const markdownDocumentAssets = useMarkdownLocalAssets({
-    filePath: loadedProjectPlanPath,
-    workspaceRoot: savedPlanProjectRef?.path ?? null,
-    onOpenFile: openLinkedFile,
-    enabled: viewMode === 'preview' && hasDocument,
-    colorScheme: currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
-  });
->>>>>>> upstream/main
 
   const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
 
@@ -525,7 +415,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
   }>({ key: null, target: null, content: '', editRevision: 0, savedRevision: 0, runtimeKey: '' });
   const saveQueue = React.useState(createPlanSaveQueue)[0];
 
-<<<<<<< HEAD
   // Filesystem writes keep the runtime adapter precedence the view always
   // used: the active RuntimeAPIs first, the registry as fallback.
   const writeDocument = React.useCallback(async (target: NonNullable<typeof docRef.current['target']>, text: string): Promise<void> => {
@@ -561,14 +450,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
   // is silently dropped. The queue orders it behind any write already in
   // flight for the same document, and the captured runtime key stops content
   // from one host being written into another after a runtime switch.
-||||||| bc50ba56aa
-  // Queue any unflushed edits. Runs on document switches and on unmount, both
-  // of which cancel the debounced save — without this the last 350ms of typing
-  // is silently dropped. The queue orders it behind any write already in
-  // flight for the same document, and the captured runtime key stops content
-  // from one host being written into another after a runtime switch.
-=======
->>>>>>> upstream/main
   const scheduleSave = React.useCallback(() => {
     const doc = docRef.current;
     if (!doc.key || !doc.target || doc.editRevision <= doc.savedRevision) {
@@ -685,31 +566,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
         return;
       }
 
-<<<<<<< HEAD
       if (targetPath) {
         const fileKey = JSON.stringify(['plan-file', activeRuntimeKey, targetPath]);
         await saveQueue.pendingFor(fileKey);
-||||||| bc50ba56aa
-      // A plan re-opened while its own flush is still writing must read the
-      // post-write state, not race it. The queue reset afterwards is safe:
-      // every write for this key has settled, and the reloaded document
-      // restarts its revision counter at zero.
-      await saveQueue.pendingFor(savedPlanKey);
-      if (cancelled) return;
-      saveQueue.reset(savedPlanKey);
-      setLoading(true);
-      try {
-        const plan = await fetchProjectPlan(savedPlanProjectRef, savedPlanId);
-=======
-      await saveQueue.pendingFor(savedPlanKey);
-      if (cancelled) return;
-      saveQueue.reset(savedPlanKey);
-      setLoading(true);
-      try {
-        const plan = await fetchProjectPlan(savedPlanProjectRef, savedPlanId);
->>>>>>> upstream/main
         if (cancelled) return;
-<<<<<<< HEAD
         saveQueue.reset(fileKey);
         setLoading(true);
         try {
@@ -731,57 +591,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
           setContent('');
         } finally {
           if (!cancelled) setLoading(false);
-||||||| bc50ba56aa
-        if (!plan) {
-          // The plan or its markdown is gone. Leave the view empty and
-          // unsaveable rather than presenting an editor that would recreate
-          // a document the user deleted.
-          setLoadError('Plan not found');
-          return;
-=======
-        if (!plan) {
-          setLoadError('Plan not found');
-          return;
->>>>>>> upstream/main
         }
-<<<<<<< HEAD
         return;
-||||||| bc50ba56aa
-        docRef.current = {
-          key: savedPlanKey,
-          target: { projectRef: savedPlanProjectRef, planId: savedPlanId },
-          content: plan.raw,
-          editRevision: 0,
-          savedRevision: 0,
-          runtimeKey: activeRuntimeKey,
-        };
-        setContent(plan.raw);
-        setLoadedProjectPlanId(savedPlanId);
-        setLoadedProjectPlanPath(plan.path ?? null);
-      } catch (error) {
-        if (cancelled) return;
-        setLoadError(error instanceof Error ? error.message : 'Plan load failed');
-      } finally {
-        if (!cancelled) setLoading(false);
-=======
-        docRef.current = {
-          key: savedPlanKey,
-          target: { projectRef: savedPlanProjectRef, planId: savedPlanId },
-          content: plan.raw,
-          editRevision: 0,
-          savedRevision: 0,
-          runtimeKey: activeRuntimeKey,
-        };
-        setContent(plan.raw);
-        setStartsEmpty(!parsePlanMarkdown(plan.raw, '').body.trim());
-        setLoadedProjectPlanId(savedPlanId);
-        setLoadedProjectPlanPath(plan.path ?? null);
-      } catch (error) {
-        if (cancelled) return;
-        setLoadError(error instanceof Error ? error.message : 'Plan load failed');
-      } finally {
-        if (!cancelled) setLoading(false);
->>>>>>> upstream/main
       }
 
       setResolvedPath(null);
@@ -795,7 +606,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
     };
   }, [activeRuntimeKey, homeDirectory, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, sessionDirectory, targetPath]);
 
-<<<<<<< HEAD
   // Synchronous buffer tracking: if an edit and an unmount land in the same
   // batch, the passive content effect would never run and a flush would save
   // a stale buffer. The editor echoes text it was given as a change; that echo
@@ -810,30 +620,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
   // The debounced write and the close/switch flush go through the same queue
   // (scheduleSave), so two saves of one document can never complete out of
   // order and a flush never duplicates a debounce of the same revision.
-||||||| bc50ba56aa
-  // An agent can change the open plan, through the knowledge tool or by
-  // editing its file. With no unsaved edits the editor takes the new text, so
-  // a later edit starts from it instead of writing the old document back over
-  // it. Unsaved edits win: the next save replaces the agent's version, the way
-  // typing in a note does. A save through the API announces itself; a file
-  // edit does not, so the open plan also watches or polls its file, as the
-  // file panel does for open files.
-=======
-  const [heldForMove, setHeldForMove] = React.useState(false);
-  React.useEffect(() => {
-    if (!savedPlanProjectRef || !savedPlanId || !savedPlanKey || loadedProjectPlanId !== savedPlanId) return;
-    return registerOpenPlan(resolveProjectContextId(savedPlanProjectRef), savedPlanId, {
-      setHeld: setHeldForMove,
-      flush: async () => {
-        scheduleSave();
-        await saveQueue.pendingFor(savedPlanKey);
-        const doc = docRef.current;
-        return doc.key === savedPlanKey && doc.savedRevision >= doc.editRevision;
-      },
-    });
-  }, [loadedProjectPlanId, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave]);
-
->>>>>>> upstream/main
   React.useEffect(() => {
     if (!resolvedPath && !loadedProjectPlanId) {
       return;
@@ -891,95 +677,13 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
       }
     };
     const release = observeProjectContext(savedPlanProjectRef, poll);
-<<<<<<< HEAD
     const interval = window.setInterval(() => { void poll(); }, WATCHED_PLAN_POLL_MS);
-||||||| bc50ba56aa
-    let interval = window.setInterval(() => { void poll(); }, 2000);
-    // A plan kept in the repository is watched by OpenCode, so its change
-    // event starts the check and the poll only covers a watch lost on an
-    // OpenCode restart. A plan in OpenChamber's own data folder keeps polling.
-    const watch = loadedProjectPlanPath
-      ? watchFileOnScreen(savedPlanProjectRef.path, loadedProjectPlanPath, () => { void poll(); })
-      : null;
-    let stopped = false;
-    void watch?.watching.then((watching) => {
-      if (!watching || stopped) return;
-      window.clearInterval(interval);
-      interval = window.setInterval(() => { void poll(); }, WATCHED_PLAN_POLL_MS);
-    });
-=======
-    let interval = window.setInterval(() => { void poll(); }, 2000);
-    const watch = loadedProjectPlanPath
-      ? watchFileOnScreen(savedPlanProjectRef.path, loadedProjectPlanPath, () => { void poll(); })
-      : null;
-    let stopped = false;
-    void watch?.watching.then((watching) => {
-      if (!watching || stopped) return;
-      window.clearInterval(interval);
-      interval = window.setInterval(() => { void poll(); }, WATCHED_PLAN_POLL_MS);
-    });
->>>>>>> upstream/main
     return () => {
       window.clearInterval(interval);
       release();
       poller.dispose();
     };
-<<<<<<< HEAD
   }, [loadedProjectPlanId, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue]);
-||||||| bc50ba56aa
-  }, [loadedProjectPlanId, loadedProjectPlanPath, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, visible]);
-
-  // Synchronous buffer tracking: if an edit and an unmount land in the same
-  // batch, the passive content effect would never run and a flush would save
-  // a stale buffer. The editor echoes text it was given as a change; that
-  // echo is not an edit and must not schedule a save.
-  const handleContentChange = React.useCallback((next: string) => {
-    if (next === docRef.current.content) return;
-    docRef.current.content = next;
-    docRef.current.editRevision += 1;
-    setContent(next);
-  }, []);
-
-  // The debounced write and the close/switch flush go through the same queue
-  // (scheduleSave), so two saves of one document can never complete out of
-  // order and a flush never duplicates a debounce of the same revision.
-  React.useEffect(() => {
-    if (!loadedProjectPlanId) {
-      return;
-    }
-
-    const controller = window.setTimeout(() => {
-      scheduleSave();
-    }, 350);
-
-    return () => {
-      window.clearTimeout(controller);
-    };
-  }, [content, loadedProjectPlanId, scheduleSave]);
-=======
-  }, [loadedProjectPlanId, loadedProjectPlanPath, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, visible]);
-
-  const handleContentChange = React.useCallback((next: string) => {
-    if (next === docRef.current.content) return;
-    docRef.current.content = next;
-    docRef.current.editRevision += 1;
-    setContent(next);
-  }, []);
-
-  React.useEffect(() => {
-    if (!loadedProjectPlanId) {
-      return;
-    }
-
-    const controller = window.setTimeout(() => {
-      scheduleSave();
-    }, 350);
-
-    return () => {
-      window.clearTimeout(controller);
-    };
-  }, [content, loadedProjectPlanId, scheduleSave]);
->>>>>>> upstream/main
 
   React.useEffect(() => {
     return () => {
@@ -993,18 +697,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
   }, [onNavigatedToChat, setSessionSwitcherOpen]);
 
   const handleConfirmPlanSend = React.useCallback(
-<<<<<<< HEAD
     async (execution: TodoSendExecution) => {
       // A saved plan sends against its own project — the one it is stored
       // under — not against whatever directory the viewer is currently in.
       // For filesystem plans those are the same directory.
-||||||| bc50ba56aa
-    async (dialogExecution: TodoSendExecution) => {
-      // A saved plan sends against its own project — the one it is stored
-      // under — not against whatever directory the viewer is currently in.
-=======
-    async (dialogExecution: TodoSendExecution) => {
->>>>>>> upstream/main
       const sendTargetProject = savedPlanProjectRef ?? currentProjectRef;
       if (!sendTargetProject || !pendingPlanSend || isManagedChatPlan) {
         return;
@@ -1015,87 +711,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
         if (getRuntimeKey() !== runtimeKey || getRuntimeSwitchRevision() !== revision) throw new Error('Runtime changed');
       };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-      // A saved plan is a markdown file too, so the agent reads it and ticks
-      // its steps there like any other plan file.
-      const planFilePath = loadedProjectPlanPath;
-=======
-      const planFilePath = loadedProjectPlanPath;
->>>>>>> upstream/main
       setIsPlanSendSubmitting(true);
 
       try {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        let prompts: MagicPromptSnapshot;
-        try {
-          // The plan's project owns the prompts, also when the session lands in a new worktree.
-          prompts = await loadMagicPrompts(sendTargetProject.path);
-        } catch (error) {
-          // Nothing was created yet; the send dialog stays open with its choices.
-          toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
-          return;
-        }
-        const visiblePrompt = prompts.render(
-          pendingPlanSend.action === 'improve' ? 'plan.improve.visible' : 'plan.implement.visible',
-          {
-            plan_title: sendPromptTitle,
-          },
-        );
-        const instructionsText = prompts.render(
-          pendingPlanSend.action === 'improve' ? 'plan.improve.instructions' : 'plan.implement.instructions',
-          {
-            plan_title: sendPromptTitle,
-            plan_path: planFilePath ?? '',
-          },
-        );
-        // A server that answered without the plan's path leaves the agent no
-        // file to read, so the plan substance rides along in the message.
-        const planSubstance = planFilePath
-          ? instructionsText
-          : [
-              instructionsText,
-              '',
-              'The plan is not stored as a file in the repository and has no file path. Its full current contents follow below this note and are the source of truth for the plan. Where the instructions above refer to the plan file, treat the plan as stored in OpenChamber project knowledge (it is edited through the OpenChamber UI): propose plan revisions as plan text in the chat rather than editing a file.',
-              '',
-              content,
-            ].join('\n');
-        const syntheticParts = [{ synthetic: true as const, text: planSubstance }];
-
-=======
-        let prompts: MagicPromptSnapshot;
-        try {
-          prompts = await loadMagicPrompts(sendTargetProject.path);
-        } catch (error) {
-          toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
-          return;
-        }
-        const visiblePrompt = prompts.render(
-          pendingPlanSend.action === 'improve' ? 'plan.improve.visible' : 'plan.implement.visible',
-          {
-            plan_title: sendPromptTitle,
-          },
-        );
-        const instructionsText = prompts.render(
-          pendingPlanSend.action === 'improve' ? 'plan.improve.instructions' : 'plan.implement.instructions',
-          {
-            plan_title: sendPromptTitle,
-            plan_path: planFilePath ?? '',
-          },
-        );
-        const planSubstance = planFilePath
-          ? instructionsText
-          : [
-              instructionsText,
-              '',
-              'The plan is not stored as a file in the repository and has no file path. Its full current contents follow below this note and are the source of truth for the plan. Where the instructions above refer to the plan file, treat the plan as stored in OpenChamber project knowledge (it is edited through the OpenChamber UI): propose plan revisions as plan text in the chat rather than editing a file.',
-              '',
-              content,
-            ].join('\n');
-        const syntheticParts = [{ synthetic: true as const, text: planSubstance }];
-
->>>>>>> upstream/main
         routeToChat();
 
         let sessionId: string | null = null;
@@ -1156,41 +774,11 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
 
         setCurrentSession(sessionId, directoryHint);
-<<<<<<< HEAD
         // "Run as goal" uses the composer's arm mechanism. Set it either way
         // so an unrelated armed flag cannot leak into this plan send. OMP
         // receives the full plan objective before the first prompt; the
         // prompt carries the plan text or points to its source file.
         const goalObjective = execution.runAsGoal === true
-||||||| bc50ba56aa
-        // The plan's card leads to the session working on it. A failed link
-        // costs only that shortcut, so it never holds up the send.
-        if (savedPlanProjectRef && savedPlanId) {
-          void useProjectContextStore.getState().linkPlanSession(savedPlanProjectRef, savedPlanId, sessionId);
-        }
-        // "Run as goal" rides the same arm mechanism as the composer target
-        // button; set explicitly either way so a stray armed flag cannot
-        // leak into a non-goal plan send. The objective override carries the
-        // plan substance — "Implement this plan: X" alone would give the
-        // progress audit nothing to judge against. Plans that exceed the
-        // objective limit are distilled into completion criteria by the
-        // small model (the working agent always reads the full plan from
-        // its file); on distillation failure a head+tail excerpt keeps the
-        // intent (top) and acceptance criteria (bottom), sacrificing the
-        // implementation middle the agent reads from the file anyway.
-        // Oversized objectives (huge plans) are distilled into audit
-        // criteria inside setSessionGoal — the shared path for every goal
-        // source. Here we only compose header + full content.
-        // Improve stops before implementation, so only Implement runs as a goal.
-        const runAsGoal = pendingPlanSend.action === 'implement' && execution.runAsGoal === true;
-        const goalObjective = runAsGoal
-=======
-        if (savedPlanProjectRef && savedPlanId) {
-          void useProjectContextStore.getState().linkPlanSession(savedPlanProjectRef, savedPlanId, sessionId);
-        }
-        const runAsGoal = pendingPlanSend.action === 'implement' && execution.runAsGoal === true;
-        const goalObjective = runAsGoal
->>>>>>> upstream/main
           ? [
               `Implement the plan "${sendPromptTitle}" end-to-end${resolvedPath ? ` (plan file: ${resolvedPath})` : ' (the full plan follows)'}.`,
               resolvedPath
@@ -1244,135 +832,15 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
     });
   }, [commentText, deleteDraft, editingDraftId, handleCancelComment, handleSaveComment, isDragging, lineSelection, planFileDrafts, planFileLabel, setCommentText, startEdit]);
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // Improve and implement each open the same choice of where the plan goes.
-  const sendMenu = (action: 'improve' | 'implement') => (
-    <>
-      <DropdownMenuItem
-        onClick={() => setPendingPlanSend({ action, target: 'session' })}
-        disabled={isManagedChatPlan}
-      >
-        {t('planView.actions.sendToNewSession')}
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        onClick={() => setPendingPlanSend({ action, target: 'worktree' })}
-        disabled={!canCreateWorktree}
-      >
-        {t('planView.actions.sendToNewWorktreeSession')}
-      </DropdownMenuItem>
-    </>
-  );
-
-  const copyPlanContents = async () => {
-    const result = await copyTextToClipboard(content);
-    if (!result.ok) return;
-    setCopiedContent(true);
-    if (copiedContentTimeoutRef.current !== null) {
-      window.clearTimeout(copiedContentTimeoutRef.current);
-    }
-    copiedContentTimeoutRef.current = window.setTimeout(() => {
-      setCopiedContent(false);
-    }, 1200);
-  };
-
-=======
-  const sendMenu = (action: 'improve' | 'implement') => (
-    <>
-      <DropdownMenuItem
-        onClick={() => setPendingPlanSend({ action, target: 'session' })}
-        disabled={isManagedChatPlan}
-      >
-        {t('planView.actions.sendToNewSession')}
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        onClick={() => setPendingPlanSend({ action, target: 'worktree' })}
-        disabled={!canCreateWorktree}
-      >
-        {t('planView.actions.sendToNewWorktreeSession')}
-      </DropdownMenuItem>
-    </>
-  );
-
-  const copyPlanContents = async () => {
-    const result = await copyTextToClipboard(content);
-    if (result.ok) toast.success(t('planView.toast.copied'));
-  };
-
-  const entryActions: ToolbarAction[] = planLink && savedPlanProjectRef ? [
-    {
-      id: 'pin',
-      label: pinnedPlanIds.has(planLink.id)
-        ? t('rightSidebar.contextNotesTodo.pin.detach')
-        : t('rightSidebar.contextNotesTodo.pin.attach'),
-      icon: pinnedPlanIds.has(planLink.id) ? 'pushpin-2-fill' : 'pushpin-2',
-      onSelect: () => void togglePlanPin(planLink.id, !pinnedPlanIds.has(planLink.id)),
-    },
-    ...planActions.actionsFor(planLink, { onDeleted: onClose }).filter((action) => action.id !== 'move').map((action): ToolbarAction => ({
-      id: action.id,
-      label: action.label,
-      icon: action.id === 'open-session' ? 'chat-3' : 'delete-bin',
-      disabled: action.disabled,
-      destructive: action.destructive,
-      onSelect: action.onSelect,
-    })),
-  ] : [];
-  const sendDisabled = !previewContent.trim() || isManagedChatPlan;
-
->>>>>>> upstream/main
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background">
-<<<<<<< HEAD
       <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-1.5 flex-shrink-0">
         <div className="min-w-0 flex-1">
           <div className="typography-ui-label font-medium truncate">{parsedTitle}</div>
           {loadError ? (
             <div className="typography-micro text-[color:var(--status-error)] truncate" title={loadError}>
               {t('planView.error.loadFailed')}
-||||||| bc50ba56aa
-      <ContextPanelHeaderToolbar>
-      <div className={cn('flex min-w-0 items-center gap-2', inPanelHeader ? 'flex-1 py-1 pe-1' : 'border-b border-edge-muted px-3 py-1.5 flex-shrink-0')}>
-        {leading}
-        <ActionToolbar
-          className="flex-1"
-          start={(
-            <div className="min-w-0 flex-1">
-              <div className="typography-ui-label font-medium truncate">{parsedTitle}</div>
-              {loadError ? (
-                <div className="typography-micro text-[color:var(--status-error)] truncate" title={loadError}>
-                  {t('planView.error.loadFailed')}
-                </div>
-              ) : null}
-              {saveError ? (
-                <div className="typography-micro text-[color:var(--status-error)] truncate" title={saveError}>
-                  {t('planView.error.saveFailed')}
-                </div>
-              ) : null}
-=======
-      <ContextPanelHeaderToolbar>
-      <div className={cn('flex min-w-0 items-center gap-2', inPanelHeader ? 'flex-1 py-1 pe-1' : 'border-b border-edge-muted px-3 py-1.5 flex-shrink-0')}>
-        {leading}
-        <ActionToolbar
-          className="flex-1"
-          start={(
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 truncate typography-ui-label font-medium" dir="auto">{parsedTitle}</span>
-                {planLink?.progress ? <PlanProgressLabel progress={planLink.progress} /> : null}
-              </div>
-              {loadError ? (
-                <div className="typography-micro text-[color:var(--status-error)] truncate" title={loadError}>
-                  {t('planView.error.loadFailed')}
-                </div>
-              ) : null}
-              {saveError ? (
-                <div className="typography-micro text-[color:var(--status-error)] truncate" title={saveError}>
-                  {t('planView.error.saveFailed')}
-                </div>
-              ) : null}
->>>>>>> upstream/main
             </div>
-<<<<<<< HEAD
           ) : null}
           {saveError ? (
             <div className="typography-micro text-[color:var(--status-error)] truncate" title={saveError}>
@@ -1503,115 +971,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
             </Button>
           </div>
         ) : null}
-||||||| bc50ba56aa
-          )}
-          groups={hasDocument ? [
-            [{
-              id: 'mode',
-              label: t('documentToolbar.preview'),
-              icon: 'eye',
-              pressed: mdViewMode === 'preview',
-              onSelect: () => saveMdViewMode(mdViewMode === 'preview' ? 'edit' : 'preview'),
-              pinned: true,
-            }],
-            [
-              {
-                id: 'improve',
-                label: t('planView.actions.improve'),
-                icon: 'loop-right-ai',
-                disabled: !content.trim() || isManagedChatPlan,
-                menu: sendMenu('improve'),
-              },
-              {
-                id: 'implement',
-                label: t('planView.actions.implement'),
-                icon: 'code-ai',
-                disabled: !content.trim() || isManagedChatPlan,
-                menu: sendMenu('implement'),
-              },
-            ],
-            [
-              // Reads the plan's text, so it works in either mode.
-              showMessageTTSButtons && {
-                id: 'read-aloud',
-                label: isTTSPlaying ? t('planView.tts.stopSpeaking') : t('planView.tts.readAloud'),
-                icon: 'volume-up',
-                iconClassName: isTTSPlaying ? 'text-[var(--primary-text)]' : undefined,
-                onSelect: () => {
-                  if (isTTSPlaying) {
-                    stopTTS();
-                  } else if (content.trim()) {
-                    void playTTS(content);
-                  }
-                },
-              },
-              {
-                id: 'copy-contents',
-                label: t('planView.actions.copyPlanContents'),
-                icon: 'file-copy',
-                done: copiedContent,
-                onSelect: () => void copyPlanContents(),
-              },
-            ],
-          ] : []}
-          fold
-        />
-=======
-          )}
-          status={hasDocument ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" size="xs" disabled={sendDisabled} className="typography-ui-label">
-                  {t('planView.actions.implement')}
-                  <Icon name="arrow-down-s" className="size-3.5 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {sendMenu('implement')}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : undefined}
-          groups={hasDocument ? [
-            [{
-              id: 'mode',
-              label: t('documentToolbar.preview'),
-              icon: 'eye',
-              pressed: viewMode === 'preview',
-              onSelect: () => saveMdViewMode(viewMode === 'preview' ? 'edit' : 'preview'),
-              pinned: true,
-            }],
-          ] : []}
-          menuOnly={hasDocument ? [
-            {
-              id: 'improve',
-              label: t('planView.actions.improve'),
-              icon: 'loop-right-ai',
-              disabled: sendDisabled,
-              menu: sendMenu('improve'),
-            },
-            showMessageTTSButtons && {
-              id: 'read-aloud',
-              label: isTTSPlaying ? t('planView.tts.stopSpeaking') : t('planView.tts.readAloud'),
-              icon: 'volume-up',
-              iconClassName: isTTSPlaying ? 'text-[var(--primary-text)]' : undefined,
-              onSelect: () => {
-                if (isTTSPlaying) {
-                  stopTTS();
-                } else if (content.trim()) {
-                  void playTTS(content);
-                }
-              },
-            },
-            {
-              id: 'copy-contents',
-              label: t('planView.actions.copyPlanContents'),
-              icon: 'file-copy',
-              onSelect: () => void copyPlanContents(),
-            },
-            ...entryActions,
-          ] : []}
-        />
->>>>>>> upstream/main
       </div>
 
       <TodoSendDialog
@@ -1635,20 +994,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
           ) : (
             <div className="relative h-full">
               <div className="h-full">
-<<<<<<< HEAD
                 {mdViewMode === 'preview' ? (
                   <div className="h-full overflow-auto p-3" ref={previewRef}>
                     {/* Same comment-on-selection as a markdown file preview. */}
-||||||| bc50ba56aa
-                {mdViewMode === 'preview' ? (
-                  <>
-                  <div className="overlay-scrollbar-target overlay-scrollbar-container h-full overflow-auto p-3" ref={setPreviewContainer}>
-                    {/* Same comment-on-selection as a markdown file preview. */}
-=======
-                {viewMode === 'preview' ? (
-                  <>
-                  <div className="overlay-scrollbar-target overlay-scrollbar-container h-full overflow-auto p-3" ref={setPreviewContainer}>
->>>>>>> upstream/main
                     <FilePreviewCommentMenu
                       containerRef={previewRef}
                       filePath={commentFileLabel}
@@ -1664,13 +1012,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ visible = true, savedProject
                         </div>
                       }
                     >
-<<<<<<< HEAD
                       <SimpleMarkdownRenderer content={content} className="typography-markdown-body" enableFileReferences={false} />
-||||||| bc50ba56aa
-                      <SimpleMarkdownRenderer content={content} documentAssets={markdownDocumentAssets} className="typography-markdown-body" frontmatter="properties" enableFileReferences={false} />
-=======
-                      <SimpleMarkdownRenderer content={previewContent} documentAssets={markdownDocumentAssets} className="typography-markdown-body" frontmatter="properties" enableFileReferences={false} />
->>>>>>> upstream/main
                     </ErrorBoundary>
                   </div>
                 ) : (
