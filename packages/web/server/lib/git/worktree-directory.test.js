@@ -2,8 +2,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveWorktreeDirectory } from './worktree-directory.js';
 
-const primaryWorktree = path.join(path.sep, 'projects', 'my-app');
-const homeDirectory = path.join(path.sep, 'home', 'dev');
+const primaryWorktree = path.resolve(path.sep, 'projects', 'my-app');
+const homeDirectory = path.resolve(path.sep, 'home', 'dev');
 
 describe('resolveWorktreeDirectory', () => {
   it('returns null when the setting is absent or not a non-empty string', () => {
@@ -22,7 +22,7 @@ describe('resolveWorktreeDirectory', () => {
   });
 
   it('uses an absolute path as-is', () => {
-    const absolute = path.join(path.sep, 'var', 'trees');
+    const absolute = path.resolve(path.sep, 'var', 'trees');
     expect(resolveWorktreeDirectory(absolute, primaryWorktree, homeDirectory)).toBe(absolute);
   });
 
