@@ -16,12 +16,6 @@ import { useSessionFoldersStore } from './useSessionFoldersStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 
-<<<<<<< HEAD
-/** Pick a color key that's least used among existing projects */
-||||||| bc50ba56aa
-/** Pick the preset colour least used among existing projects */
-=======
->>>>>>> upstream/main
 const pickAutoColor = (projects: ProjectEntry[]): string => {
   const colorKeys = PROJECT_COLORS.map((c) => c.key);
   const usageCounts = new Map<string, number>();
@@ -51,7 +45,6 @@ interface ProjectsStore {
   activeProjectId: string | null;
   manualProjectOrder: string[];
 
-<<<<<<< HEAD
   /**
    * A discovered session's directory joins the project list without a trust
    * prompt and without becoming active: the session's transcript needs its
@@ -59,13 +52,6 @@ interface ProjectsStore {
    */
   adoptSessionProject: (sessionId: string, directory: string, isCurrent: () => boolean) => Promise<boolean>;
   addProject: (path: string, options?: { label?: string; id?: string }) => Promise<ProjectEntry | null>;
-||||||| bc50ba56aa
-  addProject: (path: string, options?: { label?: string; id?: string }) => Promise<ProjectEntry | null>;
-  adoptSessionProject: (sessionId: string, directory: string, isCurrent: () => boolean) => Promise<boolean>;
-=======
-  addProject: (path: string, options?: { label?: string; id?: string }) => Promise<ProjectEntry | null>;
-  adoptSessionProject: (sessionId: string, directory: string, isCurrent: (directory: string) => boolean) => Promise<string | null>;
->>>>>>> upstream/main
   addProjects: (paths: string[]) => Promise<ProjectEntry[]>;
   removeProject: (id: string) => void;
   setActiveProject: (id: string) => void;
@@ -199,14 +185,6 @@ const deriveProjectLabel = (path: string): string => {
   return segments[segments.length - 1] || normalized;
 };
 
-<<<<<<< HEAD
-// Labels auto-derived by older versions were title-cased and persisted. Drop
-// them back to the folder name; labels the user typed themselves are kept.
-||||||| bc50ba56aa
-// Labels auto-derived by older versions were title-cased and persisted. Drop
-// them back to the folder name unless marked as a manual rename.
-=======
->>>>>>> upstream/main
 const legacyAutoProjectLabel = (path: string): string => {
   const derived = deriveProjectLabel(path);
   return derived.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -410,32 +388,7 @@ const persistProjects = (projects: ProjectEntry[], activeProjectId: string | nul
   if (manualOrder) {
     persistManualProjectOrder(manualOrder);
   }
-<<<<<<< HEAD
   return updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
-||||||| bc50ba56aa
-  void updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
-};
-
-// Discovery looks the project up in the server's list, so it waits for the
-// debounced write that adds these entries. One project at a time, so adding a
-// batch does not walk every folder at once.
-const discoverIconsOnceSaved = async (get: () => ProjectsStore, entries: ProjectEntry[]) => {
-  const saved = await updateDesktopSettings({ projects: get().projects });
-  if (!saved.ok) return;
-  for (const entry of entries) {
-    await get().discoverProjectIcon(entry.id);
-  }
-=======
-  void updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
-};
-
-const discoverIconsOnceSaved = async (get: () => ProjectsStore, entries: ProjectEntry[]) => {
-  const saved = await updateDesktopSettings({ projects: get().projects });
-  if (!saved.ok) return;
-  for (const entry of entries) {
-    await get().discoverProjectIcon(entry.id);
-  }
->>>>>>> upstream/main
 };
 
 const persistManualProjectOrder = (manualOrder: string[]) => {
@@ -447,340 +400,8 @@ const persistManualProjectOrder = (manualOrder: string[]) => {
 };
 
 const initialProjects = readPersistedProjects();
-<<<<<<< HEAD
 const persistedInitialActiveProjectId = readPersistedActiveProjectId();
 const initialActiveProjectId = initialProjects.some((project) => project.id === persistedInitialActiveProjectId)
-||||||| bc50ba56aa
-const normalizeVSCodeWorkspaceFolders = (folders: VSCodeWorkspaceFolderConfig[]): VSCodeWorkspaceFolderConfig[] => {
-  const result: VSCodeWorkspaceFolderConfig[] = [];
-  const seen = new Set<string>();
-  for (const folder of folders) {
-    const normalizedPath = normalizeProjectPath(folder.path);
-    if (!normalizedPath || seen.has(normalizedPath)) {
-      continue;
-    }
-    seen.add(normalizedPath);
-    result.push({
-      name: folder.name?.trim(),
-      path: normalizedPath,
-    });
-  }
-  return result;
-};
-
-const createVSCodeWorkspaceProject = (
-  folder: VSCodeWorkspaceFolderConfig,
-  existing: ProjectEntry | null,
-  now: number,
-  activePath: string | null,
-): ProjectEntry | null => {
-  const normalizedPath = normalizeProjectPath(folder.path);
-  if (!normalizedPath) {
-    return null;
-  }
-  const id = createProjectIdFromPath(normalizedPath);
-  const isActive = activePath === normalizedPath;
-  return {
-    ...existing,
-    id,
-    path: normalizedPath,
-    label: deriveProjectLabel(normalizedPath),
-    labelSource: 'auto',
-    addedAt: existing?.addedAt ?? now,
-    lastOpenedAt: isActive ? now : existing?.lastOpenedAt ?? now,
-  };
-};
-
-const getVSCodeWorkspaceFolders = (): VSCodeWorkspaceFolderConfig[] | null => {
-  const runtimeApis = getRegisteredRuntimeAPIs();
-  const config = getVSCodeBootstrapConfig();
-  if (!isVSCodeRuntime(runtimeApis, config)) {
-    return null;
-  }
-  const folders = Array.isArray(config?.workspaceFolders)
-    ? config.workspaceFolders
-        .map((entry) => {
-          const candidate = entry as { name?: unknown; path?: unknown };
-          const path = typeof candidate.path === 'string' ? candidate.path.trim() : '';
-          if (!path) return null;
-          const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
-          return { name, path };
-        })
-        .filter((entry): entry is { name: string; path: string } => entry !== null)
-    : [];
-
-  if (folders.length > 0) {
-    return normalizeVSCodeWorkspaceFolders(folders);
-  }
-
-  const workspaceFolder = config?.workspaceFolder;
-  if (typeof workspaceFolder !== 'string' || workspaceFolder.trim().length === 0) {
-    return null;
-  }
-
-  return normalizeVSCodeWorkspaceFolders([{ path: workspaceFolder }]);
-};
-
-const createVSCodeWorkspaceProjects = (
-  folders: VSCodeWorkspaceFolderConfig[],
-  existingProjects: ProjectEntry[],
-  activePath?: string | null,
-): { projects: ProjectEntry[]; activeProjectId: string | null; activeProject: ProjectEntry | null } | null => {
-  const normalizedFolders = normalizeVSCodeWorkspaceFolders(folders);
-  const normalizedActivePath = activePath ? normalizeProjectPath(activePath) : null;
-  const effectiveFolders = normalizedFolders.length === 0 && normalizedActivePath
-    ? [{ path: normalizedActivePath }]
-    : normalizedActivePath && !normalizedFolders.some((folder) => folder.path === normalizedActivePath)
-    ? [...normalizedFolders, { path: normalizedActivePath }]
-    : normalizedFolders;
-  if (effectiveFolders.length === 0) {
-    return null;
-  }
-  const now = Date.now();
-  const projects = effectiveFolders
-    .map((folder) => createVSCodeWorkspaceProject(
-      folder,
-      existingProjects.find((project) => project.path === folder.path) ?? null,
-      now,
-      normalizedActivePath,
-    ))
-    .filter((project): project is ProjectEntry => project !== null);
-
-  if (projects.length === 0) {
-    return null;
-  }
-
-  const activeProject = normalizedActivePath
-    ? projects.find((project) => project.path === normalizedActivePath) ?? null
-    : projects[0] ?? null;
-  const activeProjectId = activeProject?.id ?? projects[0]?.id ?? null;
-
-  if (streamDebugEnabled()) {
-    console.log('[OpenChamber][VSCode][projects] Using workspace projects', projects);
-  }
-
-  return { projects, activeProjectId, activeProject: activeProject ?? projects[0] ?? null };
-};
-
-const projectIconImagesEqual = (
-  left: ProjectEntry['iconImage'],
-  right: ProjectEntry['iconImage'],
-): boolean => {
-  if (left === right) return true;
-  if (!left || !right) return left === right;
-  return left.mime === right.mime
-    && left.updatedAt === right.updatedAt
-    && left.source === right.source;
-};
-
-const vscodeWorkspaceProjectsEqual = (left: ProjectEntry[], right: ProjectEntry[]): boolean => {
-  if (left.length !== right.length) return false;
-  return left.every((leftProject, index) => {
-    const rightProject = right[index];
-    if (!rightProject) return false;
-    return leftProject.id === rightProject.id
-      && leftProject.path === rightProject.path
-      && leftProject.label === rightProject.label
-      && leftProject.labelSource === rightProject.labelSource
-      && leftProject.icon === rightProject.icon
-      && leftProject.color === rightProject.color
-      && leftProject.iconBackground === rightProject.iconBackground
-      && leftProject.defaultAgent === rightProject.defaultAgent
-      && leftProject.defaultModel === rightProject.defaultModel
-      && leftProject.defaultVariant === rightProject.defaultVariant
-      && leftProject.addedAt === rightProject.addedAt
-      && leftProject.lastOpenedAt === rightProject.lastOpenedAt
-      && leftProject.sidebarCollapsed === rightProject.sidebarCollapsed
-      && projectIconImagesEqual(leftProject.iconImage, rightProject.iconImage);
-  });
-};
-
-const getVSCodeWorkspaceProject = (): { projects: ProjectEntry[]; activeProjectId: string | null } | null => {
-  const folders = getVSCodeWorkspaceFolders();
-  if (!folders) {
-    return null;
-  }
-  const result = createVSCodeWorkspaceProjects(folders, []);
-  if (!result) {
-    return null;
-  }
-  return { projects: result.projects, activeProjectId: result.activeProjectId };
-};
-
-// VS Code runtime is scoped to the workspace folders opened in VS Code.
-// Always prefer the VS Code workspace projects over any persisted multi-project registry.
-const vscodeWorkspace = getVSCodeWorkspaceProject();
-const isVSCodeProjectsRuntime = (() => {
-  return isVSCodeRuntime(getRegisteredRuntimeAPIs(), getVSCodeBootstrapConfig());
-})();
-const effectiveInitialProjects = vscodeWorkspace?.projects ?? (isVSCodeProjectsRuntime ? [] : initialProjects);
-const persistedInitialActiveProjectId = vscodeWorkspace?.activeProjectId ?? (isVSCodeProjectsRuntime ? null : readPersistedActiveProjectId());
-const initialActiveProjectId = effectiveInitialProjects.some((project) => project.id === persistedInitialActiveProjectId)
-=======
-const normalizeVSCodeWorkspaceFolders = (folders: VSCodeWorkspaceFolderConfig[]): VSCodeWorkspaceFolderConfig[] => {
-  const result: VSCodeWorkspaceFolderConfig[] = [];
-  const seen = new Set<string>();
-  for (const folder of folders) {
-    const normalizedPath = normalizeProjectPath(folder.path);
-    if (!normalizedPath || seen.has(normalizedPath)) {
-      continue;
-    }
-    seen.add(normalizedPath);
-    result.push({
-      name: folder.name?.trim(),
-      path: normalizedPath,
-    });
-  }
-  return result;
-};
-
-const createVSCodeWorkspaceProject = (
-  folder: VSCodeWorkspaceFolderConfig,
-  existing: ProjectEntry | null,
-  now: number,
-  activePath: string | null,
-): ProjectEntry | null => {
-  const normalizedPath = normalizeProjectPath(folder.path);
-  if (!normalizedPath) {
-    return null;
-  }
-  const id = createProjectIdFromPath(normalizedPath);
-  const isActive = activePath === normalizedPath;
-  return {
-    ...existing,
-    id,
-    path: normalizedPath,
-    label: deriveProjectLabel(normalizedPath),
-    labelSource: 'auto',
-    addedAt: existing?.addedAt ?? now,
-    lastOpenedAt: isActive ? now : existing?.lastOpenedAt ?? now,
-  };
-};
-
-const getVSCodeWorkspaceFolders = (): VSCodeWorkspaceFolderConfig[] | null => {
-  const runtimeApis = getRegisteredRuntimeAPIs();
-  const config = getVSCodeBootstrapConfig();
-  if (!isVSCodeRuntime(runtimeApis, config)) {
-    return null;
-  }
-  const folders = Array.isArray(config?.workspaceFolders)
-    ? config.workspaceFolders
-        .map((entry) => {
-          const candidate = entry as { name?: unknown; path?: unknown };
-          const path = typeof candidate.path === 'string' ? candidate.path.trim() : '';
-          if (!path) return null;
-          const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
-          return { name, path };
-        })
-        .filter((entry): entry is { name: string; path: string } => entry !== null)
-    : [];
-
-  if (folders.length > 0) {
-    return normalizeVSCodeWorkspaceFolders(folders);
-  }
-
-  const workspaceFolder = config?.workspaceFolder;
-  if (typeof workspaceFolder !== 'string' || workspaceFolder.trim().length === 0) {
-    return null;
-  }
-
-  return normalizeVSCodeWorkspaceFolders([{ path: workspaceFolder }]);
-};
-
-const createVSCodeWorkspaceProjects = (
-  folders: VSCodeWorkspaceFolderConfig[],
-  existingProjects: ProjectEntry[],
-  activePath?: string | null,
-): { projects: ProjectEntry[]; activeProjectId: string | null; activeProject: ProjectEntry | null } | null => {
-  const normalizedFolders = normalizeVSCodeWorkspaceFolders(folders);
-  const normalizedActivePath = activePath ? normalizeProjectPath(activePath) : null;
-  const effectiveFolders = normalizedFolders.length === 0 && normalizedActivePath
-    ? [{ path: normalizedActivePath }]
-    : normalizedActivePath && !normalizedFolders.some((folder) => folder.path === normalizedActivePath)
-    ? [...normalizedFolders, { path: normalizedActivePath }]
-    : normalizedFolders;
-  if (effectiveFolders.length === 0) {
-    return null;
-  }
-  const now = Date.now();
-  const projects = effectiveFolders
-    .map((folder) => createVSCodeWorkspaceProject(
-      folder,
-      existingProjects.find((project) => project.path === folder.path) ?? null,
-      now,
-      normalizedActivePath,
-    ))
-    .filter((project): project is ProjectEntry => project !== null);
-
-  if (projects.length === 0) {
-    return null;
-  }
-
-  const activeProject = normalizedActivePath
-    ? projects.find((project) => project.path === normalizedActivePath) ?? null
-    : projects[0] ?? null;
-  const activeProjectId = activeProject?.id ?? projects[0]?.id ?? null;
-
-  if (streamDebugEnabled()) {
-    console.log('[OpenChamber][VSCode][projects] Using workspace projects', projects);
-  }
-
-  return { projects, activeProjectId, activeProject: activeProject ?? projects[0] ?? null };
-};
-
-const projectIconImagesEqual = (
-  left: ProjectEntry['iconImage'],
-  right: ProjectEntry['iconImage'],
-): boolean => {
-  if (left === right) return true;
-  if (!left || !right) return left === right;
-  return left.mime === right.mime
-    && left.updatedAt === right.updatedAt
-    && left.source === right.source;
-};
-
-const vscodeWorkspaceProjectsEqual = (left: ProjectEntry[], right: ProjectEntry[]): boolean => {
-  if (left.length !== right.length) return false;
-  return left.every((leftProject, index) => {
-    const rightProject = right[index];
-    if (!rightProject) return false;
-    return leftProject.id === rightProject.id
-      && leftProject.path === rightProject.path
-      && leftProject.label === rightProject.label
-      && leftProject.labelSource === rightProject.labelSource
-      && leftProject.icon === rightProject.icon
-      && leftProject.color === rightProject.color
-      && leftProject.iconBackground === rightProject.iconBackground
-      && leftProject.defaultAgent === rightProject.defaultAgent
-      && leftProject.defaultModel === rightProject.defaultModel
-      && leftProject.defaultVariant === rightProject.defaultVariant
-      && leftProject.addedAt === rightProject.addedAt
-      && leftProject.lastOpenedAt === rightProject.lastOpenedAt
-      && leftProject.sidebarCollapsed === rightProject.sidebarCollapsed
-      && projectIconImagesEqual(leftProject.iconImage, rightProject.iconImage);
-  });
-};
-
-const getVSCodeWorkspaceProject = (): { projects: ProjectEntry[]; activeProjectId: string | null } | null => {
-  const folders = getVSCodeWorkspaceFolders();
-  if (!folders) {
-    return null;
-  }
-  const result = createVSCodeWorkspaceProjects(folders, []);
-  if (!result) {
-    return null;
-  }
-  return { projects: result.projects, activeProjectId: result.activeProjectId };
-};
-
-const vscodeWorkspace = getVSCodeWorkspaceProject();
-const isVSCodeProjectsRuntime = (() => {
-  return isVSCodeRuntime(getRegisteredRuntimeAPIs(), getVSCodeBootstrapConfig());
-})();
-const effectiveInitialProjects = vscodeWorkspace?.projects ?? (isVSCodeProjectsRuntime ? [] : initialProjects);
-const persistedInitialActiveProjectId = vscodeWorkspace?.activeProjectId ?? (isVSCodeProjectsRuntime ? null : readPersistedActiveProjectId());
-const initialActiveProjectId = effectiveInitialProjects.some((project) => project.id === persistedInitialActiveProjectId)
->>>>>>> upstream/main
   ? persistedInitialActiveProjectId
   : initialProjects[0]?.id ?? null;
 
@@ -805,7 +426,6 @@ export const useProjectsStore = create<ProjectsStore>()(
       return { ok: true, normalizedPath: normalized };
     },
 
-<<<<<<< HEAD
     adoptSessionProject: async (_sessionId, directory, isCurrent) => {
       if (!isCurrent()) return false;
       const { validateProjectPath } = get();
@@ -832,128 +452,9 @@ export const useProjectsStore = create<ProjectsStore>()(
       set({ projects });
       void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]));
       return true;
-||||||| bc50ba56aa
-    adoptSessionProject: async (sessionId, directory, isCurrent) => {
-      if (!isCurrent()) return false;
-      if (isVSCodeProjectsRuntime) {
-        const add = getRegisteredRuntimeAPIs()?.vscode?.addWorkspaceFolder;
-        if (!add) throw new Error('Adding workspace folders is unavailable');
-        const folders = await add(directory);
-        if (!isCurrent()) return false;
-        get().syncVSCodeWorkspaceFolders(folders);
-        if (!get().projects.some((entry) => entry.path === directory)) throw new Error('The session workspace folder was not added');
-        return true;
-      }
-      const response = await runBackgroundNetworkTask(() => isCurrent() ? runtimeFetch('/api/projects/session-directory', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, directory }),
-      }) : Promise.resolve(null));
-      if (!response) return false;
-      if (!response.ok) throw new Error(`Session project registration answered ${response.status}`);
-      const { project } = z.object({ project: z.object({
-        id: z.string().min(1), path: z.string().min(1), label: z.string().optional(),
-        addedAt: z.number().optional(), lastOpenedAt: z.number().optional(),
-      }) }).parse(await response.json());
-      if (!isCurrent()) return false;
-      // This response owns only an append, never a replacement or activation.
-      if (!get().projects.some((entry) => entry.id === project.id)) {
-        const projects = [...get().projects, project];
-        set({ projects });
-        cacheProjects(projects, get().activeProjectId);
-      }
-      // Join the append to this window's pending full-registry mutations. An
-      // older debounced manual add must not overwrite the confirmed project.
-      void updateDesktopSettings({ projects: get().projects });
-      return true;
-=======
-    adoptSessionProject: async (sessionId, directory, isCurrent) => {
-      if (!isCurrent(directory)) return null;
-      if (isVSCodeProjectsRuntime) {
-        const add = getRegisteredRuntimeAPIs()?.vscode?.addWorkspaceFolder;
-        if (!add) throw new Error('Adding workspace folders is unavailable');
-        const folders = await add(directory);
-        if (!isCurrent(directory)) return null;
-        get().syncVSCodeWorkspaceFolders(folders);
-        if (!get().projects.some((entry) => entry.path === directory)) throw new Error('The session workspace folder was not added');
-        return directory;
-      }
-      const response = await runBackgroundNetworkTask(() => isCurrent(directory) ? runtimeFetch('/api/projects/session-directory', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, directory }),
-      }) : Promise.resolve(null));
-      if (!response) return null;
-      if (!response.ok) throw new Error(`Session project registration answered ${response.status}`);
-      const { project, directory: answered } = z.object({
-        project: z.object({
-          id: z.string().min(1), path: z.string().min(1), label: z.string().optional(),
-          addedAt: z.number().optional(), lastOpenedAt: z.number().optional(),
-        }),
-        directory: z.string().min(1).optional(),
-      }).parse(await response.json());
-      const confirmed = answered ?? directory;
-      if (!isCurrent(confirmed)) return null;
-      if (!get().projects.some((entry) => entry.id === project.id)) {
-        const projects = [...get().projects, project];
-        set({ projects });
-        cacheProjects(projects, get().activeProjectId);
-      }
-      void updateDesktopSettings({ projects: get().projects });
-      return confirmed;
->>>>>>> upstream/main
     },
 
     addProject: async (path: string, options?: { label?: string; id?: string }) => {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-      if (isVSCodeProjectsRuntime) {
-        // Projects are scoped to VS Code workspace folders in this runtime.
-        // Adding a folder through the extension host makes the project appear
-        // in the workspace and the new folder is synced back as a project.
-        const validation = get().validateProjectPath(path);
-        if (!validation.ok || !validation.normalizedPath) {
-          return null;
-        }
-        const normalizedPath = validation.normalizedPath;
-        const existing = get().projects.find((project) => project.path === normalizedPath);
-        if (existing) {
-          return existing;
-        }
-        const runtimeApis = getRegisteredRuntimeAPIs();
-        if (runtimeApis?.vscode?.addWorkspaceFolder) {
-          try {
-            if (!await requestOpenCodeTrust(normalizedPath, { deliberate: true })) return null;
-            const folders = await runtimeApis.vscode.addWorkspaceFolder(normalizedPath);
-            return get().syncVSCodeWorkspaceFolders(folders, normalizedPath);
-          } catch {
-            return null;
-          }
-        }
-        return null;
-      }
-=======
-      if (isVSCodeProjectsRuntime) {
-        const validation = get().validateProjectPath(path);
-        if (!validation.ok || !validation.normalizedPath) {
-          return null;
-        }
-        const normalizedPath = validation.normalizedPath;
-        const existing = get().projects.find((project) => project.path === normalizedPath);
-        if (existing) {
-          return existing;
-        }
-        const runtimeApis = getRegisteredRuntimeAPIs();
-        if (runtimeApis?.vscode?.addWorkspaceFolder) {
-          try {
-            if (!await requestOpenCodeTrust(normalizedPath, { deliberate: true })) return null;
-            const folders = await runtimeApis.vscode.addWorkspaceFolder(normalizedPath);
-            return get().syncVSCodeWorkspaceFolders(folders, normalizedPath);
-          } catch {
-            return null;
-          }
-        }
-        return null;
-      }
->>>>>>> upstream/main
       const { validateProjectPath } = get();
       const validation = validateProjectPath(path);
       if (!validation.ok || !validation.normalizedPath) {
@@ -1000,40 +501,6 @@ export const useProjectsStore = create<ProjectsStore>()(
     },
 
     addProjects: async (paths: string[]) => {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-      if (isVSCodeProjectsRuntime) {
-        // VS Code paths are added via runtimeApis.vscode.addWorkspaceFolder,
-        // which is reached only by addProject. Iterate so valid selections
-        // succeed instead of silently returning []. Dedupe by path so the
-        // returned array mirrors the non-VS Code contract.
-        const added: ProjectEntry[] = [];
-        const seen = new Set<string>();
-        for (const path of paths) {
-          if (seen.has(path)) continue;
-          seen.add(path);
-          const project = await get().addProject(path);
-          if (project) {
-            added.push(project);
-          }
-        }
-        return added;
-      }
-=======
-      if (isVSCodeProjectsRuntime) {
-        const added: ProjectEntry[] = [];
-        const seen = new Set<string>();
-        for (const path of paths) {
-          if (seen.has(path)) continue;
-          seen.add(path);
-          const project = await get().addProject(path);
-          if (project) {
-            added.push(project);
-          }
-        }
-        return added;
-      }
->>>>>>> upstream/main
       const current = get();
       const existingPaths = new Set(current.projects.map((project) => project.path));
       const now = Date.now();
@@ -1312,28 +779,8 @@ export const useProjectsStore = create<ProjectsStore>()(
           return { status: 'failed', error: payload?.error || 'Failed to discover project icon' };
         }
 
-<<<<<<< HEAD
         if (payload?.settings) {
           get().synchronizeFromSettings(payload.settings, { adoptActiveProject: false });
-||||||| bc50ba56aa
-        // The search can outlast changes made in this window, so the answer's
-        // settings are already old: only this project's icon is taken from it.
-        // A full-list write still queued or in flight lacks the icon and would
-        // erase it on the server, so the list that has it is written after.
-        const iconImage = sanitizeProjectIconImage(payload?.project?.iconImage);
-        if (iconImage && runtime === getRuntimeKey() && get().projects.some((entry) => entry.id === id)) {
-          const projects = get().projects.map((entry) => (entry.id === id ? { ...entry, iconImage } : entry));
-          set({ projects });
-          cacheProjects(projects, get().activeProjectId);
-          void updateDesktopSettings({ projects });
-=======
-        const iconImage = sanitizeProjectIconImage(payload?.project?.iconImage);
-        if (iconImage && runtime === getRuntimeKey() && get().projects.some((entry) => entry.id === id)) {
-          const projects = get().projects.map((entry) => (entry.id === id ? { ...entry, iconImage } : entry));
-          set({ projects });
-          cacheProjects(projects, get().activeProjectId);
-          void updateDesktopSettings({ projects });
->>>>>>> upstream/main
         }
 
         if (payload?.skipped === true && payload.reason === 'no-favicon-found') {
