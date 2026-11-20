@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { HostWorkspacePolicySchema, type HostAuthorizationScope, type NativeOperationDescriptor, type WorkerPolicyRequest } from '@openchamber/agent-service/private-protocol';
 import type { JsonObject } from '@openchamber/agent-contract';
-import { createProjectDirectoryRuntime } from '../../../web/server/lib/host/project-directory-runtime.js';
+import { createProjectDirectoryRuntime } from '../../../web/server/lib/projects/project-directory-runtime.ts';
 import { createWorkerOperationAuthorizer } from '../../../web/server/lib/host/worker-operation-authorizer.js';
 import { describeNativeOperation } from '../worker/native-policy-descriptor.ts';
 
@@ -93,7 +93,7 @@ test('The local:// write capability follows the workspace file-write grant', asy
   expect(decision).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 });
 
-test('Every other internal scheme stays refused for a write', async () => {
+test('Non-local internal URLs and removed artifact URLs stay refused for a write', async () => {
   for (const target of ['agent://native', 'history://native', 'artifact://3', 'xd://memory', 'skill://flow-start']) {
     await expect(describeAndAuthorize('write', { path: target, content: 'x' }, ['read', 'write']))
       .rejects.toThrow('separate Host capability');

@@ -27,6 +27,22 @@ const pendingQuestion = {
 };
 
 describe('request wire schemas', () => {
+  test('accepts a nonterminal form draft reply and inactivity reset without changing terminal invariants', () => {
+    expect(QuestionReplySchema.parse({ ...cas, action: 'update', response: { results: [] } })).toMatchObject({ action: 'update' });
+    expect(() => QuestionReplySchema.parse({ ...cas, action: 'update' })).toThrow();
+    expect(QuestionRequestSchema.parse({ ...pendingQuestion, timeoutResetAt: 2 })).toMatchObject({ status: 'pending', version: '1', timeoutResetAt: 2 });
+    expect(() => QuestionRequestSchema.parse({ ...pendingQuestion, timeoutResetAt: -1 })).toThrow();
+    expect(() => QuestionRequestSchema.parse({ ...pendingQuestion, response: {} })).toThrow();
+  });
+  test('form draft revisions advance pending CAS without admitting revised ordinary questions or resolved drafts', () => {
+    const revised = { ...pendingQuestion, schema: { type: 'omp.ask', form: true, questions: [] }, version: '2', timeoutResetAt: 2 };
+    expect(QuestionRequestSchema.parse(revised)).toEqual(revised);
+    expect(() => QuestionRequestSchema.parse({ ...pendingQuestion, version: '2' })).toThrow();
+    expect(() => QuestionRequestSchema.parse({ ...revised, timeoutResetAt: undefined })).toThrow();
+    expect(() => QuestionRequestSchema.parse({ ...revised, response: {} })).toThrow();
+    expect(() => QuestionRequestSchema.parse({ ...revised, resolvedAt: 2 })).toThrow();
+    expect(QuestionRequestSchema.parse({ ...revised, status: 'answered', version: '3', response: {}, answeredAt: 3, resolvedAt: 3 })).toMatchObject({ status: 'answered', version: '3' });
+  });
   test('round-trips CAS and rejects a non-positive version', () => {
     expect(RequestCASSchema.parse(cas)).toEqual(cas);
     expect(() => RequestCASSchema.parse({ ...cas, version: '0' })).toThrow();

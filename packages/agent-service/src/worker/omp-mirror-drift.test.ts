@@ -31,7 +31,6 @@ const CUSTOM_HANDLED_BUILTIN_COMMANDS = [
   'omfg',
   'cleanse',
   'tan',
-  'seance',
   'advisor',
   'clear',
 ] as const;
@@ -43,6 +42,7 @@ const CUSTOM_HANDLED_BUILTIN_COMMANDS = [
  * unless the command is explicitly allowed or categorized here.
  */
 const EXCLUDED_BUILTIN_COMMANDS = {
+  commit: 'Selective commit eval namespace mutates Git outside the Host Git capability; not exposed through generic slash dispatch',
   security: 'OMP security scan slash workflow is not yet exposed via Canonical API',
   settings: 'TUI-only (handleTui); OpenChamber exposes Settings via dedicated Web/Desktop Settings UI',
   setup: 'TUI-only (handleTui); OpenChamber manages provider setup via dedicated Provider Settings UI',

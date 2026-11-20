@@ -17,7 +17,7 @@ const sessionId = 'session-tasks';
 const phases: TodoPhase[] = [{ name: 'Plan', tasks: [
   { content: 'Finish this', status: 'pending' },
   { content: 'Current work', status: 'in_progress' },
-  { content: 'Waiting work', status: 'blocked', blocker: 'Needs review' },
+  { content: 'Waiting work', status: 'pending' },
   { content: 'Already done', status: 'completed' },
   { content: 'Not needed', status: 'abandoned' },
 ] }];

@@ -5,6 +5,7 @@ export * from './session.ts';
 export * from './messages.ts';
 export * from './prompt.ts';
 export * from './requests.ts';
+export * from './questions.ts';
 export * from './snapshot.ts';
 export * from './pagination.ts';
 export * from './queue.ts';

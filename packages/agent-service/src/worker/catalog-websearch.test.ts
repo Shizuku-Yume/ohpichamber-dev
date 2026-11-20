@@ -70,9 +70,9 @@ test('provider catalog equals the native search-model pool and excludes chat gro
     if (state.type !== 'state') throw new Error('Expected native search state');
     const providerIds = state.state.providers.map(provider => provider.providerId);
     expect(providerIds).toEqual([
-      'web/brave', 'web/deepseek', 'web/duckduckgo', 'web/ecosia', 'web/exa', 'web/firecrawl', 'web/google', 'web/hosted',
+      'web/brave', 'web/deepseek', 'web/duckduckgo', 'web/ecosia', 'web/exa', 'web/firecrawl', 'web/google', 'web/hackernews', 'web/hosted',
       'web/jina', 'web/kagi', 'web/keenable', 'web/kimi', 'web/mojeek', 'web/ollama', 'web/parallel', 'web/perplexity',
-      'web/public', 'web/searxng', 'web/startpage', 'web/synthetic', 'web/tavily', 'web/tinyfish', 'web/zai',
+      'web/public', 'web/searxng', 'web/sofya', 'web/startpage', 'web/synthetic', 'web/tavily', 'web/tinyfish', 'web/zai',
     ]);
     expect(providerIds.every(id => id.startsWith('web/'))).toBe(true);
 

@@ -12,7 +12,7 @@ import {
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { __resetDirsFromEnvForTests } from '@oh-my-pi/pi-utils';
 import { NativeOperationDescriptorSchema, type NativeOperationDescriptor, type NativeToolTier } from '../native-policy-protocol.ts';
-import { createProjectDirectoryRuntime } from '../../../web/server/lib/host/project-directory-runtime.js';
+import { createProjectDirectoryRuntime } from '../../../web/server/lib/projects/project-directory-runtime.ts';
 import { createWorkerOperationAuthorizer } from '../../../web/server/lib/host/worker-operation-authorizer.js';
 import { describeNativeOperation } from './native-policy-descriptor.ts';
 import { WorkerSession } from './session.ts';
@@ -532,4 +532,22 @@ test('an argument-dependent extension tier decides the Host decision', async () 
   const descriptor = await describeNativeOperation(cwd, request, { editMode: 'replace', declaredTier: 'exec' });
   if (descriptor === undefined) throw new Error('The native descriptor builder returned nothing for the dynamic extension tool');
   expect(await authorize(request, descriptor)).toMatchObject({ allowed: false, approvalRequired: true });
+}, 30_000);
+
+test('OMP 19 browser launch options and malformed options cannot bypass Host execution consent', async () => {
+  const { worker, cwd, authorize } = requireHarness();
+  await worker.operation({ type: 'mode.set', mode: 'main' });
+  const inputs: JsonObject[] = [
+    { action: 'open', app: '/browser', argv: ['--private'], target: 'new-tab', insecure: true },
+    { action: 'open', app: {}, argv: 'malformed', target: [], insecure: 'malformed' },
+    {},
+  ];
+  for (const input of inputs) {
+    const request: WorkerPolicyRequest = { type: 'tool', toolName: 'browser', input };
+    const declaredTier = resolveDeclaredTier(worker.session, 'browser', input);
+    expect(declaredTier).toBe('exec');
+    const descriptor = await describeNativeOperation(cwd, request, { editMode: 'replace', declaredTier });
+    if (!descriptor) throw new Error('Browser descriptor is required');
+    expect(await authorize(request, descriptor)).toMatchObject({ allowed: false, approvalRequired: true });
+  }
 }, 30_000);

@@ -217,6 +217,14 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
         label={busy ? <SubagentActivityText childId={child.sessionId} directory={directory} identity={label} alertsOnly /> : label}
         value={(
          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {(live?.stage || live?.lastIntent) ? (
+           <span className="typography-micro text-muted-foreground truncate max-w-[160px]" title={live.recentOutput?.join('\n')}>
+            {live.stage || live.lastIntent}
+           </span>
+          ) : null}
+          {live?.completionPercent !== undefined ? (
+           <span className="typography-micro text-muted-foreground tabular-nums">{Math.round(live.completionPercent)}%</span>
+          ) : null}
           {live?.activeTool && (
            <span className="typography-micro font-mono text-muted-foreground px-1 py-0.5 rounded bg-muted/50">
             {live.activeTool}

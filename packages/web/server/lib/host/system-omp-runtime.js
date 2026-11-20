@@ -51,7 +51,7 @@ export function findSystemBunCandidates({ env = process.env, platform = process.
     if (isExecutable(resolved, platform)) candidates.push(resolved);
   };
 
-  const pathEnv = env.PATH || '';
+  const pathEnv = env.PATH || env.Path || '';
   const pathSeparator = platform === 'win32' ? ';' : ':';
   for (const segment of pathEnv.split(pathSeparator)) {
     if (!segment) continue;
@@ -98,7 +98,7 @@ export function findSystemOmpCandidates({ env = process.env, platform = process.
     if (isExecutable(resolved, platform)) candidates.push(resolved);
   };
 
-  const pathEnv = env.PATH || '';
+  const pathEnv = env.PATH || env.Path || '';
   const pathSeparator = platform === 'win32' ? ';' : ':';
   for (const segment of pathEnv.split(pathSeparator)) {
     if (!segment) continue;
@@ -194,6 +194,7 @@ export function probeSystemOmp(
     platform = process.platform,
     bundledManifest,
     deadline,
+    preferOmpInterpreter = false,
   } = {},
 ) {
   try {
@@ -208,7 +209,7 @@ export function probeSystemOmp(
       .sort()
       .join(';');
     const manifestBunVer = bundledManifest?.bunVersion || minBunVersion;
-    const cacheKey = `${ompPath}:${platform}:${mtime}:${manifestBunVer}:${manifestPkgSig}:${bundledServiceDir || ''}:${systemBunCandidates.join(';')}`;
+    const cacheKey = `${ompPath}:${platform}:${mtime}:${manifestBunVer}:${manifestPkgSig}:${bundledServiceDir || ''}:${systemBunCandidates.join(';')}:${preferOmpInterpreter}`;
     if (probeCache.has(cacheKey)) return probeCache.get(cacheKey);
 
     const checkBudget = () => getRemainingTimeout(deadline, probeTimeoutMs);
@@ -220,10 +221,11 @@ export function probeSystemOmp(
 
     // 1. Probe a separate system Bun interpreter if available
     let availableSystemBun = null;
-    const bunSearchList = [
+    const bunSearchList = preferOmpInterpreter ? [] : [
       path.join(path.dirname(ompPath), platform === 'win32' ? 'bun.exe' : 'bun'),
       ...systemBunCandidates,
     ];
+    if (preferOmpInterpreter && isWindowsCmd) return { ok: false, reason: 'NO_COMPATIBLE_BUN_INTERPRETER' };
     for (const bCandidate of bunSearchList) {
       if (deadline && Date.now() >= deadline) break;
       if (isExecutable(bCandidate, platform)) {
@@ -256,14 +258,18 @@ export function probeSystemOmp(
           stdio: ['ignore', 'pipe', 'ignore'],
         }).trim();
         const versionMatch = /^omp\/(\d+\.\d+\.\d+)/.exec(versionOut);
+        if (!versionMatch) return { ok: false, reason: 'IDENTITY_MISMATCH' };
         ompVersion = versionMatch[1];
       }
     } else {
       // Direct binary/script execution
+      const identityEnv = { ...env };
+      delete identityEnv.BUN_BE_BUN;
       const versionOut = execFileSync(ompPath, ['--version'], {
         timeout: checkBudget(),
         encoding: 'utf8',
         windowsHide: true,
+        env: identityEnv,
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim();
       const versionMatch = /^omp\/(\d+\.\d+\.\d+)/.exec(versionOut);
@@ -312,7 +318,7 @@ export function probeSystemOmp(
             if (!entry || typeof entry !== 'object' || !entry.name) continue;
             try {
               const candidatePaths = [
-                entry.path ? path.resolve(bundledServiceDir, entry.path, 'package.json') : null,
+              entry.path ? path.resolve(bundledServiceDir, '..', entry.path, 'package.json') : null,
                 path.join(bundledServiceDir, 'node_modules', entry.name, 'package.json'),
               ].filter(Boolean);
               const pkgJsonPath = candidatePaths.find(p => fs.existsSync(p));
@@ -328,8 +334,8 @@ export function probeSystemOmp(
         const distIndex = path.join(bundledServiceDir, 'dist', 'index.js');
         const distWorker = path.join(bundledServiceDir, 'dist', 'worker', 'index.js');
         let stagedImports = '';
-        if (fs.existsSync(distIndex)) stagedImports += `import '${distIndex.replace(/\\/g, '/')}';`;
-        if (fs.existsSync(distWorker)) stagedImports += `import '${distWorker.replace(/\\/g, '/')}';`;
+        if (fs.existsSync(distIndex)) stagedImports += `await import(${JSON.stringify(distIndex)});`;
+        if (fs.existsSync(distWorker)) stagedImports += `await import(${JSON.stringify(distWorker)});`;
 
         const checkScript =
           stagedImports +
@@ -382,6 +388,7 @@ export function detectSystemOmpRuntime({
   home = os.homedir(),
   probeTimeoutMs = PROBE_TIMEOUT_MS,
   candidatePaths,
+  preferOmpInterpreter = false,
 } = {}) {
   const bundledBunPath = bundledRuntime?.bunPath ?? null;
   const bundledEntrypoint = bundledRuntime?.entrypoint ?? null;
@@ -416,7 +423,7 @@ export function detectSystemOmpRuntime({
 
   // 3. Probing candidates
   const candidates = candidatePaths || findSystemOmpCandidates({ env, platform, home });
-  const systemBunCandidates = findSystemBunCandidates({ env, platform, home });
+  const systemBunCandidates = preferOmpInterpreter ? [] : findSystemBunCandidates({ env, platform, home });
   let lastFailureReason = candidates.length === 0 ? 'NO_SYSTEM_OMP' : null;
   const totalBudgetDeadline = Date.now() + Math.min(probeTimeoutMs * 2, 4000);
 
@@ -433,6 +440,7 @@ export function detectSystemOmpRuntime({
       env,
       platform,
       deadline: totalBudgetDeadline,
+      preferOmpInterpreter,
     });
     if (probe.ok) {
       return {

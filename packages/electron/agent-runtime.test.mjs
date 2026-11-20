@@ -3,6 +3,8 @@ import test from 'node:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 
 import { resolveAgentRuntime } from './agent-runtime.mjs';
 import {
@@ -13,7 +15,7 @@ import {
   probeSystemOmp,
 } from 'ohpichamber/server/lib/host/system-omp-runtime.js';
 
-function createMockRuntimeFixture() {
+function createMockRuntimeFixture(platform = process.platform) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'electron-agent-runtime-'));
   const runtimeDir = path.join(root, 'agent-runtime');
   const serviceDir = path.join(runtimeDir, 'service', 'dist');
@@ -21,14 +23,14 @@ function createMockRuntimeFixture() {
   fs.mkdirSync(workerDir, { recursive: true });
 
   const manifest = {
-    platform: process.platform,
+    platform,
     architecture: process.arch,
     bunVersion: '1.1.0',
     files: [],
   };
   fs.writeFileSync(path.join(runtimeDir, 'manifest.json'), JSON.stringify(manifest), 'utf8');
 
-  const bunPath = path.join(runtimeDir, process.platform === 'win32' ? 'bun.exe' : 'bun');
+  const bunPath = path.join(runtimeDir, platform === 'win32' ? 'bun.exe' : 'bun');
   const entrypoint = path.join(serviceDir, 'index.js');
   const workerEntry = path.join(workerDir, 'index.js');
 
@@ -42,12 +44,136 @@ function createMockRuntimeFixture() {
 test('resolveAgentRuntime validates platform manifest and required files', () => {
   const fixture = createMockRuntimeFixture();
   try {
-    const resolved = resolveAgentRuntime(fixture.root);
+    const resolved = resolveAgentRuntime(fixture.root, { env: { OHPICHAMBER_PREFER_BUNDLED_RUNTIME: '1' } });
     assert.equal(typeof resolved.bunPath, 'string');
     assert.equal(typeof resolved.entrypoint, 'string');
     assert.equal(resolved.root, fixture.runtimeDir);
-    assert.ok(resolved.source === 'bundled' || resolved.source === 'system' || resolved.source === 'operator');
+    assert.equal(resolved.source, 'bundled');
+    assert.equal(resolved.reason, 'PREFER_BUNDLED');
   } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('desktop resolves an installed OMP SDK only when it matches the shipped SDK', { skip: process.platform === 'win32' }, () => {
+  const fixture = createMockRuntimeFixture();
+  const sdk = '@oh-my-pi/pi-coding-agent';
+  const patchedFiles = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/tools/bash.ts'];
+  const writeSdk = (root, version, unpatchedFile) => {
+    fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));
+    for (const file of patchedFiles) {
+      const target = path.join(root, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, file === unpatchedFile ? '// unpatched' : '// patched');
+    }
+    const cli = path.join(root, 'dist', 'cli.js');
+    fs.writeFileSync(cli, '#!/bin/sh\necho omp/' + version + '\n', { mode: 0o755 });
+    return cli;
+  };
+  try {
+    const manifestPath = path.join(fixture.runtimeDir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    manifest.packages = [{ name: sdk, version: '19.0.0' }];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeSdk(path.join(fixture.runtimeDir, 'service', 'node_modules', sdk), '19.0.0');
+    const localSdk = path.join(fixture.root, 'global', 'node_modules', sdk);
+    const bin = path.join(fixture.root, 'bin');
+    const localServiceDir = path.join(fixture.root, 'overlay');
+    fs.mkdirSync(bin);
+    fs.symlinkSync(writeSdk(localSdk, '19.0.0'), path.join(bin, 'omp'));
+    const options = { localServiceDir, home: fixture.root, env: { PATH: bin } };
+    const selected = resolveAgentRuntime(fixture.root, options);
+    assert.equal(selected.source, 'system');
+    assert.equal(selected.ompVersion, '19.0.0');
+    assert.equal(selected.entrypoint, path.join(localServiceDir, 'dist', 'index.js'));
+    assert.equal(fs.realpathSync(path.join(localServiceDir, 'node_modules', sdk)), fs.realpathSync(localSdk));
+
+    writeSdk(localSdk, '20.0.0');
+    const fallback = resolveAgentRuntime(fixture.root, options);
+    assert.equal(fallback.source, 'bundled');
+    assert.equal(fallback.ompVersion, '19.0.0');
+    assert.equal(fallback.entrypoint, fixture.entrypoint);
+
+    for (const file of patchedFiles) {
+      writeSdk(localSdk, '19.0.0', file);
+      assert.equal(resolveAgentRuntime(fixture.root, options).entrypoint, fixture.entrypoint, file);
+    }
+
+    writeSdk(localSdk, '19.0.0');
+    fs.writeFileSync(fixture.bunPath, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    assert.equal(resolveAgentRuntime(fixture.root, options).entrypoint, fixture.entrypoint);
+    assert.equal(fs.existsSync(localServiceDir), false);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('Windows local SDK probes allow cold imports and preserve SDK rejection reasons', (t) => {
+  const fixture = createMockRuntimeFixture('win32');
+  const sdk = '@oh-my-pi/pi-coding-agent';
+  const bin = path.join(fixture.root, 'bin');
+  const localSdk = path.join(bin, 'node_modules', sdk);
+  const overlay = path.join(fixture.root, 'overlay');
+  const files = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/tools/bash.ts'];
+  const writeSdk = (directory, version = '19.0.0') => {
+    fs.mkdirSync(path.join(directory, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));
+    fs.writeFileSync(path.join(directory, 'dist', 'cli.js'), '');
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+      fs.writeFileSync(path.join(directory, file), '// patched');
+    }
+  };
+  let failure;
+  let probes = 0;
+  const mock = t.mock.method(childProcess, 'execFileSync', (binary, args, options) => {
+    assert.equal(binary, fixture.bunPath);
+    assert.equal(args[0], '--no-env-file');
+    assert.ok(options.timeout > 2500 && options.timeout <= 30000);
+    probes += 1;
+    if (failure) throw failure;
+    return '';
+  });
+  syncBuiltinESMExports();
+  try {
+    const manifestPath = path.join(fixture.runtimeDir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    manifest.packages = [{ name: sdk, version: '19.0.0' }];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeSdk(path.join(fixture.runtimeDir, 'service', 'node_modules', sdk));
+    writeSdk(localSdk);
+    fs.writeFileSync(path.join(bin, 'omp.cmd'), '@echo off');
+    const options = { platform: 'win32', env: { PATH: bin }, home: fixture.root, localServiceDir: overlay };
+    assert.equal(resolveAgentRuntime(fixture.root, options).source, 'system');
+    assert.equal(probes, 1);
+
+    failure = Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+    let rejected = resolveAgentRuntime(fixture.root, options);
+    assert.equal(rejected.source, 'bundled');
+    assert.equal(rejected.reason, 'LOCAL_SDK_PROBE_TIMEOUT');
+    assert.equal(fs.existsSync(overlay), false);
+
+    failure = new Error('import failed');
+    rejected = resolveAgentRuntime(fixture.root, options);
+    assert.equal(rejected.reason, 'LOCAL_SDK_PROBE_FAILED');
+    assert.equal(fs.existsSync(overlay), false);
+
+    const beforeMismatch = probes;
+    fs.writeFileSync(path.join(localSdk, files[0]), '// stock');
+    assert.equal(resolveAgentRuntime(fixture.root, options).reason, 'LOCAL_SDK_PATCH_MISMATCH');
+    writeSdk(localSdk, '20.0.0');
+    assert.equal(resolveAgentRuntime(fixture.root, options).reason, 'LOCAL_SDK_VERSION_MISMATCH');
+    writeSdk(localSdk);
+    fs.writeFileSync(path.join(localSdk, 'package.json'), JSON.stringify({ name: sdk, version: '19.0.0', bin: { omp: 'other.js' } }));
+    assert.equal(resolveAgentRuntime(fixture.root, options).reason, 'LOCAL_SDK_LAYOUT_MISMATCH');
+    assert.equal(probes, beforeMismatch);
+    const empty = resolveAgentRuntime(fixture.root, { ...options, env: {} });
+    assert.equal(empty.source, 'bundled');
+    assert.equal(empty.reason, 'NO_SYSTEM_OMP');
+  } finally {
+    mock.mock.restore();
+    syncBuiltinESMExports();
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
 });
@@ -207,5 +333,43 @@ exit 0
     }
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('probes each manifest package slot rather than its top-level namesake', { skip: process.platform === 'win32' }, () => {
+  const fixture = createMockRuntimeFixture();
+  const service = path.dirname(path.dirname(fixture.entrypoint));
+  const omp = path.join(fixture.root, 'omp');
+  fs.writeFileSync(omp, `#!/bin/sh
+case "$*" in
+  *-e*) echo "__COMPAT_OK__" ;;
+  *)
+    if [ "$BUN_BE_BUN" = "1" ]; then echo "1.4.4"; else echo "omp/19.0.0"; fi
+    ;;
+esac
+`, { mode: 0o755 });
+  const packages = [
+    { name: 'onnxruntime-node', version: '1.21.0', path: 'packages/onnx21' },
+    { name: 'onnxruntime-node', version: '1.26.0', path: 'packages/onnx26' },
+    { name: 'zod', version: '3.25.76', path: 'packages/zod3' },
+    { name: 'zod', version: '4.6.7', path: 'packages/zod4' },
+  ];
+  for (const item of packages) {
+    const directory = path.join(fixture.runtimeDir, item.path);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: item.name, version: item.version }));
+  }
+  for (const item of [packages[1], packages[3]]) {
+    const directory = path.join(service, 'node_modules', item.name);
+    fs.mkdirSync(path.dirname(directory), { recursive: true });
+    fs.symlinkSync(path.join(fixture.runtimeDir, item.path), directory, 'dir');
+  }
+  try {
+    const options = { bundledServiceDir: service, bundledManifest: { packages }, env: { PATH: '' } };
+    assert.equal(probeSystemOmp(omp, options).ok, true);
+    packages[2].version = '3.25.75';
+    assert.deepEqual(probeSystemOmp(omp, options), { ok: false, reason: 'PACKAGE_VERSION_MISMATCH' });
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
   }
 });

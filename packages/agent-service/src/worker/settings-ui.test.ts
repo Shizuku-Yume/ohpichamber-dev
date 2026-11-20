@@ -32,7 +32,7 @@ test('every TUI-visible OMP setting has a placement and no hand-kept id list rem
   expect((contract as Record<string, unknown>).OMP_SETTING_IDS).toBeUndefined();
   const all = orderedSettings();
   const tuiVisible = all.filter(s => s.ui?.tab !== undefined);
-  expect(tuiVisible.length).toBe(450);
+  expect(tuiVisible.length).toBe(477);
 
   for (const setting of tuiVisible) {
     const placement = OMP_SETTING_PLACEMENTS[setting.id];

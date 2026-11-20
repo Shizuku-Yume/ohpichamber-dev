@@ -103,6 +103,14 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
               {subagent.activeTool}
             </span>
           )}
+          {(subagent.stage || subagent.lastIntent || subagent.recentOutput?.length || subagent.task) ? (
+            <span className="typography-micro text-muted-foreground truncate max-w-[240px]" title={subagent.recentOutput?.join('\n')}>
+              {subagent.stage || subagent.lastIntent || subagent.recentOutput?.at(-1) || subagent.task}
+            </span>
+          ) : null}
+          {subagent.completionPercent !== undefined ? (
+            <span className="typography-micro text-muted-foreground tabular-nums">{Math.round(subagent.completionPercent)}%</span>
+          ) : null}
           {subagent.retryCountdown !== undefined && subagent.retryCountdown > 0 && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning/20 text-warning typography-micro shrink-0">
               <Icon name="refresh" className="size-2.5 animate-spin" />

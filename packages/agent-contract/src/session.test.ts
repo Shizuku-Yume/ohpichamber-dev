@@ -11,6 +11,14 @@ import {
 import { SubagentControlAckSchema, SubagentControlRequestSchema } from './requests.ts';
 
 const id = 'ses_01';
+test('compaction abort and optional rich subagent progress stay canonical', () => {
+  expect(SessionControlRequestSchema.parse({ type: 'compact.abort' })).toEqual({ type: 'compact.abort' });
+  expect(SessionControlAckSchema.parse({ type: 'compact.abort', aborted: false })).toEqual({ type: 'compact.abort', aborted: false });
+  const row = { subagentId: 'child', parentSessionId: 'parent', childSessionId: 'child', role: 'worker', status: 'completed' };
+  expect(SubagentSchema.parse({ ...row, stage: 'Checks finished', completionPercent: 100, recentOutput: [] })).toMatchObject({ status: 'completed', recentOutput: [] });
+  expect(SubagentSchema.safeParse({ ...row, completionPercent: 101 }).success).toBe(false);
+  expect(SubagentSchema.safeParse({ ...row, recentOutput: [null] }).success).toBe(false);
+});
 const timestamp = 1774201000000;
 const options = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
 const prompt = { input: { text: 'hello', attachments: [], context: [] }, options };

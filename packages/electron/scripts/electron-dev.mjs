@@ -5,7 +5,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveAgentRuntime } from '../agent-runtime.mjs';
+import { readBundledAgentRuntime } from '../agent-runtime.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -208,11 +208,10 @@ async function main() {
 
   ensureElectronInstalled();
   await runProcess('bun', ['run', '--cwd', 'packages/electron', 'prepare:agent-runtime']);
-  const agentRuntime = resolveAgentRuntime(path.join(electronDir, 'resources'));
+  const agentRuntime = readBundledAgentRuntime(path.join(electronDir, 'resources'));
   const agentEnvironment = {
-    OHPICHAMBER_BUN: agentRuntime.bunPath,
-    OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: agentRuntime.entrypoint,
-    ...agentRuntime.env,
+    OHPICHAMBER_BUN: process.env.OHPICHAMBER_BUN || agentRuntime.bunPath,
+    OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT || agentRuntime.entrypoint,
   };
   await runProcess('bun', ['run', '--cwd', 'packages/electron', 'bundle:main']);
 

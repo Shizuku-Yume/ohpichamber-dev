@@ -94,7 +94,9 @@ import { ensureDesktopLocalClientToken, shouldBootstrapPackagedLocalAuth } from 
 import { assertUpdaterCapability, readLinuxPackageType } from './updater-capability.mjs';
 import { relaunchAfterExit } from './linux-relaunch.mjs';
 import { installLinuxPackage } from './linux-package-install.mjs';
-import { checkForDesktopUpdate, downloadPendingDesktopUpdate, markDesktopUpdateDownloaded } from './updater-check.mjs';
+import {
+  downloadPendingDesktopUpdate, markDesktopUpdateDownloaded, refreshPendingDesktopUpdate, stageAutomaticDesktopUpdate,
+} from './updater-check.mjs';
 import { shouldRefreshLoginItemSettings } from './login-item-settings.mjs';
 import { resolveUpdaterChannel } from './updater-channel.mjs';
 import { convertShortcutComboToAccelerator, MINI_CHAT_GLOBAL_SHORTCUT_SETTING_KEY, normalizeStoredShortcutCombo, selectMiniChatGlobalShortcutAction } from './mini-chat-global-shortcut.mjs';
@@ -565,12 +567,16 @@ const relaunchApp = () => {
   return 0;
 };
 
-const performConfirmedQuit = async ({ relaunch = false } = {}) => {
+const performConfirmedQuit = async ({ relaunch = false, applyAutomaticUpdate = true } = {}) => {
   if (state.updateInstallPending) {
     log.info('[electron] quit suppressed: update install owns the exit');
     return;
   }
   if (state.quitInProgress) return;
+  if (applyAutomaticUpdate && state.pendingUpdate?.downloaded && automaticDesktopUpdatesEnabled()) {
+    await installDownloadedUpdate({ automatic: true, relaunch }).catch(() => {});
+    return;
+  }
   state.quitInProgress = true;
 
   try {
@@ -589,7 +595,7 @@ const performConfirmedQuit = async ({ relaunch = false } = {}) => {
 // reaper remains the backstop for an unhandled hard crash (SIGKILL).
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => {
-    void performConfirmedQuit();
+    void performConfirmedQuit({ applyAutomaticUpdate: false });
   });
 }
 
@@ -1592,12 +1598,15 @@ const spawnLocalServer = async () => {
     no_proxy: process.env.no_proxy || 'localhost,127.0.0.1',
   });
 
-  const agentRuntime = resolveAgentRuntime(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'));
+  const agentRuntime = resolveAgentRuntime(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), {
+    localServiceDir: path.join(app.getPath('userData'), 'agent-service-local-sdk'),
+  });
   state.agentRuntime = agentRuntime;
+  if (!agentRuntime.env?.BUN_BE_BUN) delete process.env.BUN_BE_BUN;
   assignInjectedEnv(process.env, {
     OHPICHAMBER_BUN: agentRuntime.bunPath,
     OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: agentRuntime.entrypoint,
-    ...(agentRuntime.env || {}),
+    BUN_BE_BUN: agentRuntime.env?.BUN_BE_BUN,
   });
   if (app.isPackaged && agentRuntime.root) {
     const { registerStandaloneLoader } = await import('ohpichamber/scripts/standalone-loader.mjs');
@@ -3636,6 +3645,50 @@ const applyUpdaterFeed = () => {
   });
 };
 
+const supportsAutomaticDesktopUpdates = () => {
+  if (!app.isPackaged || isLinuxPackageInstall()) return false;
+  if (process.platform === 'darwin' && !app.isInApplicationsFolder()) return false;
+  try {
+    assertUpdaterCapability({ packaged: true });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const automaticDesktopUpdatesEnabled = () => readSettingsRoot().desktopAutoUpdateEnabled !== false
+  && supportsAutomaticDesktopUpdates();
+
+const refreshDesktopUpdate = () => {
+  applyUpdaterFeed();
+  return refreshPendingDesktopUpdate({ autoUpdater, currentVersion: APP_VERSION, state });
+};
+
+const checkForAutomaticDesktopUpdate = () => stageAutomaticDesktopUpdate({
+  enabled: () => !state.quitRequested && !state.updateInstallPending && !state.installingUpdate
+    && automaticDesktopUpdatesEnabled(),
+  check: refreshDesktopUpdate,
+  download: () => downloadPendingDesktopUpdate({ autoUpdater, state }),
+}).catch((error) => log.warn('[electron] automatic desktop update failed:', error.message));
+
+const automaticDesktopUpdateMenuItem = (label) => ({
+  type: 'checkbox',
+  label,
+  checked: readSettingsRoot().desktopAutoUpdateEnabled !== false,
+  visible: supportsAutomaticDesktopUpdates(),
+  click: async (item) => {
+    try {
+      await mutateSettingsRoot((root) => {
+        root.desktopAutoUpdateEnabled = item.checked;
+      });
+      if (item.checked) void checkForAutomaticDesktopUpdate();
+    } catch (error) {
+      item.checked = readSettingsRoot().desktopAutoUpdateEnabled !== false;
+      log.warn('[electron] could not save automatic desktop update preference:', error.message);
+    }
+  },
+});
+
 const setupAutoUpdater = () => {
   if (!app.isPackaged) {
     return;
@@ -3672,6 +3725,10 @@ const setupAutoUpdater = () => {
     setTaskbarProgress(-1);
     log.error('[electron] autoUpdater error', err);
   });
+  if (supportsAutomaticDesktopUpdates()) {
+    setTimeout(checkForAutomaticDesktopUpdate, 15_000).unref();
+    setInterval(checkForAutomaticDesktopUpdate, 60 * 60_000).unref();
+  }
 };
 
 // quitAndInstall() reports failures (rejected code signature, a Squirrel
@@ -3679,6 +3736,9 @@ const setupAutoUpdater = () => {
 // 'error' event, long after the call returns. Give the install that long to
 // either take the app down or report why it did not.
 const UPDATE_INSTALL_GRACE_MS = 15_000;
+// On macOS the cached ZIP still needs to be unpacked and signature-checked
+// by Squirrel before it can take over the exit.
+const MAC_AUTOMATIC_UPDATE_INSTALL_GRACE_MS = 120_000;
 
 // Releasing terminals, the supervised Agent Service, and SSH sessions must not
 // hold the installer hostage: a stuck session would otherwise keep the app on
@@ -3692,7 +3752,7 @@ const UPDATE_SHUTDOWN_TIMEOUT_MS = 40_000;
  * install reaches the renderer instead of dying in the log. Restores the
  * quit/install flags when the install never happens.
  */
-const installDownloadedUpdate = () => new Promise((resolve, reject) => {
+const installDownloadedUpdate = ({ automatic = false, relaunch = true } = {}) => new Promise((resolve, reject) => {
   let settled = false;
   let graceTimer;
   let backendStopped = false;
@@ -3720,8 +3780,7 @@ const installDownloadedUpdate = () => new Promise((resolve, reject) => {
     // here on (a cancelled Linux password prompt is the common one) would
     // leave a window that reaches no server. Come back on the current version.
     if (backendStopped) {
-      log.info('[electron] relaunching on the current version after the failed install');
-      void performConfirmedQuit({ relaunch: true });
+      void performConfirmedQuit({ relaunch, applyAutomaticUpdate: false });
     }
   };
 
@@ -3738,7 +3797,7 @@ const installDownloadedUpdate = () => new Promise((resolve, reject) => {
       // app is still doing work that can fail.
       backendStopped = true;
       await Promise.race([
-        shutdownBackgroundServices(),
+        Promise.all([shutdownBackgroundServices(), ...(automatic ? [flushRendererStorage()] : [])]),
         new Promise((resolveTimeout) => {
           shutdownTimer = setTimeout(() => {
             log.warn('[electron] background shutdown timed out before update install; continuing');
@@ -3764,22 +3823,33 @@ const installDownloadedUpdate = () => new Promise((resolve, reject) => {
         resolve(null);
         log.info('[electron] package installed; restarting into the new version');
         state.updateInstallPending = false;
-        void performConfirmedQuit({ relaunch: true });
+        void performConfirmedQuit({ relaunch: true, applyAutomaticUpdate: false });
         return;
       }
       // Start the installer error window after terminal cleanup, which can
       // legitimately take longer than UPDATE_INSTALL_GRACE_MS.
       graceTimer = setTimeout(() => {
         if (settled) return;
+        if (automatic) {
+          fail(new Error('Automatic update installer did not take over the exit'));
+          return;
+        }
         settled = true;
         autoUpdater.off('error', fail);
         resolve(null);
-      }, UPDATE_INSTALL_GRACE_MS);
+      }, automatic && process.platform === 'darwin'
+        ? MAC_AUTOMATIC_UPDATE_INSTALL_GRACE_MS
+        : UPDATE_INSTALL_GRACE_MS);
       state.quitRequested = true;
       state.installingUpdate = true;
       state.quitConfirmationPending = false;
-      log.info('[electron] handing control to the platform installer');
-      autoUpdater.quitAndInstall();
+      log.info(`[electron] handing control to the platform installer (automatic=${automatic})`);
+      if (automatic) {
+        autoUpdater.autoRunAppAfterInstall = relaunch;
+        autoUpdater.quitAndInstall(true, relaunch);
+      } else {
+        autoUpdater.quitAndInstall();
+      }
       // The installer owns the exit from here; other quit paths may run again.
       state.updateInstallPending = false;
     } catch (error) {
@@ -5047,17 +5117,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
 
     case 'desktop_check_for_updates': {
       assertUpdaterCapability({ packaged: app.isPackaged });
-      applyUpdaterFeed();
       const currentVersion = APP_VERSION;
-      const { available, updateInfo, nextVersion, pendingUpdate } = await checkForDesktopUpdate({
-        autoUpdater,
-        currentVersion,
-        pendingUpdate: state.pendingUpdate,
-      });
-      // Assign before the changelog fetch: a download can finish while the
-      // notes load and mark this record as downloaded. Assigning after that
-      // await would replace it with the pre-await copy and drop the payload.
-      state.pendingUpdate = pendingUpdate;
+      const { available, updateInfo, nextVersion } = await refreshDesktopUpdate();
       const body =
         (typeof updateInfo?.releaseNotes === 'string' && updateInfo.releaseNotes.trim() ? updateInfo.releaseNotes : null) ||
         await parseRelevantChangelogNotes(currentVersion, nextVersion);
@@ -5077,6 +5138,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (!state.pendingUpdate) {
         throw new Error('No pending update');
       }
+      state.pendingUpdate.manual = true;
       setTaskbarProgress(0.01);
       emitToAllWindows('openchamber:update-progress', mapUpdaterProgressEvent({
         event: 'Started',
@@ -5096,7 +5158,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       }
 
     case 'desktop_restart': {
-      const applyUpdate = Boolean(state.pendingUpdate?.downloaded && app.isPackaged);
+      const applyUpdate = Boolean(state.pendingUpdate?.downloaded && app.isPackaged
+        && (state.pendingUpdate.manual || automaticDesktopUpdatesEnabled()));
       if (applyUpdate) assertUpdaterCapability({ packaged: app.isPackaged });
       log.info(`[electron] desktop_restart applyUpdate=${applyUpdate} packaged=${app.isPackaged}`);
       if (applyUpdate && process.platform === 'darwin' && typeof app.isInApplicationsFolder === 'function') {
@@ -5412,6 +5475,7 @@ const buildMacMenu = (locale = 'en') => {
           label: t('checkForUpdates'),
           click: () => dispatchCheckForUpdates(),
         },
+        automaticDesktopUpdateMenuItem(t('automaticUpdates')),
         { type: 'separator' },
         { label: t('settings'), accelerator: 'Cmd+,', click: () => dispatchAction('settings') },
         { label: t('reloadWebview'), click: () => reloadMenuTargetWindow() },
@@ -5517,6 +5581,7 @@ const buildAutoHiddenMenu = (locale = 'en') => {
           label: t('checkForUpdates'),
           click: () => dispatchCheckForUpdates(),
         },
+        automaticDesktopUpdateMenuItem(t('automaticUpdates')),
         { type: 'separator' },
         { label: t('settings'), accelerator: 'Ctrl+,', click: () => dispatchAction('settings') },
         { label: t('reloadWebview'), click: () => reloadMenuTargetWindow() },

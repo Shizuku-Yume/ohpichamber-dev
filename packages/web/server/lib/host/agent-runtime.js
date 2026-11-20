@@ -51,6 +51,7 @@ export function createHostAgentRuntime({
   const detected = detectSystemOmpRuntime({
     bundledRuntime,
     env: process.env,
+    candidatePaths: bunPath && entrypoint ? [] : undefined,
   });
   let resolvedBunPath = bunPath ?? (detected.source === 'operator' || detected.source === 'system' ? detected.bunPath : null) ?? process.env.OHPICHAMBER_BUN ?? bundledRuntime?.bunPath;
   let resolvedEntrypoint = entrypoint ?? process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT ?? bundledRuntime?.entrypoint;

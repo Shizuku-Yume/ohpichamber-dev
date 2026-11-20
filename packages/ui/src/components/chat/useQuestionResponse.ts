@@ -20,6 +20,7 @@ export function useQuestionResponse(form: QuestionRequest) {
     const [isResponding, setIsResponding] = React.useState(false);
     const [hasResponded, setHasResponded] = React.useState(false);
     const respondingRef = React.useRef(false);
+    const updatesRef = React.useRef(Promise.resolve());
 
     React.useEffect(() => {
         respondingRef.current = false;
@@ -33,6 +34,12 @@ export function useQuestionResponse(form: QuestionRequest) {
         });
     }, [form.sessionId]);
 
+    const update = React.useCallback((payload: QuestionAnswerPayload) => {
+        if (respondingRef.current || hasResponded) return;
+        updatesRef.current = updatesRef.current.catch(() => {}).then(() => sessionActions.updateForm(form.sessionId, form.questionId, payload));
+        void updatesRef.current.catch(recoverPending);
+    }, [form.questionId, form.sessionId, hasResponded, recoverPending]);
+
     const answer = React.useCallback(async (payload: QuestionAnswerPayload): Promise<boolean> => {
         // Enter in a text box reaches both the field and the panel handler;
         // one accepted reply owns the CAS until it settles.
@@ -40,10 +47,11 @@ export function useQuestionResponse(form: QuestionRequest) {
         respondingRef.current = true;
         setIsResponding(true);
         try {
+            await updatesRef.current.catch(() => {});
             const accepted = await deliverQuestionAnswer({
                 reply: (next) => sessionActions.replyToForm(form.sessionId, form.questionId, next),
                 recover: recoverPending,
-                failed: () => toast.error(t('chat.questionCard.submitFailed'), { description: t('chat.formCard.tryAgain') }),
+                failed: (error) => toast.error(problemMessage(error, t('chat.questionCard.submitFailed')), { description: t('chat.formCard.tryAgain') }),
             }, payload);
             if (accepted) setHasResponded(true);
             return accepted;
@@ -58,6 +66,7 @@ export function useQuestionResponse(form: QuestionRequest) {
         respondingRef.current = true;
         setIsResponding(true);
         try {
+            await updatesRef.current.catch(() => {});
             await sessionActions.cancelForm(form.sessionId, form.questionId);
             setHasResponded(true);
             return true;
@@ -71,5 +80,5 @@ export function useQuestionResponse(form: QuestionRequest) {
         }
     }, [form.questionId, form.sessionId, hasResponded, recoverPending, t]);
 
-    return { isResponding, hasResponded, answer, cancel };
+    return { isResponding, hasResponded, answer, cancel, update };
 }

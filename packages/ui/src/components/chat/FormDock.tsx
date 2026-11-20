@@ -94,7 +94,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
     const [step, setStep] = React.useState(restored?.step ?? 0);
     const [collapsed, setCollapsed] = React.useState(false);
     const [showErrors, setShowErrors] = React.useState(false);
-    const { isResponding, hasResponded, answer, cancel } = useQuestionResponse(form);
+    const { isResponding, hasResponded, answer, cancel, update } = useQuestionResponse(form);
     const waiting = forms.length - 1;
 
     // "Open session" on a question's toast expands the dock, including for a
@@ -136,8 +136,10 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
     const availableMaxHeight = useMobileAutocompleteMaxHeight(bodyRef, !collapsed, 320);
 
     const updateAnswer = React.useCallback((index: number, next: AskAnswerState) => {
-        setAnswers((previous) => previous.map((entry, entryIndex) => (entryIndex === index ? next : entry)));
-    }, []);
+        const nextAnswers = answers.map((entry, entryIndex) => (entryIndex === index ? next : entry));
+        setAnswers(nextAnswers);
+        if (form.schema?.form === true) update(buildAskAnswer(questions, nextAnswers));
+    }, [answers, form.schema, questions, update]);
 
     const handleSubmit = React.useCallback(async () => {
         if (!canSubmit) {
@@ -157,7 +159,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
         setStep(Math.min(currentStep + 1, lastStep));
     }, [currentStep, lastStep]);
 
-    const handleTextKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleTextKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLElement>) => {
         const intent = dockQuestionTextIntent(event, {
             isComposing: isIMECompositionEvent(event),
             isMobile,
@@ -227,7 +229,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
                         </span>
                     ) : null}
                     <span className="typography-micro shrink-0 tabular-nums text-muted-foreground">
-                        <AskCountdown timeoutMs={timeoutMs} requestedAt={form.requestedAt} />
+                        <AskCountdown timeoutMs={timeoutMs} requestedAt={form.timeoutResetAt ?? form.requestedAt} />
                     </span>
                 </button>
                 {/* One dot per question: filled when answered, the current one solid. */}

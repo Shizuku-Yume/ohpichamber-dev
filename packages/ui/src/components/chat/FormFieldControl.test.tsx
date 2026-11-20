@@ -95,6 +95,39 @@ async function mountField(custom: boolean) {
 }
 
 describe('form answer textarea sizing', () => {
+    test('renders native values as labels, disabled controls, checkbox markers and unmarked actions without Other', async () => {
+        const changed: AskAnswerState[] = [];
+        const question: AskQuestion = {
+            id: 'select', question: 'Select', multi: false, allowCustom: false, required: false,
+            options: [{ label: '0', displayLabel: 'First', disabled: true }, { label: '1', displayLabel: 'Second' }, { label: '2', displayLabel: 'Done' }],
+            selectionMarker: 'checkbox', checkedIndices: [0], markableCount: 2,
+        };
+        await act(async () => root.render(<I18nProvider><FormFieldControl
+            question={question} answer={{ selected: ['1'], custom: false, text: '' }} index={0}
+            showErrors={false} isMissing={false} isResponding={false} onChange={next => changed.push(next)} onTextKeyDown={() => {}}
+        /></I18nProvider>));
+        expect(container.textContent).toContain('First');
+        expect(container.textContent).not.toContain('Other');
+        expect(container.textContent).not.toContain('Required');
+        const controls = container.querySelectorAll('[role="checkbox"]');
+        expect(controls).toHaveLength(2);
+        expect(controls[0]?.getAttribute('aria-checked')).toBe('true');
+        expect(controls[0]?.getAttribute('aria-disabled')).toBe('true');
+        await act(async () => (controls[1] as HTMLButtonElement).click());
+        expect(changed.at(-1)).toMatchObject({ selected: ['1'] });
+    });
+
+    test('password controls stay masked and preserve their native defaults', async () => {
+        await act(async () => root.render(<I18nProvider><FormFieldControl
+            question={{ id: 'password', multi: false, options: [], inputType: 'password', required: false }}
+            answer={{ selected: [], custom: false, text: 'example-only' }} index={0}
+            showErrors={false} isMissing={false} isResponding={false} onChange={() => {}} onTextKeyDown={() => {}}
+        /></I18nProvider>));
+        expect(container.querySelector('input')?.type).toBe('password');
+        expect(container.querySelector('input')?.value).toBe('example-only');
+        expect(container.querySelector('textarea')).toBeNull();
+    });
+
     for (const custom of [false, true]) {
         test(`long answer can be cleared and typed again (${custom ? 'custom' : 'plain'})`, async () => {
             const textarea = await mountField(custom);

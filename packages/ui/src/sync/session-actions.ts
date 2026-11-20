@@ -791,14 +791,14 @@ async function submitApproval(request: PermissionRequest, response: "once" | "al
  }
 }
 
-async function submitQuestion(request: FormRequest, action: { action: "answer"; response: JsonValue } | { action: "cancel" }, runtimeKey: string): Promise<void> {
+async function submitQuestion(request: FormRequest, action: { action: "answer" | "update"; response: JsonValue } | { action: "cancel" }, runtimeKey: string): Promise<void> {
  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
  const reply: QuestionReply = { version: request.version, epoch: request.epoch, workerGeneration: request.workerGeneration, ...action }
  try {
   const result = await canonicalClient.respondQuestion(request.sessionId, request.questionId, reply)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   if (result.sessionId !== request.sessionId || result.questionId !== request.questionId) throw new Error("Question response identified another request")
-  removeFormRequestFromChildStores(request.sessionId, request.questionId)
+  if (action.action !== "update") removeFormRequestFromChildStores(request.sessionId, request.questionId)
  } catch (error) {
   if (!isStaleRuntime(runtimeKey) && isFormRequestNotFoundError(error)) {
    removeFormRequestFromChildStores(request.sessionId, request.questionId)
@@ -1757,6 +1757,11 @@ export async function abortCurrentOperation(sessionId: string): Promise<void> {
  const snapshot = await canonicalClient.getSnapshot(sessionId)
  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
  if (snapshot.session.sessionId !== sessionId) throw new Error("Snapshot response identified another session")
+ if (snapshot.compacting && !snapshot.activeRun) {
+  await canonicalClient.abortCompaction(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  return
+ }
  if (!snapshot.activeRun) return
  const result = await canonicalClient.abortSession(sessionId, snapshot.activeRun.runId)
  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
@@ -1849,6 +1854,13 @@ export async function cancelForm(sessionId: string, formId: string): Promise<voi
  await waitForConnectionOrThrow()
  const request = await readPendingQuestion(sessionId, formId, runtimeKey)
  await submitQuestion(request, { action: "cancel" }, runtimeKey)
+}
+
+export async function updateForm(sessionId: string, formId: string, response: JsonValue): Promise<void> {
+ const runtimeKey = getRuntimeKey()
+ await waitForConnectionOrThrow()
+ const request = await readPendingQuestion(sessionId, formId, runtimeKey)
+ await submitQuestion(request, { action: "update", response }, runtimeKey)
 }
 
 /** Cancel pending subtree questions once, restoring unresolved cards on failure. */

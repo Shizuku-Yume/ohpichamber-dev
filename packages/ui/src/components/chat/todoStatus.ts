@@ -6,5 +6,4 @@ export const TODO_STATUS_ICON = {
   completed: { name: 'checkbox-circle', color: 'var(--status-success)' },
   pending: { name: 'time', color: undefined },
   abandoned: { name: 'close-circle', color: undefined },
-  blocked: { name: 'close-circle', color: 'var(--status-error)' },
 } satisfies Record<TodoStatus, { name: IconName; color: string | undefined }>;

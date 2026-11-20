@@ -9,6 +9,8 @@
  */
 export const ompSettingsI18n = {
   'en': {
+    'settings.omp.items.worktree.onExit.options.force': "Force remove",
+    'settings.omp.items.worktree.onExit.options.force.description': "Remove all worktrees without asking, including uncommitted work and ignored files. Detached HEAD commits are lost; branch commits are kept.",
     'settings.omp.modelRoles.effort.off': 'Off',
     'settings.omp.modelRoles.effort.xhigh': 'Extra high',
     'markdownRenderer.svg.invalid': 'Invalid or disallowed SVG figure',
@@ -1289,6 +1291,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 hour',
   },
   'ar': {
+    'settings.omp.items.worktree.onExit.options.force': "إزالة إجبارية",
+    'settings.omp.items.worktree.onExit.options.force.description': "إزالة جميع أشجار العمل دون سؤال، بما فيها العمل غير المثبت والملفات المتجاهلة. تُفقد تثبيتات HEAD المنفصل؛ وتُحفظ تثبيتات الفروع.",
     'settings.omp.modelRoles.effort.off': 'إيقاف',
     'settings.omp.modelRoles.effort.xhigh': 'مرتفع جداً',
     'markdownRenderer.svg.invalid': 'شكل SVG غير صالح أو غير مسموح',
@@ -2569,6 +2573,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': 'ساعة واحدة',
   },
   'he': {
+    'settings.omp.items.worktree.onExit.options.force': "הסרה בכוח",
+    'settings.omp.items.worktree.onExit.options.force.description': "הסר את כל עצי העבודה בלי לשאול, כולל עבודה שלא נשמרה בקומיט וקבצים שמתעלמים מהם. קומיטים ב־HEAD מנותק יאבדו; קומיטים בענף יישמרו.",
     'settings.omp.modelRoles.effort.off': 'כבוי',
     'settings.omp.modelRoles.effort.xhigh': 'גבוה מאוד',
     'markdownRenderer.svg.invalid': 'איור SVG לא תקין או לא מורשה',
@@ -3849,6 +3855,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': 'שעה אחת',
   },
   'de': {
+    'settings.omp.items.worktree.onExit.options.force': "Erzwungen entfernen",
+    'settings.omp.items.worktree.onExit.options.force.description': "Alle Worktrees ohne Rückfrage entfernen, einschließlich ungesicherter Änderungen und ignorierter Dateien. Commits mit losgelöstem HEAD gehen verloren; Branch-Commits bleiben erhalten.",
     'settings.omp.modelRoles.effort.off': 'Aus',
     'settings.omp.modelRoles.effort.xhigh': 'Sehr hoch',
     'markdownRenderer.svg.invalid': 'Ungültige oder nicht erlaubte SVG-Grafik',
@@ -5129,6 +5137,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 Stunde',
   },
   'es': {
+    'settings.omp.items.worktree.onExit.options.force': "Eliminar por la fuerza",
+    'settings.omp.items.worktree.onExit.options.force.description': "Eliminar todos los árboles de trabajo sin preguntar, incluidos los cambios sin confirmar y los archivos ignorados. Se pierden los commits de HEAD separado; se conservan los de las ramas.",
     'settings.omp.modelRoles.effort.off': 'Desactivado',
     'settings.omp.modelRoles.effort.xhigh': 'Muy alto',
     'markdownRenderer.svg.invalid': 'Gráfico SVG no válido o no permitido',
@@ -6409,6 +6419,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 hora',
   },
   'fr': {
+    'settings.omp.items.worktree.onExit.options.force': "Supprimer de force",
+    'settings.omp.items.worktree.onExit.options.force.description': "Supprimer tous les arbres de travail sans demander, y compris les modifications non validées et les fichiers ignorés. Les commits en HEAD détachée sont perdus ; ceux des branches sont conservés.",
     'settings.omp.modelRoles.effort.off': 'Désactivé',
     'settings.omp.modelRoles.effort.xhigh': 'Très élevé',
     'markdownRenderer.svg.invalid': 'Figure SVG invalide ou non autorisée',
@@ -7689,6 +7701,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 heure',
   },
   'ja': {
+    'settings.omp.items.worktree.onExit.options.force': "強制削除",
+    'settings.omp.items.worktree.onExit.options.force.description': "確認せずすべてのワークツリーを削除します。未コミットの変更と無視されたファイルも削除されます。切り離された HEAD のコミットは失われ、ブランチのコミットは保持されます。",
     'settings.omp.modelRoles.effort.off': 'オフ',
     'settings.omp.modelRoles.effort.xhigh': '最高',
     'markdownRenderer.svg.invalid': '無効または許可されていない SVG 図',
@@ -8969,6 +8983,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 時間',
   },
   'ko': {
+    'settings.omp.items.worktree.onExit.options.force': "강제 삭제",
+    'settings.omp.items.worktree.onExit.options.force.description': "확인 없이 모든 작업 트리를 삭제합니다. 커밋하지 않은 작업과 무시된 파일도 삭제됩니다. 분리된 HEAD의 커밋은 손실되며 브랜치 커밋은 유지됩니다.",
     'settings.omp.modelRoles.effort.off': '끄기',
     'settings.omp.modelRoles.effort.xhigh': '매우 높음',
     'markdownRenderer.svg.invalid': '유효하지 않거나 허용되지 않은 SVG 그림',
@@ -10249,6 +10265,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1시간',
   },
   'nl': {
+    'settings.omp.items.worktree.onExit.options.force': "Geforceerd verwijderen",
+    'settings.omp.items.worktree.onExit.options.force.description': "Alle werkbomen zonder bevestiging verwijderen, inclusief niet-vastgelegde wijzigingen en genegeerde bestanden. Commits op een losgekoppelde HEAD gaan verloren; branchcommits blijven behouden.",
     'settings.omp.modelRoles.effort.off': 'Uit',
     'settings.omp.modelRoles.effort.xhigh': 'Zeer hoog',
     'markdownRenderer.svg.invalid': 'Ongeldige of niet-toegestane SVG-afbeelding',
@@ -11529,6 +11547,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 uur',
   },
   'pl': {
+    'settings.omp.items.worktree.onExit.options.force': "Usuń wymuszenie",
+    'settings.omp.items.worktree.onExit.options.force.description': "Usuń wszystkie drzewa robocze bez pytania, łącznie z niezatwierdzonymi zmianami i ignorowanymi plikami. Commity odłączonego HEAD zostaną utracone; commity gałęzi pozostaną.",
     'settings.omp.modelRoles.effort.off': 'Wyłączone',
     'settings.omp.modelRoles.effort.xhigh': 'Bardzo wysoki',
     'markdownRenderer.svg.invalid': 'Nieprawidłowy lub niedozwolony obraz SVG',
@@ -12809,6 +12829,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 godzina',
   },
   'pt-BR': {
+    'settings.omp.items.worktree.onExit.options.force': "Remover à força",
+    'settings.omp.items.worktree.onExit.options.force.description': "Remover todas as árvores de trabalho sem perguntar, incluindo alterações não confirmadas e arquivos ignorados. Commits em HEAD destacado são perdidos; commits nas branches são mantidos.",
     'settings.omp.modelRoles.effort.off': 'Desligado',
     'settings.omp.modelRoles.effort.xhigh': 'Muito alto',
     'markdownRenderer.svg.invalid': 'Figura SVG inválida ou não permitida',
@@ -14089,6 +14111,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 hora',
   },
   'tr': {
+    'settings.omp.items.worktree.onExit.options.force': "Zorla kaldır",
+    'settings.omp.items.worktree.onExit.options.force.description': "Kaydedilmemiş değişiklikler ve yok sayılan dosyalar dahil tüm çalışma ağaçlarını sormadan kaldır. Ayrılmış HEAD üzerindeki commitler kaybolur; dal commitleri korunur.",
     'settings.omp.modelRoles.effort.off': 'Kapalı',
     'settings.omp.modelRoles.effort.xhigh': 'Çok yüksek',
     'markdownRenderer.svg.invalid': 'Geçersiz veya izin verilmeyen SVG görseli',
@@ -15369,6 +15393,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 saat',
   },
   'uk': {
+    'settings.omp.items.worktree.onExit.options.force': "Примусово видалити",
+    'settings.omp.items.worktree.onExit.options.force.description': "Видалити всі робочі дерева без запиту, включно з незакоміченими змінами та ігнорованими файлами. Коміти відокремленого HEAD буде втрачено; коміти гілок збережуться.",
     'settings.omp.modelRoles.effort.off': 'Вимкнено',
     'settings.omp.modelRoles.effort.xhigh': 'Дуже високе',
     'markdownRenderer.svg.invalid': 'Неприпустиме або заборонене зображення SVG',
@@ -16649,6 +16675,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 година',
   },
   'zh-CN': {
+    'settings.omp.items.worktree.onExit.options.force': "强制移除",
+    'settings.omp.items.worktree.onExit.options.force.description': "不经确认移除所有工作树，包括未提交的更改和忽略的文件。分离 HEAD 上的提交会丢失；分支上的提交会保留。",
     'settings.omp.modelRoles.effort.off': '关闭',
     'settings.omp.modelRoles.effort.xhigh': '极高',
     'markdownRenderer.svg.invalid': '无效或不允许的 SVG 图形',
@@ -17929,6 +17957,8 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 小时',
   },
   'zh-TW': {
+    'settings.omp.items.worktree.onExit.options.force': "強制移除",
+    'settings.omp.items.worktree.onExit.options.force.description': "不經確認移除所有工作樹，包括未提交的變更和忽略的檔案。分離 HEAD 上的提交會遺失；分支上的提交會保留。",
     'settings.omp.modelRoles.effort.off': '關閉',
     'settings.omp.modelRoles.effort.xhigh': '極高',
     'markdownRenderer.svg.invalid': '無效或不被允許的 SVG 圖形',

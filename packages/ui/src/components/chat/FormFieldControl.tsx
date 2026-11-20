@@ -1,6 +1,7 @@
 import React from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Radio } from '@/components/ui/radio';
+import { Input } from '@/components/ui/input';
 import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -26,7 +27,7 @@ interface AutoGrowTextareaProps {
  disabled: boolean;
  autoFocus?: boolean;
  onValueChange: (value: string) => void;
- onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+ onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;
 }
 
 /**
@@ -99,7 +100,7 @@ export interface FormFieldControlProps {
  isResponding: boolean;
  onChange: (answer: AskAnswerState) => void;
  /** Enter advances or submits; the owner decides which. */
- onTextKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+ onTextKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;
 }
 
 export function FormFieldControl({
@@ -117,10 +118,20 @@ export function FormFieldControl({
  const label = question.header?.trim() || question.question?.trim() || fallbackLabel;
  const body = question.header && question.question ? question.question : undefined;
  const missing = showErrors && isMissing;
- const customTextarea = (
+ const customTextarea = question.inputType !== undefined && question.inputType !== 'textarea' ? (
+  <Input
+   type={['password', 'email', 'url', 'number', 'tel', 'date', 'time'].includes(question.inputType) ? question.inputType : 'text'}
+   value={answer.text}
+   placeholder={question.placeholder || t('chat.formCard.yourAnswer')}
+   disabled={isResponding}
+   autoFocus
+   onChange={(event) => onChange(setAskText(answer, event.target.value))}
+   onKeyDown={onTextKeyDown}
+  />
+ ) : (
   <AutoGrowTextarea
    value={answer.text}
-   placeholder={t('chat.formCard.yourAnswer')}
+   placeholder={question.placeholder || t('chat.formCard.yourAnswer')}
    disabled={isResponding}
    autoFocus
    onValueChange={(next) => onChange(setAskText(answer, next))}
@@ -134,19 +145,22 @@ export function FormFieldControl({
     <span className={cn('typography-meta font-medium whitespace-pre-wrap', missing ? 'text-[var(--status-error)]' : 'text-foreground')}>
      {label}
     </span>
-    <span className="typography-micro text-muted-foreground">{t('chat.formCard.required')}</span>
+    {question.required !== false ? <span className="typography-micro text-muted-foreground">{t('chat.formCard.required')}</span> : null}
    </div>
    {body ? (
     <div className="typography-micro whitespace-pre-wrap text-muted-foreground mb-1">{body}</div>
    ) : null}
+   {question.context ? <FormMarkdown content={question.context} size="meta" className="mb-1" /> : null}
 
    {question.options.length === 0 ? customTextarea : (
     <div className="space-y-0.5" role={question.multi ? 'group' : 'radiogroup'} aria-label={label}>
      {question.options.map((option, optionIndex) => {
       const selected = answer.selected.includes(option.label);
       const recommended = question.recommended === optionIndex;
+      const displayLabel = option.displayLabel ?? option.label;
+      const disabled = isResponding || option.disabled === true;
       const toggle = () => {
-       if (!isResponding) onChange(toggleAskOption(question, answer, option.label));
+       if (!disabled) onChange(toggleAskOption(question, answer, option.label));
       };
       return (
        <div
@@ -161,10 +175,12 @@ export function FormFieldControl({
         {/* The control and label share one centred row; the
                                     description hangs under the label. */}
         <div className="flex items-center gap-2">
-         {question.multi ? (
-          <Checkbox checked={selected} onChange={toggle} disabled={isResponding} ariaLabel={option.label} />
+         {optionIndex >= (question.markableCount ?? question.options.length) ? null : question.selectionMarker === 'checkbox' ? (
+          <Checkbox checked={question.checkedIndices?.includes(optionIndex) ?? false} onChange={toggle} disabled={disabled} ariaLabel={displayLabel} />
+         ) : question.multi ? (
+          <Checkbox checked={selected} onChange={toggle} disabled={disabled} ariaLabel={displayLabel} />
          ) : (
-          <Radio checked={selected} onChange={toggle} disabled={isResponding} ariaLabel={option.label} />
+          <Radio checked={selected} onChange={toggle} disabled={disabled} ariaLabel={displayLabel} />
          )}
          <span
           className={cn(
@@ -172,7 +188,7 @@ export function FormFieldControl({
            selected ? 'text-foreground font-medium' : 'text-foreground/80',
           )}
          >
-          {option.label}
+          {displayLabel}
          </span>
          {recommended ? (
           <span className="typography-micro shrink-0 text-primary/80">
@@ -194,7 +210,7 @@ export function FormFieldControl({
       );
      })}
 
-     <button
+     {question.allowCustom !== false ? <button
       type="button"
       onClick={() => onChange(setAskCustom(question, answer, !answer.custom))}
       disabled={isResponding}
@@ -218,7 +234,7 @@ export function FormFieldControl({
         {t('chat.formCard.other')}
        </span>
       </div>
-     </button>
+     </button> : null}
      {answer.custom ? (
       <div className="ps-6 pe-1 pt-0.5">
        {customTextarea}

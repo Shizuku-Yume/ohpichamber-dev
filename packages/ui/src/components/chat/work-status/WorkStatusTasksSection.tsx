@@ -17,7 +17,6 @@ type Props = {
 
 const STATUS_RANK = {
   in_progress: 0,
-  blocked: 1,
   pending: 2,
   completed: 3,
   abandoned: 4,
@@ -35,7 +34,7 @@ const TaskRow: React.FC<{ todo: TodoItem }> = ({ todo }) => {
       )}
       muted={done}
       label={<span className={done ? 'line-through' : undefined}>{todo.content}</span>}
-      tooltip={todo.blocker ? `${todo.content}\n${todo.blocker}` : todo.content}
+      tooltip={todo.content}
     />
   );
 };

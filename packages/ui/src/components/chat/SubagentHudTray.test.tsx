@@ -162,6 +162,9 @@ describe('SubagentHudTray', () => {
       depth: 1,
       retryCountdown: 10,
       description: 'Running test pipeline',
+      stage: 'Checking integration',
+      completionPercent: 42,
+      recentOutput: ['Tests started'],
     };
 
     useSubagentsStore.getState().applySubagentUpdate('ses_root', subagent);
@@ -180,6 +183,8 @@ describe('SubagentHudTray', () => {
     expect(tray?.textContent).toContain('bash');
     expect(tray?.textContent).toContain('4200');
     expect(tray?.textContent).toContain('$0.084');
+    expect(tray?.textContent).toContain('Checking integration');
+    expect(tray?.textContent).toContain('42%');
 
     const steerSpy = spyOn(canonicalClient, 'steerSubagent').mockResolvedValue({
       type: 'subagent.steer' as const,

@@ -79,6 +79,29 @@ export const markDesktopUpdateDownloaded = (pendingUpdate, info) => {
   if (info.downloadedFile) pendingUpdate.downloadedFile = info.downloadedFile;
 };
 
+export const refreshPendingDesktopUpdate = ({ autoUpdater, currentVersion, state }) => {
+  if (state.updateCheckPromise) return state.updateCheckPromise;
+  state.updateCheckPromise = checkForDesktopUpdate({ autoUpdater, currentVersion, pendingUpdate: state.pendingUpdate })
+    .then((result) => {
+      // Download completion may have marked the old record during the check.
+      if (state.pendingUpdate?.version === result.pendingUpdate?.version && state.pendingUpdate?.downloaded) {
+        markDesktopUpdateDownloaded(result.pendingUpdate, state.pendingUpdate);
+      }
+      state.pendingUpdate = result.pendingUpdate;
+      return result;
+    })
+    .finally(() => {
+      state.updateCheckPromise = null;
+    });
+  return state.updateCheckPromise;
+};
+
+export const stageAutomaticDesktopUpdate = async ({ enabled, check, download }) => {
+  if (!enabled()) return;
+  const { available } = await check();
+  if (available && enabled()) await download();
+};
+
 export const downloadPendingDesktopUpdate = async ({ autoUpdater, state }) => {
   const pendingUpdate = state.pendingUpdate;
   if (!pendingUpdate) throw new Error('No pending update');

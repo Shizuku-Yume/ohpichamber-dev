@@ -158,7 +158,7 @@ network policy still applies.
 </details>
 
 <details>
-<summary>Docker & Docker Compose setup (OMP 18.18.0)</summary>
+<summary>Docker & Docker Compose setup (OMP 19.0.0)</summary>
 
 Run OhPiChamber with the supervised OMP Agent Service inside Docker:
 

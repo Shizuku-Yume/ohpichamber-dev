@@ -102,9 +102,10 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   GoalControlRequestSchema,
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
+  z.strictObject({ type: z.literal('compact.abort') }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'approve-always', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
-  z.strictObject({ type: z.literal('question.resolve'), questionId: EntityIdSchema, action: z.enum(['answer', 'cancel']), response: JsonValueSchema.optional() }),
+  z.strictObject({ type: z.literal('question.resolve'), questionId: EntityIdSchema, action: z.enum(['answer', 'cancel', 'update', 'timeout']), response: JsonValueSchema.optional() }),
   z.strictObject({ type: z.literal('history'), request: HistoryPageRequestSchema }),
   z.strictObject({ type: z.literal('branch'), request: SessionBranchRequestSchema }),
   z.strictObject({ type: z.literal('delete.prepare') }),
@@ -121,7 +122,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('host-tools.configure'), tools: z.record(z.string(), z.boolean()) }),
   z.strictObject({ type: z.literal('tools.catalog') }),
 ]);
-export type WorkerOperation = z.infer<typeof WorkerOperationSchema> | { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
+export type WorkerOperation = z.infer<typeof WorkerOperationSchema> | { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel' | 'update' | 'timeout'; response?: JsonValue };
 const WorkerApprovalInteractionSchema = z.strictObject({
   kind: z.literal('approval'), approvalId: EntityIdSchema, toolCallId: EntityIdSchema, toolName: z.string().min(1),
   actionType: z.enum(['bash_command', 'file_write', 'network_request', 'custom_tool']), commandSummary: z.string(),
@@ -138,8 +139,8 @@ const WorkerQuestionInteractionSchema = z.strictObject({
   schema: JsonObjectSchema, timeout: z.number().int().positive().optional(),
 });
 const WorkerCancelInteractionSchema = z.strictObject({
-  kind: z.literal('cancel'), approvalId: EntityIdSchema,
-});
+  kind: z.literal('cancel'), approvalId: EntityIdSchema.optional(), questionId: EntityIdSchema.optional(),
+}).refine(value => (value.approvalId === undefined) !== (value.questionId === undefined));
 const WorkerInteractionSchema = z.discriminatedUnion('kind', [WorkerApprovalInteractionSchema, WorkerQuestionInteractionSchema, WorkerCancelInteractionSchema]);
 export type WorkerInteraction = z.infer<typeof WorkerInteractionSchema>;
 const WorkerOperationResultSchema = z.discriminatedUnion('type', [
@@ -148,6 +149,7 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('follow-up'), ack: FollowUpAckSchema }),
   z.strictObject({ type: z.literal('abort'), run: RunSchema }),
   z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
+  z.strictObject({ type: z.literal('compact.abort'), aborted: z.boolean() }),
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('mode.set'), mode: SessionModeSchema }),
   z.strictObject({ type: z.literal('session.rename'), title: z.string().min(1) }),

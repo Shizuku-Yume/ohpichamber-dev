@@ -22,6 +22,17 @@ const cases: { mode: NativePolicyContext['editMode']; input: JsonObject }[] = [
 ];
 
 describe('trusted execution-free first-party target inspection', () => {
+  test('browser launch fields never become file grants or bypass the declared execution tier', async () => {
+    const cwd = await workspace();
+    for (const input of [
+      { action: 'open', app: '/browser', argv: ['--private'], target: 'new-tab', insecure: true },
+      { action: 'open', app: { executable: '/browser' }, argv: 'invalid', target: [], insecure: 'invalid' },
+      {},
+    ]) {
+      const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'browser', input }, { editMode: 'none', declaredTier: 'exec' });
+      expect(descriptor).toMatchObject({ toolName: 'browser', declaredTier: 'exec', sourcePaths: [], destinationPaths: [] });
+    }
+  });
   for (const { mode, input } of cases) test(`derives ${mode} targets without writing or executing the edit`, async () => {
     const cwd = await workspace();
     const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input }, { editMode: mode, declaredTier: 'exec' });
@@ -70,7 +81,7 @@ describe('trusted execution-free first-party target inspection', () => {
   });
   test('passes only allowlisted OMP internal URL reads through to the SDK grammar', async () => {
     const cwd = await workspace();
-    for (const url of ['agent://native', 'history://native', 'artifact://3', 'local://notes.md:1-2', 'proc://job', 'skill://flow-start', 'xd://memory', 'mcp://server/resource', 'omp://help', 'issue://42', 'pr://7/diff']) {
+    for (const url of ['agent://native', 'history://native', 'local://3.log', 'local://3.log:1-2', 'local://notes.md:1-2', 'proc://job', 'skill://flow-start', 'xd://memory', 'mcp://server/resource', 'omp://help', 'issue://42', 'pr://7/diff']) {
       const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: url } });
       expect(descriptor?.sourcePaths).toEqual([]);
       expect(descriptor?.internalReadUrls).toEqual([url]);

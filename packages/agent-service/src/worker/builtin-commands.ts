@@ -29,7 +29,6 @@ export const ALLOWED_BUILTIN_COMMANDS = [
   'omfg',
   'cleanse',
   'tan',
-  'seance',
   'advisor',
   'unpin',
 ] as const;
@@ -41,7 +40,6 @@ const READ_ONLY_BUILTIN_COMMANDS = {
   tools: true,
   dirs: true,
   session: true,
-  seance: true,
 } satisfies Partial<Record<typeof ALLOWED_BUILTIN_COMMANDS[number], true>>;
 
 export function isAllowedBuiltinCommand(name: string): boolean {

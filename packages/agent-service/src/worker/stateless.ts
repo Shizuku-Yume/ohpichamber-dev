@@ -4,7 +4,7 @@ import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicC
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import {
   BUILTIN_TOOLS, HIDDEN_TOOLS,
-  IdaTool, MemoryEditTool, MemoryRetainTool, MemoryRecallTool, MemoryReflectTool,
+  MemoryEditTool, MemoryRetainTool, MemoryRecallTool, MemoryReflectTool,
   LearnTool, ManageSkillTool, ContextNotesTool, NewContextTool, AskTool,
   resolveBuiltinToolPlan,
   type ToolSession,
@@ -159,7 +159,6 @@ export class StatelessWorker {
         if (!tool) {
           try {
             switch (name) {
-              case 'ida': tool = new IdaTool(sessionContext); break;
               case 'memory_edit': tool = new MemoryEditTool(sessionContext); break;
               case 'retain': tool = new MemoryRetainTool(sessionContext); break;
               case 'recall': tool = new MemoryRecallTool(sessionContext); break;

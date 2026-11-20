@@ -13,7 +13,8 @@ CodeMirror never falls back to another editor's history.
 
 The desktop menu separately sends `openchamber:history-action` through
 `useMenuActions`. Its cancelable DOM event is acknowledged whenever CodeMirror
-content owns focus, including empty or read-only history. Undo/Redo runs directly
+content is the document's active element, including in an inactive window and
+with empty or read-only history. Undo/Redo runs directly
 against that view's history, independent of Chromium's native undo stack. Other
 focused elements leave the event uncancelled so Electron can use native history.
 
