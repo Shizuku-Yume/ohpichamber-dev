@@ -59,7 +59,6 @@ export function useReceivedPage(receivedId: string | null) {
         if (connected) void reload();
         connected = true;
       }
-      if (event.type === 'received-page-changed' && event.receivedId === receivedId) void reload();
     });
   }, [enterpriseMode, receivedId, reload]);
 

@@ -49,7 +49,6 @@ export const ensureReceivedPagesFeed = (enterpriseMode: boolean) => {
       if (connected || useReceivedPagesStore.getState().pages === null) void reload();
       connected = true;
     }
-    if (event.type === 'received-page-changed') void reload();
   });
   const stopSwitch = subscribeRuntimeEndpointWillChange(() => {
     stopFeed?.();
