@@ -12,8 +12,11 @@ beforeEach(async () => {
   config = path.join(root, '.npmrc');
   await fs.writeFile(config, '');
   vi.stubEnv('npm_config_userconfig', config);
-  for (const key of ['NPM_CONFIG_USERCONFIG', 'npm_config_registry', 'NPM_CONFIG_REGISTRY',
-    'npm_config_@scope:registry', 'NPM_CONFIG_@scope:REGISTRY']) vi.stubEnv(key, '');
+  vi.stubEnv('npm_config_registry', '');
+  vi.stubEnv('npm_config_@scope:registry', '');
+  if (process.platform !== 'win32') {
+    for (const key of ['NPM_CONFIG_USERCONFIG', 'NPM_CONFIG_REGISTRY', 'NPM_CONFIG_@scope:REGISTRY']) vi.stubEnv(key, '');
+  }
 });
 
 afterEach(async () => {
