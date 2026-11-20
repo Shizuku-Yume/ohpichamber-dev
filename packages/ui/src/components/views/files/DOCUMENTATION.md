@@ -6,6 +6,11 @@ This module owns shared file-tree behavior, file-editor handoffs and artifact
 previews. `FilesView` and the sidebar and mobile containers own their layout;
 runtime APIs own filesystem access, and `lib/codemirror` owns text-editor aids.
 
+`view/useFileClosing` registers the context panel's close and selection guards
+from `view/fileViewTypes`. A dirty selected file blocks a matching close or
+selection until the draft is saved or discarded; failed saves keep the action
+pending. The hook releases both guard refs when the view unmounts.
+
 ## Invariants
 
 - Folder disclosure releases pinned rows even when loading fails or no rows

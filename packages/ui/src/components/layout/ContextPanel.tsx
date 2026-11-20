@@ -1,4 +1,5 @@
 import type { FileTabSelectionGuard } from '@/components/views/files/fileTabSelectionGuard';
+import type { FileTabCloseGuard } from '@/components/views/FilesView';
 import React from 'react';
 import { ReceivedPagesTab } from '@/components/chat/sharePages/received/ReceivedPagesTab';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
