@@ -14,7 +14,7 @@ export function useClosePinnedWork(sessions: readonly Session[]): void {
       const key = JSON.stringify([runtimeKey, session.sessionId, getSessionWork(session)?.openedAt ?? null]);
       if (attempted.has(key)) continue;
       attempted.add(key);
-      void setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session) ?? session.directory, 'done')
+      void setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session), 'done')
         .catch((error) => console.warn('[session-work] could not close the work of a pinned session', error));
     }
   }, [sessions]);

@@ -44,7 +44,7 @@ import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionDraftsStore } from '@/stores/useSessionDraftsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useSessionMarkedUnread, useSessionUnread } from '@/sync/session-unread';
+import { useSessionUnread } from '@/sync/session-unread';
 import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
 import { useMultiRunMemberIds } from '@/lib/multirun/useMultiRuns';
 import { SessionProjectIcon } from './SessionProjectIcon';
@@ -93,8 +93,7 @@ const SessionTabItem: React.FC<{
   const turnActivity = useSessionTurnActivity(tab.id);
   const isStreaming = turnActivity !== null;
   const isUnread = useSessionUnread(tab.id);
-  const markedUnread = useSessionMarkedUnread(tab.id);
-  const showUnread = isUnread && (!isActive || markedUnread) && !isStreaming;
+  const showUnread = isUnread && !isActive && !isStreaming;
   const showDot = isStreaming || showUnread;
 
   const menuArgs: SessionTabMenuArgs = {

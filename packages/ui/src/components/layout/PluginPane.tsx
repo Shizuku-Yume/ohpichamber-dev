@@ -130,6 +130,8 @@ const closeTransferredPort = (port: MessagePort): void => {
 const handledGuestBootstrapEvents = new WeakSet<MessageEvent>();
 
 const HOST_RADIUS_FALLBACK = '0.5625rem';
+const HOST_FONT_FALLBACK = 'system-ui, sans-serif';
+const HOST_MONO_FALLBACK = 'ui-monospace, monospace';
 
 const popoverOpensAsSheet = (): boolean => isMobileSurfaceRuntime();
 

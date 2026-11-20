@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
-import { useSessionBlockingRequests } from '@/sync/sync-context';
-import { useSessionMarkedUnread, useSessionUnread } from '@/sync/session-unread';
+import { useSessionBlockingRequestCounts } from '@/sync/sync-context';
+import { useSessionUnread } from '@/sync/session-unread';
 import { useHasSessionTurnDuration } from '@/sync/session-turn-duration';
 import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
 import { useViewportStore, viewportSessionKey } from '@/sync/viewport-store';
@@ -39,12 +39,16 @@ export function useSessionRowLiveState({
     [isExpanded, node, sessionDirectory, timelineBadgeSessionScopes],
   );
   const {
-    hasPermission: hasPendingPermission,
-    hasForm: hasPendingForm,
-  } = useSessionBlockingRequests(blockingBadgeSessionScopes);
+    permissionCount,
+    formCount,
+  } = useSessionBlockingRequestCounts(React.useMemo(() => blockingBadgeSessionScopes.map(({ directory, sessionIDs }) => ({
+    directory,
+    sessionIds: sessionIDs,
+  })), [blockingBadgeSessionScopes]));
+  const hasPendingPermission = permissionCount > 0;
+  const hasPendingForm = formCount > 0;
   const needsAttention = useSessionUnread(session.sessionId);
-  const markedUnread = useSessionMarkedUnread(session.sessionId);
-  const showUnreadStatus = !isSessionActionPending && !isStreaming && needsAttention && (!isActive || markedUnread);
+  const showUnreadStatus = !isSessionActionPending && !isStreaming && needsAttention && !isActive;
   const showStatusMarker = isStreaming || showUnreadStatus;
   const showActivityDuration = (isStreaming || showUnreadStatus) && hasActivityDuration;
   const waitingOnUser = hasPendingPermission || hasPendingForm;

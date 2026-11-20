@@ -36,11 +36,10 @@ test('a saved annotation callback captures both current destinations and keeps t
   useInputStore.setState({
     composerAddress: fork,
     attachedFiles: [], attachmentDraftKey: null, attachmentDrafts: new Map(),
-    addAttachedFile: async (file, target, onAttached) => {
+    addAttachedFile: async (file, target) => {
       expect(target).toEqual(parent.attachments);
       await screenshotReady;
       useInputStore.getState().addRestoredAttachment({ url: 'data:image/png;base64,AA==', mimeType: file.type, filename: file.name }, target);
-      onAttached?.(useInputStore.getState().getAttachedFiles(target).slice(-1));
       return true;
     },
   });

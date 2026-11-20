@@ -135,7 +135,7 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
     },
   });
   const {
-    worktree, directory, openDirectory, worktreeRemoving, sessions, project, projectLabel, refs, selected,
+    worktree, space, canPin, directory, openDirectory, worktreeRemoving, sessions, project, projectLabel, refs, selected,
     title, branch, label, secondName, finishing, canArchive, canRename, canNewChat, pinned, workAction, inWork, activityState,
     runningSessionId, durationSessionId,
   } = work;

@@ -8,7 +8,7 @@ import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { setSessionWorkState } from '@/sync/session-actions';
-import type { SessionTabMenuComponents } from './SessionTabsStrip';
+import type { SessionMenuSlots } from '@/components/session/sidebar/sessions/sessionMenuSlots';
 import { problemMessage } from '@/lib/problemMessage';
 
 /**
@@ -17,7 +17,7 @@ import { problemMessage } from '@/lib/problemMessage';
  */
 export function HeaderSessionMarkDoneMenuItem({ session, Item }: {
   session: Session;
-  Item: SessionTabMenuComponents['Item'];
+  Item: SessionMenuSlots['Item'];
 }) {
   const { t } = useI18n();
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);

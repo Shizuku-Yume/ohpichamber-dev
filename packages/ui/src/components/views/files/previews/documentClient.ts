@@ -81,7 +81,7 @@ export const documentTransport = (): Promise<Transport> => {
 };
 
 let nextName = 1;
-const newDocumentId = (): string => {
+export const newDocumentId = (): string => {
   nextName += 1;
   return `document-${nextName}`;
 };

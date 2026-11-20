@@ -68,7 +68,7 @@ export function buildFileSourceActions({ draft, editor, fileKinds, markdownPrevi
     const goToLineAction: ToolbarAction | null = hasSourceEditor ? {
       id: 'go-to-line',
       label: t('filesView.editor.goToLine'),
-      icon: 'hashtag',
+      icon: 'code',
       shortcut: formatShortcutForDisplay(getEffectiveShortcutCombo('open_go_to_line', shortcutOverrides), ''),
       pressed: isGoToLineOpen,
       onSelect: () => {

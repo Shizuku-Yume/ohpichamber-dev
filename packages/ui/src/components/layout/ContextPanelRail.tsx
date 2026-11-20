@@ -1,3 +1,4 @@
+import { hasReceivedPages, useReceivedPages } from '@/components/chat/sharePages/received/receivedPagesStore';
 import React from 'react';
 import { ScrollShadow, ScrollShadowBands } from '@/components/ui/ScrollShadow';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
@@ -290,6 +291,7 @@ export const ContextPanelRail: React.FC = () => {
   );
   const changedFilesCount = gitStatus?.files.length ?? 0;
   const workflowsShown = useWorkflowsSurfaceShown(tabs, effectiveDirectory || null);
+  const receivedPagesShown = hasReceivedPages(useReceivedPages());
   const surfaces = React.useMemo(() => {
     return getVisibleContextRailSurfaces({
       railOrder: contextRailOrder,
@@ -302,7 +304,7 @@ export const ContextPanelRail: React.FC = () => {
       receivedPagesShown,
       extras: guestSurfaces,
     }).map((surface) => (surface.id === 'pr' && repositoryProvider === 'gitlab' ? { ...surface, icon: 'gitlab' as const } : surface));
-  }, [contextRailHiddenSurfaces, contextRailOrder, guestSurfaces, repositoryProvider, screenWidth, sourceControlConnected, tabs, workflowsShown]);
+  }, [contextRailHiddenSurfaces, contextRailOrder, guestSurfaces, receivedPagesShown, repositoryProvider, screenWidth, sourceControlConnected, tabs, workflowsShown]);
 
   // A surface whose integration disconnected closes rather than lingering as
   // an active panel with no rail icon.

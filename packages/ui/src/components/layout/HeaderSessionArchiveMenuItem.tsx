@@ -5,14 +5,14 @@ import { useI18n } from '@/lib/i18n';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { isRestorableOnItsOwn } from '@/sync/session-restore-rule';
-import type { SessionTabMenuComponents } from './SessionTabsStrip';
+import type { SessionMenuSlots } from '@/components/session/sidebar/sessions/sessionMenuSlots';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useUIStore } from '@/stores/useUIStore';
 
 export function HeaderSessionArchiveMenuItem({ sessionId, onArchive, Item }: {
   sessionId: string;
   onArchive: () => void;
-  Item: SessionTabMenuComponents['Item'];
+  Item: SessionMenuSlots['Item'];
 }) {
   const { t } = useI18n();
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);

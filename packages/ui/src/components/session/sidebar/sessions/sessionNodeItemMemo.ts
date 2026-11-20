@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { Session } from '@openchamber/agent-contract';
 import { sameMultiRunIdentity } from '@/lib/multirun/identity';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
@@ -12,7 +13,7 @@ const areNodeWorktreeRenderSemanticsEqual = (prev: SessionNode, next: SessionNod
 );
 
 const getNodeSessionDirectory = (node: SessionNode): string | null => {
-  return normalizePath(node.session.directory ?? null);
+  return normalizePath(resolveGlobalSessionDirectory(node.session) ?? null);
 };
 
 const isSecondaryMetaEqual = (prev?: SecondaryMeta | null, next?: SecondaryMeta | null): boolean => {
@@ -88,12 +89,12 @@ const hasExpansionMembershipChange = (prev: SessionNodeItemProps, next: SessionN
 const areSessionRenderSemanticsEqual = (prev: Session, next: Session): boolean => (
   prev.sessionId === next.sessionId
   && prev.title === next.title
-  && prev.directory === next.directory
+  && resolveGlobalSessionDirectory(prev) === resolveGlobalSessionDirectory(next)
   && prev.parentSessionId === next.parentSessionId
   && prev.createdAt === next.createdAt
   && prev.updatedAt === next.updatedAt
   && prev.archivedAt === next.archivedAt
-  && prev.time?.idle === next.time?.idle
+  && prev.metadata?.openchamber?.workbench?.lastIdleAt === next.metadata?.openchamber?.workbench?.lastIdleAt
   && prev.metadata === next.metadata
   && sameMultiRunIdentity(prev, next)
 );

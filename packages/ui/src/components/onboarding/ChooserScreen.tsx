@@ -1,4 +1,4 @@
-import { OpenChamberLogo } from '@/components/ui/OhPiChamberLogo';
+import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import React from 'react';
 import { isDesktopShell, startDesktopWindowDrag } from '@/lib/desktop';
 import { Button } from '@/components/ui/button';

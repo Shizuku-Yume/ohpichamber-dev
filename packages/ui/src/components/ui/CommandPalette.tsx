@@ -1,7 +1,7 @@
 import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import { useGuestsStore } from '@/lib/guests/store';
 import { useComposerConfigDirectory } from '@/hooks/useComposerConfigDirectory';
-import { useCommandsStore } from '@/stores/useCommandsStore';
+import { selectCommandsForComposer, useCommandsStore } from '@/stores/useCommandsStore';
 import { reservedComposerCommandNames } from '@/components/chat/composer/submit/guestCommands';
 import { useGuestCommands } from '@/hooks/useGuestSurfaces';
 import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
@@ -552,7 +552,7 @@ export const CommandPalette: React.FC = () => {
       loadRecords: async () => {
         if (!directory) return null;
         try {
-          return await loadSessionRecords({ sessionID: sessionId, directory });
+          return await loadSessionRecords({ sessionId: sessionId, directory });
         } catch {
           return null;
         }

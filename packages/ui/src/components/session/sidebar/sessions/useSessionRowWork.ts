@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
@@ -31,8 +32,8 @@ export function useSessionRowWork({
   const { t } = useI18n();
   const session = node.session;
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
-  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !node.session.parentSessionId && !isChatDirectoryPath(node.session.directory)
-    && !isSessionPinned(pinnedSessionIds, normalizePath(node.session.directory ?? null) ?? normalizePath(groupDirectory ?? null), node.session.sessionId);
+  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !node.session.parentSessionId && !isChatDirectoryPath(resolveGlobalSessionDirectory(node.session))
+    && !isSessionPinned(pinnedSessionIds, normalizePath(resolveGlobalSessionDirectory(node.session) ?? null) ?? normalizePath(groupDirectory ?? null), node.session.sessionId);
   const workSessionsInWork = React.useMemo(
     () => (canTrackWork ? collectSessionWorkInWork(node) : []),
     [canTrackWork, node],

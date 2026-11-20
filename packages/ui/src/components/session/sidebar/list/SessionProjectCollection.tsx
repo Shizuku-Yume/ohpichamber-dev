@@ -207,11 +207,13 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const searchActive = view.isVisible && view.hasSessionSearchQuery;
   const knownChatsRoot = useChatsRoot();
   const searchKnownDirectories = React.useMemo(() => {
-    if (topology.isVSCode && topology.knownDirectories.size > 0) return topology.knownDirectories;
     const directories = new Set(topology.knownDirectories);
-    if (knownChatsRoot) for (const session of allSearchSessions) if (isChatDirectoryPath(session.directory)) directories.add(session.directory);
+    if (knownChatsRoot) for (const session of allSearchSessions) {
+      const directory = resolveGlobalSessionDirectory(session);
+      if (directory && isChatDirectoryPath(directory)) directories.add(directory);
+    }
     return directories;
-  }, [allSearchSessions, knownChatsRoot, topology.isVSCode, topology.knownDirectories]);
+  }, [allSearchSessions, knownChatsRoot, topology.knownDirectories]);
   const searchScope = React.useMemo(() => resolveSidebarSearchScope({
     projects: topology.projects, worktrees: topology.availableWorktreesByProject, knownDirectories: searchKnownDirectories, isVSCode: topology.isVSCode,
   }), [topology.projects, topology.availableWorktreesByProject, searchKnownDirectories, topology.isVSCode]);
@@ -241,8 +243,8 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const onSearchStatusChange = view.onSearchStatusChange;
   React.useEffect(() => { onSearchStatusChange(contentSearchStatus); }, [contentSearchStatus, onSearchStatusChange]);
   const searchOwnership = React.useMemo(() => searchActive
-    ? createSessionOwnershipIndex(allSearchSessions, topology.projects, topology.availableWorktreesByProject, topology.isVSCode, [], authoritativeProjects, spaceList)
-    : null, [allSearchSessions, authoritativeProjects, searchActive, spaceList, topology.availableWorktreesByProject, topology.isVSCode, topology.projects]);
+    ? createSessionOwnershipIndex(allSearchSessions, topology.projects, topology.availableWorktreesByProject, [], spaceList)
+    : null, [allSearchSessions, searchActive, spaceList, topology.availableWorktreesByProject, topology.projects]);
   const searchResultSessions = React.useMemo(() => {
     if (!searchActive) return [];
     const sessionsById = new Map(allSearchSessions.map((session) => [session.sessionId, session]));
@@ -547,13 +549,13 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const isPinnedWork = React.useCallback((ref: SidebarWorkRef): boolean => {
     if (ref.kind === 'group') return ref.group.worktree?.pinnedAt !== undefined;
     const root = collection.sessionById.get(ref.rootSessionId);
-    return Boolean(root && isSessionPinned(collection.pinnedSessionIds, root.directory, root.sessionId));
+    return Boolean(root && isSessionPinned(collection.pinnedSessionIds, resolveGlobalSessionDirectory(root), root.sessionId));
   }, [collection.pinnedSessionIds, collection.sessionById]);
   const pinnedSessionsInWork = React.useMemo(() => {
     if (!sessionWorkEnabled) return NO_SESSIONS;
     const sessions = collection.orderedSessions.filter((session) => {
       if (session.parentSessionId || session.archivedAt || !isSessionInWork(session)) return false;
-      if (isSessionPinned(collection.pinnedSessionIds, session.directory, session.sessionId)) return true;
+      if (isSessionPinned(collection.pinnedSessionIds, resolveGlobalSessionDirectory(session), session.sessionId)) return true;
       const root = sessionRootIndex.get(session.sessionId);
       const ref = workIndex.bySessionId.get(session.sessionId) ?? (root ? workIndex.bySessionId.get(root) : undefined);
       return ref !== undefined && isPinnedWork(ref);

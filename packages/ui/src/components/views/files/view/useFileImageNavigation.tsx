@@ -2,7 +2,7 @@ import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { type ImageNeighbor } from '../previews/ImageArtifact';
 import { imageNeighborsOf } from '../imageNeighbors';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { type FileNode } from './fileViewTypes';
 import { getParentDirectoryPath } from './fileViewPaths';
 import { type useFileDirectory } from './useFileDirectory';
@@ -37,7 +37,7 @@ export function useFileImageNavigation({ fileDirectory, fileKinds, scope, tabs, 
     const respectGitignore = !showGitignored;
     const read = files.listDirectory
       ? files.listDirectory(folder, { respectGitignore }).then((result) => result.entries)
-      : opencodeClient.listLocalDirectory(folder, { respectGitignore });
+      : hostFilesystem.listLocalDirectory(folder, { respectGitignore });
     read.then((entries) => {
       if (cancelled || treeScopeRef.current !== scope) return;
       setImageFolderListing({ scope, folder, readFor, entries: mapDirectoryEntries(folder, entries) });

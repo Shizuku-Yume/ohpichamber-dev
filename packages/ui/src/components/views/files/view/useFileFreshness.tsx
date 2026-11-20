@@ -6,7 +6,6 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { subscribeToFileContentInvalidation } from '@/lib/fileContentInvalidation';
 import { isFilePathMoveInFlight } from '@/lib/filePathMoves';
 import { isFileMissingError } from '@/lib/api/files-errors';
-import { watchFileOnScreen } from '@/lib/watchedFiles';
 import { normalizePath } from './fileViewPaths';
 import { type useFileSaving, type useFileDraft } from './useFileSaving';
 import { type useFileDiagram } from './useFilePreviewModes';
@@ -16,7 +15,6 @@ import { type useFileTabs } from './useFileTabs';
 import { useI18n } from '@/lib/i18n';
 
 const MAX_CONTENT_POLL_BYTES = 200_000;
-const WATCHED_FILE_POLL_MS = 30_000;
 
 export function useFileFreshness({ diagram, draft, fileDocument, fileSaving, scope, tabs, t, visible }: {
   diagram: Pick<ReturnType<typeof useFileDiagram>, 'diagramSavedXmlRef' | 'diagramXmlRef'>;
@@ -172,13 +170,7 @@ export function useFileFreshness({ diagram, draft, fileDocument, fileSaving, sco
         });
     };
     poll();
-    let interval = window.setInterval(poll, 2000);
-    const watch = root ? watchFileOnScreen(root, selectedPath, poll) : null;
-    void watch?.watching.then((watching) => {
-      if (!watching || cancelled) return;
-      window.clearInterval(interval);
-      interval = window.setInterval(poll, WATCHED_FILE_POLL_MS);
-    });
+    const interval = window.setInterval(poll, 2000);
     const handleVisibilityChange = () => {
       if (!document.hidden) poll();
     };
@@ -188,7 +180,6 @@ export function useFileFreshness({ diagram, draft, fileDocument, fileSaving, sco
       cancelled = true;
       contentPoller?.dispose();
       window.clearInterval(interval);
-      watch?.stop();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [applyLoadedTextContent, contentDetectedBinary, failedFilePath, loadedFilePath, readFile, readFileStat, root, selectedFile?.path, t, visible]);

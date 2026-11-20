@@ -52,14 +52,8 @@ export const useSidebarGroupStatus = ({
     )).join('\u0001'), [childStores, directories]),
     React.useCallback(() => '', []),
   );
-  const pausedSnapshot = React.useSyncExternalStore(
-    subscribeOpenCodeTrust,
-    React.useCallback(() => directories.filter((directory) => isOpenCodeTrustPaused(directory)).join('\u0001'), [directories]),
-    React.useCallback(() => '', []),
-  );
   const groupStatusByKey = React.useMemo(() => {
     void bootstrapSnapshot;
-    const pausedDirectories = new Set(pausedSnapshot ? pausedSnapshot.split('\u0001') : []);
     const statuses = new Map<string, SessionSidebarGroupStatus>();
     for (const { key, archived, directories: groupDirectories, groupSessionWorkspaceIds } of groups) {
       const failedDirectory = groupDirectories.find((directory) => (

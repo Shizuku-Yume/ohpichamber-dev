@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { toast } from '@/components/ui';
 import type { useI18n } from '@/lib/i18n';
 import type { Session } from '@openchamber/agent-contract';
@@ -19,7 +20,7 @@ export const toggleSessionWork = async (
     }
     if (!await settleRunningOperatorChildren(inWork.map((entry) => entry.sessionId))) return;
     for (const entry of inWork) {
-      await setSessionWorkState(entry.sessionId, normalizePath(entry.directory ?? null) ?? directory, 'done');
+      await setSessionWorkState(entry.sessionId, normalizePath(resolveGlobalSessionDirectory(entry) ?? null) ?? directory, 'done');
     }
     leaveFinishedSessions(inWork.map((entry) => entry.sessionId));
   } catch {

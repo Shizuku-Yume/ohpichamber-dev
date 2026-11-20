@@ -5,7 +5,7 @@ import { toast } from '@/components/ui';
 import { canArchiveWorktrees, setGitWorktreeTitle } from '@/lib/gitApi';
 import { useI18n } from '@/lib/i18n';
 import { useWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
 import { useSessionDraftsStore } from '@/stores/useSessionDraftsStore';
@@ -84,7 +84,12 @@ export type UseWorktreeWorkResult = {
   finishing: boolean;
   canArchive: boolean;
   pinned: boolean;
-  canPin: false;
+  canPin: boolean;
+  openDirectory: string | null;
+  canMarkUnread: boolean;
+  hasUnread: boolean;
+  toggleRead: () => void;
+  setPin: (pin: boolean, list?: string | null) => Promise<void>;
   pinList: string | null;
   workAction: boolean;
   activityState: CollapsedActivityState;
@@ -154,7 +159,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     prepare();
     useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: projectId, directoryOverride: group.directory });
   };
-  const openDirectory = sessionToOpen?.directory ?? directory;
+  const openDirectory = (sessionToOpen ? resolveGlobalSessionDirectory(sessionToOpen) : null) ?? directory;
   const open = (): void => {
     const session = sessionToOpen;
     if (!session) {
@@ -234,7 +239,8 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     for (const id of workSessionIds) {
       const record = records.get(id);
       if (!canSessionBeUnread(record)) continue;
-      const rank: [number, number] = record.time.idle !== undefined ? [1, record.time.idle] : [0, record.updatedAt];
+      const idleAt = record.metadata?.openchamber?.workbench?.lastIdleAt;
+      const rank: [number, number] = idleAt !== undefined ? [1, idleAt] : [0, record.updatedAt];
       if (rank[0] > targetRank[0] || (rank[0] === targetRank[0] && rank[1] > targetRank[1])) {
         target = id;
         targetRank = rank;
@@ -270,6 +276,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     canArchive,
     pinned,
     canPin,
+    setPin,
     workAction,
     activityState,
     runningSessionId,

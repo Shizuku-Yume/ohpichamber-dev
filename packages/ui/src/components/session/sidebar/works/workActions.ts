@@ -73,7 +73,7 @@ export const markSessionsDone = async (
   const outcomes = await mapWithConcurrency([...sessions], MARK_DONE_CONCURRENCY, async (session) => {
     if (!isCurrentRuntime()) return 'stale';
     try {
-      const updated = await write(session.sessionId, resolveGlobalSessionDirectory(session) ?? session.directory, 'done');
+      const updated = await write(session.sessionId, resolveGlobalSessionDirectory(session), 'done');
       return updated ? 'done' : 'stale';
     } catch (error) {
       recordSessionActionFailure(session.sessionId, error instanceof Error ? error : new Error(String(error)));

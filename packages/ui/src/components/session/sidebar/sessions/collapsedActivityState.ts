@@ -127,5 +127,5 @@ export const useCollapsedSessionActivityState = ({
     }
     return result;
   }, [enabled, blockingIds]));
-  return blocked ?? active ?? waitingOnShell ?? waitingOnPullRequest ?? waitingOnExtension ?? unread;
+  return blocked ?? active ?? waitingOnShell ?? waitingOnPullRequest ?? unreadFromMetadata;
 };

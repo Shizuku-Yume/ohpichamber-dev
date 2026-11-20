@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { Session } from '@openchamber/agent-contract';
 import type { ConversationMetadata } from '@/lib/search/conversationSearch';
 import type { WorktreeMetadata } from '@/types/worktree';
@@ -45,7 +46,7 @@ export function sidebarSearchMetadata(input: {
   const seen = new Set<string>();
   const projects = new Map(input.projects.map((project) => [project.id, project]));
   return input.sessions.flatMap((session) => {
-    const directory = normalizePath(session.directory);
+    const directory = normalizePath(resolveGlobalSessionDirectory(session));
     const archived = Boolean(session.archivedAt);
     if (session.parentSessionId || seen.has(session.sessionId) || !input.isAdmitted(directory)) return [];
     seen.add(session.sessionId);

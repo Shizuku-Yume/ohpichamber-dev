@@ -9,7 +9,7 @@ import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/pers
 import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
 import { ensureHomeDirectoryResolved, useDirectoryStore } from '@/stores/useDirectoryStore';
 import { DesktopHostSwitcherInline } from '@/components/desktop/DesktopHostSwitcher';
-import { OpenChamberLogo } from '@/components/ui/OhPiChamberLogo';
+import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';

@@ -1,4 +1,5 @@
 import { trimTrailingSeparators } from './directoryExplorerStart';
+import { isFilesystemRoot } from '@/lib/pathNormalization';
 import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
@@ -381,7 +382,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (!pointsAtExistingFolder) return targetPath;
     const name = cloneDirectoryName(cloneRemoteUrl);
     if (!name) return '';
-    return isRootPath(targetPath) ? `/${name}` : `${targetPath}/${name}`;
+    return isFilesystemRoot(targetPath) ? `${targetPath.replace(/\/$/, '')}/${name}` : `${targetPath}/${name}`;
   }, [browseErrorReason, cloneRemoteUrl, exactEntry, isBrowseDirectoryMissing, isCloneMode, isLoading, query, targetPath]);
   const submitTarget = isCloneMode ? cloneDestination : targetPath;
   const normalizedTargetPath = normalizeDirectoryPath(submitTarget);

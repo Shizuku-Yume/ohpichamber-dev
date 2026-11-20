@@ -30,7 +30,7 @@ import {
 } from '@/lib/worktrees/sessionWorktreeMove';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
-import { useSessionWarmingStore, useSessionWarmUntil } from '@/stores/useSessionWarmingStore';
+import { isSessionKeptWarm, useSessionWarmingState, useSessionWarmingStore } from '@/stores/useSessionWarmingStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { setSessionPinList } from '@/sync/session-pins';
@@ -121,14 +121,20 @@ export function SessionActionsMenuItems({
   const inLiveRun = useMultiRunMemberIds(session.sessionId).length > 0;
   const multiRunKey = React.useMemo(() => (inLiveRun ? getMultiRunIdentity(session)?.key ?? null : null), [inLiveRun, session]);
 
-  const perSessionWarming = useSessionWarmingStore((state) => state.enabled);
-  const isWarmed = useSessionWarmUntil(session.sessionId) !== undefined;
-  const canKeepWarm = perSessionWarming && !archived && !isSubtaskSession
+  const warmingState = useSessionWarmingState(session.sessionId);
+  const isWarmed = isSessionKeptWarm(warmingState);
+  const canKeepWarm = warmingState !== null && !archived && !isSubtaskSession
     && Boolean(directory) && !isSpaceDirectory(directory);
+  React.useEffect(() => {
+    if (open && !archived && !isSubtaskSession && directory && !isSpaceDirectory(directory)) {
+      void useSessionWarmingStore.getState().loadSessionWarming(session.sessionId);
+    }
+  }, [archived, directory, isSubtaskSession, open, session.sessionId]);
   const toggleSessionWarm = async () => {
     if (!directory) return;
     try {
-      await useSessionWarmingStore.getState().setSessionWarm(session.sessionId, directory, !isWarmed);
+      const result = await useSessionWarmingStore.getState().toggleSessionKeepWarm(session.sessionId);
+      if (result.status === 'failed') toast.error(t('sessions.warming.toggleFailed'));
     } catch {
       toast.error(t('sessions.warming.toggleFailed'));
     }
@@ -157,7 +163,7 @@ export function SessionActionsMenuItems({
       t,
       session: { id: session.sessionId, title: session.title, directory },
       loadRecords: () => (directory
-        ? loadExportRecords({ directory, sessionID: session.sessionId }).catch(() => null)
+        ? loadExportRecords({ directory, sessionId: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),
       onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
     });
@@ -175,6 +181,7 @@ export function SessionActionsMenuItems({
   };
 
   const [worktreeTargets, setWorktreeTargets] = React.useState<SessionWorktreeMenuTarget[]>([]);
+  const [worktreeTargetsRefreshing, setWorktreeTargetsRefreshing] = React.useState(false);
   const [worktreeTargetsLoadFailed, setWorktreeTargetsLoadFailed] = React.useState(false);
   const worktreeSubmenuOpenRef = React.useRef(false);
   const worktreeLoadSequenceRef = React.useRef(0);
@@ -184,20 +191,24 @@ export function SessionActionsMenuItems({
     const loadSequence = worktreeLoadSequenceRef.current;
     if (!submenuOpen || !startWorktreeLoad) {
       setWorktreeTargetsLoadFailed(false);
+      setWorktreeTargetsRefreshing(false);
       return;
     }
     const load = startWorktreeLoad({ projectId, sourceDirectory: directory, currentWorktree });
     setWorktreeTargets(load.cachedTargets);
+    setWorktreeTargetsRefreshing(true);
     setWorktreeTargetsLoadFailed(false);
     void load.refreshTargets
       .then((freshTargets) => {
         if (!worktreeSubmenuOpenRef.current || worktreeLoadSequenceRef.current !== loadSequence) return;
         setWorktreeTargets(freshTargets);
+        setWorktreeTargetsRefreshing(false);
         setWorktreeTargetsLoadFailed(false);
       })
       .catch(() => {
         if (!worktreeSubmenuOpenRef.current || worktreeLoadSequenceRef.current !== loadSequence) return;
         setWorktreeTargetsLoadFailed(true);
+        setWorktreeTargetsRefreshing(false);
       });
   };
 
@@ -208,7 +219,7 @@ export function SessionActionsMenuItems({
 
   const renderMoveMenu = (canMoveToProject: boolean) => {
     const isWorktreeMenuDisabled = getSessionWorktreeMenuDisabled({ sessionDirectory: directory, isStreaming, isMovingToWorktree });
-    const worktreeMenuState = getSessionWorktreeMenuState({ targets: worktreeTargets, loadFailed: worktreeTargetsLoadFailed });
+    const worktreeMenuState = getSessionWorktreeMenuState({ targets: worktreeTargets, isRefreshing: worktreeTargetsRefreshing, loadFailed: worktreeTargetsLoadFailed });
     const worktreeSubTrigger = (
       <SubTrigger
         disabled={isWorktreeMenuDisabled}
@@ -524,7 +535,7 @@ export function SessionActionsMenuItems({
       {canKeepWarm ? (
         <SessionMenuItemHint hint={isWarmed ? t('sessions.sidebar.session.menuHint.stopWarm') : t('sessions.sidebar.session.menuHint.keepWarm')}>
           <Item onClick={() => { void toggleSessionWarm(); }} className="[&>svg]:me-1">
-            <Icon name={isWarmed ? 'fire-fill' : 'fire'} className="me-1 h-4 w-4" />
+            <Icon name="fire" className="me-1 h-4 w-4" />
             {isWarmed ? t('sessions.sidebar.session.menu.stopWarm') : t('sessions.sidebar.session.menu.keepWarm')}
           </Item>
         </SessionMenuItemHint>

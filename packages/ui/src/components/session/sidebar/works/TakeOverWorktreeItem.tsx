@@ -28,7 +28,7 @@ export function TakeOverWorktreeItem({ path, Item, iconClassName = 'h-4 w-4' }: 
   const children = useOperatorChildrenInWorktree(path);
   if (children.length === 0) return null;
   const takeOver = () => {
-    void takeOverSessions(children, (session) => resolveGlobalSessionDirectory(session) ?? session.directory ?? null)
+    void takeOverSessions(children, (session) => resolveGlobalSessionDirectory(session) ?? null)
       .then((failed) => {
         if (failed.length > 0) toast.error(t('sessions.sidebar.session.takeOver.failed'));
       });

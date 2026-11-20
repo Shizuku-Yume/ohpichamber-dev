@@ -21,7 +21,7 @@ import type { ChangeRequestReview } from './useChangeRequestReview';
 const CARD_CLASS = 'w-full max-w-[min(100%,calc(var(--oc-editor-width,var(--oc-context-panel-width,100vw))-var(--oc-editor-gutter-width,0px)))] overflow-hidden rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] font-sans shadow-none';
 const HEADER_ACTION_CLASS = 'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover hover:text-foreground';
 
-const ReviewAvatar: React.FC<{ person: ReviewPerson | null }> = ({ person }) => {
+export const ReviewAvatar: React.FC<{ person: ReviewPerson | null }> = ({ person }) => {
     const { broken, onError } = useAvatarImage(person?.avatarUrl ?? null);
     return (
         <span className="flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-elevated typography-micro text-muted-foreground">
