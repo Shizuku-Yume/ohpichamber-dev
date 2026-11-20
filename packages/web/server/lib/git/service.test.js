@@ -5067,6 +5067,10 @@ describe('snapshotWorktree', () => {
 
 describe('worktree archives', () => {
  const hosts = new Map();
+ const pathKey = (directory) => {
+  const resolved = path.resolve(directory);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+ };
  afterEach(async () => { for (const host of hosts.values()) await host.owner.close(); hosts.clear(); });
  const hostFor = async (repo) => {
   let host = hosts.get(repo);
@@ -5077,13 +5081,14 @@ describe('worktree archives', () => {
   const scopes = new Map();
   const register = async (cwd) => {
    const canonical = fs.realpathSync(cwd);
-   if (!scopes.has(canonical)) scopes.set(canonical, await owner.agentScopeStore.ensureWorkspace({ hostProjectId: 'fixture-host', projectDirectory: repo, workspaceDirectory: canonical, agentDirectory, name: 'Fixture' }));
-   return scopes.get(canonical);
+   const key = pathKey(canonical);
+   if (!scopes.has(key)) scopes.set(key, await owner.agentScopeStore.ensureWorkspace({ hostProjectId: 'fixture-host', projectDirectory: repo, workspaceDirectory: canonical, agentDirectory, name: 'Fixture' }));
+   return scopes.get(key);
   };
   await register(repo);
   const service = createOpenChamberSessionService({
    service: { request: async () => { throw new Error('Unexpected native session operation'); } }, agentScopeStore: owner.agentScopeStore,
-   resolveWorkspaceDirectory: async (cwd) => { try { return scopes.get(fs.realpathSync(cwd)) ?? null; } catch { return scopes.get(path.resolve(cwd)) ?? null; } },
+   resolveWorkspaceDirectory: async (cwd) => { try { return scopes.get(pathKey(fs.realpathSync(cwd))) ?? null; } catch { return scopes.get(pathKey(cwd)) ?? null; } },
    resolveWorkspaceScope: (id) => owner.agentScopeStore.getWorkspace(id),
    resolveSessionScope: (id) => owner.agentScopeStore.getSession(id), resolveHostSessionScope: (id) => owner.agentScopeStore.getSession(id),
    resolveHostRelocationScope: (id) => owner.agentScopeStore.getSession(id), registerSessionScope: async () => true,
@@ -5109,6 +5114,7 @@ describe('worktree archives', () => {
  const createArchivableWorktree = () => {
   const repo = createTempDir();
   runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'core.autocrlf', 'false']);
   runGit(repo, ['config', 'user.email', 'test@example.com']);
   runGit(repo, ['config', 'user.name', 'Test User']);
   fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
