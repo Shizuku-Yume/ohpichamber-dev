@@ -167,13 +167,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
         });
     }, []);
     const {
-        lastTurnDiffs, turnFileCount, turnDiffLoaded, turnDiffSettled, turnDiffError, retryTurnDiff, lastTurnDiffData,
+        lastTurnDiffs, turnFileCount, turnDiffSettled, lastTurnDiffData,
         workingFileCount, stagedFileCount, currentBranch, prComparison, pullRequestContext, selectedPr,
         prChangeRequestTerm, commitComparison, selectedCommitHash, branches, setBaseOverride, clearBaseOverride,
         qualifiedBranchBase, branchBaseSource, isBranchBaseResolved, showBranchOption, setComparisonRetryRevision,
         commentOrigin, changeRequestReview, reviewProvider, comparison, commitFiles, commitFilesError, branchFiles,
         branchFilesError, fetchComparisonDiffEntry, loadFullComparisonDiff, comparisonDiffData, branchFileCount,
-        changedFiles, changedFilePathsKey } = useDiffViewComparisons({ currentSessionId, rootDirectory, visible,
+        changedFiles, changedFilePathsKey } = useDiffViewComparisons({ visible,
         activeDiffScope, status, effectiveDirectory, binding, setActiveDiffScope, onDiffScopeChange, fetchBranches, git,
         isGitRepo, diffScope, expandedFiles, t,
     });
@@ -345,18 +345,25 @@ export const DiffView: React.FC<DiffViewProps> = ({
         );
     };
     const renderContent = () => {
+        if (activeDiffScope === 'turn') {
+            return <div role="status" data-diff-unsupported="turn" className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                <Icon name="information" className="size-6 text-muted-foreground" />
+                <div className="typography-ui-label font-semibold text-foreground">{t('diffView.scope.lastTurn')}</div>
+                <div className="max-w-sm typography-micro text-muted-foreground">{t('references.picker.empty.unsupported')}</div>
+            </div>;
+        }
         if (!effectiveDirectory) {
             return <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{t('diffView.state.selectSessionDirectory')}</div>;
         }
-        if (activeDiffScope !== 'turn' && unreadable) {
+        if (unreadable) {
             return <GitRepositoryUnreadableState directory={unreadable.directory} message={unreadable.message} />;
         }
-        if (activeDiffScope !== 'turn' && isLoadingStatus && !status) {
+        if (isLoadingStatus && !status) {
             return <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Icon name="loader-4" className="size-4 animate-spin" />{t('diffView.state.loadingRepositoryStatus')}
             </div>;
         }
-        if (activeDiffScope !== 'turn' && isGitRepo === false) {
+        if (isGitRepo === false) {
             return <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{t('diffView.state.notGitRepository')}</div>;
         }
         if (activeDiffScope === 'pr') {
@@ -423,22 +430,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 </div>;
             }
         }
-        if (activeDiffScope === 'turn' && turnDiffError) {
-            return <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-sm text-muted-foreground">
-                <div className="typography-ui-label font-semibold text-foreground">{t('diffView.state.failedToLoadDiff')}</div>
-                <div className="typography-meta max-w-[32rem] text-center">{turnDiffError}</div>
-                <button type="button" className="typography-ui-label text-primary hover:underline" onClick={retryTurnDiff}>{t('diffView.actions.retry')}</button>
-            </div>;
-        }
-        if (activeDiffScope === 'turn' && (!turnDiffLoaded || pendingTurnDiffFile) && currentSessionId) {
-            return <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Icon name="loader-4" className="size-4 animate-spin" />{t('diffView.state.loadingChanges')}
-            </div>;
-        }
         if (changedFiles.length === 0) {
             return <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                {activeDiffScope === 'turn' ? t('diffView.state.noLastTurnChanges')
-                    : activeDiffScope === 'pr' ? t('walkthrough.blocked.emptyDiff.description')
+                {activeDiffScope === 'pr' ? t('walkthrough.blocked.emptyDiff.description')
                     : activeDiffScope === 'commit' ? t('commitComparison.emptyDiff')
                     : activeDiffScope === 'branch' && qualifiedBranchBase ? t('diffView.branch.empty', { base: branchRefLabel(qualifiedBranchBase) })
                     : t('diffView.state.cleanWorkingTree')}
