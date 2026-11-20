@@ -61,26 +61,8 @@ describe('inline comment target', () => {
     useSessionUIStore.setState({ currentSessionId: 'ses_parent', currentSessionDirectory: directory });
     useInputStore.setState({ composerAddress: null });
     useInlineCommentDraftStore.setState({ drafts: {} });
-<<<<<<< HEAD
-    await act(async () => root.render(
-      <I18nProvider>
-        <SyncProvider client={client} directory={directory}>
-          <Harness />
-        </SyncProvider>
-      </I18nProvider>,
-    ));
-||||||| bc50ba56aa
-    await act(async () => root.render(
-      <I18nProvider>
-        <SyncProvider sdk={sdk} directory={directory}>
-          <Harness />
-        </SyncProvider>
-      </I18nProvider>,
-    ));
-=======
     fileLines = null;
     await act(async () => root.render(tree()));
->>>>>>> upstream/main
   });
 
   const tree = () => (

@@ -356,14 +356,8 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
     onLeave();
   };
 
-<<<<<<< HEAD
   const markDone = (sessions: Session[]) => run(sessions.map((session) => session.sessionId), async () => {
-||||||| bc50ba56aa
-  const markDone = (sessions: Session[]) => run(sessions.map((session) => session.id), async () => {
-=======
-  const markDone = (sessions: Session[]) => run(sessions.map((session) => session.id), async () => {
     if (!await settleRunningOperatorChildren(sessions.map((session) => session.id))) return;
->>>>>>> upstream/main
     const failed = await markOverviewSessionsDone(sessions);
     for (const session of failed) toast.error(t('overview.toast.doneFailed', { title: titleOf(session) }));
   });

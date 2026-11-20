@@ -3,13 +3,7 @@ import * as React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { Icon } from '@/components/icon/Icon';
 import { DiffViewIcon } from '@/components/icons/DiffIcon';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { ButtonTooltip } from '@/components/ui/action-toolbar';
-=======
-import { ButtonTooltip } from '@/components/ui/action-toolbar';
 import { forgetLabelWrite } from '@/components/references/labelWrites';
->>>>>>> upstream/main
 import { REFERENCE_META_TEXT, referenceNumberLabel } from '@/components/references/referencePickerItems';
 import type { IconName } from '@/components/icon/icons';
 import { toast } from '@/components/ui';
@@ -117,15 +111,7 @@ export const SourceBoardActions: React.FC<{
     const { t } = useI18n();
     const { sourceControl, trackers } = useRuntimeAPIs();
     const confirmation = useConfirmDialog();
-<<<<<<< HEAD
-    const [busy, setBusy] = React.useState<'merge' | 'ready' | null>(null);
-||||||| bc50ba56aa
-    const { triggerFireworks } = useFireworksCelebration();
-    const [busy, setBusy] = React.useState<'merge' | 'ready' | null>(null);
-=======
-    const { triggerFireworks } = useFireworksCelebration();
     const [busy, setBusy] = React.useState<'merge' | null>(null);
->>>>>>> upstream/main
 
     const pull: RepositoryChangeRequestReference | null = item.source === 'repository' && item.reference.kind === 'pull' ? item.reference : null;
     const descriptor = useSourceControlProvider(pull?.provider);
@@ -147,14 +133,6 @@ export const SourceBoardActions: React.FC<{
     const currentSessionId = useSessionUIStore((state) => (state.newSessionDraft?.open ? null : state.currentSessionId));
     const currentSession = useSession(currentSessionId, currentSessionId ? useSessionUIStore.getState().getDirectoryForSession(currentSessionId) ?? undefined : undefined);
 
-<<<<<<< HEAD
-    // The item lands on the composer as a chip, never as a sent message, and
-    // in the composer it was addressed to: the draft this flow opened, or the
-    // chat the board covered.
-||||||| bc50ba56aa
-    // The item lands on the composer as a chip, never as a sent message.
-=======
->>>>>>> upstream/main
     const attachToComposer = (target: ComposerReferenceHandoff) => {
         void resolveComposerReferences([selectionOf(item)], {
             sourceControl,
@@ -238,14 +216,8 @@ export const SourceBoardActions: React.FC<{
                 method: mergeMethod,
             });
             const { merged, outcome, message } = receipt.result;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-            // One volley more than a push, plus one for each layer of a stack landing with it.
-            if (merged) triggerFireworks({ kind: 'merge', volleys: 2 + landsBelow.length, origin });
-=======
             if (merged) forgetLabelWrite(openPull);
             if (merged) triggerFireworks({ kind: 'merge', volleys: 2 + landsBelow.length, origin });
->>>>>>> upstream/main
             if (submits) {
                 if (merged) toast.success(t('sourceBoard.toast.submitted', { reference }));
                 else toast.message(t('sourceBoard.toast.notSubmitted', { reference }), { description: message });
@@ -296,11 +268,9 @@ export const SourceBoardActions: React.FC<{
                 </>
             ) : openPull && !openPull.draft && mergeMethod ? (
                 <div className="flex shrink-0 items-center">
-<<<<<<< HEAD
                     <Button
                         size="sm"
                         variant="outline"
-                        // Two halves of one control: the inner corners stay square.
                         className={cn(mergeMethods.length > 1 && 'rounded-e-none')}
                         disabled={busy === 'merge' || submitBlocked}
                         onClick={() => void merge()}
@@ -308,34 +278,6 @@ export const SourceBoardActions: React.FC<{
                         <Icon name={busy === 'merge' ? 'loader-4' : 'git-merge'} className={busy === 'merge' ? 'size-3.5 animate-spin' : 'size-3.5'} />
                         {t(MERGE_METHOD_LABELS[mergeMethod])}
                     </Button>
-||||||| bc50ba56aa
-                    <ButtonTooltip label={t(submits ? 'contextTooltips.tracker.submitTo' : 'contextTooltips.tracker.mergeInto', { branch: openPull.base })}>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            // Two halves of one control: the inner corners stay square.
-                            className={cn(mergeMethods.length > 1 && 'rounded-e-none')}
-                            disabled={busy === 'merge' || submitBlocked}
-                            onClick={(event) => void merge(event.currentTarget)}
-                        >
-                            <Icon name={busy === 'merge' ? 'loader-4' : 'git-merge'} className={busy === 'merge' ? 'size-3.5 animate-spin' : 'size-3.5'} />
-                            {t(MERGE_METHOD_LABELS[mergeMethod])}
-                        </Button>
-                    </ButtonTooltip>
-=======
-                    <ButtonTooltip label={t(submits ? 'contextTooltips.tracker.submitTo' : 'contextTooltips.tracker.mergeInto', { branch: openPull.base })}>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className={cn(mergeMethods.length > 1 && 'rounded-e-none')}
-                            disabled={busy === 'merge' || submitBlocked}
-                            onClick={(event) => void merge(event.currentTarget)}
-                        >
-                            <Icon name={busy === 'merge' ? 'loader-4' : 'git-merge'} className={busy === 'merge' ? 'size-3.5 animate-spin' : 'size-3.5'} />
-                            {t(MERGE_METHOD_LABELS[mergeMethod])}
-                        </Button>
-                    </ButtonTooltip>
->>>>>>> upstream/main
                     {mergeMethods.length > 1 ? (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -361,12 +303,6 @@ export const SourceBoardActions: React.FC<{
                 </div>
             ) : null}
             {openPull && !openPull.draft && unmet.length > 0 ? (
-<<<<<<< HEAD
-                // A disabled button shows no tooltip, so what it waits for is said beside it.
-||||||| bc50ba56aa
-                // What the disabled button waits for is said beside it.
-=======
->>>>>>> upstream/main
                 <span
                     className="min-w-0 max-w-[16rem] truncate typography-meta text-muted-foreground"
                     title={unmet.map((requirement) => requirement.description ? `${requirement.name}: ${requirement.description}` : requirement.name).join('\n')}
@@ -446,43 +382,7 @@ const LINK_CLASS = cn(
     REFERENCE_META_TEXT,
 );
 
-<<<<<<< HEAD
-/**
- * Where to look at a PR's changes: the diff view's PR comparison, or its
- * walkthrough. Both open in the panel beside the chat on screen and read the
- * PR through the project's own folder: the folder the app shows when it
- * belongs to the project, else the project's root, without the app moving
- * there; a PR of a repository under a root that is not one is read through
- * that repository, leaving the Git selection alone. With no chat on screen
- * the app opens a draft of the project first. The phone shell has no side
- * panel: there Changes opens the workspace drawer's Git tab on the PR, in the
- * project's draft when the app shows another, `onLeave` gives the chat back
- * underneath it, and the walkthrough is not offered. A host that does not
- * serve change-request diffs gets neither link: both would only say so.
- * With an earlier revision picked (`revision`), both read that revision, the
- * one whose counts sit beside them.
- */
 export const SourceBoardPullLinks: React.FC<{
-||||||| bc50ba56aa
-/**
- * Where to look at a PR's changes: the diff view's PR comparison, or its
- * walkthrough. Both open in the panel beside the chat on screen and read the
- * PR through the project's own folder: the folder the app shows when it
- * belongs to the project, else the project's root, without the app moving
- * there; a PR of a repository under a root that is not one is read through
- * that repository, leaving the Git selection alone. With no chat on screen
- * the app opens a draft of the project first. The phone shell has no side
- * panel: there Changes opens the workspace drawer's Git tab on the PR, in the
- * project's draft when the app shows another, `onLeave` gives the chat back
- * underneath it, and the walkthrough is not offered. A host that does not
- * serve change-request diffs gets neither link: both would only say so.
- * With an earlier revision picked (`revision`), both read that revision, the
- * one whose counts sit beside them.
- */
-type PullLinkProps = {
-=======
-type PullLinkProps = {
->>>>>>> upstream/main
     pull: RepositoryChangeRequestReference;
     project: SourceBoardProject;
     repository: string | null;
@@ -510,15 +410,7 @@ type PullLinkProps = {
         if (mobile) {
             if (target.mobileDirectory === currentDirectory) ui.closeMainSurfaces();
             else useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: project.id, directoryOverride: project.path });
-<<<<<<< HEAD
-            // A repository under the folder is shown in place of the Git selection, which stays as it was.
             usePullRequestSelectionStore.getState().requestDiff(target.mobileRequestDirectory, source, context, target.mobileRepository);
-||||||| bc50ba56aa
-            // A repository under the folder is shown in place of the Git selection, which stays as it was.
-            usePullRequestSelectionStore.getState().requestDiff(target.mobileRequestDirectory, source, target.mobileRepository);
-=======
-            usePullRequestSelectionStore.getState().requestDiff(target.mobileRequestDirectory, source, target.mobileRepository);
->>>>>>> upstream/main
             onLeave?.();
             mobile.openChanges();
             return;
@@ -554,12 +446,6 @@ type PullLinkProps = {
 };
 
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * The viewer's unsent review of the previewed PR, beside its reviewers: who it
- * is and how many comments wait. Opens the diff it was written on.
- */
 export const SourceBoardReviewDraft: React.FC<PullLinkProps> = (props) => {
     const { pull, context, project } = props;
     const { t } = useI18n();
@@ -584,32 +470,6 @@ export const SourceBoardReviewDraft: React.FC<PullLinkProps> = (props) => {
     );
 };
 
-=======
-export const SourceBoardReviewDraft: React.FC<PullLinkProps> = (props) => {
-    const { pull, context, project } = props;
-    const { t } = useI18n();
-    const open = useOpenPull(props);
-    const target = React.useMemo(() => (pull.state === 'open' ? {
-        context,
-        provider: context.provider,
-        project: { owner: pull.sourceRepo.owner, name: pull.sourceRepo.repo },
-        number: pull.number,
-        headSha: pull.headSha,
-        directory: context.directory ?? project.path,
-    } : null), [context, project.path, pull.headSha, pull.number, pull.sourceRepo.owner, pull.sourceRepo.repo, pull.state]);
-    const review = useChangeRequestReview(target);
-    const count = reviewDraftCount(review);
-    if (count === 0) return null;
-    const login = review?.state?.draft?.comments[0]?.author?.login;
-    const label = t(count === 1 ? 'review.board.draft.one' : 'review.board.draft.other', { count });
-    return (
-        <button type="button" className={LINK_CLASS} onClick={() => open('diff')}>
-            {login ? `${login} · ${label}` : label}
-        </button>
-    );
-};
-
->>>>>>> upstream/main
 const DISCUSSION_CLOSE_REASONS = ['resolved', 'outdated', 'duplicate'] as const satisfies readonly DiscussionCloseReason[];
 const DISCUSSION_CLOSE_KEYS = {
     resolved: 'sourceBoard.discussion.closeResolved',

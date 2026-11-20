@@ -4,18 +4,8 @@ import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost' });
-<<<<<<< HEAD
 const domGlobals = {
-  window: browser, document: browser.document, navigator: browser.navigator,
-||||||| bc50ba56aa
-const descriptors = new Map<string, PropertyDescriptor | undefined>();
-for (const [key, value] of Object.entries({
-  window: browser, document: browser.document, navigator: browser.navigator,
-=======
-const descriptors = new Map<string, PropertyDescriptor | undefined>();
-for (const [key, value] of Object.entries({
   window: browser, document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent, navigator: browser.navigator,
->>>>>>> upstream/main
   localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement,
   HTMLInputElement: browser.HTMLInputElement,
   Node: browser.Node, Text: browser.Text, Document: browser.Document, DocumentFragment: browser.DocumentFragment,
@@ -31,17 +21,11 @@ for (const [key, value] of Object.entries(domGlobals)) {
   Object.defineProperty(globalThis, key, { value, configurable: true });
 }
 const originalFetch = globalThis.fetch;
-<<<<<<< HEAD
-const mockFetch = (async (input: RequestInfo | URL) => {
-||||||| bc50ba56aa
-globalThis.fetch = (async (input) => {
-=======
 // The request for hits of every conversation; the one for the archive alone is kept apart.
 const messageSearchRequests: string[] = [];
 const archivedMessageSearchRequests: string[] = [];
 let respondToMessageSearch: (url: URL) => Promise<Response> = async () => Response.json({ status: 'ok', hits: [], next: null, index: null });
 const fakeFetch = async (input: RequestInfo | URL): Promise<Response> => {
->>>>>>> upstream/main
   const url = new URL(String(input), 'http://localhost');
   if (url.pathname === '/api/openchamber/message-search') {
     (url.searchParams.get('lifecycle') === 'archived' ? archivedMessageSearchRequests : messageSearchRequests).push(url.toString());
@@ -53,15 +37,8 @@ const fakeFetch = async (input: RequestInfo | URL): Promise<Response> => {
     project: { directory: '/allowed' }, data: [], files: [], hits: [], archives: [], actions: [],
     trusted: false, fingerprint: 'untrusted', items: [],
   });
-<<<<<<< HEAD
-}) as typeof fetch;
-globalThis.fetch = mockFetch;
-||||||| bc50ba56aa
-}) as typeof fetch;
-=======
 };
 globalThis.fetch = fakeFetch;
->>>>>>> upstream/main
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { RuntimeAPIProvider } = await import('@/contexts/RuntimeAPIProvider');
@@ -103,14 +80,8 @@ beforeEach(() => {
   respondToMessageSearch = async () => Response.json({ status: 'ok', hits: [], next: null, index: null });
   useProjectsStore.setState({ projects: [{ id: 'allowed', path: '/allowed' }] });
   useSessionUIStore.setState({ availableWorktreesByProject: new Map() });
-<<<<<<< HEAD
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   useGlobalSessionsStore.getState().applySnapshot([
-||||||| bc50ba56aa
-  useGlobalSessionsStore.setState({ activeSessions: [
-=======
-  useGlobalSessionsStore.setState({ archivedSessions: [], activeSessions: [
->>>>>>> upstream/main
     session('allowed', '/allowed', 'Allowed conversation'),
     session('declined', '/declined', 'Declined conversation'),
   ], []);

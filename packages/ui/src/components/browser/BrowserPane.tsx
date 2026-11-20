@@ -43,7 +43,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useDevServerWait } from '@/hooks/useDevServerWait';
 import { buildQuietScript } from '@/lib/browser/pageActions';
 import { createPageDriver, pageActionParametersSchema, type DriveStep, type JsonObject } from '@/lib/browser/pageDriver';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 import { stageBrowserUpload, type UploadTicket } from '@/lib/browser/uploads';
 import { BrowserToolbar } from './BrowserToolbar';
 import { BrowserDeviceBar, type BrowserColorScheme } from './BrowserDeviceBar';
@@ -62,15 +62,9 @@ import { AnnotationDictation, type AnnotationVoiceChannel } from './AnnotationDi
 import { useAnnotationVoice } from './useAnnotationVoice';
 import type { AnnotationOverlayMessage } from '@/lib/browser/annotationOverlay';
 import { readEventPayload, useWebviewNavigation } from './useWebviewNavigation';
-<<<<<<< HEAD
-import { isStageShown, useWebviewFocusGuard, type HoldPageFocus } from './useWebviewFocusGuard';
-import { problemMessage } from '@/lib/problemMessage';
-||||||| bc50ba56aa
-import { isStageShown, useWebviewFocusGuard, type HoldPageFocus } from './useWebviewFocusGuard';
-=======
 import { useSteadyStage } from './useSteadyStage';
 import { deepActiveElement, isStageShown, useWebviewFocusGuard, type HoldPageFocus } from './useWebviewFocusGuard';
->>>>>>> upstream/main
+import { problemMessage } from '@/lib/problemMessage';
 
 export type BrowserPaneProps = {
   initialUrl: string;
@@ -367,7 +361,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory: tab
       const message = (error instanceof Error ? error.message : String(error))
         .replace(/^Error invoking remote method '[^']*': (?:Error: )?/, '');
       if (message.includes('Unknown desktop command')) {
-        throw new Error('This OpenChamber desktop app is older than its server and cannot run this browser action. Update the desktop app.');
+        throw new Error('This OhPiChamber desktop app is older than its server and cannot run this browser action. Update the desktop app.');
       }
       throw new Error(message);
     }
@@ -378,7 +372,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory: tab
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       if (!await waitForTwoFrames()) {
-        throw new Error('The OpenChamber window is not being drawn (minimized, on a workspace or tab that is not shown, or the screen is locked or off), so the page takes no input. browser.snapshot still reads the page.');
+        throw new Error('The OhPiChamber window is not being drawn (minimized, on a workspace or tab that is not shown, or the screen is locked or off), so the page takes no input. browser.snapshot still reads the page.');
       }
       const late = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error('The page did not take the input in time. Take a snapshot to see its state.')), INPUT_TIMEOUT_MS);
@@ -914,42 +908,8 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory: tab
           : 'contextPanel.browser.clearedCache'));
         try { webviewRef.current?.reloadIgnoringCache(); } catch { /* not attached */ }
       })
-<<<<<<< HEAD
       .catch((error) => toast.error(problemMessage(error, t('contextPanel.browser.clearFailed'))));
-  }, [directory, t]);
-
-  // The stage is measured rather than assumed: the panel is resizable, and a
-  // viewport that fitted a moment ago may not fit now.
-  React.useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect;
-      if (rect) setStageSize({ width: rect.width, height: rect.height });
-    });
-    observer.observe(stage);
-    return () => observer.disconnect();
-  }, []);
-||||||| bc50ba56aa
-      .catch(() => toast.error(t('contextPanel.browser.clearFailed')));
-  }, [directory, t]);
-
-  // The stage is measured rather than assumed: the panel is resizable, and a
-  // viewport that fitted a moment ago may not fit now.
-  React.useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect;
-      if (rect) setStageSize({ width: rect.width, height: rect.height });
-    });
-    observer.observe(stage);
-    return () => observer.disconnect();
-  }, []);
-=======
-      .catch(() => toast.error(t('contextPanel.browser.clearFailed')));
   }, [partition, t]);
->>>>>>> upstream/main
 
   const applyColorScheme = React.useCallback((scheme: BrowserColorScheme) => {
     setColorScheme(scheme);
