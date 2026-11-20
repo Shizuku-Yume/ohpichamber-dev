@@ -20,28 +20,6 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { fetchEligibleScheduledTaskTargets } from '@/lib/scheduledTasksApi';
-import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSelector';
-// Draft shape and payload building live in scheduledTaskEditorDraft.ts so they
-// can be unit-tested without mounting the dialog.
-import {
-  buildScheduledTaskPayload,
-  toDraft,
-  validateDraft,
-  type ScheduledTaskDraft,
-} from './scheduledTaskEditorDraft';
-=======
-import { fetchEligibleScheduledTaskTargets } from '@/lib/scheduledTasksApi';
-import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSelector';
-import {
-  buildScheduledTaskPayload,
-  toDraft,
-  validateDraft,
-  type ScheduledTaskDraft,
-} from './scheduledTaskEditorDraft';
->>>>>>> upstream/main
 import { useI18n } from '@/lib/i18n';
 import { isValidCronExpression, getNextRuns, CRON_EXAMPLES } from '@/lib/cron';
 import { canonicalizeTimezone } from '@/lib/timezones';
@@ -51,16 +29,10 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { CHAT_DRAFT_PROJECT_ID, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { SettingsStackedField } from '@/components/sections/shared/SettingsSection';
 
-<<<<<<< HEAD
 const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
 
 // Mirrors the composer's footer icon toggles (PermissionAutoAcceptButton and
 // the permission controls) so the state reads the same in both places.
-||||||| bc50ba56aa
-// Mirrors the composer's footer icon toggles (PermissionAutoAcceptButton /
-// SessionGoalButton) so the state reads the same in both places.
-=======
->>>>>>> upstream/main
 const EDITOR_TOGGLE_BUTTON_CLASS = 'flex h-6 w-6 cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0';
 
 const TIMEZONE_OPTIONS = (() => {
@@ -766,28 +738,13 @@ export function ScheduledTaskEditorDialog(props: {
   open: boolean;
   task: ScheduledTask | null;
   projectId: string;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  /** Where a task can run: the chats scope and every project. */
-  scopes: ScheduledTaskScopeOption[];
-=======
-  scopes: ScheduledTaskScopeOption[];
->>>>>>> upstream/main
   onOpenChange: (open: boolean) => void;
-<<<<<<< HEAD
   onSave: (draft: Partial<ScheduledTask>) => Promise<void>;
-||||||| bc50ba56aa
-  /** `projectId` is where the task is saved; for an existing task it may differ from its owner, which moves it. */
-  onSave: (draft: Partial<ScheduledTask>, projectId: string) => Promise<void>;
-=======
-  onSave: (draft: Partial<ScheduledTask>, projectId: string) => Promise<void>;
->>>>>>> upstream/main
 }) {
   const { open, task, onOpenChange, onSave } = props;
   const { t, locale } = useI18n();
   const globalSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const liveSessions = useAllLiveSessions();
-<<<<<<< HEAD
   const projects = useProjectsStore((state) => state.projects);
   const worktrees = useSessionUIStore((state) => state.availableWorktreesByProject);
   const sessions = React.useMemo(() => {
@@ -801,92 +758,6 @@ export function ScheduledTaskEditorDialog(props: {
         : roots.some((root) => resolveGlobalSessionDirectory(session) === root || resolveGlobalSessionDirectory(session)?.startsWith(`${root}/`))
     ));
   }, [globalSessions, liveSessions, projects, worktrees, props.projectId]);
-||||||| bc50ba56aa
-  // Candidates only. Whether one belongs to the task is the scheduler's own
-  // membership rule, fetched below, so this list never re-implements the
-  // policy the backend enforces on save and run (#4757).
-  const candidates = React.useMemo(() => {
-    const merged = new Map(globalSessions.map((session) => [session.id, session]));
-    for (const session of liveSessions) merged.set(session.id, session);
-    return [...merged.values()].filter((session) => !session.time?.archived);
-  }, [globalSessions, liveSessions]);
-  // The eligibility request depends on which sessions sit in which directory,
-  // never on the session objects, which change on every step an agent takes.
-  const candidatesKey = React.useMemo(
-    () => candidates.map((session) => `${session.id}:${session.directory ?? ''}`).sort().join('\n'),
-    [candidates],
-  );
-  const candidatesRef = React.useRef(candidates);
-  candidatesRef.current = candidates;
-  const [eligibility, setEligibility] = React.useState<
-    { status: 'idle' | 'loading' | 'error' } | { status: 'ready'; ids: ReadonlySet<string> }
-  >({ status: 'idle' });
-  const [eligibilityAttempt, setEligibilityAttempt] = React.useState(0);
-  React.useEffect(() => {
-    if (!open || !projectId || !candidatesKey) {
-      setEligibility({ status: 'idle' });
-      return undefined;
-    }
-    const controller = new AbortController();
-    setEligibility((current) => (current.status === 'ready' ? current : { status: 'loading' }));
-    fetchEligibleScheduledTaskTargets(
-      projectId,
-      candidatesRef.current.map((session) => ({ sessionId: session.id, directory: session.directory ?? '' })),
-      controller.signal,
-    ).then(
-      (ids) => setEligibility({ status: 'ready', ids }),
-      () => {
-        // A failed read is an error, never an empty list: the picker would
-        // otherwise read as "this project has no sessions".
-        if (!controller.signal.aborted) setEligibility({ status: 'error' });
-      },
-    );
-    return () => controller.abort();
-  }, [open, projectId, candidatesKey, eligibilityAttempt]);
-  const sessions = React.useMemo(
-    () => (eligibility.status === 'ready' ? candidates.filter((session) => eligibility.ids.has(session.id)) : []),
-    [candidates, eligibility],
-  );
-=======
-  const candidates = React.useMemo(() => {
-    const merged = new Map(globalSessions.map((session) => [session.id, session]));
-    for (const session of liveSessions) merged.set(session.id, session);
-    return [...merged.values()].filter((session) => !session.time?.archived);
-  }, [globalSessions, liveSessions]);
-  const candidatesKey = React.useMemo(
-    () => candidates.map((session) => `${session.id}:${session.directory ?? ''}`).sort().join('\n'),
-    [candidates],
-  );
-  const candidatesRef = React.useRef(candidates);
-  candidatesRef.current = candidates;
-  const [eligibility, setEligibility] = React.useState<
-    { status: 'idle' | 'loading' | 'error' } | { status: 'ready'; ids: ReadonlySet<string> }
-  >({ status: 'idle' });
-  const [eligibilityAttempt, setEligibilityAttempt] = React.useState(0);
-  React.useEffect(() => {
-    if (!open || !projectId || !candidatesKey) {
-      setEligibility({ status: 'idle' });
-      return undefined;
-    }
-    const controller = new AbortController();
-    setEligibility((current) => (current.status === 'ready' ? current : { status: 'loading' }));
-    fetchEligibleScheduledTaskTargets(
-      projectId,
-      candidatesRef.current.map((session) => ({ sessionId: session.id, directory: session.directory ?? '' })),
-      controller.signal,
-    ).then(
-      (ids) => setEligibility({ status: 'ready', ids }),
-      () => {
-        if (!controller.signal.aborted) setEligibility({ status: 'error' });
-      },
-    );
-    return () => controller.abort();
-  }, [open, projectId, candidatesKey, eligibilityAttempt]);
-  const sessions = React.useMemo(
-    () => (eligibility.status === 'ready' ? candidates.filter((session) => eligibility.ids.has(session.id)) : []),
-    [candidates, eligibility],
-  );
->>>>>>> upstream/main
   React.useEffect(() => {
     if (open) void refreshGlobalSessions().catch(() => undefined);
   }, [open]);
@@ -899,18 +770,6 @@ export function ScheduledTaskEditorDialog(props: {
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const weekStartPreference = useUIStore((state) => state.weekStartPreference);
   const isMobile = useUIStore((state) => state.isMobile);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // The project the run works in: the base-branch picker reads its branches
-  // from here, the same way the New worktree dialog and multi-run do.
-  const projectPath = useProjectsStore((state) => state.projects.find((entry) => entry.id === projectId)?.path ?? null);
-  // Same hook `BranchSelector` uses; calling it here only reads the store's
-  // answer so the editor can say when the folder is not a repository.
-  const branchOptions = useBranchOptions(projectPath);
-=======
-  const projectPath = useProjectsStore((state) => state.projects.find((entry) => entry.id === projectId)?.path ?? null);
-  const branchOptions = useBranchOptions(projectPath);
->>>>>>> upstream/main
 
   const [draft, setDraft] = React.useState<ScheduledTaskDraft>(() =>
     toDraft(task, {
@@ -1275,19 +1134,6 @@ export function ScheduledTaskEditorDialog(props: {
       },
     };
     if (draft.state && draft.sessionMode === 'new') payload.state = draft.state;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // A non-git project has nothing to branch from: keep the field honest even
-    // when the stored task still asks for isolation. The runtime also falls
-    // back to an in-directory run, so this only keeps the record truthful.
-    if (draft.sessionMode === 'new' && branchOptions.isGitRepository === false) {
-      payload.runInWorktree = false;
-    }
-=======
-    if (draft.sessionMode === 'new' && branchOptions.isGitRepository === false) {
-      payload.runInWorktree = false;
-    }
->>>>>>> upstream/main
 
     setSaving(true);
     try {
@@ -1298,29 +1144,7 @@ export function ScheduledTaskEditorDialog(props: {
     } finally {
       setSaving(false);
     }
-<<<<<<< HEAD
   }, [draft, onOpenChange, onSave, t]);
-||||||| bc50ba56aa
-  }, [branchOptions.isGitRepository, draft, onOpenChange, onSave, projectId, t]);
-
-  // A target session and a base branch belong to the project they were picked
-  // in; another project starts without them.
-  const changeProject = React.useCallback((nextProjectId: string) => {
-    if (nextProjectId === projectId) return;
-    setProjectId(nextProjectId);
-    setEligibility({ status: 'loading' });
-    setDraft((prev) => ({ ...prev, targetSessionId: '', baseBranch: '' }));
-  }, [projectId]);
-=======
-  }, [branchOptions.isGitRepository, draft, onOpenChange, onSave, projectId, t]);
-
-  const changeProject = React.useCallback((nextProjectId: string) => {
-    if (nextProjectId === projectId) return;
-    setProjectId(nextProjectId);
-    setEligibility({ status: 'loading' });
-    setDraft((prev) => ({ ...prev, targetSessionId: '', baseBranch: '' }));
-  }, [projectId]);
->>>>>>> upstream/main
 
   const descriptionId = React.useId();
   const hasOpenFloatingMenu = React.useCallback(() => {
@@ -1504,7 +1328,6 @@ export function ScheduledTaskEditorDialog(props: {
                     })}
                   </div>
 
-<<<<<<< HEAD
                   <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
                     <div className="typography-micro text-muted-foreground">{selectedDateLabel || ''}</div>
                     <Button
@@ -1518,175 +1341,6 @@ export function ScheduledTaskEditorDialog(props: {
                     >
                       {t('sessions.scheduledTasks.editor.date.jumpToToday')}
                     </Button>
-||||||| bc50ba56aa
-              <div className="flex flex-col gap-2">
-                <FieldLabel>{t('sessions.scheduledTasks.editor.times.label')}</FieldLabel>
-                <div className="flex flex-col gap-2">
-                  {draft.schedule.times.map((time, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <TimePill
-                        value={time}
-                        use24Hour={use24Hour}
-                        hourAriaLabel={t('sessions.scheduledTasks.editor.time.hourAria')}
-                        minuteAriaLabel={t('sessions.scheduledTasks.editor.time.minuteAria')}
-                        periodAriaLabel={t('sessions.scheduledTasks.editor.time.periodAria')}
-                        amLabel={t('sessions.scheduledTasks.editor.time.period.am')}
-                        pmLabel={t('sessions.scheduledTasks.editor.time.period.pm')}
-                        onChange={(next) => updateTimeAt(index, next)}
-                      />
-                      {draft.schedule.times.length > 1 ? (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => removeTimeAt(index)}
-                          aria-label={t('sessions.scheduledTasks.editor.times.removeAria')}
-                        >
-                          <Icon name="close" className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <Button type="button" size="sm" variant="outline" onClick={addTime}>
-                    <Icon name="add" className="me-1 h-4 w-4" /> {t('sessions.scheduledTasks.editor.times.add')}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <FieldLabel>{t('sessions.scheduledTasks.editor.timezone.label')}</FieldLabel>
-                <Select
-                  value={draft.schedule.timezone}
-                  onValueChange={(timezone) => {
-                    setDraft((prev) => ({
-                      ...prev,
-                      schedule: { ...prev.schedule, timezone },
-                    }));
-                  }}
-                >
-                  <SelectTrigger className="w-fit max-w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TIMEZONE_OPTIONS.map((timezone) => (
-                      <SelectItem key={timezone} value={timezone}>{timezone}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          {draft.sessionMode === 'new' && projectPath?.trim() ? (
-            <div className="flex flex-col gap-1">
-              <label className="inline-flex cursor-pointer items-center gap-2">
-                <Checkbox
-                  checked={draft.runInWorktree}
-                  onChange={(runInWorktree) => setDraft((prev) => ({ ...prev, runInWorktree }))}
-                  ariaLabel={t('sessions.scheduledTasks.editor.worktree.label')}
-                />
-                <span className="typography-meta">{t('sessions.scheduledTasks.editor.worktree.label')}</span>
-              </label>
-              <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.worktree.hint')}</p>
-              {/* The picker belongs to isolation, so it is absent while the
-                  switch is off rather than sitting there greyed out. */}
-              {draft.runInWorktree ? (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <FieldLabel>{t('sessions.scheduledTasks.editor.worktree.baseBranch.label')}</FieldLabel>
-                    <BranchSelector
-                      directory={projectPath}
-                      value={draft.baseBranch}
-                      onChange={(branch) => setDraft((prev) => ({ ...prev, baseBranch: branch }))}
-                      className="w-fit"
-                    />
-                    {branchOptions.isGitRepository === false ? (
-                      <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.worktree.notRepo')}</p>
-                    ) : null}
-=======
-              <div className="flex flex-col gap-2">
-                <FieldLabel>{t('sessions.scheduledTasks.editor.times.label')}</FieldLabel>
-                <div className="flex flex-col gap-2">
-                  {draft.schedule.times.map((time, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <TimePill
-                        value={time}
-                        use24Hour={use24Hour}
-                        hourAriaLabel={t('sessions.scheduledTasks.editor.time.hourAria')}
-                        minuteAriaLabel={t('sessions.scheduledTasks.editor.time.minuteAria')}
-                        periodAriaLabel={t('sessions.scheduledTasks.editor.time.periodAria')}
-                        amLabel={t('sessions.scheduledTasks.editor.time.period.am')}
-                        pmLabel={t('sessions.scheduledTasks.editor.time.period.pm')}
-                        onChange={(next) => updateTimeAt(index, next)}
-                      />
-                      {draft.schedule.times.length > 1 ? (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => removeTimeAt(index)}
-                          aria-label={t('sessions.scheduledTasks.editor.times.removeAria')}
-                        >
-                          <Icon name="close" className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <Button type="button" size="sm" variant="outline" onClick={addTime}>
-                    <Icon name="add" className="me-1 h-4 w-4" /> {t('sessions.scheduledTasks.editor.times.add')}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <FieldLabel>{t('sessions.scheduledTasks.editor.timezone.label')}</FieldLabel>
-                <Select
-                  value={draft.schedule.timezone}
-                  onValueChange={(timezone) => {
-                    setDraft((prev) => ({
-                      ...prev,
-                      schedule: { ...prev.schedule, timezone },
-                    }));
-                  }}
-                >
-                  <SelectTrigger className="w-fit max-w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TIMEZONE_OPTIONS.map((timezone) => (
-                      <SelectItem key={timezone} value={timezone}>{timezone}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          {draft.sessionMode === 'new' && projectPath?.trim() ? (
-            <div className="flex flex-col gap-1">
-              <label className="inline-flex cursor-pointer items-center gap-2">
-                <Checkbox
-                  checked={draft.runInWorktree}
-                  onChange={(runInWorktree) => setDraft((prev) => ({ ...prev, runInWorktree }))}
-                  ariaLabel={t('sessions.scheduledTasks.editor.worktree.label')}
-                />
-                <span className="typography-meta">{t('sessions.scheduledTasks.editor.worktree.label')}</span>
-              </label>
-              <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.worktree.hint')}</p>
-              {draft.runInWorktree ? (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <FieldLabel>{t('sessions.scheduledTasks.editor.worktree.baseBranch.label')}</FieldLabel>
-                    <BranchSelector
-                      directory={projectPath}
-                      value={draft.baseBranch}
-                      onChange={(branch) => setDraft((prev) => ({ ...prev, baseBranch: branch }))}
-                      className="w-fit"
-                    />
-                    {branchOptions.isGitRepository === false ? (
-                      <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.worktree.notRepo')}</p>
-                    ) : null}
->>>>>>> upstream/main
                   </div>
                 </div>
               ) : null}

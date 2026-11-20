@@ -1,12 +1,7 @@
 import React from 'react';
 import type { ChildStoreManager } from '@/sync/child-store';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-<<<<<<< HEAD
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
-||||||| bc50ba56aa
-=======
-import { isOpenCodeTrustPaused, subscribeOpenCodeTrust } from '@/lib/opencodeTrust';
->>>>>>> upstream/main
 import { normalizePath } from '../utils';
 import type { SessionGroup } from '../types';
 import type { ProjectSection } from '../projects/sessionProjectRender';
@@ -66,18 +61,7 @@ export const useSidebarGroupStatus = ({
     void bootstrapSnapshot;
     const pausedDirectories = new Set(pausedSnapshot ? pausedSnapshot.split('\u0001') : []);
     const statuses = new Map<string, SessionSidebarGroupStatus>();
-<<<<<<< HEAD
     for (const { key, archived, directories: groupDirectories, groupSessionWorkspaceIds } of groups) {
-||||||| bc50ba56aa
-    for (const { key, archived, directories: groupDirectories } of groups) {
-=======
-    for (const { key, archived, directories: groupDirectories } of groups) {
-      const pausedDirectory = groupDirectories.find((directory) => pausedDirectories.has(directory));
-      if (pausedDirectory) {
-        statuses.set(key, { state: 'trust-paused', directory: pausedDirectory, canGrantAccess: false });
-        continue;
-      }
->>>>>>> upstream/main
       const failedDirectory = groupDirectories.find((directory) => (
         childStores.getBootstrapState(directory) === 'failed' || childStores.getInitializationState(directory) === 'failed'
       ));
@@ -90,7 +74,6 @@ export const useSidebarGroupStatus = ({
           canGrantAccess: failure === 'os-permission' && canGrantAccess,
         });
       } else {
-<<<<<<< HEAD
         // Group-scoped errors match either directly by exact workspace IDs present
         // in group sessions, by directory path, or by directory resolved concurrently
         // via bindKnownWorkspaceDirectories in loadSessions.
@@ -121,35 +104,9 @@ export const useSidebarGroupStatus = ({
             canGrantAccess: false,
           });
         }
-||||||| bc50ba56aa
-        // Unopened directories rely on the global list. A previous complete
-        // list keeps empty groups ready during background refreshes.
-        const complete = hasLoadedGlobalSessions || (!archived && groupDirectories.length > 0
-          && groupDirectories.every((directory) => childStores.getBootstrapState(directory) === 'complete'));
-        statuses.set(key, {
-          state: complete ? 'ready' : globalStatus === 'error' ? 'load-failed' : 'loading',
-          // A null directory retries the global list, without initializing a location.
-          directory: complete ? groupDirectories[0] ?? null : null,
-          canGrantAccess: false,
-        });
-=======
-        const complete = hasLoadedGlobalSessions || (!archived && groupDirectories.length > 0
-          && groupDirectories.every((directory) => childStores.getBootstrapState(directory) === 'complete'));
-        statuses.set(key, {
-          state: complete ? 'ready' : globalStatus === 'error' ? 'load-failed' : 'loading',
-          directory: complete ? groupDirectories[0] ?? null : null,
-          canGrantAccess: false,
-        });
->>>>>>> upstream/main
       }
     }
     return statuses;
-<<<<<<< HEAD
   }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalRefreshFailed, hasLoadedGlobalSessions, discoveryErrors]);
-||||||| bc50ba56aa
-  }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalStatus, hasLoadedGlobalSessions]);
-=======
-  }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalStatus, hasLoadedGlobalSessions, pausedSnapshot]);
->>>>>>> upstream/main
   return { groupStatusByKey, bootstrapSnapshot };
 };

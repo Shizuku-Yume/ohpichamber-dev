@@ -241,31 +241,12 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const isUnread = useSessionUnread(session.sessionId);
 
-<<<<<<< HEAD
   const isActive = currentSessionId === session.sessionId;
-||||||| bc50ba56aa
-  const isUnread = useSessionUnread(session.id);
-
-  const isActive = currentSessionId === session.id;
-=======
-  const isUnread = useSessionUnread(session.id);
-  const markedUnread = useSessionMarkedUnread(session.id);
-
-  const isActive = currentSessionId === session.id;
->>>>>>> upstream/main
   const sessionTitle = session.title?.trim() || t('sessions.sidebar.session.untitled');
   const turnActivity = useSessionTurnActivity(session.sessionId);
   const runningBlink = useWaitingBlink(turnActivity !== null);
   const isStreaming = turnActivity !== null;
-<<<<<<< HEAD
   const showUnreadDot = !isStreaming && isUnread && !isActive;
-||||||| bc50ba56aa
-  const runningBlink = useWaitingBlink(isStreaming);
-  const showUnreadDot = !isStreaming && isUnread && !isActive;
-=======
-  const runningBlink = useWaitingBlink(isStreaming);
-  const showUnreadDot = !isStreaming && isUnread && (!isActive || markedUnread);
->>>>>>> upstream/main
 
   const timestamp = session.updatedAt || session.createdAt || Date.now();
   const timeLabel = formatSessionCompactDateLabel(timestamp);
