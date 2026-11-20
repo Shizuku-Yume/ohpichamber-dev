@@ -4,6 +4,12 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The Web server declaration build now passes with an explicit public route-rule
+type for file-resource schemas and a named exported command-stream class.
+Schema instances and subprocess behavior are unchanged; 193 Docker-place and
+command-stream unit tests pass. Linux desktop packaging is being checked;
+macOS packaging and runtime smoke verification remain unverified here.
+
 UI checking now passes with zero diagnostics (4,230 files); Agent Service
 checking also passes. UI-block guidance is generated from the UI catalog into
 the native render-tool description, without importing the renderer into the

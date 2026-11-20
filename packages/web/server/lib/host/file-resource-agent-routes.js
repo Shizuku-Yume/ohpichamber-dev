@@ -1,6 +1,8 @@
 import * as C from '@openchamber/agent-contract';
 
 // Only SDK-backed file resource operations cross this gateway projection.
+/** @typedef {{ method: string, pattern: RegExp, request?: import('zod').ZodType, response: import('zod').ZodType }} FileResourceAgentRoute */
+/** @type {FileResourceAgentRoute[]} */
 export const FILE_RESOURCE_AGENT_ROUTES = [
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/commands$/, response: C.CommandCatalogStateSchema },
   { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/commands$/, request: C.CommandCreateRequestSchema, response: C.CommandCatalogStateSchema },
