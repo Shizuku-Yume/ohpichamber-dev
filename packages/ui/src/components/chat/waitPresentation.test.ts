@@ -23,6 +23,7 @@ describe('wait presentation', () => {
     expect(timerMinutesLeft(timer, 6 * 60_000 + 1)).toBe(14);
     expect(timerMinutesLeft(timer, 19 * 60_000 + 59_000)).toBe(1);
     expect(timerMinutesLeft(timer, 20 * 60_000)).toBeUndefined();
+    expect(timerMinutesLeft(timer, -30_000)).toBe(20);
     expect(timerMinutesLeft({ source: 'kit/deploy', title: 'Deploy', startedAt: 0 }, 0)).toBeUndefined();
   });
 
