@@ -175,7 +175,7 @@ export function renderFullscreenFileViewer({ artifacts, draft, editor, fileAsset
               </div>
               {shouldMaskEditorForPendingNavigation && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background">
-                  <div className="flex items-center gap-2 typography-ui text-muted-foreground">
+                  <div className="flex items-center gap-2 typography-ui-label text-muted-foreground">
                     <Icon name="loader-4" className="size-4 animate-spin" />
                     {t('filesView.state.openingFileAtChange')}
                   </div>

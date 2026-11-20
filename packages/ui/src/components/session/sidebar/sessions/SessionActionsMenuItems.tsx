@@ -13,6 +13,7 @@ import { guestSessionActions, type GuestActionEntry } from '@/lib/guests/actions
 import { runGuestSessionAction } from '@/lib/guests/session-action';
 import { getChatsRootFromDirectory } from '@/lib/chatDirectories';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 import { getMultiRunIdentity } from '@/lib/multirun/identity';
 import { useMultiRunMemberIds } from '@/lib/multirun/useMultiRuns';
 import type { Session } from '@openchamber/agent-contract';
@@ -133,8 +134,8 @@ export function SessionActionsMenuItems({
     try {
       const result = await useSessionWarmingStore.getState().toggleSessionKeepWarm(session.sessionId);
       if (result.status === 'failed') toast.error(t('sessions.warming.toggleFailed'));
-    } catch {
-      toast.error(t('sessions.warming.toggleFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('sessions.warming.toggleFailed')));
     }
   };
 

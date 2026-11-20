@@ -44,7 +44,7 @@ export function renderFileContent({ artifacts, diagram, draft, fileAssets, fileC
   const { drawioViewMode, htmlViewMode, jsonViewMode, textViewMode } = viewModes;
   return (
 !selectedFile ? (
-            <div className="p-3 typography-ui text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
+            <div className="p-3 typography-ui-label text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
           ) : (fileLoading || isPdfAssetAuthLoading) ? (
             fileLoadingState
           ) : fileError ? (

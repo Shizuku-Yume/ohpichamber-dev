@@ -2,6 +2,9 @@
 
 ## Ownership
 
+File mutation and export errors preserve the caught Host or Canonical cause via
+`problemMessage`; translated fallbacks apply only to failures without a cause.
+
 `FilesView.tsx` composes the file surface from this folder. Runtime adapters,
 the tab store, shared editor helpers and artifact implementations remain owned
 by their existing modules.

@@ -71,7 +71,7 @@ export function HeaderSessionActionsMenuItems({
 
   if (!session || !placement) return null;
 
-  const archived = Boolean(session.archivedAt);
+  const archived = session.archivedAt !== undefined;
   const directory = normalizePath(resolveGlobalSessionDirectory(session) ?? null);
   const canTrackWork = sessionWorkEnabled && placement.ownsWork && !archived && !session.parentSessionId
     && !isChatDirectoryPath(resolveGlobalSessionDirectory(session));

@@ -5,6 +5,7 @@ import { EMPTY_CANVAS_READ } from '@/components/views/files/fileCanvas';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 import { normalizePath, isPathWithinRoot, getDisplayPath } from './fileViewPaths';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { isBinaryFile, isDrawioFile } from '@/lib/toolHelpers';
@@ -221,8 +222,8 @@ export function useFileSaving({ canvasState, diagram, draft, fileDocument, scope
         if (project) {
           try {
             await syncScheduledTaskLoops(project.id);
-          } catch {
-            toast.error(t('sessions.scheduledTasks.dialog.toast.updateFailed'));
+          } catch (error) {
+            toast.error(problemMessage(error, t('sessions.scheduledTasks.dialog.toast.updateFailed')));
           }
         }
       }

@@ -94,13 +94,13 @@ export const ArchiveArtifact: React.FC<{
           </ButtonTooltip>
         ) : actions}
       />
-      {tooLarge ? <div className="p-3 typography-ui text-muted-foreground">{t('filesView.artifact.archive.entryTooLarge')}</div> : null}
+      {tooLarge ? <div className="p-3 typography-ui-label text-muted-foreground">{t('filesView.artifact.archive.entryTooLarge')}</div> : null}
       <ScrollableOverlay outerClassName="min-h-0 flex-1">
         {!opened ? (
           <ul className="flex flex-col p-1">
             {state.entries.map((entry) => (
               <li key={entry.name}>
-                <button type="button" className="flex w-full min-w-0 items-center gap-2 rounded px-2 py-1 text-start typography-ui hover:bg-[var(--interactive-hover)]" onClick={() => open(entry)}>
+                <button type="button" className="flex w-full min-w-0 items-center gap-2 rounded px-2 py-1 text-start typography-ui-label hover:bg-[var(--interactive-hover)]" onClick={() => open(entry)}>
                   <FileTypeIcon filePath={entry.name} className="size-4 shrink-0" />
                   <span className="min-w-0 flex-1 truncate" dir="auto">{entry.name}</span>
                   <span className="shrink-0 typography-meta text-muted-foreground">{formatArtifactSize(entry.size)}</span>

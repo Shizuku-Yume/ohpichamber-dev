@@ -22,6 +22,7 @@ import { type useFileTabs } from './useFileTabs';
 import { type useFileViewModes } from './useFilePreviewModes';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 
 export function useFileAssets({ draft, fileDocument, fileKinds, fileSaving, scope, tabs, viewModes, files, isMobile, runtime, t }: {
   draft: Pick<ReturnType<typeof useFileDraft>, 'draftContent'>;
@@ -189,8 +190,8 @@ export function useFileAssets({ draft, fileDocument, fileKinds, fileSaving, scop
       const written = await files.uploadFile(target, new Blob([bytes]), { overwrite: false });
       if (!written?.success) throw new Error('write failed');
       toast.success(t('filesView.export.saved', { name }));
-    } catch {
-      toast.error(t('filesView.toast.writeFileFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('filesView.toast.writeFileFailed')));
     }
   };
 

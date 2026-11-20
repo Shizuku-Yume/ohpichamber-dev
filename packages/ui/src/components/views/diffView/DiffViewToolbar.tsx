@@ -87,7 +87,7 @@ export function DiffViewToolbar({
                     <DropdownMenu onOpenChange={handleToolbarMenuOpenChange}>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <span className="diff-toolbar__more flex-shrink-0">
+                                <span className="flex-shrink-0">
                                     <DropdownMenuTrigger asChild>
                                         <ToolbarButton label={t('diffView.actions.moreActions')} icon="more" />
                                     </DropdownMenuTrigger>

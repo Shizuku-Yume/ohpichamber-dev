@@ -4,6 +4,7 @@ import { toast } from '@/components/ui';
 import { moveWorkspacePath } from '@/components/views/files/moveWorkspacePath';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { getDropTargetLabel, normalizePath } from './treePaths';
 
@@ -129,8 +130,8 @@ export const useFileTreeDialogs = ({
         } else {
           toast.error(t('sidebarFilesTree.toast.operationFailed'));
         }
-      } catch {
-        toast.error(t('sidebarFilesTree.toast.operationFailed'));
+      } catch (error) {
+        toast.error(problemMessage(error, t('sidebarFilesTree.toast.operationFailed')));
       } finally {
         done();
       }

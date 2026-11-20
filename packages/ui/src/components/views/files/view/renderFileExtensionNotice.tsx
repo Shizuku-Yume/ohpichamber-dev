@@ -14,7 +14,7 @@ export function renderFileExtensionNotice({ fileCanvas, fileKinds, t }: {
   const { suggestExcalidrawExtension } = fileKinds;
   return (
 suggestExcalidrawExtension ? (
-        <div className="flex flex-shrink-0 items-center gap-2 border-b border-edge-muted bg-[var(--surface-muted)] px-3 py-1.5 typography-ui text-muted-foreground">
+        <div className="flex flex-shrink-0 items-center gap-2 border-b border-edge-muted bg-[var(--surface-muted)] px-3 py-1.5 typography-ui-label text-muted-foreground">
           <Icon name="information" className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t('filesView.excalidraw.installHint')}</span>
           <Tooltip>

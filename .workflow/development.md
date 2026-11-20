@@ -4,13 +4,22 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The error-cause and CSS guards pass after five retained UI error paths preserve
+their caught cause with `problemMessage`, file-artifact notices use the existing
+`typography-ui-label` token, and an unconsumed diff-toolbar class is removed.
+The header's archive action also treats timestamp zero as archived, as the
+Canonical contract and its existing regression require. Focused owner/helper
+tests pass 23 Bun and four Node tests; UI type-check passes 4,229 files. Full
+root lint exits 0 (existing hook-dependency warnings remain). These error and
+artifact typography changes have not been visually rechecked.
+
 DiffView's extracted comparison hooks now retain the fork parent's repository
 and binding authority checks: non-repositories make no binding request, and a
 board handoff cannot replay an obsolete account/revision after a rebind. The
 three failing PR-diff cases pass without changing their tests. DiffView and
 binding suites pass 26 tests; UI type-check and focused lint pass. Full root
 lint also exits 0. The root check's type step passes (4,538 files, five projects),
-but drift, error-cause, CSS and upstream-gaps remain failing; full suite/baseline
+but drift and upstream-gaps remain failing; full suite/baseline
 acceptance is not complete. DiffView rendering was not visually rechecked.
 
 The initial-draft selection failure is reproduced on Linux with a scratch Git
@@ -62,8 +71,7 @@ tests 135977136995). Main head reports zero checks. The workflow is identical
 to main; runner policy stays unchanged. The maintainer accepted this as a
 pre-existing fork CI condition and directed local gates to be authoritative.
 Fresh full lint passes in all workspaces with existing React-hook warnings.
-Remaining local guard findings include five translation-only errors, two CSS
-tokens, and stale drift/gap ledgers. The macOS first-send report is no longer
+Remaining local guard findings are stale drift/gap ledgers. The macOS first-send report is no longer
 parked; its Host-normalization fix has Linux real-path evidence above and still
 needs the tester's packaged-app confirmation.
 
