@@ -44,7 +44,7 @@ export function SharedPageCard({ part, page, plainPage }: {
   const { t } = useI18n();
   const title = page.title || t('chat.htmlRender.untitled');
   const available = !isVSCodeRuntime();
-  const state = useSharePageGroup(part.sessionID, part.callID, available);
+  const state = useSharePageGroup(part.sessionID, part.toolCallId, available);
   const group = state.group;
 
   if (state.turnedOff) {
@@ -139,14 +139,14 @@ const sharePageSource = (page: SharedPage): SharePageSource => (page.ui
 const uploads = new Map<string, Promise<SharePageGroup>>();
 
 function uploadDocument(part: ToolPart, page: SharedPage, html: string | null): Promise<SharePageGroup> {
-  const key = `${part.sessionID}\n${part.callID}`;
+  const key = `${part.sessionID}\n${part.toolCallId}`;
   let upload = uploads.get(key);
   if (!upload) {
     const document = html === null ? Promise.resolve('') : buildSharePageDocument({ ui: page.ui, html, title: page.title, expectAnswer: page.share.expectAnswer !== false });
     upload = document
-      .then((built) => postSharePageDocument(part.sessionID, part.callID, { html: built, title: page.title, source: sharePageSource(page) }))
+      .then((built) => postSharePageDocument(part.sessionID, part.toolCallId, { html: built, title: page.title, source: sharePageSource(page) }))
       .catch((error) => {
-        if (error instanceof SharePageRequestError && error.status === 409) return fetchSharePageGroup(part.sessionID, part.callID);
+        if (error instanceof SharePageRequestError && error.status === 409) return fetchSharePageGroup(part.sessionID, part.toolCallId);
         throw error;
       })
       .finally(() => uploads.delete(key));
@@ -299,7 +299,7 @@ function RecipientRow({ part, page, group, recipient, onGroup, reload, onTurnedO
     if (!confirmed) return;
     setBusy(true);
     try {
-      const next = await cancelSharePageRecipient(part.sessionID, part.callID, recipient.recipientId);
+      const next = await cancelSharePageRecipient(part.sessionID, part.toolCallId, recipient.recipientId);
       if (next) onGroup(next);
       else await reload();
     } catch (error) {
@@ -401,7 +401,7 @@ function PreviewButton({ part, title, group, onTurnedOff }: { part: ToolPart; ti
   const open = async () => {
     setLoading(true);
     try {
-      setHtml(await fetchSharePagePreview(part.sessionID, part.callID));
+      setHtml(await fetchSharePagePreview(part.sessionID, part.toolCallId));
     } catch (error) {
       if (error instanceof Error && isSharingTurnedOff(error)) onTurnedOff();
       else toast.error(t('chat.sharePage.openFailed'), { description: error instanceof Error ? error.message : String(error) });

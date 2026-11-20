@@ -57,15 +57,15 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
     const showToolFileIcons = useUIStore((s) => s.showToolFileIcons);
     const currentDirectory = useEffectiveDirectory() ?? '';
 
-    const normalizedPartTool = normalizeToolName(part.tool);
+    const normalizedPartTool = normalizeToolName(part.toolName);
     const isTaskTool = isSubagentTool(normalizedPartTool);
-    const presentation = useGuestToolPresentation(part.tool);
+    const presentation = useGuestToolPresentation(part.toolName);
 
     const status = state?.status as string | undefined;
     const isFinalized = status === 'completed' || status === 'error' || status === 'aborted' || status === 'failed' || status === 'timeout' || status === 'cancelled';
     const isError = status === 'error' || status === 'failed';
 
-    const { isActive, effectiveTimeStart, effectiveTimeEnd } = useToolRowTiming(part.id, stateWithData.time, isFinalized);
+    const { isActive, effectiveTimeStart, effectiveTimeEnd } = useToolRowTiming(part.partId, stateWithData.time, isFinalized);
 
     const expandedContentRef = React.useRef<HTMLDivElement>(null);
     const [headerActionsSlot, setHeaderActionsSlot] = React.useState<HTMLSpanElement | null>(null);
@@ -91,10 +91,10 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
         return isWriteTool(normalizedPartTool) ? parseWriteLineCount(input) : null;
     }, [input, normalizedPartTool]);
     const isMultiFileApplyPatch = isPatchTool(normalizedPartTool) && Array.isArray(metadata?.files) && metadata.files.length > 1;
-    const normalizedPart = normalizedPartTool !== part.tool ? ({ ...part, toolName: normalizedPartTool } as ToolPartType) : part;
+    const normalizedPart = normalizedPartTool !== part.toolName ? ({ ...part, toolName: normalizedPartTool } as ToolPartType) : part;
     const descriptionPath = getToolDescriptionPath(normalizedPart, state, currentDirectory);
     const stateOutput = typeof stateWithData.output === 'string' ? stateWithData.output : undefined;
-    const scriptNamespace = isExecuteTool(part.tool) ? executeNamespace(metadata) : undefined;
+    const scriptNamespace = isExecuteTool(part.toolName) ? executeNamespace(metadata) : undefined;
     const plainDescription = getToolDescription(normalizedPart, state, currentDirectory, t, scriptNamespace);
     const builtInDescription = describeOpenChamberRow(normalizedPart, input, stateOutput, t)
         ?? describeOpencodeRow(part, plainDescription, t)
@@ -104,7 +104,7 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
         [input, metadata, presentation, stateOutput],
     );
     const description = guestHeader?.subtitle ?? builtInDescription;
-    const rowTool = scriptNamespace ?? (normalizedPartTool || part.tool);
+    const rowTool = scriptNamespace ?? (normalizedPartTool || part.toolName);
     const displayName = guestHeader?.title ?? toolDisplayName(rowTool, t);
 
     const failureDetail = isError && !isExpanded ? failureReason : undefined;
@@ -152,7 +152,7 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
         shouldRenderExpandedContent || (presentation !== null && guestToolHeaderReadsOutput(presentation)),
         storeDirectory ?? undefined,
     );
-    const showsDuration = isShellTool(normalizedPartTool) || isTaskTool || part.tool === 'openchamber_image';
+    const showsDuration = isShellTool(normalizedPartTool) || isTaskTool;
 
     if (!shouldTreatAsFinalized && !isActive && !isTaskTool) {
         return null;
@@ -166,12 +166,12 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
                     'group/tool flex gap-1.5 pe-2 ps-px py-1.5 rounded-xl',
                     isMultiFileApplyPatch ? 'flex-wrap items-start cursor-pointer' : 'items-center cursor-pointer',
                 )}
-                onClick={isMultiFileApplyPatch ? () => onToggle(part.id) : handleMainRowClick}
+                onClick={isMultiFileApplyPatch ? () => onToggle(part.partId) : handleMainRowClick}
                 onKeyDown={isMultiFileApplyPatch ? (event) => {
                     if (event.target !== event.currentTarget) return;
                     if (event.key !== 'Enter' && event.key !== ' ') return;
                     event.preventDefault();
-                    onToggle(part.id);
+                    onToggle(part.partId);
                 } : handleMainKeyDown}
                 role="button"
                 tabIndex={0}
@@ -218,7 +218,7 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
                         <>
                             <div
                                 className="relative h-5 w-3.5 flex-shrink-0 cursor-pointer"
-                                onClick={(event) => { event.stopPropagation(); onToggle(part.id); }}
+                                onClick={(event) => { event.stopPropagation(); onToggle(part.partId); }}
                             >
                                 <div
                                     className={cn(
@@ -369,7 +369,7 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
                 }}
             >
                 {shouldRenderExpandedContent ? (
-                    <BlockBody onToggle={() => onToggle(part.id)}>
+                    <BlockBody onToggle={() => onToggle(part.partId)}>
                         {contentCompletion.status === 'whole' ? (
                             <ToolExpandedContent
                                 part={part}

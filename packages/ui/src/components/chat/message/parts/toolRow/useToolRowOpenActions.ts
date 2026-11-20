@@ -54,7 +54,7 @@ export const useToolRowOpenActions = ({
 
     const handleMainClick = (e: { stopPropagation: () => void }) => {
         if (isTaskTool || !runtime?.editor) {
-            onToggle(part.id);
+            onToggle(part.partId);
             return;
         }
 
@@ -87,7 +87,7 @@ export const useToolRowOpenActions = ({
             }
             runtime.editor.openFile(absolutePath, targetLine);
         } else {
-            onToggle(part.id);
+            onToggle(part.partId);
         }
     };
 
@@ -107,7 +107,7 @@ export const useToolRowOpenActions = ({
 
     const quickOpenTarget = React.useMemo<{ absolutePath: string; line?: number; toolDiff?: string; toolName: string } | null>(() => {
         if (isTaskTool) return null;
-        const toolName = normalizedPartTool || part.tool;
+        const toolName = normalizedPartTool || part.toolName;
         const target = resolveToolQuickOpenTarget(toolName, input, metadata);
         if (!target) return null;
         return {
@@ -116,7 +116,7 @@ export const useToolRowOpenActions = ({
             toolDiff: target.patch,
             toolName,
         };
-    }, [isTaskTool, normalizedPartTool, part.tool, input, metadata, currentDirectory]);
+    }, [isTaskTool, normalizedPartTool, part.toolName, input, metadata, currentDirectory]);
 
     const openQuickTarget = () => {
         if (!quickOpenTarget) return;

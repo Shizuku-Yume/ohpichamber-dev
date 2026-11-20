@@ -198,13 +198,13 @@ export const useAssistantRenderedParts = ({
 
             if (part.type === 'tool') {
                 const toolPart = part as ToolPartType;
-                const toolName = toolPart.tool?.toLowerCase() ?? '';
+                const toolName = toolPart.toolName?.toLowerCase() ?? '';
 
                 const notice = readSessionNoticePart(toolPart);
                 if (notice) {
                     rendered.push(
-                        <FadeInOnReveal key={`notice-${toolPart.id}`}>
-                            <SessionNoticeBlock notice={notice} blockId={toolPart.id} />
+                        <FadeInOnReveal key={`notice-${toolPart.partId}`}>
+                            <SessionNoticeBlock notice={notice} blockId={toolPart.partId} />
                         </FadeInOnReveal>
                     );
                     i++;
@@ -216,9 +216,9 @@ export const useAssistantRenderedParts = ({
                     continue;
                 }
 
-                if (isShownInPlace(toolPart.tool, toolPart.state)) {
-                    if (!hoistedPages?.has(toolPart.id)) {
-                        rendered.push(<ShownToolCard key={`page-${toolPart.id}`} part={toolPart} onShowPopup={onShowPopup} />);
+                if (isShownInPlace(toolPart.toolName, toolPart.state)) {
+                    if (!hoistedPages?.has(toolPart.partId)) {
+                        rendered.push(<ShownToolCard key={`page-${toolPart.partId}`} part={toolPart} onShowPopup={onShowPopup} />);
                     }
                     i++;
                     continue;
@@ -226,10 +226,10 @@ export const useAssistantRenderedParts = ({
 
                 if (isExpandableTool(toolName)) {
                     rendered.push(
-                        <FadeInOnReveal key={`tool-${toolPart.id}`}>
+                        <FadeInOnReveal key={`tool-${toolPart.partId}`}>
                             <ToolPart
                                 part={toolPart}
-                                isExpanded={expandedTools.has(toolPart.id)}
+                                isExpanded={expandedTools.has(toolPart.partId)}
                                 onToggle={onToggleTool}
                                 isMobile={isMobile}
                                 alwaysShowActions={alwaysShowMessageActions}
@@ -243,12 +243,12 @@ export const useAssistantRenderedParts = ({
                 }
 
                 rendered.push(
-                    <FadeInOnReveal key={`static-tools-${toolPart.id}`}>
+                    <FadeInOnReveal key={`static-tools-${toolPart.partId}`}>
                         <StaticToolRow
                             toolName={toolName}
                             activities={[
                                 {
-                                    id: toolPart.id,
+                                    id: toolPart.partId,
                                     turnId: '',
                                     messageId,
                                     partIndex: 0,

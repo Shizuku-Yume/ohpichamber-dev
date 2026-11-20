@@ -1,9 +1,5 @@
-import type { Message, Part, SessionRuntimeStatus as SessionStatus, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
-import { getLastConversationMessage } from '@/lib/opencode/model';
-type ToolPart = NativeToolCallPart | NativeToolResultPart;
-import { structuredErrorText } from '@/lib/opencode/projection';
-import { isShellTool, toolDescription, type ToolDescription } from '@/lib/opencode/tools';
-import { getToolMetadata } from '@/lib/toolHelpers';
+import type { Message, SessionRuntimeStatus, ToolCallPart } from '@openchamber/agent-contract';
+import { describeToolCall, isReadTool, isShellTool, isWriteTool, isEditTool, toolPresentation } from '@/lib/toolPresentation';
 
 export const SUBAGENT_SILENCE_MS = 90_000;
 
@@ -11,7 +7,7 @@ type ToolCall = { tool: string | null; detail: string | null };
 
 export type SubagentActivity =
   | { kind: 'retry'; attempt: number | null; at: number | null; error: string | null }
-  | ({ kind: 'tool'; since: number } & ToolCall)
+  | ({ kind: 'tool'; since: number | null } & ToolCall)
   | { kind: 'thinking' }
   | { kind: 'writing' }
   | { kind: 'waiting'; since: number; last: ToolCall | null };
@@ -22,98 +18,83 @@ const baseName = (path: string): string => {
   return index >= 0 ? trimmed.slice(index + 1) : trimmed;
 };
 
-const describeDetail = (description: ToolDescription | null): string | null => {
-  if (!description) return null;
-  switch (description.kind) {
-    case 'path':
-      return baseName(description.value) || description.value;
-    case 'text':
-      return description.value;
-    case 'files':
-      return description.files.map(baseName).join(', ');
-    case 'tools':
-      return description.calls.map((call) => call.name).join(', ');
-    case 'questions':
-      return null;
-  }
-};
+const callsByPart = new WeakMap<ToolCallPart, ToolCall>();
 
-const callsByPart = new WeakMap<ToolPart, ToolCall>();
-
-const describeTool = (part: ToolPart): ToolCall => {
+const describeTool = (part: ToolCallPart): ToolCall => {
   const cached = callsByPart.get(part);
   if (cached) return cached;
-  const metadata = 'metadata' in part.state ? part.state.metadata : undefined;
-  const detail = describeDetail(toolDescription(part.tool, part.state.input, metadata));
-  const call = isShellTool(part.tool) && detail ? { tool: null, detail } : { tool: getToolMetadata(part.tool).displayName, detail };
+  const description = describeToolCall(part.input, part.toolName);
+  const detail = description && (isReadTool(part.toolName) || isWriteTool(part.toolName) || isEditTool(part.toolName))
+    ? baseName(description) : description?.split('\n')[0] ?? null;
+  const call = isShellTool(part.toolName) && detail ? { tool: null, detail } : { tool: toolPresentation(part.toolName).label, detail };
   callsByPart.set(part, call);
   return call;
 };
 
 export const toolCallText = (call: ToolCall): string => [call.tool, call.detail].filter(Boolean).join(' ');
 
-const partEnd = (part: Part): number | null => {
-  if (part.type === 'tool') return part.state.status === 'completed' || part.state.status === 'error' ? part.state.time.end : null;
-  if (part.type === 'reasoning') return part.time.end ?? null;
-  if (part.type === 'text') return part.time?.end ?? null;
-  return null;
+export const lastConversationMessage = (messages: readonly Message[] | undefined): Message | undefined => {
+  if (!messages) return undefined;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === 'assistant' || message.role === 'user') return message;
+  }
+  return undefined;
 };
 
 export const readSubagentActivity = (
   messages: readonly Message[] | undefined,
-  partsByMessage: Readonly<Record<string, Part[] | undefined>>,
-  status: SessionStatus | undefined,
+  status: SessionRuntimeStatus | undefined,
+  activeTurnIds: ReadonlySet<string>,
 ): SubagentActivity | null => {
-  if (status?.type === 'retry') {
-    return { kind: 'retry', attempt: status.attempt ?? null, at: status.next ?? null, error: status.message || null };
-  }
+  if (status !== 'running' && status !== 'awaiting_approval' && status !== 'awaiting_input') return null;
   if (!messages || messages.length === 0) return null;
 
-  const latest = getLastConversationMessage(messages);
-  if (!latest) return null;
+  const latest = lastConversationMessage(messages);
+  if (!latest || !activeTurnIds.has(latest.turnId)) return null;
   if (latest.role !== 'assistant') {
-    return { kind: 'waiting', since: latest.time.created, last: null };
-  }
-  if (latest.retry) {
-    return { kind: 'retry', attempt: latest.retry.attempt, at: latest.retry.at, error: structuredErrorText(latest.retry.error) || null };
+    return { kind: 'waiting', since: latest.createdAt, last: null };
   }
 
-  const parts = partsByMessage[latest.id] ?? [];
+  const parts = latest.parts;
+  const tail = parts.at(-1);
+  if (tail?.type === 'notice' && tail.noticeType === 'auto_retry_start') {
+    return { kind: 'retry', attempt: tail.details.attempt, at: null, error: tail.details.errorMessage || null };
+  }
+  const results = new Set(parts.filter(part => part.type === 'tool_result').map(part => `${part.toolCallId}\0${part.toolName}`));
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     const part = parts[index];
-    if (part.type !== 'tool') continue;
-    if (part.state.status === 'running') return { kind: 'tool', ...describeTool(part), since: part.state.time.start };
-    if (part.state.status === 'pending') return { kind: 'tool', ...describeTool(part), since: latest.time.created };
+    if (part.type !== 'tool_call' || results.has(`${part.toolCallId}\0${part.toolName}`)) continue;
+    if (part.status === 'running' || part.status === 'pending_approval' || part.status === 'approved') {
+      return { kind: 'tool', ...describeTool(part), since: null };
+    }
   }
 
-  const tail = parts[parts.length - 1];
-  if (tail?.type === 'reasoning' && tail.time.end === undefined) return { kind: 'thinking' };
-  if (tail?.type === 'text' && tail.time && tail.time.end === undefined) return { kind: 'writing' };
-
-  let since = latest.time.completed ?? latest.time.created;
-  for (const part of parts) {
-    const end = partEnd(part);
-    if (end !== null && end > since) since = end;
+  if (latest.timing?.completedAt === undefined && status === 'running') {
+    if (tail?.type === 'reasoning') return { kind: 'thinking' };
+    if (tail?.type === 'text') return { kind: 'writing' };
   }
-  return { kind: 'waiting', since, last: findLastTool(messages, partsByMessage) };
+  const since = latest.timing?.completedAt ?? latest.createdAt;
+  return { kind: 'waiting', since, last: findLastTool(messages, latest.turnId) };
 };
 
 const LAST_TOOL_LOOKBACK = 4;
 
 const findLastTool = (
   messages: readonly Message[],
-  partsByMessage: Readonly<Record<string, Part[] | undefined>>,
+  turnId: string,
 ): ToolCall | null => {
   let steps = 0;
   for (let index = messages.length - 1; index >= 0 && steps < LAST_TOOL_LOOKBACK; index -= 1) {
     const message = messages[index];
+    if (message.turnId !== turnId) break;
     if (message.role === 'user') break;
     if (message.role !== 'assistant') continue;
     steps += 1;
-    const parts = partsByMessage[message.messageId] ?? [];
+    const parts = message.parts;
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = parts[partIndex];
-      if (part.type === 'tool') return describeTool(part);
+      if (part.type === 'tool_call') return describeTool(part);
     }
   }
   return null;

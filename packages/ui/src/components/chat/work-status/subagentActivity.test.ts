@@ -1,132 +1,118 @@
 import { describe, expect, test } from 'bun:test';
-
-import type { Message as AssistantMessage, Message, Part, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
-type ToolPart = NativeToolCallPart | NativeToolResultPart;
+import type { Message, Part, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import {
   decodeSubagentActivity,
   encodeSubagentActivity,
-  readSubagentActivity,
+  lastConversationMessage,
+  readSubagentActivity as readActivity,
   reportFirstLine,
   subagentAlertInputs,
 } from './subagentActivity';
 
-const step = (id: string, extra: Partial<AssistantMessage> = {}): AssistantMessage => ({
-  messageId: id,
-  sessionID: 'child',
-  role: 'assistant',
-  time: { created: 1_000 },
-  agent: 'explore',
-  providerID: 'p',
-  modelID: 'm',
-  ...extra,
-});
+const readSubagentActivity = (messages: readonly Message[] | undefined, parts: Readonly<Record<string, Part[]>>, status: Parameters<typeof readActivity>[1]) =>
+  readActivity(messages?.map(message => ({ ...message, parts: parts[message.messageId] ?? message.parts })), status, new Set(['turn']));
 
-const tool = (id: string, messageID: string, name: string, input: Record<string, string>, state: 'pending' | 'running' | 'completed'): ToolPart => ({
-  id,
-  sessionID: 'child',
-  messageID,
-  type: 'tool',
-  callID: id,
-  tool: name,
-  state: state === 'pending'
-    ? { status: 'pending', input, raw: '' }
-    : state === 'running'
-      ? { status: 'running', input, time: { start: 2_000 } }
-      : { status: 'completed', input, output: '', time: { start: 2_000, end: 3_000 } },
+const step = (messageId: string, extra: Partial<Message> = {}): Message => ({
+  messageId, sessionId: 'child', turnId: 'turn', role: 'assistant', createdAt: 1_000, parts: [], ...extra,
+});
+const tool = (toolCallId: string, toolName: string, input: ToolCallPart['input'], status: ToolCallPart['status'] = 'running'): ToolCallPart => ({
+  type: 'tool_call', partId: toolCallId, toolCallId, toolName, input, status,
+});
+const result = (toolCallId: string, isError = false, toolName = 'bash'): ToolResultPart => ({
+  type: 'tool_result', partId: `result_${toolCallId}`, toolCallId, toolName, isError,
+  ...(isError ? { error: 'Command failed' } : { output: '' }),
 });
 
 describe('readSubagentActivity', () => {
-  test('a tool in flight is the activity, from when it started', () => {
-    const messages: Message[] = [step('s1')];
-    const parts = { s1: [tool('t1', 's1', 'shell', { command: 'bun test relay\nmore' }, 'running')] } satisfies Record<string, Part[]>;
-    expect(readSubagentActivity(messages, parts, { type: 'busy' })).toEqual({ kind: 'tool', tool: null, detail: 'bun test relay', since: 2_000 });
+  test('describes a native call without fabricating a tool start time', () => {
+    const parts = { s1: [tool('t1', 'bash', { command: 'bun test relay\nmore' })] };
+    expect(readSubagentActivity([step('s1')], parts, 'running')).toEqual({ kind: 'tool', tool: null, detail: 'bun test relay', since: null });
   });
 
-  test('a long running command is a tool, never a wait', () => {
-    const messages: Message[] = [step('s1')];
-    const parts = {
-      s1: [
-        tool('t0', 's1', 'read', { path: 'a.ts' }, 'completed'),
-        tool('t1', 's1', 'shell', { command: 'sleep 600' }, 'running'),
-      ],
-    } satisfies Record<string, Part[]>;
-    expect(readSubagentActivity(messages, parts, { type: 'busy' })?.kind).toBe('tool');
+  test('a long-running call stays a tool rather than a silent wait', () => {
+    const parts = { s1: [tool('t0', 'read', { path: 'a.ts' }, 'completed'), tool('t1', 'bash', { command: 'sleep 600' })] };
+    expect(readSubagentActivity([step('s1')], parts, 'running')?.kind).toBe('tool');
   });
 
-  test('a report arriving while a tool runs leaves the tool as the activity', () => {
-    const report: Message = { id: 'r1', sessionID: 'child', role: 'synthetic', time: { created: 5_000 }, text: '<subagent>done</subagent>' };
-    const parts = { s1: [tool('t1', 's1', 'shell', { command: 'sleep 600' }, 'running')] } satisfies Record<string, Part[]>;
-    expect(readSubagentActivity([step('s1'), report], parts, { type: 'busy' })?.kind).toBe('tool');
+  test('system records do not replace conversation progress', () => {
+    const messages = [step('s1'), step('system', { role: 'system', createdAt: 5_000 })];
+    expect(lastConversationMessage(messages)?.messageId).toBe('s1');
+    expect(readSubagentActivity(messages, { s1: [tool('t1', 'bash', { command: 'sleep 600' })] }, 'running')?.kind).toBe('tool');
   });
 
-  test('streaming reasoning or text is progress', () => {
-    const messages: Message[] = [step('s1')];
-    expect(readSubagentActivity(messages, {
-      s1: [{ partId: 'r', sessionID: 'child', messageID: 's1', type: 'reasoning', text: '…', time: { start: 1_500 } }],
-    }, { type: 'busy' })).toEqual({ kind: 'thinking' });
-    expect(readSubagentActivity(messages, {
-      s1: [{ partId: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: '…', time: { start: 1_500 } }],
-    }, { type: 'busy' })).toEqual({ kind: 'writing' });
+  test('streaming reasoning and text use canonical content', () => {
+    expect(readSubagentActivity([step('s1', { parts: [{ type: 'reasoning', partId: 'r', content: '…' }] })], {}, 'running')).toEqual({ kind: 'thinking' });
+    expect(readSubagentActivity([step('s1')], { s1: [{ type: 'text', partId: 'x', content: '…' }] }, 'running')).toEqual({ kind: 'writing' });
   });
 
-  test('between steps it waits since the last progress, and remembers the last call', () => {
-    const messages: Message[] = [
-      step('s1', { time: { created: 1_000, completed: 3_500 } }),
-      step('s2', { time: { created: 4_000 } }),
-    ];
-    const parts = { s1: [tool('t1', 's1', 'read', { path: 'src/deep/SessionList.tsx' }, 'completed')], s2: [] } satisfies Record<string, Part[]>;
-    expect(readSubagentActivity(messages, parts, { type: 'busy' })).toEqual({
-      kind: 'waiting',
-      since: 4_000,
-      last: { tool: 'Read File', detail: 'SessionList.tsx' },
-    });
+  test('between steps it remembers the last native call', () => {
+    const messages = [step('s1'), step('s2', { createdAt: 4_000 })];
+    const parts = { s1: [tool('t1', 'read', { path: 'src/deep/SessionList.tsx' }, 'completed')], s2: [] };
+    expect(readSubagentActivity(messages, parts, 'running')).toEqual({ kind: 'waiting', since: 4_000, last: { tool: 'Read', detail: 'SessionList.tsx' } });
   });
 
-  test('a finished part moves the wait to its end', () => {
-    const messages: Message[] = [step('s1', { time: { created: 1_000 } })];
-    const parts = { s1: [tool('t1', 's1', 'grep', { pattern: 'evaluate' }, 'completed')] } satisfies Record<string, Part[]>;
-    expect(readSubagentActivity(messages, parts, { type: 'busy' })).toEqual({
-      kind: 'waiting',
-      since: 3_000,
-      last: { tool: 'Search Files', detail: 'evaluate' },
-    });
+  test('a completed step uses its authoritative completion time', () => {
+    const message = step('s1', { timing: { startedAt: 1_000, completedAt: 3_000 }, parts: [{ type: 'text', partId: 'text', content: 'Done' }] });
+    expect(readSubagentActivity([message], {}, 'running')).toEqual({ kind: 'waiting', since: 3_000, last: null });
   });
 
-  test('a retry wins, from the session status or from the step it retries', () => {
-    expect(readSubagentActivity([step('s1')], {}, { type: 'retry', attempt: 2, message: 'Rate limited', next: 9_000 }))
-      .toEqual({ kind: 'retry', attempt: 2, at: 9_000, error: 'Rate limited' });
-    const retried = step('s1', { retry: { attempt: 3, at: 8_000, error: { type: 'api', message: 'Overloaded' } } });
-    expect(readSubagentActivity([retried], {}, { type: 'busy' }))
-      .toEqual({ kind: 'retry', attempt: 3, at: 8_000, error: 'Overloaded' });
+  test.each([false, true])('a paired result settles a call, including an error result (%s)', (isError) => {
+    const parts = { s1: [tool('t1', 'bash', { command: 'exit 1' }), result('t1', isError)] };
+    expect(readSubagentActivity([step('s1')], parts, 'running')?.kind).toBe('waiting');
+    expect(readSubagentActivity([step('s1')], { s1: [...parts.s1.slice(0, 1), result('t1', isError, 'custom')] }, 'running')?.kind).toBe('tool');
   });
 
-  test('says nothing before any record arrived', () => {
-    expect(readSubagentActivity(undefined, {}, { type: 'busy' })).toBeNull();
+  test('native approval states stay pending and are not completed calls', () => {
+    expect(readSubagentActivity([step('s1')], { s1: [tool('t1', 'bash', { command: 'ls' }, 'pending_approval')] }, 'awaiting_approval')?.kind).toBe('tool');
   });
 
-  test('round-trips through its string form, which stays equal while nothing shown changes', () => {
-    const messages: Message[] = [step('s1')];
-    const before = { s1: [{ partId: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: 'a', time: { start: 1_500 } }] satisfies Part[] };
-    const after = { s1: [{ partId: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: 'a longer text', time: { start: 1_500 } }] satisfies Part[] };
-    const encoded = encodeSubagentActivity(readSubagentActivity(messages, before, { type: 'busy' }));
-    expect(encodeSubagentActivity(readSubagentActivity(messages, after, { type: 'busy' }))).toBe(encoded);
+  test('a canonical retry notice supplies its attempt and error, not an invented deadline', () => {
+    const retry: Part = { type: 'notice', partId: 'retry', noticeType: 'auto_retry_start', level: 'warning', details: { attempt: 3, maxAttempts: 5, delayMs: 8_000, errorMessage: 'Overloaded' } };
+    expect(readSubagentActivity([step('s1')], { s1: [retry] }, 'running')).toEqual({ kind: 'retry', attempt: 3, at: null, error: 'Overloaded' });
+    expect(readSubagentActivity([step('s1')], { s1: [retry, { type: 'text', partId: 'text', content: 'Resumed' }] }, 'running')?.kind).toBe('writing');
+  });
+
+  test('a new user prompt cuts off the previous turn last-tool lookup', () => {
+    const messages = [step('s1'), step('u1', { role: 'user', createdAt: 2_000 })];
+    expect(readSubagentActivity(messages, { s1: [tool('t1', 'bash', { command: 'ls' }, 'completed')] }, 'running')).toEqual({ kind: 'waiting', since: 2_000, last: null });
+  });
+
+  test('missing history and idle or unavailable sessions never claim live progress', () => {
+    expect(readSubagentActivity(undefined, {}, 'running')).toBeNull();
+    expect(readSubagentActivity([], {}, 'running')).toBeNull();
+    expect(lastConversationMessage(undefined)).toBeUndefined();
+    expect(lastConversationMessage([step('system', { role: 'system' })])).toBeUndefined();
+    for (const status of ['idle', 'unavailable', undefined] as const) {
+      expect(readSubagentActivity([step('s1')], { s1: [tool('t1', 'bash', { command: 'sleep 600' })] }, status)).toBeNull();
+    }
+  });
+
+  test('a running status alone cannot revive history outside the active turn', () => {
+    const messages = [step('s1', { parts: [tool('t1', 'bash', { command: 'sleep 600' })] })];
+    expect(readActivity(messages, 'running', new Set(['new_turn']))).toBeNull();
+    expect(readActivity(messages, 'running', new Set())).toBeNull();
+  });
+
+  test('activity stays referentially encoded while only streamed text grows', () => {
+    const messages = [step('s1')];
+    const first: Part = { type: 'text', partId: 'text', content: 'a' };
+    const encoded = encodeSubagentActivity(readSubagentActivity(messages, { s1: [first] }, 'running'));
+    expect(encodeSubagentActivity(readSubagentActivity(messages, { s1: [{ ...first, content: 'a longer text' }] }, 'running'))).toBe(encoded);
     expect(decodeSubagentActivity(encoded)).toEqual({ kind: 'writing' });
+    expect(decodeSubagentActivity('')).toBeNull();
   });
 });
 
 describe('subagentAlertInputs', () => {
-  test('keeps only what can raise an alert, so a new tool call changes nothing', () => {
-    const first = subagentAlertInputs({ kind: 'tool', tool: 'Read File', detail: 'a.ts', since: 1 });
-    const second = subagentAlertInputs({ kind: 'tool', tool: 'Search Files', detail: 'x', since: 2 });
-    expect(encodeSubagentActivity(first)).toBe(encodeSubagentActivity(second));
-    expect(subagentAlertInputs({ kind: 'waiting', since: 5, last: { tool: 'Read File', detail: 'a.ts' } }))
-      .toEqual({ kind: 'waiting', since: 5, last: null });
-    expect(subagentAlertInputs({ kind: 'retry', attempt: 2, at: 9, error: null })?.kind).toBe('retry');
+  test('keeps only values that can raise an alert', () => {
+    expect(subagentAlertInputs({ kind: 'tool', tool: 'Read', detail: 'a.ts', since: null })).toBeNull();
+    expect(subagentAlertInputs({ kind: 'waiting', since: 5, last: { tool: 'Read', detail: 'a.ts' } })).toEqual({ kind: 'waiting', since: 5, last: null });
+    expect(subagentAlertInputs({ kind: 'retry', attempt: 2, at: null, error: null })?.kind).toBe('retry');
   });
 });
 
 describe('reportFirstLine', () => {
-  test('takes the first line with text, without its markdown marks', () => {
+  test('takes the first non-empty line without Markdown marks', () => {
     expect(reportFirstLine('\n## **Two ADRs** are stale\n\nmore')).toBe('Two ADRs are stale');
     expect(reportFirstLine('```ts\ncode\n```')).toBe('code');
     expect(reportFirstLine('- `0018` is stale')).toBe('0018 is stale');

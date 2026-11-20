@@ -10,6 +10,9 @@ turn projection and scroll-follow policy.
 
 ## Invariants
 
+- Canonical tool-result text, image and nested-block decoding is owned by
+  `lib/toolResultContent.ts`. Both the registry and renderers use that pure
+  decoder without importing message components into tool presentation.
 - Quote highlights use the CSS Custom Highlight API without modifying rendered
   Markdown. Each column publishes and removes only its own marks; named browser
   highlights merge all owners because several columns can share a document.

@@ -4,12 +4,12 @@ import { formatSessionActivityDuration } from '@/components/session/sessionActiv
 import { useDurationTickerNow } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { Session } from '@openchamber/agent-contract';
-import { getLastConversationMessage } from '@/lib/opencode/model';
+import type { Session, SessionSnapshot } from '@openchamber/agent-contract';
 import { resolveUsageTone } from '@/lib/quota';
 import { formatRetryCountdown, toRetryTargetTimestamp } from '@/lib/retryCountdown';
-import { findAnsweringModelKey, findSessionModelKey, limitsForAnsweringModel } from '@/lib/routing/contextWindowLimits';
+import { findAnsweringModelKey, limitsForAnsweringModel } from '@/lib/routing/contextWindowLimits';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import { findLatestContextFill } from '@/stores/utils/tokenUtils';
 import { useDirectorySync } from '@/sync/sync-context';
 import type { State } from '@/sync/types';
@@ -24,21 +24,23 @@ import {
   type SubagentActivity,
 } from './subagentActivity';
 
-type ActivityInputs = { messages: State['message'][string] | undefined; latestParts: State['part'][string] | undefined; status: State['session_status'][string] | undefined; encoded: string };
+type ActivityInputs = { messages: State['message'][string] | undefined; turns: SessionSnapshot['turns'] | undefined; activeRunId: string | null | undefined; status: State['session_status'][string] | undefined; alertsOnly: boolean; encoded: string };
 
 const useSubagentActivity = (childId: string, directory: string | null, alertsOnly: boolean): SubagentActivity | null => {
   const last = React.useRef<ActivityInputs | null>(null);
   const encoded = useDirectorySync(
     React.useCallback((state: State) => {
       const messages = state.message[childId];
-      const latest = getLastConversationMessage(messages);
-      const latestParts = latest ? state.part[latest.id] : undefined;
+      const turns = state.snapshot[childId]?.turns;
+      const activeRunId = state.session.find((session) => session.sessionId === childId)?.activeRunId;
       const status = state.session_status[childId];
       const previous = last.current;
-      if (previous && previous.messages === messages && previous.latestParts === latestParts && previous.status === status) return previous.encoded;
-      const activity = readSubagentActivity(messages, state.part, status);
+      if (previous && previous.messages === messages && previous.turns === turns && previous.activeRunId === activeRunId && previous.status === status && previous.alertsOnly === alertsOnly) return previous.encoded;
+      const activeTurnIds = new Set((turns ?? []).filter((turn) => turn.runId === activeRunId
+        && (turn.status === 'pending' || turn.status === 'running' || turn.status === 'awaiting_approval' || turn.status === 'awaiting_input')).map((turn) => turn.turnId));
+      const activity = readSubagentActivity(messages, status, activeTurnIds);
       const next = encodeSubagentActivity(alertsOnly ? subagentAlertInputs(activity) : activity);
-      last.current = { messages, latestParts, status, encoded: next };
+      last.current = { messages, turns, activeRunId, status, alertsOnly, encoded: next };
       return next;
     }, [alertsOnly, childId]),
     directory ?? undefined,
@@ -59,10 +61,8 @@ const useSubagentContextPercent = (child: Session, directory: string | null): nu
     React.useCallback((state: State) => findAnsweringModelKey(state.message[child.sessionId] ?? []), [child.sessionId]),
     directory ?? undefined,
   );
-  const sessionKey = findSessionModelKey(child);
   if (tokens <= 0) return null;
-  const limit = limitsForAnsweringModel(sessionKey, providers).context
-    || limitsForAnsweringModel(answeringKey, providers).context
+  const limit = limitsForAnsweringModel(answeringKey, providers).context
     || DEFAULT_CONTEXT_LIMIT;
   return (tokens / limit) * 100;
 };
@@ -86,7 +86,7 @@ type ActivityText = { text: string; tone: 'muted' | 'warning' } | null;
 
 const useActivityText = (activity: SubagentActivity | null): ActivityText => {
   const { t, locale } = useI18n();
-  const ticking = activity !== null && (activity.kind === 'tool' || activity.kind === 'waiting' || activity.kind === 'retry');
+  const ticking = activity !== null && (activity.kind === 'tool' && activity.since !== null || activity.kind === 'waiting' || activity.kind === 'retry');
   const now = useDurationTickerNow(ticking);
   if (!activity) return null;
   switch (activity.kind) {
@@ -103,7 +103,7 @@ const useActivityText = (activity: SubagentActivity | null): ActivityText => {
     }
     case 'tool': {
       const call = toolCallText(activity);
-      const elapsed = now - activity.since;
+      const elapsed = activity.since === null ? 0 : now - activity.since;
       return {
         text: elapsed >= TOOL_ELAPSED_SHOWN_MS ? `${call} · ${formatSessionActivityDuration(elapsed, t)}` : call,
         tone: 'muted',
@@ -138,7 +138,7 @@ export const SubagentActivityText: React.FC<{ childId: string; directory: string
 
 export const SubagentContextValue: React.FC<{ child: Session; directory: string | null }> = ({ child, directory }) => {
   const { t } = useI18n();
-  const percent = useSubagentContextPercent(child, child.directory || directory);
+  const percent = useSubagentContextPercent(child, resolveGlobalSessionDirectory(child) || directory);
   if (percent === null) return null;
   const rounded = Math.round(percent);
   const tone = subagentContextTone(percent);

@@ -12,6 +12,11 @@ own data fetching and reconciliation; the layout's right slot owns column width.
 
 ## Invariants
 
+- Subagent activity reads canonical inline parts only for nonterminal turns in
+  the authoritative active run. Historical running calls never prove live work.
+  Call and result identities pair before rendering; native retry notices supply
+  their attempt and error without inventing a deadline or per-tool start time.
+  Web/PWA, Electron, hosted mobile and Capacitor share these projections.
 - The Checks dot owns its blinking subscription, so its clock redraws only the
   dot rather than the section.
 - Loaded-skill rows include disabled installed skills, because a skill loaded

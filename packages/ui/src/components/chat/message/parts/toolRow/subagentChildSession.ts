@@ -11,7 +11,7 @@ const useRunningTaskChildSessionId = (part: ToolPartType | undefined, directory:
     const description = part?.state.input.description;
     const parentSessionID = part?.sessionID;
     const messageID = part?.messageID;
-    const partID = part?.id;
+    const partID = part?.partId;
     const selector = React.useMemo(() => {
         let lastSessions: State['session'] | undefined;
         let lastSiblings: Part[] | undefined;

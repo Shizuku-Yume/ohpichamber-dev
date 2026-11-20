@@ -33,7 +33,7 @@ export const ToolScrollableTextOutput: React.FC<{
         [forcedMode, presentation, jsonResult],
     );
 
-    if (isShellTool(part.tool) && isStreaming) {
+    if (isShellTool(part.toolName) && isStreaming) {
         return (
             <div className="typography-code text-muted-foreground">
                 <StreamingPlainTextOutput output={renderedOutput} />
@@ -74,7 +74,7 @@ export const ToolScrollableTextOutput: React.FC<{
         return <JsonToolOutput jsonResult={jsonResult} renderedOutput={renderedOutput} />;
     }
 
-    if (isShellTool(part.tool)) return <CommandOutput output={renderedOutput} language={outputLanguage} />;
+    if (isShellTool(part.toolName)) return <CommandOutput output={renderedOutput} language={outputLanguage} />;
 
     return (
         <div>

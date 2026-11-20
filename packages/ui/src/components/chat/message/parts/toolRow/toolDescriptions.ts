@@ -12,7 +12,7 @@ import { getRelativePath } from './toolPaths';
 
 export const getToolDescriptionPath = (part: ToolPartType, state: ToolStateUnion, currentDirectory: string): string | null => {
     const stateWithData = state as ToolStateWithMetadata;
-    const described = toolDescription(part.tool, stateWithData.input, stateWithData.metadata);
+    const described = toolDescription(part.toolName, stateWithData.input, stateWithData.metadata);
     if (described?.kind !== 'path') {
         return null;
     }
@@ -58,7 +58,7 @@ export const toolDisplayName = (toolName: string, t: DescriptionTranslate): stri
 
 export const getToolDescription = (part: ToolPartType, state: ToolStateUnion, currentDirectory: string, t: DescriptionTranslate, namespace?: string): string => {
     const stateWithData = state as ToolStateWithMetadata;
-    return describeTool(toolDescription(part.tool, stateWithData.input, stateWithData.metadata), currentDirectory, t, namespace);
+    return describeTool(toolDescription(part.toolName, stateWithData.input, stateWithData.metadata), currentDirectory, t, namespace);
 };
 
 export const describeOpenChamberRow = (
@@ -68,7 +68,7 @@ export const describeOpenChamberRow = (
     translate: ReturnType<typeof useI18n>['t'],
 ): string | null => {
     if (part.state.status !== 'completed') return null;
-    const summary = openChamberCallSummary(part.tool, input);
+    const summary = openChamberCallSummary(part.toolName, input);
     const envelope = parseOpenChamberEnvelope(output) ?? toolContentShellEnvelope(part);
     const run = secretRowView(envelope);
     if (summary && run) {
@@ -86,7 +86,7 @@ export const describeOpencodeRow = (
     detail: string,
     translate: ReturnType<typeof useI18n>['t'],
 ): string | null => {
-    const verb = opencodeToolVerb(part.tool);
+    const verb = opencodeToolVerb(part.toolName);
     if (!verb) return null;
     const action = opencodeCallSucceeded(part) ? translate(verb.key) : verb.tool;
     return detail ? `${action} \u00b7 ${detail.slice(0, 120)}` : action;

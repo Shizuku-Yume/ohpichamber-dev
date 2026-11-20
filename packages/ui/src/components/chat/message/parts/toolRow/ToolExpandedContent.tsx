@@ -78,24 +78,24 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
     const input = stateWithData.input;
-    const rawOutput = getToolOutput(part.tool, stateWithData.output, metadata?.output, state.status);
+    const rawOutput = getToolOutput(part.toolName, stateWithData.output, metadata?.output, state.status);
     const hasStringOutput = typeof rawOutput === 'string' && rawOutput.length > 0;
     const rawOutputString = typeof rawOutput === 'string' ? rawOutput : '';
-    const isStreamingBash = isShellTool(part.tool) && state.status === 'running';
+    const isStreamingBash = isShellTool(part.toolName) && state.status === 'running';
     const throttledOutputString = useStreamingTextThrottle({
         text: rawOutputString,
         isStreaming: isStreamingBash,
-        identityKey: part.id,
+        identityKey: part.partId,
         allowTextReplacement: isStreamingBash,
     });
     const outputString = isStreamingBash ? throttledOutputString : rawOutputString;
     const isMobile = useUIStore((store) => store.isMobile);
     const openChamberEnvelope = React.useMemo(
-        () => (state.status === 'completed' && openChamberCallSummary(part.tool, input) ? parseOpenChamberEnvelope(rawOutputString) : null),
-        [input, part.tool, rawOutputString, state.status],
+        () => (state.status === 'completed' && openChamberCallSummary(part.toolName, input) ? parseOpenChamberEnvelope(rawOutputString) : null),
+        [input, part.toolName, rawOutputString, state.status],
     );
     const opencodeResult = React.useMemo(() => {
-        const verb = opencodeToolVerb(part.tool);
+        const verb = opencodeToolVerb(part.toolName);
         return verb && opencodeCallSucceeded(part) ? parseOpencodeToolResult(verb.tool, rawOutputString) : null;
     }, [part, rawOutputString]);
     const [showRawToolAnswer, setShowRawToolAnswer] = React.useState(false);
@@ -106,17 +106,17 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
         [currentDirectory, diffContent, metadata]
     );
     const todoItems = React.useMemo(
-        () => (isTodoWriteTool(part.tool) && state.status === 'completed' ? todoWriteItems(input) : null),
-        [input, part.tool, state.status],
+        () => (isTodoWriteTool(part.toolName) && state.status === 'completed' ? todoWriteItems(input) : null),
+        [input, part.toolName, state.status],
     );
     const showTodoList = todoItems !== null && todoItems.length > 0;
-    const hideToolInputPreview = isOpenChamberTool(part.tool)
+    const hideToolInputPreview = isOpenChamberTool(part.toolName)
         || showTodoList
         || (opencodeResult !== null && !showRawToolAnswer)
-        || isPatchTool(part.tool)
-        || isEditTool(part.tool)
-        || isExecuteTool(part.tool);
-    const isExecute = isExecuteTool(part.tool);
+        || isPatchTool(part.toolName)
+        || isEditTool(part.toolName)
+        || isExecuteTool(part.toolName);
+    const isExecute = isExecuteTool(part.toolName);
     const executeCode = React.useMemo(() => (isExecute ? executeScript(input) : undefined), [input, isExecute]);
     const executeCalls = React.useMemo(() => (isExecute ? executeToolCalls(metadata) : []), [isExecute, metadata]);
     const executeTruncation = React.useMemo(
@@ -124,8 +124,8 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
         [isExecute, metadata],
     );
     const diagnosticSection = React.useMemo(
-        () => getToolDiagnosticSection(part.tool, input, metadata, currentDirectory),
-        [currentDirectory, input, metadata, part.tool],
+        () => getToolDiagnosticSection(part.toolName, input, metadata, currentDirectory),
+        [currentDirectory, input, metadata, part.toolName],
     );
 
     const inputTextContent = React.useMemo(() => {
@@ -133,22 +133,22 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
             return '';
         }
 
-        if ('command' in input && typeof input.command === 'string' && isShellTool(part.tool)) {
-            return formatInputForDisplay(input, part.tool);
+        if ('command' in input && typeof input.command === 'string' && isShellTool(part.toolName)) {
+            return formatInputForDisplay(input, part.toolName);
         }
 
         if (typeof (input as { content?: unknown }).content === 'string') {
             return (input as { content?: string }).content ?? '';
         }
 
-        return formatInputForDisplay(input, part.tool);
-    }, [input, part.tool]);
+        return formatInputForDisplay(input, part.toolName);
+    }, [input, part.toolName]);
     const hasInputText = !hideToolInputPreview && inputTextContent.trim().length > 0;
     const webSearchOutput = React.useMemo(
-        () => (isWebSearchTool(part.tool) && state.status === 'completed' && hasStringOutput ? parseWebSearchOutput(outputString) : null),
-        [hasStringOutput, outputString, part.tool, state.status],
+        () => (isWebSearchTool(part.toolName) && state.status === 'completed' && hasStringOutput ? parseWebSearchOutput(outputString) : null),
+        [hasStringOutput, outputString, part.toolName, state.status],
     );
-    const isWriteLikeTool = isWriteTool(part.tool);
+    const isWriteLikeTool = isWriteTool(part.toolName);
     const writeLikeInputPatch = React.useMemo(() => {
         if (!isWriteLikeTool || !hasInputText) {
             return undefined;
@@ -165,7 +165,7 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
 
     React.useEffect(() => {
         setDiffViewMode(defaultDiffViewMode);
-    }, [defaultDiffViewMode, part.id]);
+    }, [defaultDiffViewMode, part.partId]);
 
     const renderScrollableBlock = (
         content: React.ReactNode,
@@ -267,7 +267,7 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
             );
         }
 
-        if (isQuestionTool(part.tool)) {
+        if (isQuestionTool(part.toolName)) {
             if (state.status === 'completed' && hasStringOutput) {
                 const parsedQA = parseQuestionOutput(outputString);
                 if (parsedQA && parsedQA.length > 0) {
@@ -328,7 +328,7 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
             return <div className="typography-meta text-muted-foreground">{t('chat.toolPart.awaitingResponse')}</div>;
         }
 
-        if (isSubagentTool(part.tool) && hasStringOutput) {
+        if (isSubagentTool(part.toolName) && hasStringOutput) {
             return renderScrollableBlock(
                 <div className="w-full min-w-0">
                     <SimpleMarkdownRenderer content={fenceUiBlocks(prepareTaskToolOutput(outputString))} singleTilde={false} variant="tool" onShowPopup={onShowPopup} uiBlocks />
@@ -336,7 +336,7 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
             );
         }
 
-        if (isFileChangeTool(part.tool) && (diffEntries.length > 0 || !!diagnosticSection)) {
+        if (isFileChangeTool(part.toolName) && (diffEntries.length > 0 || !!diagnosticSection)) {
             const renderEntryActions = (entry: DiffPatchEntry) => (
                 <>
                                 {entry.renderMode === 'diff' ? (
@@ -400,7 +400,7 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
             );
         }
 
-        if (part.tool === 'write' && diagnosticSection) {
+        if (isWriteTool(part.toolName) && diagnosticSection) {
             return renderScrollableBlock(
                 <div className="space-y-3">
                     {renderDiagnosticsSection()}
@@ -492,7 +492,7 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
                     </div>
                 ) : output,
                 {
-                    maxHeightClass: isShellTool(part.tool) ? 'max-h-[46vh]' : undefined,
+                    maxHeightClass: isShellTool(part.toolName) ? 'max-h-[46vh]' : undefined,
                     followKey: isStreamingBash ? outputString : undefined,
                 }
             );
@@ -506,11 +506,11 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
 
     const hasVisibleOutput = outputString.trim().length > 0;
     const shouldRenderResult = (state.status === 'completed' && 'output' in state)
-        || (isShellTool(part.tool) && hasVisibleOutput);
+        || (isShellTool(part.toolName) && hasVisibleOutput);
 
     return (
         <div className="relative space-y-2">
-            {isQuestionTool(part.tool) ? (
+            {isQuestionTool(part.toolName) ? (
                 renderResultContent()
             ) : (
                 <>
@@ -564,7 +564,7 @@ export const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.mem
                                 diff={writeLikeInputPatch}
                                 diffViewMode={diffViewMode}
                             />
-                        ) : isSubagentTool(part.tool) ? (
+                        ) : isSubagentTool(part.toolName) ? (
                             <div className="tool-input-text tool-prose-text whitespace-pre-wrap break-words text-muted-foreground">
                                 {inputTextContent}
                             </div>

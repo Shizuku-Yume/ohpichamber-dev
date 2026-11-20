@@ -21,10 +21,10 @@ export const laterPageAsk = (page: LaterPage | undefined): RenderedPageAsk => {
 export const pageBlocksTurn = (ask: RenderedPageAsk): boolean => ask.kind === 'waiting' && ask.later !== true;
 
 export function usePageAsk(part: ToolPart, ask: RenderedPageAsk | undefined): RenderedPageAsk | undefined {
-    const laterPage = useLaterPage(ask?.kind === 'later' ? part.sessionID : '', part.callID);
+    const laterPage = useLaterPage(ask?.kind === 'later' ? part.sessionID : '', part.toolCallId);
     const sessionId = ask?.kind === 'waiting' ? part.sessionID : '';
     const directory = useSessionDirectory(sessionId);
-    const announced = useIsCallWaiting(sessionId, part.callID);
+    const announced = useIsCallWaiting(sessionId, part.toolCallId);
     const status = useSessionStatus(sessionId, directory);
     const snapshotReady = useSessionStatusSnapshotReady(directory, sessionId);
     if (!ask) return undefined;

@@ -2,7 +2,7 @@ import type { JsonValue, ToolCallPart, ToolResultPart } from '@openchamber/agent
 import React from 'react';
 import { z } from 'zod';
 
-import { nativeToolResultContent } from '@/components/chat/message/toolRenderers';
+import { nativeToolResultContent } from '@/lib/toolResultContent';
 
 /** Runtime backend that an eval cell dispatches to. */
 type EvalLanguage = 'python' | 'js';

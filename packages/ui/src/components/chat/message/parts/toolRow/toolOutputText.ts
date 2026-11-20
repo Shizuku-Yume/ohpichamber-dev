@@ -9,11 +9,11 @@ export const getToolOutputLanguage = (
     metadata: Record<string, unknown> | undefined,
     input: Record<string, unknown> | undefined,
 ): string => {
-    if (isShellTool(part.tool)) {
+    if (isShellTool(part.toolName)) {
         return 'bash';
     }
 
-    return detectLanguageFromOutput(formatEditOutput(output, part.tool, metadata), part.tool, input);
+    return detectLanguageFromOutput(formatEditOutput(output, part.toolName, metadata), part.toolName, input);
 };
 
 export const getToolOutputText = (
@@ -23,9 +23,9 @@ export const getToolOutputText = (
 ): string => {
     // external: #2265 Cap tool payloads before JSON parsing, highlighting and DOM allocation.
     const capped = capToolOutputText(output);
-    if (isShellTool(part.tool)) {
+    if (isShellTool(part.toolName)) {
         return capped;
     }
 
-    return formatEditOutput(capped, part.tool, metadata);
+    return formatEditOutput(capped, part.toolName, metadata);
 };
