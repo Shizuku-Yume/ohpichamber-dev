@@ -869,16 +869,13 @@ the theme's canvas and accent.
 Imported themes add up quickly (the catalog, a themes folder). Without a cap
 the page below the list moves further down with every import.
 
-## About: the Android app's own update
+## About: updates
 
-On the Android app, About shows the app's version with a "Download app
-{version}" button while the app's update check offers a newer APK, the same
-link as the update toast (`openchamber/AboutSettings.tsx`,
-`MobileAppUpdateToast.tsx`). The check button there checks the app build too.
-Closing the toast skips that version for the toast only; the button stays
-until the version is installed. iOS updates through the App Store and gets no
-button. The server's update buttons on the same page name the server or the
-desktop app they replace, never the phone app.
+About shares bundled Host release notes with the stable desktop update dialog.
+Electron checks the fork's GitHub Releases feed through its updater. Web/PWA,
+hosted mobile and Capacitor install updates outside the app; the upstream CLI
+update service and mobile download mirror remain disabled by the fork's release
+decisions. See `components/update/DOCUMENTATION.md` for ownership and surfaces.
 
 ### Why the button lives in About and the toast is not shown again
 

@@ -1,6 +1,5 @@
-import { GuestToolCard } from '@/components/chat/message/parts/GuestToolCard';
 import React from 'react';
-import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from 'ohpichamber-sdk';
+import { GUEST_TOOL_CARD_TEMPLATE_ROOTS, GUEST_TOOL_CARD_URL_MAX, GUEST_TOOL_TEMPLATE_ROOTS, GUEST_TOOL_TEMPLATE_VALUE_MAX, guestToolPlaceholderPattern, type GuestTone, type GuestToolCard, type GuestToolContribution, type JsonValue } from 'ohpichamber-sdk';
 
 import { isGuestActive } from './capabilities.ts';
 import { useGuestsStore } from './store.ts';
@@ -127,13 +126,13 @@ export const renderTemplate = (template: string, context: TemplateContext): stri
 const TEMPLATE_NEEDS_OUTPUT = /\{output(?:\.|\})/;
 
 /** Whether the rule's header reads the call's output, which a collapsed row then needs. */
-const guestToolHeaderReadsOutput = (rule: GuestToolRule): boolean => Boolean(
+export const guestToolHeaderReadsOutput = (rule: GuestToolRule): boolean => Boolean(
   (rule.title && TEMPLATE_NEEDS_OUTPUT.test(rule.title))
   || (rule.subtitle && TEMPLATE_NEEDS_OUTPUT.test(rule.subtitle)),
 );
 
-const templateOutputValue = (output: string | undefined): TemplateValue => {
-  if (!output) return undefined;
+const templateOutputValue = (output: TemplateValue): TemplateValue => {
+  if (typeof output !== 'string') return output;
   const trimmed = output.trim();
   if (!(trimmed.startsWith('{') && trimmed.endsWith('}')) && !(trimmed.startsWith('[') && trimmed.endsWith(']'))) {
     return output;
@@ -173,7 +172,7 @@ export const renderGuestToolHeader = (
 };
 
 /** Rows for `output: "table"`: the parsed output array, or its `items` array. `null` when neither. */
-export const guestToolTableRows = (output: string | undefined): JsonValue[] | null => {
+export const guestToolTableRows = (output: TemplateValue): JsonValue[] | null => {
   const value = templateOutputValue(output);
   if (isJsonArray(value)) return value;
   if (isJsonObject(value)) {
