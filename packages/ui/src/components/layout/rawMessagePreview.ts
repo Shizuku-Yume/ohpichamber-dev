@@ -2,32 +2,6 @@ import type { Part } from '@openchamber/agent-contract';
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 
-<<<<<<< HEAD
-/**
- * Helpers for the Raw Messages preview row in the context sidebar.
- *
- * Each collapsed entry shows a role label, native part/tool summary, I/O
- * token counters (assistant only), a content snippet, an 8-character message
- * id suffix, and a locale-aware timestamp.
- *
- * Helpers here are pure and DOM-free so they can be unit tested.
- */
-||||||| bc50ba56aa
-/**
- * Helpers for the Raw Messages preview row in the context sidebar.
- *
- * Each collapsed entry shows a role label, parts summary (e.g. "bash",
- * "text + todowrite"), I/O token counters (assistant only), a content
- * snippet, an 8-char message id suffix, and a locale-aware timestamp.
- *
- * Note: we surface the **suffix** of the message id (last 8 chars), not the
- * prefix. OpenCode ids share a long common prefix (e.g. `msg_e39e98d…`); the
- * tail is what actually differentiates them.
- *
- * Helpers here are pure and DOM-free so they can be unit tested.
- */
-=======
->>>>>>> upstream/main
 
 const PREVIEW_ID_LENGTH = 8;
 

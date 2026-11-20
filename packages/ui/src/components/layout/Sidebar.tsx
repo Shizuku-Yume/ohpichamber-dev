@@ -97,22 +97,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
     const currentWidth = isResizing ? (resizingWidthRef.current ?? appliedWidth) : appliedWidth;
     const publishedWidth = isResizing ? currentWidth : openWidth;
 
-<<<<<<< HEAD
-    // The titlebar overlay that floats above the sidebar is a sibling of it, not
-    // a child, so it cannot read the width published on <aside>. Publish it on
-    // the root as well, the way --oc-header-height and --oc-titlebar-left-inset
-    // already are, so the overlay can cap itself to the sidebar. It is the open
-    // width, which a toggle leaves alone: a new value on the root restyles the
-    // whole document.
-||||||| bc50ba56aa
-    // The titlebar overlay that floats above the sidebar is a sibling of it, not
-    // a child, so it cannot read the width published on <aside>. Publish it on
-    // the root as well, the way --oc-header-height and --oc-titlebar-start-inset
-    // already are, so the overlay can cap itself to the sidebar. It is the open
-    // width, which a toggle leaves alone: a new value on the root restyles the
-    // whole document.
-=======
->>>>>>> upstream/main
     React.useEffect(() => {
         document.documentElement.style.setProperty('--oc-left-sidebar-width', `${publishedWidth}px`);
         const overlay = titlebarOverlayRef.current;
