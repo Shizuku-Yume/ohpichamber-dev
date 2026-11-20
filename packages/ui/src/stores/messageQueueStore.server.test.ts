@@ -5,14 +5,8 @@ import type { AttachedFile } from "./types/sessionTypes"
 import type { MessageQueueUpdatedEvent } from "./messageQueueStore"
 import type { QueueItem, QueueState } from "@openchamber/agent-contract"
 
-<<<<<<< HEAD
-type FetchCall = { path: string; method: string; body: unknown; directory?: string }
-||||||| bc50ba56aa
-type FetchCall = { path: string; method: string; body: ReturnType<typeof JSON.parse>; directory?: string }
-=======
 const environment = directoryEnvironment({ home: '/home/test' })
-type FetchCall = { path: string; method: string; body: ReturnType<typeof JSON.parse>; directory?: string }
->>>>>>> upstream/main
+type FetchCall = { path: string; method: string; body: unknown; directory?: string }
 let calls: FetchCall[] = []
 let activeRuntimeKey = "runtime-a"
 let respond: (call: FetchCall) => Response | Promise<Response> = () => new Response("{}", { status: 200 })
@@ -28,26 +22,12 @@ environment.respond(async (url, init) => {
     if (directory) call.directory = decodeURIComponent(directory)
     calls.push(call)
     return respond(call)
-<<<<<<< HEAD
-  },
-}))
-mock.module("@/lib/runtime-switch", () => ({ getRuntimeKey: () => activeRuntimeKey }))
-mock.module("@/lib/persistence", () => ({ updateDesktopSettings: async () => undefined }))
-||||||| bc50ba56aa
-  },
-}))
-const desktop = await import("@/lib/desktop")
-mock.module("@/lib/desktop", () => ({ ...desktop, isVSCodeRuntime: () => false }))
-mock.module("@/lib/runtime-switch", () => ({ getRuntimeKey: () => activeRuntimeKey }))
-mock.module("@/lib/persistence", () => ({ updateDesktopSettings: async () => undefined }))
-=======
 })
 const activateRuntime = (key: string) => {
   activeRuntimeKey = key
   switchRuntimeEndpoint({ apiBaseUrl: 'https://local.test', runtimeKey: key })
 }
 const { selectInputHistoryEntries, useInputHistoryStore } = await import("./useInputHistoryStore")
->>>>>>> upstream/main
 
 const {
   applyMessageQueueUpdatedEvent,
@@ -151,32 +131,7 @@ describe("server-owned message queue", () => {
     expect(calls[0]).toEqual({
       method: "POST",
       path: "/api/message-queue/sessions/session-1/items",
-<<<<<<< HEAD
-      directory: "/repo",
-      body: {
-        expectedRevision: "0",
-        content: "from before",
-        request: {
-          input: {
-            text: "from before",
-            attachments: [],
-            context: [],
-          },
-          options: {
-            providerId: "p",
-            modelId: "m",
-            agentId: null,
-            variant: null,
-            reasoningEffort: null,
-          },
-        },
-      },
-||||||| bc50ba56aa
-      directory: "/repo",
       body: { directory: "/repo", item: { content: "from before", text: "from before", attachments: [], context: [], sendConfig: { providerID: "p", modelID: "m" } } },
-=======
-      body: { directory: "/repo", item: { content: "from before", text: "from before", attachments: [], context: [], sendConfig: { providerID: "p", modelID: "m" } } },
->>>>>>> upstream/main
     })
     expect(calls[1]?.path).toBe("/api/message-queue")
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q1"])
@@ -209,16 +164,8 @@ describe("server-owned message queue", () => {
   })
 
   test("resync can establish the initial snapshot before bootstrap", async () => {
-<<<<<<< HEAD
-    activeRuntimeKey = "runtime-never-hydrated"
-    respond = () => json(snapshot([]))
-||||||| bc50ba56aa
-    activeRuntimeKey = "runtime-never-hydrated"
-    respond = () => json({ revision: 1, sessions: [] })
-=======
     activateRuntime("runtime-never-hydrated")
     respond = () => json({ revision: 1, sessions: [] })
->>>>>>> upstream/main
     await useMessageQueueStore.getState().resync()
     expect(calls).toHaveLength(1)
   })
@@ -274,29 +221,6 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
   })
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  test("returning to a runtime migrates its unattempted legacy messages without repeating the first upload", async () => {
-    activeRuntimeKey = "runtime-partial-migration"
-    const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
-    if (!legacyTarget) throw new Error("Missing test target")
-    const legacyKey = getMessageQueueKey(legacyTarget)
-    useMessageQueueStore.setState({ queuedMessages: { [legacyKey]: ["first", "second"].map((id) => ({ id, content: id, text: id, createdAt: 1, sendConfig: { providerID: "p", modelID: "m" } })) } })
-    const first = deferredResponse()
-    respond = (call) => call.method === "POST"
-      ? calls.length === 1 ? first.promise : json({ revision: 2, session: session([]) })
-      : json({ revision: 3, sessions: [] })
-    const initial = useMessageQueueStore.getState().hydrate()
-    useMessageQueueStore.getState().resetForRuntimeSwitch(activeRuntimeKey)
-    activeRuntimeKey = "runtime-other"
-    first.resolve(json({ revision: 1, session: session([]) }))
-    await initial
-    activeRuntimeKey = "runtime-partial-migration"
-    await useMessageQueueStore.getState().hydrate()
-    expect(calls.filter((call) => call.method === "POST").map((call) => call.body.item.content)).toEqual(["first", "second"])
-  })
-
-=======
   test("returning to a runtime migrates its unattempted legacy messages without repeating the first upload", async () => {
     activateRuntime("runtime-partial-migration")
     const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
@@ -318,7 +242,6 @@ describe("server-owned message queue", () => {
     expect(calls.filter((call) => call.method === "POST").map((call) => call.body.item.content)).toEqual(["first", "second"])
   })
 
->>>>>>> upstream/main
   test("a failed refresh preserves the projection and a later recovery retries", async () => {
     applyMessageQueueUpdatedEvent(updated("10", queueState([serverItem("q1", "queued")], "10")), "runtime-a")
     respond = () => new Response(null, { status: 503 })
@@ -329,24 +252,6 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
   })
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  test("a runtime switch rejects an old snapshot and its pending recovery", async () => {
-    const old = deferredResponse()
-    respond = () => old.promise
-    const bootstrap = useMessageQueueStore.getState().hydrate()
-    const recovery = useMessageQueueStore.getState().resync()
-    useMessageQueueStore.getState().resetForRuntimeSwitch(activeRuntimeKey)
-    activeRuntimeKey = "runtime-b"
-    respond = () => json({ revision: 1, sessions: [] })
-    await useMessageQueueStore.getState().hydrate()
-    old.resolve(json({ revision: 99, sessions: [session([serverItem("q1", "old runtime")])] }))
-    await Promise.all([bootstrap, recovery])
-    expect(Object.keys(useMessageQueueStore.getState().queuedMessages)).toHaveLength(0)
-    expect(calls).toHaveLength(2)
-  })
-
-=======
   test("a runtime switch rejects an old snapshot and its pending recovery", async () => {
     const old = deferredResponse()
     respond = () => old.promise
@@ -363,7 +268,6 @@ describe("server-owned message queue", () => {
     expect(calls).toHaveLength(2)
   })
 
->>>>>>> upstream/main
   test("resync drops a queue the server no longer lists", async () => {
     useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "dropped", text: "dropped", createdAt: 1 }] } })
     respond = () => json(snapshot([]))
@@ -432,16 +336,8 @@ describe("server-owned message queue", () => {
   test("queue acceptance records the captured owner after the active runtime changes", async () => {
     const historyTarget = { runtimeKey: 'runtime-a', directory: '/original', sessionId: 'history-runtime-switch' };
     respond = () => {
-<<<<<<< HEAD
-      activeRuntimeKey = 'runtime-b';
-      return json(queueState([], "110", historyTarget.sessionId));
-||||||| bc50ba56aa
-      activeRuntimeKey = 'runtime-b';
-      return json({ revision: 110, session: { ...session([]), sessionId: historyTarget.sessionId, directory: historyTarget.directory } });
-=======
       activateRuntime('runtime-b');
       return json({ revision: 110, session: { ...session([]), sessionId: historyTarget.sessionId, directory: historyTarget.directory } });
->>>>>>> upstream/main
     };
     await useMessageQueueStore.getState().addToQueue(historyTarget, {
       content: 'for original runtime', sendConfig: { providerID: 'p', modelID: 'm' },
@@ -654,79 +550,22 @@ describe("server-owned message queue", () => {
     respond = () => json(queueState([serverItem("q2", "b")], "10"))
     useMessageQueueStore.getState().removeFromQueue(target, "q1")
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q2"])
-<<<<<<< HEAD
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(calls[0]).toEqual({
-      method: "DELETE",
-      path: "/api/message-queue/sessions/session-1/items/q1",
-      body: { expectedRevision: "0", queueItemId: "q1" },
-      directory: "/repo",
-    })
-||||||| bc50ba56aa
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(calls[0]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1/items/q1", body: undefined, directory: "/repo" })
-=======
     await environment.settle()
     expect(calls[0]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1/items/q1", body: undefined })
->>>>>>> upstream/main
 
     respond = () => json(queueState([], "11"))
     useMessageQueueStore.getState().clearQueue(target)
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBe(undefined)
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    await Promise.resolve()
-    expect(calls[1]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1", body: undefined, directory: "/repo" })
-=======
     await environment.settle()
     expect(calls[1]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1", body: undefined })
->>>>>>> upstream/main
   })
 
   test("reorderQueue sends the complete new order", async () => {
     useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "a", text: "a", createdAt: 1 }, { id: "q2", content: "b", text: "b", createdAt: 2 }] } })
     respond = () => json(queueState([serverItem("q2", "b"), serverItem("q1", "a")], "12"))
     useMessageQueueStore.getState().reorderQueue(target, "q2", "q1")
-<<<<<<< HEAD
-    await Promise.resolve()
-    expect(calls[0]).toEqual({
-      method: "PUT",
-      path: "/api/message-queue/sessions/session-1/order",
-      body: { expectedRevision: "0", queueItemIds: ["q2", "q1"] },
-      directory: "/repo",
-    })
-  })
-
-  test("UI store refetches on 409 QUEUE_CONFLICT", async () => {
-    let conflictEncountered = false
-    respond = (call) => {
-      if (call.method === "POST" && call.path.includes("/items")) {
-        conflictEncountered = true
-        return new Response(JSON.stringify({ type: "urn:ohpichamber:problem:QUEUE_CONFLICT", status: 409, code: "QUEUE_CONFLICT", title: "Conflict", detail: "Conflict" }), {
-          status: 409,
-          headers: { "content-type": "application/problem+json" },
-        })
-      }
-      return json(snapshot([queueState([serverItem("q-auth", "authoritative")], "10")]))
-    }
-
-    await expect(useMessageQueueStore.getState().addToQueue(target, {
-      content: "prompt to fail",
-      sendConfig: { providerID: "p", modelID: "m" },
-    })).rejects.toThrow()
-
-    expect(conflictEncountered).toBe(true)
-    // The store must refetch and apply authoritative state, not treat as empty
-    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.content)).toEqual(["authoritative"])
-||||||| bc50ba56aa
-    await Promise.resolve()
-    expect(calls[0]).toEqual({ method: "PUT", path: "/api/message-queue/sessions/session-1/order", body: { itemIds: ["q2", "q1"] }, directory: "/repo" })
-=======
     await environment.settle()
     expect(calls[0]).toEqual({ method: "PUT", path: "/api/message-queue/sessions/session-1/order", body: { itemIds: ["q2", "q1"] } })
->>>>>>> upstream/main
   })
 })
 

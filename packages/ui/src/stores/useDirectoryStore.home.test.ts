@@ -9,118 +9,6 @@ const storage = environment.storage;
 const settingsUpdates = () => environment.settingsWrites.map((write) => write.changes);
 let loggedIn = false;
 let homeReads = 0;
-<<<<<<< HEAD
-const directoriesSet: string[] = [];
-let runtimeKey = 'test';
-let probeDirectory: (directory: string) => Promise<'available' | 'missing' | 'unknown'> = async () => 'available';
-
-mock.module('@/lib/host-filesystem', () => ({
-  hostFilesystem: {
-    setDirectory: (directory: string) => {
-      directoriesSet.push(directory);
-    },
-    getDirectory: () => directoriesSet.at(-1) ?? '/',
-    getDirectoryAvailability: (directory: string) => probeDirectory(directory),
-    getFilesystemHome: async () => {
-      homeReads += 1;
-      // Before login /api/fs/home answers 401, which this read reports as null.
-      return loggedIn ? HOME : null;
-    },
-    getSystemInfo: async () => {
-      if (!loggedIn) throw new Error('UI authentication required');
-      return { homeDirectory: HOME };
-    },
-    getFilesystemHomeInfo: async () => {
-      if (!loggedIn) throw new Error('Failed to resolve the chats root (401)');
-      return { home: HOME, chatsRoot: CHATS_ROOT };
-    },
-  },
-}));
-
-mock.module('@/lib/desktop', () => ({
-  getDesktopHomeDirectory: async () => null,
-  isDesktopShell: () => false,
-}));
-
-const settingsUpdates: Array<Record<string, string>> = [];
-
-mock.module('@/lib/persistence', () => ({
-  updateDesktopSettings: async (changes: Record<string, string>) => {
-    settingsUpdates.push(changes);
-  },
-}));
-
-mock.module('@/lib/runtime-switch', () => ({
-  subscribeRuntimeEndpointChanged: () => () => undefined,
-  getRuntimeApiBaseUrl: () => 'http://127.0.0.1:9',
-  getRuntimeKey: () => runtimeKey,
-}));
-
-mock.module('@/stores/useFileSearchStore', () => ({
-  useFileSearchStore: {
-    getState: () => ({ clearCache: () => undefined, invalidateDirectory: () => undefined }),
-  },
-}));
-
-// Local storage writes land on the next tick.
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-||||||| bc50ba56aa
-const directoriesSet: string[] = [];
-let runtimeKey = 'test';
-let probeDirectory = async (_directory: string): Promise<'available' | 'missing' | 'unknown'> => 'available';
-
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
-    setDirectory: (directory: string) => {
-      directoriesSet.push(directory);
-    },
-    getDirectory: () => directoriesSet.at(-1) ?? '/',
-    getDirectoryAvailability: (directory: string) => probeDirectory(directory),
-    getFilesystemHome: async () => {
-      homeReads += 1;
-      // Before login /api/fs/home answers 401, which this read reports as null.
-      return loggedIn ? HOME : null;
-    },
-    getSystemInfo: async () => {
-      if (!loggedIn) throw new Error('UI authentication required');
-      return { homeDirectory: HOME };
-    },
-    getFilesystemHomeInfo: async () => {
-      if (!loggedIn) throw new Error('Failed to resolve the chats root (401)');
-      return { home: HOME, chatsRoot: CHATS_ROOT };
-    },
-  },
-}));
-
-mock.module('@/lib/desktop', () => ({
-  getDesktopHomeDirectory: async () => null,
-  isVSCodeRuntime: () => false,
-  isDesktopShell: () => false,
-}));
-
-const settingsUpdates: Array<Record<string, string>> = [];
-
-mock.module('@/lib/persistence', () => ({
-  updateDesktopSettings: async (changes: Record<string, string>) => {
-    settingsUpdates.push(changes);
-  },
-}));
-
-mock.module('@/lib/runtime-switch', () => ({
-  subscribeRuntimeEndpointChanged: () => () => undefined,
-  getRuntimeApiBaseUrl: () => 'http://127.0.0.1:9',
-  getRuntimeKey: () => runtimeKey,
-}));
-
-mock.module('@/stores/useFileSearchStore', () => ({
-  useFileSearchStore: {
-    getState: () => ({ clearCache: () => undefined, invalidateDirectory: () => undefined }),
-  },
-}));
-
-// Local storage writes land on the next tick.
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-=======
 let probeDirectory = async (_directory: string): Promise<'available' | 'missing' | 'unknown'> => 'available';
 environment.respond(async (url, init) => {
   if (url.pathname === '/api/fs/home') {
@@ -139,8 +27,7 @@ environment.respond(async (url, init) => {
   throw new Error(`Unexpected request: ${url}`);
 });
 const settle = environment.settle;
-const clientDirectory = async () => (await import('@/lib/opencode/client')).opencodeClient.getDirectory();
->>>>>>> upstream/main
+const clientDirectory = async () => (await import('@/lib/host-filesystem')).hostFilesystem.getDirectory();
 
 describe('home directory on a first visit to a password-protected server', () => {
   test('starts on "/" before login and moves to the chats root once logged in', async () => {
@@ -200,44 +87,10 @@ describe('home directory on a first visit to a password-protected server', () =>
 });
 
 describe('saved directory restoration', () => {
-<<<<<<< HEAD
-  afterEach(() => {
-    runtimeKey = 'test';
-    probeDirectory = async () => 'available';
-    setTestWindow(undefined);
-  });
-
-||||||| bc50ba56aa
-  afterEach(() => {
-    runtimeKey = 'test';
-    setTestWindow(undefined);
-  });
-
-=======
   afterEach(() => switchRuntimeEndpoint({ apiBaseUrl: 'https://local.test', runtimeKey: 'test' }));
->>>>>>> upstream/main
   const prepare = async () => {
-<<<<<<< HEAD
-    setTestWindow({
-      localStorage: testLocalStorage,
-      matchMedia: () => ({ matches: false }),
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-    });
-    loggedIn = true;
-    const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
-||||||| bc50ba56aa
-    setTestWindow({
-      localStorage: testLocalStorage,
-      matchMedia: () => ({ matches: false }),
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-    });
-    const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
-=======
     const { useDirectoryStore } = await import('./useDirectoryStore');
     await (await import('./useDirectoryStore')).ensureHomeDirectoryResolved();
->>>>>>> upstream/main
     useDirectoryStore.getState().setDirectory('/saved/chat');
     await settle();
     environment.settingsWrites.length = 0;
