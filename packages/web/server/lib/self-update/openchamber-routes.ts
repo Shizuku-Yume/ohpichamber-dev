@@ -1,7 +1,15 @@
 import { publicEnterprisePolicy } from '../enterprise-mode.js';
 import { registerOpenRouterModelInfoRoute } from '../host/openrouter-model-info.js';
+import type { Application } from '../shared/http-contracts.js';
 
-export const registerOpenChamberRoutes = (app, dependencies) => {
+interface OpenChamberRouteDependencies {
+  modelsDevApiUrl: string;
+  modelsMetadataCacheTtl: number;
+  fetchFreeZenModels: () => Promise<unknown>;
+  getCachedZenModels: () => unknown;
+}
+
+export const registerOpenChamberRoutes = (app: Application, dependencies: OpenChamberRouteDependencies) => {
   const {
     modelsDevApiUrl,
     modelsMetadataCacheTtl,
@@ -22,7 +30,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
   app.get('/api/openchamber/release-notes', async (req, res) => {
     const { fetchReleaseNotes, VERSION_PATTERN } = await import('../changelog/update-notes.js');
     // Query values can be arrays; only the string form is checked and used.
-    const isVersion = (value) => VERSION_PATTERN.test(value);
+    const isVersion = (value: string) => VERSION_PATTERN.test(value);
     const version = String(req.query.version ?? '');
     const since = req.query.since === undefined ? undefined : String(req.query.since);
     if (!isVersion(version) || (since !== undefined && !isVersion(since))) {
@@ -50,7 +58,8 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
       res.json(toClientModelsMetadata(metadata));
     } catch (error) {
       console.warn('Failed to fetch models.dev metadata via server:', error);
-      const statusCode = error?.name === 'TimeoutError' || error?.name === 'AbortError' ? 504 : 502;
+      const name = error !== null && typeof error === 'object' && 'name' in error ? error.name : undefined;
+      const statusCode = name === 'TimeoutError' || name === 'AbortError' ? 504 : 502;
       res.status(statusCode).json({ error: 'Failed to retrieve model metadata' });
     }
   });
@@ -67,7 +76,8 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         res.setHeader('Cache-Control', 'public, max-age=60');
         res.json(cachedZenModels);
       } else {
-        const statusCode = error?.name === 'AbortError' ? 504 : 502;
+        const name = error !== null && typeof error === 'object' && 'name' in error ? error.name : undefined;
+        const statusCode = name === 'AbortError' ? 504 : 502;
         res.status(statusCode).json({ error: 'Failed to retrieve zen models' });
       }
     }

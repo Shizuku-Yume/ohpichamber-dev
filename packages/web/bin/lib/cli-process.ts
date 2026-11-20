@@ -2,6 +2,35 @@ import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { getRunDir } from './cli-paths.js';
+import type { JsonValue } from '../../server/lib/shared/json-values.js';
+
+export interface CliNotice {
+  level?: string;
+  code?: string;
+  message: string;
+}
+
+export type InstanceFileFields = {
+  port?: JsonValue;
+  host?: JsonValue;
+  launchMode?: JsonValue;
+  uiPassword?: JsonValue;
+  hasUiPassword?: JsonValue;
+  apiOnly?: JsonValue;
+  startedAt?: JsonValue;
+  runtime?: JsonValue;
+};
+
+export interface ProcessStateOptions {
+  isProcessRunning?: (pid: number) => boolean;
+  readProcessCmdline?: (pid: number) => string | null;
+}
+
+export const SERVER_SHUTDOWN_GRACE_MS = 30_000;
+
+export function hasInstanceFields(value: JsonValue | undefined): value is JsonValue & InstanceFileFields {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
 async function getPidFilePath(port) {
   return path.join(getRunDir(), `openchamber-${port}.pid`);
@@ -40,10 +69,11 @@ function removePidFile(pidFilePath) {
       fs.unlinkSync(pidFilePath);
     }
   } catch {
+    void 0;
   }
 }
 
-function readInstanceOptions(instanceFilePath) {
+function readInstanceOptions(instanceFilePath: string): JsonValue {
   try {
     return JSON.parse(fs.readFileSync(instanceFilePath, 'utf8'));
   } catch {
@@ -79,6 +109,7 @@ function removeInstanceFile(instanceFilePath) {
       fs.unlinkSync(instanceFilePath);
     }
   } catch {
+    void 0;
   }
 }
 
@@ -148,7 +179,7 @@ function isOpenchamberProcessRunning(pid) {
   return state === 'matched' || state === 'unknown';
 }
 
-function getOpenchamberProcessState(pid, options = {}) {
+function getOpenchamberProcessState(pid, options: ProcessStateOptions = {}) {
   const checkProcessRunning = typeof options.isProcessRunning === 'function'
     ? options.isProcessRunning
     : isProcessRunning;
@@ -166,8 +197,9 @@ function getOpenchamberProcessState(pid, options = {}) {
   return isOpenchamberCmdline(cmdline) ? 'matched' : 'mismatched';
 }
 
-function hasOpenchamberRuntimeInfo(info) {
-  return Boolean(info && typeof info.runtime === 'string' && info.runtime.length > 0);
+function hasOpenchamberRuntimeInfo(info: unknown): info is { runtime: string } {
+  return info !== null && typeof info === 'object' && 'runtime' in info
+    && typeof info.runtime === 'string' && info.runtime.length > 0;
 }
 
 function waitForProcessExit(pid, timeoutMs) {
@@ -208,6 +240,7 @@ async function terminateProcessTree(pid, options = {}) {
     try {
       process.kill(pid);
     } catch {
+      void 0;
     }
 
     if (await waitForProcessExit(pid, 800)) {
@@ -221,6 +254,7 @@ async function terminateProcessTree(pid, options = {}) {
         windowsHide: true,
       });
     } catch {
+      void 0;
     }
 
     if (await waitForProcessExit(pid, gracefulTimeoutMs)) {
@@ -234,6 +268,7 @@ async function terminateProcessTree(pid, options = {}) {
         windowsHide: true,
       });
     } catch {
+      void 0;
     }
 
     return waitForProcessExit(pid, forceTimeoutMs);
@@ -242,6 +277,7 @@ async function terminateProcessTree(pid, options = {}) {
   try {
     process.kill(pid, 'SIGTERM');
   } catch {
+    void 0;
   }
 
   if (await waitForProcessExit(pid, gracefulTimeoutMs)) {
@@ -251,6 +287,7 @@ async function terminateProcessTree(pid, options = {}) {
   try {
     process.kill(pid, 'SIGKILL');
   } catch {
+    void 0;
   }
 
   return waitForProcessExit(pid, forceTimeoutMs);

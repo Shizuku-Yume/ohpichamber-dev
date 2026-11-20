@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { createSshPassphraseStore } from './ssh-passphrases.js';
 
-describe('OpenCode SSH passphrase storage', () => {
+describe('Host SSH passphrase storage', () => {
+  it('creates a Host-owned entry without activating provider credentials', async () => {
+    const entries = [];
+    const store = createSshPassphraseStore({
+      list: async () => entries,
+      create: async (entry) => { entries.push(entry); },
+      remove: async () => {},
+    });
+    await store.create('ssh_one', 'fixture-passphrase');
+    expect(entries).toEqual([{
+      id: 'ssh_one', integrationID: 'openchamber-git-ssh', label: 'Git SSH key',
+      value: { type: 'key', key: 'fixture-passphrase' }, activate: false,
+    }]);
+    expect(await store.read('ssh_one')).toBe('fixture-passphrase');
+  });
+
   it('reads and removes exact SSH credentials independently of provider accounts', async () => {
     const entries = [
       { id: 'provider', integrationID: 'openai', value: { type: 'key', key: 'provider-secret' } },
@@ -19,8 +34,17 @@ describe('OpenCode SSH passphrase storage', () => {
     expect(await store.read('ssh_one')).toBeNull();
   });
 
-  it('does not turn an OpenCode failure into a missing credential', async () => {
+  it('does not turn a Host read failure into a missing credential', async () => {
     const store = createSshPassphraseStore({ list: async () => { throw new Error('offline'); } });
     await expect(store.read('cred_one')).rejects.toThrow('offline');
+  });
+
+  it('treats an empty source or an absent passphrase as unavailable', async () => {
+    const empty = createSshPassphraseStore({ list: async () => [] });
+    expect(await empty.read('missing')).toBeNull();
+    const missingPassphrase = createSshPassphraseStore({ list: async () => [{
+      id: 'missing', integrationID: 'openchamber-git-ssh', value: { type: 'key' },
+    }] });
+    expect(await missingPassphrase.read('missing')).toBeNull();
   });
 });

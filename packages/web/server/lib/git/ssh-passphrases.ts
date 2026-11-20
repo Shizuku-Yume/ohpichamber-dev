@@ -1,8 +1,18 @@
-import type { CredentialSource } from '../opencode/auth.js';
+interface SshPassphraseEntry {
+  id: string;
+  integrationID: string;
+  value: { type: string; key?: string };
+}
+
+interface SshPassphraseSource {
+  create(entry: SshPassphraseEntry & { label: string; activate: false }): Promise<void>;
+  list(): Promise<readonly SshPassphraseEntry[]>;
+  remove(id: string): Promise<void>;
+}
 
 const INTEGRATION_ID = 'openchamber-git-ssh';
 
-export function createSshPassphraseStore(source: Required<Pick<CredentialSource, 'create' | 'list' | 'remove'>>) {
+export function createSshPassphraseStore(source: SshPassphraseSource) {
   return {
     create: async (id: string, passphrase: string) => {
       await source.create({ id, integrationID: INTEGRATION_ID, label: 'Git SSH key',
@@ -10,7 +20,7 @@ export function createSshPassphraseStore(source: Required<Pick<CredentialSource,
     },
     read: async (id: string) => {
       const entry = (await source.list()).find((item) => item.id === id && item.integrationID === INTEGRATION_ID);
-      if (!entry || entry.value.type !== 'key') return null;
+      if (!entry || entry.value.type !== 'key' || typeof entry.value.key !== 'string') return null;
       return entry.value.key;
     },
     remove: async (id: string) => {

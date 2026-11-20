@@ -3,6 +3,12 @@ import path from 'node:path';
 
 import { z } from 'zod';
 
+export interface EnterprisePolicyOptions {
+ env?: NodeJS.ProcessEnv;
+ platform?: NodeJS.Platform;
+ readFile?: (filePath: string) => string;
+}
+
 /**
  * Enterprise mode: an administrator's promise that conversation content goes
  * only to the model providers configured in the native OMP Host. Two sources
@@ -212,7 +218,7 @@ export const watchEnterprisePolicy = ({ onChange, intervalMs = 15_000, read = re
  * them and treat an invalid one as unset. `source` says where enterprise mode
  * came from, for the UI and the logs.
  */
-export const readEnterprisePolicy = (options = {}) => {
+export const readEnterprisePolicy = (options: EnterprisePolicyOptions = {}) => {
  const env = options.env ?? process.env;
  const file = readPolicyFile(options);
 
@@ -265,10 +271,10 @@ export const readEnterprisePolicy = (options = {}) => {
  };
 };
 
-export const isEnterpriseMode = (options) => readEnterprisePolicy(options).enterpriseMode;
+export const isEnterpriseMode = (options: EnterprisePolicyOptions = {}) => readEnterprisePolicy(options).enterpriseMode;
 
 /** Whether enterprise mode keeps this server off the network (loopback only). */
-export const isNetworkAccessBlocked = (options) => {
+export const isNetworkAccessBlocked = (options: EnterprisePolicyOptions = {}) => {
  const policy = readEnterprisePolicy(options);
  return policy.enterpriseMode && !policy.allowNetworkAccess;
 };
@@ -279,7 +285,7 @@ export const NETWORK_ACCESS_BLOCKED_ERROR = 'Enterprise mode keeps OhPiChamber o
  + 'An administrator can allow it with "allowNetworkAccess": true in the policy file, or OPENCHAMBER_ALLOW_NETWORK_ACCESS=1 where the environment turns enterprise mode on.';
 
 /** What a client may know about the policy; pinned endpoints and keys stay on the server. */
-export const publicEnterprisePolicy = (options) => {
+export const publicEnterprisePolicy = (options: EnterprisePolicyOptions = {}) => {
  const { enterpriseMode, source, organization, policyError, allowNetworkAccess } = readEnterprisePolicy(options);
  return { enterpriseMode, source, organization, policyError, networkAccessBlocked: enterpriseMode && !allowNetworkAccess };
 };
