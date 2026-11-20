@@ -24,14 +24,17 @@ Bun 1.4.4 clean installation, native
 
 Desktop notification IPC now waits for Electron's `show`/`failed` events with a
 five-second deadline; native failure cannot fall back to browser success.
-The macOS test action gives localized System Settings → Notifications guidance
-when delivery is unconfirmed. Focused native/routing, adapter and UI coverage
-passes 42 tests; workspace types and changed-file lint pass, and the unsigned
-arm64 app rebuilds. Root checks still fail unrelated upstream drift and, with
-packaged web assets present, stale createAgent/createScanner gap allowlisting;
-both reproduce on main source. Native disabled/enabled permission behavior
-and visible presentation still need manual retesting; the running app was left
-untouched.
+The real macOS test of ee8b5ee34 showed that `show` also fires with Allow
+notifications disabled: it is not evidence of authorization or a visible banner.
+The macOS test action now acknowledges sending to macOS and explains how to
+allow OhPiChamber in System Settings → Notifications if no banner appeared.
+The failure toast and other platforms stay unchanged. Native/routing, adapter
+and UI tests cover handoff/failure feedback, not OS authorization or delivery.
+All 46 focused tests, workspace/package types and changed-file lint pass.
+Root checks previously failed unrelated upstream drift and, with packaged web
+assets present, stale createAgent/createScanner gap allowlisting; both reproduce
+on main source. Rebuilding over a running dist/mac-arm64 app is blocked; native
+presentation of the revised toast still needs manual verification.
 
 The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
 `no-favicon-found` discovery response: non-OK responses otherwise become an error

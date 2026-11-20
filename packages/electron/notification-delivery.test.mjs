@@ -9,7 +9,7 @@ const notificationFixture = (show) => {
   return notification;
 };
 
-test('confirms success only after the native show event', async () => {
+test('acknowledges native handoff only after the show event', async () => {
   const notification = notificationFixture(() => {});
   const shown = showNotificationAndWait(notification);
   let settled = false;
@@ -22,7 +22,7 @@ test('confirms success only after the native show event', async () => {
   assert.equal(notification.listenerCount('close'), 0);
 });
 
-test('reports native permission/delivery failure without success', async () => {
+test('reports a native failed event without claiming a handoff', async () => {
   const notification = notificationFixture(value => value.emit('failed', {}, 'Notifications are not allowed'));
   assert.equal(await showNotificationAndWait(notification), false);
   assert.equal(notification.listenerCount('show'), 0);
@@ -34,14 +34,14 @@ test('reports failure when showing throws', async () => {
   assert.equal(notification.listenerCount('show'), 0);
 });
 
-test('reports unconfirmed delivery when no native event arrives', async () => {
+test('reports missing native acknowledgement when no event arrives', async () => {
   const notification = notificationFixture(() => {});
   assert.equal(await showNotificationAndWait(notification, 1), false);
   assert.equal(notification.listenerCount('show'), 0);
   assert.equal(notification.listenerCount('failed'), 0);
 });
 
-test('does not treat closing before showing as delivery', async () => {
+test('does not treat closing before showing as a native handoff', async () => {
   const notification = notificationFixture(value => value.emit('close'));
   assert.equal(await showNotificationAndWait(notification), false);
 });

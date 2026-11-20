@@ -344,7 +344,9 @@ export const NotificationSettings: React.FC = () => {
       });
 
       if (success) {
-        toast.success(t('settings.notifications.page.toast.testNotificationSent'));
+        toast.success(t(isDesktop && window.__OPENCHAMBER_PLATFORM__ === 'darwin'
+          ? 'settings.notifications.page.toast.testNotificationMacSent'
+          : 'settings.notifications.page.toast.testNotificationSent'));
       } else {
         toast.error(t(isDesktop && window.__OPENCHAMBER_PLATFORM__ === 'darwin'
           ? 'settings.notifications.page.toast.testNotificationMacUnavailable'

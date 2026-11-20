@@ -8,6 +8,7 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacSent': "测试通知已发送至 macOS。如果没有出现横幅，请在系统设置 → 通知中允许 OhPiChamber 发送通知。",
   'settings.notifications.page.toast.testNotificationMacUnavailable': "无法确认通知是否已送达。请在 macOS 系统设置 → 通知中允许 OhPiChamber 发送通知，然后重试。",
   'settings.openchamber.sessionRetention.field.archivedDescription': '保留期限从归档时开始计算。过期会话会被删除。',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': '保留期限从会话的最后活动时间开始计算。过期会话会被归档。',

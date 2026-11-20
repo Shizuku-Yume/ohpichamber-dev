@@ -40,8 +40,9 @@ describe('notification test feedback', () => {
     globals.clear();
   });
 
-  for (const shown of [false, true]) {
-    test(`macOS test reports ${shown ? 'success after confirmation' : 'System Settings guidance without success'}`, async () => {
+  const cases = ['darwin', 'win32', 'linux'].flatMap(platform => [false, true].map(shown => ({ platform, shown })));
+  for (const { platform, shown } of cases) {
+    test(`${platform} test reports ${shown ? 'native handoff' : 'failure'}`, async () => {
       const { createRoot } = await import('react-dom/client');
       const { NotificationSettings } = await import('./NotificationSettings');
       const { I18nProvider } = await import('@/lib/i18n');
@@ -53,7 +54,7 @@ describe('notification test feedback', () => {
       registerRuntimeAPIs(null);
       Object.assign(window, {
         __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
-        __OPENCHAMBER_PLATFORM__: 'darwin',
+        __OPENCHAMBER_PLATFORM__: platform,
         __OPENCHAMBER_RUNTIME_APIS__: { notifications: { notifyAgentCompletion: async () => shown } },
       });
       const priorEnabled = useUIStore.getState().nativeNotificationsEnabled;
@@ -70,10 +71,14 @@ describe('notification test feedback', () => {
         if (!button) throw new Error('Missing test notification button');
         await act(async () => { button.click(); });
         if (shown) {
-          expect(success).toHaveBeenCalledWith('Test notification sent successfully');
+          expect(success).toHaveBeenCalledWith(platform === 'darwin'
+            ? 'Test notification sent to macOS. If no banner appeared, allow OhPiChamber in System Settings → Notifications.'
+            : 'Test notification sent successfully');
           expect(error).not.toHaveBeenCalled();
         } else {
-          expect(error).toHaveBeenCalledWith('Notification delivery could not be confirmed. Allow OhPiChamber in macOS System Settings → Notifications, then try again.');
+          expect(error).toHaveBeenCalledWith(platform === 'darwin'
+            ? 'Notification delivery could not be confirmed. Allow OhPiChamber in macOS System Settings → Notifications, then try again.'
+            : 'Failed to send test notification');
           expect(success).not.toHaveBeenCalled();
         }
       } finally {

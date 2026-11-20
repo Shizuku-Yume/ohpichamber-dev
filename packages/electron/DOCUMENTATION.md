@@ -6,13 +6,15 @@ Electron owns native windows, privileged IPC, desktop host credentials, browser-
 
 ## Invariants
 
-- Native notification IPC confirms success only on Electron's `show` event.
+- Native notification IPC reports handoff only on Electron's `show` event.
   Unsupported notifications, native failure, or five seconds without confirmation
   report failure, without a browser fallback. Electron 45 exposes no notification
-  authorization query; macOS test failures point to System Settings → Notifications
-  rather than asserting that permission is denied. A `show` event is Electron's
-  confirmation, not a guarantee of a visible banner under Focus or OS presentation
-  preferences. Web/PWA, hosted mobile and Capacitor retain their own delivery paths.
+  authorization query, and `show` fires even with Allow notifications disabled.
+  On macOS the test action acknowledges sending to macOS, not delivery, and gives
+  System Settings → Notifications guidance if no banner appeared. Its failure
+  toast keeps the same guidance without asserting permission is denied.
+  The external URL policy is unchanged. Other desktop platforms, web/PWA, hosted mobile and
+  Capacitor retain their existing feedback and delivery paths.
 
 ### Startup and storage
 

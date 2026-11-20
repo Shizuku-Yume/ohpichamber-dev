@@ -8,6 +8,7 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacSent': "Notification de test envoyée à macOS. Si aucune bannière n’est apparue, autorisez OhPiChamber dans Réglages Système → Notifications.",
   'settings.notifications.page.toast.testNotificationMacUnavailable': "La réception de la notification n’a pas pu être confirmée. Autorisez OhPiChamber dans Réglages Système de macOS → Notifications, puis réessayez.",
   'settings.openchamber.sessionRetention.field.archivedDescription': 'La durée de conservation commence à l\'archivage. Les sessions expirées sont supprimées.',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': 'La durée de conservation commence à la dernière activité de la session. Les sessions expirées sont archivées.',
