@@ -121,7 +121,6 @@ describe('ModelPickerList screen reader semantics', () => {
     restoreGlobals?.();
   });
 
-<<<<<<< HEAD
   test('gives every section a role="group" and an accessible name', async () => {
     const host = await renderPicker({ favoriteModels: [favorite], recentModels: [favorite] });
     const groups = Array.from(host.querySelectorAll<HTMLElement>('[role="group"]'));
@@ -132,88 +131,3 @@ describe('ModelPickerList screen reader semantics', () => {
     expect(names).toContain(providers[0].name);
   });
 });
-||||||| bc50ba56aa
-/** The name a screen reader reads for a row, from its aria-labelledby. */
-const rowName = (row: Element) => (row.getAttribute('aria-labelledby') ?? '')
-  .split(' ')
-  .map((id) => document.getElementById(id)?.textContent)
-  .filter(Boolean)
-  .join(' ');
-
-const highlightedRow = () => document.querySelector('[role="option"].bg-interactive-selection');
-
-test('the search field is a combobox that points at the highlighted row as arrows move', async () => {
-  await renderPicker();
-  const listbox = document.querySelector('[role="listbox"]');
-  expect(field().getAttribute('role')).toBe('combobox');
-  expect(field().getAttribute('aria-controls')).toBe(listbox?.id ?? null);
-  expect(listbox?.getAttribute('aria-label')).toBe('Models');
-
-  expect(activeRow()).toBe(highlightedRow());
-  expect(rowName(activeRow()!)).toBe('Alpha');
-
-  await press('ArrowDown');
-  const row = activeRow()!;
-  expect(row).toBe(highlightedRow());
-  expect(row.getAttribute('role')).toBe('option');
-  // The star button inside the row is left out of its name.
-  expect(rowName(row)).toBe('Beta');
-  expect(row.closest('[role="group"]')?.getAttribute('aria-label')).toBe('Lab Small');
-  expect(row.closest('[role="listbox"]')).toBe(listbox);
-});
-
-test('a favorite row, which shows its provider only as a logo, names the provider', async () => {
-  await renderPicker([favorite]);
-  const row = activeRow()!;
-  expect(row.closest('[role="group"]')?.getAttribute('aria-label')).toBe('Favorites');
-  expect(rowName(row)).toBe('Beta Lab Small');
-});
-
-test('the field never points at a row that is not in the page', async () => {
-  await renderPicker();
-  // Up from the first row wraps to the last row of the long section, which is
-  // not mounted until the list scrolls to it.
-  for (const key of ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowDown'] as const) {
-    await press(key);
-    const id = field().getAttribute('aria-activedescendant');
-    if (id) expect(activeRow()).toBe(highlightedRow());
-    else expect(highlightedRow()).toBeNull();
-  }
-});
-=======
-/** The name a screen reader reads for a row, from its aria-labelledby. */
-const rowName = (row: Element) => (row.getAttribute('aria-labelledby') ?? '')
-  .split(' ')
-  .map((id) => document.getElementById(id)?.textContent)
-  .filter(Boolean)
-  .join(' ');
-
-const highlightedRow = () => document.querySelector('[role="option"].oc-selected');
-
-test('the search field is a combobox that points at the highlighted row as arrows move', async () => {
-  await renderPicker();
-  const listbox = document.querySelector('[role="listbox"]');
-  expect(field().getAttribute('role')).toBe('combobox');
-  expect(field().getAttribute('aria-controls')).toBe(listbox?.id ?? null);
-  expect(listbox?.getAttribute('aria-label')).toBe('Models');
-
-  expect(activeRow()).toBe(highlightedRow());
-  expect(rowName(activeRow()!)).toBe('Alpha');
-
-  await press('ArrowDown');
-  const row = activeRow()!;
-  expect(row).toBe(highlightedRow());
-  expect(row.getAttribute('role')).toBe('option');
-  // The star button inside the row is left out of its name.
-  expect(rowName(row)).toBe('Beta');
-  expect(row.closest('[role="group"]')?.getAttribute('aria-label')).toBe('Lab Small');
-  expect(row.closest('[role="listbox"]')).toBe(listbox);
-});
-
-test('a favorite row, which shows its provider only as a logo, names the provider', async () => {
-  await renderPicker([favorite]);
-  const row = activeRow()!;
-  expect(row.closest('[role="group"]')?.getAttribute('aria-label')).toBe('Favorites');
-  expect(rowName(row)).toBe('Beta Lab Small');
-});
->>>>>>> upstream/main

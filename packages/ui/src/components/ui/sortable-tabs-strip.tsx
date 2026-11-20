@@ -62,18 +62,6 @@ type SortableTabsStripProps = {
   variant?: 'default' | 'active-pill' | 'animated';
   activePillInsetClassName?: string;
   activePillButtonClassName?: string;
-<<<<<<< HEAD
-  /** Active-pill height on desktop: `toolbar` is 28px like toolbar and
-      Settings-page controls, `form` is 32px like the inputs of a modal form.
-      Give the strip the matching height (`h-7` or `h-8`), or let it size from
-      content so touch layouts keep their taller pill height. */
-||||||| bc50ba56aa
-  /** Active-pill height on desktop: `toolbar` is 28px like the toolbar
-      controls, `form` is 32px like the inputs and selects of a form (Settings).
-      Give the strip the matching height (`h-7` or `h-8`). Touch layouts keep
-      their own larger size either way. */
-=======
->>>>>>> upstream/main
   pillSize?: 'toolbar' | 'form';
   activePillLowercase?: boolean;
   inactiveTabsIconOnly?: boolean;
@@ -478,16 +466,7 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
         {usesActivePillIndicator && pillRect ? (
           <div
             className={cn(
-<<<<<<< HEAD
-              // Light themes paint elevated darker than the canvas, so the
-              // raised pill takes the canvas colour there to stand above the track.
-||||||| bc50ba56aa
-              // Light themes paint elevated darker than the canvas, so the
-              // raised pill takes the canvas colour there to stand above the track.
               // oxlint-disable-next-line openchamber/no-physical-sides -- positioned from offsetLeft, which is physical in either direction
-=======
-              // oxlint-disable-next-line openchamber/no-physical-sides -- positioned from offsetLeft, which is physical in either direction
->>>>>>> upstream/main
               'oc-raised pointer-events-none absolute left-0 top-0 z-0 rounded-md bg-[var(--surface-background)] dark:bg-[var(--surface-elevated)]',
               shouldAnimateActivePill && pillTransitionEnabled
               && (nonCompositedIndicator ? 'pill-tabs__indicator--is-animated-layout' : 'pill-tabs__indicator--is-animated')
@@ -509,15 +488,8 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
         {useUnderlineIndicator && pillRect ? (
           <div
             className={cn(
-<<<<<<< HEAD
-              'pointer-events-none absolute left-0 -bottom-px z-10 h-[3px] rounded-t-[2px] bg-[var(--primary-base)]',
-||||||| bc50ba56aa
-              // oxlint-disable-next-line openchamber/no-physical-sides -- positioned from offsetLeft, which is physical in either direction
-              'pointer-events-none absolute left-0 -bottom-px z-10 h-[3px] rounded-t-[2px] bg-[var(--primary-base)]',
-=======
               // oxlint-disable-next-line openchamber/no-physical-sides -- positioned from offsetLeft, which is physical in either direction
               'pointer-events-none absolute left-0 -bottom-px z-10 h-[3px] rounded-t-[2px] bg-foreground',
->>>>>>> upstream/main
               pillTransitionEnabled && 'underline-tabs__indicator--is-animated'
             )}
             style={{
@@ -569,26 +541,9 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
               : 'min-w-0 flex-1 basis-0';
           const handleAuxClick = closable
             ? (event: React.MouseEvent<HTMLDivElement>) => {
-<<<<<<< HEAD
               // Middle-click (button === 1) closes the tab. Matches browser tab behavior.
               if (event.button !== 1) {
                 return;
-||||||| bc50ba56aa
-                // Middle-click (button === 1) closes the tab. Matches browser tab behavior.
-                if (event.button !== 1) {
-                  return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                onClose?.(item.id);
-=======
-                if (event.button !== 1) {
-                  return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                onClose?.(item.id);
->>>>>>> upstream/main
               }
               event.preventDefault();
               event.stopPropagation();
@@ -597,20 +552,9 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
             : undefined;
           const handleMouseDown = closable
             ? (event: React.MouseEvent<HTMLDivElement>) => {
-<<<<<<< HEAD
               // Prevent the browser's middle-click autoscroll affordance.
               if (event.button === 1) {
                 event.preventDefault();
-||||||| bc50ba56aa
-                // Prevent the browser's middle-click autoscroll affordance.
-                if (event.button === 1) {
-                  event.preventDefault();
-                }
-=======
-                if (event.button === 1) {
-                  event.preventDefault();
-                }
->>>>>>> upstream/main
               }
             }
             : undefined;
@@ -736,128 +680,16 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
                       ? '-ms-2.5 me-1 h-[88%] w-5 self-center !aspect-auto rounded-md'
                       : 'aspect-square h-[65%] min-h-4 max-h-5 rounded-sm me-1',
                     usesActivePillIndicator
-<<<<<<< HEAD
                       ? (isActive
                         ? 'text-muted-foreground hover:bg-transparent hover:text-foreground'
                         : 'text-muted-foreground opacity-0 hover:bg-transparent hover:text-foreground group-hover:opacity-100')
                       : (isActive
                         ? 'text-muted-foreground hover:bg-interactive-hover/60 hover:text-foreground'
                         : 'text-muted-foreground opacity-0 hover:bg-interactive-hover/80 hover:text-foreground group-hover:opacity-100')
-||||||| bc50ba56aa
-                      ? useIntrinsicPillSizing
-                        ? 'shrink-0 whitespace-nowrap px-3 text-center'
-                        : isScrollable
-                          ? cn(!item.labelFolder && 'max-w-56', 'shrink-0 px-3 text-center')
-                          : (showInactiveIconOnly
-                            ? 'px-2 !min-w-0 text-center'
-                            : useIntrinsicActiveTab
-                              ? 'shrink-0 whitespace-nowrap px-3 text-center'
-                              : 'px-3 text-center')
-                      : isScrollable
-                        ? cn(!item.labelFolder && 'max-w-56', 'justify-start truncate px-3 text-start')
-                        : 'w-full justify-center truncate px-3 text-center',
-                    usesActivePillIndicator
-                      // 24px buttons in a 2px-padded track: the switch is
-                      // 28px, as tall as the toolbar controls beside it (32px
-                      // with 28px buttons for a form). Callers may add classes
-                      // (padding) on top.
-                      ? cn(isActivePillVariant ? (isMobile ? 'h-[38px]' : pillSize === 'form' ? 'h-7' : 'h-6') : 'h-7', activePillButtonClassName)
-                      : null,
-                    usesActivePillIndicator
-                      ? isActive
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                      : null,
-                    usesActivePillIndicator
-                      ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
-                      : null
-=======
-                      ? useIntrinsicPillSizing
-                        ? 'shrink-0 whitespace-nowrap px-3 text-center'
-                        : isScrollable
-                          ? cn(!item.labelFolder && 'max-w-56', 'shrink-0 px-3 text-center')
-                          : (showInactiveIconOnly
-                            ? 'px-2 !min-w-0 text-center'
-                            : useIntrinsicActiveTab
-                              ? 'shrink-0 whitespace-nowrap px-3 text-center'
-                              : 'px-3 text-center')
-                      : isScrollable
-                        ? cn(!item.labelFolder && 'max-w-56', 'justify-start truncate px-3 text-start')
-                        : 'w-full justify-center truncate px-3 text-center',
-                    usesActivePillIndicator
-                      ? cn(isActivePillVariant ? (isMobile ? 'h-[38px]' : pillSize === 'form' ? 'h-7' : 'h-6') : 'h-7', activePillButtonClassName)
-                      : null,
-                    usesActivePillIndicator
-                      ? isActive
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                      : null,
-                    usesActivePillIndicator
-                      ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
-                      : null
->>>>>>> upstream/main
                   )}
                   aria-label={closeLabel}
                 >
-<<<<<<< HEAD
                   <Icon name="close" className="h-3 w-3" />
-||||||| bc50ba56aa
-                  {usesActivePillIndicator ? (
-                    <>
-                      {shouldShowIcon ? (
-                        <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-                          <span className={cn('flex items-center justify-center transition-opacity', closeReplacesIcon && (alwaysShowCloseControls ? 'opacity-0' : 'group-hover:opacity-0'))}>{item.icon}</span>
-                          {closeReplacesIcon ? closeInsideTab : null}
-                        </span>
-                      ) : null}
-                      {shouldShowLabel ? <span className={cn('animated-tabs__label truncate', item.preview && 'italic')}><TabLabelText item={item} /></span> : null}
-                    </>
-                  ) : (
-                    <span className={cn('flex min-w-0 flex-nowrap items-center gap-1.5', !isScrollable && 'justify-center')}>
-                      {shouldShowIcon ? (
-                        <span
-                          className={cn(
-                            'relative flex h-4 w-4 shrink-0 items-center justify-center transition-colors duration-200 ease-out',
-                            isActive ? 'text-[var(--primary-base)]' : 'text-muted-foreground'
-                          )}
-                        >
-                          <span className={cn('flex items-center justify-center transition-opacity', closeReplacesIcon && (alwaysShowCloseControls ? 'opacity-0' : 'group-hover:opacity-0'))}>{item.icon}</span>
-                          {closeReplacesIcon ? closeInsideTab : null}
-                        </span>
-                      ) : null}
-                      <span className={cn('truncate leading-[1.2]', item.preview && 'italic')}><TabLabelText item={item} /></span>
-                    </span>
-                  )}
-=======
-                  {usesActivePillIndicator ? (
-                    <>
-                      {shouldShowIcon ? (
-                        <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-                          <span className={cn('flex items-center justify-center transition-opacity', closeReplacesIcon && (alwaysShowCloseControls ? 'opacity-0' : 'group-hover:opacity-0'))}>{item.icon}</span>
-                          {closeReplacesIcon ? closeInsideTab : null}
-                        </span>
-                      ) : null}
-                      {shouldShowLabel ? <span className={cn('animated-tabs__label truncate', item.preview && 'italic')}><TabLabelText item={item} /></span> : null}
-                      {shouldShowLabel ? item.accessory : null}
-                    </>
-                  ) : (
-                    <span className={cn('flex min-w-0 flex-nowrap items-center gap-1.5', !isScrollable && 'justify-center')}>
-                      {shouldShowIcon ? (
-                        <span
-                          className={cn(
-                            'relative flex h-4 w-4 shrink-0 items-center justify-center transition-colors duration-200 ease-out',
-                            isActive ? 'text-foreground' : 'text-muted-foreground'
-                          )}
-                        >
-                          <span className={cn('flex items-center justify-center transition-opacity', closeReplacesIcon && (alwaysShowCloseControls ? 'opacity-0' : 'group-hover:opacity-0'))}>{item.icon}</span>
-                          {closeReplacesIcon ? closeInsideTab : null}
-                        </span>
-                      ) : null}
-                      <span className={cn('truncate leading-[1.2]', item.preview && 'italic')}><TabLabelText item={item} /></span>
-                      {item.accessory}
-                    </span>
-                  )}
->>>>>>> upstream/main
                 </button>
               ) : null}
             </div>

@@ -295,13 +295,6 @@ const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; o
                     <Button size="sm" variant="outline" onClick={repository.retry}>{t('gitView.empty.retryDiscovery')}</Button>
                 </div>
             ) : null}
-<<<<<<< HEAD
-            {/* Remounted per source and project: a new list starts with an empty search. */}
-||||||| bc50ba56aa
-            {/* Remounted per source and project: a new list starts with an empty search.
-                Repository focus stays in the store until shown, including across discovery. */}
-=======
->>>>>>> upstream/main
             <SourceBoardBody
             key={`${tab}:${tab === 'repository' ? `${allRepositories ? 'all:' : ''}${directory}` : containerId ?? ''}`}
             tab={tab}
@@ -331,14 +324,9 @@ const SourceBoardBody: React.FC<{
     project: ProjectEntry | null;
     directory: string | null;
     repositoryDiscoveryPending: boolean;
-<<<<<<< HEAD
     /** The project's root, which a pinned link's repository is looked up under. */
     projectRoot: string | null;
     /** The repositories listed together, or null while one folder is read. */
-||||||| bc50ba56aa
-    /** The repositories listed together, or null while one folder is read. */
-=======
->>>>>>> upstream/main
     allRepositories: readonly string[] | null;
     trackerContainerId: string | null;
     mapping: TrackerMappingResult | null;
@@ -356,33 +344,15 @@ const SourceBoardBody: React.FC<{
     const { t } = useI18n();
     const { sourceControl, trackers } = useRuntimeAPIs();
     const tracker = trackerOfSource(tab);
-<<<<<<< HEAD
     // An item another surface asked to show: an issue or PR by its link, a
     // tracker item by its identifier. It is read on its own, not typed into the
     // search: the list stays as it was, and the preview opens on the item.
-||||||| bc50ba56aa
-    const repositoryFocus = useSourceBoardStore((state) => (tab === 'repository' ? state.repositoryFocus : null));
-    // An item another surface asked to show: an issue or PR by its link, a
-    // tracker item by its identifier. It is read on its own, not typed into the
-    // search: the list stays as it was, and the preview opens on the item.
-=======
-    const repositoryFocus = useSourceBoardStore((state) => (tab === 'repository' ? state.repositoryFocus : null));
->>>>>>> upstream/main
     const [pinnedLink, setPinnedLink] = React.useState<{ kind: RepositoryReferenceKind; url: string; focus?: typeof repositoryFocus } | null>(null);
     const [pinnedTrackerId, setPinnedTrackerId] = React.useState<string | null>(null);
     const [pinRequest, setPinRequest] = React.useState(0);
-<<<<<<< HEAD
     // The item is read through the repository its link names, which under an
     // established root may be a submodule the list does not read: opened from
     // there, its labels, comments and Changes links belong to that repository.
-||||||| bc50ba56aa
-    // The item is read through the repository its link names, which under an
-    // established root may be a submodule the list does not read: opened from
-    // there, its labels, comments and Changes links belong to that repository.
-    const projectRoot = project ? normalizeProjectPath(project.path) : null;
-=======
-    const projectRoot = project ? normalizeProjectPath(project.path) : null;
->>>>>>> upstream/main
     const pinnedLinkFolder = useLinkRepository(projectRoot ?? '', pinnedLink?.url ?? '', {
         enabled: Boolean(projectRoot && pinnedLink && tab === 'repository'),
     });
@@ -402,13 +372,6 @@ const SourceBoardBody: React.FC<{
         query: pinnedLink?.url ?? '',
     });
     const pinnedLookup = allRepositories ? pinnedAcross : pinnedSingle;
-<<<<<<< HEAD
-
-||||||| bc50ba56aa
-    // Past the project's fork network a link is read with the project's account
-    // where that account's host is the link's, and only read (`TrackerItemView`).
-=======
->>>>>>> upstream/main
     const urls = useRepositoryUrlMatcher();
     // Past the project's fork network a link is read with the project's account
     // where that account's host is the link's, and only read.
@@ -454,16 +417,8 @@ const SourceBoardBody: React.FC<{
         pinnedItem,
         onScreen,
     });
-<<<<<<< HEAD
     // The item a link asked to show is followed like a listed one; a lookup
     // that fell back to a search lists others, which are not.
-||||||| bc50ba56aa
-    // The item a link asked to show is followed like a listed one; a lookup
-    // that fell back to a search lists others, which are not.
-    const pinnedLinkFollowed = pinnedOutsideItem ? pinnedOutside.followed : pinnedLookup.followed;
-=======
-    const pinnedLinkFollowed = pinnedOutsideItem ? pinnedOutside.followed : pinnedLookup.followed;
->>>>>>> upstream/main
     const pinnedFollowed = React.useMemo(() => (pinnedItem?.source === 'tracker'
         ? pinnedTrackerFollowed
         : pinnedLookup.followed.filter((item) => !isTrackedWorkItem(item) && item.number === pinnedReference?.number)
@@ -539,29 +494,14 @@ const SourceBoardBody: React.FC<{
         : project;
     const actionPath = actionProjectEntry ? normalizeProjectPath(actionProjectEntry.path) : null;
     const actionProject: SourceBoardProject | null = actionProjectEntry && actionPath ? { id: actionProjectEntry.id, path: actionPath } : null;
-<<<<<<< HEAD
     // A tracker item is read nowhere; an issue or PR is acted on in the repository it was listed from.
     // An item of a repository under a root that is not one: the project itself is no repository to branch from.
     const readsNestedRepository = tab === 'repository'
         && (allRepositories !== null || (actionPath !== null && directory !== null && directory !== actionPath));
     // An item is read and acted on through the folder it came from: its repository's, across several.
-||||||| bc50ba56aa
-    // An item is read and acted on through the folder it came from: its repository's, across several.
-=======
->>>>>>> upstream/main
     const readFolder = tracker
         ? actionProject?.path ?? null
         : itemDirectory(previewItem, directory);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // A tracker item is read nowhere; an issue or PR is acted on in the repository it was listed from.
-    // An item of a repository under the project root — a submodule, or another checkout — keeps the project itself out of worktrees.
-    const readsNestedRepository = tab === 'repository'
-        && (allRepositories !== null || (actionPath !== null && readFolder !== null && readFolder !== actionPath));
-=======
-    const readsNestedRepository = tab === 'repository'
-        && (allRepositories !== null || (actionPath !== null && readFolder !== null && readFolder !== actionPath));
->>>>>>> upstream/main
     const actionContext = useRepositoryReadContext(readFolder);
     const boundContext: SourceControlReadContext | null = actionContext && actionContext !== 'missing' ? actionContext : null;
     const previewLinked = previewItem?.source === 'repository' && previewItem.reference.linked === true;
@@ -944,14 +884,7 @@ const SourceBoardBody: React.FC<{
                         </div>
                     </>
                 )}
-<<<<<<< HEAD
                 {/* A crash below keeps the header, the only way to close the page on iOS. */}
-||||||| bc50ba56aa
-                {pinnedDiscoveryError && !inPreview ? pinnedDiscoveryError : null}
-                {/* A crash below keeps the header, the only way to close the page on iOS. */}
-=======
-                {pinnedDiscoveryError && !inPreview ? pinnedDiscoveryError : null}
->>>>>>> upstream/main
                 <ErrorBoundary>
                     <ScrollableOverlay ref={mobileScrollRef} outerClassName="min-h-0 flex-1" className={inPreview ? 'px-4 py-3' : undefined} disableHorizontal>
                         {inPreview ? preview : list}

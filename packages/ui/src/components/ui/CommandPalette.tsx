@@ -78,30 +78,7 @@ type ProjectActionsRunnerLike = {
 const useProjectActions = (): ProjectActionsRunnerLike | null => null;
 const useObserveProjectActionRuns = (_enabled: boolean) => {};
 import { resolveProjectActionIconName } from '@/lib/projectActions';
-<<<<<<< HEAD
 import { problemMessage } from '@/lib/problemMessage';
-||||||| bc50ba56aa
-import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
-=======
-import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
-import { useGuestActions, useGuestCommands } from '@/hooks/useGuestSurfaces';
-import { useGuestsStore } from '@/lib/guests/store';
-import { guestSessionActions, type GuestActionEntry } from '@/lib/guests/actions';
-import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
-import { runGuestSessionAction } from '@/lib/guests/session-action';
-import { GuestIcon } from '@/components/layout/GuestRailIcon';
-import { getRuntimeUrlResolver } from '@/lib/runtime-url';
-import { useComposerConfigDirectory } from '@/hooks/useComposerConfigDirectory';
-import { selectCommandsForComposer, useCommandsStore } from '@/stores/useCommandsStore';
-import { reservedComposerCommandNames } from '@/components/chat/composer/submit/guestCommands';
-import { useInputStore } from '@/sync/input-store';
-import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
-import { toast } from './toast';
-import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
-import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import { rankConversationMetadata } from '@/lib/search/conversationSearch';
-import { Button } from './button';
->>>>>>> upstream/main
 
 type CommandEntry = {
   id: string;
@@ -181,23 +158,7 @@ export const CommandPalette: React.FC = () => {
     (state) => isCommandPaletteOpen ? state.activeSessions : EMPTY_SESSIONS,
     [isCommandPaletteOpen],
   ));
-<<<<<<< HEAD
   const pinnedSessionIds = EMPTY_PINNED_SESSION_IDS;
-||||||| bc50ba56aa
-  const pinnedSessionIds = useSessionPinnedStore(React.useCallback(
-    (state) => isCommandPaletteOpen ? state.ids : EMPTY_PINNED_SESSION_IDS,
-    [isCommandPaletteOpen],
-  ));
-=======
-  const archivedSessions = useGlobalSessionsStore(React.useCallback(
-    (state) => isCommandPaletteOpen ? state.archivedSessions : EMPTY_SESSIONS,
-    [isCommandPaletteOpen],
-  ));
-  const pinnedSessionIds = useSessionPinnedStore(React.useCallback(
-    (state) => isCommandPaletteOpen ? state.ids : EMPTY_PINNED_SESSION_IDS,
-    [isCommandPaletteOpen],
-  ));
->>>>>>> upstream/main
   const sessionOrderRanks = useSessionOrderingStore(React.useCallback(
     (state) => isCommandPaletteOpen ? state.rankById : EMPTY_SESSION_ORDER_RANKS,
     [isCommandPaletteOpen],
@@ -397,79 +358,7 @@ export const CommandPalette: React.FC = () => {
         onSelect: run(() => window.location.reload()),
       });
     list.push(
-<<<<<<< HEAD
 
-||||||| bc50ba56aa
-      {
-        id: 'collapse-sessions-all',
-        secondary: true,
-        title: t('sessions.sidebar.header.displayMode.collapseAll'),
-        icon: <Icon name="contract-up-down" className="me-2 h-4 w-4" />,
-        shortcutId: 'collapse_sessions_all',
-        searchText: t('sessions.sidebar.header.displayMode.collapseAll'),
-        onSelect: run(() => {
-          // The sidebar handler acts on hidden sidebars too; opening it shows the result.
-          setSidebarOpen(true);
-          shortcutRegistry.invoke('collapse_sessions_all');
-        }),
-      },
-      {
-        id: 'expand-sessions-all',
-        secondary: true,
-        title: t('sessions.sidebar.header.displayMode.expandAll'),
-        icon: <Icon name="expand-up-down" className="me-2 h-4 w-4" />,
-        shortcutId: 'expand_sessions_all',
-        searchText: t('sessions.sidebar.header.displayMode.expandAll'),
-        onSelect: run(() => {
-          // The sidebar handler acts on hidden sidebars too; opening it shows the result.
-          setSidebarOpen(true);
-          shortcutRegistry.invoke('expand_sessions_all');
-        }),
-      },
-      {
-        id: 'pin-session',
-        secondary: true,
-        title: t('commandPalette.item.pinSession'),
-        icon: <Icon name="pushpin" className="me-2 h-4 w-4" />,
-        shortcutId: 'pin_current_session',
-        searchText: t('commandPalette.item.pinSession'),
-        onSelect: run(pinCurrentSession(t)),
-      },
-=======
-      {
-        id: 'collapse-sessions-all',
-        secondary: true,
-        title: t('sessions.sidebar.header.displayMode.collapseAll'),
-        icon: <Icon name="contract-up-down" className="me-2 h-4 w-4" />,
-        shortcutId: 'collapse_sessions_all',
-        searchText: t('sessions.sidebar.header.displayMode.collapseAll'),
-        onSelect: run(() => {
-          setSidebarOpen(true);
-          shortcutRegistry.invoke('collapse_sessions_all');
-        }),
-      },
-      {
-        id: 'expand-sessions-all',
-        secondary: true,
-        title: t('sessions.sidebar.header.displayMode.expandAll'),
-        icon: <Icon name="expand-up-down" className="me-2 h-4 w-4" />,
-        shortcutId: 'expand_sessions_all',
-        searchText: t('sessions.sidebar.header.displayMode.expandAll'),
-        onSelect: run(() => {
-          setSidebarOpen(true);
-          shortcutRegistry.invoke('expand_sessions_all');
-        }),
-      },
-      {
-        id: 'pin-session',
-        secondary: true,
-        title: t('commandPalette.item.pinSession'),
-        icon: <Icon name="pushpin" className="me-2 h-4 w-4" />,
-        shortcutId: 'pin_current_session',
-        searchText: t('commandPalette.item.pinSession'),
-        onSelect: run(pinCurrentSession(t)),
-      },
->>>>>>> upstream/main
       {
         id: 'copy-session-id',
         secondary: true,
@@ -818,28 +707,10 @@ export const CommandPalette: React.FC = () => {
   const nestedWorktreePrefixesRef = React.useRef(nestedWorktreePrefixes);
   nestedWorktreePrefixesRef.current = nestedWorktreePrefixes;
 
-<<<<<<< HEAD
-  // ---------------------------------------------------------------------------
-  // Message search (server index, opt-in).
-  // ---------------------------------------------------------------------------
-||||||| bc50ba56aa
-  // ---------------------------------------------------------------------------
-  // Message search (server index, opt-in; VS Code has no OpenChamber server)
-  // ---------------------------------------------------------------------------
-=======
->>>>>>> upstream/main
   const messageSearchEnabled = useUIStore((state) => state.messageSearchEnabled);
-<<<<<<< HEAD
   const messageSearchSupported = messageSearchEnabled;
   // Reasoning hits only while it is indexed and shown in the chat: a hit in
   // hidden reasoning would lead nowhere visible.
-||||||| bc50ba56aa
-  const messageSearchSupported = messageSearchEnabled && !isVSCodeRuntime();
-  // Reasoning hits only while it is indexed and shown in the chat: a hit in
-  // hidden reasoning would lead nowhere visible.
-=======
-  const messageSearchSupported = messageSearchEnabled && !isVSCodeRuntime();
->>>>>>> upstream/main
   const reasoningIndexed = useUIStore((state) => state.messageSearchReasoningEnabled);
   const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
   const reasoningSearchable = reasoningIndexed && showReasoningTraces;
@@ -1301,7 +1172,6 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === 'sessions') {
                 return (
-<<<<<<< HEAD
                   <CommandGroup key="sessions" heading={t('commandPalette.group.sessions')}>
                     {scoredSessions.map(({ item: session, ranges }) => {
                       // Untitled sessions never match, so their ranges are empty.
@@ -1330,49 +1200,6 @@ export const CommandPalette: React.FC = () => {
                       );
                     })}
                   </CommandGroup>
-||||||| bc50ba56aa
-                  <CommandGroup key="sessions" heading={t('commandPalette.group.sessions')}>
-                    {scoredSessions.map(({ item: session, ranges }) => {
-                      // Untitled sessions never match, so their ranges are empty.
-                      const title = session.title || t('commandPalette.session.untitled');
-                      const dir = resolveGlobalSessionDirectory(session);
-                      const branch = branchForSession(session.id, dir);
-                      const projectLabel = projectLabelForDirectory(dir);
-                      return (
-                        <CommandItem
-                          key={session.id}
-                          value={`session:${session.id}`}
-                          onSelect={() => handleOpenSession(session)}
-                        >
-                          <Icon name="chat-ai-3" className="me-2 h-4 w-4" />
-                          <span dir="auto" className="min-w-0 flex-1 truncate oc-ui-start-align"><Matched text={title} ranges={ranges} /></span>
-                          {projectLabel ? (
-                            <span dir="auto" className="max-w-[180px] shrink-0 truncate text-muted-foreground typography-meta">{projectLabel}</span>
-                          ) : null}
-                          {branch ? (
-                            <span className="inline-flex max-w-[160px] shrink-0 items-center gap-1 text-muted-foreground typography-meta">
-                              <Icon name="git-branch" className="h-3 w-3" />
-                              <span dir="ltr" className="truncate">{branch}</span>
-                            </span>
-                          ) : null}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-=======
-                  <React.Fragment key="sessions">
-                    {scoredSessions.length > 0 ? (
-                      <CommandGroup heading={t('commandPalette.group.sessions')}>
-                        {scoredSessions.map(({ item, ranges }) => renderSessionItem(item, ranges, handleOpenSession))}
-                      </CommandGroup>
-                    ) : null}
-                    {scoredArchivedSessions.length > 0 ? (
-                      <CommandGroup heading={t('search.omni.result.archivedTag')}>
-                        {scoredArchivedSessions.map(({ item, ranges }) => renderSessionItem(item, ranges, handleOpenArchivedSession))}
-                      </CommandGroup>
-                    ) : null}
-                  </React.Fragment>
->>>>>>> upstream/main
                 );
               }
               if (groupKey === 'files' && visibleFiles.length > 0) {
