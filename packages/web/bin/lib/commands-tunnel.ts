@@ -590,7 +590,7 @@ async function handleTunnelProfileSubcommand(
           message: 'Profile name (Enter to accept/edit)',
           placeholder: 'prod-main',
           initialValue: 'prod-main',
-          validate(value) {
+          validate(value: string | undefined) {
             return normalizeProfileName(value).length > 0 ? undefined : 'Profile name is required.';
           },
         });
@@ -610,7 +610,7 @@ async function handleTunnelProfileSubcommand(
           message: 'Tunnel hostname (Enter to accept/edit)',
           placeholder: existingProfile?.hostname || 'app.example.com',
           initialValue: existingProfile?.hostname || 'app.example.com',
-          validate(value) {
+          validate(value: string | undefined) {
             return normalizeProfileHostname(value).length > 0 ? undefined : 'Hostname is required.';
           },
         });
@@ -1370,11 +1370,11 @@ async function tunnelCommand(options: TunnelCommandOptions, subcommand: string |
                 .filter((entry) => entry.provider === provider && entry.mode === 'managed-remote')
                 .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
               const suggestedHostname = normalizeProfileHostname(lastManagedRemoteProfile?.hostname) || 'app.example.com';
-              const enteredHostname = await clackText({
+              const enteredHostname: string | symbol = await clackText({
                 message: 'Enter managed-remote tunnel hostname',
                 placeholder: suggestedHostname,
                 initialValue: suggestedHostname,
-                validate(value) {
+                validate(value: string | undefined) {
                   if (!isString(value) || value.trim().length === 0) {
                     return 'Hostname is required.';
                   }
@@ -1393,7 +1393,7 @@ async function tunnelCommand(options: TunnelCommandOptions, subcommand: string |
 
           if (!(isString(token) && token.trim().length > 0)) {
             if (canPrompt(options)) {
-              const entered = await clackPassword({
+              const entered: string | symbol = await clackPassword({
                 message: 'Enter managed-remote tunnel token',
               });
               if (isPromptCancelled(entered) || !entered || !entered.trim()) {
@@ -1425,7 +1425,7 @@ async function tunnelCommand(options: TunnelCommandOptions, subcommand: string |
                 message: 'Profile name',
                 placeholder: suggestedName,
                 initialValue: suggestedName,
-                validate(value) {
+                validate(value: string | undefined) {
                   return normalizeProfileName(value).length > 0 ? undefined : 'Profile name is required.';
                 },
               });
@@ -1533,7 +1533,7 @@ async function tunnelCommand(options: TunnelCommandOptions, subcommand: string |
                 message: 'Enter managed-local config path',
                 placeholder: suggestedConfigPath,
                 initialValue: suggestedConfigPath,
-                validate(value) {
+                validate(value: string | undefined) {
                   if (!isString(value) || value.trim().length === 0) {
                     return 'Config path is required.';
                   }

@@ -240,7 +240,7 @@ async function resolveTunnelTtlOverrides(options: Partial<CliOptions>) {
       const enteredConnect = await clackText({
         message: 'Enter connect-link TTL (e.g. 30m, 2h, 1d)',
         placeholder: '30m',
-        validate(value) {
+        validate(value: string | undefined) {
           try {
             parseTtlMsOrThrow(value, {
               flagName: '--connect-ttl',
@@ -274,7 +274,7 @@ async function resolveTunnelTtlOverrides(options: Partial<CliOptions>) {
       const enteredSession = await clackText({
         message: 'Enter session TTL (e.g. 8h, 24h, 1d)',
         placeholder: '8h',
-        validate(value) {
+        validate(value: string | undefined) {
           try {
             parseTtlMsOrThrow(value, {
               flagName: '--session-ttl',

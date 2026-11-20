@@ -31,7 +31,7 @@ import {
   findClosestMatch,
 } from './lib/cli-args.js';
 import { readDesktopLocalPortFromSettings } from './lib/cli-paths.js';
-import { resolveExplicitBinary, searchPathFor } from './lib/cli-executables.js';
+import { searchPathFor } from './lib/cli-executables.js';
 import { startupCommand } from './lib/commands-startup.js';
 import { logsCommand } from './lib/commands-logs.js';
 import { statusCommand } from './lib/commands-status.js';
@@ -39,7 +39,6 @@ import { scheduleCommand } from './lib/commands-schedule.js';
 import { sessionCommand } from './lib/commands-session.js';
 import { modelsCommand } from './lib/commands-models.js';
 import { projectsCommand } from './lib/commands-projects.js';
-import { createUpdateCommand } from './lib/commands-update.js';
 import { createConnectUrlCommand } from './lib/commands-connect-url.js';
 import { createLifecycleCommands } from './lib/commands-lifecycle.js';
 import { createServeCommand } from './lib/commands-serve.js';
@@ -71,12 +70,11 @@ import {
   logStatus,
 } from './cli-output.js';
 import { applyConnectAttemptTimeout } from '../server/lib/network-defaults.js';
-import { createOpenCodeEnvRuntime } from '../server/lib/opencode/env-runtime.js';
+import { resolveWebAgentRuntime, registerStandaloneLoader } from '../scripts/standalone-loader.mjs';
 import { bunVersionRunsBunPty } from '../server/lib/terminal/bun-pty-support.js';
 import { isRecord, isString } from '../server/lib/shared/object-guards.js';
 import type { JsonObject, JsonValue } from '../server/lib/shared/json-values.js';
 import type { CliOptions } from './lib/cli-args.js';
-import type { CliNotice } from './lib/cli-process.js';
 
 // external: #3399 provider fetches need a longer connect-attempt timeout than undici's 250ms default.
 applyConnectAttemptTimeout();
@@ -87,6 +85,22 @@ function isPackageManifest(value: JsonValue): value is JsonObject {
 
 const PACKAGE_JSON: JsonValue = JSON.parse(fs.readFileSync(webPackagePaths.packageJson, 'utf8'));
 const PACKAGE_VERSION = isPackageManifest(PACKAGE_JSON) ? PACKAGE_JSON.version : undefined;
+
+const bundledAgentRuntime = resolveWebAgentRuntime(webPackagePaths.root);
+if (bundledAgentRuntime) {
+  process.env.OHPICHAMBER_BUN ??= bundledAgentRuntime.bunPath;
+  process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT ??= bundledAgentRuntime.entrypoint;
+  registerStandaloneLoader();
+  const loaderPath = path.join(webPackagePaths.root, 'scripts', 'standalone-loader.mjs');
+  if (fs.existsSync(loaderPath)) {
+    const importFlag = `--import=${pathToFileURL(loaderPath).href}`;
+    if (!process.env.NODE_OPTIONS?.includes(loaderPath)) {
+      process.env.NODE_OPTIONS = process.env.NODE_OPTIONS
+        ? `${process.env.NODE_OPTIONS} ${importFlag}`
+        : importFlag;
+    }
+  }
+}
 
 let onCancelCleanup: (() => Promise<void>) | null = null;
 let activeCommandOptions: CliOptions | null = null;
@@ -118,14 +132,14 @@ function boldText(text: string) {
   return `${ANSI.bold}${text}${ANSI.unbold}`;
 }
 
-function importFromFilePath(filePath: string) {
-  return import(pathToFileURL(filePath).href);
-}
-
 function getBunBinary() {
   if (isString(process.env.BUN_BINARY) && process.env.BUN_BINARY.trim().length > 0) {
     return process.env.BUN_BINARY.trim();
   }
+  if (isString(process.env.OHPICHAMBER_BUN) && process.env.OHPICHAMBER_BUN.trim().length > 0) {
+    return process.env.OHPICHAMBER_BUN.trim();
+  }
+  if (bundledAgentRuntime?.bunPath) return bundledAgentRuntime.bunPath;
   if (isString(process.env.BUN_INSTALL) && process.env.BUN_INSTALL.trim().length > 0) {
     return path.join(process.env.BUN_INSTALL.trim(), 'bin', process.platform === 'win32' ? 'bun.exe' : 'bun');
   }
@@ -156,53 +170,11 @@ function getServerRuntimeBinary() {
   return searchPathFor('node') ?? process.execPath;
 }
 
-function missingEnvDependency(name: string) {
-  return (): never => {
-    throw new TypeError(`${name} is not a function`);
-  };
-}
-
-async function checkOpenCodeCLI(onNotice?: (notice: CliNotice) => void) {
-  if (process.env.OPENCODE_BINARY) {
-    const override = resolveExplicitBinary(process.env.OPENCODE_BINARY);
-    if (override) {
-      process.env.OPENCODE_BINARY = override;
-      return override;
-    }
-    const message = `OPENCODE_BINARY="${process.env.OPENCODE_BINARY}" is not an executable file. Falling back to PATH lookup.`;
-    if (onNotice !== undefined) {
-      onNotice({ level: 'warning', code: 'OPENCODE_BINARY_INVALID', message });
-    } else {
-      console.warn(`Warning: ${message}`);
-    }
-  }
-
-  let resolvedFromPath = searchPathFor('opencode');
-  if (!resolvedFromPath) {
-    createOpenCodeEnvRuntime({
-      state: {},
-      normalizeDirectoryPath: missingEnvDependency('normalizeDirectoryPath'),
-      readSettingsFromDiskMigrated: missingEnvDependency('readSettingsFromDiskMigrated'),
-    }).applyLoginShellEnvSnapshot();
-    resolvedFromPath = searchPathFor('opencode');
-  }
-  if (resolvedFromPath) {
-    process.env.OPENCODE_BINARY = resolvedFromPath;
-    return resolvedFromPath;
-  }
-
-  throw new Error(
-    `Unable to locate the opencode CLI on PATH (${process.env.PATH || '<empty>'}). ` +
-    'Ensure the CLI is installed and reachable, or set OPENCODE_BINARY to its full path.'
-  );
-}
-
 const serveCommand = createServeCommand({
   serverPath: fileURLToPath(new URL('../server/index.js', import.meta.url)),
-  checkOpenCodeCLI,
   getServerRuntimeBinary,
-  setForegroundServerActive(value) { foregroundServerActive = value; },
-  setForegroundShutdown(handler) { foregroundShutdown = handler; },
+  setForegroundServerActive(value: boolean) { foregroundServerActive = value; },
+  setForegroundShutdown(handler: ((signal?: string) => Promise<void>) | null) { foregroundShutdown = handler; },
 });
 
 const lifecycleCommands = createLifecycleCommands({ serveCommand });
@@ -216,12 +188,6 @@ const tunnelCommand = createTunnelCommand({
 });
 
 const connectUrlCommand = createConnectUrlCommand({
-  serveCommand,
-});
-
-const updateCommand = createUpdateCommand({
-  importFromFilePath,
-  packageManagerPath: fileURLToPath(new URL('../server/lib/package-manager.js', import.meta.url)),
   serveCommand,
 });
 
@@ -247,8 +213,6 @@ const commands = {
   logs: logsCommand,
 
   startup: startupCommand,
-
-  update: updateCommand,
 
   tunnel: tunnelCommand,
 };
@@ -350,7 +314,7 @@ async function main() {
   }
 
   if (!isCommandName(command) || !commands[command]) {
-    const knownCommands = ['serve', 'stop', 'restart', 'status', 'schedule', 'session', 'models', 'projects', 'control', 'tunnel', 'startup', 'logs', 'update'];
+    const knownCommands = ['serve', 'stop', 'restart', 'status', 'schedule', 'session', 'models', 'projects', 'control', 'tunnel', 'startup', 'logs', 'connect-url'];
     const suggestion = findClosestMatch(command, knownCommands);
     const hint = suggestion ? ` Did you mean '${suggestion}'?` : '';
     if (isJsonMode(options)) {
@@ -371,7 +335,7 @@ async function main() {
   await commands[command](options);
 }
 
-const isCliExecution = isModuleCliExecution(process.argv[1], new URL('./cli.js', import.meta.url).href, fs.realpathSync, 'openchamber');
+const isCliExecution = isModuleCliExecution(process.argv[1], new URL('./cli.js', import.meta.url).href, fs.realpathSync, 'ohpichamber');
 
 if (isCliExecution) {
   let isHandlingSigint = false;

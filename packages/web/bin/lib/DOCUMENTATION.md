@@ -1,6 +1,6 @@
 # CLI Module Map
 
-This directory contains the non-entrypoint implementation for the OpenChamber CLI. `packages/web/bin/cli.js` should stay thin: it owns bootstrap, command wiring, top-level dispatch, signal/cancel handling, and compatibility exports. Domain logic belongs in these modules.
+This directory contains the non-entrypoint implementation for the OpenChamber CLI. `packages/web/bin/cli.js` owns source-loader bootstrap and public exports; `cli-runtime.ts` owns command wiring, top-level dispatch and signal/cancel handling. Domain logic belongs in these modules.
 
 ### Migration status
 
@@ -9,9 +9,12 @@ In the pre-M0 baseline, the CLI manages both OpenChamber Host Gateway services a
 ## Entrypoint Boundary
 
 - `../cli.js`
-  - Owns process bootstrap, package/version lookup, command table wiring, signal handlers, top-level error handling, and legacy exports used by tests or external consumers.
-  - Injects runtime dependencies into command factories, such as `serveCommand`, `stopCommand`, cancel cleanup, and foreground server state setters.
-  - Should not grow command-specific behavior. If a new branch needs more than dispatch/wiring, move it here into a command or helper module instead.
+  - Loads standalone package aliases and the existing Node source resolver before dynamically importing the TypeScript controller. Emitted builds load the corresponding JavaScript controller.
+  - Re-exports public entrypoint helpers without a second command table or signal state.
+- `../cli-runtime.ts`
+  - Owns package/version lookup, command wiring, top-level errors and signal/cancel state.
+  - Injects dependencies into command factories and configures the bundled Bun Agent Service. It neither discovers an OpenCode binary nor provides OpenCode update commands.
+  - New domain branches belong in a command or helper module, not in the controller.
 
 ## Command Modules
 

@@ -21,6 +21,18 @@ import {
   printJson,
   logStatus,
 } from '../cli-output.js';
+import type { CliOptions } from './cli-args.js';
+
+export interface ServeOptions extends Partial<Omit<CliOptions, 'port' | 'host' | 'uiPassword' | 'apiOnly'>> {
+  port?: unknown;
+  host?: unknown;
+  uiPassword?: unknown;
+  apiOnly?: boolean | undefined;
+  suppressUnsafePortWarning?: boolean;
+  suppressUiPasswordWarning?: boolean;
+  suppressStartupSummary?: boolean;
+  suppressQuietOutput?: boolean;
+}
 
 const DAEMON_READY_TIMEOUT_MS = 30000;
 
@@ -30,7 +42,7 @@ function createServeCommand({
   setForegroundServerActive,
   setForegroundShutdown,
 }) {
-async function serveCommand(options) {
+async function serveCommand(options: ServeOptions) {
     const showOutput = shouldRenderHumanOutput(options);
     const jsonMessages = [];
     const emitNotice = (notice) => {
@@ -291,7 +303,7 @@ async function serveCommand(options) {
 
     let resolvedPort;
     try {
-      resolvedPort = await new Promise((resolve, reject) => {
+      resolvedPort = await new Promise<number>((resolve, reject) => {
         let settled = false;
         const timeout = setTimeout(() => {
           if (settled) return;
