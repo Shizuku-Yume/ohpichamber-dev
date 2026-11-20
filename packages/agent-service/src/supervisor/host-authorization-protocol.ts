@@ -4,9 +4,11 @@ import { ApprovalRequestSchema, CounterSchema, DisplayPathSchema, EntityIdSchema
 import { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSchema } from '../protocol.ts';
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
-import { NativeOperationDescriptorSchema, HostActionRequestSchema, HostActionResultSchema } from '../native-policy-protocol.ts';
+import { NativeOperationDescriptorSchema, HostActionRequestSchema, HostActionResultSchema, type HostActionRequest } from '../native-policy-protocol.ts';
 export { NativeOperationDescriptorSchema, NativeLspActionSchema, NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from '../native-policy-protocol.ts';
 export type { NativeOperationDescriptor, NativeLspAction, NativePolicyContext, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from '../native-policy-protocol.ts';
+export const hostActionTimeoutMs = (request: HostActionRequest): number | undefined =>
+  request.toolName === 'openchamber_secret' && request.action === 'secret.run' ? undefined : 120_000;
 export const CapturedHostBootstrapScopeSchema = z.strictObject({
   rootSessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema.optional(),

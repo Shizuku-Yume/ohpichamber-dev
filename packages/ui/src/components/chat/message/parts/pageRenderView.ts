@@ -68,7 +68,7 @@ const secretRunFields = z.object({
 });
 
 const secretRunInputSchema = secretRunFields
-    .extend({ action: z.string().optional().catch(undefined), parameters: secretRunFields.optional().catch(undefined) })
+    .extend({ action: z.string().optional().catch(undefined), input: secretRunFields.optional().catch(undefined), parameters: secretRunFields.optional().catch(undefined) })
     .catch({});
 
 const pageAnswerSchema = z.object({
@@ -214,15 +214,15 @@ const secretRunCommandLine = (program: string, args: readonly string[]): string 
 };
 
 /** The card a running `secret.run` call asks on, else null. */
-const requestedSecretRun = (view: CanonicalToolView): RequestedSecretRun | null => {
+export const requestedSecretRun = (view: CanonicalToolView): RequestedSecretRun | null => {
     if (view.tool !== OPENCHAMBER_SECRET_TOOL || view.state.status !== 'running') return null;
     const parsed = secretRunInputSchema.parse(view.state.input ?? {});
     if (parsed.action !== 'secret.run' && parsed.action !== 'run') return null;
-    const program = parsed.parameters?.program ?? parsed.program;
-    const reason = parsed.parameters?.reason ?? parsed.reason;
-    const inputs = parsed.parameters?.inputs ?? parsed.inputs;
+    const program = parsed.input?.program ?? parsed.parameters?.program ?? parsed.program;
+    const reason = parsed.input?.reason ?? parsed.parameters?.reason ?? parsed.reason;
+    const inputs = parsed.input?.inputs ?? parsed.parameters?.inputs ?? parsed.inputs;
     if (!program || !reason || !inputs) return null;
-    const args = parsed.parameters?.args ?? parsed.args ?? [];
+    const args = parsed.input?.args ?? parsed.parameters?.args ?? parsed.args ?? [];
     return {
         reason,
         program,

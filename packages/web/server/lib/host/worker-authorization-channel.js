@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { CapturedHostBootstrapScopeSchema, HostAuthorizationScopeSchema, HostWorkerAuthorizationCancelSchema, HostWorkerAuthorizationRequestSchema, HostWorkerAuthorizationReplySchema, HostWorkerActionRequestSchema, HostWorkerActionReplySchema, HostWorkerActionCancelSchema, HostActionResultSchema, WorkerPolicyResultSchema } from '@openchamber/agent-service/private-protocol';
+import { hostActionTimeoutMs, CapturedHostBootstrapScopeSchema, HostAuthorizationScopeSchema, HostWorkerAuthorizationCancelSchema, HostWorkerAuthorizationRequestSchema, HostWorkerAuthorizationReplySchema, HostWorkerActionRequestSchema, HostWorkerActionReplySchema, HostWorkerActionCancelSchema, HostActionResultSchema, WorkerPolicyResultSchema } from '@openchamber/agent-service/private-protocol';
 
 const unavailable = { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host authorization channel is unavailable' };
 const unauthorized = { allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The worker authorization request is not valid for this Host child' };
@@ -47,7 +47,8 @@ export const createHostWorkerAuthorizationChannel = ({ isCurrentChild, capturedS
     const operation = action ? invokeHostAction : authorizeWorkerOperation;
     if (typeof operation !== 'function') { send(child, requestId, action ? actionUnavailable : unavailable, action); return; }
     const handle = { child, controller: new AbortController(), timer: null };
-    handle.timer = setTimeout(() => { if (remove(requestId, handle)) send(child, requestId, action ? actionUnavailable : unavailable, action); }, action ? 120_000 : 5_000);
+    const timeoutMs = message.type === 'worker.action.request' ? hostActionTimeoutMs(message.request) : 5_000;
+    if (timeoutMs !== undefined) handle.timer = setTimeout(() => { if (remove(requestId, handle)) send(child, requestId, action ? actionUnavailable : unavailable, action); }, timeoutMs);
     pending.set(requestId, handle);
     const active = () => pending.get(requestId) === handle && isCurrentChild(child) && child.connected && capturedScope(message.scope.rootSessionId) === captured;
     const live = async () => {

@@ -41,6 +41,28 @@ describe('openchamber events', () => {
     Reflect.deleteProperty(globalThis, 'EventSource');
   });
 
+  test('delivers Guest service events to frame subscribers and ignores malformed envelopes', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const events: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type === 'guest-service-event') events.push(event);
+    });
+    try {
+      const source = MockEventSource.instances.at(-1)!;
+      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:guest-service-event', properties }) });
+      send({ guestId: 'desk', topic: 'refresh', data: { count: 1 } });
+      send({ guestId: 'desk', topic: 'empty' });
+      send({ guestId: '', topic: 'invalid' });
+      send({ guestId: 'desk', topic: 1 });
+      expect(events).toEqual([
+        { type: 'guest-service-event', guestId: 'desk', topic: 'refresh', data: { count: 1 } },
+        { type: 'guest-service-event', guestId: 'desk', topic: 'empty', data: null },
+      ]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('publishes an empty Host policy snapshot but rejects malformed policy envelopes', async () => {
     const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
     const policies: unknown[] = [];

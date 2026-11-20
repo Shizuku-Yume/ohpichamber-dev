@@ -97,6 +97,15 @@ export class WorkerInteraction {
     return this.approveTool(toolCallId, 'bash', input, 'Host policy requires approval for this exact command', signal);
   }
 
+  async approveSecretCommand(toolCallId: string, command: JsonObject, signal?: AbortSignal): Promise<boolean> {
+    if (this.closed || signal?.aborted) return false;
+    const choice = await this.requestApproval(
+      this.callbacks.currentTurn() ?? 'turn-0', toolCallId, 'bash', command,
+      'Approve this exact command before supplying secrets', ['Approve', 'Reject'], signal,
+    );
+    return choice === 'Approve';
+  }
+
   readonly ui: ExtensionUIContext = {
     approve: (prompt, dialogOptions) => this.handleApprove(prompt, dialogOptions),
     select: (title, options, dialogOptions) => this.select(title, options, dialogOptions),

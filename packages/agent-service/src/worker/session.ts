@@ -676,6 +676,18 @@ export class WorkerSession {
       const hostToolsController = createHostToolController({
         scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
         invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
+        approveSecretRun: async (toolCallId, command, signal) => {
+          const decision = bashPolicy.approval(command);
+          if (decision !== 'read' && decision !== 'write' && decision !== 'exec' && decision.policy === 'deny') {
+            throw new ProjectionError(403, 'UNAUTHORIZED', 'Native command policy refused the secret command');
+          }
+          if (!await interaction.approveSecretCommand(toolCallId, command, signal)) {
+            throw new ProjectionError(403, 'UNAUTHORIZED', 'Secret command approval was rejected');
+          }
+          const approvalId = interaction.takeApprovalReceipt(toolCallId);
+          if (!approvalId) throw new ProjectionError(403, 'UNAUTHORIZED', 'Secret command approval is unavailable');
+          await authorizeTool('bash', command, { toolCallId, approvalId });
+        },
         initialEnablement: initialHostTools,
       });
       const result = await createAgentSession({

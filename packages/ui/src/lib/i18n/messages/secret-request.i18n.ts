@@ -1,6 +1,8 @@
 /** The card an agent asks for a secret on (`openchamber_secret`) — merged into each locale's main dictionary. */
 export const secretRequestI18n = {
   en: {
+    'chat.secretRequest.refused': 'Secrets cannot be saved to files. Ask the agent to use secret.run instead.',
+    'chat.secretRun.loadFailed': 'Could not load the secret fields. Retrying.',
     'chat.secretRequest.inputLabel': 'Secret value',
     'chat.secretRequest.showSecret': 'Show secret',
     'chat.secretRequest.hideSecret': 'Hide secret',
@@ -21,6 +23,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'The secrets were not sent',
   },
   nl: {
+    'chat.secretRequest.refused': 'Geheimen kunnen niet in bestanden worden opgeslagen. Vraag de agent om secret.run te gebruiken.',
+    'chat.secretRun.loadFailed': 'De geheime velden konden niet worden geladen. Opnieuw proberen.',
     'chat.secretRequest.inputLabel': 'Waarde van het geheim',
     'chat.secretRequest.showSecret': 'Geheim tonen',
     'chat.secretRequest.hideSecret': 'Geheim verbergen',
@@ -41,6 +45,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'De geheimen zijn niet verstuurd',
   },
   de: {
+    'chat.secretRequest.refused': 'Geheimnisse können nicht in Dateien gespeichert werden. Bitte den Agenten, stattdessen secret.run zu verwenden.',
+    'chat.secretRun.loadFailed': 'Die Geheimnisfelder konnten nicht geladen werden. Erneuter Versuch.',
     'chat.secretRequest.inputLabel': 'Wert des Geheimnisses',
     'chat.secretRequest.showSecret': 'Geheimnis anzeigen',
     'chat.secretRequest.hideSecret': 'Geheimnis verbergen',
@@ -61,6 +67,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'Die Geheimnisse wurden nicht gesendet',
   },
   es: {
+    'chat.secretRequest.refused': 'Los secretos no se pueden guardar en archivos. Pide al agente que use secret.run.',
+    'chat.secretRun.loadFailed': 'No se pudieron cargar los campos secretos. Reintentando.',
     'chat.secretRequest.inputLabel': 'Valor del secreto',
     'chat.secretRequest.showSecret': 'Mostrar secreto',
     'chat.secretRequest.hideSecret': 'Ocultar secreto',
@@ -81,6 +89,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'No se enviaron los secretos',
   },
   fr: {
+    'chat.secretRequest.refused': 'Les secrets ne peuvent pas être enregistrés dans des fichiers. Demandez à l’agent d’utiliser secret.run.',
+    'chat.secretRun.loadFailed': 'Impossible de charger les champs secrets. Nouvelle tentative.',
     'chat.secretRequest.inputLabel': 'Valeur du secret',
     'chat.secretRequest.showSecret': 'Afficher le secret',
     'chat.secretRequest.hideSecret': 'Masquer le secret',
@@ -101,6 +111,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'Les secrets n\'ont pas été envoyés',
   },
   ja: {
+    'chat.secretRequest.refused': 'シークレットはファイルに保存できません。代わりに secret.run を使うようエージェントに依頼してください。',
+    'chat.secretRun.loadFailed': 'シークレットの入力欄を読み込めませんでした。再試行中です。',
     'chat.secretRequest.inputLabel': 'シークレットの値',
     'chat.secretRequest.showSecret': 'シークレットを表示',
     'chat.secretRequest.hideSecret': 'シークレットを隠す',
@@ -121,6 +133,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'シークレットを送信できませんでした',
   },
   ko: {
+    'chat.secretRequest.refused': '비밀 값은 파일에 저장할 수 없습니다. 에이전트에게 대신 secret.run을 사용하도록 요청하세요.',
+    'chat.secretRun.loadFailed': '비밀 입력 필드를 불러오지 못했습니다. 다시 시도 중입니다.',
     'chat.secretRequest.inputLabel': '비밀 값',
     'chat.secretRequest.showSecret': '비밀 표시',
     'chat.secretRequest.hideSecret': '비밀 숨기기',
@@ -141,6 +155,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': '비밀을 보내지 못했습니다',
   },
   pl: {
+    'chat.secretRequest.refused': 'Sekretów nie można zapisywać w plikach. Poproś agenta o użycie secret.run.',
+    'chat.secretRun.loadFailed': 'Nie udało się wczytać pól sekretów. Ponawianie próby.',
     'chat.secretRequest.inputLabel': 'Wartość sekretu',
     'chat.secretRequest.showSecret': 'Pokaż sekret',
     'chat.secretRequest.hideSecret': 'Ukryj sekret',
@@ -161,6 +177,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'Nie wysłano sekretów',
   },
   'pt-BR': {
+    'chat.secretRequest.refused': 'Segredos não podem ser salvos em arquivos. Peça ao agente para usar secret.run.',
+    'chat.secretRun.loadFailed': 'Não foi possível carregar os campos secretos. Tentando novamente.',
     'chat.secretRequest.inputLabel': 'Valor do segredo',
     'chat.secretRequest.showSecret': 'Mostrar segredo',
     'chat.secretRequest.hideSecret': 'Ocultar segredo',
@@ -181,6 +199,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'Os segredos não foram enviados',
   },
   tr: {
+    'chat.secretRequest.refused': 'Gizli değerler dosyalara kaydedilemez. Ajandan bunun yerine secret.run kullanmasını isteyin.',
+    'chat.secretRun.loadFailed': 'Gizli değer alanları yüklenemedi. Yeniden deneniyor.',
     'chat.secretRequest.inputLabel': 'Gizli değer',
     'chat.secretRequest.showSecret': 'Gizli değeri göster',
     'chat.secretRequest.hideSecret': 'Gizli değeri gizle',
@@ -201,6 +221,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'Gizli değerler gönderilemedi',
   },
   uk: {
+    'chat.secretRequest.refused': 'Секрети не можна зберігати у файлах. Попросіть агента використати secret.run.',
+    'chat.secretRun.loadFailed': 'Не вдалося завантажити поля секретів. Повторна спроба.',
     'chat.secretRequest.inputLabel': 'Значення секрету',
     'chat.secretRequest.showSecret': 'Показати секрет',
     'chat.secretRequest.hideSecret': 'Приховати секрет',
@@ -221,6 +243,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'Секрети не надіслано',
   },
   'zh-CN': {
+    'chat.secretRequest.refused': '密钥不能保存到文件中。请让智能体改用 secret.run。',
+    'chat.secretRun.loadFailed': '无法加载密钥字段，正在重试。',
     'chat.secretRequest.inputLabel': '密钥值',
     'chat.secretRequest.showSecret': '显示密钥',
     'chat.secretRequest.hideSecret': '隐藏密钥',
@@ -241,6 +265,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': '密钥未发送',
   },
   'zh-TW': {
+    'chat.secretRequest.refused': '密鑰無法儲存至檔案。請讓代理改用 secret.run。',
+    'chat.secretRun.loadFailed': '無法載入密鑰欄位，正在重試。',
     'chat.secretRequest.inputLabel': '密鑰值',
     'chat.secretRequest.showSecret': '顯示密鑰',
     'chat.secretRequest.hideSecret': '隱藏密鑰',
@@ -261,6 +287,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': '密鑰未傳送',
   },
   ar: {
+    'chat.secretRequest.refused': 'لا يمكن حفظ الأسرار في ملفات. اطلب من الوكيل استخدام secret.run بدلاً من ذلك.',
+    'chat.secretRun.loadFailed': 'تعذر تحميل حقول الأسرار. جارٍ إعادة المحاولة.',
     'chat.secretRequest.inputLabel': 'قيمة السر',
     'chat.secretRequest.showSecret': 'إظهار السر',
     'chat.secretRequest.hideSecret': 'إخفاء السر',
@@ -281,6 +309,8 @@ export const secretRequestI18n = {
     'chat.secretRun.sendFailed': 'لم تُرسل الأسرار',
   },
   he: {
+    'chat.secretRequest.refused': 'לא ניתן לשמור סודות בקבצים. יש לבקש מהסוכן להשתמש ב-secret.run במקום זאת.',
+    'chat.secretRun.loadFailed': 'לא ניתן לטעון את שדות הסודות. מתבצע ניסיון נוסף.',
     'chat.secretRequest.inputLabel': 'ערך הסוד',
     'chat.secretRequest.showSecret': 'הצגת הסוד',
     'chat.secretRequest.hideSecret': 'הסתרת הסוד',

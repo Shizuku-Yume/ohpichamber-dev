@@ -37,6 +37,7 @@ import { daemonClient, isolateDaemonForSmokeTest } from '@oh-my-pi/pi-coding-age
 import type { DaemonCompletionEvent } from '@oh-my-pi/pi-coding-agent/daemon/protocol';
 import { logger } from '@oh-my-pi/pi-utils';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
+import { createSecretRequests } from '../../../web/server/lib/openchamber-control/secret-request.ts';
 
 const previousNoTitle = process.env.PI_NO_TITLE;
 beforeEach(() => {
@@ -80,8 +81,8 @@ function instructionMessages(request: ProviderRequest): Array<{ role: string; co
  return request.messages.filter(message => message.role === 'system' || message.role === 'developer')
   .map(message => ({ role: message.role, content: message.content }));
 }
-const HOST_TOOL_NAMES = ['openchamber', 'web', 'openchamber_knowledge', 'notify', 'openchamber_render', 'openchamber_workflow'] as const;
-const ENABLED_HOST_TOOL_NAMES = ['openchamber', 'web', 'openchamber_knowledge', 'openchamber_render', 'openchamber_workflow'] as const;
+const HOST_TOOL_NAMES = ['openchamber', 'web', 'openchamber_knowledge', 'notify', 'openchamber_render', 'openchamber_secret', 'openchamber_workflow'] as const;
+const ENABLED_HOST_TOOL_NAMES = ['openchamber', 'web', 'openchamber_knowledge', 'openchamber_render', 'openchamber_secret', 'openchamber_workflow'] as const;
 // The worker bypasses generic tool authorization for every registered Host
 // tool: their capability owners authorize the inner call. The list is derived
 // from the registry so a newly registered Host tool cannot silently fall to the
@@ -901,6 +902,55 @@ test('Host policy refusal blocks native lsp tool before execution', async () => 
   expect(harness.fatal()).toBe(false);
  } finally { unsubscribe(); await harness.close(); }
 }, 30000);
+
+for (const decision of ['approve', 'reject'] as const) {
+ test(`actual SDK secret command waits for source-bound ${decision} before Host invocation`, async () => {
+  const invocations: HostActionRequest[] = [];
+  const waiting = Promise.withResolvers<void>();
+  const secrets = createSecretRequests({ isEnabled: async () => true, onWaitChange: change => { if (change.type === 'waiting') waiting.resolve(); } });
+  const program = process.execPath;
+  const args = ['-e', 'console.log(process.env.TOKEN)'];
+  const harness = await fixture({
+   respond(payload) {
+    return payload.messages.at(-1)?.role === 'tool' ? completion() : completion({
+     name: 'openchamber_secret', id: 'secret-native-call', input: {
+      action: 'secret.run', input: { program, args, reason: 'Authenticate', inputs: [{ env: 'TOKEN', label: 'Token' }] },
+     },
+    });
+   },
+   invoke: async (request, signal, directory) => {
+    invocations.push(request);
+    if (request.toolName !== 'openchamber_secret') throw new Error('Expected a secret Host action');
+    return JsonValueSchema.parse(await secrets.run(request.input, { sessionId: request.sessionId, callId: request.toolCallId, directory, signal }));
+   },
+  });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
+  try {
+   cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
+   await harness.worker.operation({ type: 'prompt', runId: 'secret-native-run', request: prompt('Run one secret command.') });
+   const approval = await harness.waitApproval();
+   expect(approval).toMatchObject({ status: 'pending', toolName: 'bash', toolCallId: 'secret-native-call', actionType: 'bash_command' });
+   expect(invocations).toEqual([]);
+   await harness.interactions.resolveApproval(rootSessionId, approval.approvalId, { decision, version: approval.version, epoch: approval.epoch, workerGeneration: approval.workerGeneration });
+   if (decision === 'approve') {
+    await waiting.promise;
+    await secrets.answer({ sessionId: rootSessionId, callId: 'secret-native-call', values: { TOKEN: 'private-native-secret-value' }, remember: ['TOKEN'] });
+   }
+   await terminal.promise;
+   expect(invocations).toHaveLength(decision === 'approve' ? 1 : 0);
+   expect(harness.grants).toEqual(decision === 'approve' ? [approval.approvalId] : []);
+   expect(harness.interactions.consumeApprovalGrant(rootSessionId, generation, approval.approvalId, approval.toolCallId, 'bash', { command: [program, ...args].map(value => `'${value.replaceAll("'", "'\\''")}'`).join(' ') })).toBeUndefined();
+   const persisted = await readFile(harness.worker.sessionFile, 'utf8');
+   expect(JSON.stringify([harness.events, harness.requests, harness.hostRequests, harness.journal.snapshot(), persisted])).not.toContain('private-native-secret-value');
+   if (decision === 'approve') {
+    expect(persisted).toContain('[secret:TOKEN]');
+    expect(secrets.forget(rootSessionId)).toEqual({ forgotten: 1 });
+   }
+   expect(harness.fatal()).toBe(false);
+  } finally { unsubscribe(); await harness.close(); }
+ }, 30000);
+}
 
 for (const approvalMode of ['always-ask', 'yolo'] as const) {
  for (const decision of ['approve', 'reject'] as const) {
