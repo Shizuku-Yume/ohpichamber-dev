@@ -1,14 +1,4 @@
-<<<<<<< HEAD
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-||||||| bc50ba56aa
-import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-=======
-import { afterAll, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import type { RuntimeAPIs } from '@/lib/api/types';
-import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
-import { directoryEnvironment } from './test-support/directoryEnvironment';
->>>>>>> upstream/main
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -17,16 +7,7 @@ type Deferred<T> = {
 };
 
 const searchRequests: Array<Deferred<Array<{ path: string }>>> = [];
-<<<<<<< HEAD
 let runtimeKey = 'runtime-a';
-||||||| bc50ba56aa
-let runtimeKey = 'runtime-a';
-let runtimeSearch: (() => Promise<Array<{ path: string; preview: string[] }>>) | undefined;
-const runtimeSearchCalls: Array<{ signal?: AbortSignal }> = [];
-=======
-let runtimeSearch: (() => Promise<Array<{ path: string; preview: string[] }>>) | undefined;
-const runtimeSearchCalls: Array<{ signal?: AbortSignal }> = [];
->>>>>>> upstream/main
 
 const createDeferred = <T>(): Deferred<T> => {
   let resolve!: (value: T) => void;
@@ -46,7 +27,6 @@ environment.respond(async (url) => {
   const files = await request.promise;
   return Response.json({ data: files.map((file) => ({ path: file.path.replace(/^\/project\//, '') })) });
 });
-<<<<<<< HEAD
 
 mock.module('@/lib/host-filesystem', () => ({
   hostFilesystem: {
@@ -54,65 +34,13 @@ mock.module('@/lib/host-filesystem', () => ({
   },
 }));
 mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
-||||||| bc50ba56aa
-
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
-    searchFiles: searchFilesMock,
-  },
-}));
-mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
-mock.module('@/contexts/runtimeAPIRegistry', () => ({
-  getRegisteredRuntimeAPIs: () => {
-    const search = runtimeSearch;
-    return search ? { files: { search: (payload: { signal?: AbortSignal }) => {
-      runtimeSearchCalls.push(payload);
-      return search();
-    } } } : undefined;
-  },
-}));
-=======
-const setRuntime = (runtimeKey: string) => switchRuntimeEndpoint({ apiBaseUrl: `https://${runtimeKey}.test`, runtimeKey });
-const unavailableCapability = (name: string | symbol): never => {
-  throw new Error(`Unexpected native capability: ${String(name)}`);
-};
-const nativeAPIs: RuntimeAPIs = {
-  get runtime(): never { return unavailableCapability('runtime'); },
-  get terminal(): never { return unavailableCapability('terminal'); },
-  get git(): never { return unavailableCapability('git'); },
-  get settings(): never { return unavailableCapability('settings'); },
-  get permissions(): never { return unavailableCapability('permissions'); },
-  get notifications(): never { return unavailableCapability('notifications'); },
-  get sourceControl(): never { return unavailableCapability('sourceControl'); },
-  files: {
-    listDirectory: () => unavailableCapability('listDirectory'),
-    createDirectory: () => unavailableCapability('createDirectory'),
-    search: (payload: { signal?: AbortSignal }) => {
-      runtimeSearchCalls.push(payload);
-      return runtimeSearch?.() ?? Promise.resolve([]);
-    },
-  },
-};
-afterAll(() => registerRuntimeAPIs(null));
->>>>>>> upstream/main
 
 const { useFileSearchStore } = await import('./useFileSearchStore');
 
 describe('useFileSearchStore', () => {
   beforeEach(() => {
     searchRequests.length = 0;
-<<<<<<< HEAD
     runtimeKey = 'runtime-a';
-||||||| bc50ba56aa
-    runtimeKey = 'runtime-a';
-    runtimeSearch = undefined;
-    runtimeSearchCalls.length = 0;
-=======
-    setRuntime('runtime-a');
-    runtimeSearch = undefined;
-    registerRuntimeAPIs(nativeAPIs);
-    runtimeSearchCalls.length = 0;
->>>>>>> upstream/main
     useFileSearchStore.setState({
       cache: {},
       cacheKeys: [],
@@ -120,7 +48,6 @@ describe('useFileSearchStore', () => {
     });
   });
 
-<<<<<<< HEAD
   test('forwards Host search filters and directory scope', async () => {
     const searchPromise = useFileSearchStore.getState().searchFiles(' /project ', ' foo ', 25, {
       includeHidden: true,
@@ -133,82 +60,11 @@ describe('useFileSearchStore', () => {
       type: 'directory',
       includeHidden: true,
       respectGitignore: false,
-||||||| bc50ba56aa
-  test('keeps indexed results and appends deduplicated toggle results', async () => {
-    runtimeSearch = mock(async () => [
-      { path: '/project/ordinary.ts', preview: ['ordinary.ts'] },
-      { path: '/project/build/ignored.ts', preview: ['build/ignored.ts'] },
-    ]);
-    const pending = useFileSearchStore.getState().searchFiles('/project', 'ts', 3, { respectGitignore: false });
-    const indexed = { path: '/project/ordinary.ts', name: 'ordinary.ts', relativePath: 'ordinary.ts' };
-    searchRequests[0].resolve([indexed]);
-
-    expect(await pending).toEqual([
-      indexed,
-      { path: '/project/build/ignored.ts', name: 'ignored.ts', relativePath: 'build/ignored.ts', extension: 'ts' },
-    ]);
-    expect(runtimeSearchCalls).toHaveLength(1);
-    expect(runtimeSearchCalls[0]).toMatchObject({
-      directory: '/project', query: 'ts', maxResults: 3, includeHidden: false, respectGitignore: false,
-=======
-  test('keeps indexed results and appends deduplicated toggle results', async () => {
-    runtimeSearch = mock(async () => [
-      { path: '/project/ordinary.ts', preview: ['ordinary.ts'] },
-      { path: '/project/build/ignored.ts', preview: ['build/ignored.ts'] },
-    ]);
-    const pending = useFileSearchStore.getState().searchFiles('/project', 'ts', 3, { respectGitignore: false });
-    const indexed = { path: '/project/ordinary.ts', name: 'ordinary.ts', relativePath: 'ordinary.ts', extension: 'ts' };
-    await environment.settle();
-    searchRequests[0].resolve([indexed]);
-
-    expect(await pending).toEqual([
-      indexed,
-      { path: '/project/build/ignored.ts', name: 'ignored.ts', relativePath: 'build/ignored.ts', extension: 'ts' },
-    ]);
-    expect(runtimeSearchCalls).toHaveLength(1);
-    expect(runtimeSearchCalls[0]).toMatchObject({
-      directory: '/project', query: 'ts', maxResults: 3, includeHidden: false, respectGitignore: false,
->>>>>>> upstream/main
     });
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  });
-
-  test('keeps toggle caches separate and leaves directory searches on OpenCode', async () => {
-    runtimeSearch = mock(async () => [{ path: '/project/.hidden.ts', preview: ['.hidden.ts'] }]);
-    const hidden = useFileSearchStore.getState().searchFiles('/project', 'hidden', 60, { includeHidden: true });
-=======
-  });
-
-  test('keeps toggle caches separate and leaves directory searches on OpenCode', async () => {
-    runtimeSearch = mock(async () => [{ path: '/project/.hidden.ts', preview: ['.hidden.ts'] }]);
-    const hidden = useFileSearchStore.getState().searchFiles('/project', 'hidden', 60, { includeHidden: true });
-    await environment.settle();
->>>>>>> upstream/main
     searchRequests[0].resolve([]);
-<<<<<<< HEAD
     await searchPromise;
-||||||| bc50ba56aa
-    expect(await hidden).toHaveLength(1);
-
-    expect(await useFileSearchStore.getState().searchFiles('/project', 'hidden')).toEqual([]);
-    const directories = useFileSearchStore.getState().searchFiles('/project', 'hidden', 60, { includeHidden: true, type: 'directory' });
-    searchRequests[1].resolve([{ path: '/project/folder' }]);
-    expect(await directories).toEqual([{ path: '/project/folder' }]);
-    expect(runtimeSearchCalls).toHaveLength(1);
-=======
-    expect(await hidden).toHaveLength(1);
-
-    expect(await useFileSearchStore.getState().searchFiles('/project', 'hidden')).toEqual([]);
-    const directories = useFileSearchStore.getState().searchFiles('/project', 'hidden', 60, { includeHidden: true, type: 'directory' });
-    await environment.settle();
-    searchRequests[1].resolve([{ path: '/project/folder' }]);
-    expect(await directories).toMatchObject([{ path: '/project/folder' }]);
-    expect(runtimeSearchCalls).toHaveLength(1);
->>>>>>> upstream/main
   });
 
-<<<<<<< HEAD
   test('forwards default Host search filters', async () => {
     const searchPromise = useFileSearchStore.getState().searchFiles('/project', 'foo');
     expect(searchFilesMock).toHaveBeenLastCalledWith('foo', {
@@ -217,230 +73,9 @@ describe('useFileSearchStore', () => {
       type: 'file',
       includeHidden: false,
       respectGitignore: true,
-||||||| bc50ba56aa
-  test('shows the plain search before the supplement answers, with one indexed request between them', async () => {
-    const runtimeAnswer = createDeferred<Array<{ path: string; preview: string[] }>>();
-    runtimeSearch = mock(() => runtimeAnswer.promise);
-    const full = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-    const plain = useFileSearchStore.getState().searchFiles('/project', 'x', 60);
-    expect(searchRequests).toHaveLength(1);
-
-    const indexed = [{ path: '/project/x.ts' }];
-    searchRequests[0].resolve(indexed);
-    expect(await plain).toEqual(indexed);
-
-    runtimeAnswer.resolve([{ path: '/project/.x.ts', preview: ['.x.ts'] }]);
-    expect((await full).map((file) => file.path)).toEqual(['/project/x.ts', '/project/.x.ts']);
-  });
-
-  test('preserves indexed hits, reports supplemental failure and retries without caching partial results', async () => {
-    const error = new Error('search failed');
-    const warning = spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      runtimeSearch = mock(async () => { throw error; });
-      const pending = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-      const indexed = [{ path: '/project/x.ts' }];
-      searchRequests[0].resolve(indexed);
-      expect(await pending).toEqual(indexed);
-      expect(warning.mock.calls).toEqual([['Supplemental file search failed; keeping indexed results:', error]]);
-      // Only the plain search's own answer is kept; the partial one is not.
-      expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(1);
-      expect(useFileSearchStore.getState().inFlight).toEqual({});
-
-      runtimeSearch = mock(async () => [{ path: '/project/.x.ts', preview: ['.x.ts'] }]);
-      const retry = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-      expect(await retry).toHaveLength(2);
-      expect(searchRequests).toHaveLength(1);
-      expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(2);
-    } finally {
-      warning.mockRestore();
-    }
-  });
-
-  describe('stopping the search behind the toggles', () => {
-    const searches = () => useFileSearchStore.getState().searchFiles;
-    const walkSignal = (index: number) => runtimeSearchCalls[index]?.signal;
-    const pendingWalk = () => {
-      runtimeSearch = mock(() => new Promise<Array<{ path: string; preview: string[] }>>((_, reject) => {
-        runtimeSearchCalls.at(-1)?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
-      }));
-    };
-
-    test('stops silently when its only caller moves on, and the same query starts a new walk', async () => {
-      const warning = spyOn(console, 'warn').mockImplementation(() => {});
-      try {
-        pendingWalk();
-        const caller = new AbortController();
-        const first = searches()('/project', 'x', 60, { includeHidden: true, signal: caller.signal });
-        expect(walkSignal(0)?.aborted).toBe(false);
-
-        caller.abort();
-        expect(walkSignal(0)?.aborted).toBe(true);
-
-        // Asked again before the stopped walk has settled.
-        void searches()('/project', 'x', 60, { includeHidden: true });
-        expect(runtimeSearchCalls).toHaveLength(2);
-        expect(walkSignal(1)?.aborted).toBe(false);
-
-        searchRequests[0].resolve([{ path: '/project/x.ts' }]);
-        await first;
-        expect(warning).not.toHaveBeenCalled();
-        // Only the plain search's answer is kept; the stopped walk's is not.
-        expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(1);
-      } finally {
-        warning.mockRestore();
-      }
-=======
-  test('shows the plain search before the supplement answers, with one indexed request between them', async () => {
-    const runtimeAnswer = createDeferred<Array<{ path: string; preview: string[] }>>();
-    runtimeSearch = mock(() => runtimeAnswer.promise);
-    const full = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-    const plain = useFileSearchStore.getState().searchFiles('/project', 'x', 60);
-    await environment.settle();
-    expect(searchRequests).toHaveLength(1);
-
-    const indexed = [{ path: '/project/x.ts' }];
-    searchRequests[0].resolve(indexed);
-    expect(await plain).toMatchObject(indexed);
-
-    runtimeAnswer.resolve([{ path: '/project/.x.ts', preview: ['.x.ts'] }]);
-    expect((await full).map((file) => file.path)).toEqual(['/project/x.ts', '/project/.x.ts']);
-  });
-
-  test('preserves indexed hits, reports supplemental failure and retries without caching partial results', async () => {
-    const error = new Error('search failed');
-    const warning = spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      runtimeSearch = mock(async () => { throw error; });
-      const pending = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-      const indexed = [{ path: '/project/x.ts' }];
-      await environment.settle();
-      searchRequests[0].resolve(indexed);
-      expect(await pending).toMatchObject(indexed);
-      expect(warning.mock.calls).toEqual([['Supplemental file search failed; keeping indexed results:', error]]);
-      // Only the plain search's own answer is kept; the partial one is not.
-      expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(1);
-      expect(useFileSearchStore.getState().inFlight).toEqual({});
-
-      runtimeSearch = mock(async () => [{ path: '/project/.x.ts', preview: ['.x.ts'] }]);
-      const retry = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-      expect(await retry).toHaveLength(2);
-      expect(searchRequests).toHaveLength(1);
-      expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(2);
-    } finally {
-      warning.mockRestore();
-    }
-  });
-
-  describe('stopping the search behind the toggles', () => {
-    const searches = () => useFileSearchStore.getState().searchFiles;
-    const walkSignal = (index: number) => runtimeSearchCalls[index]?.signal;
-    const pendingWalk = () => {
-      runtimeSearch = mock(() => new Promise<Array<{ path: string; preview: string[] }>>((_, reject) => {
-        runtimeSearchCalls.at(-1)?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
-      }));
-    };
-
-    test('stops silently when its only caller moves on, and the same query starts a new walk', async () => {
-      const warning = spyOn(console, 'warn').mockImplementation(() => {});
-      try {
-        pendingWalk();
-        const caller = new AbortController();
-        const first = searches()('/project', 'x', 60, { includeHidden: true, signal: caller.signal });
-        expect(walkSignal(0)?.aborted).toBe(false);
-
-        caller.abort();
-        expect(walkSignal(0)?.aborted).toBe(true);
-
-        // Asked again before the stopped walk has settled.
-        void searches()('/project', 'x', 60, { includeHidden: true });
-        expect(runtimeSearchCalls).toHaveLength(2);
-        expect(walkSignal(1)?.aborted).toBe(false);
-
-        await environment.settle();
-        searchRequests[0].resolve([{ path: '/project/x.ts' }]);
-        await first;
-        expect(warning).not.toHaveBeenCalled();
-        // Only the plain search's answer is kept; the stopped walk's is not.
-        expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(1);
-      } finally {
-        warning.mockRestore();
-      }
->>>>>>> upstream/main
     });
-<<<<<<< HEAD
     searchRequests[0].resolve([]);
     await searchPromise;
-||||||| bc50ba56aa
-
-    test('keeps running while another caller still waits', () => {
-      pendingWalk();
-      const one = new AbortController();
-      const two = new AbortController();
-      void searches()('/project', 'x', 60, { includeHidden: true, signal: one.signal });
-      void searches()('/project', 'x', 60, { includeHidden: true, signal: two.signal });
-      expect(runtimeSearchCalls).toHaveLength(1);
-
-      one.abort();
-      expect(walkSignal(0)?.aborted).toBe(false);
-      two.abort();
-      expect(walkSignal(0)?.aborted).toBe(true);
-    });
-
-    test('a caller without a signal keeps it running', () => {
-      pendingWalk();
-      const one = new AbortController();
-      void searches()('/project', 'x', 60, { includeHidden: true, signal: one.signal });
-      void searches()('/project', 'x', 60, { includeHidden: true });
-
-      one.abort();
-      expect(walkSignal(0)?.aborted).toBe(false);
-    });
-  });
-
-  test('still rejects indexed failures without caching supplemental hits', async () => {
-    runtimeSearch = mock(async () => [{ path: '/project/.x.ts', preview: ['.x.ts'] }]);
-    const pending = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-    searchRequests[0].reject(new Error('index failed'));
-    await expect(pending).rejects.toThrow('index failed');
-    expect(useFileSearchStore.getState().cache).toEqual({});
-    expect(useFileSearchStore.getState().inFlight).toEqual({});
-=======
-
-    test('keeps running while another caller still waits', () => {
-      pendingWalk();
-      const one = new AbortController();
-      const two = new AbortController();
-      void searches()('/project', 'x', 60, { includeHidden: true, signal: one.signal });
-      void searches()('/project', 'x', 60, { includeHidden: true, signal: two.signal });
-      expect(runtimeSearchCalls).toHaveLength(1);
-
-      one.abort();
-      expect(walkSignal(0)?.aborted).toBe(false);
-      two.abort();
-      expect(walkSignal(0)?.aborted).toBe(true);
-    });
-
-    test('a caller without a signal keeps it running', () => {
-      pendingWalk();
-      const one = new AbortController();
-      void searches()('/project', 'x', 60, { includeHidden: true, signal: one.signal });
-      void searches()('/project', 'x', 60, { includeHidden: true });
-
-      one.abort();
-      expect(walkSignal(0)?.aborted).toBe(false);
-    });
-  });
-
-  test('still rejects indexed failures without caching supplemental hits', async () => {
-    runtimeSearch = mock(async () => [{ path: '/project/.x.ts', preview: ['.x.ts'] }]);
-    const pending = useFileSearchStore.getState().searchFiles('/project', 'x', 60, { includeHidden: true });
-    await environment.settle();
-    searchRequests[0].reject(new Error('index failed'));
-    await expect(pending).rejects.toThrow('transport failure');
-    expect(useFileSearchStore.getState().cache).toEqual({});
-    expect(useFileSearchStore.getState().inFlight).toEqual({});
->>>>>>> upstream/main
   });
 
   test('does not cache a stale in-flight search after invalidation', async () => {

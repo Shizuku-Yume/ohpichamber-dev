@@ -1,18 +1,7 @@
-<<<<<<< HEAD
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { MCPApplyResult, MCPConfigurationState, MCPConfigureRequest, MCPServerConfig } from '@openchamber/agent-contract';
 import { MCPApplyResultSchema } from '@openchamber/agent-contract';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-||||||| bc50ba56aa
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { McpDraft } from './useMcpConfigStore';
-=======
-import { beforeEach, describe, expect, test } from 'bun:test';
-import type { McpDraft } from './useMcpConfigStore';
-import { directoryEnvironment } from './test-support/directoryEnvironment';
-
-const environment = directoryEnvironment({ home: '/workspace', fakeTimers: false });
->>>>>>> upstream/main
 
 const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, scope: 'project' as const, transport: { type: 'stdio', command: 'mcp-tools', args: [] } };
 let current: MCPConfigurationState;
@@ -42,50 +31,7 @@ mock.module('@/api/canonicalClient', () => ({
     },
     applyWorkspaceMcp: async (): Promise<MCPApplyResult> => ({ kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration: current, workers: [] }),
   }
-<<<<<<< HEAD
 }));
-||||||| bc50ba56aa
-  captured.push({ url, method, body: JSON.parse(String(init?.body ?? '{}')) });
-  return new Response(JSON.stringify({}), { headers: { 'Content-Type': 'application/json' } });
-};
-
-mock.module('@/lib/runtime-fetch', () => ({ runtimeFetch: runtimeFetchMock }));
-
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: { getDirectory: () => '/workspace/project' },
-}));
-
-mock.module('@/stores/useProjectsStore', () => ({
-  useProjectsStore: {
-    getState: () => ({ getActiveProject: () => ({ path: '/workspace/project' }) }),
-  },
-}));
-
-mock.module('@/lib/configUpdate', () => ({
-  startConfigUpdate: mock(() => undefined),
-  finishConfigUpdate: mock(() => undefined),
-  updateConfigUpdateMessage: mock(() => undefined),
-}));
-
-mock.module('@/stores/useAgentsStore', () => ({
-  refreshAfterOpenCodeRestart: mock(async () => undefined),
-}));
-
-=======
-  captured.push({ url, method, body: JSON.parse(String(init?.body ?? '{}')) });
-  return new Response(JSON.stringify({}), { headers: { 'Content-Type': 'application/json' } });
-};
-
-environment.respond(async (url, init) => {
-  if (url.pathname.startsWith('/api/config/mcp')) return runtimeFetchMock(`${url.pathname}${url.search}`, init);
-  if (url.pathname === '/api/fs/home') return Response.json({ home: '/workspace', chatsRoot: '/workspace/chats' });
-  if (url.pathname === '/api/location' || url.pathname === '/api/session') return Response.json({}, { status: 401 });
-  throw new Error(`Unexpected request: ${url}`);
-});
-const { useProjectsStore } = await import('./useProjectsStore');
-useProjectsStore.setState({ projects: [{ id: 'project', path: '/workspace/project' }], activeProjectId: 'project' });
-
->>>>>>> upstream/main
 const { useMcpConfigStore } = await import('./useMcpConfigStore');
 
 beforeEach(() => {

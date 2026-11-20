@@ -51,16 +51,8 @@ type GlobalSessionsState = {
   mutationRevision: number;
   mutationRevisionBySessionId: Map<string, number>;
   hasLoaded: boolean;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  /** Published only by complete loads. Partial head checks cannot prove absence. */
-  authoritativeSessions: Session[] | null;
-=======
-  authoritativeSessions: Session[] | null;
->>>>>>> upstream/main
   managedChatsHydrated: boolean;
   status: GlobalSessionsStatus;
-<<<<<<< HEAD
   /** The global list request itself failed; partial per-scope errors do not set this. */
   globalRefreshFailed: boolean;
   discoveryErrors: ReadonlyMap<string, string>;
@@ -68,11 +60,6 @@ type GlobalSessionsState = {
   clearWorkspaceDiscoveryErrors: (workspaceId: string) => void;
   /** Re-read the persisted managed-chats snapshot after the chats root is
       warm; retain newer mutations and stop after an authoritative load. */
-||||||| bc50ba56aa
-  /** Re-read the persisted managed-chats snapshot after the chats root is
-      warm; retain newer mutations and stop after an authoritative load. */
-=======
->>>>>>> upstream/main
   rehydrateManagedChatSessions: () => void;
   loadSessions: (fallbackActive?: Session[]) => Promise<LoadResult>;
   /**
@@ -95,15 +82,6 @@ type GlobalSessionsState = {
   resetForRuntimeSwitch: () => void;
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const PAGE_SIZE = 500;
-const HEAD_PAGE_SIZE = 20;
-=======
-const PAGE_SIZE = 500;
-const HEAD_PAGE_SIZE = 20;
-const RECENT_PAGE_SIZE = 50;
->>>>>>> upstream/main
 const DIRECTORY_SESSION_REFRESH_CONCURRENCY = 2;
 let directorySessionRefreshActive = 0;
 const directorySessionRefreshWaiters: Array<() => void> = [];
@@ -125,19 +103,8 @@ const withDirectorySessionRefreshSlot = async <T>(task: () => Promise<T>): Promi
 
 let inflightLoad: Promise<LoadResult> | null = null;
 let inflightHead: Promise<boolean> | null = null;
-<<<<<<< HEAD
 // Bumped on runtime switch: an in-flight load from the previous instance must
 // not apply its (stale) snapshot after the reset.
-||||||| bc50ba56aa
-// True while a page of an unfinished load is being merged. The managed-chats
-// snapshot is written from complete loads only, never from a partial list.
-let mergingSessionPage = false;
-// Bumped on runtime switch: an in-flight load from the previous instance must
-// not apply its (stale) snapshot after the reset.
-=======
-let inflightRecent: Promise<boolean> | null = null;
-let mergingSessionPage = false;
->>>>>>> upstream/main
 let loadGeneration = 0;
 
 type ChildDiscovery = { sessions: Session[]; succeededParents: Set<string>; failedParents: Set<string> };
@@ -317,131 +284,19 @@ const buildSessionsByDirectory = (sessions: Session[]): Map<string, Session[]> =
   return next;
 };
 
-<<<<<<< HEAD
 const getSessionSignature = (session: Session): string => JSON.stringify(session);
-||||||| bc50ba56aa
-const getSessionSignature = (session: Session): string => {
-  return [
-    session.id,
-    session.title ?? '',
-    session.agent ?? '',
-    session.parentID ?? '',
-    session.time?.created ?? 0,
-    session.time?.updated ?? 0,
-    session.time?.archived ?? 0,
-    // A view changes no `updated`; without these it would read as no change.
-    session.time?.idle ?? 0,
-    session.time?.viewed ?? 0,
-    JSON.stringify(session.metadata ?? null),
-    resolveGlobalSessionDirectory(session) ?? '',
-  ].join(':');
-};
-=======
-const sessionUsageSignature = (session: Session): string => [
-  sessionSpendSignature(session),
-  sessionSelectionSignature(session),
-].join(':');
-
-const sessionSpendSignature = (session: Session): string => `${session.cost ?? 0}:${JSON.stringify(session.tokens ?? null)}`;
-
-const sessionSelectionSignature = (session: Session): string => [
-  JSON.stringify(session.model ?? null),
-  JSON.stringify(session.permissions ?? null),
-  JSON.stringify(session.outcome ?? null),
-  JSON.stringify(session.revert ?? null),
-  session.subpath ?? null,
-].join(':');
-
-const getSessionSignature = (session: Session): string => {
-  return [
-    session.id,
-    session.title ?? '',
-    session.agent ?? '',
-    session.parentID ?? '',
-    session.time?.created ?? 0,
-    session.time?.updated ?? 0,
-    session.time?.archived ?? 0,
-    session.time?.idle ?? 0,
-    session.time?.viewed ?? 0,
-    JSON.stringify(session.metadata ?? null),
-    resolveGlobalSessionDirectory(session) ?? '',
-    sessionUsageSignature(session),
-  ].join(':');
-};
->>>>>>> upstream/main
 
 const getSessionStructuralSignature = (session: Session): string => {
-<<<<<<< HEAD
   const structural = omitKeys(session, ['updatedAt']);
   return JSON.stringify(structural);
-||||||| bc50ba56aa
-  return [
-    session.id,
-    session.title ?? '',
-    session.agent ?? '',
-    session.parentID ?? '',
-    session.time?.created ?? 0,
-    session.time?.archived ?? 0,
-    // A finished turn and a view of it decide the unread mark, so they publish
-    // at once instead of waiting with the recency-only updates.
-    session.time?.idle ?? 0,
-    session.time?.viewed ?? 0,
-    JSON.stringify(session.metadata ?? null),
-    resolveGlobalSessionDirectory(session) ?? '',
-  ].join(':');
-=======
-  return [
-    session.id,
-    session.title ?? '',
-    session.agent ?? '',
-    session.parentID ?? '',
-    session.time?.created ?? 0,
-    session.time?.archived ?? 0,
-    session.time?.idle ?? 0,
-    session.time?.viewed ?? 0,
-    JSON.stringify(session.metadata ?? null),
-    resolveGlobalSessionDirectory(session) ?? '',
-    sessionSelectionSignature(session),
-  ].join(':');
->>>>>>> upstream/main
 };
 
 export const isGlobalSessionDeferrableUpdate = (existing: Session, incoming: Session): boolean => {
   const merged = mergeSessionDirectoryMetadata(incoming, existing);
-<<<<<<< HEAD
   return existing.updatedAt !== merged.updatedAt
     && getSessionStructuralSignature(existing) === getSessionStructuralSignature(merged);
-||||||| bc50ba56aa
-  return existing.time?.updated !== merged.time?.updated
-    && getSessionStructuralSignature(existing) === getSessionStructuralSignature(merged);
-=======
-  const changed = existing.time?.updated !== merged.time?.updated
-    || sessionSpendSignature(existing) !== sessionSpendSignature(merged);
-  return changed && getSessionStructuralSignature(existing) === getSessionStructuralSignature(merged);
->>>>>>> upstream/main
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * Records read from a persisted snapshot. They omit fields the sidebar does
- * not paint, so one never stands in for a complete record with the same
- * signature: the first live or authoritative copy replaces it.
- */
-const persistedSeedRecords = new WeakSet<Session>();
-
-const markPersistedSeed = (sessions: Session[]): Session[] => {
-  for (const session of sessions) persistedSeedRecords.add(session);
-  return sessions;
-};
-=======
-const persistedSeedRecords = new WeakSet<Session>();
-
-const markPersistedSeed = (sessions: Session[]): Session[] => {
-  for (const session of sessions) persistedSeedRecords.add(session);
-  return sessions;
-};
->>>>>>> upstream/main
 
 const readPersistedSessionSeed = (): Session[] => {
   const chats = readManagedChatSessions();
@@ -525,15 +380,6 @@ type DirectoryPageResult = {
   failures: Record<string, string>;
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/** The session-list transport, bound once so paging code stays testable. */
-const listSessionPage: SessionPageLister = (options) => opencodeClient.listSessionsPage(options);
-
-=======
-const listSessionPage: SessionPageLister = (options) => opencodeClient.listSessionsPage(options);
-
->>>>>>> upstream/main
 const fetchDirectoryPages = async (
   directories: Set<string>,
 ): Promise<DirectoryPageResult> => {
@@ -546,7 +392,6 @@ const fetchDirectoryPages = async (
   });
   const results = await mapWithConcurrency(orderedDirectories, DIRECTORY_SESSION_REFRESH_CONCURRENCY, async (directory) => {
     try {
-<<<<<<< HEAD
       const workspace = await withDirectorySessionRefreshSlot(() => {
         if (generation !== loadGeneration) throw new Error('Runtime changed before workspace resolution');
         return canonicalClient.resolveWorkspace(directory);
@@ -561,33 +406,6 @@ const fetchDirectoryPages = async (
         useGlobalSessionsStore.getState().clearWorkspaceDiscoveryErrors(workspace.workspaceId);
       }
       return { status: 'fulfilled' as const, value: { directory, ...result } };
-||||||| bc50ba56aa
-      if (!isCurrent()) throw new Error('Runtime instance changed');
-      return {
-        status: 'fulfilled' as const,
-        value: {
-          directory,
-          // One request per directory, split client-side: OpenCode's archived
-          // filter cannot see sessions the server's archive file marks.
-          sessions: await withDirectorySessionRefreshSlot(() => {
-            if (!isCurrent()) throw new Error('Runtime instance changed');
-            return listGlobalSessionPages(listSessionPage, { directory, pageSize: PAGE_SIZE });
-          }),
-        },
-      };
-=======
-      if (!isCurrent()) throw new Error('Runtime instance changed');
-      return {
-        status: 'fulfilled' as const,
-        value: {
-          directory,
-          sessions: await withDirectorySessionRefreshSlot(() => {
-            if (!isCurrent()) throw new Error('Runtime instance changed');
-            return listGlobalSessionPages(listSessionPage, { directory, pageSize: PAGE_SIZE });
-          }),
-        },
-      };
->>>>>>> upstream/main
     } catch (reason) {
       return { status: 'rejected' as const, reason };
     }
@@ -701,48 +519,6 @@ const applySnapshot = (
   };
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * Merge one page of an in-flight global load into the visible lists. Never a
- * replacement: the store may already hold the persisted managed-chats seed and
- * earlier pages, and those must stay visible while pagination continues.
- * Sessions the page reclassifies move buckets; mutations newer than the load's
- * baseline win, so an archive or delete made while the page was in flight is
- * not undone.
- */
-const mergeSessionPage = (
-  state: GlobalSessionsState,
-  active: Session[],
-  archived: Session[],
-  baselineRevision: number,
-): Partial<GlobalSessionsState> | GlobalSessionsState => {
-  const incomingActiveIds = new Set(active.map((session) => session.id));
-  const incomingArchivedIds = new Set(archived.map((session) => session.id));
-  const mergedActive = mergeSessionLists(state.activeSessions, active)
-    .filter((session) => !incomingArchivedIds.has(session.id));
-  const mergedArchived = mergeSessionLists(state.archivedSessions, archived)
-    .filter((session) => !incomingActiveIds.has(session.id));
-  const reconciled = overlayMutationsSince(state, mergedActive, mergedArchived, baselineRevision);
-  return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, state.status, false);
-};
-=======
-const mergeSessionPage = (
-  state: GlobalSessionsState,
-  active: Session[],
-  archived: Session[],
-  baselineRevision: number,
-): Partial<GlobalSessionsState> | GlobalSessionsState => {
-  const incomingActiveIds = new Set(active.map((session) => session.id));
-  const incomingArchivedIds = new Set(archived.map((session) => session.id));
-  const mergedActive = mergeSessionLists(state.activeSessions, active)
-    .filter((session) => !incomingArchivedIds.has(session.id));
-  const mergedArchived = mergeSessionLists(state.archivedSessions, archived)
-    .filter((session) => !incomingActiveIds.has(session.id));
-  const reconciled = overlayMutationsSince(state, mergedActive, mergedArchived, baselineRevision);
-  return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, state.status, false);
-};
->>>>>>> upstream/main
 
 const overlayMutationsSince = (
   state: GlobalSessionsState,
@@ -1002,14 +778,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     loadGeneration += 1;
     inflightLoad = null;
     inflightHead = null;
-<<<<<<< HEAD
     resetWorkspaceDirectories();
-||||||| bc50ba56aa
-    getDirectoryRefreshEpoch();
-=======
-    inflightRecent = null;
-    getDirectoryRefreshEpoch();
->>>>>>> upstream/main
     set({
       ...buildManagedChatSessionsState(readPersistedSessionSeed()),
       mutationRevision: 0,
@@ -1037,7 +806,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         rootsReady = true;
         get().rehydrateManagedChatSessions();
-<<<<<<< HEAD
         let attempt = 0;
         return await retry(async () => {
           if (generation !== loadGeneration) throw new Error('Runtime changed before session discovery');
@@ -1047,51 +815,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             && Object.values(result.errors).some((code) => code === 'SERVICE_UNAVAILABLE');
           if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
           const binding = await bindKnownWorkspaceDirectories(generation);
-||||||| bc50ba56aa
-        // One fetch of every session, split client-side: archive state is
-        // OpenChamber's own, so the server list cannot filter on it.
-        // Thousands of sessions paginate for seconds. Show the newest page as
-        // soon as it lands and keep loading the rest silently; the complete
-        // snapshot below is still the only authoritative result.
-        let firstPageMerged = false;
-        // The marks of the isolated spaces the host merged in, applied with the snapshot below.
-        let spaceMarks: SpaceMark[] = [];
-        const allSessions = await listGlobalSessionPages(listSessionPage, {
-          pageSize: PAGE_SIZE,
-          onSpaces: (spaces) => { spaceMarks = spaces ?? []; },
-          onPage: (page) => {
-            if (firstPageMerged || generation !== loadGeneration) return;
-            firstPageMerged = true;
-            const firstPage = splitGlobalSessionsByArchived(page);
-            mergingSessionPage = true;
-            try {
-              set((state) => mergeSessionPage(state, firstPage.active, firstPage.archived, baselineRevision));
-            } finally {
-              mergingSessionPage = false;
-            }
-          },
-        });
-=======
-        let firstPageMerged = false;
-        let spaceMarks: SpaceMark[] = [];
-        const allSessions = await listGlobalSessionPages(listSessionPage, {
-          pageSize: PAGE_SIZE,
-          onSpaces: (spaces) => { spaceMarks = spaces ?? []; },
-          onPage: (page) => {
-            if (firstPageMerged || generation !== loadGeneration) return;
-            firstPageMerged = true;
-            const firstPage = splitGlobalSessionsByArchived(page);
-            mergingSessionPage = true;
-            try {
-              set((state) => mergeSessionPage(state, firstPage.active, firstPage.archived, baselineRevision));
-            } finally {
-              mergingSessionPage = false;
-            }
-          },
-        });
->>>>>>> upstream/main
 
-<<<<<<< HEAD
           if (generation !== loadGeneration) {
             // Runtime switched mid-load: this snapshot belongs to the previous
             // instance — drop it.
@@ -1134,53 +858,14 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           binding.adoptGuessedSession();
           return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
         }, STARTUP_RETRY);
-||||||| bc50ba56aa
-        if (generation !== loadGeneration) {
-          // Runtime switched mid-load: this snapshot belongs to the previous
-          // instance — drop it.
-          return { activeSessions: [], archivedSessions: [] };
-        }
-        const { active, archived } = splitGlobalSessionsByArchived(allSessions);
-        // The marks first: a reader of the snapshot that asks which space a record belongs to
-        // must find the space that listed it.
-        useSpacesStore.getState().applyMarks(spaceMarks);
-        set((state) => {
-          const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'ready');
-        });
-        const committed = get();
-        raiseSessionOrderingBaselines(committed.activeSessions);
-        return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
-=======
-        if (generation !== loadGeneration) {
-          return { activeSessions: [], archivedSessions: [] };
-        }
-        const { active, archived } = splitGlobalSessionsByArchived(allSessions);
-        useSpacesStore.getState().applyMarks(spaceMarks);
-        set((state) => {
-          const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'ready');
-        });
-        const committed = get();
-        raiseSessionOrderingBaselines(committed.activeSessions);
-        return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
->>>>>>> upstream/main
       } catch (error) {
         if (generation !== loadGeneration) {
           return { activeSessions: [], archivedSessions: [] };
         }
         if (!rootsReady) {
-<<<<<<< HEAD
           // No classification authority arrived. Preserve both memory and the
           // persisted snapshot so a retry can hydrate it after root recovery.
           set({ status: 'error', globalRefreshFailed: true });
-||||||| bc50ba56aa
-          // No classification authority arrived. Preserve both memory and the
-          // persisted snapshot so a retry can hydrate it after root recovery.
-          set({ status: 'error' });
-=======
-          set({ status: 'error' });
->>>>>>> upstream/main
           const state = get();
           return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
         }
@@ -1219,15 +904,8 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       return get().status === 'ready';
     }
     if (inflightHead) return inflightHead;
-<<<<<<< HEAD
     // Only a complete load establishes the baseline this pass compares to.
     if (!get().hasLoaded || get().failedChildDiscoveryParents.size > 0) {
-||||||| bc50ba56aa
-    // A seed cannot establish the unchanged-record boundary for a head check.
-    if (!get().hasLoaded) {
-=======
-    if (!get().hasLoaded) {
->>>>>>> upstream/main
       await get().loadSessions();
       return get().status === 'ready';
     }
@@ -1237,23 +915,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       try {
         const result = await canonicalClient.listSessions();
         if (generation !== loadGeneration) return false;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        // The first-page marks describe every space even when session coverage is partial.
-        const spacesState = useSpacesStore.getState();
-        if (spacesState.spaces.size !== spaceMarks.length || spaceMarks.some((mark) => {
-          const existing = spacesState.spaces.get(mark.id);
-          return !existing || existing.name !== mark.name || existing.state !== mark.state
-            || existing.projectDirectory !== mark.projectDirectory || existing.directory !== mark.directory;
-        })) spacesState.applyMarks(spaceMarks);
-=======
-        const spacesState = useSpacesStore.getState();
-        if (spacesState.spaces.size !== spaceMarks.length || spaceMarks.some((mark) => {
-          const existing = spacesState.spaces.get(mark.id);
-          return !existing || existing.name !== mark.name || existing.state !== mark.state
-            || existing.projectDirectory !== mark.projectDirectory || existing.directory !== mark.directory;
-        })) spacesState.applyMarks(spaceMarks);
->>>>>>> upstream/main
         set((state) => {
           const mutations: GlobalSessionMutation[] = [];
           for (const session of result.items) {
@@ -1283,7 +944,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     return headPromise;
   },
 
-<<<<<<< HEAD
   clearWorkspaceDiscoveryErrors: (workspaceId) => {
     set((state) => {
       const discoveryErrors = new Map(state.discoveryErrors);
@@ -1295,51 +955,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     });
   },
 
-||||||| bc50ba56aa
-=======
-  refreshRecentSessions: async () => {
-    if (get().hasLoaded || inflightLoad) return get().refreshSessionHead();
-    if (inflightRecent) return inflightRecent;
-    const generation = loadGeneration;
-    const baselineRevision = get().mutationRevision;
-    const recentPromise = (async () => {
-      try {
-        await ensureChatsRootDirectory();
-        if (generation !== loadGeneration) return false;
-        get().rehydrateManagedChatSessions();
-        let spaceMarks: SpaceMark[] = [];
-        const sessions = await listGlobalSessionPages(listSessionPage, {
-          pageSize: RECENT_PAGE_SIZE,
-          onSpaces: (spaces) => { spaceMarks = spaces ?? []; },
-          stopAfterPage: () => true,
-        });
-        if (generation !== loadGeneration) return false;
-        if (get().hasLoaded || inflightLoad) return true;
-        useSpacesStore.getState().applyMarks(spaceMarks);
-        const page = splitGlobalSessionsByArchived(sessions);
-        mergingSessionPage = true;
-        try {
-          set((state) => mergeSessionPage(state, page.active, page.archived, baselineRevision));
-        } finally {
-          mergingSessionPage = false;
-        }
-        const committed = get().entityById;
-        raiseSessionOrderingBaselines(page.active.flatMap((session) => {
-          const record = committed.get(session.id);
-          return record && !record.time?.archived ? [record] : [];
-        }));
-        return true;
-      } catch (error) {
-        if (generation === loadGeneration) console.warn('[GlobalSessions] Failed to read recent sessions:', error);
-        return false;
-      }
-    })();
-    inflightRecent = recentPromise;
-    void recentPromise.finally(() => { if (inflightRecent === recentPromise) inflightRecent = null; });
-    return recentPromise;
-  },
-
->>>>>>> upstream/main
   refreshSessionsForDirectories: async (directories, fallbackActive) => {
     const directorySet = normalizeDirectorySet(directories);
     if (directorySet.size === 0) {
@@ -1518,7 +1133,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   },
 }));
 
-<<<<<<< HEAD
 subscribeWorkspaceDirectories(() => {
   const state = useGlobalSessionsStore.getState();
   if (state.activeSessions.length === 0) return;
@@ -1532,15 +1146,6 @@ subscribeWorkspaceDirectories(() => {
  * live upserts. Persist the saved snapshot plus explicit mutations until a
  * complete discovery succeeds; partial discovery cannot retire unread scopes.
  */
-||||||| bc50ba56aa
-/**
- * Before the first complete load the store holds the seed, maybe a first page,
- * and live upserts: a partial list. The global snapshot then keeps its saved
- * contents plus explicit local mutations; from the first complete load on it
- * follows the active list.
- */
-=======
->>>>>>> upstream/main
 const persistGlobalSnapshotFrom = (state: GlobalSessionsState, previous: GlobalSessionsState): void => {
   if (state.hasLoaded) {
     if (state.activeSessions !== previous.activeSessions || state.sessionsByDirectory !== previous.sessionsByDirectory || !previous.hasLoaded) {
@@ -1555,15 +1160,8 @@ const persistGlobalSnapshotFrom = (state: GlobalSessionsState, previous: GlobalS
 
 useGlobalSessionsStore.subscribe((state, previous) => {
   countSyncPerformance('globalSessionPublications');
-<<<<<<< HEAD
   // Both snapshots split sessions by the chats root, so they wait for it.
   if (getChatsRoot() === null) return;
-||||||| bc50ba56aa
-  // Both snapshots split sessions by the chats root, so they wait for it.
-  if (mergingSessionPage || getChatsRoot() === null) return;
-=======
-  if (mergingSessionPage || getChatsRoot() === null) return;
->>>>>>> upstream/main
   if (
     state.activeSessions !== previous.activeSessions
     || state.sessionsByDirectory !== previous.sessionsByDirectory

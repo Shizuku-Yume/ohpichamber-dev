@@ -106,20 +106,6 @@ const normalizeFollowUpBehavior = (
     return DEFAULT_FOLLOW_UP_BEHAVIOR;
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * Who delivers the queue. Web, desktop, and mobile talk to an OpenChamber
- * server that owns the queue and sends it whether or not any UI is open. VS
- * Code has no server of its own, so the extension UI keeps the local queue
- * and the foreground auto-send hook.
- */
-export const isServerOwnedMessageQueue = (): boolean => !isVSCodeRuntime();
-
-=======
-export const isServerOwnedMessageQueue = (): boolean => !isVSCodeRuntime();
-
->>>>>>> upstream/main
 export interface QueuedMessageSendConfig {
     providerID: string;
     modelID: string;
@@ -204,135 +190,6 @@ export const parseMessageQueueKey = (key: string): MessageQueueTarget | null => 
 };
 
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const serverSendConfigSchema = z.object({
-    providerID: z.string().min(1),
-    modelID: z.string().min(1),
-    agent: z.string().optional(),
-    variant: z.string().optional(),
-});
-
-const serverGoalSchema = z.object({
-    objective: z.string().min(1).optional(),
-    tokenBudget: z.number().int().positive().nullable(),
-});
-
-const serverAttachmentSchema = z.object({
-    id: z.string(),
-    filename: z.string(),
-    mimeType: z.string(),
-    size: z.number(),
-    source: z.enum(['local', 'server', 'vscode']),
-    serverPath: z.string().optional(),
-    /** The file's on-disk path, when the runtime resolved one; the model is handed it as the file identity. */
-    agentPath: z.string().optional(),
-    /** Present only on a taken item; broadcasts and snapshots omit payloads. */
-    dataUrl: z.string().optional(),
-});
-
-const serverContextPartSchema = z.discriminatedUnion('kind', [
-    z.object({
-        kind: z.literal('context'),
-        text: z.string(),
-        metadata: contextPartMetadataSchema,
-        instructions: z.string().optional(),
-    }),
-    z.object({ kind: z.literal('instruction'), text: z.string() }),
-    z.object({ kind: z.literal('synthetic'), text: z.string() }),
-]);
-
-const serverItemBaseSchema = z.object({
-    id: z.string().min(1),
-    createdAt: z.number(),
-    content: z.string(),
-    text: z.string(),
-    agentMention: z.string().optional(),
-    attachments: z.array(serverAttachmentSchema),
-    /** Present only on a taken item; broadcasts and snapshots omit it like attachment payloads. */
-    context: z.array(serverContextPartSchema).optional(),
-    contextPreview: z.string().optional(),
-    sendConfig: serverSendConfigSchema,
-    goal: serverGoalSchema.optional(),
-});
-
-const scheduledTaskSchema = z.object({
-    projectId: z.string().min(1), taskId: z.string().min(1),
-});
-const serverItemSchema = z.union([
-    serverItemBaseSchema.extend({ scheduledTask: scheduledTaskSchema, sendConfig: serverSendConfigSchema.partial() }),
-    serverItemBaseSchema,
-]);
-
-const serverSessionSchema = z.object({
-    sessionId: z.string().min(1),
-    directory: z.string(),
-    items: z.array(serverItemSchema),
-    sendingId: z.string().nullable(),
-});
-=======
-const serverSendConfigSchema = z.object({
-    providerID: z.string().min(1),
-    modelID: z.string().min(1),
-    agent: z.string().optional(),
-    variant: z.string().optional(),
-});
-
-const serverGoalSchema = z.object({
-    objective: z.string().min(1).optional(),
-    tokenBudget: z.number().int().positive().nullable(),
-});
-
-const serverAttachmentSchema = z.object({
-    id: z.string(),
-    filename: z.string(),
-    mimeType: z.string(),
-    size: z.number(),
-    source: z.enum(['local', 'server', 'vscode']),
-    serverPath: z.string().optional(),
-    agentPath: z.string().optional(),
-    dataUrl: z.string().optional(),
-});
-
-const serverContextPartSchema = z.discriminatedUnion('kind', [
-    z.object({
-        kind: z.literal('context'),
-        text: z.string(),
-        metadata: contextPartMetadataSchema,
-        instructions: z.string().optional(),
-    }),
-    z.object({ kind: z.literal('instruction'), text: z.string() }),
-    z.object({ kind: z.literal('synthetic'), text: z.string() }),
-]);
-
-const serverItemBaseSchema = z.object({
-    id: z.string().min(1),
-    createdAt: z.number(),
-    content: z.string(),
-    text: z.string(),
-    agentMention: z.string().optional(),
-    attachments: z.array(serverAttachmentSchema),
-    context: z.array(serverContextPartSchema).optional(),
-    contextPreview: z.string().optional(),
-    sendConfig: serverSendConfigSchema,
-    goal: serverGoalSchema.optional(),
-});
-
-const scheduledTaskSchema = z.object({
-    projectId: z.string().min(1), taskId: z.string().min(1),
-});
-const serverItemSchema = z.union([
-    serverItemBaseSchema.extend({ scheduledTask: scheduledTaskSchema, sendConfig: serverSendConfigSchema.partial() }),
-    serverItemBaseSchema,
-]);
-
-const serverSessionSchema = z.object({
-    sessionId: z.string().min(1),
-    directory: z.string(),
-    items: z.array(serverItemSchema),
-    sendingId: z.string().nullable(),
-});
->>>>>>> upstream/main
 
 const serverSnapshotSchema = z.object({
     revision: z.union([z.number(), z.string()]).optional(),
@@ -340,116 +197,7 @@ const serverSnapshotSchema = z.object({
     errors: z.array(z.unknown()).optional(),
 });
 
-<<<<<<< HEAD
 const toQueuedMessage = (item: QueueItem): QueuedMessage => {
-||||||| bc50ba56aa
-const serverSessionResponseSchema = z.object({
-    revision: z.number(),
-    session: serverSessionSchema,
-});
-
-const serverTakeResponseSchema = serverSessionResponseSchema.extend({ item: serverItemSchema });
-const serverTakeAllResponseSchema = serverSessionResponseSchema.extend({ items: z.array(serverItemSchema) });
-
-type ServerQueueSession = z.infer<typeof serverSessionSchema>;
-type ServerQueueItem = z.infer<typeof serverItemSchema>;
-type ServerQueueAttachment = z.infer<typeof serverAttachmentSchema>;
-
-const decodeDataUrl = (dataUrl: string): ArrayBuffer | null => {
-    const commaIndex = dataUrl.indexOf(',');
-    if (!dataUrl.startsWith('data:') || commaIndex === -1) return null;
-    const meta = dataUrl.slice(5, commaIndex);
-    const payload = dataUrl.slice(commaIndex + 1);
-    try {
-        if (meta.endsWith(';base64')) {
-            const binary = atob(payload);
-            const buffer = new ArrayBuffer(binary.length);
-            const bytes = new Uint8Array(buffer);
-            for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-            return buffer;
-        }
-        const encoded = new TextEncoder().encode(decodeURIComponent(payload));
-        const buffer = new ArrayBuffer(encoded.byteLength);
-        new Uint8Array(buffer).set(encoded);
-        return buffer;
-    } catch {
-        return null;
-    }
-};
-
-/** A taken item carries its payload; a projection item has an empty file. */
-const toAttachedFile = (attachment: ServerQueueAttachment): AttachedFile => {
-    const dataUrl = attachment.dataUrl ?? '';
-    const bytes = dataUrl ? decodeDataUrl(dataUrl) : null;
-    const file: AttachedFile = {
-        id: attachment.id,
-        file: new File(bytes ? [bytes] : [], attachment.filename, { type: attachment.mimeType }),
-        dataUrl,
-        mimeType: attachment.mimeType,
-        filename: attachment.filename,
-        size: attachment.size,
-        source: attachment.source,
-    };
-    if (attachment.serverPath) file.serverPath = attachment.serverPath;
-    if (attachment.agentPath) file.agentPath = attachment.agentPath;
-    return file;
-};
-
-const toQueuedMessage = (item: ServerQueueItem): QueuedMessage => {
-=======
-const serverSessionResponseSchema = z.object({
-    revision: z.number(),
-    session: serverSessionSchema,
-});
-
-const serverTakeResponseSchema = serverSessionResponseSchema.extend({ item: serverItemSchema });
-const serverTakeAllResponseSchema = serverSessionResponseSchema.extend({ items: z.array(serverItemSchema) });
-
-type ServerQueueSession = z.infer<typeof serverSessionSchema>;
-type ServerQueueItem = z.infer<typeof serverItemSchema>;
-type ServerQueueAttachment = z.infer<typeof serverAttachmentSchema>;
-
-const decodeDataUrl = (dataUrl: string): ArrayBuffer | null => {
-    const commaIndex = dataUrl.indexOf(',');
-    if (!dataUrl.startsWith('data:') || commaIndex === -1) return null;
-    const meta = dataUrl.slice(5, commaIndex);
-    const payload = dataUrl.slice(commaIndex + 1);
-    try {
-        if (meta.endsWith(';base64')) {
-            const binary = atob(payload);
-            const buffer = new ArrayBuffer(binary.length);
-            const bytes = new Uint8Array(buffer);
-            for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-            return buffer;
-        }
-        const encoded = new TextEncoder().encode(decodeURIComponent(payload));
-        const buffer = new ArrayBuffer(encoded.byteLength);
-        new Uint8Array(buffer).set(encoded);
-        return buffer;
-    } catch {
-        return null;
-    }
-};
-
-const toAttachedFile = (attachment: ServerQueueAttachment): AttachedFile => {
-    const dataUrl = attachment.dataUrl ?? '';
-    const bytes = dataUrl ? decodeDataUrl(dataUrl) : null;
-    const file: AttachedFile = {
-        id: attachment.id,
-        file: new File(bytes ? [bytes] : [], attachment.filename, { type: attachment.mimeType }),
-        dataUrl,
-        mimeType: attachment.mimeType,
-        filename: attachment.filename,
-        size: attachment.size,
-        source: attachment.source,
-    };
-    if (attachment.serverPath) file.serverPath = attachment.serverPath;
-    if (attachment.agentPath) file.agentPath = attachment.agentPath;
-    return file;
-};
-
-const toQueuedMessage = (item: ServerQueueItem): QueuedMessage => {
->>>>>>> upstream/main
     const message: QueuedMessage = {
         id: item.queueItemId,
         content: item.content,
@@ -530,19 +278,9 @@ type LegacyQueueMigration = {
 };
 const legacyMigrations = new Map<string, LegacyQueueMigration>();
 
-<<<<<<< HEAD
 /** Server revision last applied per queue key; older snapshots are ignored. */
 const appliedRevisions = new Map<string, string>();
 const snapshotRevisions = new Map<string, string>();
-||||||| bc50ba56aa
-/** Server revision last applied per queue key; older snapshots are ignored. */
-const appliedRevisions = new Map<string, number>();
-/** A full snapshot also owns sessions it omits, including previously unseen keys. Per runtime and owner. */
-const snapshotRevisions = new Map<string, number>();
-=======
-const appliedRevisions = new Map<string, number>();
-const snapshotRevisions = new Map<string, number>();
->>>>>>> upstream/main
 let hydrationGeneration = 0;
 
 interface MessageQueueState {
@@ -571,7 +309,6 @@ interface MessageQueueActions {
     hydrate: () => Promise<void>;
     resync: () => Promise<void>;
     refreshSpaceQueue: (spaceId: string) => Promise<void>;
-<<<<<<< HEAD
     /**
      * Server-owned queue: apply one session's authoritative state (broadcast or response) from its
      * owner, the host ('') or a space; a session the owner may not speak for is ignored.
@@ -579,15 +316,6 @@ interface MessageQueueActions {
     applyServerSession: (session: QueueState | { sessionId: string; directory?: string; items: unknown[]; sendingId?: string | null }, revision?: number | string, expectedRuntimeKey?: string, owner?: string) => void;
     /** Server-owned queue: tell the server that owns the session's queue to hold or release its delivery. */
     setServerHold: (sessionId: string, directory: string, held: boolean) => Promise<void>;
-||||||| bc50ba56aa
-    /**
-     * Server-owned queue: apply one session's authoritative state (broadcast or response) from its
-     * owner, the host ('') or a space; a session the owner may not speak for is ignored.
-     */
-    applyServerSession: (session: ServerQueueSession, revision: number, expectedRuntimeKey: string, owner?: string) => void;
-=======
-    applyServerSession: (session: ServerQueueSession, revision: number, expectedRuntimeKey: string, owner?: string) => void;
->>>>>>> upstream/main
     resetForRuntimeSwitch: (previousRuntimeKey: string | null | undefined) => void;
 }
 
@@ -638,7 +366,6 @@ const removeMessageLocally = (
     return { queuedMessages: { ...state.queuedMessages, [key]: newQueue } };
 };
 
-<<<<<<< HEAD
 const findDirectoryForSession = (sessionId: string, state: Pick<MessageQueueState, 'queuedMessages' | 'sendingIds'>): string => {
     for (const key of Object.keys(state.queuedMessages)) {
         const parsed = parseMessageQueueKey(key);
@@ -654,37 +381,19 @@ const findDirectoryForSession = (sessionId: string, state: Pick<MessageQueueStat
 };
 
 /** Every projection of one session in this runtime, whatever directory it was keyed under. */
-||||||| bc50ba56aa
-/** Every projection of one session in this runtime, whatever directory it was keyed under. */
-=======
->>>>>>> upstream/main
 const clearSessionProjection = (
     state: Pick<MessageQueueState, 'queuedMessages' | 'sendingIds'>,
     runtimeKey: string,
     sessionId: string,
-<<<<<<< HEAD
     revision: string,
-||||||| bc50ba56aa
-    revision: number,
-=======
-    revision: number,
-    owner?: string,
->>>>>>> upstream/main
 ): Pick<MessageQueueState, 'queuedMessages' | 'sendingIds'> => {
     let queuedMessages = state.queuedMessages;
     let sendingIds = state.sendingIds;
     for (const key of new Set([...Object.keys(queuedMessages), ...Object.keys(sendingIds)])) {
         const parsed = parseMessageQueueKey(key);
         if (parsed?.runtimeKey !== runtimeKey || parsed.sessionId !== sessionId) continue;
-<<<<<<< HEAD
         const currentRev = appliedRevisions.get(key);
         if (currentRev && compareCounters(currentRev, revision) > 0) continue;
-||||||| bc50ba56aa
-        if ((appliedRevisions.get(key) ?? -1) > revision) continue;
-=======
-        if (owner !== undefined && queueOwnerOf(parsed.directory) !== owner) continue;
-        if ((appliedRevisions.get(key) ?? -1) > revision) continue;
->>>>>>> upstream/main
         appliedRevisions.set(key, revision);
         queuedMessages = withoutKey(queuedMessages, key);
         sendingIds = withoutKey(sendingIds, key);
@@ -755,63 +464,23 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     if (currentSnapRev && compareCounters(currentSnapRev, revision) > 0) return;
                     const target = createMessageQueueTarget(queueState.sessionId, directory, expectedRuntimeKey);
                     if (!target) {
-<<<<<<< HEAD
                         if (queueState.items.length > 0) return;
                         set((state) => clearSessionProjection(state, expectedRuntimeKey, queueState.sessionId, revision));
-||||||| bc50ba56aa
-                        // Servers before 1.22.2 drop a session's directory once its
-                        // queue is empty. A session id is unique across directories,
-                        // so an empty session still says which projection is done.
-                        if (session.items.length > 0) return;
-                        set((state) => clearSessionProjection(state, expectedRuntimeKey, session.sessionId, revision));
-=======
-                        if (session.items.length > 0) return;
-                        set((state) => clearSessionProjection(state, expectedRuntimeKey, session.sessionId, revision));
->>>>>>> upstream/main
                         return;
                     }
                     const key = getMessageQueueKey(target);
-<<<<<<< HEAD
                     const currentRev = appliedRevisions.get(key);
                     if (currentRev && compareCounters(currentRev, revision) > 0) return;
                     appliedRevisions.set(key, revision);
-||||||| bc50ba56aa
-                    if ((appliedRevisions.get(key) ?? -1) > revision) return;
-                    appliedRevisions.set(key, revision);
-=======
-                    if (newestSessionRevision(expectedRuntimeKey, owner, session.sessionId) > revision) return;
->>>>>>> upstream/main
                     set((state) => {
-<<<<<<< HEAD
                         const queue = queueState.items.map(toQueuedMessage);
-||||||| bc50ba56aa
-                        const queue = session.items.map(toQueuedMessage);
-=======
-                        const cleared = clearSessionProjection(state, expectedRuntimeKey, session.sessionId, revision, owner);
-                        appliedRevisions.set(key, revision);
-                        const queue = session.items.map(toQueuedMessage);
->>>>>>> upstream/main
                         const queuedMessages = queue.length > 0
-<<<<<<< HEAD
                             ? { ...state.queuedMessages, [key]: queue }
                             : withoutKey(state.queuedMessages, key);
                         const leased = queueState.items.filter((item) => item.status === 'leased');
                         const sendingIds = leased.length > 0
                             ? { ...state.sendingIds, [key]: leased.map((item) => item.queueItemId) }
                             : withoutKey(state.sendingIds, key);
-||||||| bc50ba56aa
-                            ? { ...state.queuedMessages, [key]: queue }
-                            : withoutKey(state.queuedMessages, key);
-                        const sendingIds = session.sendingId
-                            ? { ...state.sendingIds, [key]: [session.sendingId] }
-                            : withoutKey(state.sendingIds, key);
-=======
-                            ? { ...cleared.queuedMessages, [key]: queue }
-                            : cleared.queuedMessages;
-                        const sendingIds = session.sendingId
-                            ? { ...cleared.sendingIds, [key]: [session.sendingId] }
-                            : cleared.sendingIds;
->>>>>>> upstream/main
                         return { queuedMessages, sendingIds };
                     });
                 };
@@ -859,17 +528,10 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     }
                     snapshotRevisions.set(revisionKey, maxRevision);
                     set((state) => {
-<<<<<<< HEAD
                         const isNewerThanSnapshot = (key: string) => {
                             const rev = appliedRevisions.get(key);
                             return rev ? compareCounters(rev, maxRevision) > 0 : false;
                         };
-||||||| bc50ba56aa
-                        // A broadcast newer than this snapshot wins, listed in it or not.
-                        const isNewerThanSnapshot = (key: string) => (appliedRevisions.get(key) ?? -1) > snapshot.revision;
-=======
-                        const isNewerThanSnapshot = (key: string) => (appliedRevisions.get(key) ?? -1) > snapshot.revision;
->>>>>>> upstream/main
                         const isOwned = (key: string) => {
                             const parsed = parseMessageQueueKey(key);
                             return parsed?.runtimeKey === runtimeKey && queueOwnerOf(parsed.directory) === owner;
@@ -892,23 +554,11 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                             const target = createMessageQueueTarget(queue.sessionId, directory, runtimeKey);
                             if (!target) continue;
                             const key = getMessageQueueKey(target);
-<<<<<<< HEAD
                             if (isNewerThanSnapshot(key)) continue;
                             appliedRevisions.set(key, queue.revision);
                             if (queue.items.length > 0) queuedMessages[key] = queue.items.map(toQueuedMessage);
                             const leased = queue.items.filter((item) => item.status === 'leased');
                             if (leased.length > 0) sendingIds[key] = leased.map((item) => item.queueItemId);
-||||||| bc50ba56aa
-                            if (isNewerThanSnapshot(key)) continue;
-                            appliedRevisions.set(key, snapshot.revision);
-                            if (session.items.length > 0) queuedMessages[key] = session.items.map(toQueuedMessage);
-                            if (session.sendingId) sendingIds[key] = [session.sendingId];
-=======
-                            if (newestSessionRevision(runtimeKey, owner, session.sessionId) > snapshot.revision) continue;
-                            appliedRevisions.set(key, snapshot.revision);
-                            if (session.items.length > 0) queuedMessages[key] = session.items.map(toQueuedMessage);
-                            if (session.sendingId) sendingIds[key] = [session.sendingId];
->>>>>>> upstream/main
                         }
                         return { queuedMessages, sendingIds };
                     });
@@ -1002,24 +652,11 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         });
 
                         try {
-<<<<<<< HEAD
                             const queueState = await requestJson(
                                 QueueStateSchema,
                                 `${sessionPath(target.sessionId)}/items`,
                                 toOwner(target, jsonInit('POST', appendRequest)),
                             );
-||||||| bc50ba56aa
-                            const result = await requestJson(serverSessionResponseSchema, `${sessionPath(target.sessionId)}/items`, toOwner(target, jsonInit('POST', {
-                                directory: target.directory,
-                                item: toServerItemInput(message, message.sendConfig),
-                            })));
-                            // The optimistic entry is replaced by the server's copy of the queue.
-=======
-                            const result = await requestJson(serverSessionResponseSchema, `${sessionPath(target.sessionId)}/items`, toOwner(target, jsonInit('POST', {
-                                directory: target.directory,
-                                item: toServerItemInput(message, message.sendConfig),
-                            })));
->>>>>>> upstream/main
                             set((state) => removeMessageLocally(state, key, id));
                             applyServerSession(queueState, queueState.revision, target.runtimeKey, queueOwnerOf(target.directory));
                             if (historyIdentity) {
@@ -1091,28 +728,11 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
 
                     clearQueue: (target) => {
                         const key = getMessageQueueKey(target);
-<<<<<<< HEAD
                         const currentQueue = get().queuedMessages[key] ?? [];
                         const sending = new Set(get().sendingIds[key] ?? []);
                         for (const msg of currentQueue) {
                             if (!sending.has(msg.id)) {
                                 get().removeFromQueue(target, msg.id);
-||||||| bc50ba56aa
-                        set((state) => {
-                            // Clearing drops what is still queued, never a message
-                            // already handed to the server: that send will resolve
-                            // and must find its entry to remove or restore.
-                            const sending = state.sendingIds[key] ?? [];
-                            const retained = (state.queuedMessages[key] ?? []).filter((m) => sending.includes(m.id));
-                            if (retained.length > 0) {
-                                return { queuedMessages: { ...state.queuedMessages, [key]: retained } };
-=======
-                        set((state) => {
-                            const sending = state.sendingIds[key] ?? [];
-                            const retained = (state.queuedMessages[key] ?? []).filter((m) => sending.includes(m.id));
-                            if (retained.length > 0) {
-                                return { queuedMessages: { ...state.queuedMessages, [key]: retained } };
->>>>>>> upstream/main
                             }
                         }
                     },
@@ -1339,7 +959,6 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
 
 export const messageQueueUpdatedEventSchema = z.object({
     type: z.literal('openchamber:message-queue.updated'),
-<<<<<<< HEAD
     properties: z.object({
         sessionId: z.string().optional(),
         queue: QueueStateSchema.optional(),
@@ -1352,26 +971,11 @@ export const messageQueueUpdatedEventSchema = z.object({
         }).optional(),
         spaceId: z.string().optional(),
     }),
-||||||| bc50ba56aa
-    // `spaceId` marks a change the host forwarded from that space's own queue.
-    properties: z.object({ revision: z.number(), session: serverSessionSchema, spaceId: z.string().optional() }),
-=======
-    properties: z.object({ revision: z.number(), session: serverSessionSchema, spaceId: z.string().optional() }),
->>>>>>> upstream/main
 });
 
 export type MessageQueueUpdatedEvent = z.infer<typeof messageQueueUpdatedEventSchema>;
 
-<<<<<<< HEAD
 export const applyMessageQueueUpdatedEvent = (payload: MessageQueueUpdatedEvent, expectedRuntimeKey: string): void => {
-||||||| bc50ba56aa
-/** `openchamber:message-queue.updated` broadcast → projection. */
-export const applyMessageQueueUpdatedEvent = (payload: SyncEvent | MessageQueueUpdatedEvent, expectedRuntimeKey: string): void => {
-    if (!isServerOwnedMessageQueue()) return;
-=======
-export const applyMessageQueueUpdatedEvent = (payload: SyncEvent | MessageQueueUpdatedEvent, expectedRuntimeKey: string): void => {
-    if (!isServerOwnedMessageQueue()) return;
->>>>>>> upstream/main
     const parsed = messageQueueUpdatedEventSchema.safeParse(payload);
     if (!parsed.success) return;
     const { queue, spaceId, session, revision } = parsed.data.properties;

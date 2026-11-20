@@ -64,14 +64,7 @@ const handlers = {
   remove: async (): Promise<ContextPayload> => emptyPayload(),
 };
 
-<<<<<<< HEAD
 const calls = { fetch: 0, saveTodos: 0, createNote: 0, updateNote: 0, deleteNote: 0, create: 0, update: 0, pinPlan: 0, remove: 0 };
-||||||| bc50ba56aa
-const calls = { fetch: 0, saveTodos: 0, writeTodo: 0, createNote: 0, updateNote: 0, deleteNote: 0, create: 0, update: 0, pinPlan: 0, remove: 0 };
-=======
-const savedStores: (string | null)[] = [];
-const calls = { fetch: 0, saveTodos: 0, writeTodo: 0, createNote: 0, updateNote: 0, deleteNote: 0, create: 0, update: 0, pinPlan: 0, remove: 0 };
->>>>>>> upstream/main
 
 mock.module('@/lib/projectContextApi', () => ({
   fetchProjectContext: () => {

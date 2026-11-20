@@ -60,18 +60,8 @@ interface ProjectContextActions {
   savePlan: (project: ProjectRef, planId: string, raw: string) => Promise<boolean>;
   setPlanPinned: (project: ProjectRef, planId: string, pinned: boolean) => Promise<boolean>;
   deletePlan: (project: ProjectRef, planId: string) => Promise<boolean>;
-<<<<<<< HEAD
   /** Move a plan into the team's shared folder, or back; the plan gets a new id. */
   movePlan: (project: ProjectRef, planId: string, direction: 'share' | 'unshare') => Promise<boolean>;
-||||||| bc50ba56aa
-  /** Move a plan into the team's shared folder, or back; the plan gets a new id. */
-  movePlan: (project: ProjectRef, planId: string, direction: 'share' | 'unshare') => Promise<boolean>;
-  /** Remember the session a plan was just sent to; its card then leads there. */
-  linkPlanSession: (project: ProjectRef, planId: string, sessionId: string) => Promise<boolean>;
-=======
-  movePlan: (project: ProjectRef, planId: string, direction: 'share' | 'unshare') => Promise<string | null>;
-  linkPlanSession: (project: ProjectRef, planId: string, sessionId: string) => Promise<boolean>;
->>>>>>> upstream/main
   reset: () => void;
 }
 
@@ -207,7 +197,6 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
       return promise;
     },
 
-<<<<<<< HEAD
     /**
      * Optimistically apply todos, then persist.
      *
@@ -215,20 +204,6 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
      * state that is not on disk without also showing the error.
      */
     saveTodos: async (project, todos) => {
-||||||| bc50ba56aa
-    /**
-     * Optimistically apply todos, then persist.
-     *
-     * With `change` only that one todo is sent, so a todo an agent added since
-     * the last read is not overwritten by this list; without it (reorder,
-     * clearing completed) the whole list is. On failure the previous list is
-     * restored, so the panel never shows a state that is not on disk without
-     * also showing the error.
-     */
-    saveTodos: async (project, todos, change) => {
-=======
-    saveTodos: async (project, todos, change) => {
->>>>>>> upstream/main
       const projectId = resolveProjectContextId(project);
       if (!projectId) return false;
 
@@ -239,30 +214,8 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
       flags.todos = true;
 
       try {
-<<<<<<< HEAD
         const committed = await enqueueWrite(projectId, 'todos', () => saveProjectTodos(project, todos));
         patchEntry(projectId, { todos: committed.todos, loaded: true });
-||||||| bc50ba56aa
-        const committed = await enqueueWrite(projectId, 'todos', () => (
-          change ? writeProjectTodo(project, change) : saveProjectTodos(project, todos)
-        ));
-        if (committed) {
-          patchEntry(projectId, { todos: committed.todos, loaded: true });
-        } else {
-          // Someone, usually an agent, removed the todo first: nothing failed,
-          // the list on screen is just behind.
-          refreshAfterWrite = true;
-        }
-=======
-        const committed = await enqueueWrite(projectId, 'todos', () => (
-          change ? writeProjectTodo(project, change) : saveProjectTodos(project, todos, notesTodosStore)
-        ));
-        if (committed) {
-          patchEntry(projectId, { todos: committed.todos, notesTodosStore: committed.notesTodosStore, loaded: true });
-        } else {
-          refreshAfterWrite = true;
-        }
->>>>>>> upstream/main
         return true;
       } catch (error) {
         patchEntry(projectId, {
