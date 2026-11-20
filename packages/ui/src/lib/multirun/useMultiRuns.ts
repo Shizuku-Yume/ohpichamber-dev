@@ -58,7 +58,11 @@ export function useMultiRunTitle(runKey: string | null): string | null {
 
 export function useMultiRunMemberIds(sessionId: string | null): readonly string[] {
   const selectJoined = React.useMemo(() => {
-    const project = memoizeSessionListProjection((sessions: Session[], targetId: string) => {
+    const project = memoizeSessionListProjection((
+      sessions: Session[],
+      targetId: string,
+      _worktrees: ReturnType<typeof useSessionUIStore.getState>['worktreeMetadata'],
+    ) => {
       const own = sessions.find((session) => session.sessionId === targetId);
       const key = own && isActiveRoot(own) ? readMultiRunIdentity(own, resolveLegacyScope(own))?.key : undefined;
       if (!key) return '';
