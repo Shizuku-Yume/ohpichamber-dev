@@ -11,6 +11,8 @@ if (!globalThis.window) {
     window: dom,
     document: dom.document,
     navigator: dom.navigator,
+    localStorage: dom.localStorage,
+    sessionStorage: dom.sessionStorage,
     HTMLElement: dom.HTMLElement,
     Element: dom.Element,
     Node: dom.Node,
