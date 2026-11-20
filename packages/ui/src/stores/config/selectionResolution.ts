@@ -1,5 +1,6 @@
 import { parseModelIdentifier, parseModelSelection } from '@/lib/modelIdentifier';
-import { type Model, findCatalogModel, type Agent } from '@/lib/opencode/model';
+import type { Model, Agent } from '@openchamber/agent-contract';
+import { findCatalogModel } from '@/lib/opencode/model';
 import { type ConfigStore, type CurrentVariantSelection, type DirectoryScopedConfig, type ProviderWithModelList, type ProviderModelSelection, type DefaultAgentModelSelection, type GitModelSelection } from './types';
 import { listModelVariantIds, modelVariantNames } from '@/lib/modelVariants';
 import { type EffortChoice, resolveEffortChoice, readRememberedEffort } from '@/lib/modelEfforts';

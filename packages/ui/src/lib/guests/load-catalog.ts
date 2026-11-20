@@ -1,3 +1,4 @@
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 

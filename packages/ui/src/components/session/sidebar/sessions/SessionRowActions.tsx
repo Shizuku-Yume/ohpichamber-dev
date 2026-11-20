@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useI18n } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';

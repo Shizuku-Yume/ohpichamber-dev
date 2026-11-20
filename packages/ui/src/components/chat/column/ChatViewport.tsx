@@ -1,6 +1,6 @@
 import React from 'react';
 import { SessionRecapNote } from '@/components/chat/SessionRecapSpacer';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { ChatColumnSessionContext, type ChatColumnSession } from '../chatColumnSession';
 import { Button } from '@/components/ui/button';
 import { KeepAlive } from '@/components/ui/KeepAlive';

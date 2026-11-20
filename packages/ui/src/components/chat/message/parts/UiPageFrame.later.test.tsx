@@ -2,7 +2,8 @@ import { afterEach, expect, mock, test } from 'bun:test';
 import React, { act } from 'react';
 import { Window } from 'happy-dom';
 
-import type { ToolPart } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPart = NativeToolCallPart | NativeToolResultPart;
 import type { RenderedPageAsk } from '@/lib/opencode/tools';
 
 const browser = new Window({ url: 'http://localhost/' });

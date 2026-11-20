@@ -1,4 +1,4 @@
-import React, { act, useState } from 'react';
+import { act, useState } from 'react';
 import { test, expect } from 'bun:test';
 import { Window } from 'happy-dom';
 

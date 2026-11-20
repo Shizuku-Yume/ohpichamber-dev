@@ -1,10 +1,12 @@
 /**
- * Composer identity of a `/btw` fork while it is still being created.
+ * Composer identity of a pending native `/btw` question.
  *
- * The fork's text stays in memory until it migrates to the real session or is
+ * The question's text stays in memory until it receives an ephemeral record or is
  * discarded; persisted under this key it would leak into the next `/btw` for
  * the same parent. This module exists so draft persistence can recognise it
- * without pulling in the whole fork flow.
+ * without pulling in the ephemeral execution flow.
  */
 export const isBtwPendingComposerKey = (sessionId: string | null | undefined): boolean =>
     Boolean(sessionId?.startsWith('btw-pending:'));
+
+export const btwPendingComposerKey = (parentSessionId: string): string => `btw-pending:${parentSessionId}`;

@@ -1,3 +1,4 @@
+import type { WorktreeMetadata } from '@/types/worktree';
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import type { ApprovalRequest, PromptRequest, Run, Session, SessionDeleteAck, SessionSnapshot, Message, Turn } from "@openchamber/agent-contract"
 import { CanonicalEventSchema, SessionMetadataSchema } from "@openchamber/agent-contract"

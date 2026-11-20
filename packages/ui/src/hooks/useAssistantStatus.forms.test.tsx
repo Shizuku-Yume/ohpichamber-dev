@@ -3,7 +3,8 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import type { FormRequest, ToolPart } from '@/lib/opencode/model';
+import type { QuestionRequest as FormRequest, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPart = NativeToolCallPart | NativeToolResultPart;
 import type { State } from '@/sync/types';
 
 // A running turn with an open form, either still holding the turn or deferred

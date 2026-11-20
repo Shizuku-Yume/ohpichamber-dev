@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+
 import { create } from 'zustand';
 import type { CanonicalEvent, ShellJob, ShellJobIdentity, ShellSnapshot } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -141,3 +143,29 @@ export const sessionsInTree = (sessionIds: Iterable<string>, rootId: string, par
   return result.sort();
 };
 export const backgroundShellsOfSessions = (byId: ReadonlyMap<string, TrackedShell>, sessionIds: ReadonlySet<string>): TrackedShell[] => [...byId.values()].filter((shell) => shell.background && sessionIds.has(shell.sessionId)).sort((left, right) => left.startedAt - right.startedAt || left.jobId.localeCompare(right.jobId));
+
+const settleWaiters = new Map<string, SettleWaiter>();
+
+export const waitForShellSettle = (shellID: string, timeoutMs: number): ShellSettleWait => {
+  settleWaiters.get(shellID)?.reject(new Error('Replaced by a newer wait for the same command.'));
+  let cancel = (): void => {};
+  const settled = new Promise<SettleOutcome>((resolve, reject) => {
+    const finish = (settle: () => void) => {
+      clearTimeout(timer);
+      if (settleWaiters.get(shellID) === waiter) settleWaiters.delete(shellID);
+      settle();
+    };
+    const waiter: SettleWaiter = {
+      resolve: (outcome) => finish(() => resolve(outcome)),
+      reject: (error) => finish(() => reject(error)),
+    };
+    const timer = setTimeout(() => waiter.reject(new Error('The command did not move to the background in time.')), timeoutMs);
+    settleWaiters.set(shellID, waiter);
+    cancel = () => waiter.reject(new Error('Cancelled.'));
+  });
+  return { settled, cancel };
+};
+
+export const useRunningShell = (shellID: string | undefined): TrackedShell | undefined => (
+  useBackgroundShellsStore(useCallback((state) => (shellID ? state.byId.get(shellID) : undefined), [shellID]))
+);

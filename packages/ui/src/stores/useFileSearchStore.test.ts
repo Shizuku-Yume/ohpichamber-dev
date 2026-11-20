@@ -1,3 +1,4 @@
+import { directoryEnvironment } from './test-support/directoryEnvironment';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 type Deferred<T> = {

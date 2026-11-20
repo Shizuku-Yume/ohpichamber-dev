@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { expect } from 'bun:test';
 import { Window } from 'happy-dom';
 import { Worker as NodeWorker } from 'node:worker_threads';

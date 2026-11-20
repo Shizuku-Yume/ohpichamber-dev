@@ -1,7 +1,7 @@
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '../utils';
 
 type SessionRowPlaceInput = {

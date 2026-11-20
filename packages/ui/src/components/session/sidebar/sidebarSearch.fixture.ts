@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { ConversationResult } from '@/hooks/useConversationSearch';
 import type { SessionSidebarRowModelArgs } from './sessionSidebarRowModel';
 import type { ProjectSection } from './projects/sessionProjectRender';

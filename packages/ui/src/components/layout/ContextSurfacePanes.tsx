@@ -1,3 +1,5 @@
+import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
+import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import React from 'react';
 
 import { TerminalView } from '@/components/views/TerminalView';

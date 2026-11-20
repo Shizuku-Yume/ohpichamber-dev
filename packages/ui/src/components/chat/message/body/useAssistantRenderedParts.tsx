@@ -1,5 +1,6 @@
 import React from 'react';
-import type { Part, ToolPart as ToolPartType } from '@/lib/opencode/model';
+import type { Part, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import type { StreamPhase, ToolPopupContent } from '../types';
 import type { TurnGroupingContext } from '../../lib/turns/types';
 import ToolPart from '../parts/ToolPart';

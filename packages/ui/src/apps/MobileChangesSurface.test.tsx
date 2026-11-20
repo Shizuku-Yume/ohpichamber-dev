@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { GitLogEntry, GitStatus } from '@/lib/api/types';
@@ -82,8 +82,8 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   const requests: URL[] = [];
   const originalFetch = globalThis.fetch;
   let failBranchDiff = true;
-  let statusFailure: 'host' | 'timeout' | null = null;
-  let refreshedStatus: GitStatus | null = null;
+  const statusFailure: 'host' | 'timeout' | null = null;
+  const refreshedStatus: GitStatus | null = null;
   let nestedIsRepository = true;
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');

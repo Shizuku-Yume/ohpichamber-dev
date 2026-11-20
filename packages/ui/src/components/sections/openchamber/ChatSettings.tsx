@@ -1,3 +1,5 @@
+import type { ChatWidth } from '@/stores/ui/types';
+import { SETTINGS_WIDTH_NUMBER_CLASS } from '@/components/sections/shared/SettingsSection';
 import React from 'react';
 import type { OmpSettingsState } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
@@ -15,23 +17,7 @@ import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import {
-  SettingsSection,
-  SettingsFieldRow,
-  SettingsCheckboxRow,
-  SettingsChipGroup,
-  SettingsControlGroup,
-  SettingsRadioGroup,
-  SettingsRadioOption,
-  SettingsStackedField,
-  SettingsNewBadge,
-  SETTINGS_NUMBER_INPUT_CLASS,
-  SETTINGS_NUMBER_STEPPER_ROW_CLASS,
-  SETTINGS_NUMBER_UNIT_CLASS,
-  SETTINGS_SPACE_CHECKBOX_CLASS,
-  SETTINGS_SPACE_ROW_CLASS,
-  SETTINGS_WIDTH_SELECT_CLASS,
-} from '@/components/sections/shared/SettingsSection';
+import { SettingsSection, SettingsFieldRow, SettingsCheckboxRow, SettingsChipGroup, SettingsControlGroup, SettingsRadioGroup, SettingsRadioOption, SettingsNewBadge, SETTINGS_NUMBER_STEPPER_ROW_CLASS, SETTINGS_NUMBER_UNIT_CLASS, SETTINGS_SPACE_CHECKBOX_CLASS, SETTINGS_SPACE_ROW_CLASS, SETTINGS_WIDTH_SELECT_CLASS } from '@/components/sections/shared/SettingsSection';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n, type I18nKey } from '@/lib/i18n';
@@ -45,7 +31,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { useMessageQueueStore, type FollowUpBehavior } from '@/stores/messageQueueStore';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
-import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore, type ChatWidth, type LargeTextPasteBehavior } from '@/stores/useUIStore';
+import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore, type LargeTextPasteBehavior } from '@/stores/useUIStore';
 
 import { MessageSearchSettings } from './MessageSearchSettings';
 import { chatSettingsTabAnchors, useChatSettingsTabStore, type ChatSettingsTab } from './chatSettingsTabs';

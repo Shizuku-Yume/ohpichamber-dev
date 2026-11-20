@@ -1,3 +1,4 @@
+import { openSession } from '@/lib/router/openSessionFromRoute';
 import React from 'react';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
@@ -22,7 +23,6 @@ import { seedGlobalSessionStatusFromHost } from '@/sync/host-session-status-seed
 import { refreshRecentGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { SyncProvider, useSessions } from '@/sync/sync-context';
-import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useSync } from '@/sync/use-sync';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { SyncRuntimeEffects } from './AppEffects';

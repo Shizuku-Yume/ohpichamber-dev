@@ -1,3 +1,5 @@
+import { normalizeProjectPath } from '@/lib/projectResolution';
+
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { CanonicalEvent, RuntimeSession, Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import {
@@ -15,7 +17,6 @@ import { countSyncPerformance } from './performance-diagnostics';
 import { hasRunningShell, useBackgroundShellsStore } from './background-shells';
 import { useWorkflowActivityStore } from './workflow-activity';
 import { usePrWatchStore } from './pr-watch';
-import { useExtensionWaitsStore } from './extension-waits';
 
 type GlobalSessionStatusEntry = { status: SessionRuntimeStatus; directory: string };
 type GlobalSessionStatusState = {
@@ -300,4 +301,22 @@ export const useFirstSessionWithOpenTurn = (sessionIds: readonly string[]): stri
   const onShell = useBackgroundShellsStore((state) => sessionIds.find((id) => state.sessionIds.has(id)) ?? null);
   const onPullRequest = usePrWatchStore((state) => sessionIds.find((id) => state.bySession.has(id)) ?? null);
   return inTurn ?? inWorkflow ?? onShell ?? onPullRequest;
+};
+
+const statusWriteWatchers = new Set<Set<string>>();
+
+export const watchGlobalSessionStatusWrites = () => {
+  const touched = new Set<string>();
+  statusWriteWatchers.add(touched);
+  return { touched, stop: () => { statusWriteWatchers.delete(touched); } };
+};
+
+export const getDirectoryOwnedSessionIds = (directory: string, sessions: readonly Session[]): string[] => {
+  const scope = normalizeProjectPath(directory);
+  if (!scope) return [];
+  const ids: string[] = [];
+  for (const session of sessions) {
+    if (normalizeProjectPath(session.directory) === scope) ids.push(session.id);
+  }
+  return ids;
 };

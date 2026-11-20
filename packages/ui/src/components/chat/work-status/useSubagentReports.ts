@@ -1,6 +1,6 @@
 import React from 'react';
 
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { readForegroundSubagentRun, readSubagentRun, type SubagentRun } from '@/lib/opencode/subagent-run';
 import { useDirectoryStore, useDirectorySync } from '@/sync/sync-context';
 import type { State } from '@/sync/types';

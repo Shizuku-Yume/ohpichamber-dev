@@ -14,15 +14,15 @@ import { abortShortcutReachesComposer, isTouchOnlyInput } from '../../composer/s
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
-import { useBtwStore } from '@/stores/useBtwStore';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { cyclePermissionMode } from '../../permissionAutoAccept';
-import { displayedPermissionMode, nextPermissionMode } from '@/stores/utils/permissionAutoAccept';
+import { displayedPermissionMode } from '@/stores/utils/permissionAutoAccept';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
 import { useKeybind } from '@/hooks/useKeybind';
-import { useOpenCodeStartupStore } from '@/sync/opencode-startup-gate';
+import { useAgentStartupStore } from '@/sync/agent-startup-wait';
+import { getRuntimeSwitchRevision } from '@/lib/runtime-switch';
 import { useComposerTextValue } from '../../composer/state/composerText';
 import { useMobileViewportPin } from '../../composer/state/useMobileViewportPin';
 
@@ -33,7 +33,7 @@ type Dependencies = {
     i18n: Pick<ReturnType<typeof useI18n>, 't'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'isMobileExpanded'>;
-    permissionSettings: Pick<ReturnType<typeof useComposerPermissionSettings>, 'pendingBtwPermissionMode' | 'setSessionMode'>;
+    permissionSettings: Pick<ReturnType<typeof useComposerPermissionSettings>, 'setSessionMode'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'newSessionDraftOpen' | 'isBtwActive' | 'btwSessionId' | 'currentSessionId' | 'currentManagementSessionId' | 'draftPermissionMode' | 'setDraftPermissionMode' | 'abortPromptSessionId' | 'acknowledgeSessionAbort'>;
     mobileShell: Pick<ReturnType<typeof useComposerMobileShell>, 'mobileTextareaFocused' | 'mobileComposerExpanded'>;
     runtime: Pick<ReturnType<typeof useComposerRuntime>, 'isVSCode'>;
@@ -50,7 +50,7 @@ export function useComposerControls({
     const { t } = i18n;
     const { isMobile } = preferences;
     const { isMobileExpanded } = expansion;
-    const { pendingBtwPermissionMode, setSessionMode } = permissionSettings;
+    const { setSessionMode } = permissionSettings;
     const {
         newSessionDraftOpen, isBtwActive, btwSessionId, currentSessionId, currentManagementSessionId,
         draftPermissionMode, setDraftPermissionMode, abortPromptSessionId, acknowledgeSessionAbort,
@@ -87,7 +87,7 @@ export function useComposerControls({
 
     const pillText = useComposerTextValue(composerText, (text) => (isMobile && !mobileComposerExpanded ? text : ''));
 
-    const waitingForOpenCode = useOpenCodeStartupStore((state) => state.waitingSends > 0);
+    const waitingForAgent = useAgentStartupStore((state) => [...state.pending.values()].includes(getRuntimeSwitchRevision()));
 
     const footerGapClass = 'gap-x-1.5 gap-y-0';
 
@@ -105,14 +105,13 @@ export function useComposerControls({
 
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
 
-    const permissionScopeSessionId = isBtwActive ? btwSessionId : currentSessionId ?? currentManagementSessionId;
+    const permissionScopeSessionId = currentSessionId ?? currentManagementSessionId;
 
     const safetyNetAvailable = useRoutingStore(selectSafetyNetAvailable);
 
     const defaultPermissionMode = useUIStore((state) => (isVSCode ? 'ask' : state.permissionDefaultMode));
 
     const permissionMode = usePermissionStore((state) => {
-        if (isBtwActive && !btwSessionId) return pendingBtwPermissionMode ?? defaultPermissionMode;
         if (!permissionScopeSessionId) {
             return draftPermissionMode ?? defaultPermissionMode;
         }
@@ -121,15 +120,10 @@ export function useComposerControls({
 
     const shownPermissionMode = displayedPermissionMode(permissionMode, safetyNetAvailable);
 
-    const isPermissionAutoAcceptInteractive = Boolean(permissionScopeSessionId || newSessionDraftOpen);
+    const isPermissionAutoAcceptInteractive = !isBtwActive && Boolean(permissionScopeSessionId || newSessionDraftOpen);
 
     const handlePermissionModeCycle = React.useCallback(() => {
-        if (isBtwActive && !btwSessionId && currentSessionId) {
-            useBtwStore.getState().setPanelState(currentSessionId, {
-                pendingPermissionMode: nextPermissionMode(permissionMode, safetyNetAvailable),
-            });
-            return;
-        }
+        if (isBtwActive) return;
         cyclePermissionMode({
             permissionScopeSessionId,
             newSessionDraftOpen,
@@ -181,6 +175,6 @@ export function useComposerControls({
         openMobileAttachSheet, toggleDictation, desktopDictating, iconButtonBaseClass, goalObjectiveLength,
     footerPaddingClass, footerGapClass, abortShortcutReaches, shownPermissionMode,
     isPermissionAutoAcceptInteractive,
-        handlePermissionModeCycle, setDesktopDictating, waitingForOpenCode,
+        handlePermissionModeCycle, setDesktopDictating, waitingForAgent,
     };
 }

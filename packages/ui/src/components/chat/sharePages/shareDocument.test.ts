@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 import { buildShareUiDocument } from '@/share-document/page';
 import { buildShareHtmlDocument } from './shareDocument';
 

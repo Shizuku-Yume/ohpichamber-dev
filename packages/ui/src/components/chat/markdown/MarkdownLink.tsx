@@ -1,3 +1,6 @@
+import { useOpenChatLink } from '../useOpenChatLink';
+import { localPathFromFileUrl } from '../fileReferenceParser';
+import { isDesktopShell } from '@/lib/desktop';
 import { HoverTooltip } from '@/components/ui/row-tooltip';
 import React from 'react';
 import type { ExtraProps } from 'streamdown';
@@ -25,7 +28,7 @@ import { openMarkdownDocumentLink } from '@/components/views/files/previews/useM
 import { claimGuestIdentifier, claimGuestUrl } from '@/lib/guests/links';
 import { guestPanelOpensHere } from '@/lib/guests/phone';
 import { useGuestsStore } from '@/lib/guests/store';
-import { isBuiltInLink, runGuestLink } from './guestLinkClick';
+import { runGuestLink } from './guestLinkClick';
 
 // A path in code text and a path in a link's href parse differently: an href
 // may percent-encode spaces and non-ASCII names, which are decoded first.

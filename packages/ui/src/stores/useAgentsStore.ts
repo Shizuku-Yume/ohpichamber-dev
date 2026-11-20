@@ -1,3 +1,5 @@
+
+
 import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
@@ -57,7 +59,7 @@ const agentsLastLoadedAt = new Map<string, number>();
 const agentsLoadGeneration = new Map<string, number>();
 const agentsLoadInFlight = new Map<string, { generation: number; request: Promise<boolean> }>();
 let agentsGeneration = 0;
-let agentsReloadEpoch = 0;
+const agentsReloadEpoch = 0;
 
 const getAgentsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_AGENTS_CACHE_KEY;
@@ -327,3 +329,11 @@ const syncAgentReadiness = (state: AgentReadinessState): void => {
 };
 
 registerAgentReadinessListener(syncAgentReadiness);
+
+export const isAgentHidden = (agent: Agent): boolean => {
+  const extended = agent as AgentWithExtras;
+  return extended.hidden === true || extended.options?.hidden === true;
+};
+
+export const filterVisibleAgents = (agents: Agent[]): Agent[] =>
+  agents.filter((agent) => !isAgentHidden(agent));

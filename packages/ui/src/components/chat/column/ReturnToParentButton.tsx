@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

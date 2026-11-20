@@ -1,3 +1,18 @@
+import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
+import { copyTextToClipboard } from '@/lib/clipboard';
+import { formatSessionAsMarkdown } from '@/lib/exportSession';
+import { buildExportFilename } from '@/lib/exportSession';
+import { saveAsMarkdownDesktop } from '@/lib/exportSession';
+import { downloadAsMarkdown } from '@/lib/exportSession';
+import { useGuestActions } from '@/hooks/useGuestSurfaces';
+import { guestSessionActions } from '@/lib/guests/actions';
+import type { GuestActionEntry } from '@/lib/guests/actions';
+import { runGuestSessionAction } from '@/lib/guests/session-action';
+import { GuestIcon } from '@/components/layout/GuestRailIcon';
+import { requestSessionTreeMove } from '@/lib/worktrees/sessionWorktreeMove';
+import { collectSessionMoveDescendants } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
+import { buildSessionTreeMoveMessages } from '@/lib/worktrees/sessionWorktreeMove';
+import { SessionAiRenameMenuItem } from '@/components/session/SessionAiRenameMenuItem';
 import React, { useEffect } from 'react';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';

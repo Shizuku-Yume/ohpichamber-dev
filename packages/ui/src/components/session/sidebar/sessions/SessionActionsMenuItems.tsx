@@ -15,7 +15,7 @@ import { getChatsRootFromDirectory } from '@/lib/chatDirectories';
 import { useI18n } from '@/lib/i18n';
 import { getMultiRunIdentity } from '@/lib/multirun/identity';
 import { useMultiRunMemberIds } from '@/lib/multirun/useMultiRuns';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getSessionPinList } from '@/lib/sessionPins';
 import { isOperatorChildSession } from '@/lib/sessionOperatorChild';
 import { takeOverSession } from '@/sync/session-take-over';

@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 
 import { getChatDraftIdentityKey, subscribeChatDraftDeletion, type ChatDraftIdentity } from '@/lib/chatDraftPersistence';
@@ -59,3 +60,8 @@ export const readLinkedReferences = (target: ChatDraftIdentity | null): Composer
 
 subscribeChatDraftDeletion((identity) => useLinkedReferenceDrafts.getState().clear(identity));
 useLinkedReferenceDrafts.subscribe((state) => storeSharedPageChips(state.drafts));
+
+export const useDraftLinkedReferences = (target: ChatDraftIdentity | null): ComposerReference[] => {
+    const key = target ? getChatDraftIdentityKey(target) : null;
+    return useLinkedReferenceDrafts((state) => (key ? state.drafts.get(key) ?? NO_REFERENCES : NO_REFERENCES));
+};

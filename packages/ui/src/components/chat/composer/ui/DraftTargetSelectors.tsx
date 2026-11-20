@@ -1,3 +1,7 @@
+import { formatShortcutForDisplay } from '@/lib/shortcuts/bindings';
+import { getEffectiveShortcutCombo } from '@/lib/shortcuts/schema';
+import { sessionEvents } from '@/lib/sessionEvents';
+import { GlassRedrawGuard } from '@/components/ui/glass-redraw-guard';
 import { DraftsHerePicker, MobileDraftsHerePicker } from './DraftsHerePicker';
 /**
  * Where a new session will run: the project and the directory within it.

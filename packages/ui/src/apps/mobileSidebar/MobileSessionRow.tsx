@@ -15,9 +15,6 @@ import { resolveTooltipBranchLabel } from '@/components/session/sidebar/sessions
 import { TimelineProjectName } from '@/components/session/sidebar/sessions/SessionTimelineRowBody';
 import { useZoneProjectNames } from '@/components/session/sidebar/sessions/useZoneProjectNames';
 import { useSessionRefLines } from '@/components/session/sidebar/sessions/useSessionRefLines';
-import { useSessionRowGuestMarks } from '@/components/session/sidebar/sessions/useRowGuestMarks';
-import { normalizePath } from '@/lib/pathNormalization';
-import { MobileGuestMarks } from './MobileGuestMarks';
 import { refTintStyle } from '@/lib/source-control/prVisualState';
 import { isMultiLineTimelineContext, isPinnedZoneRowKey, sessionExpansionKey, type SessionSidebarRow } from '@/components/session/sidebar/sessionSidebarRowModel';
 import type { SessionNode } from '@/components/session/sidebar/types';
@@ -36,7 +33,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { useHasSessionTurnDuration } from '@/sync/session-turn-duration';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionMarkedUnread, useSessionUnread } from '@/sync/session-unread';
+import { useSessionUnread } from '@/sync/session-unread';
 import { getSessionDirectory } from '../mobileSessionFields';
 import { MobileProjectIcon } from '../MobileProjectIcon';
 import { MobileSessionRenameForm } from '../MobileSessionRenameForm';

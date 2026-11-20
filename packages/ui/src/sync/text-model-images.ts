@@ -1,5 +1,5 @@
 import { attachmentWireName } from "@/lib/attachmentIdentity"
-import { opencodeClient } from "@/lib/opencode/client"
+import { saveWorkspaceAttachments } from "@/lib/workspace-attachments"
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { getAttachmentInputModality, getUnsupportedAttachmentInputs } from "./attachment-files"
@@ -60,7 +60,7 @@ const savedPath = async (file: FilePart, directory: string | null | undefined): 
   if (onDisk) return onDisk
   const bytes = decodeDataUrl(file.url)
   if (!bytes) return null
-  const [result] = await opencodeClient.writeOpenCodeTempFiles(directory, [{ filename: file.filename, bytes }]).catch(() => [])
+  const [result] = await saveWorkspaceAttachments(directory, [{ filename: file.filename, bytes }]).catch(() => [])
   return result && "path" in result ? result.path : null
 }
 

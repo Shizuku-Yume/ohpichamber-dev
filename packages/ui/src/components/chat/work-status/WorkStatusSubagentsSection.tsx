@@ -10,8 +10,6 @@ import { toast } from '@/components/ui';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import type { IconName } from '@/components/icon/icons';
-import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
-import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { useI18n } from '@/lib/i18n';
 import { useAllLiveSessions, useAllSessionStatuses, useDirectorySync } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';

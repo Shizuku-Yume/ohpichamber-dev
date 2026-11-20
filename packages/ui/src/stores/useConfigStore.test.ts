@@ -1,3 +1,6 @@
+import { flushDeferredStorage } from './utils/safeStorage';
+import { invalidateConfigCatalogsForReload } from '@/stores/config/catalogLifecycle';
+import { selectConfigAgentsForDirectory } from '@/stores/config/selectors';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { Agent } from '@openchamber/agent-contract';
 import type { DesktopSettings } from '@/lib/desktop';

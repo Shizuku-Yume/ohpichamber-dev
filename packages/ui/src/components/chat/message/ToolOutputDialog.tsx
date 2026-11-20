@@ -1,3 +1,7 @@
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
+import { DialogTitle } from '@/components/ui/dialog';
+import { PdfArtifact } from '@/components/views/files/previews/PdfArtifact';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { PatchDiff } from '@pierre/diffs/react';

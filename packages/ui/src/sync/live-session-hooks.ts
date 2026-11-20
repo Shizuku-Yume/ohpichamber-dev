@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from "react"
-import type { Session, SessionStatus } from "@/lib/opencode/model"
+import type { Session, SessionRuntimeStatus as SessionStatus } from '@openchamber/agent-contract';
 import { ChildStoreManager } from "./child-store"
 import { aggregateLiveSessions, aggregateLiveSessionStatuses, areSessionListsEquivalent, areStatusMapsEquivalent, findLiveSession } from "./live-aggregate"
 import { countSyncPerformance } from "./performance-diagnostics"
@@ -102,7 +102,7 @@ export function useLiveSessionsExcluding(excludedIds: ReadonlySet<string>): Sess
   )
 }
 
-export function useSessions(directory?: string) {
+export function useSessions(directory?: string): State['session'] {
   return useDirectorySync(
     useCallback((state: State) => state.session, []),
     directory,

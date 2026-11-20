@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import type { PromptOrigin } from '@/lib/opencode/prompt-origin';
 import type { ReviewTransferDirection } from '@/lib/reviewFlow';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from '../types';

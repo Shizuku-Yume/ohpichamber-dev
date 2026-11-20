@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Icon } from '@/components/icon/Icon';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { AskOtherModelsDialog } from '@/components/multirun/AskOtherModelsDialog';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { AssistantCopyButton } from './AssistantCopyButton';

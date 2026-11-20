@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { keepCommandSubagentReports } from '@/lib/opencode/subagent-run';
 import { dropReplyCommandRows } from '@/lib/opencode/reply-command';
 import { useSessionStartTimes, useSessionMessageLoader } from '@/sync/sync-context';

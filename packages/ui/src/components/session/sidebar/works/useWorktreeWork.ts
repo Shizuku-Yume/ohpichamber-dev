@@ -1,4 +1,4 @@
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { setGitWorktreePinned } from '@/lib/gitApiHttp';
 import React from 'react';
 import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
 import { toast } from '@/components/ui';

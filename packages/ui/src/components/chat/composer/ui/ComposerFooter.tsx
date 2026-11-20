@@ -1,3 +1,10 @@
+import { useUIStore } from '@/stores/useUIStore';
+import { Tooltip } from '@/components/ui/tooltip';
+import { TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipContent } from '@/components/ui/tooltip';
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
+import { formatShortcutForDisplay } from '@/lib/shortcuts/bindings';
+import { getEffectiveShortcutCombo } from '@/lib/shortcuts/schema';
 
 import type { SourceControlProvider } from '@/lib/api/types';
 import type { SessionMode } from '@openchamber/agent-contract';
@@ -77,11 +84,7 @@ interface ComposerFooterProps {
     onDictationActiveChange?: (active: boolean) => void;
     isBtw?: boolean;
     escapeStops?: boolean;
-    modelSessionId?: string | null;
-    btwSelection: BtwSelection;
-    btwModelSelectorOpen?: boolean;
-    onBtwModelSelectorOpenChange?: (open: boolean) => void;
-    pinnedSelection?: BtwSelection | null;
+    pinnedSelection?: ComposerModelSelection | null;
     onRunInParallel?: () => void;
     parallelRun?: { runCount: number; launching: boolean; onLaunch: () => void } | null;
     /** A sent message is held until Agent Service's first connection. */
@@ -197,13 +200,13 @@ function ComposerFooterView(props: ComposerFooterProps) {
                                 onOpenGuestAttach={onOpenGuestAttach}
                                 filesOnly={isBtw}
                             />
-                            <PermissionAutoAcceptButton
+                            {!isBtw ? <PermissionAutoAcceptButton
                                 footerIconButtonClass={footerIconButtonClass}
                                 iconSizeClass={iconSizeClass}
                                 isInteractive={isPermissionAutoAcceptInteractive}
                                 permissionMode={permissionMode}
                                 handlePermissionModeCycle={onCyclePermissionMode}
-                            />
+                            /> : null}
                         </div>
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
                             {waitingForAgent ? <AgentStartupNote /> : null}
@@ -276,14 +279,14 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             isExpandedInput={isExpandedInput}
                             onToggle={onToggleExpandedInput}
                         /> : null}
-                        <PermissionAutoAcceptButton
+                        {!isBtw ? <PermissionAutoAcceptButton
                             footerIconButtonClass={footerIconButtonClass}
                             iconSizeClass={iconSizeClass}
                             isInteractive={isPermissionAutoAcceptInteractive}
                             permissionMode={permissionMode}
                             handlePermissionModeCycle={onCyclePermissionMode}
                             withTooltip
-                        />
+                        /> : null}
                     </div>
                     <div className={cn('flex items-center flex-1 justify-end', isVSCode ? cn(footerGapClass, 'md:gap-x-3') : 'gap-x-2')} data-dictation-chain="true">
                         {waitingForAgent ? <AgentStartupNote className="flex-shrink-0" /> : null}

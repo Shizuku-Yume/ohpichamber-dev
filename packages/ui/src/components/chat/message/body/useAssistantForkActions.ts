@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 import type { ForkSessionExecution } from '@/components/session/ForkSessionDialog';
 import { useI18n } from '@/lib/i18n';

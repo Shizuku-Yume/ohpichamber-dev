@@ -1,3 +1,5 @@
+import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import type { RuntimeAPIs } from '@/lib/api/types';
 import { describe, expect, test } from 'bun:test';
 type FilePart = { id: string; sessionID?: string; messageID?: string; type?: string; mime?: string; filename?: string; url: string };
 import {

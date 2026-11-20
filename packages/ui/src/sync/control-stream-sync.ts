@@ -2,7 +2,7 @@ import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useWorkflowRunsStore } from '@/lib/workflows/store';
 import { seedGlobalSessionStatusFromHost } from './host-session-status-seed';
-import { shareAnswerToastFor, showShareAnswerToast } from './share-answer-toast';
+import { shareAnswerToastFor } from './share-answer-toast';
 
 export const subscribeControlStreamSync = (
   runtimeKey: string,

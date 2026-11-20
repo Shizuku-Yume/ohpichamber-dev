@@ -4,7 +4,7 @@ import type { SourceControlProvider } from '@/lib/source-control/types';
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { chatQuoteAnchorSchema, type ChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
-import { diffCommentOriginSchema, type DiffCommentOrigin } from '@/lib/diffCommentOrigin';
+import { diffCommentOriginSchema, describeDiffCommentOrigin, type DiffCommentOrigin } from '@/lib/diffCommentOrigin';
 import { appendTerminalContexts } from './terminalContext';
 
 const sourceControlProviderIdSchema = z.enum(['github', 'gitlab']);
@@ -208,13 +208,19 @@ const userWords = (text: string | undefined, subject: string) => (
 export function formatContextText(payload: ContextPartPayload): string {
     switch (payload.kind) {
         case 'code-comment': {
-            // A whole-file comment has no lines to quote: the model reads the file itself.
+            const originNote = payload.origin ? ` ${describeDiffCommentOrigin(payload.origin)}` : '';
             if (payload.startLine === 0 && payload.endLine === 0) {
-                return `Comment on \`${payload.fileLabel}\` (the whole file):\n\n${payload.text}`;
+                return `The user wrote this to you about \`${payload.fileLabel}\` (the whole file)${originNote}:\n\n${payload.text}`;
             }
             const range = `lines ${payload.startLine}-${payload.endLine}`;
             const sideNote = payload.source === 'diff' && payload.side ? ` (${payload.side})` : '';
-            return `Comment on \`${payload.fileLabel}\` ${range}${sideNote}:\n\`\`\`${payload.language}\n${payload.code}\n\`\`\`\n\n${payload.text}`;
+            const quoted = `The user selected \`${payload.fileLabel}\` ${range}${sideNote}${originNote}:\n\`\`\`${payload.language}\n${payload.code}\n\`\`\``;
+            const now = payload.changedCode === undefined
+                ? ''
+                : payload.changedCode
+                    ? `\n\nThe file changed after the user selected these lines, and the quoted code is no longer there. These lines now hold:\n\`\`\`${payload.language}\n${payload.changedCode}\n\`\`\``
+                    : '\n\nThe file changed after the user selected these lines, and the quoted code is no longer there.';
+            return `${quoted}${now}${userWords(payload.text, 'these lines')}`;
         }
         case 'terminal':
             return appendTerminalContexts('', [{

@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';

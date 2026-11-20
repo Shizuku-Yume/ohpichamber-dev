@@ -1,3 +1,4 @@
+
 import { cjk } from '@streamdown/cjk';
 import { createMathPlugin } from '@streamdown/math';
 import { defaultRehypePlugins, defaultRemarkPlugins, type CjkPlugin, type MathPlugin, type StreamdownProps } from 'streamdown';
@@ -147,4 +148,9 @@ export function getMarkdownProcessingOptions(
   lineBreaks = false,
 ): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
   return policies[singleTildeStrikethrough ? 'gfm' : 'strict'][allowRawHtml ? 'raw' : 'text'][lineBreaks ? 'breaks' : 'plain'];
+}
+
+export function remarkLiteralText(this: Processor) {
+  const data = this.data();
+  (data.micromarkExtensions ??= []).push({ disable: { null: ['htmlFlow', 'htmlText', 'characterReference'] } });
 }

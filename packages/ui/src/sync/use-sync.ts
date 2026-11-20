@@ -1,3 +1,4 @@
+import { buildSessionMessageRecordsSnapshot } from './sync-context';
 import { useCallback, useMemo } from "react"
 import type { Message } from "@openchamber/agent-contract"
 import { getRuntimeKey } from "@/lib/runtime-switch"

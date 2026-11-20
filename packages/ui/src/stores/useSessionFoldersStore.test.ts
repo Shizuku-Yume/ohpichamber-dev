@@ -1,3 +1,4 @@
+import { directoryEnvironment } from './test-support/directoryEnvironment';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { createSessionFoldersStore, type SessionFoldersRuntime } from './useSessionFoldersStore';
 
@@ -5,7 +6,7 @@ const environment = directoryEnvironment({ fakeTimers: false });
 const browserWindow = window;
 const storage = new Map<string, string>();
 let storageSetCount = 0;
-let runtimeKey = 'runtime-a';
+const runtimeKey = 'runtime-a';
 type TestFolder = { id: string; name: string; sessionIds: string[]; createdAt: number; parentId: string | null };
 type TestFoldersMap = { [scopeKey: string]: TestFolder[] };
 /** Whatever the fake Host answers: a folder snapshot, a write result or an error. */

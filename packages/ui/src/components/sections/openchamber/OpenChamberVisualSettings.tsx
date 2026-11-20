@@ -1,7 +1,9 @@
+import { DEFAULT_EDITOR_FONT_SIZE } from '@/stores/ui/preferences';
+import { SETTINGS_CONTROL_CLUSTER_CLASS } from '@/components/sections/shared/SettingsSection';
 import React from 'react';
 import { ThemeAppearancePicker } from './ThemeAppearancePicker';
 
-import { DEFAULT_EDITOR_FONT_SIZE, useUIStore } from '@/stores/useUIStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
@@ -30,24 +32,7 @@ import { useI18n } from '@/lib/i18n';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { normalizeMobileKeyboardMode, supportsMobileKeyboardResizeContent, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
-import {
-    SettingsSection,
-    SettingsTwoColumn,
-    SettingsStackedField,
-    SettingsFieldRow,
-    SettingsCheckboxRow,
-    SettingsChipGroup,
-    SETTINGS_SELECT_TRIGGER_CLASS,
-    SETTINGS_ICON_BUTTON_CLASS,
-    SETTINGS_WIDTH_SHORT_TEXT_CLASS,
-    SETTINGS_WIDTH_SELECT_CLASS,
-    SETTINGS_NUMBER_STEPPER_ROW_CLASS,
-    SETTINGS_NUMBER_UNIT_CLASS,
-    SETTINGS_WIDTH_NUMBER_CLASS,
-    SETTINGS_SPACE_ROW_CLASS,
-    SETTINGS_SPACE_CHECKBOX_CLASS,
-    SETTINGS_HELPER_CLASS,
-} from '@/components/sections/shared/SettingsSection';
+import { SettingsSection, SettingsTwoColumn, SettingsStackedField, SettingsFieldRow, SettingsCheckboxRow, SettingsChipGroup, SETTINGS_SELECT_TRIGGER_CLASS, SETTINGS_ICON_BUTTON_CLASS, SETTINGS_NUMBER_STEPPER_ROW_CLASS, SETTINGS_NUMBER_UNIT_CLASS, SETTINGS_WIDTH_NUMBER_CLASS, SETTINGS_SPACE_ROW_CLASS, SETTINGS_SPACE_CHECKBOX_CLASS, SETTINGS_HELPER_CLASS } from '@/components/sections/shared/SettingsSection';
 
 interface Option<T extends string> {
     id: T;

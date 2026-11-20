@@ -19,11 +19,9 @@ import { QueuedMessagesStrip } from '../../QueuedMessagesStrip';
 import { AutoReviewStrip } from '../../AutoReviewStrip';
 import { PullRequestWatchStrip } from '../../PullRequestWatchStrip';
 import { ExtensionWaitStrip } from '../../ExtensionWaitStrip';
-import { ModelControls } from '../../ModelControls';
 import { ComposerContextRows } from '../../composer/ui/ComposerContextRows';
 import { RevertedMessagesStrip } from '../../RevertedMessagesStrip';
 import { SessionFolderMissingRow } from '../../SessionFolderMissingRow';
-import { SessionTrustPausedRow } from '../../SessionTrustPausedRow';
 import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { SessionDoneHintRow } from '@/components/chat/SessionDoneHintRow';
 import { SessionReviewHintRow } from '@/components/chat/SessionReviewHintRow';
@@ -45,10 +43,10 @@ type Dependencies = {
     inlineContext: Pick<ReturnType<typeof useComposerInlineContext>, 'hasDrafts' | 'inlineDraftTarget'>;
     referenceActions: Pick<ReturnType<typeof useComposerReferenceActions>, 'openAttachmentByName'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'hasContent' | 'pendingFirstSend'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'newSessionDraftOpen' | 'isBtwActive' | 'isBtwPanelVisible' | 'hasPendingForm' | 'currentSessionId' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'setReviewDialogOpen' | 'sessionFolder' | 'trustPausedDirectory' | 'btwComposerSessionId'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'newSessionDraftOpen' | 'isBtwActive' | 'isBtwPanelVisible' | 'hasPendingForm' | 'currentSessionId' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'setReviewDialogOpen' | 'sessionFolder' | 'btwComposerSessionId'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'queuedMessages' | 'parentMessageQueueTarget'>;
     draftTarget: Pick<ReturnType<typeof useComposerDraftTarget>, 'showDraftTargetSelectors' | 'messageWaitsForSpace'>;
-    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentAgentName' | 'effectiveBtwSelection'>;
+    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentAgentName'>;
     queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEdit' | 'handleQueuedMessageSend'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'handleOpenMobilePanel'>;
     editorActions: Pick<ReturnType<typeof useComposerEditorActions>, 'handleCycleThinking' | 'handleOpenThinkingPanel' | 'handleCycleAgent'>;
@@ -71,11 +69,11 @@ export function useComposerRows({
     const {
         newSessionDraftOpen, isBtwActive, isBtwPanelVisible, hasPendingForm, currentSessionId,
         currentSessionDirectoryForSync, currentDirectory, setReviewDialogOpen, sessionFolder,
-        trustPausedDirectory, btwComposerSessionId,
+        btwComposerSessionId,
     } = sessionScope;
     const { queuedMessages, parentMessageQueueTarget } = queueState;
     const { showDraftTargetSelectors, messageWaitsForSpace } = draftTarget;
-    const { currentAgentName, effectiveBtwSelection } = selection;
+    const { currentAgentName } = selection;
     const { handleQueuedMessageEdit, handleQueuedMessageSend } = queueActions;
     const { sessionPhase, handleOpenMobilePanel } = sessionLifecycle;
     const { handleCycleThinking, handleOpenThinkingPanel, handleCycleAgent } = editorActions;
@@ -181,14 +179,9 @@ export function useComposerRows({
         ? <SessionFolderMissingRow sessionId={currentSessionId} directory={currentSessionDirectoryForSync} busy={sessionPhase !== 'idle'} />
         : null;
 
-    const trustPausedRow = trustPausedDirectory && !folderMissingRow && !isBtwActive
-        ? <SessionTrustPausedRow directory={trustPausedDirectory} />
-        : null;
-
-    const composerTopRows = folderMissingRow || trustPausedRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const composerTopRows = folderMissingRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {folderMissingRow}
-            {trustPausedRow}
             {worktreeSetupRow}
             {creatingSessionRow}
             {spaceWaitRow}
@@ -207,14 +200,7 @@ export function useComposerRows({
 
     const mobileModelAgentRow = isMobile ? (
         <div className="flex items-center justify-between gap-x-2 px-3.5 pb-2 pt-0.5">
-            {isBtwActive ? (
-                <ModelControls
-                    sessionId={btwComposerSessionId}
-                    selection={effectiveBtwSelection}
-                    rememberVariantPicks={false}
-                />
-            ) : (
-                <>
+            {<>
                     <div className="flex min-w-0 items-center gap-0.5">
                         <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
                         <MemoMobileEffortButton onCycleThinking={handleCycleThinking} onOpenThinking={handleOpenThinkingPanel} />
@@ -224,8 +210,7 @@ export function useComposerRows({
                         onCycleAgent={handleCycleAgent}
                         className="flex-shrink-0 px-0"
                     />
-                </>
-            )}
+                </>}
         </div>
     ) : null;
 

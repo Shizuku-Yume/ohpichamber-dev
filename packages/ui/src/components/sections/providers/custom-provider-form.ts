@@ -1,3 +1,4 @@
+
 import { ModelSchema, ProviderConfigureRequestSchema, ProviderModelDiscoveryRequestSchema } from '@openchamber/agent-contract';
 import type { Model, ModelCatalogInfo, ModelInfoSource, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
@@ -727,3 +728,5 @@ export function discoveryFilterCounts(rows: readonly DiscoveryRow[]): Record<Dis
   }
   return counts;
 }
+
+export type DiscoveredModel = z.infer<typeof discoveredModelSchema>;

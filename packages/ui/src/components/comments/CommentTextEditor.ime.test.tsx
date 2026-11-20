@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CommentTextEditor } from './CommentTextEditor';
 import { useCommentImagePaste } from './useCommentImagePaste';

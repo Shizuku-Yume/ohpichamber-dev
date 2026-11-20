@@ -2,7 +2,7 @@ import React from 'react';
 import { DropdownMenuContent } from '@/components/ui/dropdown-menu';
 import { ContextMenuContent } from '@/components/ui/context-menu';
 import { MoveSessionDialog } from '@/components/session/MoveSessionDialog';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { SessionNode } from '../types';
 import type { StartSessionWorktreeMenuLoadResult } from '../sessionWorktreeMenu';

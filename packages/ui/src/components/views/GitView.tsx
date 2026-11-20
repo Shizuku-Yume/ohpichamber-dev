@@ -1,3 +1,4 @@
+import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useConfigStore } from '@/stores/useConfigStore';

@@ -1,3 +1,4 @@
+import { problemMessage } from '@/lib/problemMessage';
 import { MessageSliceContext } from "./message/messageSliceContext";
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -33,9 +34,6 @@ import { useI18n } from '@/lib/i18n';
 import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
 import { useChatColumnActions } from './chatColumnSession';
-import { MessageSelectionMark } from './messageSelection/MessageSelectionMark';
-import { MESSAGE_SELECT_UNIT_ATTRIBUTE } from './messageSelection/useMessageSelectionClicks';
-import { useMessageSelectionEntry } from './messageSelection/useMessageSelectionEntry';
 
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 

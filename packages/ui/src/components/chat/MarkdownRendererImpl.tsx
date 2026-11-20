@@ -1,3 +1,4 @@
+import type { Theme } from '@/types/theme';
 import React from 'react';
 import { isInvisibleText } from '@/lib/invisibleText';
 import { useEmojiShortcodes } from '@/lib/emoji/shortcodes';

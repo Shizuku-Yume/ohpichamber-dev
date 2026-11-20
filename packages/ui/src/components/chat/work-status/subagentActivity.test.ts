@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { AssistantMessage, Message, Part, ToolPart } from '@/lib/opencode/model';
+import type { Message as AssistantMessage, Message, Part, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPart = NativeToolCallPart | NativeToolResultPart;
 import {
   decodeSubagentActivity,
   encodeSubagentActivity,

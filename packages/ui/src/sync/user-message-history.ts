@@ -1,3 +1,4 @@
+
 import type { Message, Part } from "@openchamber/agent-contract"
 import type { State } from "./types"
 
@@ -56,3 +57,10 @@ export const buildUserMessageHistorySnapshot = (
   }
   return { sessionId, records, history }
 }
+
+export type UserMessageHistorySnapshot = {
+  sessionID: string;
+  revertMessageID?: string;
+  records: UserMessageHistoryRecord[];
+  history: TranscriptPrompt[];
+};

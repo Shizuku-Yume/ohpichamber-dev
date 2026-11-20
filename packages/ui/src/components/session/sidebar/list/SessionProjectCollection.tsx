@@ -1,3 +1,12 @@
+import type { ConversationResultProject } from '@/components/search/conversationResultContext';
+import type { SearchScope } from '@/lib/search/omniQuery';
+import type { ContentSearchStatus } from '@/hooks/useConversationSearch';
+import { resolveSidebarSearchScope } from '../sidebarConversationSearch';
+import { sidebarSearchMetadata } from '../sidebarConversationSearch';
+import { searchScopeQuery } from '@/lib/search/omniQuery';
+import { useSidebarConversationSearch } from '../useSidebarConversationSearch';
+import { formatDirectoryName } from '@/lib/utils';
+import { useClosePinnedWork } from '../works/useClosePinnedWork';
 import { SidebarTerminalActivity } from './SidebarTerminalActivity';
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';

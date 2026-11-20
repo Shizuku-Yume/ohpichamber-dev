@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from "react"
-import type { Message, Part } from "@/lib/opencode/model"
+import type { Message, Part } from '@openchamber/agent-contract';
 import { subscribeDirectorySessionMessages } from "./child-store"
 import { countSyncPerformance } from "./performance-diagnostics"
 import type { State } from "./types"

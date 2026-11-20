@@ -1,7 +1,7 @@
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerDraftText } from './useComposerDraftText';
 import React from 'react';
-import type { AttachIssueRequest } from '@openchamber/sdk';
+import type { AttachIssueRequest } from 'ohpichamber-sdk';
 import { type ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import { withComposerReferences, type ComposerReference } from '../../composer/composerReferences';
 import { readLinkedReferences, useLinkedReferenceDrafts } from '../../composer/linkedReferenceDrafts';

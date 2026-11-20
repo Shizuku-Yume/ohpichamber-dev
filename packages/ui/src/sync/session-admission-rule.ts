@@ -1,5 +1,5 @@
 import type { ProjectEntry } from '@/lib/api/types';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';

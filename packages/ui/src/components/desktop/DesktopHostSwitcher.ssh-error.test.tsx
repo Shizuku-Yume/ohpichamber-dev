@@ -1,5 +1,5 @@
 import { afterAll, expect, mock, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { Window } from 'happy-dom';
 
 const dom = new Window({ url: 'http://localhost/' });

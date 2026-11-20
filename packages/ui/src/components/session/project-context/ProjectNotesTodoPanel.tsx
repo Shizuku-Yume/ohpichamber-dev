@@ -1,3 +1,4 @@
+import { fetchSessionKnowledgeSummary } from '@/lib/sessionKnowledgeApi';
 import React from 'react';
 
 import { toast } from '@/components/ui';

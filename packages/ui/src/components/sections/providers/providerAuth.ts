@@ -1,3 +1,5 @@
+
+
 import type { Provider, ProviderOAuthMethods } from '@openchamber/agent-contract';
 
 /** Login method identity is not necessarily its stored provider identity. */
@@ -70,3 +72,7 @@ export const shouldAutoOpenAuthPanel = (input: {
   isEditableCustomProvider?: boolean;
 }): boolean =>
   requiresProviderAuth(input.provider) && !input.userDismissed && !input.editingConfiguration;
+
+export type CredentialConnection = Extract<ConnectionInfo, { type: 'credential' }>;
+
+export type SignInMethod = IntegrationOAuthMethod | IntegrationExternalMethod;

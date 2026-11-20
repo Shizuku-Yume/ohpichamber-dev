@@ -1,4 +1,5 @@
-import type { ToolPart as ToolPartType } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import { formatEditOutput, detectLanguageFromOutput, capToolOutputText } from '../../toolRenderers';
 import { isShellTool } from '@/lib/opencode/tools';
 

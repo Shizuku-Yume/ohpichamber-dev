@@ -10,7 +10,6 @@ import { useI18n } from '@/lib/i18n';
 import { describeChange } from './changeStatus';
 import { changedPathName } from './changesTree';
 import { ChangedPathLabel } from './ChangedPathLabel';
-import { DiffCount } from '@/components/ui/diff-count';
 
 /** Line counts of a changed file; the side with nothing to say stays out on a narrow row. */
 const ChangeStats: React.FC<{ insertions: number; deletions: number; hideZero?: boolean }> = ({ insertions, deletions, hideZero = false }) => (

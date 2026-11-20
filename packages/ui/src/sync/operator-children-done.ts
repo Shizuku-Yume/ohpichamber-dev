@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isOperatorChildSession } from '@/lib/sessionOperatorChild';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { hasActiveSubagent, useGlobalSessionStatusStore } from './global-session-status';

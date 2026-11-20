@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { isSkillTool } from '@/lib/opencode/tools';
 
 export type LoadedSkill = {

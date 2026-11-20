@@ -1,10 +1,10 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { toast } from '@/components/ui';
 import { I18nProvider } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 import { installHookTestDom } from '../test-utils/testDom';
 import { SessionRowOrderProvider, type SessionRowOrderWork } from '../sessions/sessionRowOrder';

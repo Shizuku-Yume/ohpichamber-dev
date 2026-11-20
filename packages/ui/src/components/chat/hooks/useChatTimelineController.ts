@@ -1,3 +1,4 @@
+import type { ChatMessageEntry } from '../lib/turns/types';
 import React from 'react';
 
 import type { Message } from '@openchamber/agent-contract';

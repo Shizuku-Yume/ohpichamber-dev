@@ -5,7 +5,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { getPinnedSessionKey } from '@/lib/sessionPins';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SessionNode } from '../types';
 import { isWorkflowAgentSession } from '@/lib/sessionWorkflowMetadata';

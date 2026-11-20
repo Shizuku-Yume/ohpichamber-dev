@@ -1,4 +1,3 @@
-import React from 'react';
 import type { ToastRequest } from 'ohpichamber-sdk';
 import { toast, type ExternalToast } from 'sonner';
 

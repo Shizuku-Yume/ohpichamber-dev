@@ -1,3 +1,4 @@
+
 import type { Database } from 'sql.js/dist/sql-wasm-browser.js';
 
 export type SqliteDatabase = Database;
@@ -71,3 +72,5 @@ export const readParquetRows = async (bytes: Uint8Array<ArrayBuffer>, rowCap: nu
   }
   return { columns, rows: objects.map((row) => columns.map((column) => cellText(row[column]))), totalRows };
 };
+
+export const quoteSqlName = (name: string): string => `"${name.replace(/"/g, '""')}"`;

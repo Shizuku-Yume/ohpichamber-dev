@@ -1,5 +1,6 @@
+import { DEFAULT_EDITOR_FONT_SIZE } from '@/stores/ui/preferences';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { DEFAULT_EDITOR_FONT_SIZE, useUIStore } from './useUIStore';
+import { useUIStore } from './useUIStore';
 
 const originalOptions = useUIStore.persist.getOptions();
 const originalState = useUIStore.getState();

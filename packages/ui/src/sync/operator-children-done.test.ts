@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { findRunningOperatorChildren } from './operator-children-done';
 
 const session = (id: string, parentID?: string, operator = true): Session => {

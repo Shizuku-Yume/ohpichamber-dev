@@ -1,3 +1,4 @@
+import { findWebLinks } from '../referenceLinks';
 
 import { RangeSetBuilder, StateEffect, StateField, type Transaction } from '@codemirror/state';
 import { Decoration, Direction, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';

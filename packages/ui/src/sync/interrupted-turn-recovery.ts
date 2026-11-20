@@ -1,5 +1,6 @@
 import type { StoreApi } from "zustand"
-import type { Message, Part, SessionOutcome, StructuredError } from "@/lib/opencode/model"
+import type { Message, Part } from '@openchamber/agent-contract';
+import type { SessionOutcome, StructuredError } from '@/lib/opencode/model';
 import { type DirectoryStore } from "./child-store"
 
 // external: https://github.com/anomalyco/opencode/issues/19023 Explicit turn-end evidence repairs assistant messages and tools that OpenCode leaves unfinished.

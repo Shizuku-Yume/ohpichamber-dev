@@ -1,5 +1,6 @@
 
 import { z } from 'zod';
+import { readSourceControlProvider } from '@/lib/source-control/providers/registry';
 import type { SourceControlProvider } from '@/lib/source-control/types';
 import type { WalkthroughSource, WalkthroughTarget } from '@/lib/walkthrough/types';
 
@@ -84,6 +85,22 @@ function diffCommentOriginLabel(origin: DiffCommentOrigin): string {
             return origin.headRef;
         case 'change-request':
             return changeRequestReference(origin);
+    }
+}
+
+export function describeDiffCommentOrigin(origin: DiffCommentOrigin): string {
+    switch (origin.kind) {
+        case 'commit':
+            return `in commit ${shortHash(origin.hash)}`;
+        case 'branch':
+            return `in the changes of branch \`${origin.headRef}\` compared with \`${origin.baseRef}\``;
+        case 'change-request': {
+            const descriptor = origin.provider ? readSourceControlProvider(origin.provider) : null;
+            const noun = descriptor ? `${descriptor.label} ${descriptor.terminology.promptNoun}` : 'pull request';
+            const repository = origin.repository ? ` in ${origin.repository}` : '';
+            const revision = origin.revision ? ` at commit ${shortHash(origin.revision)}` : '';
+            return `in ${noun} ${changeRequestReference(origin)}${repository}${revision}`;
+        }
     }
 }
 

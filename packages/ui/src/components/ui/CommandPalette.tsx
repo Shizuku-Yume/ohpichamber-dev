@@ -1,3 +1,24 @@
+import { useGuestActions } from '@/hooks/useGuestSurfaces';
+import { useGuestsStore } from '@/lib/guests/store';
+import { useComposerConfigDirectory } from '@/hooks/useComposerConfigDirectory';
+import { useCommandsStore } from '@/stores/useCommandsStore';
+import { reservedComposerCommandNames } from '@/components/chat/composer/submit/guestCommands';
+import { useGuestCommands } from '@/hooks/useGuestSurfaces';
+import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
+import type { GuestActionEntry } from '@/lib/guests/actions';
+import { runGuestSessionAction } from '@/lib/guests/session-action';
+import { guestSessionActions } from '@/lib/guests/actions';
+import { GuestIcon } from '@/components/layout/GuestRailIcon';
+import { getRuntimeUrlResolver } from '@/lib/runtime-url';
+import { resolveGuestIconName } from '@/lib/guests/icon';
+import { guestPackageIconSrc } from '@/lib/guests/icon';
+import { useInputStore } from '@/sync/input-store';
+import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
+import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { getRuntimeKey } from '@/lib/runtime-switch';
+import { rankConversationMetadata } from '@/lib/search/conversationSearch';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { Button } from './button';
 import React from 'react';
 import {
   Command,

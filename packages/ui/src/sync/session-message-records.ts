@@ -1,6 +1,6 @@
 import React, { useRef, useCallback } from "react"
 import type { StoreApi } from "zustand"
-import type { Message, Part } from "@/lib/opencode/model"
+import type { Message, Part } from '@openchamber/agent-contract';
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { subscribeDirectorySessionMessages, type DirectoryStore } from "./child-store"

@@ -1,5 +1,7 @@
 import { getToolMetadata } from '@/lib/toolHelpers';
-import type { ToolInput, ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+import type { ToolInput, ToolState as ToolStateUnion } from '@/lib/opencode/model';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import { useI18n } from '@/lib/i18n';
 import { isTodoWriteTool, isOpenChamberTool, openChamberCallSummary, toolDescription, type ToolDescription } from '@/lib/opencode/tools';
 import { toolContentShellEnvelope } from '@/lib/opencode/toolContentShells';

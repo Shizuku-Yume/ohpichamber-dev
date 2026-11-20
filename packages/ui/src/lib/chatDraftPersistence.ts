@@ -1,3 +1,5 @@
+
+
 import { normalizePath } from '@/lib/pathNormalization';
 import { withoutShareLinkKeys } from '@/lib/received-pages/link';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
@@ -130,3 +132,22 @@ export const subscribeChatDraftDeletion = (listener: (identity: ChatDraftIdentit
   deletionListeners.add(listener);
   return () => deletionListeners.delete(listener);
 };
+
+export const workDraftIdOfComposerKey = (sessionId: string | null | undefined): string | null => (
+  sessionId?.startsWith(WORK_DRAFT_KEY_PREFIX) ? sessionId.slice(WORK_DRAFT_KEY_PREFIX.length) : null
+);
+
+export const readChatDraftClaimingFolderDraft = (identity: ChatDraftIdentity | null): ChatDraftSnapshot => {
+  const saved = readChatDraft(identity);
+  if (!identity || workDraftIdOfComposerKey(identity.sessionId) === null || saved.text) return saved;
+  const folderIdentity = { ...identity, sessionId: null };
+  const folderDraft = readChatDraft(folderIdentity);
+  if (!folderDraft.text) return saved;
+  writeChatDraft(identity, folderDraft.text, folderDraft.confirmedMentions);
+  clearChatDraft(folderIdentity);
+  return folderDraft;
+};
+
+export const isNewSessionDraftIdentity = (identity: ChatDraftIdentity): boolean => (
+  identity.sessionId === null || workDraftIdOfComposerKey(identity.sessionId) !== null
+);

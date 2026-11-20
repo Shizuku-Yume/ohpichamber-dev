@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 import { answerReceivedPage, type ReceivedPage } from '@/lib/received-pages/api';
 import { SHARE_DOCUMENT_SOURCE, SHARE_VIEWER_SOURCE, type ViewerMessage } from '@/share-document/protocol';
 

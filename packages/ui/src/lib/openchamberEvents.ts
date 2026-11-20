@@ -1,3 +1,4 @@
+
 import { getRuntimeUrlResolver } from './runtime-url';
 import { runtimeFetch } from './runtime-fetch';
 import { getRuntimeExtraHeadersSync } from './runtime-auth';
@@ -801,3 +802,8 @@ export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => 
   }
  };
 };
+
+export type ControlStreamSyncEvent = Extract<SyncEvent, {
+  type: 'openchamber.page-waiting' | 'openchamber.page-settled' | 'openchamber.session-assist' | 'session.patched'
+    | 'openchamber.workflow-run' | 'openchamber.workflow-run-removed';
+}>;

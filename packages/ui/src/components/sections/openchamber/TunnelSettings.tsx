@@ -1,3 +1,4 @@
+import { problemMessage } from '@/lib/problemMessage';
 import React from 'react';
 import QRCode from 'qrcode';
 import { toast } from '@/components/ui';

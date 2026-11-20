@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { isSameRepositoryItemLink } from '@/components/sourceBoard/openTrackerItem';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import { referenceLinkChip, type ReferenceLinkChip } from '@/lib/messages/referenceLinkChip';
 import { useRepositoryUrlMatcher, type RepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
 import { useTrackerUrlMatcher, type TrackerUrlMatcher } from '@/lib/trackers/matchTrackerUrl';

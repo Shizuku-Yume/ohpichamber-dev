@@ -1,6 +1,6 @@
 import React from 'react';
 import { getLastConversationRecord, isIncompleteAssistantTurn } from '@/lib/opencode/model';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import {
     useSessionStatus,
     useSessionStatusSnapshotReady,

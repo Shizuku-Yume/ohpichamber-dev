@@ -14,7 +14,6 @@ import {
   type FolderChange,
   type FolderSnapshot,
 } from '@/lib/sessionFolders/folderChanges';
-import { folderScopeKeepsMovedSession } from '@/lib/sessionFolders/folderScopes';
 
 
 export interface SessionFolder {

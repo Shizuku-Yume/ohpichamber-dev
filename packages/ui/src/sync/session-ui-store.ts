@@ -1,4 +1,6 @@
 
+import type { InputHistorySubmission } from '@/stores/useInputHistoryStore';
+
 export type CanonicalSkillMentions = {
   names: readonly string[]
 }

@@ -103,7 +103,7 @@ describe('model-facing text', () => {
         test('a whole-file comment names the file and quotes no lines', () => {
             expect(formatContextText(contextPayloadFromDraft(draft({
                 startLine: 0, endLine: 0, side: undefined, code: '',
-            })))).toBe('Comment on `src/app.ts` (the whole file):\n\nfix this');
+            })))).toBe('The user wrote this to you about `src/app.ts` (the whole file):\n\nfix this');
             const part = createContextPart(contextPayloadFromDraft(draft({ startLine: 0, endLine: 0, side: undefined, code: '' })));
             expect(part.metadata.opencodeComment?.selection).toBeUndefined();
         });

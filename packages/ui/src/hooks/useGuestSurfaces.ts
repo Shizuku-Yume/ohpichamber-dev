@@ -8,7 +8,7 @@ import { isGuestActive } from '@/lib/guests/capabilities';
 import { guestCommandEntries, type GuestCommandEntry } from '@/lib/guests/commands';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { enabledGuestSurfaces } from '@/lib/guests/surfaces';
-import { guestPanelOpensHere, mayGuestShowOnPhone, phoneGuestPanelModes } from '@/lib/guests/phone';
+import { guestPanelOpensHere, phoneGuestPanelModes } from '@/lib/guests/phone';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
 import { useGuestsStore } from '@/lib/guests/store';
 import type { InstalledGuest } from '@/lib/guests/types';

@@ -1,3 +1,4 @@
+import { runtimeFetch } from '@/lib/runtime-fetch';
 import React from 'react';
 import type { Integration as Model, Provider } from '@openchamber/agent-contract';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -5,7 +6,7 @@ import { SettingsProjectSelector } from '@/components/sections/shared/SettingsPr
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import {
   SETTINGS_CARD_GRID_CLASS,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { GUEST_SURFACE_DOCK_SIZE_MIN } from '@openchamber/sdk';
+import { GUEST_SURFACE_DOCK_SIZE_MIN } from 'ohpichamber-sdk';
 
 import type { GuestSurfaceDocking } from '@/lib/guests/surfaces';
 import type { PluginContextPanelMode } from '@/lib/surfaces/modes';

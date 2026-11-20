@@ -1,6 +1,7 @@
+import { DEFAULT_EDITOR_FONT_SIZE } from '@/stores/ui/preferences';
 import React from 'react';
 import { isTerminalEventTarget } from '@/lib/terminalFocus';
-import { DEFAULT_EDITOR_FONT_SIZE, useUIStore } from '@/stores/useUIStore';
+import { useUIStore } from '@/stores/useUIStore';
 
 interface ThemeProviderProps {
   children: React.ReactNode;

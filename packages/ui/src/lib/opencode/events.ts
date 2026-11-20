@@ -1,3 +1,8 @@
+
+
+
+
+
 type PermissionAutoAcceptSyncEvent = {
   type: 'openchamber.permission-auto-accept';
   properties: {

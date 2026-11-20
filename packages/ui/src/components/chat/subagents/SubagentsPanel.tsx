@@ -11,7 +11,7 @@ import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useI18n } from '@/lib/i18n';
-import type { FormRequest, PermissionRequest } from '@/lib/opencode/model';
+import type { QuestionRequest as FormRequest, ApprovalRequest as PermissionRequest } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectoryStore, useDirectorySync } from '@/sync/sync-context';

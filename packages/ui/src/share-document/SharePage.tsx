@@ -9,7 +9,7 @@ import { formatTemplate } from '@/lib/i18n/format';
 import { I18nContext, type I18nContextValue } from '@/lib/i18n/react-context';
 import { getLocaleDirection, LOCALE_LABEL_KEYS, LOCALES, type Locale } from '@/lib/i18n/runtime';
 import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID } from '@/lib/theme/themes';
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { SHARE_DOCUMENT_MESSAGES } from './messages.generated';
 import { setShareIntlLocale } from './shims/i18n';

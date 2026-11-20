@@ -1,3 +1,5 @@
+import { detectToolOutputLanguage } from '@/lib/toolHelpers';
+import { formatToolInput } from '@/lib/toolHelpers';
 import type { JsonValue, ToolResultPart } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
@@ -388,4 +390,15 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
     }
 
     return hunks;
+};
+
+const formatInputForDisplay = (input: Record<string, unknown>, toolName?: string) => {
+    if (!input || typeof input !== 'object') {
+        return String(input);
+    }
+    return formatToolInput(input, toolName || '');
+};
+
+export const detectLanguageFromOutput = (output: string, toolName: string, input?: Record<string, unknown>) => {
+    return detectToolOutputLanguage(toolName, output, input);
 };

@@ -36,7 +36,6 @@ import { loadGuestServiceFailure, setGuestServiceSocketPath } from '@/lib/guests
 import { guestNeedsApproval } from '@/lib/guests/capabilities';
 import { SESSION_EVENT_LABEL_KEYS } from '@/lib/guests/session-event-labels';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
-import type { IconName } from '@/components/icon/icons';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { getGuestSourceUrl } from '@/lib/guests/source-url';
 import { approveGuestCapabilities, installGuest, setGuestEnabled, uninstallGuest, uploadGuestZip } from '@/lib/guests/install';

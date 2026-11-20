@@ -1,10 +1,11 @@
+import { markConfigCatalogStale } from '@/stores/config/catalogLifecycle';
 import { type CatalogKind } from "@/lib/opencode/events"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { ChildStoreManager } from "./child-store"
 import { emitSyncConfigChanged } from "./sync-refs"
 import { opencodeClient } from "@/lib/opencode/client"
 import { spaceFoldersOfProject } from "./space-catalog-sync"
-import { markConfigCatalogStale } from "@/stores/useConfigStore"
+
 import { refreshStoresForCatalogKinds } from "@/stores/catalogRefresh"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 

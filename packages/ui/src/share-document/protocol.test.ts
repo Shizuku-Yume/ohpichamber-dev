@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 import { createShareSubmitter, viewerMessageSchema, type ShareSubmitMessage, type ViewerMessage } from './protocol';
 
 /** The `ui` page's side of the viewer's frame protocol, as the renderer bundle runs it. */

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
 import { CanonicalClient } from '@/api/canonicalClient';

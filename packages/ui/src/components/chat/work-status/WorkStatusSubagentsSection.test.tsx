@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ApprovalRequest, QuestionRequest, Session } from '@openchamber/agent-contract';
@@ -11,7 +11,6 @@ import { useSessionActivityTimingStore } from '@/sync/session-activity-timing';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import type { State } from '@/sync/types';
 import type { WorkStatusSubagentsSection as WorkStatusSubagentsSectionType } from './WorkStatusSubagentsSection';
 

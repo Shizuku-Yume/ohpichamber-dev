@@ -1,3 +1,4 @@
+import { useConfigStore } from '@/stores/useConfigStore';
 import { afterAll, expect, spyOn, test } from 'bun:test';
 import { plugin } from 'bun';
 import { readFileSync, readdirSync } from 'node:fs';

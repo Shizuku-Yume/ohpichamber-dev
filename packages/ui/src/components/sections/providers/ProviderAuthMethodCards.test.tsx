@@ -1,6 +1,6 @@
 import { afterAll, afterEach, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import React, { act } from 'react';
+import { act } from 'react';
 import type { CredentialConnection, SignInMethod } from './providerAuth';
 
 const browser = new Window({ url: 'http://localhost' });

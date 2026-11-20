@@ -1,23 +1,18 @@
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerColumn } from './useComposerColumn';
+import { useDirectorySync } from '@/sync/sync-context';
+import { resolveReasoningEffortToSend } from '@/components/chat/composer/submit/resolveReasoningEffort';
 import React from 'react';
-import { resolveModelMetadata, useConfigStore } from '@/stores/useConfigStore';
-import { filterVisibleAgents } from '@/stores/useAgentsStore';
-import { useUIStore } from '@/stores/useUIStore';
-import { useSelectionStore } from '@/sync/selection-store';
-import { btwModelAvailability, resolveBtwSelection } from '@/stores/useBtwStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
+import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
 import { usePinnedComposerSelection } from '../../pinnedComposerSelection';
-import { findCatalogModel } from '@/lib/opencode/model';
-import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
-import { useKeybinds } from '@/hooks/useKeybind';
-import { getNextFavoriteModel } from '@/lib/modelRefs';
-import { modelVariantNames, nextThinkingVariant } from '@/lib/modelVariants';
 
 type Dependencies = {
     column: Pick<ReturnType<typeof useComposerColumn>, 'columnPinned'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerFormRef'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'currentDirectory' | 'isBtwActive' | 'btwComposerSessionId' | 'sessionAgentPick' | 'btwAgentSelection' | 'btwModelSelection'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'currentDirectory' | 'currentSessionDirectoryForSync' | 'isBtwActive' | 'btwComposerSessionId' | 'sessionAgentPick'>;
 };
 
 export function useComposerSelection({
@@ -26,8 +21,8 @@ export function useComposerSelection({
     const { columnPinned } = column;
     const { composerFormRef } = editorState;
     const {
-        currentSessionId, currentDirectory, isBtwActive, btwComposerSessionId, sessionAgentPick,
-        btwAgentSelection, btwModelSelection,
+        currentSessionId, currentDirectory, currentSessionDirectoryForSync, isBtwActive, btwComposerSessionId, sessionAgentPick,
+
     } = sessionScope;
 
     const pinnedComposerSelection = usePinnedComposerSelection({
@@ -38,13 +33,15 @@ export function useComposerSelection({
 
     const mailboxTarget = columnPinned ? currentSessionId : null;
 
-    const shownSessionId = isBtwActive ? btwComposerSessionId : currentSessionId;
+    const shownSessionId = currentSessionId;
 
     const configProviderId = useConfigStore((state) => state.currentProviderId);
 
     const configModelId = useConfigStore((state) => state.currentModelId);
 
-    const configCatalogLoaded = useConfigStore((state) => state.providersLoaded && state.agentsLoaded);
+    const modelsReady = useCatalogReadiness('models', currentDirectory).isReady;
+    const agentsReady = useCatalogReadiness('agents', currentDirectory).isReady;
+    const configCatalogLoaded = modelsReady && agentsReady;
 
     const currentProviderId = pinnedComposerSelection?.model?.providerId ?? configProviderId;
 
@@ -54,11 +51,9 @@ export function useComposerSelection({
 
     const providerCatalog = useConfigStore((state) => state.providers);
 
-    const autoReady = useRoutingStore(selectAutoReady);
-
     const currentModelMetadata = React.useMemo(
         () => currentProviderId && currentModelId
-            ? resolveModelMetadata(modelsMetadata, providerCatalog, currentProviderId, currentModelId)
+            ? useConfigStore.getState().getModelMetadata(currentProviderId, currentModelId)
             : undefined,
         [currentProviderId, currentModelId, modelsMetadata, providerCatalog],
     );
@@ -75,108 +70,35 @@ export function useComposerSelection({
 
     const setAgent = useConfigStore((state) => state.setAgent);
 
-    const allAgents = useConfigStore((state) => state.agents);
+    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
 
-    const agents = React.useMemo(() => filterVisibleAgents(allAgents), [allAgents]);
+    const configReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
 
-    const btwSavedVariant = useSelectionStore(React.useCallback(
-        (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
-            ? state.getAgentModelVariantForSession(
-                btwComposerSessionId,
-                btwAgentSelection,
-                btwModelSelection.providerId,
-                btwModelSelection.modelId,
-            )
-            : undefined,
-        [btwAgentSelection, btwComposerSessionId, btwModelSelection],
-    ));
+    const settingsDefaultReasoningEffort = useConfigStore((state) => state.settingsDefaultReasoningEffort);
 
-    const btwComposerVariant = pinnedComposerSelection
-        ? pinnedComposerSelection.variant
-        : currentVariantSelection.override === null ? null : currentVariantSelection.override ?? configVariant;
+    const configuredReasoningEffort = pinnedComposerSelection ? pinnedComposerSelection.reasoningEffort : configReasoningEffort;
 
-    const effectiveBtwSelection = React.useMemo(() => resolveBtwSelection({
-        agents,
-        savedAgent: btwAgentSelection,
-        isModelAvailable: btwModelAvailability(providerCatalog, autoReady),
-        savedModel: btwModelSelection,
-        savedVariant: btwSavedVariant,
-        composerModel: currentProviderId && currentModelId ? { providerId: currentProviderId, modelId: currentModelId } : null,
-        composerVariant: btwComposerVariant,
-    }), [agents, autoReady, btwAgentSelection, btwComposerVariant, btwModelSelection, btwSavedVariant, currentModelId, currentProviderId, providerCatalog]);
+    const persistedThinkingLevel = useDirectorySync(
+        React.useCallback((state) => (
+            currentSessionId ? state.snapshot[currentSessionId]?.selection?.thinkingLevel : undefined
+        ), [currentSessionId]),
+        currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
+    );
 
-    React.useEffect(() => {
-        const { model, agent, variant } = effectiveBtwSelection;
-        if (!isBtwActive || !btwComposerSessionId || !model || !agent) return;
-        const selections = useSelectionStore.getState();
-        if (selections.getSessionModelSelection(btwComposerSessionId)) return;
-        selections.saveSessionAgentSelection(btwComposerSessionId, agent);
-        selections.saveSessionModelSelection(btwComposerSessionId, model.providerId, model.modelId);
-        selections.saveAgentModelForSession(btwComposerSessionId, agent, model.providerId, model.modelId);
-        selections.saveAgentModelVariantForSession(btwComposerSessionId, agent, model.providerId, model.modelId, variant);
-    }, [btwComposerSessionId, effectiveBtwSelection, isBtwActive]);
-
-    const [btwModelSelectorOpen, setBtwModelSelectorOpen] = React.useState(false);
-
-    if (!isBtwActive && btwModelSelectorOpen) setBtwModelSelectorOpen(false);
-
-    const isBtwKey = (event: KeyboardEvent): boolean => {
-        const keyColumn = event.target instanceof Element ? event.target.closest('[data-chat-column="pinned"]') : null;
-        if (columnPinned ? !keyColumn?.contains(composerFormRef.current) : keyColumn) return false;
-        const ui = useUIStore.getState();
-        return !(ui.isSettingsDialogOpen
-            || ui.isCommandPaletteOpen
-            || ui.isHelpDialogOpen
-            || ui.isSessionSwitcherOpen
-            || ui.isAboutDialogOpen);
-    };
-
-    const cycleBtwFavoriteModel = (event: KeyboardEvent, delta: number): boolean | void => {
-        if (!isBtwKey(event) || !btwComposerSessionId) return false;
-        const ui = useUIStore.getState();
-        const { model, agent } = effectiveBtwSelection;
-        const next = getNextFavoriteModel(
-            ui.favoriteModels,
-            providerCatalog,
-            ui.hiddenModels,
-            { providerID: model?.providerId ?? '', modelID: model?.modelId ?? '' },
-            delta,
-        );
-        if (!next) return false;
-        const selections = useSelectionStore.getState();
-        selections.saveSessionModelSelection(btwComposerSessionId, next.providerID, next.modelID);
-        if (agent) selections.saveAgentModelForSession(btwComposerSessionId, agent, next.providerID, next.modelID);
-        selections.pickSessionModel(btwComposerSessionId, next.providerID, next.modelID);
-    };
-
-    const cycleBtwThinkingVariant = (event: KeyboardEvent): boolean | void => {
-        if (!isBtwKey(event) || !btwComposerSessionId) return false;
-        const { model, agent, variant } = effectiveBtwSelection;
-        if (!model || !agent) return false;
-        const variants = modelVariantNames(findCatalogModel(providerCatalog.find((provider) => provider.id === model.providerId)?.models, model.modelId));
-        if (variants.length === 0) return false;
-        useSelectionStore.getState().saveAgentModelVariantForSession(
-            btwComposerSessionId,
-            agent,
-            model.providerId,
-            model.modelId,
-            nextThinkingVariant(variants, variant),
-        );
-    };
-
-    useKeybinds(isBtwActive ? {
-        open_model_selector: (event) => {
-            if (!isBtwKey(event) || !btwComposerSessionId) return false;
-            setBtwModelSelectorOpen((open) => !open);
-        },
-        cycle_thinking_variant: cycleBtwThinkingVariant,
-        cycle_favorite_model_forward: (event) => cycleBtwFavoriteModel(event, 1),
-        cycle_favorite_model_backward: (event) => cycleBtwFavoriteModel(event, -1),
-    } : {});
+    const reasoningEffortForModel = React.useCallback((
+        providerId: string | undefined,
+        modelId: string | undefined,
+        input: { captured?: { reasoningEffort?: string | null } | undefined; session?: string | null | undefined; native?: string | null | undefined; draft?: string | null | undefined },
+    ): string | undefined => {
+        if (!providerId || !modelId) return undefined;
+        const model = useConfigStore.getState().providers
+            .find((provider) => provider.providerId === providerId)?.models
+            .find((candidate) => candidate.modelId === modelId);
+        return resolveReasoningEffortToSend({ model, ompDefault: settingsDefaultReasoningEffort, ...input });
+    }, [settingsDefaultReasoningEffort]);
 
     return {
         currentProviderId, currentModelId, currentModelMetadata, agents, mailboxTarget, shownSessionId,
-        currentAgentName, currentVariant, effectiveBtwSelection, configCatalogLoaded, setAgent,
-        btwModelSelectorOpen, setBtwModelSelectorOpen, pinnedComposerSelection,
-    };
+        currentAgentName, currentVariant, configCatalogLoaded, setAgent,
+        pinnedComposerSelection, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel};
 }

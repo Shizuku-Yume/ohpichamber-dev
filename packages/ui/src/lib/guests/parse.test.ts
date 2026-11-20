@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 
 import { browserProviderGuests } from './browser-providers.ts';
 import { parseGuestCatalogJson, parseInstalledGuestJson } from './parse.ts';

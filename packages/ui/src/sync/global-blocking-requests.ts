@@ -1,3 +1,5 @@
+
+
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { ApprovalRequest, CanonicalEvent, QuestionRequest, SessionSnapshot } from '@openchamber/agent-contract';
 import { compareCounters } from './event-reducer';
@@ -120,3 +122,11 @@ export const replaceGlobalBlockingRequestSnapshot = (directory: string, snapshot
   reducer.write(sessionId, { directory, permissions: approvals, forms: questions });
   reducer.publish();
 };
+
+export const useIsPageWaiting = (sessionId: string | null | undefined): boolean => (
+  useGlobalBlockingRequestsStore((state) => Boolean(sessionId && state.bySession.get(sessionId)?.pages.length))
+);
+
+export const useIsCallWaiting = (sessionId: string | null | undefined, callId: string | null | undefined): boolean => (
+  useGlobalBlockingRequestsStore((state) => Boolean(sessionId && callId && state.bySession.get(sessionId)?.pages.some((page) => page.id === callId)))
+);

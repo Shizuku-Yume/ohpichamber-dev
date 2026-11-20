@@ -7,7 +7,6 @@ import { clearChatDraft, readChatDraft, writeChatDraft, type ChatDraftIdentity }
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { useInputStore } from '@/sync/input-store';
 import { useComposerDraft } from '../useComposerDraft';
-import { createComposerText } from '../composerText';
 
 const source: ChatDraftIdentity = { runtimeKey: 'runtime-a', directory: '/repo', sessionId: 'source' };
 const fork: ChatDraftIdentity = { ...source, sessionId: 'fork' };

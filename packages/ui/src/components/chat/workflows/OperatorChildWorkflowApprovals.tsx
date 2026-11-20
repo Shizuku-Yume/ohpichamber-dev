@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { useI18n } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isOperatorChildSession } from '@/lib/sessionOperatorChild';
 import { useSessionWorkflowRuns } from '@/lib/workflows/store';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';

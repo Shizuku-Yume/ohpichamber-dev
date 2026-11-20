@@ -1,3 +1,4 @@
+
 import type { Part, ToolResultPart } from '@openchamber/agent-contract';
 import { fenceUiBlocks } from '../../uiBlocks/taggedBlocks';
 import type { ChatMessageEntry, TurnRecord } from './types';
@@ -83,4 +84,11 @@ export function toolResultsByCall(messages: readonly ChatMessageEntry[]): Map<st
 /** The message a shown part belongs to, so a card can name its session and message. */
 export function messageOwningPart(messages: readonly ChatMessageEntry[], partId: string): ChatMessageEntry | undefined {
     return messages.find((message) => message.parts.some((part) => part.partId === partId));
+}
+
+export function uiPageMessageId(turn: TurnRecord | undefined, expanded: boolean, messageId: string, partId: string): string {
+    const final = turn ? getLiveFinalMessage(turn.assistantMessages) : undefined;
+    return !expanded && turn && final && getShownPages(turn.assistantMessages, final).some((part) => part.id === partId && part.messageID === messageId)
+        ? final.info.id
+        : messageId;
 }

@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { opencodeClient } from '@/lib/opencode/client';
 import { isOperatorChildSession, metadataAfterTakeOver, permissionsAfterTakeOver } from '@/lib/sessionOperatorChild';
 import { getRuntimeKey } from '@/lib/runtime-switch';

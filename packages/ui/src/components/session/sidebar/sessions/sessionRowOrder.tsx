@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- Provider and hooks are one contract. */
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionGroup } from '../types';
 
 export type SessionRowOrderEntry = {

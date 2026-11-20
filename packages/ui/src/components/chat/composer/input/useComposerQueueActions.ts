@@ -1,3 +1,5 @@
+import type { FileResourceExpandResult } from '@openchamber/agent-contract';
+import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import type { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
@@ -12,34 +14,37 @@ import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import type { ComposerSendHandlers } from './composerSendHandlers';
+import type { QueuedContextPart } from '@/stores/messageQueueStore';
+import type { SyntheticContextPart } from '@/sync/input-store';
+import type { ComposerReference } from '../../composer/composerReferences';
+import type { SessionReference } from '../../composer/sessionReferences';
+import type { ChatInputProps } from './chatInputProps';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { createComposerSubmitErrorMessage } from './createComposerSubmitErrorMessage';
+import { selectBuiltinCommandsForDirectory } from '@/stores/useCommandsStore';
+import { useCommandsStore } from '@/stores/useCommandsStore';
+import { selectAvailableSkillsForDirectory } from '@/stores/useSkillsStore';
+import { useSkillsStore } from '@/stores/useSkillsStore';
+import { expandCanonicalSkills } from '@/sync/session-ui-store';
+import { expandWorkspaceSkillNames } from '@/api/fileResourceExpansion';
+import { expandNativeFileResource } from '@/api/fileResourceExpansion';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { ROOT_SELECTION_AGENT } from '@/sync/selection-store';
 import React from 'react';
-import { useUIStore } from '@/stores/useUIStore';
-import { type QueuedContextPart, type QueuedMessageGoal } from '@/stores/messageQueueStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useSelectionStore } from '@/sync/selection-store';
-import { prepareUserMessageResume } from '@/sync/user-message-resume';
-import { attachedImagesAsPathNotes, ImageSaveForTextModelError, modelCannotReadImages } from '@/sync/text-model-images';
-import { useInputStore, type SyntheticContextPart } from '@/sync/input-store';
+import { useInputStore } from '@/sync/input-store';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { CONTEXT_METADATA_KEY, draftFromContextPayload } from '@/lib/messages/contextParts';
 import { toast } from '@/components/ui';
-import { collectRunningActions, planRunningActionsNote } from '../../lib/runningActionsNote';
-import { toContextReference, withComposerReferences, type ComposerReference } from '../../composer/composerReferences';
-import { referencesLinkedIn, withoutSharedPageLinks, withReferencesFromText } from '../../composer/referenceLinks';
-import { type SessionReference } from '../../composer/sessionReferences';
+import { toContextReference, withComposerReferences } from '../../composer/composerReferences';
 import { routeGuestSlashCommand } from '../../composer/submit/guestCommands';
-import { opencodeClient } from '@/lib/opencode/client';
-import { buildSkillMentionInstruction } from '@/lib/skillMentionInstruction';
 import { withMissingCitations } from '@/lib/attachmentIdentity';
 import { filterMissingInlineAttachments } from '../../composer/attachments/inlineMentionAttachments';
 import { buildComposerContext, expandCommentSnippets } from '../../composer/submit/buildOutgoingMessage';
 import { planLocalSlashCommand } from '../../composer/submit/slashCommands';
-import { withoutShareLinkKeys } from '@/lib/received-pages/link';
-import { withRegisteredSharedPages } from '../../sharePages/received/takeShareLink';
-import type { ChatInputProps } from './chatInputProps';
 import { collectInlineSkillMentions } from './composerMentionTokens';
 import { recordLinkedReferences } from './recordLinkedReferences';
 
@@ -51,11 +56,11 @@ type Dependencies = {
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
     sendHandlers: Pick<ComposerSendHandlers, 'handleQueueMessageRef' | 'handleSubmitRef'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'getCurrentInputSnapshot'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity' | 'currentDirectory' | 'attachedFiles'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput'>;
-    language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions'>;
-    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant'>;
-    mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'sanitizeAttachmentsForSend' | 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions'>;
+    language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions' | 'loadCommands'>;
+    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
+    mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'sanitizeAttachmentsForSend' | 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions' | 'prepareDocumentMentions'>;
     props: Pick<ChatInputProps, 'scrollToLatest'>;
     referenceDrafts: Pick<ReturnType<typeof useComposerReferenceDrafts>, 'setLinkedReferencesFor' | 'updateLinkedReferencesFor' | 'updateLinkedReferences'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
@@ -75,111 +80,130 @@ export function useComposerQueueActions({
     const { getCurrentInputSnapshot } = sendAvailability;
     const {
         currentSessionId, inputMode, sendHeldByMissingFolderRef, consumePendingSyntheticParts,
-        projectActionsRef, clearAttachedFiles, chatDraftIdentity,
-    } = sessionScope;
+        projectActionsRef, clearAttachedFiles, chatDraftIdentity, currentDirectory, attachedFiles} = sessionScope;
     const { messageQueueTarget, addToQueue, popQueuedToInput } = queueState;
     const {
         guestCommands, readSessionMentionsBeforeSend, linkedReferences, availableSkills,
-        referenceLinksIn, sessionMentionsIn, rememberSessionMentions,
-    } = language;
-    const { currentProviderId, currentModelId, mailboxTarget, currentAgentName, currentVariant } = selection;
+        referenceLinksIn, sessionMentionsIn, rememberSessionMentions, loadCommands} = language;
+    const { currentProviderId, currentModelId, mailboxTarget, currentAgentName, currentVariant , configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
     const {
         sanitizeAttachmentsForSend, prepareReadOnSendMentions, mentionableAgents,
-        extractInlineFileMentions,
-    } = mentionAttachments;
+        extractInlineFileMentions, prepareDocumentMentions} = mentionAttachments;
     const { scrollToLatest } = props;
     const { setLinkedReferencesFor, updateLinkedReferencesFor, updateLinkedReferences } = referenceDrafts;
     const { isMobile } = preferences;
 
+    const { files: runtimeFiles } = useRuntimeAPIs();
+    const getSubmitErrorMessage = createComposerSubmitErrorMessage(t);
+
     const handleQueueMessage = React.useCallback(async () => {
+        // The comment's exit paths are attach/cancel; queueing a real prompt
+        // underneath comment mode must never fire.
         if (isMobileCommentOpen()) return;
-        if (await waitForPendingAttachments()) {
-            void handleQueueMessageRef.current();
-            return;
-        }
         const inputSnapshot = getCurrentInputSnapshot();
         if (!inputSnapshot.hasContent || !currentSessionId || !messageQueueTarget) return;
+        const queueRuntimeKey = getRuntimeKey();
+        if (inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
+            && !planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true, [])) {
+            if (!await loadCommands(currentDirectory)) {
+                toast.error(t('chat.chatInput.toast.messageSendFailed'));
+                return;
+            }
+            if (queueRuntimeKey !== getRuntimeKey()) return;
+        }
 
-        if (planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true)
+        // A local or extension command is run, not queued: the queue delivers
+        // text to the model, and `/compact`, `/btw`, or `/task` mean nothing there.
+        if (planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true, selectBuiltinCommandsForDirectory(useCommandsStore.getState(), currentDirectory))
             || routeGuestSlashCommand(inputSnapshot.message, inputMode, guestCommands)) {
             void handleSubmitRef.current();
             return;
         }
-        if (sendHeldByMissingFolderRef.current()) return;
-        const queueRuntimeKey = getRuntimeKey();
         const queueTarget = messageQueueTarget;
         const queueSessionId = currentSessionId;
-        const settleModelPick = useSelectionStore.getState().captureSessionModelPickSettlement(
-            queueSessionId, currentProviderId, currentModelId, queueRuntimeKey,
-        );
-        const resumeAfterQueue = prepareUserMessageResume(queueSessionId, queueRuntimeKey);
-        const messageToQueue = withoutShareLinkKeys(inputSnapshot.message.replace(/^\n+|\n+$/g, ''));
+        const messageToQueue = inputSnapshot.message.replace(/^\n+|\n+$/g, '');
         if (!(await readSessionMentionsBeforeSend(messageToQueue))) return;
-        const composerAttachments = sanitizeAttachmentsForSend(attachmentsToSend(messageToQueue));
+        const composerAttachments = sanitizeAttachmentsForSend(attachedFiles);
 
-        const readOnSendMentions = await prepareReadOnSendMentions(
+        // A queued message is resolved now, not at delivery: the server that
+        // sends it has no agent list, no confirmed mentions, and no way to read
+        // a document the user named — and the mention must match what was
+        // visible when the user typed it.
+        const documentMentions = await prepareDocumentMentions(
             [messageToQueue],
             new Set(composerAttachments.map((attachment) => attachment.filename)),
             queueRuntimeKey,
-            composerAttachments,
         );
-        if (readOnSendMentions.status === 'runtime-changed') return;
-        if (readOnSendMentions.status === 'failed') {
-            toast.error(t('chat.chatInput.toast.attachNamedFailed', { name: readOnSendMentions.filename }));
+        if (documentMentions.status === 'runtime-changed') return;
+        if (documentMentions.status === 'failed') {
+            toast.error(t('chat.chatInput.toast.attachNamedFailed', { name: documentMentions.filename }));
             return;
         }
-        const { sanitizedText, mention } = parseAgentMentions(withoutSharedPageLinks(messageToQueue, linkedReferences), mentionableAgents());
-        const { attachments: extractedMentionAttachments } = extractInlineFileMentions(sanitizedText, readOnSendMentions.prepared, composerAttachments);
-        // external: #3898 OpenCode rejects the entire prompt when an inline file mention does not exist.
+        const sanitizedText = messageToQueue;
+        const { attachments: extractedMentionAttachments } = extractInlineFileMentions(sanitizedText, documentMentions.prepared);
+        // #3898: a queued message is delivered later without the composer, so
+        // a phantom mention (`@masha.conner`) must be dropped now or the
+        // delivery 400s.
         const { sendable: mentionAttachments } = await filterMissingInlineAttachments(
             extractedMentionAttachments,
-            opencodeClient,
+            { listLocalDirectory: async (directory) => (await runtimeFiles.listDirectory(directory)).entries },
         );
-        let attachmentsToQueue = [...composerAttachments, ...mentionAttachments];
-        if (modelCannotReadImages(currentProviderId, currentModelId)) {
-            try {
-                attachmentsToQueue = await attachedImagesAsPathNotes(attachmentsToQueue, queueTarget.directory);
-            } catch (error) {
-                if (!(error instanceof ImageSaveForTextModelError)) throw error;
-                toast.error(t('chat.chatInput.toast.textModelImageSaveFailed', { files: error.filenames.join(', ') }));
-                return;
-            }
-            if (getRuntimeKey() !== queueRuntimeKey) return;
-        }
         const availableSkillNames = new Set(
-            availableSkills.map((skill) => skill.name),
+            selectAvailableSkillsForDirectory(useSkillsStore.getState(), queueTarget.directory).map((skill) => skill.name),
         );
-        const skillInstruction = buildSkillMentionInstruction(collectInlineSkillMentions(sanitizedText, availableSkillNames));
-        const textToQueue = await useSnippetsStore.getState().expandText(sanitizedText).catch((error) => {
-            console.warn('[queue] Failed to expand snippets, queueing original text:', error);
-            return sanitizedText;
-        });
+        const queuedSkillNames = collectInlineSkillMentions(sanitizedText, availableSkillNames);
+        let skillInstruction: string | null;
+        // Capture native expansion and bindings with the queued selection.
+        let expandedResource: FileResourceExpandResult | null;
+        try {
+            skillInstruction = queueSessionId
+                ? await expandCanonicalSkills(queueSessionId, queuedSkillNames)
+                : await expandWorkspaceSkillNames(queueTarget.directory, queuedSkillNames);
+            expandedResource = await expandNativeFileResource(sanitizedText, queueTarget.directory);
+            const invocation = expandedResource ? null : /^\/([^\s]+)(?:\s([\s\S]*))?$/.exec(sanitizedText);
+            if (invocation && availableSkillNames.has(invocation[1])) {
+                const slashSkill = queueSessionId
+                    ? await expandCanonicalSkills(queueSessionId, [invocation[1]], invocation[2] ?? '')
+                    : await expandWorkspaceSkillNames(queueTarget.directory, [invocation[1]], invocation[2] ?? '');
+                skillInstruction = [skillInstruction, slashSkill].filter(Boolean).join('\n\n');
+            }
+        } catch (error) {
+            toast.error(getSubmitErrorMessage(error, t('chat.queuedMessage.toast.queueFailed')));
+            return;
+        }
+        const textToQueue = expandedResource?.content ?? sanitizedText;
 
+        // Everything attached to the composer leaves with the message: the
+        // chips are part of what was queued, and come back if it is edited.
         const syntheticParts = consumePendingSyntheticParts(mailboxTarget) ?? [];
         const draftTarget = inlineDraftTarget;
         const drafts = draftTarget ? consumeDrafts(draftTarget) : [];
-        const linked = referencesLinkedIn(messageToQueue, linkedReferences);
-        const linkedToQueue = await withRegisteredSharedPages(withReferencesFromText(linked, referenceLinksIn(messageToQueue)));
-        const expandedDrafts = await expandCommentSnippets(drafts, useSnippetsStore.getState().expandText);
-        const actionsNote = currentSessionId
-            ? planRunningActionsNote(currentSessionId, collectRunningActions(projectActionsRef.current))
-            : null;
+        const linked = linkedReferences;
+        // Queued context is delivered as captured, so comment snippets expand now.
+        let expandedDrafts: InlineCommentDraft[];
+        try {
+            expandedDrafts = await expandCommentSnippets(drafts, text => useSnippetsStore.getState().expandText(text, queueTarget.directory));
+        } catch (error) {
+            if (draftTarget) useInlineCommentDraftStore.getState().restoreDrafts(draftTarget, drafts);
+            if (syntheticParts.length) useInputStore.getState().setPendingSyntheticParts(syntheticParts, mailboxTarget);
+            toast.error(getSubmitErrorMessage(error, t('chat.queuedMessage.toast.queueFailed')));
+            return;
+        }
         const context = buildComposerContext({
             inlineComments: expandedDrafts,
-            syntheticTexts: [...syntheticParts.map((part) => part.text), ...(actionsNote?.text ? [actionsNote.text] : [])],
-            references: [...linkedToQueue.map(toContextReference), ...sessionMentionsIn(messageToQueue)],
+            syntheticTexts: syntheticParts.map((part) => part.text),
+            references: [...linked.map(toContextReference), ...sessionMentionsIn(messageToQueue)],
         }, skillInstruction);
-        const goalArm = textToQueue.trim()
-            ? useSessionGoalArmStore.getState().consume()
-            : { armed: false, objectiveOverride: null };
-        const goalSettings = useUIStore.getState();
-        const goal: QueuedMessageGoal | undefined = goalArm.armed ? {
-            tokenBudget: goalSettings.sessionGoalDefaultBudgetEnabled ? goalSettings.sessionGoalDefaultBudget : null,
-        } : undefined;
-        if (goal && goalArm.objectiveOverride?.trim()) goal.objective = goalArm.objectiveOverride;
+        const attachmentsToQueue = [...composerAttachments, ...mentionAttachments];
 
+        // Sending while the agent works must still take the reader to the
+        // live edge — a queued message produces no user row yet, so the
+        // anchor path has nothing to claim and would leave the viewport
+        // parked mid-history.
         scrollToLatest?.();
 
+        // Clear the composer. The mentions it had confirmed were resolved
+        // above, so nothing later needs them.
         setMessage('');
         confirmedMentionsRef.current.clear();
         if (composerAttachments.length > 0) {
@@ -190,25 +214,40 @@ export function useComposerQueueActions({
             composerRef.current?.focus();
         }
 
+        const queuedProviderId = expandedResource?.modelSelection?.providerId ?? currentProviderId;
+        const queuedModelId = expandedResource?.modelSelection?.modelId ?? currentModelId;
+        const queuedAgent = queueSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(queueSessionId)
+            ?? useConfigStore.getState().currentAgentName
+            ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const queuedSessionEffort = queueSessionId && queuedAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                queueSessionId, queuedAgent, queuedProviderId ?? '', queuedModelId ?? '',
+            )
+            : undefined;
         try {
             await addToQueue(queueTarget, {
                 content: messageToQueue,
                 text: textToQueue,
-                agentMention: mention?.name,
                 attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
                 context: context.length > 0 ? context : undefined,
-                sendConfig: currentProviderId && currentModelId ? {
-                    providerID: currentProviderId,
-                    modelID: currentModelId,
-                    agent: currentAgentName ?? undefined,
+                sendConfig: queuedProviderId && queuedModelId ? {
+                    providerID: queuedProviderId,
+                    modelID: queuedModelId,
                     variant: currentVariant ?? undefined,
+                    reasoningEffort: reasoningEffortForModel(queuedProviderId, queuedModelId, {
+                        session: queuedSessionEffort,
+                        native: queueSessionId ? persistedThinkingLevel : undefined,
+                        draft: configuredReasoningEffort,
+                    }),
                 } : undefined,
-                goal,
             });
         } catch (error) {
             console.warn('[queue] failed to queue message:', error);
-            toast.error(t('chat.queuedMessage.toast.queueFailed'));
-            if (goalArm.armed) useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride);
+            toast.error(getSubmitErrorMessage(error, t('chat.queuedMessage.toast.queueFailed')));
+            // The composer was cleared on queueing; give everything back. The
+            // text is appended if the user has already typed something new.
             const currentInput = composerRef.current?.getValue() ?? composerText.get();
             if (!currentInput) {
                 setMessage(messageToQueue);
@@ -224,17 +263,12 @@ export function useComposerQueueActions({
             if (syntheticParts.length > 0) {
                 useInputStore.getState().setPendingSyntheticParts(syntheticParts, mailboxTarget);
             }
+            // Anything attached while the queue write was out stays, after these.
             updateLinkedReferencesFor(chatDraftIdentity, (current) => withComposerReferences(linked, current));
             return;
         }
-        if (queueSessionId && currentAgentName) {
-            useSelectionStore.getState().settleSessionAgentPick(queueSessionId, currentAgentName);
-        }
-        if (inputMode !== 'shell') settleModelPick();
-        void resumeAfterQueue().catch(console.warn);
-        recordLinkedReferences(queueSessionId, queueTarget.directory, linkedToQueue);
-        if (currentSessionId) actionsNote?.commit(currentSessionId);
-    }, [getCurrentInputSnapshot, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachmentsToSend, sanitizeAttachmentsForSend, prepareReadOnSendMentions, extractInlineFileMentions, mentionableAgents, availableSkills, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, setLinkedReferencesFor, updateLinkedReferencesFor, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t, readSessionMentionsBeforeSend, sessionMentionsIn, referenceLinksIn, composerText, setMessage, waitForPendingAttachments, projectActionsRef, handleSubmitRef, handleQueueMessageRef, confirmedMentionsRef, sendHeldByMissingFolderRef, composerRef]);
+        recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel, t, readSessionMentionsBeforeSend, sessionMentionsIn]);
 
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
         const synthetic: SyntheticContextPart[] = [];

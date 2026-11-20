@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { expect, mock, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';

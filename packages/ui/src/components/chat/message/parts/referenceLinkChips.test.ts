@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { CONTEXT_METADATA_KEY, type ContextPartPayload } from '@/lib/messages/contextParts';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import { githubLikeDescriptor } from '@/lib/source-control/providers/descriptor.fixture';
 import { createRepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
 import { linearLikeTrackerDescriptor } from '@/lib/trackers/descriptor.fixture';

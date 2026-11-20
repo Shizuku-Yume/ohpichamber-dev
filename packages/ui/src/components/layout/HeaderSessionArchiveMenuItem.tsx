@@ -1,4 +1,3 @@
-import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { SessionMenuItemHint } from '@/components/session/SessionMenuItemHint';
 import { toast } from '@/components/ui';

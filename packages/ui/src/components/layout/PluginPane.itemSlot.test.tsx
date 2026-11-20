@@ -3,8 +3,8 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { OpenCode } from '@opencode/client';
 import { Window } from 'happy-dom';
-import { hostMessageSchema } from '@openchamber/sdk/schemas';
-import type { GuestLinkItem, HostMessage } from '@openchamber/sdk';
+import { hostMessageSchema } from 'ohpichamber-sdk/schemas';
+import type { GuestLinkItem, HostMessage } from 'ohpichamber-sdk';
 
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';

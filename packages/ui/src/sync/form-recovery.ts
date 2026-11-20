@@ -1,3 +1,5 @@
+import type { Session } from '@openchamber/agent-contract';
+import { normalizePath } from '@/lib/pathNormalization';
 import type { Message, Part } from "@openchamber/agent-contract"
 import { isQuestionTool } from "@/lib/toolPresentation"
 
@@ -37,3 +39,8 @@ export async function recoverPendingFormWithRetry(
   }
   return false
 }
+
+export const resolveRecoveryDirectory = (
+  session: Pick<Session, "directory"> | null,
+  fallback: string | null,
+): string | null => normalizePath(session?.directory ?? null) ?? normalizePath(fallback)

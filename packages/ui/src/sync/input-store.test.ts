@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { strToU8, zipSync } from "fflate"
 import { useInputStore } from "./input-store"
 import { getChatDraftIdentityKey } from "@/lib/chatDraftPersistence"

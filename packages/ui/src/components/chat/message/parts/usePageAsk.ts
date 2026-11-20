@@ -1,5 +1,6 @@
 import type { RenderedPageAsk } from '@/lib/opencode/tools';
-import type { ToolPart } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPart = NativeToolCallPart | NativeToolResultPart;
 import { useIsCallWaiting } from '@/sync/global-blocking-requests';
 import { useLaterPage, type LaterPage } from '@/sync/later-pages';
 import { useSessionDirectory, useSessionStatus, useSessionStatusSnapshotReady } from '@/sync/sync-context';

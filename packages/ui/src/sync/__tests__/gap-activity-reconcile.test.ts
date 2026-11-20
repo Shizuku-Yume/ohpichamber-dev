@@ -1,9 +1,10 @@
+import { reconcileActivityAfterGap } from '@/sync/session-reconnect-recovery';
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { SyncEvent } from "@/lib/opencode/events"
-import type { Session, SessionStatus } from "@/lib/opencode/model"
+import type { Session, SessionRuntimeStatus as SessionStatus } from '@openchamber/agent-contract';
 import { opencodeClient } from "@/lib/opencode/client"
 import { ChildStoreManager } from "../child-store"
-import { reconcileActivityAfterGap } from "../sync-context"
+
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById, useGlobalSessionStatusStore } from "../global-session-status"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 

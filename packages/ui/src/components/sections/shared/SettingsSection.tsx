@@ -1,3 +1,5 @@
+
+import { Icon } from '@/components/icon/Icon';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -700,3 +702,7 @@ export function SettingsChipGroup<T extends string>({
     </div>
   );
 }
+
+const SETTINGS_TRIGGER_WIDTH_CLASS = 'w-fit max-w-[28ch]';
+
+export const SETTINGS_SELECT_ROW_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;

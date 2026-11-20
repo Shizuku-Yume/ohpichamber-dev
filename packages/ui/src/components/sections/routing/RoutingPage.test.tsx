@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Model, Provider } from '@openchamber/agent-contract';

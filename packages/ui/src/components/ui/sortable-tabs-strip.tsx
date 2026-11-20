@@ -466,7 +466,6 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
         {usesActivePillIndicator && pillRect ? (
           <div
             className={cn(
-              // oxlint-disable-next-line openchamber/no-physical-sides -- positioned from offsetLeft, which is physical in either direction
               'oc-raised pointer-events-none absolute left-0 top-0 z-0 rounded-md bg-[var(--surface-background)] dark:bg-[var(--surface-elevated)]',
               shouldAnimateActivePill && pillTransitionEnabled
               && (nonCompositedIndicator ? 'pill-tabs__indicator--is-animated-layout' : 'pill-tabs__indicator--is-animated')
@@ -488,7 +487,6 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
         {useUnderlineIndicator && pillRect ? (
           <div
             className={cn(
-              // oxlint-disable-next-line openchamber/no-physical-sides -- positioned from offsetLeft, which is physical in either direction
               'pointer-events-none absolute left-0 -bottom-px z-10 h-[3px] rounded-t-[2px] bg-foreground',
               pillTransitionEnabled && 'underline-tabs__indicator--is-animated'
             )}

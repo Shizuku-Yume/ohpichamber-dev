@@ -3,7 +3,6 @@ import { plugin } from 'bun';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import React from 'react';
 import { Window } from 'happy-dom';
 import type { Root } from 'react-dom/client';
 import type { StoreApi } from 'zustand';

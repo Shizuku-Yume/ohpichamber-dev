@@ -3,7 +3,7 @@ import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
 import type { Message, Part, ToolCallPart } from '@openchamber/agent-contract';
 
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSessionCompacting, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
+import { useDirectorySync, useSessionCompacting, useSessionMessages, useSessionPermissions } from '@/sync/sync-context';
 import { useSessionActivity } from './useSessionActivity';
 import type { AgentStatus } from '@/lib/agentStatus';
 import { normalizeIntent, toolPresentation } from '@/lib/toolPresentation';

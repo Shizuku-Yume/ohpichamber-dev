@@ -1,3 +1,4 @@
+import { subscribeConfigStoreChanges } from './config/subscriptions';
 import { create } from "zustand";
 import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';

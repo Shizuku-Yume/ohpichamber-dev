@@ -1,4 +1,4 @@
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 
 
 const DOCUMENT_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'";

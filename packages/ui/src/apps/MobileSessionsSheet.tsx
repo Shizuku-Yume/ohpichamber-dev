@@ -542,7 +542,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
             <SessionSidebar mobileVariant isVisible={listActive} phone={phoneList} />
           </MobileSidebarActionsProvider>
         </div>
-      ) : null}
       {empty ? (
         <div className="min-h-0 flex-1">
           <MobileSessionsEmpty

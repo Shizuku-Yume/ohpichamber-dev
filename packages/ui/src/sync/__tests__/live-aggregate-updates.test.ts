@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Session } from '@/lib/opencode/model'
+import type { Session } from '@openchamber/agent-contract';
 
 import { aggregateLiveSessions } from '../live-aggregate'
 

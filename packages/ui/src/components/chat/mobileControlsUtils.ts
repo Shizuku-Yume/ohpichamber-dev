@@ -1,3 +1,4 @@
+
 import type { Agent } from '@openchamber/agent-contract';
 import { getProviderModelDisplayName, type DisplayProvider } from '@/lib/modelDisplay';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
@@ -90,4 +91,32 @@ export const formatEffortLabel = (
     if (/^\d+(\.\d+)?$/.test(trimmed)) return trimmed;
     const name = trimmed.toLowerCase();
     return isKnownEffortLabel(name) ? t(EFFORT_LABEL_KEYS[name]) : capitalizeLabel(trimmed);
+};
+
+export const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
+
+const getCyclablePrimaryAgents = (agents: readonly CyclableAgent[]) => agents.filter((agent) => isPrimaryMode(agent.mode));
+
+export const getCycledPrimaryAgentName = (
+    agents: readonly CyclableAgent[],
+    currentAgentName: string | undefined,
+    direction: 1 | -1 = 1,
+    favoriteAgentNames: readonly string[] = [],
+) => {
+    const primaryAgents = getCyclablePrimaryAgents(agents);
+    const favorites = primaryAgents.filter((agent) => favoriteAgentNames.includes(agent.name));
+    if (favorites.length > 0) {
+        const index = favorites.findIndex((agent) => agent.name === currentAgentName);
+        if (index < 0) return (direction === 1 ? favorites[0] : favorites[favorites.length - 1]).name;
+        if (favorites.length === 1) return null;
+        return favorites[(index + direction + favorites.length) % favorites.length].name;
+    }
+    if (primaryAgents.length <= 1) {
+        return null;
+    }
+
+    const currentIndex = primaryAgents.findIndex((agent) => agent.name === currentAgentName);
+    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeCurrentIndex + direction + primaryAgents.length) % primaryAgents.length;
+    return primaryAgents[nextIndex]?.name ?? null;
 };

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { createContextPart } from '@/lib/messages/contextParts';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { useMessageSelectionStore } from '@/stores/useMessageSelectionStore';
 import type { ChatMessageEntry } from '../lib/turns/types';
 import { listSelectableUnits } from './selectableUnits';

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { Message } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 
 
 export type ShareAnswer = {

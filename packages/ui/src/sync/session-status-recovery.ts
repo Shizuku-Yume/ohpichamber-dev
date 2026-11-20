@@ -1,5 +1,5 @@
 import type { StoreApi } from "zustand"
-import type { SessionStatus } from "@/lib/opencode/model"
+import type { SessionRuntimeStatus as SessionStatus } from '@openchamber/agent-contract';
 import { type DirectoryStore } from "./child-store"
 import { runBackgroundNetworkTask } from "@/lib/background-network"
 import { selectHeldSessionStatuses } from "./directory-recovery-snapshots"

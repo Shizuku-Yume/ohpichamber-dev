@@ -1,7 +1,9 @@
 import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import type { Metadata, ToolInput, ToolPart as ToolPartType } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+import type { Metadata, ToolInput } from '@/lib/opencode/model';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import { useUIStore } from '@/stores/useUIStore';
 import { toAbsoluteFilePath } from '@/lib/path-utils';
 import { hasTextSelectionInside } from '@/lib/textSelection';

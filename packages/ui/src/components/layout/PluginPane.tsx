@@ -51,8 +51,6 @@ import {
 import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { guestMay, isGuestActive } from '@/lib/guests/capabilities';
 import { guestFileOperation } from '@/lib/guests/files';
-import { useHostDevice } from '@/lib/guests/useHostDevice';
-import { useHostTypography } from '@/lib/guests/useHostTypography';
 import { guestGenerate } from '@/lib/guests/generate';
 import { guestGenerateResults, lateGenerateResult, type GenerateOwner } from '@/lib/guests/generate-results';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -98,7 +96,6 @@ import { DockedPanelSurfaceContext, usePageColors } from '@/hooks/usePageColors'
 import { useInputStore } from '@/sync/input-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
-import { isForegroundShellStopping } from '@/components/chat/message/parts/foregroundShellStop';
 import { useSessionSelector, useSessionStatus } from '@/sync/sync-context';
 import type { Session } from '@openchamber/agent-contract';
 import { GuestPopover } from './GuestPopover';

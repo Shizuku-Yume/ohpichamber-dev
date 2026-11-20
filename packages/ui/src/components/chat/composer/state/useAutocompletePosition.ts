@@ -4,7 +4,6 @@ import React from 'react';
 import type { ComposerEditorHandle } from '../editor/ComposerEditor';
 import type { AutocompleteKind } from '../language/triggers';
 import type { AutocompleteOverlayPosition } from '../ui/ComposerAutocompletePopups';
-import type { ComposerText } from './composerText';
 
 export interface AutocompletePositionOptions {
     /** Only focus mode places popups at the caret. */

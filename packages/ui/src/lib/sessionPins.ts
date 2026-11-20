@@ -1,3 +1,5 @@
+import { parseMetadata } from '@/lib/metadataParse';
+import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
 import { z } from 'zod';
 import type { Session, SessionMetadata as Metadata } from '@openchamber/agent-contract';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -68,3 +70,11 @@ export function withSessionPinned(metadata: Metadata, pinned: boolean, now: numb
  delete next.isPinned;
  return next;
 }
+
+const pinnedSchema = z.object({ openchamber: z.object({ pinned: z.object({ at: z.number(), list: z.string().min(1).optional() }) }) });
+
+export const getSessionPinList = (session: Session | null | undefined): string | null => {
+  const parsed = parseMetadata(pinnedSchema, session?.metadata);
+  if (!parsed.success) return null;
+  return parsed.data.openchamber.pinned.list ?? DEFAULT_PIN_LIST;
+};

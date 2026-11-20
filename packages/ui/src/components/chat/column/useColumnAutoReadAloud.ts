@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { useAutoReadAloud } from '@/hooks/useAutoReadAloud';

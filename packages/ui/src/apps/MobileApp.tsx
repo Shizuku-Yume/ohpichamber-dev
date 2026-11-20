@@ -1,3 +1,7 @@
+import { connectMobileWorkspaceOpener } from '@/lib/mobileWorkspaceTabs';
+import { PluginPane } from '@/components/layout/PluginPane';
+import { pluginModeFromId } from '@/lib/surfaces/modes';
+import { GuestHosts } from '@/components/layout/GuestHosts';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -21,7 +25,6 @@ import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MobileToaster } from './MobileToaster';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
-import { useKeepScreenAwake } from '@/hooks/useKeepScreenAwake';
 import { useRouter } from '@/hooks/useRouter';
 import { useTerminalSessionKeepalive } from '@/hooks/useTerminalSessionKeepalive';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
@@ -90,7 +93,6 @@ import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
 import { useMobilePairingConfirmation } from './useMobilePairingConfirmation';
 import { useEdgeSwipe } from './useEdgeSwipe';
 import { useNativePushRegistration } from './useNativePushRegistration';
-import { useNativeWidgetSync } from './useNativeWidgetSync';
 import { IpadSidebarResizeHandle } from './IpadSidebarResizeHandle';
 import {
   IPAD_LEFT_SIDEBAR_WIDTH,
@@ -100,7 +102,6 @@ import {
 } from './ipadSidebarResize';
 import { ReceivedPagePanel } from '@/components/chat/sharePages/received/ReceivedPagePanel';
 import { focusChatInput } from '@/components/chat/composer/editor/dom';
-import { hasReceivedPages, useReceivedPagesStore } from '@/components/chat/sharePages/received/receivedPagesStore';
 
 type MobileAppProps = {
   apis: RuntimeAPIs;

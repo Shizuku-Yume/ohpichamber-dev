@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
 

@@ -2,13 +2,7 @@ import React from 'react';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { sidebarPendingWidth } from '@/components/layout/sidebarPendingWidth';
-import {
-  CONTEXT_ZONE_DEFAULT_WIDTH,
-  isZoneShown,
-  resolveZoneActiveTab,
-  showsFileTreeOnly,
-  sideZoneWidth,
-} from '@/lib/workspace/zones';
+import { isZoneShown } from '@/lib/workspace/zones';
 
 export const WORK_STATUS_PANEL_WIDTH = 300;
 

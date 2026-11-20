@@ -1,3 +1,5 @@
+import type { MarkdownPresentation } from './MarkdownPresentationContext';
+import { useChatSurfaceMode } from '../useChatSurfaceMode';
 import React from 'react';
 import {
   CodeBlockContainer,

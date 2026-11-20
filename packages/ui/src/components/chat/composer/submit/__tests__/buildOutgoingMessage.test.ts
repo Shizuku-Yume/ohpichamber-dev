@@ -44,7 +44,8 @@ describe('a share link in the text', () => {
         const link = 'https://share.openchamber.dev/p/AbCdEfGhIjKlMnOpQrStUv';
         const out = buildOutgoingMessage(input({ composerText: `[pick](${link}#Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE)`, queued: [{ text: `${link}#Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE` }] }), deps());
         expect(out.primaryText).not.toContain('Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE');
-        expect(out.primaryText).toContain(`[pick](${link})`);
+        expect(out.primaryText).toBe(link);
+        expect(out.additionalParts.some((part) => part.text.includes(`[pick](${link})`))).toBe(true);
     });
 });
 

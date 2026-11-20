@@ -3,7 +3,6 @@ import type { SessionNode } from '../types';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
-import { useExtensionWaitsStore } from '@/sync/extension-waits';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { usePrWatchStore } from '@/sync/pr-watch';
 

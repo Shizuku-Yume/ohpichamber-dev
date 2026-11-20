@@ -1,3 +1,4 @@
+import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import React from 'react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { Icon } from '@/components/icon/Icon';

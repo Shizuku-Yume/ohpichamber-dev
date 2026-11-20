@@ -1,3 +1,4 @@
+import { parseMetadata } from '@/lib/metadataParse';
 import { z } from 'zod';
 
 import type { Session } from '@openchamber/agent-contract';

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 
 import {
   EMPTY_GUEST_MARK_INDEX,

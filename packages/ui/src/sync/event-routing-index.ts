@@ -1,5 +1,5 @@
 import { syncEventMessageID, syncEventSessionID, type SyncEvent } from "@/lib/opencode/events"
-import type { Message } from "@/lib/opencode/model"
+import type { Message } from '@openchamber/agent-contract';
 import { ChildStoreManager } from "./child-store"
 import { LOCATION_SCOPED_FORM_SESSION_ID } from "./location-scoped-forms"
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"

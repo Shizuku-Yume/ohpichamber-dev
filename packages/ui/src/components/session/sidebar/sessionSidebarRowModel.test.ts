@@ -1,3 +1,5 @@
+import { getWorkFolderOwnerKey } from './sessions/sessionFolderIdentity';
+import { deriveSessionRowBulkSelectAll } from './sessions/sessionRowOrder';
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';

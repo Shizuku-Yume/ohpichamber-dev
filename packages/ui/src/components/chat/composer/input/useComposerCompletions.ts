@@ -8,12 +8,13 @@ import type { useComposerEditorActions } from './useComposerEditorActions';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerAutocompleteState } from './useComposerAutocompleteState';
 import type { ComposerSendHandlers } from './composerSendHandlers';
-import { resolveGuestMention, type GuestMention } from '@/lib/guests/mentions';
+import type { GuestMention } from '@/lib/guests/mentions';
 import type { CommandInfo } from '../../CommandAutocomplete';
+import type { Session } from '@openchamber/agent-contract';
+import { resolveGuestMention } from '@/lib/guests/mentions';
 import { withoutSnippetToken } from '@/lib/snippetNames';
 import { toast } from '@/components/ui';
 import { sessionLinkText, sessionReference } from '../../composer/sessionReferences';
-import { type Session } from '@/lib/opencode/model';
 import { confirmMention } from '../../composer/language/mentions';
 import { lastPrefixSigilIndex } from '../../composer/language/prefixTokens';
 import { useComposerTextValue } from '../../composer/state/composerText';
@@ -32,10 +33,23 @@ type Dependencies = {
     sendHandlers: Pick<ComposerSendHandlers, 'handleSubmitRef'>;
 };
 
+export interface ComposerCompletions {
+    handleCommandSelect: (command: CommandInfo) => void;
+    handleSkillSelect: (name: string) => void;
+    handleSnippetSelect: (snippet: unknown, trigger: string) => void;
+    snippetDraftText: string | undefined;
+    handleSnippetDraftSaved: (name: string) => void;
+    handleFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
+    handleAgentSelect: (name: string) => void;
+    handleSessionSelect: (session: Session) => void;
+    handleExtensionMentionSelect: (mention: GuestMention) => void;
+    handleEmojiSelect: (emoji: string) => void;
+}
+
 export function useComposerCompletions({
     editorState, autocompleteState, draftText, i18n, mentionPaths, language, editorActions,
     referenceDrafts, sessionScope, sendHandlers,
-}: Dependencies) {
+}: Dependencies): ComposerCompletions {
     const { composerRef } = editorState;
     const { completingMentionRef, closeAutocomplete, openAutocomplete, autocompleteQuery } = autocompleteState;
     const { confirmedMentionsRef, composerText, setMessage, currentChatDraftIdentityRef } = draftText;
@@ -83,7 +97,7 @@ export function useComposerCompletions({
         const cursorPosition = composerRef.current?.getSelection().start ?? message.length;
         const lastAtSymbol = message.substring(0, cursorPosition).lastIndexOf('@');
         const start = lastAtSymbol === -1 ? cursorPosition : lastAtSymbol;
-        const inserted = `${sessionLinkText(session.id)} `;
+        const inserted = `${sessionLinkText(session.sessionId)} `;
         rememberSessionMentions([sessionReference(session)]);
         const newMessage = message.substring(0, start) + inserted + message.substring(cursorPosition);
         setMessage(newMessage);

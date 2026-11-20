@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { I18nProvider } from '@/lib/i18n';

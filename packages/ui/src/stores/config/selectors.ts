@@ -1,6 +1,7 @@
 import { type ProviderWithModelList, type ConfigStore, type ProviderModel, type ConfigSlice } from './types';
 import { toConfigDirectoryKey } from './directories';
-import { type Agent, findCatalogModel } from '@/lib/opencode/model';
+import type { Agent } from '@openchamber/agent-contract';
+import { findCatalogModel } from '@/lib/opencode/model';
 import { isMissingFromCatalog, isStaleAutoSelection as resolveStaleAutoSelection } from './selectionResolution';
 import { hasLiveCatalog } from './directorySnapshots';
 import { useConfigStore } from '../useConfigStore';

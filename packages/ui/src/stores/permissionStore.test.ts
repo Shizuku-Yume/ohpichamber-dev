@@ -1,7 +1,4 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { directoryEnvironment } from './test-support/directoryEnvironment';
-import { ChildStoreManager } from '@/sync/child-store';
-import { setSyncRefs } from '@/sync/sync-refs';
 
 let fetchImpl: (input: string, init?: RequestInit) => Promise<Response>;
 const runtimeFetchModule = await import('@/lib/runtime-fetch');

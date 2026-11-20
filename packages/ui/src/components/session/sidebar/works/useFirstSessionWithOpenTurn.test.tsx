@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import type { CanonicalEvent } from '@openchamber/agent-contract';

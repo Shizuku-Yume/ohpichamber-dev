@@ -1,12 +1,9 @@
 import React from 'react';
-import { Capacitor } from '@capacitor/core';
 
 import { isCapacitorApp } from '@/lib/platform';
 import type { PairingConnectionPayload } from '@/lib/connectionPayload';
-import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import type { QuotaProviderId } from '@/types';
-import { useInputStore } from '@/sync/input-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { openSession } from '@/lib/router/openSessionFromRoute';
 
@@ -24,7 +21,7 @@ let handlers: DeepLinkHandlers = {};
 let ready = false;
 type NavigationIntent = Exclude<DeepLinkIntent, { type: 'pairing' }>;
 let pending: NavigationIntent | null = null;
-let launchUrlConsumed = false;
+const launchUrlConsumed = false;
 
 const execute = (intent: NavigationIntent): boolean => {
   switch (intent.type) {

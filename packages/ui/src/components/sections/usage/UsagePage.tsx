@@ -4,7 +4,6 @@ import { ConsoleBudgetsSection } from './ConsoleBudgetsSection';
 import { useQuotaAutoRefresh, useQuotaProviders, useQuotaStore } from '@/stores/useQuotaStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { QuotaProviderLogo } from '@/components/usage/QuotaProviderLogo';
-import { selectVisibleModelNames, toggleVisibleModel } from '@/components/usage/usageModelSelection';
 import {
   Collapsible,
   CollapsibleContent,

@@ -6,7 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useInputStore } from '@/sync/input-store';
-import { attachmentWireName, attachmentsCitedIn } from '@/lib/attachmentIdentity';
+import { attachmentsCitedIn } from '@/lib/attachmentIdentity';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';

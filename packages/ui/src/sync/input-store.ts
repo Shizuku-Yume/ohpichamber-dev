@@ -4,10 +4,10 @@ import type { AttachIssueRequest } from 'ohpichamber-sdk'
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import type { InlineCommentDraftTarget } from "@/stores/useInlineCommentDraftStore"
-import { HeicConversionError, prepareAttachmentFiles } from "./attachment-files"
+import { prepareAttachmentFiles } from "./attachment-files";
 import { getChatDraftIdentityKey, subscribeChatDraftDeletion, type ChatDraftIdentity } from "@/lib/chatDraftPersistence"
 import { pathForDroppedFile } from "@/lib/desktop"
-import { assignFileAttachmentFilenames, attachmentBasename } from "@/lib/attachmentIdentity"
+import { attachmentBasename } from "@/lib/attachmentIdentity";
 import { formatFileSize } from "@/lib/fileSize"
 import { formatMessage, useI18nStore } from "@/lib/i18n/store"
 

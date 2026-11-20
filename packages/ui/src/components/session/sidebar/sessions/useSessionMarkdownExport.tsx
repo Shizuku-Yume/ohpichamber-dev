@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, getExportRevealLabelKey, revealExportedMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
 import type { ChildSessionExport } from '@/lib/exportSession';
 import { useI18n } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
 import type { SessionNode } from '../types';
 import { buildActiveSessionTreeFromCache } from './sessionSubtreeActions';

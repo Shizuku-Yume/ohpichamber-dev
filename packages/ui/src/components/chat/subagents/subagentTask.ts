@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { isSubagentTool, subagentSessionId } from '@/lib/opencode/tools';
 
 const subagentCallInputSchema = z.object({ prompt: z.string().trim().min(1) });

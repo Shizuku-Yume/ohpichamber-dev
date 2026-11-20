@@ -1,4 +1,5 @@
 
+
 const NESTED_SCROLLABLE_SELECTOR = '[data-scrollable]';
 
 export const isFollowReleaseKey = (
@@ -96,3 +97,8 @@ export function onTabStep(container: HTMLElement, listener: (tabs: HTMLElement) 
 
 export const isMiddleButtonPan = (root: HTMLElement, event: Pick<MouseEvent, 'button' | 'target'>): boolean =>
     event.button === 1 && nestedScrollable(root, event.target) === null;
+
+export function onNavigationRelease(scroller: HTMLElement, listener: () => void): () => void {
+    scroller.addEventListener(NAVIGATION_RELEASE_EVENT, listener);
+    return () => scroller.removeEventListener(NAVIGATION_RELEASE_EVENT, listener);
+}

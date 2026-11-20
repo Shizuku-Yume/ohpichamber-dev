@@ -16,47 +16,7 @@ import { formatQuotaResetLabel, formatWindowLabel } from '@/lib/quota';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useChatColumnActions } from '../../chatColumnSession';
-import {
-    dispatchedSchema,
-    workflowSavedSchema,
-    workflowStoppedSchema,
-    workflowResultSchema,
-    workflowListedSchema,
-    workflowCheckedSchema,
-    browserResizedSchema,
-    browserInspectedSchema,
-    browserNavigatedSchema,
-    browserScrolledSchema,
-    browserSelectedSchema,
-    browserTypedSchema,
-    browserClickedSchema,
-    browserSnapshotSchema,
-    scheduleRanSchema,
-    fileOpenedSchema,
-    workNamedSchema,
-    sessionMessagesSchema,
-    sessionStatusSchema,
-    knowledgeListedSchema,
-    knowledgeSavedSchema,
-    linkedSchema,
-    unlinkedSchema,
-    memoriesListedSchema,
-    memorySavedSchema,
-    modelPreferencesSchema,
-    modelsFoundSchema,
-    movedSchema,
-    pageOpenedSchema,
-    projectsListedSchema,
-    scheduledSchema,
-    scheduleListedSchema,
-    screenshotSchema,
-    sessionsListedSchema,
-    tightestWindow,
-    readOpenChamberCallInput,
-    usageSchema,
-    type OpenChamberCallInput,
-    type OpenChamberEnvelope,
-} from './openChamberToolEnvelope';
+import { dispatchedSchema, workflowSavedSchema, workflowStoppedSchema, workflowResultSchema, workflowListedSchema, workflowCheckedSchema, browserResizedSchema, browserInspectedSchema, browserNavigatedSchema, browserScrolledSchema, browserSelectedSchema, browserTypedSchema, browserClickedSchema, browserSnapshotSchema, scheduleRanSchema, fileOpenedSchema, workNamedSchema, sessionMessagesSchema, sessionStatusSchema, knowledgeListedSchema, knowledgeSavedSchema, linkedSchema, unlinkedSchema, memoriesListedSchema, modelPreferencesSchema, modelsFoundSchema, movedSchema, pageOpenedSchema, projectsListedSchema, scheduledSchema, scheduleListedSchema, screenshotSchema, sessionsListedSchema, tightestWindow, readOpenChamberCallInput, usageSchema, type OpenChamberCallInput, type OpenChamberEnvelope } from './openChamberToolEnvelope';
 import { GeneratedImages } from './GeneratedImages';
 import { RawToggleContext, usePanelsAvailable } from './toolResultContext';
 import { Actions, Field, List, ListRow, Section, SessionLinkRow, Warning, WebLinkRow, type OpenActionInput } from './ToolResultParts';

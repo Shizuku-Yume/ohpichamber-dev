@@ -1,3 +1,4 @@
+import { copyTextToClipboard } from '@/lib/clipboard';
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';

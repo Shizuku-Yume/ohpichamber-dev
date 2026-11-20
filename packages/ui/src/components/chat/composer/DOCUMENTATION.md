@@ -3,6 +3,21 @@
 The chat composer: the prompt language, the editor that renders it, and
 everything between typing and sending.
 
+`ChatInput.tsx` composes the `input/` hooks and render functions. Selection,
+draft lifetime, reference preparation, queue capture and submission each have
+one state owner there. Agent commands, skill/resource expansion and sends use
+the Canonical Client; file access and tracker notifications use Host services.
+Queued configuration is captured before delivery, and submission retains its
+runtime-switch revision across asynchronous preparation. Document mentions are
+prepared before consuming a draft, so a failed read leaves the draft intact.
+Pasted-image path citations persist through the workspace Host upload service,
+not through an agent SDK temporary-file endpoint.
+
+Native `/btw` questions use the parent's selection and return ephemeral records,
+not independent sessions. Their pending composer key is UI draft identity only;
+record IDs never drive canonical session model lookups. Per-BTW SDK-session
+model, agent and permission overrides are not supported by the native contract.
+
 `ChatInput.tsx` (one directory up) composes the hooks and render helpers in
 `input/`. Those modules hold the composer's state and event handlers and wire
 the language, editor, attachment and submission modules together.

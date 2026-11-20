@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 
-import type { JsonValue, Metadata } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
+import type { Metadata } from '@/lib/opencode/model';
 
 type MetadataParseResult<T> = { success: true; data: T } | { success: false; data?: undefined };
 

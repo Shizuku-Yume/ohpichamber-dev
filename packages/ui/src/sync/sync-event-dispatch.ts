@@ -1,5 +1,5 @@
 import { syncEventMessageID, syncEventSessionID, type SyncEvent } from "@/lib/opencode/events"
-import type { PermissionRequest } from "@/lib/opencode/model"
+import type { ApprovalRequest as PermissionRequest } from '@openchamber/agent-contract';
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { reduceGlobalEvent, applyDirectoryEvent } from "./event-reducer"
 import { useGlobalSyncStore } from "./global-sync-store"

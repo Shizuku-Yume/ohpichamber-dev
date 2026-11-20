@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { memoizeSessionListProjection } from '@/stores/sessionListProjection';
 import type { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { isRestorableOnItsOwn } from '@/sync/session-restore-rule';

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { FilePart, Part } from '@/lib/opencode/model';
+import type { AttachmentPart as FilePart, Part } from '@openchamber/agent-contract';
 import { sessionMentionChipsOf } from '../parts/sessionMentionChips';
 import { useReferenceLinkChips } from '../parts/referenceLinkChips';
 import { readContextPart } from '@/lib/messages/contextParts';

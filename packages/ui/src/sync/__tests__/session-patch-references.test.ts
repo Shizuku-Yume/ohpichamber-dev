@@ -1,10 +1,11 @@
+import { createEventRoutingIndex } from '@/sync/event-routing-index';
 import { afterEach, describe, expect, test } from "bun:test"
 import type { SyncEvent } from "@/lib/opencode/events"
-import type { Message, Part, Session } from "@/lib/opencode/model"
+import type { Message, Part, Session } from '@openchamber/agent-contract';
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { ChildStoreManager } from "../child-store"
 import { setActionRefs } from "../session-actions"
-import { createEventRoutingIndex, handleEvent } from "../sync-context"
+import { handleEvent } from "../sync-context"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup() })

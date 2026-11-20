@@ -138,10 +138,10 @@ export function buildOutgoingMessage(
     ));
 
     return {
-        primaryText,
+        primaryText: withoutShareLinkKeys(primaryText),
         primaryFileResourcesExpanded: input.queued.length > 0,
         primaryAttachments,
-        additionalParts,
+        additionalParts: additionalParts.map((part) => ({ ...part, text: withoutShareLinkKeys(part.text) })),
         skillNames,
         isEmpty: !primaryText && primaryAttachments.length === 0 && additionalParts.length === 0,
     };

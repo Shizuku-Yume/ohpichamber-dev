@@ -1,29 +1,29 @@
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerColumn } from './useComposerColumn';
+import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useDraftAttachedFiles, useInputStore } from '@/sync/input-store';
 import * as sessionActions from '@/sync/session-actions';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { createChatDraftIdentity, type ChatDraftIdentity } from '@/lib/chatDraftPersistence';
-import { btwHoldsDock, useBtwPanelState } from '../../btw/useBtwPanelState';
+import { createChatDraftIdentity } from '@/lib/chatDraftPersistence';
+import { useBtwPanelState } from '../../btw/useBtwPanelState';
 import { btwPendingComposerKey } from '@/lib/btw';
 import { useProjectActions } from '@/components/layout/projectActionsRunnerContext';
 import { usePendingComposerReferences } from '../../composer/pendingComposerReferences';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRetryModelPick } from '@/hooks/useRetryModelPick';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useComposerTextEffect } from '../../composer/state/composerText';
-import { useOpenCodeTrustPaused } from '@/components/projects/useOpenCodeTrustPause';
 import { useFolderMissing } from '@/components/session/sidebar/projects/useProjectFolderMissing';
 import { isSpaceDirectory } from '@/lib/spaces/space-route';
 import { useMessageSelecting } from '@/stores/useMessageSelectionStore';
 import { useScopedBlockingForms, useScopedBlockingPermissions } from '@/sync/sync-context';
 import { resolveWorkDraftComposerKey, NEW_CHAT_DRAFT_DIRECTORY } from './composerDraftIdentity';
 
-const probeSessionLocation = (directory: string) => opencodeClient.getLocationAvailability(directory);
+const probeSessionLocation = (directory: string) => hostFilesystem.getDirectoryAvailability(directory);
 
 type Dependencies = {
     column: Pick<ReturnType<typeof useComposerColumn>, 'chatColumnSession' | 'columnPinned'>;
@@ -53,17 +53,13 @@ export function useComposerSessionScope({
 
     const liveEffectiveDirectory = useEffectiveDirectory();
 
-    const currentDirectory = liveEffectiveDirectory ?? fallbackDirectory;
+    const currentDirectory = (chatColumnSession ? chatColumnSession.directory : liveEffectiveDirectory) ?? fallbackDirectory;
 
     const currentSessionDirectoryForSync = useSessionUIStore(
         React.useCallback((s) => currentSessionId ? s.getDirectoryForSession(currentSessionId) : null, [currentSessionId]),
     );
 
-    const trustDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? null;
-
-    const trustPausedDirectory = useOpenCodeTrustPaused(trustDirectory) ? trustDirectory : null;
-
-    const btwPanel = useBtwPanelState(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    const btwPanel = useBtwPanelState(currentSessionId);
 
     const pendingForms = useScopedBlockingForms(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
 
@@ -73,9 +69,9 @@ export function useComposerSessionScope({
 
     const hasPendingForm = pendingForms.length > 0 || hasPendingPermission;
 
-    const btwSessionId = btwPanel.btwSessionId;
+    const btwSessionId = btwPanel.ephemeralRecordId;
 
-    const btwDirectory = btwPanel.btwDirectory;
+    const btwDirectory = currentSessionDirectoryForSync ?? currentDirectory;
 
     const btwComposerSessionId = btwPanel.pending && currentSessionId
         ? btwPendingComposerKey(currentSessionId)
@@ -84,19 +80,17 @@ export function useComposerSessionScope({
     const isBtwActive = Boolean(btwComposerSessionId) && !btwPanel.collapsed;
 
     useRetryModelPick(
-        isBtwActive ? btwSessionId : currentSessionId,
-        (isBtwActive ? btwDirectory : null) ?? currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
+        currentSessionId,
+        currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
     );
 
-    const isBtwPanelVisible = btwHoldsDock(btwPanel, hasPendingForm);
+    const isBtwPanelVisible = Boolean(btwPanel.pending || btwPanel.ephemeralRecordId);
 
     const immediateBtwSubmitRef = React.useRef<{ identity: ChatDraftIdentity; text: string } | null>(null);
 
     const draftCaretModeRef = React.useRef({ btw: isBtwActive, atEnd: isBtwActive });
 
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
-
-    const isPromotedBtwSession = btwPanel.parentPromoted;
 
     const activeRuntimeKey = getRuntimeKey();
 
@@ -169,15 +163,9 @@ export function useComposerSessionScope({
         [currentSessionId],
     ));
 
-    const btwModelSelection = useSelectionStore(React.useCallback(
-        (s) => btwComposerSessionId ? s.sessionModelSelections.get(btwComposerSessionId) ?? null : null,
-        [btwComposerSessionId],
-    ));
 
-    const btwAgentSelection = useSelectionStore(React.useCallback(
-        (s) => btwComposerSessionId ? s.sessionAgentSelections.get(btwComposerSessionId) ?? null : null,
-        [btwComposerSessionId],
-    ));
+
+
 
     const consumePendingBtwComposerRequest = useInputStore((s) => s.consumePendingBtwComposerRequest);
 
@@ -227,15 +215,15 @@ export function useComposerSessionScope({
 
     return {
         currentSessionId, currentDirectory, isBtwActive, btwComposerSessionId, sessionAgentPick,
-        btwAgentSelection, btwModelSelection, activeRuntimeKey, chatDraftIdentity, inputMode, attachedFiles,
+        activeRuntimeKey, chatDraftIdentity, inputMode, attachedFiles,
         closeReviewDialog, newSessionDraftOpen, newSessionDraft, currentSessionDirectoryForSync,
         btwSessionId, isBtwPanelVisible, draftCaretModeRef, immediateBtwSubmitRef, pendingBtwComposerRequest,
         consumePendingBtwComposerRequest, btwDirectory, btwPanel, sendHeldByMissingFolderRef,
         consumePendingSyntheticParts, projectActionsRef, clearAttachedFiles, sendHeldByMissingFolder,
-        setReviewDialogOpen, isPromotedBtwSession, sessionFolder, pendingPresetSubmit, pendingDraftSubmit,
+        setReviewDialogOpen, sessionFolder, pendingPresetSubmit, pendingDraftSubmit,
         clearAbortPrompt, abortCurrentOperation, pickSessionAgent, addAttachedFile, setPendingInputText,
         pendingGuestIssue, consumePendingGuestIssue, pendingComposerReferenceCount, setNewSessionDraftTarget,
-        hasPendingForm, trustPausedDirectory, currentManagementSessionId, draftPermissionMode,
+        hasPendingForm, currentManagementSessionId, draftPermissionMode,
         setDraftPermissionMode, abortPromptSessionId, acknowledgeSessionAbort, claimAttachmentSlot,
         messageSelectionActive, hasPendingPermission, reviewDialogMounted, reviewDialogOpen,
     };

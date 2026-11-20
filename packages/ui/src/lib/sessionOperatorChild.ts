@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 import { parseMetadata } from '@/lib/metadataParse';
-import type { Metadata, PermissionRuleset, Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import type { Metadata, PermissionRuleset } from '@/lib/opencode/model';
 import { withSessionWorkState } from '@/lib/sessionWorkMetadata';
 
 const operatorChildLinkSchema = z.object({

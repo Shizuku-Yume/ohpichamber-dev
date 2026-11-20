@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 import { z } from 'zod';
 
 import { createPageDriver, type JsonObject, type PageDialog } from './pageDriver';

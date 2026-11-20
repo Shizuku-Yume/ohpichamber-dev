@@ -1,3 +1,4 @@
+import { trimTrailingSeparators } from './directoryExplorerStart';
 import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {

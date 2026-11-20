@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import type { MCPOAuthResult, MCPServerConfig } from '@openchamber/agent-contract';
-import React, { act } from 'react';
+import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Element as HappyElement, HTMLElement, Window } from 'happy-dom';
 

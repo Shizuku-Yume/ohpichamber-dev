@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { resolveAdmittedLineageDirectory } from './session-admission-rule';
 
 const session = (id: string, directory: string, parentID?: string): Session => ({

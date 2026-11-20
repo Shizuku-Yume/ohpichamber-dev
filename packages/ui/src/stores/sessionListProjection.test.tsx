@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { useShallow } from 'zustand/react/shallow';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { withMultiRunMembership } from '@/lib/multirun/identity';
 import { selectArchivedSessions, selectActiveArchiveSessions, selectArchiveParentTitles } from '@/components/views/archive/sessionSelectors';
 import { selectHasChats } from '@/apps/mobileSessionFields';

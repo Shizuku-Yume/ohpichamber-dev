@@ -1,4 +1,4 @@
-import type { FormRequest, Message, Part, PermissionRequest } from "@/lib/opencode/model"
+import type { QuestionRequest as FormRequest, Message, Part, ApprovalRequest as PermissionRequest } from '@openchamber/agent-contract';
 
 export const EMPTY_MESSAGES: Message[] = []
 

@@ -1,3 +1,5 @@
+
+import { canKeepScreenAwake } from '@/lib/platform';
 import type { I18nKey } from '@/lib/i18n/store';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
@@ -1867,3 +1869,12 @@ export const getAvailableSettingsAnchorPages = (ctx: SettingsSearchAvailabilityC
     return page && (!page.isAvailable || page.isAvailable(ctx)) && (!item.isAvailable || item.isAvailable(ctx));
   }).map((item) => [item.id, item.page] as const),
 );
+
+export type SettingsSearchItem = SettingsSearchTitle & {
+  id: string;
+  page: SettingsPageSlug;
+  descriptionKey?: I18nKey;
+  descriptionParams?: I18nParams;
+  keywords?: string[];
+  isAvailable?: (ctx: SettingsSearchAvailabilityContext) => boolean;
+};

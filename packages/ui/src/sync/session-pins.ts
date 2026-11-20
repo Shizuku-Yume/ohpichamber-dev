@@ -1,3 +1,4 @@
+
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getPinnedSessionKey, isSessionPinnedInMetadata } from '@/lib/sessionPins';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -81,3 +82,9 @@ useGlobalSessionsStore.subscribe((state, previous) => {
  }
 });
 void migrateLegacyPins();
+
+export function setSessionPinList(target: PinTarget, pinned: boolean, list: string | null): Promise<void> {
+  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
+  if (!key) return Promise.resolve();
+  return writeSessionPin(key, target, pinned, list);
+}

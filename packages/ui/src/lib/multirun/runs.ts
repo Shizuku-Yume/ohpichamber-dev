@@ -56,7 +56,7 @@ export const multiRunVariantLabel = (runGroup: string | undefined): string => {
 
 type IndexedMember = { session: Session; identity: MultiRunIdentity };
 
-let lastIndexed: { members: IndexedMember[]; index: MultiRunIndex } | null = null;
+const lastIndexed: { members: IndexedMember[]; index: MultiRunIndex } | null = null;
 
 const sameMembers = (left: readonly IndexedMember[], right: readonly IndexedMember[]): boolean => (
   left.length === right.length

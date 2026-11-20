@@ -4,7 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { assistantTextSegments } from '@/lib/messages/messageText';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import type { TurnGroupingContext } from '../../lib/turns/types';
 import { buildTurnImageExportSource, resolveMessageImageExportWidth, saveMessageImageExport } from '../imageExport';
 import { MessageSliceContext } from '../messageSliceContext';

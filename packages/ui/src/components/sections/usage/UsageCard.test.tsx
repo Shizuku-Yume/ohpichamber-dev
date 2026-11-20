@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import React from 'react';
 import type { UsageWindow } from '@/types';
 
 const dom = new Window();

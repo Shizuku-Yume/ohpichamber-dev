@@ -6,7 +6,7 @@ import {
   type GuestTone,
   type ServiceMark,
   type ServiceMarkTarget,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 import { z } from 'zod';
 
 import { normalizePath } from '@/lib/pathNormalization';

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 
 /** The app's side of a received page: what it hands the shell, and what it does with an answer. */
 

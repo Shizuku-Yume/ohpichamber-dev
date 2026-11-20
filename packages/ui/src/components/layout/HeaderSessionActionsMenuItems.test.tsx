@@ -1,3 +1,4 @@
+import { HeaderSessionArchiveMenuItem } from '@/components/layout/HeaderSessionArchiveMenuItem';
 import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';

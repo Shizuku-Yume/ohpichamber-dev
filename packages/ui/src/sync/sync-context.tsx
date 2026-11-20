@@ -1,3 +1,4 @@
+
 import { applySessionLiveWorkEvents, applySessionLiveWorkSnapshot } from "./session-live-work"
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
@@ -699,4 +700,14 @@ export function useSessionPartsForMessages(sessionId: string, messageIds: readon
     return cache.current
   }, [store, sessionId, messageIds])
   return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, (change) => { if (change.reset || change.messagesChanged || change.partMessageIds.some((id) => messageIds.includes(id))) notify() }), [store, sessionId, messageIds]), get, get)
+}
+
+let bootingRoot = false
+
+let bootedAt = 0
+
+const BOOT_DEBOUNCE_MS = 1500
+
+export function isRecentBoot() {
+  return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
 }

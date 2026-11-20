@@ -1,5 +1,18 @@
+import type { MessageBodyProps } from './body/messageBodyProps';
+import type { ToolCallPart } from '@openchamber/agent-contract';
+import type { ToolResultPart } from '@openchamber/agent-contract';
+import { useMobileAppActions } from '@/apps/mobileAppContext';
+import type { Part } from '@openchamber/agent-contract';
+import type { Session } from '@openchamber/agent-contract';
+import { isQuestionTool } from '@/lib/toolHelpers';
+import { isReadTool } from '@/lib/toolHelpers';
+import type { ReadToolGroupItem } from './parts/ReadToolGroup';
+import { normalizeToolName } from '@/lib/toolHelpers';
+import { parseNativeReadPath } from '@/lib/toolHelpers';
+import { normalizeWorkspaceToolPath } from './parts/toolDiffUtils';
+import { ReadToolGroup } from './parts/ReadToolGroup';
 import React from 'react';
-import type { MessageBodyProps } from '@openchamber/agent-contract';
+
 import { UserMessageBody } from './body/UserMessageBody';
 import { AssistantMessageBody } from './body/AssistantMessageBody';
 

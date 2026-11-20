@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { GitWorktreeRequestError } from '@/lib/api/types';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast, groupSessionTreesByFolder, moveSessionsThenRemoveWorktree, WorktreeKeepStoppedError } from './worktreeRemovalFlow';
 

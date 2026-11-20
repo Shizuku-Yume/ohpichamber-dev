@@ -1,4 +1,4 @@
-import { GUEST_MICROPHONE_FRAME_MAX, HostRequestError } from '@openchamber/sdk';
+import { GUEST_MICROPHONE_FRAME_MAX, HostRequestError } from 'ohpichamber-sdk';
 import { create } from 'zustand';
 
 export const useGuestListeningStore = create<{ captureCountByGuest: Record<string, number> }>(() => ({

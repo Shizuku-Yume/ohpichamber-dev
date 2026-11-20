@@ -1,3 +1,6 @@
+
+
+
 import { z } from 'zod';
 
 import type { JsonValue } from '@openchamber/agent-contract';
@@ -446,3 +449,67 @@ export const readOpenChamberCallInput = (input: ToolInput | undefined): OpenCham
     kind: parsed.parameters?.kind ?? parsed.kind,
   };
 };
+
+export const memoriesListedSchema = z.object({
+  memories: z.array(z.object({
+    memoryId: z.string(),
+    title: text,
+    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
+    scope: z.enum(['global', 'project']).optional().catch(undefined),
+  })),
+  globalUnavailable: z.boolean().optional().catch(undefined),
+  projectUnavailable: z.boolean().optional().catch(undefined),
+});
+
+const secretRunSchema = z.object({
+  answer: z.union([
+    z.object({
+      status: z.literal('ran'),
+      outcome: z.enum(['exited', 'timeout', 'killed', 'not-started']).catch('killed'),
+      exitCode: z.number().int().nullable().catch(null),
+    }),
+    z.object({ status: z.literal('declined') }),
+    z.object({ answered: z.literal(false) }),
+  ]),
+  stdout: z.string().optional().catch(undefined),
+  stderr: z.string().optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+});
+
+const secretRequestSchema = z.object({
+  answer: z.union([
+    z.object({ status: z.literal('saved'), file: z.string().optional().catch(undefined) }),
+    z.object({ status: z.literal('declined') }),
+    z.object({ answered: z.literal(false) }),
+  ]),
+});
+
+export const secretRowView = (
+  envelope: Pick<OpenChamberEnvelope, 'ok' | 'action'> & { data?: unknown } | null,
+): { key: SecretRunVerbKey; code?: number; output?: string; file?: string } | null => {
+  if (envelope?.ok !== true) return null;
+  if (envelope.action === 'secret.request') {
+    const request = secretRequestSchema.safeParse(envelope.data);
+    if (!request.success) return null;
+    const { answer } = request.data;
+    if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRequestNotGiven' };
+    if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRequestDeclined' };
+    return { key: 'chat.toolPart.openchamber.action.secretRequestSaved', file: answer.file };
+  }
+  if (envelope.action !== 'secret.run') return null;
+  const parsed = secretRunSchema.safeParse(envelope.data);
+  if (!parsed.success) return null;
+  const { answer, stdout = '', stderr = '', error = '' } = parsed.data;
+  const output = [stdout, stderr, error].map((part) => part.trimEnd()).filter(Boolean).join('\n');
+  if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRunNotRun', output };
+  if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRunDeclined', output };
+  if (answer.outcome === 'timeout') return { key: 'chat.toolPart.openchamber.action.secretRunTimedOut', output };
+  if (answer.outcome === 'not-started') return { key: 'chat.toolPart.openchamber.action.secretRunNotStarted', output };
+  if (answer.outcome === 'killed' || answer.exitCode === null) return { key: 'chat.toolPart.openchamber.action.secretRunStopped', output };
+  if (answer.exitCode !== 0) return { key: 'chat.toolPart.openchamber.action.secretRunFailed', code: answer.exitCode, output };
+  return { key: 'chat.toolPart.openchamber.action.secretRun', output };
+};
+
+const VERB_KEYS = new Map(Object.entries(OPENCHAMBER_ACTION_VERB_KEYS));
+
+export const openChamberVerbKey = (action: string | undefined) => (action ? VERB_KEYS.get(action) : undefined);

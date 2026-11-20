@@ -2,7 +2,7 @@ import React from 'react';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { useKeybinds } from '@/hooks/useKeybind';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { takeSessionActionFailure } from '@/sync/session-action-failures';
 import { describeSessionActionError } from '../sessions/sessionActionError';

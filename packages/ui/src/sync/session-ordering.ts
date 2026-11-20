@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import type { Session } from '@openchamber/agent-contract';
 import { isSessionPinned } from '@/lib/sessionPins';
@@ -141,3 +142,11 @@ export const orderSessionsByLifecycleScopes = (sessions: Session[], pinnedSessio
   for (const session of sessions.filter((item) => !visited.has(item.sessionId)).sort(compare)) append(session);
   return ordered;
 };
+
+const finiteTime = (value: unknown): number => (
+  typeof value === 'number' && Number.isFinite(value) ? value : 0
+);
+
+export const getSessionActivityTime = (session: Session): number => (
+  finiteTime(session.time?.idle) || finiteTime(session.time?.updated) || finiteTime(session.time?.created)
+);

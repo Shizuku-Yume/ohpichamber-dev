@@ -2,7 +2,7 @@ import React from 'react';
 
 import type { IconName } from '@/components/icon/icons';
 import type { I18nKey } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getProviderModelDisplayName } from '@/lib/modelDisplay';
 import type { SubagentRun } from '@/lib/opencode/subagent-run';
 import { useSubagentReports } from './useSubagentReports';

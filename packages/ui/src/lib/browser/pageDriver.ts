@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 
 import {
   buildDraggableScript,

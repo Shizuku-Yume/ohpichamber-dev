@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { getBackgroundNetworkState, runBackgroundNetworkTask } from '@/lib/background-network';

@@ -1,3 +1,5 @@
+import { WorktreeKeepStoppedError } from '@/lib/worktrees/worktreeRemovalFlow';
+import type { WorktreeKeepStop } from '@/lib/worktrees/worktreeRemovalFlow';
 import type { Session, SessionMoveToWorktreeResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import { toast } from '@/components/ui';
@@ -409,4 +411,18 @@ const executeSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
 export const requestSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
   if (useSessionMoveState.getState().pendingSessionIds.has(intent.root.sessionId)) return;
   executeSessionTreeMove(intent);
+};
+
+const KEEP_STOP_KEYS = {
+  busy: 'sessions.sidebar.work.archive.keptRunning',
+  unknown: 'sessions.sidebar.work.archive.keptUnknown',
+  added: 'sessions.sidebar.dialogs.worktreeDelete.keepAdded',
+  unconfirmed: 'sessions.sidebar.dialogs.worktreeDelete.keepUnconfirmed',
+  switched: 'sessions.sidebar.dialogs.worktreeDelete.keepSwitched',
+} satisfies Record<WorktreeKeepStop, I18nKey>;
+
+export const describeWorktreeKeepError = (error: Error, t: (key: I18nKey) => string): string | null => {
+  if (error instanceof WorktreeKeepStoppedError) return t(KEEP_STOP_KEYS[error.reason]);
+  if (error instanceof SessionMoveOutcomeUnknownError) return t('sessions.sidebar.dialogs.worktreeDelete.keepOutcomeUnknown');
+  return null;
 };

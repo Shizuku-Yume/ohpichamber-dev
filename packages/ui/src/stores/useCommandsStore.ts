@@ -1,3 +1,5 @@
+import { normalizePath } from '@/lib/pathNormalization';
+
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { CommandCatalogState, CommandEntry } from '@openchamber/agent-contract';
@@ -213,3 +215,20 @@ subscribeToConfigChanges((event) => {
     void useCommandsStore.getState().loadCommands();
   }
 });
+
+export const selectCommandsForComposer = (
+  state: Pick<CommandsStore, 'commandsByDirectory'>,
+  target: ComposerCommandDirectory,
+): Command[] => (target.status === 'pending' ? EMPTY_COMMANDS : selectCommandsForDirectory(state, target.directory));
+
+export const resolveCommandDirectory = (
+  directory: string | null | undefined,
+  draft: CommandDirectorySource | null,
+): ComposerCommandDirectory => {
+  const start = draft?.open ? draft.worktreeStartDirectory : null;
+  if (!start || !directory || normalizePath(directory) !== start.worktreeRoot) {
+    return { status: 'resolved', directory };
+  }
+  if (start.directory === null) return { status: 'pending' };
+  return { status: 'resolved', directory: start.directory };
+};

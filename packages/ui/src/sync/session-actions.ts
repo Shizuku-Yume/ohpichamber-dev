@@ -1,7 +1,18 @@
+import { findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
+import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
+import { createMessageQueueTarget } from '@/stores/messageQueueStore';
+import { useMessageQueueStore } from '@/stores/messageQueueStore';
+import { followSessionTabMove } from '@/lib/sessionTabs';
+import { ConnectionLostError } from './connection-lost-error';
+import type { Session } from '@openchamber/agent-contract';
+import { getDirectoryState } from './sync-refs';
+import { getAllSyncSessionMap } from './sync-refs';
+import type { SentMessage } from '@/sync/send-message-options';
 
 // The review-flow callback signature is retained for its Task 16 cutover;
 // session records and action responses use the Canonical contract directly.
 import { useSessionUIStore } from "./session-ui-store"
+import { beginAgentStartupWait } from './agent-startup-wait'
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
@@ -156,7 +167,7 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
  const request = PromptRequestSchema.parse(input.request)
- await waitForConnectionOrThrow()
+ await waitForConnectionOrThrow({ intent: 'prompt' })
  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
  if (input.mode === "steer") {
   const result = await canonicalClient.steer(input.sessionId, request, input.commandId)
@@ -525,7 +536,9 @@ const CONNECTION_GRACE_MS = 2000
 const CONNECTION_PROBE_MS = 500
 const RELAY_CONNECTION_GRACE_MS = 3000
 const RELAY_CONNECTION_PROBE_MS = 3000
-export async function waitForConnectionOrThrow(): Promise<void> {
+export async function waitForConnectionOrThrow(options: { intent?: 'prompt' } = {}): Promise<void> {
+ const finishWait = options.intent === 'prompt' ? beginAgentStartupWait(getRuntimeSwitchRevision()) : undefined
+ try {
  const relayed = isRelayModeActive()
  const deadline = Date.now() + (relayed ? RELAY_CONNECTION_GRACE_MS : CONNECTION_GRACE_MS)
  const probeMs = relayed ? RELAY_CONNECTION_PROBE_MS : CONNECTION_PROBE_MS
@@ -540,6 +553,9 @@ export async function waitForConnectionOrThrow(): Promise<void> {
   }
  }
  throw connectionLostError()
+ } finally {
+  finishWait?.()
+ }
 }
 
 type SessionListSnapshot = {
@@ -1692,7 +1708,7 @@ export async function optimisticSend(input: {
   if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("Message was not sent because the runtime changed.")
  }
  assertRuntimeUnchanged()
- await waitForConnectionOrThrow()
+ await waitForConnectionOrThrow({ intent: 'prompt' })
  assertRuntimeUnchanged()
  const directory = input.directory ?? getSessionDirectory(input.sessionId)
  const context = (input.context ?? []).filter((item) => item.text.trim())

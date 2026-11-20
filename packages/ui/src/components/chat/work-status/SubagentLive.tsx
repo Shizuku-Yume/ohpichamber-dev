@@ -4,7 +4,8 @@ import { formatSessionActivityDuration } from '@/components/session/sessionActiv
 import { useDurationTickerNow } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { getLastConversationMessage, type Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { getLastConversationMessage } from '@/lib/opencode/model';
 import { resolveUsageTone } from '@/lib/quota';
 import { formatRetryCountdown, toRetryTargetTimestamp } from '@/lib/retryCountdown';
 import { findAnsweringModelKey, findSessionModelKey, limitsForAnsweringModel } from '@/lib/routing/contextWindowLimits';

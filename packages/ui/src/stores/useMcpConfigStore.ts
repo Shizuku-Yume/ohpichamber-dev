@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { MCPApplyResultSchema, MCPServerConfigSchema, type MCPApplyResult, type MCPConfigurationState, type MCPServerConfig } from '@openchamber/agent-contract';
@@ -157,3 +158,12 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
     apply: directory => mutate(directory),
   };
 }, { name: 'mcp-config-store' }));
+
+export interface McpOAuthConfig {
+  client_id?: string;
+  client_secret?: string;
+  scope?: string;
+  callback_port?: number;
+  redirect_uri?: string;
+  auth_server_metadata_url?: string;
+}

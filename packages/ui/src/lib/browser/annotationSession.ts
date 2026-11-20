@@ -7,7 +7,7 @@ import {
 } from './annotationOverlay';
 import { isBrowserAnnotationPayload, type BrowserAnnotationPayload, type BrowserRect } from './contract';
 import { renderAnnotationScreenshot } from './annotationScreenshot';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 
 export type PageCapture = {
   readonly mime: string;

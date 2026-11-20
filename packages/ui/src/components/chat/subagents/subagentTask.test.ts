@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { findSubagentTask } from './subagentTask';
 
 const assistant = (id: string, sessionID: string): Message => ({

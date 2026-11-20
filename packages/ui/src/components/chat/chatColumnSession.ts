@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -66,4 +67,12 @@ export const useChatColumnExpandedInput = (): ChatColumnExpandedInput => {
     () => column ?? { expanded: globalExpanded, setExpanded: setGlobalExpanded },
     [column, globalExpanded, setGlobalExpanded],
   );
+};
+
+export const ChatTranscriptDirectoryContext = React.createContext<string | null>(null);
+
+export const useChatTranscriptDirectory = (): string | null => {
+  const nested = React.useContext(ChatTranscriptDirectoryContext);
+  const { directory } = useChatSessionSelection();
+  return nested ?? directory;
 };

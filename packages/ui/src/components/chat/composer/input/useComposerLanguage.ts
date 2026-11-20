@@ -65,6 +65,8 @@ export function useComposerLanguage({
     const { isMobile, currentTheme } = preferences;
     const { largeTextPasteScopeRef } = largePasteScope;
 
+    const loadCommands = useCommandsStore((state) => state.loadCommands);
+
     const knownAgentNames = React.useMemo(
         () => new Set(agents.map((agent) => agent.name.toLowerCase())),
         [agents]
@@ -320,7 +322,7 @@ export function useComposerLanguage({
 
     return {
         knownAgentNamesRef, setConfirmedMentionsRevision, guestCommands, readSessionMentionsBeforeSend,
-        linkedReferences, availableSkills, referenceLinksIn, sessionMentionsIn, rememberSessionMentions,
+        linkedReferences, availableSkills, referenceLinksIn, sessionMentionsIn, rememberSessionMentions, loadCommands,
         referencePickerDirectory, chatDraftIdentityKeyRef, pastedSessionIds, linkPastedSessionId,
         setOpenSharedPageKey, sessionLinkOrigins, resolveSessionLinks, readPastedReferenceLinks,
         openSharedPageKey, chipOpenRef, chatDraftIdentityKey, attachmentFilenames, languageContext,

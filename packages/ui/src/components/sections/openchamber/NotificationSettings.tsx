@@ -12,15 +12,7 @@ import { getClientPlatform } from '@/lib/platform';
 import { useI18n } from '@/lib/i18n';
 import { problemMessage } from '@/lib/problemMessage';
 import type { NativePushStatus } from '@/lib/api/types';
-import {
-  SettingsSection,
-  SettingsTwoColumn,
-  SettingsCheckboxRow,
-  SettingsNewBadge,
-  SettingsGroupTitle,
-  SETTINGS_SPACE_CHECKBOX_CLASS,
-  SETTINGS_SPACE_ROW_CLASS,
-} from '@/components/sections/shared/SettingsSection';
+import { SettingsSection, SettingsTwoColumn, SettingsCheckboxRow, SettingsNewBadge, SettingsGroupTitle, SETTINGS_SPACE_CHECKBOX_CLASS } from '@/components/sections/shared/SettingsSection';
 
 const DEFAULT_NOTIFICATION_TEMPLATES = {
   completion: {

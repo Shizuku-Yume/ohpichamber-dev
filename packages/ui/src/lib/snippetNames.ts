@@ -1,3 +1,4 @@
+
 import type { Snippet } from '@/types/snippet';
 
 const SNIPPET_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
@@ -52,3 +53,8 @@ export const suggestSnippetName = (text: string, snippets: readonly Snippet[]): 
   const base = words.join('-').slice(0, SUGGESTED_NAME_MAX_LENGTH).replace(/-+$/, '');
   return uniqueSnippetName(isValidSnippetName(base) ? base : 'snippet', snippets);
 };
+
+export const normalizeSnippetNameInput = (value: string): string => value
+  .replace(/\s+/g, '-')
+  .replace(/[^a-z0-9_-]/gi, '')
+  .slice(0, 80);

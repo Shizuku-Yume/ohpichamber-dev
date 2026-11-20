@@ -1,6 +1,6 @@
 import React, { useRef, useCallback } from "react"
 import { useStore } from "zustand"
-import type { FormRequest, PermissionRequest, Session } from "@/lib/opencode/model"
+import type { QuestionRequest as FormRequest, ApprovalRequest as PermissionRequest, Session } from '@openchamber/agent-contract';
 import { subscribeDirectoryPermission, subscribeDirectoryPermissions, subscribeDirectoryForms } from "./child-store"
 import { deriveRecoveredQuestions, useRecoverableQuestionsStore, type RecoveredQuestion } from "./recoverable-questions"
 import { LOCATION_SCOPED_FORM_SESSION_ID } from "./location-scoped-forms"

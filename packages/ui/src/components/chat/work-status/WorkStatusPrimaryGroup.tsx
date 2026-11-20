@@ -1,3 +1,4 @@
+import { DiffCount } from '@/components/ui/diff-count';
 import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useGitStore } from '@/stores/useGitStore';

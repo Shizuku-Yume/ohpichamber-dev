@@ -15,7 +15,6 @@ import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
 import { GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
-import { MobileAppSettings } from './MobileAppSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from '@/lib/desktop';

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { HostDevice } from '@openchamber/sdk';
+import type { HostDevice } from 'ohpichamber-sdk';
 
 import { useTabletLayout } from '@/lib/device';
 import { readMobileKeyboardVar } from '@/lib/mobileKeyboardInsets';

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 
 import { buildReceivedPageShell, lockDownReceivedDocument } from './receivedPageDocument';
 

@@ -1,3 +1,5 @@
+import { handleComposerSendFailure } from './handleComposerSendFailure';
+import type { InputHistorySubmission } from '@/stores/useInputHistoryStore';
 import type { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
@@ -8,7 +10,6 @@ import type { useComposerReferenceDrafts } from './useComposerReferenceDrafts';
 import type { useComposerQueueState } from './useComposerQueueState';
 import type { useComposerQueueActions } from './useComposerQueueActions';
 import type { useComposerPreferences } from './useComposerPreferences';
-import type { useComposerPermissionSettings } from './useComposerPermissionSettings';
 import type { useComposerParallelRun } from './useComposerParallelRun';
 import type { useComposerMentionAttachments } from './useComposerMentionAttachments';
 import type { useComposerLanguage } from './useComposerLanguage';
@@ -21,47 +22,50 @@ import type { useComposerDraftHistory } from './useComposerDraftHistory';
 import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import type { ComposerSendHandlers } from './composerSendHandlers';
+import type { QueuedMessage } from '@/stores/messageQueueStore';
+import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
+import type { ChatInputProps } from './chatInputProps';
+import type { SubmitOptions } from './chatInputProps';
+import { getRuntimeSwitchRevision } from '@/lib/runtime-switch';
+import type { CanonicalSkillMentions } from '@/sync/session-ui-store';
+
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { selectBuiltinCommandsForDirectory } from '@/stores/useCommandsStore';
+import { useCommandsStore } from '@/stores/useCommandsStore';
+import { ROOT_SELECTION_AGENT } from '@/sync/selection-store';
+import { runForkCommand } from '@/components/chat/composer/submit/forkCommand';
+import { CanonicalApiError } from '@/api/canonicalClient';
+import { problemMessage } from '@/lib/problemMessage';
+import { selectAvailableSkillsForDirectory } from '@/stores/useSkillsStore';
+import { useSkillsStore } from '@/stores/useSkillsStore';
+import { waitForPendingDraftWorktreeRequest } from '@/lib/worktrees/pendingDraftWorktree';
+import { canonicalClient } from '@/api/canonicalClient';
+import { postTrackerSessionStarted } from '@/lib/trackers/sessionStatus';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { isServerOwnedMessageQueue, type QueuedMessage } from '@/stores/messageQueueStore';
-import { readEffortRevision } from '@/lib/modelEfforts';
-import { useSessionUIStore, type SendMessageOptions, type SentMessage } from '@/sync/session-ui-store';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useInputStore } from '@/sync/input-store';
 import * as sessionActions from '@/sync/session-actions';
-import { useInlineCommentDraftStore, type InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
+import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { createChatDraftIdentity, type ChatDraftIdentity } from '@/lib/chatDraftPersistence';
+import { createChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import { useBtwStore } from '@/stores/useBtwStore';
-import { buildBtwSyntheticTexts, btwPendingComposerKey, preparePendingBtwSend, startBtwSession } from '@/lib/btw';
-import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { toast } from '@/components/ui';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { collectRunningActions, planRunningActionsNote } from '../../lib/runningActionsNote';
 import { composerReferenceKey, toContextReference } from '../../composer/composerReferences';
-import { referencesLinkedIn, withoutSharedPageLinks, withReferencesFromText } from '../../composer/referenceLinks';
-import { type FormRequest } from '@/lib/opencode/model';
-import { postTrackerSessionStarted } from '@/lib/trackers/sessionStatus';
 import { runGuestCommand } from '@/lib/guests/run-command';
 import { routeGuestSlashCommand } from '../../composer/submit/guestCommands';
-import { opencodeClient } from '@/lib/opencode/client';
-import { buildSkillMentionInstruction } from '@/lib/skillMentionInstruction';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
-import { trackUnconfirmedSend } from '@/lib/unconfirmedSends';
 import { filterMissingInlineAttachments } from '../../composer/attachments/inlineMentionAttachments';
 import { buildOutgoingMessage, expandCommentSnippets } from '../../composer/submit/buildOutgoingMessage';
 import { buildCommandVariables, canRunCommand, findMagicPromptCommand, planLocalSlashCommand } from '../../composer/submit/slashCommands';
 import { spaceModelRefusal, stoppedSpaceOfTarget } from '@/lib/spaces/space-model-access';
 import { runSpaceAction } from '@/lib/spaces/space-repair';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
-import { withRegisteredSharedPages } from '../../sharePages/received/takeShareLink';
 import { buildChatInputHistorySubmissions } from '../../inputHistory';
-import type { ChatInputProps, SubmitOptions } from './chatInputProps';
-import { runComposerActionCommand } from './runComposerActionCommand';
 import { collectInlineSkillMentions } from './composerMentionTokens';
 import { recordLinkedReferences } from './recordLinkedReferences';
-import { handleComposerSendFailure } from './handleComposerSendFailure';
 import { createComposerSubmitErrorMessage } from './createComposerSubmitErrorMessage';
 
 type Dependencies = {
@@ -75,27 +79,26 @@ type Dependencies = {
     inlineContext: Pick<ReturnType<typeof useComposerInlineContext>, 'isMobileCommentOpen' | 'hasDrafts' | 'attachmentsToSend' | 'inlineDraftTarget' | 'consumeDrafts'>;
     sendHandlers: Pick<ComposerSendHandlers, 'handleSubmitRef'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'composerQueuedMessages' | 'getCurrentInputSnapshot' | 'hasQueuedMessages'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'isBtwActive' | 'currentSessionId' | 'btwPanel' | 'newSessionDraftOpen' | 'newSessionDraft' | 'btwDirectory' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'attachedFiles' | 'inputMode' | 'btwSessionId' | 'activeRuntimeKey' | 'chatDraftIdentity' | 'immediateBtwSubmitRef' | 'sendHeldByMissingFolder' | 'setReviewDialogOpen' | 'consumePendingSyntheticParts' | 'isPromotedBtwSession' | 'projectActionsRef' | 'clearAttachedFiles' | 'btwComposerSessionId' | 'sessionFolder'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'isBtwActive' | 'currentSessionId' | 'btwPanel' | 'newSessionDraftOpen' | 'newSessionDraft' | 'btwDirectory' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'attachedFiles' | 'inputMode' | 'btwSessionId' | 'activeRuntimeKey' | 'chatDraftIdentity' | 'immediateBtwSubmitRef' | 'sendHeldByMissingFolder' | 'setReviewDialogOpen' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'btwComposerSessionId' | 'sessionFolder'>;
     parallelRun: Pick<ReturnType<typeof useComposerParallelRun>, 'parallel'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'autoReviewRunning'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'takeForSend'>;
-    selection: Pick<ReturnType<typeof useComposerSelection>, 'effectiveBtwSelection' | 'currentProviderId' | 'currentModelId' | 'currentAgentName' | 'currentVariant' | 'mailboxTarget'>;
-    language: Pick<ReturnType<typeof useComposerLanguage>, 'readSessionMentionsBeforeSend' | 'guestCommands' | 'availableSkills' | 'linkedReferences' | 'referenceLinksIn' | 'sessionMentionsIn'>;
+    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'currentAgentName' | 'currentVariant' | 'mailboxTarget' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
+    language: Pick<ReturnType<typeof useComposerLanguage>, 'readSessionMentionsBeforeSend' | 'guestCommands' | 'availableSkills' | 'linkedReferences' | 'referenceLinksIn' | 'sessionMentionsIn' | 'loadCommands'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'setExpandedInput'>;
-    permissionSettings: Pick<ReturnType<typeof useComposerPermissionSettings>, 'pendingBtwPermissionMode'>;
-    runtime: Pick<ReturnType<typeof useComposerRuntime>, 'runtimeTrackers'>;
+    runtime: Pick<ReturnType<typeof useComposerRuntime>, 'runtimeTrackers' | 'runtimeFiles'>;
     draftHistory: Pick<ReturnType<typeof useComposerDraftHistory>, 'handoffDraft' | 'restoreDraft' | 'persistDraftImmediately' | 'messageHistory' | 'migrateDraft'>;
     queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueueMessage'>;
     props: Pick<ChatInputProps, 'scrollToBottom'>;
-    mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions' | 'sanitizeAttachmentsForSend'>;
+    mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions' | 'sanitizeAttachmentsForSend' | 'prepareDocumentMentions'>;
     referenceDrafts: Pick<ReturnType<typeof useComposerReferenceDrafts>, 'updateLinkedReferencesFor'>;
 };
 
 export function useComposerSubmission({
     i18n, attachmentWork, draftText, historySearchState, editorState, column, sending, inlineContext,
     sendHandlers, sendAvailability, sessionScope, parallelRun, sessionLifecycle, queueState, selection,
-    language, preferences, expansion, permissionSettings, runtime, draftHistory, queueActions, props,
+    language, preferences, expansion, runtime, draftHistory, queueActions, props,
     mentionAttachments, referenceDrafts,
 }: Dependencies) {
     const { t } = i18n;
@@ -112,80 +115,62 @@ export function useComposerSubmission({
         isBtwActive, currentSessionId, btwPanel, newSessionDraftOpen, newSessionDraft, btwDirectory,
         currentSessionDirectoryForSync, currentDirectory, attachedFiles, inputMode, btwSessionId,
         activeRuntimeKey, chatDraftIdentity, immediateBtwSubmitRef, sendHeldByMissingFolder,
-        setReviewDialogOpen, consumePendingSyntheticParts, isPromotedBtwSession, projectActionsRef,
+        setReviewDialogOpen, consumePendingSyntheticParts, projectActionsRef,
         clearAttachedFiles, btwComposerSessionId, sessionFolder,
     } = sessionScope;
     const { parallel } = parallelRun;
     const { sessionPhase, autoReviewRunning } = sessionLifecycle;
     const { messageQueueTarget, takeForSend } = queueState;
     const {
-        effectiveBtwSelection, currentProviderId, currentModelId, currentAgentName, currentVariant,
-        mailboxTarget,
-    } = selection;
+        currentProviderId, currentModelId, currentAgentName, currentVariant,
+        mailboxTarget, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
     const {
         readSessionMentionsBeforeSend, guestCommands, availableSkills, linkedReferences,
-        referenceLinksIn, sessionMentionsIn,
-    } = language;
+        referenceLinksIn, sessionMentionsIn, loadCommands} = language;
     const { isMobile } = preferences;
     const { setExpandedInput } = expansion;
-    const { pendingBtwPermissionMode } = permissionSettings;
-    const { runtimeTrackers } = runtime;
+    const { runtimeTrackers , runtimeFiles} = runtime;
     const { handoffDraft, restoreDraft, persistDraftImmediately, messageHistory, migrateDraft } = draftHistory;
     const { handleQueueMessage } = queueActions;
     const { scrollToBottom } = props;
     const {
         prepareReadOnSendMentions, mentionableAgents, extractInlineFileMentions,
-        sanitizeAttachmentsForSend,
-    } = mentionAttachments;
+        sanitizeAttachmentsForSend, prepareDocumentMentions} = mentionAttachments;
     const { updateLinkedReferencesFor } = referenceDrafts;
 
     const getSubmitErrorMessage = createComposerSubmitErrorMessage(t);
+    const hasLinkedReferences = linkedReferences.length > 0;
+
     const handleSubmit = async (options?: SubmitOptions) => {
+        // Comment mode's only submit is attach; every other send path must be
+        // inert while it is open.
         if (isMobileCommentOpen()) return;
-        if (await waitForPendingAttachments()) {
-            void handleSubmitRef.current(options);
-            return;
-        }
-        if (isBtwActive && currentSessionId && (btwPanel.creating || useBtwStore.getState().byParent[currentSessionId]?.pendingSend)) return;
-        if (pendingFirstSend) return;
+        // "Run in parallel" launches the run instead of sending a message.
         if (parallel.isActive && !options?.queuedOnly) {
             if (parallel.runCount >= 2) void parallel.launch();
             return;
         }
         const submitRuntimeKey = getRuntimeKey();
+        const submitRuntimeRevision = getRuntimeSwitchRevision();
         const queuedOnly = options?.queuedOnly ?? false;
         const queuedMessageId = options?.queuedMessageId;
         const delivery = options?.delivery === 'steer' && sessionPhase !== 'idle' ? 'steer' : undefined;
         const capturedTarget = messageQueueTarget;
+        // Snapshot the draft and current-session identity before the first
+        // async gap so a later sidebar selection cannot reroute the send.
         const capturedDraftSnapshot = newSessionDraftOpen ? { ...newSessionDraft } : null;
-        const queuedProjection = queuedMessageId
-            ? composerQueuedMessages.filter((message) => message.id === queuedMessageId)
-            : composerQueuedMessages;
-        const capturedSendConfig = queuedOnly ? queuedProjection[0]?.sendConfig : undefined;
-        const providerIdToSend = capturedSendConfig?.providerID ?? (isBtwActive ? effectiveBtwSelection.model?.providerId : currentProviderId);
-        const modelIdToSend = capturedSendConfig?.modelID ?? (isBtwActive ? effectiveBtwSelection.model?.modelId : currentModelId);
-        const agentNameToSend = capturedSendConfig?.agent ?? (isBtwActive ? effectiveBtwSelection.agent : currentAgentName);
-        const variantToSend = capturedSendConfig?.variant ?? (isBtwActive ? effectiveBtwSelection.variant : currentVariant);
-        const effortRevision = providerIdToSend && modelIdToSend
-            ? readEffortRevision(providerIdToSend, modelIdToSend)
-            : undefined;
-        const magicPromptDirectory = isBtwActive
-            ? btwDirectory ?? currentSessionDirectoryForSync ?? currentDirectory
-            : capturedTarget || !capturedDraftSnapshot
-                ? capturedTarget?.directory ?? currentDirectory
-                : capturedDraftSnapshot.target === 'chat'
-                    ? null
-                    : capturedDraftSnapshot.bootstrapPendingDirectory ?? capturedDraftSnapshot.directoryOverride ?? currentDirectory;
+        const capturedDraftProjectPath = capturedDraftSnapshot?.selectedProjectId
+            ? useProjectsStore.getState().projects.find((project) => project.id === capturedDraftSnapshot.selectedProjectId)?.path ?? null
+            : null;
         const inputSnapshot = options?.presetText != null
             ? {
                 message: options.presetText,
-                hasContent: options.presetText.trim().length > 0 || attachedFiles.length > 0 || hasDrafts,
+                hasContent: options.presetText.trim().length > 0 || attachedFiles.length > 0 || hasDrafts || (!isBtwActive && hasLinkedReferences),
             }
             : getCurrentInputSnapshot();
         if (queuedOnly && autoReviewRunning) {
             return;
         }
-        if (!queuedOnly && !(await readSessionMentionsBeforeSend(inputSnapshot.message))) return;
 
         if (queuedOnly) {
             if (!composerQueuedMessages.some((message) => !queuedMessageId || message.id === queuedMessageId) || !currentSessionId) return;
@@ -193,8 +178,22 @@ export function useComposerSubmission({
             return;
         }
 
+        if (!queuedOnly && inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
+            && !planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), [])) {
+            if (!await loadCommands(currentDirectory)) {
+                toast.error(t('chat.chatInput.toast.messageSendFailed'));
+                return;
+            }
+            if (submitRuntimeKey !== getRuntimeKey()) return;
+        }
+
+        // Local slash commands are planned before anything is taken or
+        // consumed. An action command must leave the queue and the attached
+        // context where they are; a prompt command must send that context with
+        // the prompt it produces. A command the composer cannot run here is not
+        // a local command at all and goes out as typed.
         let commandPlan = !queuedOnly && inputSnapshot.hasContent
-            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId))
+            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), selectBuiltinCommandsForDirectory(useCommandsStore.getState(), currentDirectory))
             : null;
         if (commandPlan?.kind === 'prompt') {
             const magicCommand = findMagicPromptCommand(commandPlan.command.name);
@@ -206,40 +205,43 @@ export function useComposerSubmission({
                 });
             if (!commandIsAvailable) commandPlan = null;
         }
-        if (commandPlan?.command.name === 'handoff-review' && (isMobile || isVSCodeRuntime())) commandPlan = null;
+        if (commandPlan?.command.name === 'handoff-review' && isMobile) commandPlan = null;
 
+        // Enter BTW before sending so the question stays separate from the main draft.
+        // A bare command waits for input; an argument requests one immediate send.
         if (commandPlan?.kind === 'prompt' && commandPlan.command.name === 'btw' && currentSessionId) {
-            const targetComposerId = btwSessionId ?? btwPendingComposerKey(currentSessionId);
-            const targetIdentity = createChatDraftIdentity(
-                activeRuntimeKey,
-                btwDirectory ?? currentSessionDirectoryForSync ?? currentDirectory,
-                targetComposerId,
-            );
+            useBtwStore.getState().setPanelState(currentSessionId, {
+                pending: true,
+                collapsed: false,
+                ephemeralRecordId: undefined,
+                ephemeralText: undefined,
+                ephemeralStatus: undefined,
+                pendingSend: undefined
+            });
+            const targetIdentity = createChatDraftIdentity(activeRuntimeKey, currentSessionDirectoryForSync ?? currentDirectory, `btw-pending:${currentSessionId}`);
             const argument = commandPlan.command.argument.trim();
             handoffDraft(targetIdentity, isBtwActive ? argument : argument || null);
-            useInputStore.getState().moveAttachedFiles(chatDraftIdentity, targetIdentity);
             if (argument && targetIdentity) immediateBtwSubmitRef.current = { identity: targetIdentity, text: argument };
-            if (btwSessionId) {
-                useBtwStore.getState().setPanelState(currentSessionId, { collapsed: false });
-                return;
-            }
-            useBtwStore.getState().setPanelState(currentSessionId, { pending: true, creating: false, collapsed: false });
             return;
         }
-
         if (useAuthSessionStore.getState().state !== 'ok') {
             toast.error(t('sessionAuth.expired.sendBlocked'));
             return;
         }
 
-        if (sendHeldByMissingFolder()) return;
-
+        // A failed send returns the typed prompt no matter WHY it failed —
+        // auth, network, server, anything. Losing a long prompt to a toast is
+        // the one outcome this handler must never produce. The mentions are
+        // snapshotted here because sending clears them before it can fail.
         const confirmedMentionsSnapshot = new Set(confirmedMentionsRef.current);
-        const restoreComposerText = (target: ChatDraftIdentity | null = chatDraftIdentity) => {
+        const restoreComposerText = () => {
             if (queuedOnly || !inputSnapshot.message) return;
-            restoreDraft(target, inputSnapshot.message, confirmedMentionsSnapshot);
+            restoreDraft(chatDraftIdentity, inputSnapshot.message, confirmedMentionsSnapshot);
         };
 
+        // An extension command never reaches the model: the extension turns
+        // `/name args` into a chip, which lands through the same pending slot
+        // a guest panel's `attach` uses. Nothing else in the composer moves.
         const guestRoute = !queuedOnly && !isBtwActive && inputSnapshot.hasContent
             ? routeGuestSlashCommand(inputSnapshot.message, inputMode, guestCommands)
             : null;
@@ -248,12 +250,12 @@ export function useComposerSubmission({
             confirmedMentionsRef.current.clear();
             persistDraftImmediately(chatDraftIdentity, '');
             messageHistory.reset();
-            setPromptHistorySearch(null);
             const outcome = await runGuestCommand(guestRoute);
             if (outcome.ok) {
                 if (outcome.item) {
                     useInputStore.getState().setPendingGuestIssue(outcome.item);
                 } else {
+                    // Nothing matched: give the command back so the user can fix the argument.
                     restoreComposerText();
                     toast.info(t('chat.chatInput.toast.guestCommandNothing', { name: guestRoute.entry.guestName }));
                 }
@@ -266,14 +268,50 @@ export function useComposerSubmission({
             return;
         }
 
+        // The projection knows the captured send configuration; the full
+        // messages are taken from the queue only once nothing below can still
+        // bail out, so an early return leaves the queue untouched.
+        const queuedProjection = queuedMessageId
+            ? composerQueuedMessages.filter((message) => message.id === queuedMessageId)
+            : composerQueuedMessages;
+        const capturedSendConfig = queuedProjection[0]?.sendConfig;
+        const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
+        const modelIdToSend = capturedSendConfig?.modelID ?? currentModelId;
+        const variantToSend = capturedSendConfig ? capturedSendConfig.variant : currentVariant;
+        const sessionEffortAgent = currentSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
+            ?? useConfigStore.getState().currentAgentName
+            ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const sessionReasoningEffort = currentSessionId && sessionEffortAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                currentSessionId, sessionEffortAgent, providerIdToSend, modelIdToSend,
+            )
+            : undefined;
+        // A queued item owns the effort it captured: its explicit value (or
+        // unset/auto) is delivered as captured, never re-resolved against a
+        // later session or preference change.
+        const reasoningEffortToSend = reasoningEffortForModel(providerIdToSend, modelIdToSend, capturedSendConfig
+            ? { captured: capturedSendConfig }
+            : {
+                session: sessionReasoningEffort,
+                native: currentSessionId ? persistedThinkingLevel : undefined,
+                draft: configuredReasoningEffort,
+            });
+
+        // The isolated space the message targets, if any: a session by its directory, a draft by
+        // the creation request it still waits on or by its directory.
         const spaceTarget = currentSessionId
             ? { requestId: null, directory: currentSessionDirectoryForSync ?? currentDirectory ?? null }
             : newSessionDraftOpen
                 ? { requestId: newSessionDraft?.pendingWorktreeRequestId ?? null, directory: newSessionDraft?.directoryOverride ?? null }
                 : null;
+        // A stopped space takes no message on any model, and its catalog does not load while it is
+        // stopped, so this comes before the model check. The message stays in the composer;
+        // "Start", where the group's menu offers it, brings the space back and the user sends again.
         const stoppedSpace = spaceTarget ? stoppedSpaceOfTarget(spaceTarget) : null;
         if (stoppedSpace) {
-            toast.error(t(stoppedSpace.reason === 'gone' ? 'spaces.draft.spaceGone' : stoppedSpace.reason === 'unreachable' ? 'spaces.draft.spaceUnreachable' : 'spaces.draft.spaceStopped'), stoppedSpace.start ? {
+            toast.error(t(stoppedSpace.reason === 'gone' ? 'spaces.draft.spaceGone' : 'spaces.draft.spaceStopped'), stoppedSpace.start ? {
                 action: {
                     label: t('spaces.actions.start'),
                     onClick: () => void runSpaceAction(stoppedSpace.spaceId, 'start'),
@@ -288,113 +326,195 @@ export function useComposerSubmission({
             return;
         }
 
+        // A message to an isolated space goes only on a model the space holds a key for; otherwise
+        // it stays in the input with the reason and the way to the grant dialog.
         const spaceRefusal = spaceTarget ? spaceModelRefusal(spaceTarget, providerIdToSend) : null;
         if (spaceRefusal) {
-            const provider = useConfigStore.getState().providers.find((entry) => entry.id === spaceRefusal.providerId)?.name ?? spaceRefusal.providerId;
-            toast.error(spaceRefusal.reason === 'opencode'
-                ? t('spaces.draft.modelOpenCode')
+            const provider = useConfigStore.getState().providers.find((entry) => entry.providerId === spaceRefusal.providerId)?.name ?? spaceRefusal.providerId;
+            toast.error(spaceRefusal.reason === 'domain_blocked'
+                ? t('spaces.draft.modelDomainBlocked', { domain: spaceRefusal.domain })
                 : spaceRefusal.reason === 'needs_again'
                     ? t('spaces.draft.modelNeedsKeyAgain', { provider })
                     : t('spaces.draft.modelNotGranted', { provider }), {
                 action: {
                     label: t('spaces.group.access.give'),
-                    onClick: () => useSpacesStore.getState().openAccessDialog(spaceRefusal.spaceId, spaceRefusal.reason === 'opencode' ? null : spaceRefusal.providerId),
+                    onClick: () => useSpacesStore.getState().openAccessDialog(spaceRefusal.spaceId, spaceRefusal.providerId, spaceRefusal.reason === 'domain_blocked' ? spaceRefusal.domain : undefined),
                 },
             });
             return;
         }
 
+        // Auto-review owns the active workflow; follow-ups wait in its queue.
         if (currentSessionId && !queuedOnly && autoReviewRunning && !isBtwActive && !commandPlan) {
             void handleQueueMessage();
             return;
         }
 
-        let deferredQuestions: readonly FormRequest[] = [];
+        // Side questions never send or queue messages into the active session transcript.
         if (currentSessionId && !queuedOnly && !isBtwActive && !commandPlan) {
-            const [deniedPermissions, forms] = await Promise.all([
+            // Sending is authoritative for blocking prompts: deny pending
+            // permissions and dismiss open forms for the session subtree. The
+            // deny/clear vanishes the card instantly (optimistic); rejecting
+            // unblocks the agent's tool but does NOT end its turn.
+            const [deniedPermissions, dismissedForms] = await Promise.all([
                 sessionActions.dismissOpenPermissionsForSession(currentSessionId),
-                sessionActions.dismissOpenFormsForSession(currentSessionId, { deferQuestions: inputMode !== 'shell' }),
+                sessionActions.dismissOpenFormsForSession(currentSessionId),
             ]);
-            if ((deniedPermissions || forms.dismissed) && delivery !== 'steer' && forms.deferred.length === 0) {
+            // An explicit Steer goes straight to the session inbox, which
+            // takes it while the turn is still active. Any other send would
+            // race with that run, so it is queued; the queued-message auto-send
+            // hook delivers it once the session returns to idle (#1740, #3369).
+            if ((deniedPermissions || dismissedForms) && delivery !== 'steer') {
                 void handleQueueMessage();
                 return;
             }
-            deferredQuestions = forms.deferred;
         }
 
-        if (commandPlan?.kind === 'action' && currentSessionId) {
-            await runComposerActionCommand({
-                setMessage, confirmedMentionsRef, persistDraftImmediately, chatDraftIdentity, messageHistory,
-                setPromptHistorySearch, isBtwActive, setExpandedInput, isMobile, composerRef,
-                currentSessionId, scrollToBottom, openTimelineDialog, setReviewDialogOpen, currentProviderId,
-                currentModelId, currentAgentName, currentVariant, t, currentDirectory, getSubmitErrorMessage,
-                commandPlan, capturedSendConfig, restoreComposerText,
-            });
+        // Action commands change session or UI state and send nothing. The
+        // command text goes; the queue and whatever the composer had attached
+        // stay exactly where they are.
+        if ((commandPlan?.kind === 'builtin' || commandPlan?.kind === 'action') && currentSessionId) {
+            const actionName = commandPlan.command.name;
+            setMessage('');
+            confirmedMentionsRef.current.clear();
+            persistDraftImmediately(chatDraftIdentity, '');
+            messageHistory.reset();
+            if (!isBtwActive) setExpandedInput(false);
+            if (isMobile) composerRef.current?.blur();
+            try {
+                if (commandPlan.kind === 'builtin') {
+                    const output = await sessionActions.runBuiltinCommand(currentSessionId, inputSnapshot.message);
+                    if (output) toast.info(output);
+                } else if (actionName === 'undo') {
+                    await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
+                    scrollToBottom?.();
+                } else if (actionName === 'redo') {
+                    await useSessionUIStore.getState().handleSlashRedo(currentSessionId);
+                    scrollToBottom?.();
+                } else if (actionName === 'timeline') {
+                    openTimelineDialog();
+                } else if (actionName === 'handoff-review') {
+                    setReviewDialogOpen(true);
+                } else if (actionName === 'fork') {
+                    const forkOutcome = await runForkCommand(currentSessionId, commandPlan.command.argument, {
+                        // The fork branches the main session, so it keeps that session's
+                        // selection even while the btw panel owns the composer.
+                        providerID: capturedSendConfig?.providerID ?? currentProviderId,
+                        modelID: capturedSendConfig?.modelID ?? currentModelId,
+                        agent: undefined,
+                        variant: capturedSendConfig?.variant ?? currentVariant ?? undefined,
+                    }, {
+                        fork: sessionActions.forkFromLastCompletedTurn,
+                        directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.sessionId) || currentDirectory || null,
+                        send: (text, selection, target) => useSessionUIStore.getState().sendMessage(
+                            text,
+                            selection.providerID,
+                            selection.modelID,
+                            null,
+                            undefined,
+                            undefined,
+                            undefined,
+                            selection.variant,
+                            'normal',
+                            target,
+                        ),
+                        draftIdentity: (directory, sessionId) => createChatDraftIdentity(getRuntimeKey(), directory, sessionId),
+                        restoreText: (target, text) => useInputStore.setState({ pendingComposerRestore: { target, text, files: [] } }),
+                    });
+                    if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
+                } else if (actionName === 'compact') {
+                    const instructions = commandPlan.command.argument.trim();
+                    await sessionActions.compactSession(currentSessionId, instructions || undefined);
+                }
+            } catch (error) {
+                restoreComposerText();
+                if (actionName === 'fork') {
+                    toast.error(error instanceof sessionActions.NothingToForkError
+                        ? t('chat.chatInput.toast.forkNothingToFork')
+                        : getSubmitErrorMessage(error, t('chat.chatInput.toast.forkFailed')));
+                    return;
+                }
+                if (commandPlan.kind === 'builtin') {
+                    toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
+                    return;
+                }
+                if (actionName !== 'compact') throw error;
+                if (error instanceof CanonicalApiError && error.problem.code === 'SESSION_TOO_SMALL') {
+                    toast.info(t('chat.chatInput.toast.compactNotNeeded'));
+                    return;
+                }
+                toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.compactFailed')));
+            }
             return;
         }
 
-        let sendMessageOptions: SendMessageOptions | undefined;
-        if (isBtwActive && btwSessionId && btwDirectory) {
-            sendMessageOptions = {
-                target: { runtimeKey: submitRuntimeKey, sessionId: btwSessionId, directory: btwDirectory },
-                sessionId: btwSessionId,
-                directory: btwDirectory,
-            };
-        } else if (capturedTarget || capturedDraftSnapshot || delivery) {
+        let sendMessageOptions: {
+            target?: NonNullable<typeof capturedTarget>;
+            sessionId?: string;
+            directory?: string;
+            draftSnapshot?: NonNullable<typeof capturedDraftSnapshot>;
+            historySubmissions?: InputHistorySubmission[];
+            delivery?: 'steer';
+            skills?: CanonicalSkillMentions;
+            fileResourcesExpanded?: boolean;
+            reasoningEffort?: string;
+        } | undefined;
+        if (capturedTarget || capturedDraftSnapshot || delivery || reasoningEffortToSend) {
             sendMessageOptions = {};
             if (capturedTarget) sendMessageOptions.target = capturedTarget;
             if (capturedDraftSnapshot) sendMessageOptions.draftSnapshot = capturedDraftSnapshot;
         }
         if (delivery && sendMessageOptions) sendMessageOptions.delivery = delivery;
-        sendMessageOptions = { ...sendMessageOptions, userInitiated: true, recordEffort: !isBtwActive && !queuedOnly, effortRevision };
-        let sent: SentMessage | undefined;
-        if (deferredQuestions.length > 0) sendMessageOptions.onSent = (route) => { sent = route; };
+        if (reasoningEffortToSend) sendMessageOptions = { ...(sendMessageOptions ?? {}), reasoningEffort: reasoningEffortToSend };
 
+        // Queued messages resolved their mentions when they were queued; only
+        // the composer's own text can still name a document.
+        if (!queuedOnly && inputSnapshot.hasContent && !(await readSessionMentionsBeforeSend(inputSnapshot.message))) return;
         const reservedFilenames = new Set([
             ...attachedFiles.map((attachment) => attachment.filename),
             ...queuedProjection.flatMap((queued) => queued.attachments?.map((attachment) => attachment.filename) ?? []),
         ]);
-        const readOnSendMentions = await prepareReadOnSendMentions(
+        const documentMentions = await prepareDocumentMentions(
             !isBtwActive && !queuedOnly && inputSnapshot.hasContent ? [inputSnapshot.message] : [],
             reservedFilenames,
             submitRuntimeKey,
-            attachedFiles,
         );
-        if (readOnSendMentions.status === 'runtime-changed') return;
-        if (readOnSendMentions.status === 'failed') {
-            toast.error(t('chat.chatInput.toast.attachNamedFailed', { name: readOnSendMentions.filename }));
+        if (documentMentions.status === 'runtime-changed') return;
+        if (documentMentions.status === 'failed') {
+            toast.error(t('chat.chatInput.toast.attachNamedFailed', { name: documentMentions.filename }));
             return;
         }
-        const preparedMentions = readOnSendMentions.prepared;
+        const preparedDocumentMentions = documentMentions.prepared;
 
+        // The composer delivers these itself, so they leave the queue now. The
+        // server skips anything already in flight so it cannot go out twice.
         let queuedMessagesToSend: QueuedMessage[] = [];
         if (capturedTarget && hasQueuedMessages && !commandPlan) {
             try {
                 queuedMessagesToSend = await takeForSend(capturedTarget, queuedMessageId);
             } catch (error) {
                 console.warn('[queue] failed to take queued messages for sending:', error);
-                toast.error(t('chat.queuedMessage.toast.takeFailed'));
+                toast.error(problemMessage(error, t('chat.queuedMessage.toast.takeFailed')));
                 return;
             }
             if (queuedOnly && queuedMessagesToSend.length === 0) return;
-            const queuedGoal = queuedMessagesToSend.find((queued) => queued.goal)?.goal;
-            if (queuedGoal || queuedOnly) {
-                sendMessageOptions = { ...sendMessageOptions, queuedGoal: queuedGoal ?? null };
-            }
         }
 
-        const sentAttachedFiles = attachmentsToSend(inputSnapshot.message);
         const historySubmissions = buildChatInputHistorySubmissions({
             inputMode,
-            queuedMessages: isServerOwnedMessageQueue() ? [] : queuedMessagesToSend,
+            // Server-owned items were recorded on acceptance.
+            queuedMessages: [],
             composerText: inputSnapshot.message,
-            composerAttachments: sentAttachedFiles,
+            composerAttachments: attachedFiles,
             includeComposer: !queuedOnly && inputSnapshot.hasContent,
         });
         if (historySubmissions?.length) {
             sendMessageOptions = { ...sendMessageOptions, historySubmissions };
         }
 
+        // Inline review comments and synthetic context are consumed before
+        // assembly so a failed send can restore exactly what it took. What is
+        // here belongs to this send: queueing took its own context with it.
         const syntheticParts = isBtwActive ? [] : consumePendingSyntheticParts(mailboxTarget);
         const consumedDraftTarget = inlineDraftTarget;
         const drafts: InlineCommentDraft[] = consumedDraftTarget
@@ -405,6 +525,8 @@ export function useComposerSubmission({
                 useInlineCommentDraftStore.getState().restoreDrafts(consumedDraftTarget, drafts);
             }
         };
+        // Everything a prompt command consumed comes back if it fails: the
+        // attached context, the typed text, and the files.
         const restoreConsumedInput = () => {
             restoreConsumedDrafts();
             if (syntheticParts?.length) {
@@ -418,81 +540,77 @@ export function useComposerSubmission({
         };
 
         const availableSkillNames = new Set(
-            availableSkills.map((skill) => skill.name),
+            selectAvailableSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
         );
 
-        const expandedDrafts = await expandCommentSnippets(drafts, useSnippetsStore.getState().expandText);
-
-        const sentComposerText = !queuedOnly && inputSnapshot.hasContent ? inputSnapshot.message : '';
-        const linkedReferencesToSend = await withRegisteredSharedPages(withReferencesFromText(referencesLinkedIn(sentComposerText, linkedReferences), referenceLinksIn(sentComposerText)));
+        // Comments become synthetic context, which the send-time expansion
+        // below skips, so their own words expand here.
+        let expandedDrafts: InlineCommentDraft[];
+        try {
+            expandedDrafts = await expandCommentSnippets(drafts, text => useSnippetsStore.getState().expandText(text, currentDirectory));
+        } catch (error) {
+            restoreConsumedInput();
+            toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
+            return;
+        }
 
         const outgoing = buildOutgoingMessage({
             queued: queuedMessagesToSend,
-            composerText: !queuedOnly && inputSnapshot.hasContent ? withoutSharedPageLinks(inputSnapshot.message, linkedReferencesToSend) : null,
-            composerAttachments: sentAttachedFiles,
+            composerText: !queuedOnly && inputSnapshot.hasContent ? inputSnapshot.message : null,
+            composerAttachments: attachedFiles,
             inlineComments: expandedDrafts,
             syntheticTexts: [
-                ...buildBtwSyntheticTexts({ isBtwActive, isPromotedBtwSession }),
                 ...(syntheticParts?.map((part) => part.text) ?? []),
             ],
-            references: isBtwActive ? [] : linkedReferencesToSend.map(toContextReference).concat(
+            references: isBtwActive ? [] : linkedReferences.map(toContextReference).concat(
                 !queuedOnly && inputSnapshot.hasContent ? sessionMentionsIn(inputSnapshot.message) : [],
             ),
         }, {
-            parseAgentMention: (text) => {
-                if (isBtwActive) return { text };
-                const { sanitizedText, mention } = parseAgentMentions(text, mentionableAgents());
-                return { text: sanitizedText, agentName: mention?.name };
-            },
             extractFileMentions: (text) => {
                 if (isBtwActive) return { text, attachments: [] };
-                const { sanitizedText, attachments } = extractInlineFileMentions(text, preparedMentions, attachedFiles);
+                const { sanitizedText, attachments } = extractInlineFileMentions(text, preparedDocumentMentions);
                 return { text: sanitizedText, attachments };
             },
             sanitizeAttachments: sanitizeAttachmentsForSend,
             collectSkillNames: (text) => collectInlineSkillMentions(text, availableSkillNames),
         });
 
-        let primaryText = outgoing.primaryText;
-        const { primaryAttachments, additionalParts, agentMentionName, skillNames } = outgoing;
+        const primaryText = outgoing.primaryText;
+        const { primaryAttachments, additionalParts, skillNames } = outgoing;
+        if (outgoing.primaryFileResourcesExpanded) sendMessageOptions = { ...sendMessageOptions, fileResourcesExpanded: true };
 
         if (outgoing.isEmpty) return;
 
-        const actionsNote = isBtwActive ? null : planRunningActionsNote(currentSessionId ?? null, collectRunningActions(projectActionsRef.current));
-        if (actionsNote?.text) additionalParts.push({ text: actionsNote.text, synthetic: true });
-
+        // Skills named inline are attached to the canonical prompt request.
         if (skillNames.length > 0) {
             sendMessageOptions = {
                 ...sendMessageOptions,
-                skills: { names: skillNames, instructionFor: buildSkillMentionInstruction },
+                skills: { names: skillNames },
             };
         }
 
-        // external: #3898 OpenCode rejects the entire prompt when an inline file mention does not exist.
+        // #3898: inline @-mentions resolve to server paths without checking
+        // the file exists, and OpenCode 400s the whole prompt on a missing
+        // file. Silently drop the unresolvable ones and submit the rest;
+        // the prompt text itself is untouched. Filtered once here so every
+        // send path below (magic-prompt, btw fork, optimistic row, main send)
+        // carries the same list.
         const { sendable: sendableAttachments } = await filterMissingInlineAttachments(
             primaryAttachments,
-            opencodeClient,
+            { listLocalDirectory: async (directory) => (await runtimeFiles.listDirectory(directory)).entries },
         );
 
-        const unconfirmedSend = !queuedOnly && !isBtwActive && chatDraftIdentity && inputSnapshot.message
-            ? trackUnconfirmedSend({
-                identity: chatDraftIdentity,
-                text: inputSnapshot.message,
-                confirmedMentions: confirmedMentionsSnapshot,
-                attachmentNames: sentAttachedFiles.map((file) => file.filename),
-            })
-            : null;
-        if (unconfirmedSend) sendMessageOptions = { ...sendMessageOptions, progress: unconfirmedSend.progress };
-
+        // Clear input (the queue was taken above)
         if (!queuedOnly) {
             setMessage('');
             confirmedMentionsRef.current.clear();
+            // Clear per-session draft on submit
             persistDraftImmediately(chatDraftIdentity, '');
             messageHistory.reset();
-            setPromptHistorySearch(null);
             if (attachedFiles.length > 0) {
                 clearAttachedFiles(chatDraftIdentity);
             }
+            // Close expanded input overlay when submitting
             if (!isBtwActive) setExpandedInput(false);
         }
 
@@ -500,120 +618,120 @@ export function useComposerSubmission({
             composerRef.current?.blur();
         }
 
+        // Prompt commands render a visible prompt and send it with everything
+        // the composer had attached. `/btw` was handled above as a composer
+        // transition and never reaches this sending path.
         if (commandPlan?.kind === 'prompt') {
             const { name: commandName, argument } = commandPlan.command;
 
+            // The rest render a visible prompt plus synthetic instructions and
+            // send them as one message, the attached context riding along.
             const command = findMagicPromptCommand(commandName);
             if (command) {
                 const variables = buildCommandVariables(command, argument);
                 try {
-                    await sessionActions.waitForConnectionOrThrow();
-                    const prompts = await loadMagicPrompts(magicPromptDirectory);
+                    await sessionActions.waitForConnectionOrThrow({ intent: 'prompt' });
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
+                    let promptDirectory: string | null;
+                    if (capturedTarget) {
+                        promptDirectory = capturedTarget.directory;
+                    } else if (capturedDraftSnapshot?.target === 'chat') {
+                        promptDirectory = null;
+                    } else if (capturedDraftSnapshot) {
+                        promptDirectory = capturedDraftSnapshot.pendingWorktreeRequestId
+                            ? await waitForPendingDraftWorktreeRequest(capturedDraftSnapshot.pendingWorktreeRequestId)
+                            : capturedDraftSnapshot.bootstrapPendingDirectory ?? capturedDraftSnapshot.directoryOverride ?? capturedDraftProjectPath;
+                        if (!promptDirectory) throw new Error('Project directory is unavailable');
+                    } else {
+                        promptDirectory = currentSessionDirectoryForSync ?? currentDirectory;
+                        if (!promptDirectory) throw new Error('Session directory is unavailable');
+                    }
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
+                    const prompts = await loadMagicPrompts(promptDirectory);
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
                     const visibleText = prompts.render(command.visiblePrompt, variables.visible);
                     const instructionsText = prompts.render(command.instructionsPrompt, variables.instructions);
-                    scrollToBottom?.();
                     await sendMessage(
                         visibleText,
                         providerIdToSend,
                         modelIdToSend,
-                        agentNameToSend,
+                        null,
                         sendableAttachments,
-                        agentMentionName,
+                        undefined,
                         [...additionalParts, { text: instructionsText, synthetic: true }],
                         variantToSend,
                         inputMode,
-                        sendMessageOptions,
+                        { ...sendMessageOptions, runtimeRevision: submitRuntimeRevision },
                     );
-                    if (currentSessionId) actionsNote?.commit(currentSessionId);
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
+                    scrollToBottom?.();
                 } catch (error) {
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) return;
                     restoreConsumedInput();
                     toast.error(getSubmitErrorMessage(error, t(command.errorToastKey)));
                 }
-                unconfirmedSend?.settle();
                 return;
             }
         }
 
+
         const expandOutgoingSnippets = async () => {
-            try {
-                const expandText = useSnippetsStore.getState().expandText;
-                primaryText = await expandText(primaryText);
-                for (const part of additionalParts) {
-                    if (!part.synthetic) part.text = await expandText(part.text);
-                }
-            } catch (error) {
-                console.warn('[ChatInput] Failed to expand snippets, sending original text:', error);
+            const expandText = useSnippetsStore.getState().expandText;
+            for (const part of additionalParts) {
+                if (!part.synthetic && !part.fileResourcesExpanded) part.text = await expandText(part.text, currentDirectory);
             }
         };
         let pendingBtwSend: symbol | null = null;
-        if (isBtwActive && btwPanel.pending && currentSessionId) {
-            pendingBtwSend = await preparePendingBtwSend(currentSessionId, submitRuntimeKey, expandOutgoingSnippets);
-            if (!pendingBtwSend) {
-                if (getRuntimeKey() !== submitRuntimeKey) restoreComposerText();
-                return;
+        try {
+            if (isBtwActive && btwPanel.pending && currentSessionId) {
+                const panelStore = useBtwStore.getState();
+                if (panelStore.byParent[currentSessionId]?.pendingSend) return;
+                pendingBtwSend = Symbol('btw-send');
+                panelStore.setPanelState(currentSessionId, { pendingSend: pendingBtwSend });
+                await expandOutgoingSnippets();
+                if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) {
+                    if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend === pendingBtwSend) {
+                        useBtwStore.getState().setPanelState(currentSessionId, { pendingSend: undefined });
+                    }
+                    restoreComposerText();
+                    return;
+                }
+            } else {
+                await expandOutgoingSnippets();
             }
-        } else {
-            await expandOutgoingSnippets();
+        } catch (error) {
+            restoreConsumedInput();
+            toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
+            return;
         }
-        const ownsPendingBtwSend = () => Boolean(pendingBtwSend && currentSessionId
-            && useBtwStore.getState().byParent[currentSessionId]?.pendingSend === pendingBtwSend);
 
+        // Collect all attachments for error recovery
         const allAttachments = [
             ...sendableAttachments,
             ...additionalParts.flatMap(p => p.attachments ?? []),
         ];
 
+        // Arm the timeline anchor BEFORE the optimistic user row can commit;
+        // arming after (or a frame later) races the commit and the anchor
+        // never claims the new message.
         scrollToBottom?.();
 
-        if (isBtwActive && btwPanel.pending && currentSessionId && btwComposerSessionId) {
-            const targetDirectory = useSessionUIStore.getState().getDirectoryForSession(currentSessionId)
-                || currentDirectory
-                || null;
-            if (!targetDirectory) {
-                useBtwStore.getState().setPanelState(currentSessionId, { pendingSend: undefined });
-                restoreConsumedInput();
-                toast.error(t('chat.btw.toast.createFailed'));
-                return;
-            }
+        // Only the btw question owns the composer. An ephemeral answer keeps
+        // the panel open (`isBtwActive`), but the composer is then the main
+        // session's input again, so a submit must fall through to the regular
+        // send path rather than return after the composer was cleared.
+        if (isBtwActive && btwPanel.pending && currentSessionId) {
             try {
-                const fork = await startBtwSession({
-                    parentSessionId: currentSessionId,
-                    expectedRuntimeKey: submitRuntimeKey,
-                    question: primaryText,
-                    directory: targetDirectory,
-                    providerID: providerIdToSend,
-                    modelID: modelIdToSend,
-                    agent: agentNameToSend,
-                    variant: variantToSend,
-                    attachments: sendableAttachments,
-                    additionalParts,
-                    skills: sendMessageOptions?.skills,
-                    permissionMode: pendingBtwPermissionMode,
-                });
-                if (!ownsPendingBtwSend()) return;
-                if (getRuntimeKey() !== submitRuntimeKey) {
-                    useBtwStore.getState().clearPanelState(currentSessionId);
-                    return;
-                }
-                const forkDirectory = fork.directory ?? targetDirectory;
-                const forkIdentity = createChatDraftIdentity(activeRuntimeKey, forkDirectory, fork.id);
-                migrateDraft(chatDraftIdentity, forkIdentity);
-                useInputStore.getState().moveAttachedFiles(chatDraftIdentity, forkIdentity);
-                if (inlineDraftTarget) {
-                    const drafts = useInlineCommentDraftStore.getState();
-                    drafts.restoreDrafts({ directory: forkDirectory, sessionKey: fork.id }, drafts.consumeDrafts(inlineDraftTarget));
-                }
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, creating: false, pendingSend: undefined });
-                useSelectionStore.getState().clearSessionSelections(btwComposerSessionId);
+                if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) return;
+                const result = await canonicalClient.askBtw(currentSessionId, primaryText);
+                if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) return;
+                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, pendingSend: undefined, ephemeralRecordId: result.recordId, ephemeralText: '', ephemeralStatus: 'running', collapsed: false });
                 scrollToBottom?.();
             } catch (error) {
-                if (!ownsPendingBtwSend()) return;
-                if (getRuntimeKey() !== submitRuntimeKey) {
-                    useBtwStore.getState().clearPanelState(currentSessionId);
-                    restoreComposerText();
-                    return;
-                }
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, creating: false, collapsed: false, pendingSend: undefined });
+                if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) return;
+                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, collapsed: false, pendingSend: undefined });
                 restoreConsumedInput();
                 toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));
             }
@@ -624,47 +742,58 @@ export function useComposerSubmission({
             primaryText,
             providerIdToSend,
             modelIdToSend,
-            agentNameToSend,
+            null,
             sendableAttachments,
-            agentMentionName,
+            undefined,
             additionalParts.length > 0 ? additionalParts : undefined,
             variantToSend,
             inputMode,
             sendMessageOptions,
         );
         void sendPromise.then(() => {
-            if (deferredQuestions.length > 0 && getRuntimeKey() === submitRuntimeKey) {
-                void sessionActions.deferQuestionsAfterSend(deferredQuestions, sent);
-            }
             if (isBtwActive) return;
+            // On a draft there is no session yet in this closure: the send path
+            // creates one and makes it current before resolving, so the id is
+            // read from the store. The fallback is used only when the closure
+            // had no session at all, so a mid-send session switch cannot
+            // redirect the write to an unrelated session.
             const sessionState = useSessionUIStore.getState();
             const linkTargetSessionId = currentSessionId ?? sessionState.currentSessionId;
             const linkTargetDirectory = currentSessionId
                 ? currentSessionDirectoryForSync ?? currentDirectory
                 : sessionState.currentSessionDirectory
-                    ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
-                    ?? currentDirectory;
-            if (linkTargetSessionId) {
-                recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferencesToSend);
-                actionsNote?.commit(linkTargetSessionId);
+                ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
+                ?? currentDirectory;
+            if (linkTargetSessionId && getRuntimeKey() === submitRuntimeKey) {
+                void recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences).catch((error: unknown) => {
+                    console.error('Session link update failed:', error);
+                    toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
+                });
+            } else if (linkedReferences.length > 0) {
+                toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
             }
+            // A session that starts with a Linear issue attached reports itself
+            // on that issue (the Linear card's Session comments), however it
+            // was started: a draft, a worktree made from the issue.
             if (!currentSessionId && linkTargetSessionId) {
-                for (const reference of linkedReferencesToSend) {
-                    if (reference.kind !== 'tracker-item') continue;
-                    void postTrackerSessionStarted(runtimeTrackers, reference.provider, {
-                        sessionId: linkTargetSessionId,
-                        identifier: reference.identifier,
+                for (const reference of linkedReferences) {
+                    if (reference.kind !== 'linear-issue' && reference.kind !== 'tracker-item') continue;
+                    void postTrackerSessionStarted(runtimeTrackers, reference.kind === 'linear-issue' ? 'linear' : reference.provider, {
+                        sessionId: linkTargetSessionId, identifier: reference.identifier,
                     });
                 }
             }
 
+            // The sent references leave the composer; one attached while the
+            // send was out stays for the next message.
             const sentKeys = new Set(linkedReferences.map(composerReferenceKey));
             updateLinkedReferencesFor(chatDraftIdentity, (current) => current.filter((reference) => !sentKeys.has(composerReferenceKey(reference))));
-        }).catch((error) => handleComposerSendFailure(error, {
-            currentChatDraftIdentityRef, handoffDraft, chatDraftIdentity, composerText, restoreDraft, t,
-            sessionFolder, isBtwActive, allAttachments, submitRuntimeKey, restoreConsumedDrafts,
-            restoreComposerText,
-        })).finally(() => unconfirmedSend?.settle());
+        }).catch((error: unknown) => {
+            handleComposerSendFailure(error, {
+                allAttachments, chatDraftIdentity, restoreConsumedDrafts, restoreComposerText, t,
+                notifyError: (message) => toast.error(message),
+            });
+        });
 
         if (!isMobile) {
             composerRef.current?.focus();

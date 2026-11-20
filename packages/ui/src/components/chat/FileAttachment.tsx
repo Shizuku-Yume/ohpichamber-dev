@@ -1,3 +1,4 @@
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { INLINE_SERVER_ATTACHMENT_ID_PREFIX } from './composer/attachments/inlineMentionAttachments';
 import React, { useRef, memo } from 'react';
 import type { AttachmentPart, Part } from '@openchamber/agent-contract';
@@ -680,3 +681,105 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
 });
 
 MessageFilesDisplay.displayName = 'MessageFilesDisplay';
+
+export const ActiveEditorFileSuggestion = memo(() => {
+  const { t } = useI18n();
+  const activeEditorFile = useInputStore((s) => s.activeEditorFile);
+  const attachedFiles = useInputStore((s) => s.attachedFiles)
+  const addVSCodeFileAttachment = useInputStore((s) => s.addVSCodeFileAttachment)
+  const addVSCodeSelectionAttachment = useInputStore((s) => s.addVSCodeSelectionAttachment)
+  const isVSCodeRuntime = useRuntimeAPIs().runtime.isVSCode;
+
+  if (!isVSCodeRuntime || !activeEditorFile) return null;
+
+  const { filePath, fileName, relativePath, selection, fileSize } = activeEditorFile;
+
+  const isFileAttached = attachedFiles.some(
+    (f) => f.source === 'vscode' && f.vscodeSource === 'file' && (f.vscodePath || '') === filePath
+  )
+
+  let selectionRange = ''
+  if (selection) {
+    selectionRange = selection.startLine === selection.endLine
+      ? `${selection.startLine}`
+      : `${selection.startLine}-${selection.endLine}`
+  }
+  const selectionLabel = selection ? `${relativePath}:${selectionRange}` : ''
+  const isSelectionAttached = !!selectionLabel && attachedFiles.some(
+    (f) => f.source === 'vscode' && f.vscodeSource === 'selection' && f.filename === selectionLabel && f.vscodePath === filePath
+  )
+
+  if (isFileAttached && (!selection || isSelectionAttached)) return null;
+
+  const ext = fileName.split('.').pop() || '';
+  const displayName = fileName;
+
+  const handleAddFile = () => {
+    try {
+      addVSCodeFileAttachment(filePath, fileName, fileSize);
+    } catch (error) {
+      if (error instanceof Error) toast.error(error.message);
+    }
+  };
+
+  const handlePinSelection = async () => {
+    if (!selection) return;
+    const blob = new Blob([selection.text], { type: 'text/plain' });
+    const file = new File([blob], selectionLabel, { type: 'text/plain' });
+    await addVSCodeSelectionAttachment(filePath, file);
+  };
+
+  const showSelectionPin = !!selection && !isSelectionAttached;
+  const showFileAdd = !showSelectionPin && !isFileAttached;
+
+  if (!showSelectionPin && !showFileAdd) return null;
+
+  return (
+    <div className="inline-flex items-center">
+      {showSelectionPin && (
+        <div
+          className="inline-flex items-center gap-1 text-xs pe-1 rounded-sm italic text-muted-foreground border border-dashed bg-transparent"
+          style={{ borderColor: 'var(--interactive-border)' }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('chat.fileAttachment.activeEditor.pinSelection')}
+                onClick={() => { void handlePinSelection(); }}
+                className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
+              >
+                <Icon name="pushpin-2" className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{t('chat.fileAttachment.activeEditor.pinSelection')}</TooltipContent>
+          </Tooltip>
+          <FileTypeIcon filePath={fileName} extension={ext} className="h-4 w-4 flex-shrink-0" />
+          <span className="text-xs whitespace-nowrap" title={relativePath}>{`${displayName}:${selectionRange}`}</span>
+        </div>
+      )}
+      {showFileAdd && (
+        <div
+          className="inline-flex items-center gap-1 text-xs pe-1 rounded-sm italic text-muted-foreground border border-dashed bg-transparent"
+          style={{ borderColor: 'var(--interactive-border)' }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('chat.fileAttachment.activeEditor.addFile', { name: displayName })}
+                onClick={handleAddFile}
+                className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
+              >
+                <Icon name="add" className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{t('chat.fileAttachment.activeEditor.addFile', { name: displayName })}</TooltipContent>
+          </Tooltip>
+          <FileTypeIcon filePath={fileName} extension={ext} className="h-4 w-4 flex-shrink-0" />
+          <span className="text-xs truncate max-w-[220px]" title={relativePath}>{displayName}</span>
+        </div>
+      )}
+    </div>
+  );
+});

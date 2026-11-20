@@ -10,7 +10,6 @@ import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolv
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { applyBackgroundShellEvents, resetBackgroundShells, type RunningShell } from '@/sync/background-shells';
 import { BackgroundShellsStrip } from './BackgroundShellsStrip';
-import { stopForegroundShell } from './message/parts/foregroundShellStop';
 
 const session = (sessionId: string, parentSessionId?: string): Session => ({
   sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId,

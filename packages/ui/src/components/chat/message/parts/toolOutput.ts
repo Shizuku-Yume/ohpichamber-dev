@@ -1,3 +1,4 @@
+
 const MAX_SYNTHETIC_TERMINAL_CELLS = 100_000;
 
 interface TerminalRenderBudget {
@@ -131,4 +132,8 @@ export const renderTerminalOutput = (output: string): string => {
     }
 
     return lines.map((line) => line.join('')).join('\n');
+};
+
+export const getStreamingOutputAppend = (previous: string, next: string): string | undefined => {
+    return next.startsWith(previous) ? next.slice(previous.length) : undefined;
 };

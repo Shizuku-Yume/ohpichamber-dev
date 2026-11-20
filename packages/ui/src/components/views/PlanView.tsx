@@ -1,3 +1,7 @@
+import { usePlanActions } from '@/components/session/project-context/usePlanActions';
+import { useSessionKnowledgePins } from '@/components/session/project-context/useSessionKnowledgePins';
+import { toast } from '@/components/ui/toast';
+import { PlanTodos } from '@/components/session/project-context/PlanTodos';
 import React from 'react';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';

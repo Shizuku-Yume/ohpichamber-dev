@@ -1,3 +1,6 @@
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { CompactionSettings } from './CompactionSettings';
+import { SessionWarmingModeField } from './SessionWarmingModeField';
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { formatModelRef } from '@openchamber/agent-contract';
@@ -778,6 +781,19 @@ export const DefaultsSettings: React.FC = () => {
             ariaLabel={t('settings.openchamber.defaults.field.showChats')}
           />
         </SettingsInset>
+      </SettingsSection>
+    </>
+  );
+};
+
+export const SessionContextSettings: React.FC = () => {
+  const { t } = useI18n();
+  const isVSCode = isVSCodeRuntime();
+  return (
+    <>
+      <CompactionSettings />
+      <SettingsSection title={t('settings.openchamber.defaults.promptCacheTitle')}>
+        {isVSCode ? <SessionWarmingCheckbox /> : <SessionWarmingModeField />}
       </SettingsSection>
     </>
   );

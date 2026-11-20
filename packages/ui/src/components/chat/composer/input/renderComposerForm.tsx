@@ -81,7 +81,7 @@ type Dependencies = {
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'isDesktopExpanded' | 'isMobileExpanded' | 'isComposerExpanded'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile' | 'inputBarOffset' | 'currentTheme' | 'chatInputRadius' | 'hasHardwareKeyboard' | 'mobileReturnKeySends' | 'inputSpellcheckEnabled'>;
     draftTarget: Pick<ReturnType<typeof useComposerDraftTarget>, 'showDesktopDraftPresentation' | 'draftPresentationClassName' | 'draftHeading' | 'draftProjectLabel' | 'showDraftTargetSelectors' | 'selectedDraftProject' | 'draftProjects' | 'selectedDraftDirectory' | 'selectedDraftBranchLabel' | 'selectedDraftBranchIsKnown' | 'selectedDraftDirectoryHasUncommittedChanges' | 'projectRootBranchOption' | 'worktreeBranchOptions' | 'spaceBranchOptions' | 'draftBranchItems' | 'shouldShowDraftBranchSelector' | 'handleDraftProjectChange' | 'handleDraftDirectoryChange' | 'refreshDraftTarget' | 'handleCreateSpace' | 'handleCreateCustomWorktree' | 'handleMobileDraftPickerChange'>;
-    controls: Pick<ReturnType<typeof useComposerControls>, 'abortShortcutReaches' | 'pillText' | 'footerIconButtonClass' | 'iconSizeClass' | 'sendIconSizeClass' | 'stopIconSizeClass' | 'openMobileAttachSheet' | 'toggleDictation' | 'desktopDictating' | 'iconButtonBaseClass' | 'goalObjectiveLength' | 'footerPaddingClass' | 'shownPermissionMode' | 'isPermissionAutoAcceptInteractive' | 'handlePermissionModeCycle' | 'setDesktopDictating' | 'waitingForOpenCode' | 'footerGapClass'>;
+    controls: Pick<ReturnType<typeof useComposerControls>, 'abortShortcutReaches' | 'pillText' | 'footerIconButtonClass' | 'iconSizeClass' | 'sendIconSizeClass' | 'stopIconSizeClass' | 'openMobileAttachSheet' | 'toggleDictation' | 'desktopDictating' | 'iconButtonBaseClass' | 'goalObjectiveLength' | 'footerPaddingClass' | 'shownPermissionMode' | 'isPermissionAutoAcceptInteractive' | 'handlePermissionModeCycle' | 'setDesktopDictating' | 'waitingForAgent' | 'footerGapClass'>;
     props: Pick<ChatInputProps, 'draftPresentationExiting' | 'onOpenSettings'>;
     mobileShell: Pick<ReturnType<typeof useComposerMobileShell>, 'mobileComposerExpanded' | 'mobileShell'>;
     language: Pick<ReturnType<typeof useComposerLanguage>, 'attachmentFilenames' | 'languageContext'>;
@@ -98,7 +98,7 @@ type Dependencies = {
     editorHandlers: Pick<ReturnType<typeof useComposerEditorHandlers>, 'handleEditorChange' | 'handleEditorKeyDown' | 'handleEditorKeyUp' | 'handleEditorSelectionChange' | 'handleEditorBlur'>;
     paste: Pick<ReturnType<typeof useComposerPaste>, 'handlePaste'>;
     dictation: Pick<ReturnType<typeof useComposerDictation>, 'handleDictationInsert' | 'handleDictationInsertAndSend' | 'markDictationStart'>;
-    selection: Pick<ReturnType<typeof useComposerSelection>, 'effectiveBtwSelection' | 'btwModelSelectorOpen' | 'setBtwModelSelectorOpen' | 'pinnedComposerSelection'>;
+    selection: Pick<ReturnType<typeof useComposerSelection>, 'pinnedComposerSelection'>;
 };
 
 export function renderComposerForm({
@@ -152,7 +152,7 @@ export function renderComposerForm({
         stopIconSizeClass, openMobileAttachSheet, toggleDictation, desktopDictating,
         iconButtonBaseClass, goalObjectiveLength, footerPaddingClass, shownPermissionMode,
         isPermissionAutoAcceptInteractive, handlePermissionModeCycle, setDesktopDictating,
-        waitingForOpenCode, footerGapClass,
+        waitingForAgent, footerGapClass,
     } = controls;
     const { draftPresentationExiting, onOpenSettings } = props;
     const { mobileComposerExpanded, mobileShell } = mobile;
@@ -183,7 +183,7 @@ export function renderComposerForm({
     const { handlePaste } = paste;
     const { handleDictationInsert, handleDictationInsertAndSend, markDictationStart } = dictation;
     const {
-        effectiveBtwSelection, btwModelSelectorOpen, setBtwModelSelectorOpen, pinnedComposerSelection,
+        pinnedComposerSelection,
     } = selection;
 
     return (
@@ -518,14 +518,10 @@ export function renderComposerForm({
                         onDictationContentHeightChange={handleDictationContentHeightChange}
                         onDictationActiveChange={setDesktopDictating}
                         isBtw={isBtwActive}
-                        modelSessionId={btwComposerSessionId}
-                        btwSelection={effectiveBtwSelection}
-                        btwModelSelectorOpen={btwModelSelectorOpen}
-                        onBtwModelSelectorOpenChange={setBtwModelSelectorOpen}
                         pinnedSelection={pinnedComposerSelection}
                         onRunInParallel={!isMobile && !isBtwActive && !columnPinned ? handleRunInParallel : undefined}
                         parallelRun={parallelRun}
-                        waitingForOpenCode={waitingForOpenCode}
+                        waitingForAgent={waitingForAgent}
                     />
                     {mobileModelAgentRow}
                     </div>

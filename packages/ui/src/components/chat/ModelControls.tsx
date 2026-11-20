@@ -1,3 +1,4 @@
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import { formatModelRef, modelRefInstanceKey } from '@openchamber/agent-contract';
 import { getReasoningEffortLevels, resolveThinkingLevel } from '@/lib/modelThinkingLevels';
 import React from 'react';

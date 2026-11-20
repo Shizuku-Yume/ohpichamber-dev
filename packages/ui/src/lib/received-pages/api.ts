@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { shareRequestFailure } from '@/lib/share-pages/api';
 

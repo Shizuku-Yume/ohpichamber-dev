@@ -1,4 +1,4 @@
-import { hasGuestPage } from '@openchamber/sdk';
+import { hasGuestPage } from 'ohpichamber-sdk';
 
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { pluginModeFromId, type PluginContextPanelMode } from '@/lib/surfaces/modes';

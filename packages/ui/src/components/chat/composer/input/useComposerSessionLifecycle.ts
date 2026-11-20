@@ -50,7 +50,7 @@ export function useComposerSessionLifecycle({
         immediateBtwSubmitRef.current = null;
         const panels = useBtwStore.getState();
         const pending = panels.byParent[currentSessionId];
-        if (pending?.pending && !pending.creating && !btwSessionId) {
+        if (pending?.pending && !pending.pendingSend && !btwSessionId) {
             const pendingSessionId = btwPendingComposerKey(currentSessionId);
             const identity = createChatDraftIdentity(activeRuntimeKey, currentSessionDirectoryForSync ?? currentDirectory, pendingSessionId);
             if (identity) {

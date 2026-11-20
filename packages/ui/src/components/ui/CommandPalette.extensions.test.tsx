@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { Window } from 'happy-dom';
 import type { InstalledGuest } from '@/lib/guests/types';
 

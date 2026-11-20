@@ -1,3 +1,4 @@
+import { hostFilesystem } from '@/lib/host-filesystem';
 import React from 'react';
 
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -6,7 +7,6 @@ import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { DirectoryRequests } from '@/components/views/files/directoryRequests';
 import { areDirectoryNodesEqual } from '@/components/views/files/fileTreeStatus';
 import { AUTO_RELIST_MAX_ENTRIES, useFileTreeChanges, type FileTreeChangeBatch } from '@/components/views/files/useFileTreeChanges';
-import { opencodeClient } from '@/lib/opencode/client';
 import { sortNodes, type FileNode } from './fileNode';
 import { getParentPath, isAbsolutePath, normalizePath, shouldIgnoreEntryName } from './treePaths';
 import { fileTreeCacheByRoot, fileTreeCacheKey, getOrCreateCache, touchCache } from './treeCache';
@@ -116,7 +116,7 @@ export const useFileTreeListing = ({
         const respectGitignore = !showGitignored;
         const entries = files.listDirectory
           ? (await files.listDirectory(normalizedDir, { respectGitignore })).entries
-          : await opencodeClient.listLocalDirectory(normalizedDir, { respectGitignore });
+          : await hostFilesystem.listLocalDirectory(normalizedDir, { respectGitignore });
         if (stale()) return;
         entryCountByDirRef.current.set(normalizedDir, entries.length);
         const mapped = mapDirectoryEntries(normalizedDir, entries);

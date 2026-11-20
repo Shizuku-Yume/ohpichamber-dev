@@ -6,7 +6,7 @@ import { searchFixture } from './sidebarSearch.fixture';
 import { resolveSidebarSearchScope, sidebarSearchMetadata } from './sidebarConversationSearch';
 import { buildSessionSidebarRowModel } from './sessionSidebarRowModel';
 import { searchScopeQuery, type SearchScope } from '@/lib/search/omniQuery';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { searchConversations } from '@/lib/messageSearch';
 import type { VSCodeBootstrapConfig } from '@/lib/vscodeBootstrap';

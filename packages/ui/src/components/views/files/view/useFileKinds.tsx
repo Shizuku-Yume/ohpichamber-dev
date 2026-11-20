@@ -2,7 +2,7 @@ import React from 'react';
 import { isAudioFile, isBinaryFile, isDelimitedTableFile, isDrawioFile, isExcalidrawFile, isFontFile, isImageFile, isMermaidFile, isNotebookFile, isPdfFile, isSvgFile, isVideoFile } from '@/lib/toolHelpers';
 import { useGuestFileEditor } from '@/lib/guests/file-editors';
 import { useGuestsStore } from '@/lib/guests/store';
-import { GUEST_FILE_EDITOR_CONTENT_MAX } from '@openchamber/sdk';
+import { GUEST_FILE_EDITOR_CONTENT_MAX } from 'ohpichamber-sdk';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { getDisplayPath } from './fileViewPaths';
 import { isMarkdownFile, isJsonFile, isHtmlFile } from './fileViewKinds';

@@ -1,3 +1,4 @@
+import { FormDockModeContext } from './formsInChat';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import React from 'react';

@@ -1,11 +1,12 @@
+import { sessionsInWorktree } from '@/components/overview/overviewActions';
 import React from 'react';
 
 import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isOperatorChildSession } from '@/lib/sessionOperatorChild';
-import { sessionsInWorktree } from '@/lib/worktrees/worktreeUse';
+
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { takeOverSessions } from '@/sync/session-take-over';
 

@@ -1,3 +1,4 @@
+import { selectIsModelMissingFromCatalog } from '@/stores/config/selectors';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,7 @@ import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { selectIsModelMissingFromCatalog, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 
 import { updateProjectSetup, updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';

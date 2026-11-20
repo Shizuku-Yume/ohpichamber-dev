@@ -1,3 +1,4 @@
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import React from 'react';
 import { z } from 'zod';
 import { Icon } from '@/components/icon/Icon';
@@ -8,7 +9,6 @@ import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { DatePicker, TimePill } from '@/components/ui/date-time';
 import { Input as FieldInput } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useCalendarPreferences } from '@/components/ui/useCalendarPreferences';
 import { useI18n as useBaseI18n } from '@/lib/i18n';
 const useI18n = () => {
@@ -22,7 +22,6 @@ const useI18n = () => {
 import { KIT_SHARED_CSS, kitVariables, seriesColor } from '../lib/visualKit';
 import { cn } from '@/lib/utils';
 import { MarkdownContent } from '../MarkdownRenderer';
-import { MarkdownPresentationContext } from '../markdown/MarkdownPresentationContext';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { axisTicks } from './axisTicks';
 import { ExtensionBlockFrame } from './ExtensionBlockFrame';
@@ -32,15 +31,7 @@ import {
  answeringFrame,
  NO_EXTENSION_BLOCKS, type ExtensionBlocks, blockDecisions, blockFields, cardDecision, choiceOption, DEFAULT_TIME, decisionOf, decisionTitles, blockName, blockNode, blockPath, blockProps, noteSlot, parseUiBlock, sliderStart, type BlockName, type BlockPath, type BlockValue, tones,
 } from './catalog';
-import {
-  describeUiBlockAnswer,
-  pageAnswerNamesButton,
-  describeUiBlockReplyAnswer,
-  type UiBlockAnswer,
-  type UiBlockAnswerData,
-  type UiBlockFieldValue,
-  type UiBlockReplyAnswerData,
-} from './answer';
+import { describeUiBlockAnswer, describeUiBlockReplyAnswer, type UiBlockAnswer, type UiBlockAnswerData, type UiBlockFieldValue, type UiBlockReplyAnswerData } from './answer';
 
 export type UiBlockHost =
  | { kind: 'page'; submit: ((answer: UiBlockAnswer) => Promise<void>) | null; answered: UiBlockAnswerData | null }

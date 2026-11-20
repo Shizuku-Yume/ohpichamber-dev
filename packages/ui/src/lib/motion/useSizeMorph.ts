@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 import { parseCssTimeMs } from './springs';
@@ -104,3 +105,5 @@ const useSizeMorph = (ref: React.RefObject<HTMLElement | null>, axis: MorphAxis)
 export const useHeightMorph = (ref: React.RefObject<HTMLElement | null>): void => useSizeMorph(ref, 'height');
 
 export const useHeightMorphRef = (): ((element: HTMLElement | null) => void) => useSizeMorphAttach('height');
+
+export const useWidthMorph = (ref: React.RefObject<HTMLElement | null>): void => useSizeMorph(ref, 'width');

@@ -1,7 +1,7 @@
+import { hostFilesystem } from '@/lib/host-filesystem';
 import React from 'react';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { areDirectoryNodesEqual } from '../fileTreeStatus';
-import { opencodeClient } from '@/lib/opencode/client';
 import { type FileNode } from './fileViewTypes';
 import { sortNodes, normalizePath, isAbsolutePath } from './fileViewPaths';
 import { shouldIgnoreEntryName } from './fileViewEntries';
@@ -69,7 +69,7 @@ export function useFileDirectory({ fileDocument, layout, scope, tabs, files }: {
         const respectGitignore = !showGitignored;
         const entries = files.listDirectory
           ? (await files.listDirectory(normalizedDir, { respectGitignore })).entries
-          : await opencodeClient.listLocalDirectory(normalizedDir, { respectGitignore });
+          : await hostFilesystem.listLocalDirectory(normalizedDir, { respectGitignore });
         if (!isCurrentRequest()) return;
         const mapped = mapDirectoryEntries(normalizedDir, entries);
         loadedDirsRef.current = new Set(loadedDirsRef.current);

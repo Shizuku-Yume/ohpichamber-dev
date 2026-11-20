@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import React from 'react';
 import { handleSessionRenameKeyDown } from './sessionRenameKeyboard';
 
 const dom = new Window();

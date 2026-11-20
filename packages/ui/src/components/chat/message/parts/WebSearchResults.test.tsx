@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, expect, test } from 'bun:test';
 import { plugin } from 'bun';
 import { pathToFileURL } from 'node:url';

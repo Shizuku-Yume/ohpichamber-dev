@@ -1,4 +1,6 @@
-import { getLastConversationMessage, type Message, type Part, type SessionStatus, type ToolPart } from '@/lib/opencode/model';
+import type { Message, Part, SessionRuntimeStatus as SessionStatus, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+import { getLastConversationMessage } from '@/lib/opencode/model';
+type ToolPart = NativeToolCallPart | NativeToolResultPart;
 import { structuredErrorText } from '@/lib/opencode/projection';
 import { isShellTool, toolDescription, type ToolDescription } from '@/lib/opencode/tools';
 import { getToolMetadata } from '@/lib/toolHelpers';

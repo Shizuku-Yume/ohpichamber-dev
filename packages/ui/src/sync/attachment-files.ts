@@ -1,3 +1,4 @@
+
 const ACCEPTED_ATTACHMENT_TYPES = [
   "image/png",
   "image/jpeg",
@@ -428,4 +429,11 @@ export const prepareAttachmentFiles = (
     }
     return prepared
   })
+}
+
+const IMAGE_MENTION_EXTENSIONS = new Set(["gif", "heic", "heif", "jpeg", "jpg", "png", "webp"])
+
+export const isReadOnSendMentionFilename = (name: string): boolean => {
+  const extension = extensionOf(name)
+  return DOCUMENT_EXTENSIONS.has(extension) || IMAGE_MENTION_EXTENSIONS.has(extension)
 }

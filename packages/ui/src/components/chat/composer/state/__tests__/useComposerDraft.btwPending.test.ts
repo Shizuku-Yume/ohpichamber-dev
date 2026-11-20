@@ -1,3 +1,4 @@
+import { writeChatDraft } from '@/lib/chatDraftPersistence';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';

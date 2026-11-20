@@ -1,3 +1,4 @@
+import type { MobileKeepScreenAwake } from '@/stores/ui/types';
 import React from 'react';
 
 import {
@@ -7,7 +8,7 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { canKeepScreenAwake } from '@/lib/platform';
-import { useUIStore, type MobileKeepScreenAwake } from '@/stores/useUIStore';
+import { useUIStore } from '@/stores/useUIStore';
 
 const KEEP_SCREEN_AWAKE_OPTIONS: Array<{ value: MobileKeepScreenAwake; labelKey: I18nKey }> = [
   { value: 'off', labelKey: 'settings.mobileApp.keepScreenAwake.option.off' },

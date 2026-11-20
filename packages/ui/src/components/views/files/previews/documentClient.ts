@@ -1,3 +1,4 @@
+
 import type {
   BookOpened, CellNote, CellPatch, DocumentCalls, DocumentChunk, DocumentRequest, DocumentResponse, DocumentResult, SheetLayout,
 } from './documentProtocol';
@@ -155,4 +156,14 @@ export const openWorkbook = async (path: string, name: string, bytes: Uint8Array
   const id = newDocumentId();
   const opened = await call('workbook.open', { book: id, path, name, bytes });
   return opened ? new WorkbookBook(call, id, opened) : null;
+};
+
+export const collectRows = () => {
+  const rows: string[][] = [];
+  return {
+    rows,
+    add: (chunk: { rows: string[][] }) => {
+      for (const row of chunk.rows) rows.push(row);
+    },
+  };
 };

@@ -1,3 +1,4 @@
+
 import { isDeepNight, isFridayEvening, isSmallHours, occasionOf, type Occasion } from './calendar';
 import type { EasterEggCopy, ToastLine } from './copy/types';
 
@@ -51,3 +52,5 @@ export const netDeletionLine = (
     description: line.description,
   };
 };
+
+export type DraftMoment = Occasion | 'deepNight' | 'everyday';

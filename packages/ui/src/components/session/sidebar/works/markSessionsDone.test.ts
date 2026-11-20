@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { takeSessionActionFailure } from '@/sync/session-action-failures';
 import { markSessionsDone } from './workActions';

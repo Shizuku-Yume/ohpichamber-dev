@@ -1,3 +1,4 @@
+import { useHeightMorph } from '@/lib/motion/useSizeMorph';
 import type { ModelSelection } from '@openchamber/agent-contract';
 import React from 'react';
 import { cn } from '@/lib/utils';
@@ -6,7 +7,7 @@ import { useChatSessionSelection } from './chatColumnSession';
 import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';

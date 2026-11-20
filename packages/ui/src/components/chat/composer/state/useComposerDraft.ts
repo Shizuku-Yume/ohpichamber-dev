@@ -1,3 +1,4 @@
+import type { ComposerText } from './composerText';
 import { isBtwPendingComposerKey } from "@/lib/btw";
 import { isMentionEntryInText } from '../language/mentions';
 /**

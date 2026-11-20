@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 
 import appCss from '@/index.css?inline';
 import { normalizeLocale, type Locale } from '@/lib/i18n/runtime';
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
 import { createShareSubmitter, viewerMessageSchema } from './protocol';
 import { SHARE_PAGE_DATA_ID, SHARE_PAGE_ROOT_ID, sharePageDataSchema } from './page';

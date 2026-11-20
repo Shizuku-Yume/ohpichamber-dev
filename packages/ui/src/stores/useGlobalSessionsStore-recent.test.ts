@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { opencodeClient, type SessionPage } from '@/lib/opencode/client';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';

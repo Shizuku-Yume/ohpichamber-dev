@@ -1,3 +1,4 @@
+import { PinToMenu } from '../sections/PinToMenu';
 import React from 'react';
 import { TakeOverWorktreeItem } from './TakeOverWorktreeItem';
 import { Icon } from '@/components/icon/Icon';
@@ -38,7 +39,7 @@ import { CollapsedActivityIndicator } from '../sessions/collapsedActivityIndicat
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
 import { SIDEBAR_REF_TOOLTIP_CLOSE_DELAY_MS, SidebarRefLinks } from '../sessions/SidebarRefLinks';
 import { RowMarkTooltip } from '../sessions/RowMarkTooltip';
-import { GuestRowMarkLines, GuestRowMarks } from '../sessions/GuestRowMarks';
+import { GuestRowMarks } from '../sessions/GuestRowMarks';
 import { useWorkRowGuestMarks } from '../sessions/useRowGuestMarks';
 import type { RowGuestMark } from '@/lib/guests/marks';
 import { openGuestSurface } from '@/lib/guests/open-surface';

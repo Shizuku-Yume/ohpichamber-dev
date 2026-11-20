@@ -1,8 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import type { Root, RootContent } from 'mdast';
-import remarkParse from 'remark-parse';
-import { defaultRemarkPlugins } from 'streamdown';
-import { unified } from 'unified';
 
 import { buildSkillHref } from '@/lib/messages/inlineMessageLinks';
 import { prepareUserMarkdownContent } from './userTextPartContent';

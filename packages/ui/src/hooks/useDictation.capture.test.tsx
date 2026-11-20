@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, spyOn, test, type Spy } from 'bun:test';
 import { Window } from 'happy-dom';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { DictationStreamSender } from '@/lib/dictation/dictation-stream-sender';

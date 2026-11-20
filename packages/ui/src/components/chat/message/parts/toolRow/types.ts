@@ -1,4 +1,6 @@
-import type { FilePart, Metadata, ToolInput, ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@/lib/opencode/model';
+import type { AttachmentPart as FilePart, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+import type { Metadata, ToolInput, ToolState as ToolStateUnion } from '@/lib/opencode/model';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import type { ToolPopupContent } from '../../types';
 
 export type ToolJsonViewMode = 'summary' | 'formatted' | 'raw';

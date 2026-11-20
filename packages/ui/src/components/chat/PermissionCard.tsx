@@ -1,3 +1,6 @@
+import { usePermissionResponse } from './usePermissionResponse';
+import { usePermissionFromSubagent } from './usePermissionResponse';
+import { getPermissionToolPresentation } from './permissionToolPresentation';
 import React from 'react';
 import { z } from 'zod';
 import type { ApprovalRequest } from '@openchamber/agent-contract';
@@ -121,3 +124,46 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
 
 /** Allow once / session allowance / deny, with the original dock and inline layouts. */
 export { PermissionActions };
+
+export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onResponse }) => {
+  const { t } = useI18n();
+  const { isResponding, hasResponded, respond } = usePermissionResponse(permission, onResponse);
+  const isFromSubagent = usePermissionFromSubagent(permission);
+  const tool = getPermissionToolPresentation(permission);
+
+  if (hasResponded) {
+    return null;
+  }
+
+  return (
+    <div className="group w-full pt-0 pb-2">
+      <div className="chat-column">
+        <div className="-mt-1 border border-edge-muted rounded-xl bg-muted/10">
+          <div className="px-2 py-1.5 border-b border-edge-muted bg-muted/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Icon name="question" className="h-3.5 w-3.5 text-[var(--status-warning)]" />
+                <span className="typography-meta font-medium text-muted-foreground">
+                  {t('chat.permissionCard.title')}
+                </span>
+                {isFromSubagent ? (
+                  <span className="typography-micro text-muted-foreground px-1.5 py-0.5 rounded bg-foreground/5">
+                    {t('chat.questionCard.fromSubagent')}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {tool.icon}
+                <span dir="auto" className="typography-meta text-muted-foreground font-medium">{tool.name}</span>
+              </div>
+            </div>
+          </div>
+
+          <PermissionRequestContent permission={permission} />
+
+          <PermissionActions permission={permission} isResponding={isResponding} onRespond={(response) => void respond(response)} variant="inline" />
+        </div>
+      </div>
+    </div>
+  );
+};

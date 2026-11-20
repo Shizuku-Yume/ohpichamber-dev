@@ -13,7 +13,8 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import type { RenderedPageShare } from '@/lib/opencode/tools';
-import type { ToolPart } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPart = NativeToolCallPart | NativeToolResultPart;
 import {
   cancelSharePageRecipient,
   fetchSharePageGroup,

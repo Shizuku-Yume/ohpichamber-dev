@@ -7,7 +7,6 @@ import type { useComposerRuntime } from './useComposerRuntime';
 import type { useComposerReferenceDrafts } from './useComposerReferenceDrafts';
 import type { useComposerQueueState } from './useComposerQueueState';
 import type { useComposerPreferences } from './useComposerPreferences';
-import type { useComposerPermissionSettings } from './useComposerPermissionSettings';
 import type { useComposerParallelRun } from './useComposerParallelRun';
 import type { useComposerMentionAttachments } from './useComposerMentionAttachments';
 import type { useComposerLanguage } from './useComposerLanguage';
@@ -31,11 +30,11 @@ type Dependencies = {
     draftText: Pick<ReturnType<typeof useComposerDraftText>, 'setMessage' | 'confirmedMentionsRef' | 'composerText' | 'currentChatDraftIdentityRef'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'getCurrentInputSnapshot' | 'pendingFirstSend' | 'composerQueuedMessages' | 'hasQueuedMessages'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity' | 'isBtwActive' | 'btwPanel' | 'newSessionDraftOpen' | 'newSessionDraft' | 'btwDirectory' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'attachedFiles' | 'btwSessionId' | 'activeRuntimeKey' | 'immediateBtwSubmitRef' | 'sendHeldByMissingFolder' | 'setReviewDialogOpen' | 'isPromotedBtwSession' | 'btwComposerSessionId' | 'sessionFolder'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity' | 'isBtwActive' | 'btwPanel' | 'newSessionDraftOpen' | 'newSessionDraft' | 'btwDirectory' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'attachedFiles' | 'btwSessionId' | 'activeRuntimeKey' | 'immediateBtwSubmitRef' | 'sendHeldByMissingFolder' | 'setReviewDialogOpen' | 'btwComposerSessionId' | 'sessionFolder'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput' | 'takeForSend'>;
-    language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions'>;
-    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant' | 'effectiveBtwSelection'>;
-    mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'sanitizeAttachmentsForSend' | 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions'>;
+    language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions' | 'loadCommands'>;
+    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
+    mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'sanitizeAttachmentsForSend' | 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions' | 'prepareDocumentMentions'>;
     props: Pick<ChatInputProps, 'scrollToLatest' | 'scrollToBottom'>;
     referenceDrafts: Pick<ReturnType<typeof useComposerReferenceDrafts>, 'setLinkedReferencesFor' | 'updateLinkedReferencesFor' | 'updateLinkedReferences'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
@@ -44,8 +43,7 @@ type Dependencies = {
     parallelRun: Pick<ReturnType<typeof useComposerParallelRun>, 'parallel'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'autoReviewRunning'>;
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'setExpandedInput'>;
-    permissionSettings: Pick<ReturnType<typeof useComposerPermissionSettings>, 'pendingBtwPermissionMode'>;
-    runtime: Pick<ReturnType<typeof useComposerRuntime>, 'runtimeTrackers'>;
+    runtime: Pick<ReturnType<typeof useComposerRuntime>, 'runtimeTrackers' | 'runtimeFiles'>;
     draftHistory: Pick<ReturnType<typeof useComposerDraftHistory>, 'handoffDraft' | 'restoreDraft' | 'persistDraftImmediately' | 'messageHistory' | 'migrateDraft'>;
 };
 

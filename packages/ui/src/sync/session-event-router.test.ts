@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionPatch, SyncEvent } from '@/lib/opencode/events';
 import { applySessionEventsToGlobalSessions } from './session-event-router';
 

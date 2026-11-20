@@ -1,18 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
 
-import {
-    assignImageAttachmentFilenames,
-    buildAttachmentCitationText,
-    findAttachmentCitationRanges,
-    findImagePathCitationNames,
-    findLocalFileLinks,
-    imageSaveModeForModel,
-    isGenericImageFilename,
-    nextPastedContextFilename,
-    prepareImageToSave,
-} from '../attachmentCitations';
+import { assignImageAttachmentFilenames, buildAttachmentCitationText, findAttachmentCitationRanges, findLocalFileLinks, isGenericImageFilename, nextPastedContextFilename } from '../attachmentCitations';
 
-let decodeHeic = async (): Promise<Blob> => new Blob(['jpeg-data'], { type: 'image/jpeg' });
+const decodeHeic = async (): Promise<Blob> => new Blob(['jpeg-data'], { type: 'image/jpeg' });
 
 mock.module('heic2any', () => ({
     default: async () => decodeHeic(),

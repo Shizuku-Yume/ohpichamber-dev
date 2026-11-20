@@ -1,3 +1,4 @@
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { canAddSidebarSection, closeSectionsManager, editSection, openSectionsManager, useSidebarSectionsUiStore } from '../sections/sectionActions';

@@ -1,4 +1,6 @@
 
+
+
 import { useCallback } from 'react';
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -129,3 +131,13 @@ export const markSessionUnreadSeen = (sessionId: string): void => {
    if (pendingViews.get(sessionId) === lastIdleAt) pendingViews.delete(sessionId);
   });
 };
+
+export const canSessionBeUnread = (session: Session | undefined): session is Session => (
+  Boolean(session) && !session?.parentID && session?.time.archived === undefined
+)
+
+const keptMarks = new Set<string>()
+
+export const releaseKeptUnreadMarks = (): void => {
+  keptMarks.clear()
+}

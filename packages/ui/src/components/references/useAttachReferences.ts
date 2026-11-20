@@ -1,3 +1,5 @@
+import type { ReferenceLinkTarget } from './resolveComposerReferences';
+import { resolveReferenceLink } from './resolveComposerReferences';
 import * as React from 'react';
 
 import type { ComposerReference } from '@/components/chat/composer/composerReferences';
@@ -41,4 +43,9 @@ export function useAttachReferences(
             }),
         };
     }, [deps, onAttach, t]);
+}
+
+export function useReadReferenceLink(directory: string | null): (target: ReferenceLinkTarget) => Promise<ComposerReference> {
+    const deps = useReferenceResolveDeps(directory);
+    return React.useCallback((target) => resolveReferenceLink(target, deps), [deps]);
 }

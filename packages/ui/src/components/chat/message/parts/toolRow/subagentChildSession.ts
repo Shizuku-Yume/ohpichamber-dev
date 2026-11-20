@@ -1,5 +1,6 @@
 import React from 'react';
-import type { Part, ToolPart as ToolPartType } from '@/lib/opencode/model';
+import type { Part, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import { useDirectorySync } from '@/sync/sync-context';
 import type { State } from '@/sync/types';
 import { readTaskSessionIdFromOutput, readTaskSessionIdFromRecord, resolveRunningTaskChildSessionId } from '../taskToolModel';

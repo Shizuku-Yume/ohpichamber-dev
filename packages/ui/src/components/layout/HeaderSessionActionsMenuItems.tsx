@@ -8,7 +8,7 @@ import { useSessionWorktreeMenuLoader } from '@/components/session/sidebar/sessi
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { isSessionPinnedInMetadata } from '@/lib/sessionPins';
 import { useSidebarSpaces } from '@/lib/spaces/spaces-store';

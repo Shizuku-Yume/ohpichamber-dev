@@ -1,5 +1,5 @@
 import { type ConfigStore, type DirectoryScopedConfig, type ProviderWithModelList } from './types';
-import { type Agent } from '@/lib/opencode/model';
+import type { Agent } from '@openchamber/agent-contract';
 
 export const hasLiveCatalog = (state: Pick<ConfigStore, 'directoryScoped'>, directoryKey: string): boolean => (
     state.directoryScoped[directoryKey]?.providersLoaded === true

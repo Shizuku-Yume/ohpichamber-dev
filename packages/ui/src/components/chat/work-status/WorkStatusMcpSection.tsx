@@ -3,7 +3,6 @@ import { useI18n } from '@/lib/i18n';
 import { Switch } from '@/components/ui/switch';
 import { getMcpServerStatus, isMcpServerConnected, useMcpStore } from '@/stores/useMcpStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useUIStore } from '@/stores/useUIStore';
 import { McpIcon } from '@/components/icons/McpIcon';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { toast } from 'sonner';

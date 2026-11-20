@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import type { Session } from '@openchamber/agent-contract';
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';

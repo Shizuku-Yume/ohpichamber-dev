@@ -1,3 +1,6 @@
+import { SettingsInlineLink } from '@/components/sections/classification/JevAccessNote';
+import { fetchBypassingRuntimeBridge } from '@/lib/runtime-fetch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import React from 'react';
 import QRCode from 'qrcode';
@@ -53,7 +56,6 @@ import type { PendingPairingRecord, RemoteClientRecord } from '@/lib/api/types';
 import { buildPairingConnectionPayload, encodePairingConnectionPayload, parsePairingConnectionPayload, type PairingEndpointCandidate } from '@/lib/connectionPayload';
 import { readPairingResponse } from '@/lib/pairingResponse';
 import { RelayConflictNotice } from './RelayConflictNotice';
-import { AddDeviceFallbackOption } from './AddDeviceFallbackOption';
 import {
   desktopSshLogsClear,
   desktopSshLogs,

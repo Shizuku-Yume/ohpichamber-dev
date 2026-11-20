@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { useStreamingStore } from '@/sync/streaming';
 import {
     useSessionMessageRecords,

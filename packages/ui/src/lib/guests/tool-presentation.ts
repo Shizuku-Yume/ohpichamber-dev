@@ -1,3 +1,4 @@
+import { GuestToolCard } from '@/components/chat/message/parts/GuestToolCard';
 import React from 'react';
 import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from 'ohpichamber-sdk';
 

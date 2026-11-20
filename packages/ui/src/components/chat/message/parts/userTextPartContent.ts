@@ -1,3 +1,4 @@
+import { CHIP_TRAILING_PUNCTUATION } from '@/lib/messages/inlineMessageLinks';
 import type { Root, RootContent } from 'mdast';
 import remarkParse from 'remark-parse';
 import { defaultRemarkPlugins } from 'streamdown';

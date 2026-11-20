@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 
 export type ChatSettingsTab = 'messages' | 'composer' | 'assistance';
@@ -80,3 +81,6 @@ export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | nu
   }
   return null;
 };
+
+export const chatSettingsTabAnchors = (tab: ChatSettingsTab): string[] =>
+  [...SEARCH_TARGET_TABS].filter(([, owner]) => owner === tab).map(([id]) => id);

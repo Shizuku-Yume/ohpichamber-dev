@@ -1,3 +1,4 @@
+import { DEFAULT_CONTEXT_EDITOR_TREE_WIDTH } from '@/stores/ui/preferences';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { z } from 'zod';
 import { CONTEXT_SURFACES, sortContextSurfaces } from '../lib/surfaces/registry';
@@ -8,7 +9,7 @@ import {
 } from '../lib/browser/devServerWait';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { useTerminalStore } from './useTerminalStore';
-import { DEFAULT_CONTEXT_EDITOR_TREE_WIDTH, useUIStore } from './useUIStore';
+import { useUIStore } from './useUIStore';
 
 const getContextPanelTabs = (directory: string) => useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
 

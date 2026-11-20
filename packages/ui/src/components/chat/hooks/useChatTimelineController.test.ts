@@ -1,3 +1,4 @@
+import type { Message } from '@openchamber/agent-contract';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, jest, test } from 'bun:test';

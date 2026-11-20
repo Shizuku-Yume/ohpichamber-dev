@@ -1,3 +1,17 @@
+import type { RepositoryReferenceFilter } from '@/lib/api/types';
+import { useRepositoryAcrossReferenceList } from '@/components/references/referenceSources';
+import type { IssueLiveSummary } from '@/lib/api/types';
+import type { TrackerLiveSummary } from '@/lib/trackers/types';
+import { trackerIssueLook } from '@/lib/trackers/stateLook';
+import { useRepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
+import { useBranchTrackedPulls } from '@/stores/useGitHubPrStatusStore';
+import type { TrackedItem } from '@/lib/trackedItems/model';
+import { getLinkedSidebarChanges } from '@/lib/linkedIssues';
+import { repositoryThread } from '@/lib/trackedItems/fromLinks';
+import { getLinkedSidebarIssues } from '@/lib/linkedIssues';
+import { workItem } from '@/lib/trackedItems/fromLinks';
+import { useTrackedItems } from '@/lib/trackedItems/interest';
+import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import React from 'react';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import type { Session } from '@openchamber/agent-contract';

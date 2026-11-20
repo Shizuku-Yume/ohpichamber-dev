@@ -1,3 +1,4 @@
+import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,6 @@ import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 import { normalizePath as normalizePathImpl } from '@/lib/pathNormalization';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -26,7 +26,6 @@ import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import { guestActionsWhere, type GuestActionEntry } from '@/lib/guests/actions';
 import { runGuestAction } from '@/lib/guests/run-action';
 import { MobileRowMenu } from './mobileSidebar/MobileRowMenu';
-import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS, MOBILE_HEADER_TITLE_CLASS } from '@/components/ui/mobileHeader';
 
 const LazyFilesEditor = React.lazy(() =>
   import('@/components/views/FilesView').then((module) => ({ default: module.FilesView })),

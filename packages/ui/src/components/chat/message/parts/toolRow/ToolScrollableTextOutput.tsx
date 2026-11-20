@@ -1,6 +1,7 @@
 import React from 'react';
 import { SimpleMarkdownRenderer } from '../../../MarkdownRenderer';
-import type { ToolPart as ToolPartType } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import { HighlightedCode } from '@/components/code/HighlightedCode';
 import type { ToolPopupContent } from '../../types';
 import { tryParseJsonOutput } from '../../toolRenderers';

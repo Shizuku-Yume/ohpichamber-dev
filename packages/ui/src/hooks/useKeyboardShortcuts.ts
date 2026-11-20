@@ -1,5 +1,7 @@
+import { useComposerAbortEscape } from './useComposerAbortEscape';
+import { isDesktopShell } from '@/lib/desktop';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import React from 'react';
-import { hasReceivedPages, useReceivedPagesStore } from '@/components/chat/sharePages/received/receivedPagesStore';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
 import { getTerminalFocusOwner, isTerminalEventTarget } from '@/lib/terminalFocus';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';

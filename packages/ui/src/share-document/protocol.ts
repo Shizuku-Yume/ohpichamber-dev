@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { JsonValue } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
 
 export const SHARE_DOCUMENT_SOURCE = 'openchamber-share-document';
 export const SHARE_VIEWER_SOURCE = 'openchamber-share-viewer';

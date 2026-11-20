@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import type { Session } from '@openchamber/agent-contract';
 import { listedChildren } from './listedChildren';
 import type { SessionFolder, SessionFoldersMap } from '@/stores/useSessionFoldersStore';

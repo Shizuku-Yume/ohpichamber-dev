@@ -1,3 +1,13 @@
+import { useEffect } from 'react';
+import { toPierreAnnotationId } from '@/components/comments/PierreDiffCommentUtils';
+import { preserveScrollPosition } from '@/components/views/pierreDiff/diffDom';
+import { acquireSharedVirtualizer } from '@/components/views/pierreDiff/sharedVirtualizer';
+import { makeContentCacheKey } from '@/components/views/pierreDiff/contentCacheKey';
+import { waitForDiffReady } from '@/components/views/pierreDiff/diffDom';
+import { wakeVirtualizer } from '@/components/views/pierreDiff/sharedVirtualizer';
+import { isSameSelection } from '@/components/views/pierreDiff/diffSelection';
+import { resolveContextExpansionRequest } from '@/components/views/pierreDiff/contextExpansion';
+import type { ContextExpansionRequest } from '@/components/views/pierreDiff/types';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -22,7 +32,6 @@ import { hideWhitespaceChanges } from '@/lib/diff/hideWhitespaceChanges';
 import { DiffStickyScrollbar } from './DiffStickyScrollbar';
 import { useEditorCodeMetrics } from '@/lib/editorCodeMetrics';
 import { HIDE_COLUMN_SCROLLBAR_CSS, HUNK_ACTION_OVERLAY_CSS, WEBKIT_SCROLL_FIX_CSS } from './pierreDiff/css';
-import { useContextExpansion } from './pierreDiff/useContextExpansion';
 import { useAnnotationRenderer, useLineAnnotations } from './pierreDiff/useDiffAnnotations';
 import { useDiffComments } from './pierreDiff/useDiffComments';
 import { useDiffInstance } from './pierreDiff/useDiffInstance';

@@ -1,3 +1,4 @@
+
 import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -101,3 +102,5 @@ export const mergeSessionDirectoryMetadata = (incoming: Session, existing?: Sess
     ...(keepArchive ? { archivedAt: existing.archivedAt, archiveRevision: existing.archiveRevision } : {}),
   };
 };
+
+export type SessionPageLister = (options: SessionListOptions) => Promise<SessionPage>;

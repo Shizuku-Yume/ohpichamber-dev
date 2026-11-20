@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { PromptOrigin } from '@/lib/opencode/prompt-origin';
 import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { useSessionSelector } from '@/sync/sync-context';

@@ -1,4 +1,5 @@
-import { type Model, type Provider, type Agent, type Config } from '@/lib/opencode/model';
+import type { Model, Provider, Agent } from '@openchamber/agent-contract';
+import { type Config } from '@/lib/opencode/model';
 import { type ProjectConfigError } from '@/lib/opencode/configError';
 import { type ModelMetadata } from '@/types';
 import { type VoiceApiKeyState, type VoiceApiKeyKind } from '@/lib/voiceKeysApi';

@@ -1,3 +1,7 @@
+
+
+
+
 import type { ToolCallPart } from '@openchamber/agent-contract';
 
 import {
@@ -667,4 +671,20 @@ export function formatToolInput(input: ToolCallPart['input'], toolName: string):
  if (isEvalTool(toolName) && typeof input.code === 'string') return input.code;
  // Keep complete structured native edit/task/custom-tool inputs visible.
  return JSON.stringify(input, null, 2);
+}
+
+export function hasFileVersionsDiff(filePath: string): boolean {
+  return isImageFile(filePath) || isOfficePreviewFile(filePath);
+}
+
+export function isDataFile(filePath: string): boolean {
+  return ['sqlite', 'sqlite3', 'db', 'parquet'].includes(getFileExtension(filePath));
+}
+
+export function isArchiveFile(filePath: string): boolean {
+  return ['zip', 'jar', 'war'].includes(getFileExtension(filePath));
+}
+
+export function isNotebookFile(filePath: string): boolean {
+  return getFileExtension(filePath) === 'ipynb';
 }

@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { sameMultiRunIdentity } from '@/lib/multirun/identity';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import type { SessionNode } from '../types';

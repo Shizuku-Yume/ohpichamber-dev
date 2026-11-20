@@ -8,11 +8,10 @@ import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useInputStore } from '@/sync/input-store';
-import { getChatDraftIdentityKey } from '@/lib/chatDraftPersistence';
 import { toast } from '@/components/ui';
-import { opencodeClient } from '@/lib/opencode/client';
+import { saveWorkspaceAttachments } from '@/lib/workspace-attachments';
 import { assignImageAttachmentFilenames, buildAttachmentCitationText, buildImagePathCitationText, findImagePathCitationNames, imageSaveModeForModel, prepareImageToSave, renameFileForAttachmentCitation } from '../../attachmentCitations';
-import { assignFileAttachmentFilenames, attachmentsCitedIn } from '@/lib/attachmentIdentity';
+import { assignFileAttachmentFilenames } from '@/lib/attachmentIdentity';
 import { buildImagePasteInsertion, withInlineInsertionBoundaries } from '../../composer/text';
 import { getFileMentionInputSourceForInsertedText } from './composerMentionTokens';
 
@@ -74,10 +73,10 @@ export function useComposerFileIntake({
         const savingToastId = toast.loading(t('chat.chatInput.toast.imagesSaving', { files: images.map((file) => file.name).join(', ') }));
         const prepared = await Promise.all(images.map((file) => prepareImageToSave(file).catch(() => null)));
         const readable = prepared.filter((entry) => entry !== null);
-        let results: Awaited<ReturnType<typeof opencodeClient.writeOpenCodeTempFiles>>;
+        let results: Awaited<ReturnType<typeof saveWorkspaceAttachments>>;
         try {
             results = readable.length > 0
-                ? await opencodeClient.writeOpenCodeTempFiles(currentDirectory, readable.map(({ filename, bytes }) => ({ filename, bytes })))
+                ? await saveWorkspaceAttachments(currentDirectory, readable.map(({ filename, bytes }) => ({ filename, bytes })))
                 : [];
         } catch (error) {
             results = readable.map(({ filename }) => ({ filename, error: error instanceof Error ? error : new Error(String(error)) }));
@@ -225,21 +224,6 @@ export function useComposerFileIntake({
             toast.error(t('chat.chatInput.toast.attachFileFailed'));
         }
     }, [addAttachedFile, imageSaveMode, insertCitationAtSelection, renameCitation, savePastedImagesAsFiles, saveImagesWithPathCitation, t, composerText, composerRef, pendingPastedAttachmentFilenamesRef]);
-
-    const seenVSCodeAttachmentsRef = React.useRef<{ draftKey: string; ids: Set<string> } | null>(null);
-
-    React.useEffect(() => {
-        const draftKey = chatDraftIdentity ? getChatDraftIdentityKey(chatDraftIdentity) : '';
-        const vscodeFiles = attachedFiles.filter((file) => file.source === 'vscode');
-        const seen = seenVSCodeAttachmentsRef.current;
-        seenVSCodeAttachmentsRef.current = { draftKey, ids: new Set(vscodeFiles.map((file) => file.id)) };
-        if (!seen || seen.draftKey !== draftKey) return;
-        const fresh = vscodeFiles.filter((file) => !seen.ids.has(file.id));
-        if (fresh.length === 0) return;
-        const text = composerRef.current?.getValue() ?? composerText.get();
-        const uncited = fresh.filter((file) => attachmentsCitedIn(text, [file]).length === 0);
-        if (uncited.length > 0) insertCitationAtSelection(buildAttachmentCitationText(uncited.map((file) => file.filename)), '');
-    }, [attachedFiles, chatDraftIdentity, composerText, insertCitationAtSelection, composerRef]);
 
     const attachFilesWithCitation = React.useCallback((files: File[], leadingText: string = ''): Promise<void> => {
         const work = attachFilesWithCitationNow(files, leadingText);

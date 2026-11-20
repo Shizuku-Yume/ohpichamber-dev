@@ -1,4 +1,4 @@
-import React, { act, useState } from 'react';
+import { act, useState } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { GitLogEntry } from '@/lib/api/types';

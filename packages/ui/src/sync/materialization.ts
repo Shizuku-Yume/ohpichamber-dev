@@ -1,3 +1,6 @@
+
+
+
 import type { Message, Part, ToolCallPart } from "@openchamber/agent-contract"
 import { mergeMessages } from "./optimistic"
 import { sortMessagesChronologically } from "./message-ordering"
@@ -111,4 +114,42 @@ export function getSessionMaterializationStatus(state: MaterializedState, sessio
   const messages = state.message[sessionId]
   if (!messages) return { hasMessages: false, renderable: false, missingPartMessageIDs: [] }
   return { hasMessages: true, renderable: true, missingPartMessageIDs: [] }
+}
+
+export const getSessionMaterializationRequestKey = (
+  runtimeKey: string,
+  directory: string,
+  sessionID: string,
+): string => JSON.stringify([runtimeKey, directory, sessionID])
+
+export function isSessionMaterializationStillNeeded(
+  state: MaterializedState,
+  sessionID: string,
+  request: SessionMaterializationRequest,
+): boolean {
+  if (request.reason === "empty-assistant-message") {
+    return !request.messageID || !Object.prototype.hasOwnProperty.call(state.part, request.messageID)
+  }
+
+  if (request.reason === "missing-owning-message") {
+    if (!request.messageID) return true
+    return !(state.message[sessionID] ?? []).some((message) => message.id === request.messageID)
+  }
+
+  if (request.reason === "orphan-delta" || request.reason === "missing-delta-part") {
+    if (!request.messageID || !request.partID) return true
+    return !(state.part[request.messageID] ?? []).some((part) => part.id === request.partID)
+  }
+
+  if (request.reason === "settled-running-tool") {
+    return getStaleRunningToolMessageID(state, sessionID) === request.messageID
+  }
+
+  return true
+}
+
+export type SessionMaterializationRequest = {
+  reason: SessionMaterializationReason
+  messageID?: string
+  partID?: string
 }

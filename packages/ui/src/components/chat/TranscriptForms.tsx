@@ -1,5 +1,6 @@
+import { useRecoveredQuestions } from '@/sync/session-request-hooks';
 import React from 'react';
-import { useRecoveredQuestions, useScopedBlockingForms } from '@/sync/sync-context';
+import { useScopedBlockingForms } from '@/sync/sync-context';
 import { dispatchPageWaiting } from './lib/scroll/timelineScrollIntent';
 import { FormCard } from './FormCard';
 

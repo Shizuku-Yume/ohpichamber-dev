@@ -1,4 +1,4 @@
-import type { Project as OpenCodeProject, Session } from '@/lib/opencode/model';
+import type { Project as OpenCodeProject, Session } from '@openchamber/agent-contract';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
 import { resolveSessionNestingParentId } from '@/lib/sessionWorkLineage';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';

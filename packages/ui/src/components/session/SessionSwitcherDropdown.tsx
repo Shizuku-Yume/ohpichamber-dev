@@ -12,7 +12,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionMarkedUnread, useSessionUnread } from '@/sync/session-unread';
+import { useSessionUnread } from '@/sync/session-unread';
 import {
   findSwitcherItemAncestorIds,
   useSwitcherItems,

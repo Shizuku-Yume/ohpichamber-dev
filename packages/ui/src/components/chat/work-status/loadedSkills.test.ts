@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { AssistantMessage, Message, Part, ToolState } from '@/lib/opencode/model';
+import type { Message as AssistantMessage, Message, Part } from '@openchamber/agent-contract';
+import type { ToolState } from '@/lib/opencode/model';
 import { resolveLoadedSkillTarget, selectLoadedSkills } from './loadedSkills';
 
 const sessionID = 'ses_1';

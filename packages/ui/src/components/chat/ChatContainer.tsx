@@ -1,3 +1,4 @@
+import type { PinnedSelection } from '@/components/chat/column/useChatColumnSelection';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageTTS } from "@/hooks/useMessageTTS";
 import { useAutoReadAloud } from "@/hooks/useAutoReadAloud";

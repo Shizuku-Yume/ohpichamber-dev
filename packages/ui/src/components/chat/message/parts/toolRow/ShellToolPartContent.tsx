@@ -1,5 +1,6 @@
 import React from 'react';
-import type { ToolPart as ToolPartType } from '@/lib/opencode/model';
+import type { ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
+type ToolPartType = NativeToolCallPart | NativeToolResultPart;
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useRunningShell } from '@/sync/background-shells';
 import { stopForegroundShell, useForegroundShellStopping } from '../foregroundShellStop';

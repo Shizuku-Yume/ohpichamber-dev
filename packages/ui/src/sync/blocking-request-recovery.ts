@@ -1,5 +1,5 @@
 import type { StoreApi } from "zustand"
-import type { FormRequest, PermissionRequest } from "@/lib/opencode/model"
+import type { QuestionRequest as FormRequest, ApprovalRequest as PermissionRequest } from '@openchamber/agent-contract';
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { ChildStoreManager, type DirectoryStore } from "./child-store"
 import { noteQuestionFormSnapshot } from "./recoverable-questions"

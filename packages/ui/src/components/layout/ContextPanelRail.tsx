@@ -1,6 +1,5 @@
 import React from 'react';
 import { ScrollShadow, ScrollShadowBands } from '@/components/ui/ScrollShadow';
-import { hasReceivedPages, useReceivedPages } from '@/components/chat/sharePages/received/receivedPagesStore';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import {
   DndContext,
@@ -22,7 +21,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { Icon } from '@/components/icon/Icon';
-import { DiffViewIcon } from '@/components/icons/DiffIcon';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';

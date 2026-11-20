@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { Session } from "@/lib/opencode/model"
+import type { Session } from '@openchamber/agent-contract';
 import { resolveSessionReadDirectory, type SessionReadDirectorySources } from "./session-read-directory"
 
 type Adoption = { sessionID: string; from: string; to: string }

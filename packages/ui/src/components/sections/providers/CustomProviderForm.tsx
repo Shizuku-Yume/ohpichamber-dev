@@ -13,7 +13,6 @@ import {
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useProviderLogo } from '@/hooks/useProviderLogo';

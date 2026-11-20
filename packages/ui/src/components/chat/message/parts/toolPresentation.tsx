@@ -1,4 +1,3 @@
-import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { resolveGuestToolIcon } from '@/lib/guests/icon';

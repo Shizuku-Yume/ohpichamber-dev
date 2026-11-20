@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GuestTone } from '@openchamber/sdk';
+import type { GuestTone } from 'ohpichamber-sdk';
 
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';

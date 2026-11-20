@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { afterEach, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';

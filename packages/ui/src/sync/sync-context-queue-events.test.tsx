@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CanonicalClient } from '@/api/canonicalClient';
 import { getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';

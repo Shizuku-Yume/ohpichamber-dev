@@ -13,7 +13,7 @@ import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAttachmentPreview } from './useComposerAttachmentPreview';
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
-import type { AttachIssueRequest } from '@openchamber/sdk';
+import type { AttachIssueRequest } from 'ohpichamber-sdk';
 import { toast } from '@/components/ui';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { openGuestSurface } from '@/lib/guests/open-surface';

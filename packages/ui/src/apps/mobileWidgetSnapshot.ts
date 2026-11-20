@@ -6,7 +6,6 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { isSessionUnread } from '@/sync/session-unread';
 import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync/session-ordering';
-import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useSessionUIStore } from '@/sync/session-ui-store';
