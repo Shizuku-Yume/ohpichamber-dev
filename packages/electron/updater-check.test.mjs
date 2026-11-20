@@ -73,7 +73,7 @@ test('names a failed check by its status or network code, without the response d
   assert.equal(describeCheckFailure(new Error('Cannot parse feed\nmore details')), 'Cannot parse feed');
 });
 
-for (const message of ['ENOTFOUND', 'HttpError: 404 Not Found', 'No published versions on GitHub']) {
+for (const message of ['ECONNRESET', 'HttpError: 503 Service Unavailable', 'Cannot parse feed']) {
   test(`reports a failed check without a pending update: ${message}`, async () => {
     const cause = new Error(message);
     const state = { pendingUpdate: null };
@@ -84,6 +84,24 @@ for (const message of ['ENOTFOUND', 'HttpError: 404 Not Found', 'No published ve
       assert.match(error.message, /Unable to check for updates/);
       assert.equal(error.cause, cause);
       return true;
+    });
+    assert.equal(state.pendingUpdate, null);
+    assert.equal(state.updateCheckPromise, null);
+  });
+}
+
+for (const message of ['ENOTFOUND', 'HttpError: 404 Not Found "https://github.com/.../latest-linux.yml"', 'No published versions on GitHub']) {
+  test(`treats ${message} as no update available without a pending update`, async () => {
+    const state = { pendingUpdate: null };
+    assert.deepEqual(await refreshPendingDesktopUpdate({
+      autoUpdater: { checkForUpdates: async () => { throw new Error(message); } },
+      currentVersion: '1.0.0', state,
+    }), {
+      available: false,
+      updateInfo: null,
+      updateResult: null,
+      nextVersion: '1.0.0',
+      pendingUpdate: null,
     });
     assert.equal(state.pendingUpdate, null);
     assert.equal(state.updateCheckPromise, null);
