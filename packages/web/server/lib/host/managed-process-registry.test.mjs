@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MANAGED_PROCESS_TOKEN_ENV, createManagedProcessRegistry, terminateManagedProcess } from './managed-process-registry.js';
@@ -11,6 +12,8 @@ const mkdirMock = vi.fn();
 const writeFileMock = vi.fn();
 const renameMock = vi.fn();
 const signalIdentitiesMock = vi.fn();
+const registryDir = path.resolve('/registry');
+const registryFile = (pid) => path.join(registryDir, `${pid}.json`);
 
 let processTable;
 let envTokens;
@@ -23,7 +26,7 @@ const registry = createManagedProcessRegistry({
     writeFile: writeFileMock,
     rename: renameMock,
   },
-  registryDir: '/registry',
+  registryDir,
   readProcessTable: async () => processTable,
   signalIdentities: signalIdentitiesMock,
 });
@@ -74,7 +77,7 @@ const record = (overrides = {}) => ({
 const serveFiles = (entry, { birthIdentity = '1234', cmdline = null } = {}) => {
   readdirMock.mockResolvedValue(['777.json']);
   readFileMock.mockImplementation(async (file) => {
-    if (file === '/registry/777.json') return JSON.stringify(entry);
+    if (file === registryFile(777)) return JSON.stringify(entry);
     if (file === '/proc/777/stat') return statLine(777, birthIdentity);
     if (file === '/proc/777/cmdline') return cmdline ?? cmdlineFor('/usr/bin/bun', '/srv/index.js');
     const env = /^\/proc\/(\d+)\/environ$/.exec(file);
@@ -84,6 +87,7 @@ const serveFiles = (entry, { birthIdentity = '1234', cmdline = null } = {}) => {
 };
 
 beforeEach(() => {
+  setPlatform('linux');
   readdirMock.mockReset();
   readFileMock.mockReset();
   rmMock.mockReset();
@@ -143,7 +147,7 @@ describe('reapOrphanedProcesses', () => {
     processTable = [];
 
     expect(await reapOrphanedProcesses()).toEqual({ inspected: 1, reaped: 0 });
-    expect(rmMock).toHaveBeenCalledWith('/registry/777.json', { force: true });
+    expect(rmMock).toHaveBeenCalledWith(registryFile(777), { force: true });
     expect(signalIdentitiesMock).not.toHaveBeenCalled();
   });
 
@@ -154,7 +158,7 @@ describe('reapOrphanedProcesses', () => {
 
     expect(await reapOrphanedProcesses()).toEqual({ inspected: 1, reaped: 0 });
     expect(readFileMock).toHaveBeenCalledTimes(1);
-    expect(rmMock).toHaveBeenCalledWith('/registry/777.json', { force: true });
+    expect(rmMock).toHaveBeenCalledWith(registryFile(777), { force: true });
     expect(signalIdentitiesMock).not.toHaveBeenCalled();
   });
 
@@ -190,7 +194,7 @@ describe('reapOrphanedProcesses', () => {
       'SIGTERM',
     );
     expect(processTable).toEqual([]);
-    expect(rmMock).toHaveBeenCalledWith('/registry/777.json', { force: true });
+    expect(rmMock).toHaveBeenCalledWith(registryFile(777), { force: true });
     expect(numericSignalCalls()).toEqual([]);
     expect(killMock.mock.calls.every(([pid]) => pid > 0)).toBe(true);
   });
@@ -218,7 +222,7 @@ describe('reapOrphanedProcesses', () => {
 
     expect(await reapOrphanedProcesses()).toEqual({ inspected: 1, reaped: 0 });
     expect(signalIdentitiesMock).not.toHaveBeenCalled();
-    expect(rmMock).toHaveBeenCalledWith('/registry/777.json', { force: true });
+    expect(rmMock).toHaveBeenCalledWith(registryFile(777), { force: true });
   });
 
   it('refuses a leader whose environment no longer carries the token', async () => {
@@ -228,7 +232,7 @@ describe('reapOrphanedProcesses', () => {
 
     expect(await reapOrphanedProcesses()).toEqual({ inspected: 1, reaped: 0 });
     expect(signalIdentitiesMock).not.toHaveBeenCalled();
-    expect(rmMock).toHaveBeenCalledWith('/registry/777.json', { force: true });
+    expect(rmMock).toHaveBeenCalledWith(registryFile(777), { force: true });
   });
 
   it('refuses a leader pid whose command is not the recorded Agent Service', async () => {
@@ -237,7 +241,7 @@ describe('reapOrphanedProcesses', () => {
 
     expect(await reapOrphanedProcesses()).toEqual({ inspected: 1, reaped: 0 });
     expect(signalIdentitiesMock).not.toHaveBeenCalled();
-    expect(rmMock).toHaveBeenCalledWith('/registry/777.json', { force: true });
+    expect(rmMock).toHaveBeenCalledWith(registryFile(777), { force: true });
   });
 
   it('leaves the child alone while its recorded owner is alive', async () => {
@@ -312,9 +316,10 @@ describe('registerManagedProcess', () => {
       entrypoint: '/srv/index.js', ownershipToken: TOKEN,
     });
 
-    expect(mkdirMock).toHaveBeenCalledWith('/registry', { recursive: true });
-    expect(writeFileMock).toHaveBeenCalledWith('/registry/4242.json.tmp-' + process.pid, expect.any(String));
-    expect(renameMock).toHaveBeenCalledWith('/registry/4242.json.tmp-' + process.pid, '/registry/4242.json');
+    const temporaryFile = `${registryFile(4242)}.tmp-${process.pid}`;
+    expect(mkdirMock).toHaveBeenCalledWith(registryDir, { recursive: true });
+    expect(writeFileMock).toHaveBeenCalledWith(temporaryFile, expect.any(String));
+    expect(renameMock).toHaveBeenCalledWith(temporaryFile, registryFile(4242));
     expect(JSON.parse(writeFileMock.mock.calls[0][1])).toMatchObject({
       pid: 4242, ownerPid: 12345, kind: 'agent-service', binary: '/usr/bin/bun',
       entrypoint: '/srv/index.js', birthIdentity: '987654', ownershipToken: TOKEN, runtime: 'web',
@@ -355,7 +360,7 @@ describe('unregisterManagedProcess', () => {
   it('removes the entry file', async () => {
     await unregisterManagedProcess(4242);
 
-    expect(rmMock).toHaveBeenCalledWith('/registry/4242.json', { force: true });
+    expect(rmMock).toHaveBeenCalledWith(registryFile(4242), { force: true });
   });
 
   it('is a no-op for a non-integer pid', async () => {
