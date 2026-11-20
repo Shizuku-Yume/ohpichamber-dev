@@ -29,8 +29,9 @@
   },
   "scripts": {
     "dev": "bun run build:watch",
-    "dev:server": "bun ../../scripts/build-builtin-extensions.mjs && OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
-    "dev:server:watch": "bun ../../scripts/build-builtin-extensions.mjs && node ./scripts/dev-server-watch.mjs",
+    "dev:server:prepare": "bun run --cwd ../agent-contract build && bun run --cwd ../agent-service build",
+    "dev:server": "bun run dev:server:prepare && bun ../../scripts/build-builtin-extensions.mjs && OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
+    "dev:server:watch": "bun run dev:server:prepare && bun ../../scripts/build-builtin-extensions.mjs && node ./scripts/dev-server-watch.mjs",
     "build": "bun run build:server && NODE_OPTIONS=--max-old-space-size=6144 vite build && node ./scripts/stage-changelog.mjs",
     "stage:changelog": "node ./scripts/stage-changelog.mjs",
     "build:diag": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build --config vite.diag.config.ts",
