@@ -11,16 +11,8 @@ import { subscribeFirstServerConnect } from '@/sync/first-server-connect';
 import { subscribeStreamGap } from '@/sync/stream-gap';
 import { isDesktopShell } from '@/lib/desktop';
 
-<<<<<<< HEAD
 export const GLOBAL_SESSIONS_REFRESH_INTERVAL_MS = 45_000;
 const GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS = 10 * 60_000;
-||||||| bc50ba56aa
-export const GLOBAL_SESSIONS_REFRESH_INTERVAL_MS = 45_000;
-export const GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS = 10 * 60_000;
-=======
-export const GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS = 10 * 60_000;
-export const GLOBAL_SESSIONS_RETRY_INTERVAL_MS = 45_000;
->>>>>>> upstream/main
 const STARTUP_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
 
 type ScheduleTimeout = (callback: () => void, delay: number) => number;
@@ -105,17 +97,9 @@ export const startGlobalSessionsPolling = (
   let running = false;
   let readyDuringRun = false;
   let fullRefreshPending = false;
-<<<<<<< HEAD
   // A refresh came due while the app was hidden and has not run yet.
   let missedWhileHidden = false;
-||||||| bc50ba56aa
-=======
-  let gapDuringRun = false;
-  let fullRetryAt: number | null = null;
-  let headRetryAt: number | null = null;
->>>>>>> upstream/main
   let lastFullRefreshAt = Number.NEGATIVE_INFINITY;
-<<<<<<< HEAD
   /** Schedules the next pass; the caller decided its delay. */
   const scheduleNext = (retryDelay?: number, delay = GLOBAL_SESSIONS_REFRESH_INTERVAL_MS) => {
     timeoutId = scheduleTimeout(() => {
@@ -130,29 +114,6 @@ export const startGlobalSessionsPolling = (
       void run(fullDue ? refresh : headCheck, fullDue);
     }, retryDelay ?? delay);
   };
-||||||| bc50ba56aa
-=======
-  const fullDueAt = () => fullRetryAt ?? lastFullRefreshAt + GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS;
-  const scheduleNext = (startupRetryDelay: number | undefined) => {
-    if (timeoutId !== undefined) clearScheduledTimeout(timeoutId);
-    const delay = startupRetryDelay
-      ?? (!hasSucceeded
-        ? GLOBAL_SESSIONS_RETRY_INTERVAL_MS
-        : Math.max(0, Math.min(fullDueAt(), headRetryAt ?? Number.POSITIVE_INFINITY) - now()));
-    timeoutId = scheduleTimeout(() => {
-      timeoutId = undefined;
-      if (visibility.isHidden()) {
-        return;
-      }
-      if (hasSucceeded && now() < fullDueAt() && headRetryAt !== null) {
-        headRetryAt = null;
-        void run(headCheck, false);
-        return;
-      }
-      void run(refresh);
-    }, delay);
-  };
->>>>>>> upstream/main
   const run = async (load: () => Promise<boolean>, full = true) => {
     running = true;
     readyDuringRun = false;
@@ -181,7 +142,6 @@ export const startGlobalSessionsPolling = (
       void run(refresh);
       return;
     }
-<<<<<<< HEAD
     const retryDelay = !hasSucceeded ? STARTUP_RETRY_DELAYS_MS[startupRetries] : undefined;
     if (retryDelay !== undefined) startupRetries += 1;
     const untilFullRefresh = GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS - (now() - lastFullRefreshAt);
@@ -189,31 +149,6 @@ export const startGlobalSessionsPolling = (
       ? Math.min(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS, untilFullRefresh)
       : full ? GLOBAL_SESSIONS_REFRESH_INTERVAL_MS : 0;
     scheduleNext(retryDelay, delay);
-||||||| bc50ba56aa
-    const retryDelay = !hasSucceeded ? STARTUP_RETRY_DELAYS_MS[startupRetries] : undefined;
-    if (retryDelay !== undefined) startupRetries += 1;
-    const untilFullRefresh = GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS - (now() - lastFullRefreshAt);
-    const delay = untilFullRefresh > 0
-      ? Math.min(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS, untilFullRefresh)
-      : full ? GLOBAL_SESSIONS_REFRESH_INTERVAL_MS : 0;
-    timeoutId = scheduleTimeout(() => {
-      timeoutId = undefined;
-      if (visibility.isHidden()) {
-        return;
-      }
-      const fullDue = !hasSucceeded || now() - lastFullRefreshAt >= GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS;
-      void run(fullDue ? refresh : headCheck, fullDue);
-    }, retryDelay ?? delay);
-=======
-    if (gapDuringRun && hasSucceeded) {
-      gapDuringRun = false;
-      void run(headCheck, false);
-      return;
-    }
-    const startupRetryDelay = !hasSucceeded ? STARTUP_RETRY_DELAYS_MS[startupRetries] : undefined;
-    if (startupRetryDelay !== undefined) startupRetries += 1;
-    scheduleNext(startupRetryDelay);
->>>>>>> upstream/main
   };
   const stopListening = visibility.onVisible(() => {
     if (disposed) return;

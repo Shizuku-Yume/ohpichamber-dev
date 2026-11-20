@@ -7,23 +7,8 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import type { SessionPage } from '@/lib/opencode/client';
-=======
-import type { SessionPage } from '@/lib/opencode/client';
-import { notifyStreamGap } from '@/sync/stream-gap';
->>>>>>> upstream/main
 import {
-<<<<<<< HEAD
   GLOBAL_SESSIONS_REFRESH_INTERVAL_MS,
-||||||| bc50ba56aa
-  GLOBAL_SESSIONS_REFRESH_INTERVAL_MS,
-  GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS,
-=======
-  GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS,
-  GLOBAL_SESSIONS_RETRY_INTERVAL_MS,
->>>>>>> upstream/main
   startGlobalSessionsPolling,
   useGlobalSessionsPolling,
 } from './useGlobalSessionsPolling';
@@ -211,7 +196,6 @@ describe('global sessions polling lifecycle', () => {
     notifyVisible();
     await flush();
     expect(refreshes).toBe(1);
-<<<<<<< HEAD
     expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
     notifyVisible();
     await flush();
@@ -220,217 +204,13 @@ describe('global sessions polling lifecycle', () => {
     // Visible again before anything came due: nothing extra.
     await clock.fire();
     expect(refreshes).toBe(2);
-||||||| bc50ba56aa
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
-    // Returning before another poll comes due still takes a full snapshot.
-    await clock.fire();
-    expect(refreshes).toBe(2);
-=======
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
-    // Returning before another refresh comes due still takes a full snapshot.
->>>>>>> upstream/main
     notifyVisible();
     await flush();
-<<<<<<< HEAD
     expect(refreshes).toBe(2);
-||||||| bc50ba56aa
-    expect(refreshes).toBe(3);
-=======
-    expect(refreshes).toBe(2);
-    expect(clock.pending.size).toBe(1);
->>>>>>> upstream/main
     dispose();
     expect(listening).toBe(false);
   });
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  test('checks the head between full snapshots and takes a full snapshot by ten minutes', async () => {
-    const clock = timers();
-    let now = 0;
-    let fullLoads = 0;
-    let headChecks = 0;
-    const full = async () => { fullLoads += 1; return true; };
-    const dispose = startGlobalSessionsPolling(full, full, clock.schedule, clock.clear,
-      undefined, undefined, async () => { headChecks += 1; return true; }, () => now);
-    await flush();
-    expect(fullLoads).toBe(1);
-    for (let index = 0; index < 13; index += 1) {
-      now += clock.delay() ?? 0;
-      await clock.fire();
-    }
-    expect(headChecks).toBe(13);
-    expect(fullLoads).toBe(1);
-    expect(clock.delay()).toBe(15_000);
-    now += clock.delay() ?? 0;
-    expect(now).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
-    await clock.fire();
-    expect(fullLoads).toBe(2);
-    expect(headChecks).toBe(13);
-    dispose();
-  });
-
-  test('returning from hidden before a poll is due takes a complete snapshot, then resumes head checks', async () => {
-    const clock = timers();
-    let visible: () => void = () => undefined;
-    let fullLoads = 0;
-    let headChecks = 0;
-    const full = async () => { fullLoads += 1; return true; };
-    const dispose = startGlobalSessionsPolling(full, full, clock.schedule, clock.clear, {
-      isHidden: () => false,
-      onVisible: (listener) => { visible = listener; return () => undefined; },
-    }, undefined, async () => { headChecks += 1; return true; });
-    await flush();
-    visible();
-    await flush();
-    expect(fullLoads).toBe(2);
-    expect(headChecks).toBe(0);
-    expect(clock.pending.size).toBe(1);
-    await clock.fire();
-    expect(fullLoads).toBe(2);
-    expect(headChecks).toBe(1);
-    dispose();
-  });
-
-=======
-  test('a stream gap checks the head of the list and leaves the full snapshot on its schedule', async () => {
-    const clock = timers();
-    let now = 0;
-    let gap: () => void = () => undefined;
-    let fullLoads = 0;
-    let headChecks = 0;
-    let finishInitial: (success: boolean) => void = () => undefined;
-    const dispose = startGlobalSessionsPolling(
-      () => { fullLoads += 1; return new Promise<boolean>((resolve) => { finishInitial = resolve; }); },
-      async () => { fullLoads += 1; return true; },
-      clock.schedule, clock.clear, undefined, undefined,
-      async () => { headChecks += 1; return true; },
-      () => now,
-      (listener) => { gap = listener; return () => { gap = () => undefined; }; },
-    );
-    // The first load may have read its pages before the gap: the head is
-    // checked once it lands.
-    gap();
-    expect(headChecks).toBe(0);
-    finishInitial(true);
-    await flush();
-    await flush();
-    expect(headChecks).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
-
-    now += 60_000;
-    gap();
-    await flush();
-    expect(headChecks).toBe(2);
-    expect(fullLoads).toBe(1);
-    expect(clock.pending.size).toBe(1);
-    // The snapshot keeps its deadline, counted from the last snapshot.
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS - 60_000);
-
-    now += GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS - 60_000;
-    await clock.fire();
-    expect(fullLoads).toBe(2);
-    expect(headChecks).toBe(2);
-    dispose();
-    gap();
-    await flush();
-    expect(headChecks).toBe(2);
-  });
-
-  test('head checks of later gaps do not push a failed snapshot retry away', async () => {
-    const clock = timers();
-    let now = 0;
-    let gap: () => void = () => undefined;
-    let fullLoads = 0;
-    let fullFails = false;
-    const dispose = startGlobalSessionsPolling(
-      async () => { fullLoads += 1; return true; },
-      async () => { fullLoads += 1; return !fullFails; },
-      clock.schedule, clock.clear, undefined, undefined,
-      async () => true,
-      () => now,
-      (listener) => { gap = listener; return () => undefined; },
-    );
-    await flush();
-    fullFails = true;
-    now = GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS;
-    await clock.fire();
-    expect(fullLoads).toBe(2);
-    const retryAt = now + GLOBAL_SESSIONS_RETRY_INTERVAL_MS;
-    // Reconnects before the retry is due, each with a successful head check.
-    for (const offset of [20_000, 20_000]) {
-      now += offset;
-      gap();
-      await flush();
-      expect(clock.delay()).toBe(retryAt - now);
-    }
-    fullFails = false;
-    now = retryAt;
-    await clock.fire();
-    expect(fullLoads).toBe(3);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
-    dispose();
-  });
-
-  test('a head check a gap asked for retries after a failure and keeps the snapshot deadline', async () => {
-    const clock = timers();
-    let now = 0;
-    let gap: () => void = () => undefined;
-    let fullLoads = 0;
-    let headChecks = 0;
-    let headFails = true;
-    const dispose = startGlobalSessionsPolling(
-      async () => { fullLoads += 1; return true; },
-      async () => { fullLoads += 1; return true; },
-      clock.schedule, clock.clear, undefined, undefined,
-      async () => { headChecks += 1; return !headFails; },
-      () => now,
-      (listener) => { gap = listener; return () => undefined; },
-    );
-    await flush();
-    now += 100_000;
-    gap();
-    await flush();
-    expect(headChecks).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_RETRY_INTERVAL_MS);
-    headFails = false;
-    now += GLOBAL_SESSIONS_RETRY_INTERVAL_MS;
-    await clock.fire();
-    expect(headChecks).toBe(2);
-    expect(fullLoads).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS - 100_000 - GLOBAL_SESSIONS_RETRY_INTERVAL_MS);
-    dispose();
-  });
-
-  test('a stream gap during a load checks the head right after it', async () => {
-    const clock = timers();
-    let gap: () => void = () => undefined;
-    let headChecks = 0;
-    let finishRefresh: (success: boolean) => void = () => undefined;
-    let visible: () => void = () => undefined;
-    const dispose = startGlobalSessionsPolling(
-      async () => true,
-      () => new Promise<boolean>((resolve) => { finishRefresh = resolve; }),
-      clock.schedule, clock.clear,
-      { isHidden: () => false, onVisible: (listener) => { visible = listener; return () => undefined; } },
-      undefined,
-      async () => { headChecks += 1; return true; },
-      Date.now,
-      (listener) => { gap = listener; return () => undefined; },
-    );
-    await flush();
-    visible();
-    gap();
-    expect(headChecks).toBe(0);
-    finishRefresh(true);
-    await flush();
-    await flush();
-    expect(headChecks).toBe(1);
-    expect(clock.pending.size).toBe(1);
-    dispose();
-  });
-
->>>>>>> upstream/main
   test('disposal during a load prevents a late completion from scheduling more work', async () => {
     const clock = timers();
     let complete: (success: boolean) => void = () => undefined;
@@ -509,51 +289,13 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     await act(async () => { await clock.fire(); await recovered; });
     expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['restored']);
     expect(useGlobalSessionsStore.getState().status).toBe('ready');
-<<<<<<< HEAD
     expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
     expect(list.mock.calls.every(([workspaceId]) => workspaceId === undefined)).toBe(true);
-||||||| bc50ba56aa
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
-    expect(list.mock.calls.every(([options]) => options?.global === true)).toBe(true);
-    const seedsBeforeHeadCheck = host.mock.calls.length;
-    await act(async () => clock.fire());
-    expect(list.mock.calls.at(-1)?.[0]?.limit).toBe(20);
-    expect(host.mock.calls.length).toBe(seedsBeforeHeadCheck);
-=======
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
-    expect(list.mock.calls.every(([options]) => options?.global === true)).toBe(true);
-    // A stream gap reads the head of the list, without the host seed.
-    const seedsBeforeHeadCheck = host.mock.calls.length;
-    await act(async () => notifyStreamGap('startup-a'));
-    expect(list.mock.calls.at(-1)?.[0]?.limit).toBe(20);
-    expect(host.mock.calls.length).toBe(seedsBeforeHeadCheck);
-    // Another runtime's gap reads nothing here.
-    const listsBeforeForeignGap = list.mock.calls.length;
-    await act(async () => notifyStreamGap('another-runtime'));
-    expect(list.mock.calls.length).toBe(listsBeforeForeignGap);
->>>>>>> upstream/main
 
-<<<<<<< HEAD
     const oldPage = new Promise<SessionList>((resolve) => { resolveOldPage = resolve; });
     list.mockImplementation(() => getRuntimeKey() === 'startup-a' ? oldPage : Promise.resolve(session('new-runtime')));
-||||||| bc50ba56aa
-    const oldPage = new Promise<SessionPage>((resolve) => { resolveOldPage = resolve; });
-    list.mockImplementationOnce(() => oldPage);
-=======
-    const oldPage = new Promise<SessionPage>((resolve) => { resolveOldPage = resolve; });
-    list.mockImplementationOnce(() => oldPage);
-    // The ten-minute snapshot, still waiting for its first page.
->>>>>>> upstream/main
     await act(async () => clock.fire());
-<<<<<<< HEAD
-    // The pass between full loads is a head check: it applies what it reads as
-    // mutations and never flashes the list into a loading state.
-    expect(useGlobalSessionsStore.getState().status).toBe('ready');
-||||||| bc50ba56aa
-    expect(useGlobalSessionsStore.getState().status).toBe('ready');
-=======
     expect(useGlobalSessionsStore.getState().status).toBe('loading');
->>>>>>> upstream/main
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
     expect(clock.pending.size).toBe(0);
     const switched = subscribeToNextReady();
@@ -583,7 +325,6 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     }
   }
 });
-<<<<<<< HEAD
 
 /**
  * Each window renders its own app root with its own global sessions store,
@@ -614,38 +355,3 @@ describe('global session polling root coverage', () => {
     expect(/refreshGlobalSessions\(liveSessions\)\.then\(\(\) => seedGlobalSessionStatusFromHost\(\)\)/.test(source)).toBe(true);
   });
 });
-||||||| bc50ba56aa
-
-/**
- * Each window renders its own app root with its own global sessions store,
- * so every root whose UI lists sessions from that store must start the
- * polling itself. The Mini Chat window's session switcher once read an
- * empty store because its root never did (#4643).
- */
-describe('global session polling root coverage', () => {
-  // VS Code's Settings editor tab is a VSCodeApp root that lists no
-  // sessions, so there the poller is gated on the panel kind; the chat panel
-  // still polls.
-  const rootSources: Array<[string, string, RegExp]> = [
-    ['App', '../App.tsx', /^\s*useGlobalSessionsPolling\(true\);/m],
-    ['VSCodeApp', '../apps/VSCodeApp.tsx', /^\s*useGlobalSessionsPolling\(!isSettingsPanel\);/m],
-    ['ElectronMiniChatApp', '../apps/ElectronMiniChatApp.tsx', /^\s*useGlobalSessionsPolling\(true\);/m],
-  ];
-
-  for (const [rootName, sourcePath, mountCall] of rootSources) {
-    test(`${rootName} mounts useGlobalSessionsPolling`, () => {
-      const source = readFileSync(new URL(sourcePath, import.meta.url), 'utf8');
-      expect(mountCall.test(source)).toBe(true);
-    });
-  }
-
-  // The mobile shell has no poller on purpose: its sessions sheet loads the
-  // list when it opens. That load must run the host seed too, or a question
-  // already waiting at startup never reaches the index its rows read (#5098).
-  test('the mobile sessions sheet seeds the host index after its own load', () => {
-    const source = readFileSync(new URL('../apps/MobileSessionsSheet.tsx', import.meta.url), 'utf8');
-    expect(/refreshGlobalSessions\(liveSessions\)\.then\(\(\) => seedGlobalSessionStatusFromHost\(\)\)/.test(source)).toBe(true);
-  });
-});
-=======
->>>>>>> upstream/main
