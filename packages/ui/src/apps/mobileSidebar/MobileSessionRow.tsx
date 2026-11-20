@@ -66,42 +66,16 @@ export const MobileSessionRow: React.FC<{
   const directory = getSessionDirectory(session);
   const { revealed, armed, renaming } = useMobileRowSwipe(row.key);
   const title = session.title?.trim() || t('mobile.sessions.untitled');
-<<<<<<< HEAD
   const aiRename = useSessionAiRenameAction(session.sessionId, directory, revealed || renaming);
   const isCurrent = useSessionUIStore((state) => state.currentSessionId === session.sessionId);
   // A run's overview covers the session, and then the run's row is the selected one.
-||||||| bc50ba56aa
-  const aiRename = useSessionAiRenameAction(session.id, session.directory, revealed || renaming);
-  const isCurrent = useSessionUIStore((state) => state.currentSessionId === session.id);
-  // A run's overview covers the session, and then the run's row is the selected one.
-=======
-  const aiRename = useSessionAiRenameAction(session.id, session.directory, revealed || renaming);
-  const isCurrent = useSessionUIStore((state) => state.currentSessionId === session.id);
->>>>>>> upstream/main
   const runOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
   const active = isCurrent && !runOverviewOpen;
-<<<<<<< HEAD
   const isUnread = useSessionUnread(session.sessionId);
   const turnActivity = useSessionTurnActivity(session.sessionId);
-||||||| bc50ba56aa
-  const isUnread = useSessionUnread(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
-=======
-  const isUnread = useSessionUnread(session.id);
-  const markedUnread = useSessionMarkedUnread(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
->>>>>>> upstream/main
   const isStreaming = turnActivity !== null;
-<<<<<<< HEAD
   const showUnread = !isStreaming && isUnread && !active;
   const hasActivityDuration = useHasSessionTurnDuration(session.sessionId, isStreaming);
-||||||| bc50ba56aa
-  const showUnread = !isStreaming && isUnread && !active;
-  const hasActivityDuration = useHasSessionTurnDuration(session.id, isStreaming);
-=======
-  const showUnread = !isStreaming && isUnread && (!active || markedUnread);
-  const hasActivityDuration = useHasSessionTurnDuration(session.id, isStreaming);
->>>>>>> upstream/main
   const showActivityDuration = (isStreaming || showUnread) && hasActivityDuration;
   const hasChildren = node.children.length > 0;
   const expanded = row.expanded === true;
@@ -112,18 +86,12 @@ export const MobileSessionRow: React.FC<{
   const pendingRequests = usePendingRequests(familyIds);
   const topLevel = !session.parentSessionId;
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
-  const pinned = useSessionPinnedStore((state) => isSessionPinned(state.ids, directory || null, session.id));
+  const pinned = useSessionPinnedStore((state) => isSessionPinned(state.ids, directory || null, session.sessionId));
   const ownsWork = sessionWorkEnabled && row.ownsWork && topLevel && !isChatDirectoryPath(directory) && !pinned;
   const sessionsInWork = React.useMemo(() => (ownsWork ? collectSessionWorkInWork(node) : []), [node, ownsWork]);
   const work = ownsWork
     ? { inWork: sessionsInWork.length > 0, onToggle: () => { void toggleMobileSessionWork(session, sessionsInWork, t); } }
     : undefined;
-<<<<<<< HEAD
-  const pinned = useSessionPinnedStore((state) => isSessionPinned(state.ids, directory || null, session.sessionId));
-||||||| bc50ba56aa
-  const pinned = useSessionPinnedStore((state) => isSessionPinned(state.ids, directory || null, session.id));
-=======
->>>>>>> upstream/main
   const pin = topLevel && directory ? { pinned, onToggle: () => toggleMobileSessionPin(session, pinned, t) } : undefined;
   const inPinnedZone = isPinnedZoneRowKey(row.key);
   const showDoneHint = Boolean(work?.inWork) && !isStreaming && isDoneSuggested(session);
@@ -149,31 +117,8 @@ export const MobileSessionRow: React.FC<{
     </span>
   ) : null);
   const inSpace = row.secondaryMeta?.inSpace === true;
-<<<<<<< HEAD
   const toggle = hasChildren && !row.forceExpanded
     ? () => toggleParent(sessionExpansionKey(row.renderContext, row.archived, session.sessionId))
-||||||| bc50ba56aa
-  const toggle = hasChildren && !row.forceExpanded
-    ? () => toggleParent(sessionExpansionKey(row.renderContext, row.archived, session.id))
-=======
-  const projectRoot = useProjectsStore(React.useCallback(
-    (state) => (row.projectId ? state.projects.find((entry) => entry.id === row.projectId)?.path ?? null : null),
-    [row.projectId],
-  ));
-  const guestMarks = useSessionRowGuestMarks({
-    shown: true,
-    sessionId: session.id,
-    directory: normalizePath(session.directory ?? null),
-    projectId: row.projectId ?? null,
-    projectRoot,
-    worktree: node.worktree,
-    inProjectTree: row.renderContext === 'project' && !row.archived,
-    metaBranch: inSpace ? null : row.secondaryMeta?.branchLabel ?? null,
-  });
-  const marks = <MobileGuestMarks marks={guestMarks} onOpenRow={() => selectMobileSession(session, row.projectId, actions.close)} />;
-  const toggle = hasChildren
-    ? () => toggleParent(sessionExpansionKey(row.renderContext, row.archived, session.id))
->>>>>>> upstream/main
     : undefined;
 
   const setRevealed = (next: boolean) => useMobileSidebarRowsStore.getState().setRevealed(row.key, next);
@@ -191,9 +136,9 @@ export const MobileSessionRow: React.FC<{
     void runGuestSessionAction({
       entry,
       t,
-      session: { id: session.id, title: session.title, directory },
+      session: { id: session.sessionId, title: session.title, directory },
       loadRecords: () => (directory
-        ? loadRecords({ directory, sessionID: session.id }).catch(() => null)
+        ? loadRecords({ directory, sessionID: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),
       onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
     });
@@ -299,7 +244,7 @@ export const MobileSessionRow: React.FC<{
 
   const menu = (
     <>
-      <SessionReadMenuItem sessionId={session.id} Item={ContextMenuItem} showShortcut={false} />
+      <SessionReadMenuItem sessionId={session.sessionId} Item={ContextMenuItem} showShortcut={false} />
       <ContextMenuItem onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}>
         <Icon name="edit" className="me-1 size-4" />
         {t('sessions.sidebar.session.menu.rename')}
@@ -317,7 +262,7 @@ export const MobileSessionRow: React.FC<{
         </ContextMenuItem>
       ) : null}
       {isOperatorChildSession(session) ? (
-        <ContextMenuItem onClick={() => { void takeOverSession(session.id, directory || null).catch(() => toast.error(t('sessions.sidebar.session.takeOver.failed'))); }}>
+        <ContextMenuItem onClick={() => { void takeOverSession(session.sessionId, directory || null).catch(() => toast.error(t('sessions.sidebar.session.takeOver.failed'))); }}>
           <Icon name="user" className="me-1 size-4" />
           {t('sessions.sidebar.session.menu.takeOver')}
         </ContextMenuItem>
@@ -343,7 +288,7 @@ export const MobileSessionRow: React.FC<{
       revealed={revealed}
       onRevealedChange={setRevealed}
       dataActiveSession={active}
-      sessionId={session.id}
+      sessionId={session.sessionId}
       contentClassName={cn('relative flex w-full items-center bg-background transition-colors', active && !row.repeat && MOBILE_ACTIVE_ROW_CLASS)}
       actions={(
         <MobileSessionRowActions

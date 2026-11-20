@@ -12,16 +12,8 @@ import { cn } from '@/lib/utils';
 import { refreshGlobalSessionsWhenShown, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS } from '@/hooks/useGlobalSessionsPolling';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-<<<<<<< HEAD
-import { useSessionUnread } from '@/sync/session-unread';
-import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
-||||||| bc50ba56aa
-import { useSessionUnread } from '@/sync/session-unread';
-import { useHasSessionTurnDuration } from '@/sync/session-turn-duration';
-=======
 import { useSessionMarkedUnread, useSessionUnread } from '@/sync/session-unread';
-import { useHasSessionTurnDuration } from '@/sync/session-turn-duration';
->>>>>>> upstream/main
+import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 const RECENT_SESSIONS_LIMIT = 10;
@@ -37,28 +29,12 @@ const SwitcherRow: React.FC<{
   onSelect: () => void;
 }> = ({ session, meta, active, onSelect }) => {
   const { t } = useI18n();
-<<<<<<< HEAD
-  const isUnread = useSessionUnread(session.sessionId);
+  const isUnread = useSessionUnread(session.id);
+  const markedUnread = useSessionMarkedUnread(session.sessionId);
   const turnActivity = useSessionTurnActivity(session.sessionId);
-||||||| bc50ba56aa
-  const isUnread = useSessionUnread(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
-=======
-  const isUnread = useSessionUnread(session.id);
-  const markedUnread = useSessionMarkedUnread(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
->>>>>>> upstream/main
   const isStreaming = turnActivity !== null;
-<<<<<<< HEAD
-  const showUnreadDot = !isStreaming && isUnread && !active;
-  const hasActivityDuration = useHasSessionActivityDuration(session.sessionId, isStreaming);
-||||||| bc50ba56aa
-  const showUnreadDot = !isStreaming && isUnread && !active;
-  const hasActivityDuration = useHasSessionTurnDuration(session.id, isStreaming);
-=======
   const showUnreadDot = !isStreaming && isUnread && (!active || markedUnread);
-  const hasActivityDuration = useHasSessionTurnDuration(session.id, isStreaming);
->>>>>>> upstream/main
+  const hasActivityDuration = useHasSessionActivityDuration(session.sessionId, isStreaming);
   const showActivityDuration = (isStreaming || showUnreadDot) && hasActivityDuration;
   const timeLabel = formatSessionCompactDateLabel(session.updatedAt || session.createdAt);
 

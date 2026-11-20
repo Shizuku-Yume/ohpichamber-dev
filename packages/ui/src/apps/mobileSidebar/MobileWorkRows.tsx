@@ -43,24 +43,12 @@ const MobileSlotMark: React.FC<{ slotLeft: number; children: React.ReactNode }> 
   </span>
 );
 
-<<<<<<< HEAD
 /**
  * A worktree work in the phone's list: one row for the worktree and every
  * session in it, as on the desktop. A tap opens what was last worked on
  * there; the chevron opens its sessions. Swiping reveals Done or Track,
  * Rename, Pin or Unpin, Archive worktree and Delete.
  */
-||||||| bc50ba56aa
-/**
- * A worktree work in the phone's list: one row for the worktree and every
- * session in it, as on the desktop. A tap opens what was last worked on
- * there; the chevron opens its sessions. Swiping reveals Done or Track,
- * Rename, Pin or Unpin, Archive worktree and Delete. An isolated space has
- * this row too, with its instance icon, its state as a mark at the end, and Done or
- * Track beside its actions sheet, which says what the mark stands for.
- */
-=======
->>>>>>> upstream/main
 export const MobileWorktreeRow: React.FC<{
   row: Extract<SessionSidebarRow, { kind: 'group-header' }>;
   geometry: MobileTreeGeometry;
@@ -70,16 +58,10 @@ export const MobileWorktreeRow: React.FC<{
   const actions = useMobileSidebarActions();
   const { revealed, renaming } = useMobileRowSwipe(row.key);
   const work = useWorktreeWork({ group: row.group, projectId: row.projectId, collapsed: row.collapsed, onNavigate: actions.close });
-<<<<<<< HEAD
   const { worktree, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
-||||||| bc50ba56aa
-  const { worktree, space, spaceName, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
-=======
-  const { worktree, space, spaceName, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
   const guestMarks = useWorkRowGuestMarks({ space: Boolean(space), projectId: project?.id ?? row.projectId ?? null, directory: work.directory, branch });
   const marks = <MobileGuestMarks marks={guestMarks} onOpenRow={() => work.open()} />;
   const projectNamed = useZoneProjectNames();
->>>>>>> upstream/main
   const mixedProject = useMixedRowProject(row.projectId, row.mixed && row.detailed);
   const expandable = !row.empty;
   const expanded = !row.collapsed;
@@ -208,14 +190,9 @@ export const MobileWorktreeRow: React.FC<{
     </>;
   }
 
-<<<<<<< HEAD
   // The fork's worktree model offers no pin write (`useWorktreeWork` reports
   // `canPin` false), so the row has no pin action to swipe.
   const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
-||||||| bc50ba56aa
-  const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (space ? 1 : 0) + (work.canPin ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
-=======
-  const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (space ? 1 : 0) + (work.canPin ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
   const pinWork = () => requestPinTo({ current: work.pinList, pin: (list) => { void work.setPin(true, list); }, unpin: () => { void work.setPin(false); } });
   const menu = (
     <>
@@ -253,7 +230,6 @@ export const MobileWorktreeRow: React.FC<{
     </>
   );
 
->>>>>>> upstream/main
   return (
     <MobileRowMenu disabled={revealed || renaming || worktreeRemoving} menu={menu}>
     <MobileSwipeActionsRow
@@ -281,25 +257,6 @@ export const MobileWorktreeRow: React.FC<{
             onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}
           />
         ) : null}
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        {space ? (
-          <MobileSwipeAction
-            icon="more"
-            label={t('spaces.actions.menuAria', { label })}
-            revealed={revealed}
-            onClick={after(() => useSpacesStore.getState().openActionsSheet(space.id))}
-          />
-        ) : null}
-        {work.canPin ? (
-          <MobileSwipeAction
-            icon={work.pinned ? 'unpin' : 'pushpin'}
-            label={work.pinned ? t('sessions.sidebar.work.menu.unpin') : t('sessions.sidebar.work.menu.pin')}
-            revealed={revealed}
-            onClick={after(() => requestPinTo({ current: work.pinList, pin: (list) => { void work.setPin(true, list); }, unpin: () => { void work.setPin(false); } }))}
-          />
-        ) : null}
-=======
         {space ? (
           <MobileSwipeAction
             icon="more"
@@ -316,7 +273,6 @@ export const MobileWorktreeRow: React.FC<{
             onClick={after(pinWork)}
           />
         ) : null}
->>>>>>> upstream/main
         {work.canArchive ? (
           <MobileSwipeAction
             icon="archive"

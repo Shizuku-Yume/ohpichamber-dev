@@ -77,14 +77,8 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
     if (!worktreePath) return [] as Session[];
     const merged = new Map<string, Session>();
     for (const session of [...globalActiveSessions, ...liveSessions]) {
-<<<<<<< HEAD
-      if (getSessionDirectory(session) === worktreePath) merged.set(session.sessionId, session);
-||||||| bc50ba56aa
-      if (getSessionDirectory(session) === worktreePath) merged.set(session.id, session);
-=======
       const directory = getSessionDirectory(session);
-      if (directory && checkoutHoldsDirectory(worktreePath, directory)) merged.set(session.id, session);
->>>>>>> upstream/main
+      if (directory && checkoutHoldsDirectory(worktreePath, directory)) merged.set(session.sessionId, session);
     }
     return Array.from(merged.values());
   }, [globalActiveSessions, liveSessions, worktreePath]);
@@ -207,13 +201,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
 
   const handleConfirm = () => {
     if (!worktree || isProcessing) return;
-<<<<<<< HEAD
-    removeWorktreeInBackground(worktree, linkedSessions.map((session) => session.sessionId));
-||||||| bc50ba56aa
-    removeWorktreeInBackground(worktree, linkedSessions.map((session) => session.id));
-=======
-    removeWorktreeInBackground(worktree, linkedSessions.map((session) => session.id), keepSessions && linkedSessions.length > 0);
->>>>>>> upstream/main
+    removeWorktreeInBackground(worktree, linkedSessions.map((session) => session.sessionId), keepSessions && linkedSessions.length > 0);
     onClose();
   };
 

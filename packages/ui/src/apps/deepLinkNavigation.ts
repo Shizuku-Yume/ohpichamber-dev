@@ -2,19 +2,11 @@ import React from 'react';
 import { Capacitor } from '@capacitor/core';
 
 import { isCapacitorApp } from '@/lib/platform';
-<<<<<<< HEAD
 import type { PairingConnectionPayload } from '@/lib/connectionPayload';
-||||||| bc50ba56aa
-import { subscribeToNativeShortcutRequests } from '@/lib/nativeShortcutRequests';
-import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useInputStore } from '@/sync/input-store';
-=======
-import { subscribeToNativeShortcutRequests } from '@/lib/nativeShortcutRequests';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import type { QuotaProviderId } from '@/types';
 import { useInputStore } from '@/sync/input-store';
->>>>>>> upstream/main
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { openSession } from '@/lib/router/openSessionFromRoute';
 
@@ -28,69 +20,12 @@ interface DeepLinkHandlers {
   openSettings?: (section?: string) => void;
 }
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * A new session asked for by the iOS Shortcuts app or Siri (see nativeShortcutRequests).
- * Unlike a deep link it may carry a first message to send, which is why it never comes
- * from a URL.
- */
-type ShortcutNewSessionIntent = { type: 'shortcut-new-session'; projectId?: string; text?: string };
-
-type NavigationIntent = DeepLinkIntent | ShortcutNewSessionIntent;
-
-=======
-type ShortcutNewSessionIntent = { type: 'shortcut-new-session'; projectId?: string; text?: string };
-
-type NavigationIntent = DeepLinkIntent | ShortcutNewSessionIntent;
-
->>>>>>> upstream/main
 let handlers: DeepLinkHandlers = {};
 let ready = false;
 type NavigationIntent = Exclude<DeepLinkIntent, { type: 'pairing' }>;
 let pending: NavigationIntent | null = null;
 let launchUrlConsumed = false;
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * Opens a draft in the requested project, or where the user last was when none is named,
- * and leaves the message for the draft's composer to send. A project the app no longer
- * knows (the Shortcuts picker lists the projects of the last time the app was open) opens
- * the default draft with the message added to its composer, unsent: the user picks the place.
- */
-const openShortcutSession = (intent: ShortcutNewSessionIntent): void => {
-  const store = useSessionUIStore.getState();
-  const project = intent.projectId
-    ? useProjectsStore.getState().projects.find((entry) => entry.id === intent.projectId) ?? null
-    : null;
-  store.openNewSessionDraft(project ? { selectedProjectId: project.id } : undefined);
-  const text = intent.text?.trim();
-  if (!text) return;
-  if (intent.projectId && !project) {
-    useInputStore.getState().setPendingInputText(text, 'append');
-    return;
-  }
-  useInputStore.getState().requestDraftSubmit(useSessionUIStore.getState().newSessionDraft.draftId, text);
-};
-
-=======
-const openShortcutSession = (intent: ShortcutNewSessionIntent): void => {
-  const store = useSessionUIStore.getState();
-  const project = intent.projectId
-    ? useProjectsStore.getState().projects.find((entry) => entry.id === intent.projectId) ?? null
-    : null;
-  store.openNewSessionDraft(project ? { selectedProjectId: project.id } : undefined);
-  const text = intent.text?.trim();
-  if (!text) return;
-  if (intent.projectId && !project) {
-    useInputStore.getState().setPendingInputText(text, 'append');
-    return;
-  }
-  useInputStore.getState().requestDraftSubmit(useSessionUIStore.getState().newSessionDraft.draftId, text);
-};
-
->>>>>>> upstream/main
 const execute = (intent: NavigationIntent): boolean => {
   switch (intent.type) {
     case 'session':
@@ -157,15 +92,7 @@ const applyDeepLinkIntent = (intent: NavigationIntent): void => {
   flush();
 };
 
-<<<<<<< HEAD
-/** Convenience: parse a raw `ohpichamber://…` URL and apply it. No-op for unrecognised URLs. */
 const applyDeepLinkUrl = (raw: string | null | undefined, onPairing?: (payload: PairingConnectionPayload) => void): void => {
-||||||| bc50ba56aa
-/** Convenience: parse a raw `openchamber://…` URL and apply it. No-op for unrecognised URLs. */
-const applyDeepLinkUrl = (raw: string | null | undefined): void => {
-=======
-const applyDeepLinkUrl = (raw: string | null | undefined): void => {
->>>>>>> upstream/main
   const intent = parseDeepLink(raw);
   if (intent?.type === 'pairing') {
     onPairing?.(intent.payload);
@@ -191,14 +118,6 @@ export const useDeepLinkHandlers = (next: DeepLinkHandlers): void => {
   }, [next]);
 };
 
-<<<<<<< HEAD
-/**
- * Single native entry point for deep links. Subscribes to both the custom URL scheme
- * (`App.appUrlOpen` — widgets, Live Activities, external links) and notification taps
- * (`pushNotificationActionPerformed`), normalising each into a {@link DeepLinkIntent}.
- * Both listeners are registered UNCONDITIONALLY so a cold-launch tap/open isn't lost while
- * the app is still connecting; intents stash until `ready` (connected + initialized).
- */
 export const useDeepLinkSource = ({ ready: isReady, onPairing }: {
   ready: boolean;
   onPairing?: (payload: PairingConnectionPayload) => void;
@@ -207,20 +126,6 @@ export const useDeepLinkSource = ({ ready: isReady, onPairing }: {
   React.useEffect(() => {
     onPairingRef.current = onPairing;
   }, [onPairing]);
-||||||| bc50ba56aa
-/**
- * Single native entry point for deep links. Subscribes to the custom URL scheme
- * (`App.appUrlOpen` — widgets, Live Activities, external links), notification taps
- * (`pushNotificationActionPerformed`) and iOS Shortcuts requests, normalising each into an
- * intent. The listeners are registered UNCONDITIONALLY so a cold-launch tap/open isn't lost
- * while the app is still connecting; intents stash until `ready` (connected + initialized).
- */
-export const useDeepLinkSource = (options: { ready: boolean }): void => {
-  const { ready: isReady } = options;
-=======
-export const useDeepLinkSource = (options: { ready: boolean }): void => {
-  const { ready: isReady } = options;
->>>>>>> upstream/main
 
   React.useEffect(() => {
     setReady(isReady);
@@ -245,21 +150,11 @@ export const useDeepLinkSource = (options: { ready: boolean }): void => {
           return;
         }
         cleanup.push(() => void handle.remove());
-<<<<<<< HEAD
         const launch = await App.getLaunchUrl();
         if (!disposed && !receivedAppUrl) {
           const intent = parseDeepLink(launch?.url);
           if (intent?.type === 'pairing') onPairingRef.current?.(intent.payload);
         }
-||||||| bc50ba56aa
-=======
-        // external: https://capacitorjs.com/docs/apis/app#getlaunchurl Android cold-launch URLs require getLaunchUrl and are consumed once per process.
-        if (!launchUrlConsumed && Capacitor.getPlatform() === 'android') {
-          launchUrlConsumed = true;
-          const initial = await App.getLaunchUrl().catch(() => null);
-          if (!disposed && initial?.url) applyDeepLinkUrl(initial.url);
-        }
->>>>>>> upstream/main
       })
       .catch(() => undefined);
 

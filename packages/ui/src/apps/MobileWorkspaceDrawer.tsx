@@ -52,14 +52,8 @@ export const MobileWorkspaceDrawer: React.FC<{
   onOpenPlan: (plan: { id: string; title: string; projectRef: ProjectRef }) => void;
   onOpenReceivedPage: (page: { receivedId: string; title: string }) => void;
   variant?: 'drawer' | 'panel';
-<<<<<<< HEAD
   reconnectBanner?: React.ReactNode;
-}> = ({ open, onClose, registerBackHandler, tab, onTabChange, pendingChangesDiff, onOpenPlan, variant = 'drawer', reconnectBanner }) => {
-||||||| bc50ba56aa
-}> = ({ open, onClose, tab, onTabChange, pendingChangesDiff, onOpenPlan, variant = 'drawer' }) => {
-=======
-}> = ({ open, onClose, tab, onTabChange, registerPreviewBackHandler, pendingChangesDiff, pendingChangesCommit, onOpenPlan, onOpenReceivedPage, variant = 'drawer' }) => {
->>>>>>> upstream/main
+}> = ({ open, onClose, registerBackHandler, tab, onTabChange, registerPreviewBackHandler, pendingChangesDiff, pendingChangesCommit, onOpenPlan, onOpenReceivedPage, variant = 'drawer', reconnectBanner }) => {
   const { t, direction } = useI18n();
   const rootRef = React.useRef<HTMLElement | null>(null);
   const drawerRef = React.useRef<HTMLElement>(null);
@@ -355,21 +349,7 @@ export const MobileWorkspaceDrawer: React.FC<{
 
   const terminalWorkspaceClass = tab === 'terminal' && 'oc-mobile-workspace-terminal';
   if (variant === 'panel') {
-<<<<<<< HEAD
-    // The caller animates the width; the content itself is plain flow so it
-    // never gets its own compositing layer (iOS clips those to the safe-area
-    // viewport, which is exactly what the drawer's settled `transform: none`
-    // avoids on the other host).
     return <div className={cn('flex h-full min-h-0 flex-col bg-background text-foreground', terminalWorkspaceClass)}>{body}</div>;
-||||||| bc50ba56aa
-    // The caller animates the width; the content itself is plain flow so it
-    // never gets its own compositing layer (iOS clips those to the safe-area
-    // viewport, which is exactly what the drawer's settled `transform: none`
-    // avoids on the other host).
-    return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{body}</div>;
-=======
-    return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{body}</div>;
->>>>>>> upstream/main
   }
 
   return createPortal(

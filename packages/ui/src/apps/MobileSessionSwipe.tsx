@@ -12,31 +12,14 @@ export const ROW_ACTIONS_WIDTH = 4 * ROW_ACTION_SLOT_WIDTH;
 type MobileSessionWorkAction = { inWork: boolean; onToggle: () => void };
 type MobileSessionPinAction = { pinned: boolean; onToggle: () => void };
 const ROW_SWIPE_SNAP_MS = 180;
+const setActionsShown = (actions: HTMLElement | null, shown: boolean) => {
+  if (actions) actions.style.visibility = shown ? 'visible' : 'hidden';
+};
 
-<<<<<<< HEAD
 /** Generic swipe-right-to-reveal wrapper for drawer rows (sessions, projects,
     worktrees): horizontal intent detection, imperative transform during the
     drag, snap on release. The actions sit on the LEFT so the opposite
     direction stays free for the drawer's own close swipe. */
-||||||| bc50ba56aa
-// The actions are hidden while the row covers them. WebKit stops painting the
-// row over them while the list animates it (a header opening or closing slides
-// and fades the rows below), and they showed through the row's text.
-const setActionsShown = (actions: HTMLElement | null, shown: boolean) => {
-  if (actions) actions.style.visibility = shown ? 'visible' : 'hidden';
-};
-
-/** Generic swipe-to-reveal wrapper for drawer rows (sessions, projects,
-    worktrees): horizontal intent detection, imperative transform during the
-    drag, snap on release. The actions sit at the row's start (left, or right
-    in RTL) and the row slides toward its end, so the opposite direction stays
-    free for the drawer's own close swipe. */
-=======
-const setActionsShown = (actions: HTMLElement | null, shown: boolean) => {
-  if (actions) actions.style.visibility = shown ? 'visible' : 'hidden';
-};
-
->>>>>>> upstream/main
 export const MobileSwipeActionsRow: React.FC<{
   actionsWidth: number;
   actions: React.ReactNode;
@@ -56,23 +39,6 @@ export const MobileSwipeActionsRow: React.FC<{
   contentClassName = 'relative flex w-full items-center bg-background',
   children,
 }) => {
-<<<<<<< HEAD
-    const contentRef = React.useRef<HTMLDivElement>(null);
-    const startRef = React.useRef<{ x: number; y: number } | null>(null);
-    const draggingRef = React.useRef(false);
-    const offsetRef = React.useRef(0);
-    const revealedRef = React.useRef(revealed);
-||||||| bc50ba56aa
-  const { direction } = useI18n();
-  // Offsets are measured toward the row's end; in RTL that is leftward.
-  const sign = direction === 'rtl' ? -1 : 1;
-  const contentRef = React.useRef<HTMLDivElement>(null);
-  const actionsRef = React.useRef<HTMLDivElement>(null);
-  const startRef = React.useRef<{ x: number; y: number } | null>(null);
-  const draggingRef = React.useRef(false);
-  const offsetRef = React.useRef(0);
-  const revealedRef = React.useRef(revealed);
-=======
   const { direction } = useI18n();
   const sign = direction === 'rtl' ? -1 : 1;
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -81,27 +47,7 @@ export const MobileSwipeActionsRow: React.FC<{
   const draggingRef = React.useRef(false);
   const offsetRef = React.useRef(0);
   const revealedRef = React.useRef(revealed);
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-    const applyOffset = React.useCallback((px: number, animate: boolean) => {
-      const el = contentRef.current;
-      if (!el) return;
-      el.style.transition = animate ? `transform ${ROW_SWIPE_SNAP_MS}ms ease-out` : 'none';
-      el.style.transform = px === 0 ? 'none' : `translateX(${px}px)`;
-      offsetRef.current = px;
-    }, []);
-||||||| bc50ba56aa
-  const applyOffset = React.useCallback((px: number, animate: boolean) => {
-    const el = contentRef.current;
-    if (!el) return;
-    // A row sliding shut keeps its actions until the slide ends.
-    setActionsShown(actionsRef.current, px !== 0 || (animate && px !== offsetRef.current));
-    el.style.transition = animate ? `transform ${ROW_SWIPE_SNAP_MS}ms ease-out` : 'none';
-    el.style.transform = px === 0 ? 'none' : `translateX(${px * sign}px)`;
-    offsetRef.current = px;
-  }, [sign]);
-=======
   const applyOffset = React.useCallback((px: number, animate: boolean) => {
     const el = contentRef.current;
     if (!el) return;
@@ -110,100 +56,36 @@ export const MobileSwipeActionsRow: React.FC<{
     el.style.transform = px === 0 ? 'none' : `translateX(${px * sign}px)`;
     offsetRef.current = px;
   }, [sign]);
->>>>>>> upstream/main
 
-    React.useEffect(() => {
-      revealedRef.current = revealed;
-      applyOffset(revealed ? actionsWidth : 0, true);
-    }, [actionsWidth, applyOffset, revealed]);
-
-<<<<<<< HEAD
-    const handleTouchStart = (event: React.TouchEvent) => {
-      if (event.touches.length !== 1) return;
-      const touch = event.touches[0];
-      startRef.current = { x: touch.clientX, y: touch.clientY };
-      draggingRef.current = false;
-    };
-||||||| bc50ba56aa
-  // Before paint: a row mounted in the middle of a list animation is drawn
-  // with its actions already hidden.
-  React.useLayoutEffect(() => {
-    revealedRef.current = revealed;
-    applyOffset(revealed ? actionsWidth : 0, true);
-  }, [actionsWidth, applyOffset, revealed]);
-=======
-  React.useLayoutEffect(() => {
-    revealedRef.current = revealed;
-    applyOffset(revealed ? actionsWidth : 0, true);
-  }, [actionsWidth, applyOffset, revealed]);
->>>>>>> upstream/main
-
-    const handleTouchMove = (event: React.TouchEvent) => {
-      if (!startRef.current) return;
-      const touch = event.touches[0];
-      const dx = touch.clientX - startRef.current.x;
-      const dy = touch.clientY - startRef.current.y;
-      if (!draggingRef.current) {
-        if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
-        draggingRef.current = true;
-      }
-      const base = revealedRef.current ? actionsWidth : 0;
-      applyOffset(Math.max(0, Math.min(actionsWidth, base + dx)), false);
-    };
-
-    const handleTouchEnd = () => {
-      startRef.current = null;
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      const shouldReveal = offsetRef.current > actionsWidth / 2;
-      applyOffset(shouldReveal ? actionsWidth : 0, true);
-      if (shouldReveal !== revealedRef.current) onRevealedChange(shouldReveal);
-    };
-
-<<<<<<< HEAD
-    return (
-      <div
-        data-active-session={dataActiveSession || undefined}
-        className="relative overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-        // Vertical panning stays native; horizontal moves reach the swipe handler.
-        style={{ touchAction: 'pan-y' }}
-      >
-        <div className="absolute inset-y-0 left-0 flex items-stretch" style={{ width: actionsWidth }} aria-hidden={!revealed}>
-          {actions}
-        </div>
-        <div ref={contentRef} className={contentClassName}>
-          {children}
-        </div>
-||||||| bc50ba56aa
-  const handleTouchEnd = () => {
-    startRef.current = null;
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    const shouldReveal = offsetRef.current > actionsWidth / 2;
-    applyOffset(shouldReveal ? actionsWidth : 0, true);
-    if (shouldReveal !== revealedRef.current) onRevealedChange(shouldReveal);
+  const handleTransitionEnd = (event: React.TransitionEvent) => {
+    if (event.target === contentRef.current && event.propertyName === 'transform' && offsetRef.current === 0) setActionsShown(actionsRef.current, false);
   };
 
-  return (
-    <div
-      data-active-session={dataActiveSession || undefined}
-      // Rounded as the desktop's rows are: the list is inset from the screen's
-      // edges, and the selection and a swipe's actions keep the row's shape.
-      className="relative overflow-hidden rounded-lg"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
-      // Vertical panning stays native; horizontal moves reach the swipe handler.
-      style={{ touchAction: 'pan-y' }}
-    >
-      <div ref={actionsRef} className="absolute inset-y-0 inset-s-0 flex items-stretch" style={{ width: actionsWidth }} aria-hidden={!revealed}>
-        {actions}
-=======
+  React.useLayoutEffect(() => {
+    revealedRef.current = revealed;
+    applyOffset(revealed ? actionsWidth : 0, true);
+  }, [actionsWidth, applyOffset, revealed]);
+
+  const handleTouchStart = (event: React.TouchEvent) => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    startRef.current = { x: touch.clientX, y: touch.clientY };
+    draggingRef.current = false;
+  };
+
+  const handleTouchMove = (event: React.TouchEvent) => {
+    if (!startRef.current) return;
+    const touch = event.touches[0];
+    const dx = (touch.clientX - startRef.current.x) * sign;
+    const dy = touch.clientY - startRef.current.y;
+    if (!draggingRef.current) {
+      if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+      draggingRef.current = true;
+    }
+    const base = revealedRef.current ? actionsWidth : 0;
+    applyOffset(Math.max(0, Math.min(actionsWidth, base + dx)), false);
+  };
+
   const handleTouchEnd = () => {
     startRef.current = null;
     if (!draggingRef.current) return;
@@ -226,27 +108,13 @@ export const MobileSwipeActionsRow: React.FC<{
     >
       <div ref={actionsRef} className="absolute inset-y-0 inset-s-0 flex items-stretch" style={{ width: actionsWidth }} aria-hidden={!revealed}>
         {actions}
->>>>>>> upstream/main
       </div>
-<<<<<<< HEAD
-    );
-  };
-||||||| bc50ba56aa
-      {/* The row keeps its rounded shape while it slides away from its actions. */}
       <div ref={contentRef} className={`${contentClassName} rounded-[inherit]`} onTransitionEnd={handleTransitionEnd} onTransitionCancel={handleTransitionEnd}>
         {children}
       </div>
     </div>
   );
 };
-=======
-      <div ref={contentRef} className={`${contentClassName} rounded-[inherit]`} onTransitionEnd={handleTransitionEnd} onTransitionCancel={handleTransitionEnd}>
-        {children}
-      </div>
-    </div>
-  );
-};
->>>>>>> upstream/main
 
 export const MobileSessionRowActions: React.FC<{
   sessionId: string;
@@ -287,42 +155,10 @@ export const MobileSessionRowActions: React.FC<{
       toast.success(t('sessions.sidebar.session.copyId.success'));
     };
 
-<<<<<<< HEAD
     return (
       <>
         {/* Icon-only actions on the row's own background — they read as the row
           extending to reveal extra controls, not a separate panel. */}
-||||||| bc50ba56aa
-  return (
-    <>
-      {/* Icon-only actions on the row's own background — they read as the row
-          extending to reveal extra controls, not a separate panel. */}
-      <button
-        type="button"
-        tabIndex={tabIndex}
-        className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-        aria-label={t('mobile.sessions.archiveSessionAria', { title })}
-        onClick={onArchive}
-        style={{ touchAction: 'manipulation' }}
-      >
-        <RiArchiveLine className="size-[18px]" />
-      </button>
-      {pin ? (
-=======
-  return (
-    <>
-      <button
-        type="button"
-        tabIndex={tabIndex}
-        className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-        aria-label={t('mobile.sessions.archiveSessionAria', { title })}
-        onClick={onArchive}
-        style={{ touchAction: 'manipulation' }}
-      >
-        <RiArchiveLine className="size-[18px]" />
-      </button>
-      {pin ? (
->>>>>>> upstream/main
         <button
           type="button"
           tabIndex={tabIndex}
@@ -376,14 +212,7 @@ export const MobileSessionRowActions: React.FC<{
           onClick={confirmingDelete ? onConfirmDelete : onRequestDelete}
           style={{ touchAction: 'manipulation' }}
         >
-<<<<<<< HEAD
           <Icon name="delete-bin" className="size-[18px]" />
-||||||| bc50ba56aa
-          {/* The check glyph draws smaller than the others at the same box. */}
-          <Icon name={work.inWork ? 'check' : 'eye'} className={work.inWork ? 'size-5' : 'size-[18px]'} />
-=======
-          <Icon name={work.inWork ? 'check' : 'eye'} className={work.inWork ? 'size-5' : 'size-[18px]'} />
->>>>>>> upstream/main
         </button>
         <button
           type="button"

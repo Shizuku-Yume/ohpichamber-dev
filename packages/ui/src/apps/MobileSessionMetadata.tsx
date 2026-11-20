@@ -28,25 +28,11 @@ const formatTokens = (value: number): string => {
 
 type ContextDisplay =
   | { state: 'measured'; percentage: number; tokens: string; colorClass: string }
-<<<<<<< HEAD
-  /** Nothing to measure yet: a draft, or a session without a response. */
-||||||| bc50ba56aa
-  /** Compacted since the last response that reported tokens: the fill is unknown. */
   | { state: 'compacted'; tokens: string }
-  /** Nothing to measure yet: a draft, or a session without a response. */
-=======
-  | { state: 'compacted'; tokens: string }
->>>>>>> upstream/main
   | { state: 'pending' }
   | null;
 
 
-<<<<<<< HEAD
-/** `percentage: null` draws the empty track for a pending draft or session without usage. */
-||||||| bc50ba56aa
-/** `percentage: null` draws the empty track only: the fill is unknown after a compaction. */
-=======
->>>>>>> upstream/main
 const ContextProgressIcon: React.FC<{ percentage: number | null }> = ({ percentage }) => {
   const progressPct = clampPercent(percentage ?? 0) ?? 0;
   const tone = resolveUsageTone(percentage ?? 0);
@@ -242,20 +228,9 @@ const SessionMetadataOverlay: React.FC<{
               )}
             </MetadataRow>
           ) : null}
-<<<<<<< HEAD
-          {/* The header ring is empty on a draft; this row says why, so the
-              empty ring reads as "nothing yet" rather than "still loading". */}
-||||||| bc50ba56aa
           {contextDisplay?.state === 'compacted' ? (
             <p className="px-2.5 pb-1 typography-meta text-muted-foreground">{t('contextUsage.compacted.description')}</p>
           ) : null}
-          {/* The header ring is empty on a draft; this row says why, so the
-              empty ring reads as "nothing yet" rather than "still loading". */}
-=======
-          {contextDisplay?.state === 'compacted' ? (
-            <p className="px-2.5 pb-1 typography-meta text-muted-foreground">{t('contextUsage.compacted.description')}</p>
-          ) : null}
->>>>>>> upstream/main
           {contextDisplay?.state === 'pending' ? (
             <p className="px-2.5 pb-1 typography-meta text-muted-foreground">{t('mobile.header.metadata.contextPending')}</p>
           ) : null}
