@@ -649,7 +649,7 @@ export const NotificationSettings: React.FC = () => {
             </>
           )}
         >
-          <SettingsTwoColumn className="gap-2 md:grid-cols-2 md:gap-3 lg:gap-3">
+          <SettingsTwoColumn>
             {(['completion', 'subtask', 'error', 'question'] as const).map((event: NotificationTemplateEvent) => (
               <section key={event} className="p-2">
                 <SettingsGroupTitle className="capitalize">

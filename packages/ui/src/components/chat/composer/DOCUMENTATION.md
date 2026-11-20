@@ -315,9 +315,15 @@ and the send path reading the same grammar.
   draft. Two orderings are load-bearing: the debounced write is skipped once
   while a draft is being restored, and a deleted draft's empty signature is
   recorded before a queued write could resurrect it.
+  Retargeting the same new-session draft, or moving the same session to another
+  directory, carries text, attachments and linked references to that identity.
+  A different draft id, session or runtime keeps its own content. Confirmed
+  file mentions do not carry across directories. Disabling draft persistence
+  keeps these transitions in memory without durable writes.
   Fork replay text and files arrive in `input-store.pendingComposerRestore`,
   addressed to the fork's runtime, directory, and session. The hook consumes
-  them after loading that identity's draft. Selection alone is not enough:
+  them after loading that identity's draft and adds missing attachment citations
+  so restored files participate in sending. Selection alone is not enough:
   the deferred chat column can still show the source composer. Ordinary
   pending text insertions keep their existing path in `ChatInput`.
   The hook also selects the attachment draft before paint. `input-store.ts`

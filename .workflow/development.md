@@ -28,6 +28,17 @@ self-link cases but retains three literal Windows-path/math failures also
 present in the pre-fix aggregate. UI type-check passes (4,229 files); focused
 lint passes. Native rendering was not visually checked for this batch.
 
+The scoped UI feature regression repair restores composer retargeting and fork
+attachment citations, literal Markdown Windows paths, shared diff counts, settings
+layout primitives and missing project search targets. ReferenceBrowser and
+Walkthrough fixtures now answer Git discovery/status reads; BehaviorPage and
+CodeMirror tests follow their current public contracts. The initial UI run passed
+1,371/1,405 files. Subsequent focused runs cover all repaired files; the final
+16-file batch and three files rechecked after final edits pass. Touched-file lint
+passes. UI type-check is blocked by `MarkdownDiffPreview.tsx:9` passing an object
+to a string argument; broad dead-code findings remain unresolved. No full-suite
+rerun or visual/platform acceptance is claimed.
+
 The gap audit now compares the pinned v2.7.3 revision rather than its historical
 v2.7.0 literal, follows TypeScript source behind JavaScript import specifiers,
 checks relocated settings sanitizers and composed store owners, and recognizes

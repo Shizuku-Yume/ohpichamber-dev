@@ -99,7 +99,7 @@ describe('fork composer restoration', () => {
                 composer.render(source);
                 expect(composer.result.text).toBe('source draft @source.ts');
                 expect(useInputStore.getState().attachedFiles).toBe(sourceFiles);
-                expect(readChatDraft(fork).text).toBe(persistEnabled ? 'replay prompt' : '');
+                expect(readChatDraft(fork).text).toBe(persistEnabled ? 'replay prompt [replay.txt]' : '');
             } finally {
                 composer.teardown();
             }
@@ -178,7 +178,7 @@ describe('attachment draft ownership', () => {
                 const sourceFiles = useInputStore.getState().attachedFiles;
                 for (const identity of [
                     fork,
-                    { ...source, directory: '/other' },
+                    { ...source, sessionId: 'other', directory: '/other' },
                     { ...source, runtimeKey: 'runtime-b' },
                     { ...source, sessionId: null },
                     { ...source, sessionId: 'btw-pending:source' },

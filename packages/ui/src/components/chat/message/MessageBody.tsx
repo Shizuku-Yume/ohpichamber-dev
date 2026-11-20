@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
+import { DiffCount } from '@/components/ui/diff-count';
 import { ErrorResponseDetails } from '@/components/chat/ErrorResponseDetails';
 import { SaveProjectPlanDialog } from '@/components/session/SaveProjectPlanDialog';
 import { ForkSessionDialog, type ForkSessionExecution } from '@/components/session/ForkSessionDialog';
@@ -111,11 +112,7 @@ const TurnChangedFileChipContent = React.memo(({ file, interactive = false }: { 
         <FileTypeIcon filePath={file.file} className="h-3.5 w-3.5 flex-shrink-0" />
         <span className="max-w-52 truncate text-foreground/80" title={file.file}>{getDisplayFileName(file.file)}</span>
         {file.additions !== undefined && file.deletions !== undefined ? (
-            <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
-                <span style={{ color: 'var(--status-success)' }}>+{file.additions}</span>
-                <span className="text-muted-foreground/70">/</span>
-                <span style={{ color: 'var(--status-error)' }}>-{file.deletions}</span>
-            </span>
+            <DiffCount added={file.additions} removed={file.deletions} className="typography-meta" />
         ) : null}
     </span>
 ));
