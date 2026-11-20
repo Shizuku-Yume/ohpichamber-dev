@@ -10,6 +10,11 @@ and CLI, rather than assuming a fixed set of bootstrap monoliths. Electron
 references count when checking public Host exports. Tests, fixtures, dependency
 trees and generated output are not production coverage. Imports alone never
 count as using a constructor or mounting routes.
+Typed constructor calls count too. Dependency comparison tracks named object
+properties, not spread-variable names, whose contents cannot be inferred.
+A same-file reference outside an export's declaration counts as a caller.
+Dependency keys are compared within the same logical source owner (`.ts` and
+`.js` are equivalent), not pooled across unrelated factories with the same name.
 
 The route audit follows source imports from the server entry, including `.js`
 specifiers whose source owner is TypeScript. A reachable route module must still

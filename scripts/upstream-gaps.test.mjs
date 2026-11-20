@@ -107,6 +107,46 @@ test('an unchanged fork passes the guardrail', () => {
   assert.match(result.output, /PASSED/);
 });
 
+test('typed factory calls are counted and still expose missing named dependencies', () => {
+  const files = baseFiles();
+  files['packages/web/server/index.js'] = INDEX.replace('createAutoReviewRuntime({ enabled: true })', 'createAutoReviewRuntime<{ enabled: boolean }>({ enabled: true })');
+  const fixture = makeFixture(files);
+  assert.equal(runGuardrail(fixture).status, 0);
+  fixture.fork('packages/web/server/index.js', files['packages/web/server/index.js'].replace('{ enabled: true }', '{}'));
+  assert.match(runGuardrail(fixture).output, /\[route-deps\] createAutoReviewRuntime.enabled/);
+});
+
+test('spread variable names are not dependency names but explicit keys remain audited', () => {
+  const files = baseFiles();
+  files['packages/web/server/index.js'] = INDEX.replace('{ enabled: true }', '{ ...oldOptions, enabled: true }');
+  const fixture = makeFixture(files);
+  fixture.fork('packages/web/server/index.js', files['packages/web/server/index.js'].replace('...oldOptions', '...newOptions'));
+  assert.equal(runGuardrail(fixture).status, 0);
+  fixture.fork('packages/web/server/index.js', INDEX.replace('{ enabled: true }', '{ ...newOptions }'));
+  assert.match(runGuardrail(fixture).output, /\[route-deps\] createAutoReviewRuntime.enabled/);
+});
+
+test('same-named factory dependencies are compared within their source owner', () => {
+  const files = baseFiles();
+  files['packages/web/server/lib/a.js'] = `createClient({ baseUrl: '/legacy' });\n`;
+  files['packages/web/server/lib/b.js'] = `createClient({ token: 'opaque' });\n`;
+  const fixture = makeFixture(files);
+  fixture.fork('packages/web/server/lib/a.js', `createCanonicalClient({ origin: '/api/agent/v1' });\n`);
+  assert.equal(runGuardrail(fixture).status, 0);
+  fixture.fork('packages/web/server/lib/b.js', `createClient({});\n`);
+  assert.match(runGuardrail(fixture).output, /\[route-deps\] createClient.token/);
+});
+
+test('a same-file route caller counts but an exported definition alone does not', () => {
+  const files = baseFiles();
+  files['packages/web/server/lib/trackers/routes.js'] += `\nexport function registerNestedRoutes(app) { app.get('/api/nested', () => {}); }\n`;
+  files['packages/web/server/lib/trackers/routes.js'] = files['packages/web/server/lib/trackers/routes.js'].replace("  app.get('/api/tracker/things'", "  registerNestedRoutes(app);\n  app.get('/api/tracker/things'");
+  const fixture = makeFixture(files);
+  assert.equal(runGuardrail(fixture).status, 0);
+  fixture.fork('packages/web/server/lib/trackers/routes.js', files['packages/web/server/lib/trackers/routes.js'].replace('  registerNestedRoutes(app);', ''));
+  assert.match(runGuardrail(fixture).output, /\[unused-route-fn\] registerNestedRoutes/);
+});
+
 test('TypeScript route owners count through JavaScript import specifiers without counting imports as mounting', () => {
   const files = baseFiles();
   files['packages/web/server/index.js'] = `import './lib/server-frame/bootstrap.js';\n`;

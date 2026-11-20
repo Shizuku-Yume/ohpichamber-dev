@@ -15,7 +15,6 @@ route-deps	registerOpenChamberRoutes.fetchFreeZenModels	## 2026-11-10 - Merge up
 route-deps	createOpenChamberControlService.secretFiles	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; agent secret tool was retired so secretFiles is unused in normal runtime
 unused-route-fn	createSecretFiles	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; secret files manager and hourly sweeper never created for retired secret tool
 unused-route-fn	createSecretRequests	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; secret request coordinator never created for retired secret tool
-unused-route-fn	createServerDiagnosticJournal	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	HTTP diagnostic journal ring buffer never attached to middleware
 unused-route-fn	createUnreadBaseline	## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities	Replaced by Host-persisted session unread watermarks in metadata (openchamber.workbench.lastIdleAt/viewedAt)
 unused-route-fn	createWorkNamer	## 2026-10-26 - OMP owns session titles	Replaced by OMP native session and worktree title generation
 unused-route-fn	createMergeFollowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	GitHub merge follow listener for PR watch; disposition depends on PR watch adoption
@@ -296,22 +295,11 @@ route-deps	createOpenChamberControlService.onPageWaitChange	## 2026-11-10 - Merg
 route-deps	createOpenChamberControlService.workNaming	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.loadQuota	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createDeltaCoalescer	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createGitIdentityStore	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createSshHostResolver	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createGitHubAuthStore	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createGuestAgentContext	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createServiceHostApi	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createServiceLifetime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createGuestServiceRegistry	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createThemeCatalog	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createLinearTracker	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createFrameEncryptor	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createFrameDecryptor	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createAccountEvents	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createRepositoryIdResolver	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createTestHost	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces module, unreleased; no mounted caller.
 unused-route-fn	createLocalPlace	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
-unused-route-fn	createIdleStop	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces module, unreleased; no mounted caller.
 unused-route-fn	createLiveDockerPlace	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
 unused-route-fn	createFakeDocker	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
 unused-route-fn	createMemoryPlace	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
@@ -537,7 +525,6 @@ runtime-constructor	createServiceHostApi	OMP packages/web/server/lib/guests/serv
 runtime-constructor	createManagedConfigRuntime	OMP packages/web/server/lib/tunnels/managed-config.ts	Renamed in fork to createManagedTunnelConfigRuntime and called in index.js:386.
 runtime-constructor	gitWorktreeCreation.createWorktree	OMP packages/web/server/lib/git/worktree-creation.ts	Worktree creation constructor; fork instantiates createWorktreeCreation.
 runtime-constructor	createExtensionQuotaProviders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode extension quota provider constructor retired with OpenCode runtime.
-unused-route-fn	createProviderDescriptors	OMP packages/web/server/lib/source-control/provider-descriptors.ts	Factory function; module exports singleton sourceControlProviderDescriptors = createProviderDescriptors().
 unused-route-fn	createPackedToolsSource	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Development build packaging helper in unreleased isolated spaces.
 route-deps	createAutoReviewRuntime.buildOpenCodeUrl	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode URL builder; runtime cut over to canonical sessionService and global hub.
 route-deps	createAutoReviewRuntime.getOpenCodeAuthHeaders	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode auth headers; runtime cut over to canonical sessionService.

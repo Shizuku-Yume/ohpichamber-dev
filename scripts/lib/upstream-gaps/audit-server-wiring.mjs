@@ -182,10 +182,7 @@ function extractObjectKeys(objExpr) {
   for (const rawP of props) {
     const p = stripLeadingComments(rawP);
     if (!p) continue;
-    if (p.startsWith('...')) {
-      keys.push(p.replace(/\s+/g, ' '));
-      continue;
-    }
+    if (p.startsWith('...')) continue;
     const m = /^([A-Za-z_$][\w$]*)\s*(?::|\(|$|,)/.exec(p);
     if (m) keys.push(m[1]);
     else {
@@ -205,7 +202,7 @@ function lineOf(src, idx) {
 function extractCalls(src, fileLabel) {
   if (!src) return [];
   const results = [];
-  const re = /(?:^|[^.\w$])((?:[A-Za-z_$][\w$]*\.)?(?:register[A-Z]\w*|create[A-Z]\w*))\s*\(/gm;
+  const re = /(?:^|[^.\w$])((?:[A-Za-z_$][\w$]*\.)?(?:register[A-Z]\w*|create[A-Z]\w*))\s*(?:<[^\n()]*>)?\s*\(/gm;
   let m;
   while ((m = re.exec(src)) !== null) {
     const fnName = m[1];
@@ -350,7 +347,12 @@ const strippedByFile = new Map([...fileContents].map(([rel, src]) => [rel, strip
 for (const exp of exportedFns) {
   // A use is any reference outside import and re-export statements: a call, or a value
   // such as a default parameter or a dependency object entry. An import alone is not use.
-  const callers = [...strippedByFile.entries()].filter(([otherFile, src]) => otherFile !== exp.file && usesName(src, exp.name));
+  const callers = [...strippedByFile.entries()].filter(([otherFile, src]) => {
+    const references = otherFile === exp.file
+      ? src.replace(new RegExp(`\\b(?:function\\s+|(?:const|let|var)\\s+)${exp.name}\\b`, 'g'), '')
+      : src;
+    return usesName(references, exp.name);
+  });
   if (callers.length === 0) {
     unusedExports.push(exp);
   }
@@ -386,41 +388,29 @@ const report = {
   unusedExports,
 };
 
-for (const name of [...upReg.keys()].filter((k) => fkReg.has(k))) {
-  const uList = upReg.get(name);
-  const fList = fkReg.get(name);
-  const uKeys = new Set(uList.flatMap((x) => x.objKeys.flatMap((o) => o.keys)));
-  const fKeys = new Set(fList.flatMap((x) => x.objKeys.flatMap((o) => o.keys)));
-  const missingInFork = [...uKeys].filter((k) => !fKeys.has(k));
-  const extraInFork = [...fKeys].filter((k) => !uKeys.has(k));
-  if (missingInFork.length > 0 || extraInFork.length > 0) {
-    report.registerCalls.depDiffs.push({
-      name,
-      upstream: uList.map((x) => `${x.file}:${x.line}`),
-      fork: fList.map((x) => `${x.file}:${x.line}`),
-      missingInFork,
-      extraInFork,
-    });
+function dependencyDiffs(upstream, fork) {
+  const diffs = [];
+  const owner = (call) => call.file.replace(/\.ts$/, '.js');
+  for (const [name, upstreamCalls] of upstream) {
+    const forkCalls = fork.get(name) ?? [];
+    for (const file of new Set(upstreamCalls.map(owner))) {
+      const uList = upstreamCalls.filter((call) => owner(call) === file);
+      const fList = forkCalls.filter((call) => owner(call) === file);
+      if (fList.length === 0) continue;
+      const uKeys = new Set(uList.flatMap((call) => call.objKeys.flatMap((object) => object.keys)));
+      const fKeys = new Set(fList.flatMap((call) => call.objKeys.flatMap((object) => object.keys)));
+      const missingInFork = [...uKeys].filter((key) => !fKeys.has(key));
+      const extraInFork = [...fKeys].filter((key) => !uKeys.has(key));
+      if (missingInFork.length || extraInFork.length) {
+        diffs.push({ name, upstream: uList.map((call) => `${call.file}:${call.line}`), fork: fList.map((call) => `${call.file}:${call.line}`), missingInFork, extraInFork });
+      }
+    }
   }
+  return diffs;
 }
 
-for (const name of [...upCreate.keys()].filter((k) => fkCreate.has(k))) {
-  const uList = upCreate.get(name);
-  const fList = fkCreate.get(name);
-  const uKeys = new Set(uList.flatMap((x) => x.objKeys.flatMap((o) => o.keys)));
-  const fKeys = new Set(fList.flatMap((x) => x.objKeys.flatMap((o) => o.keys)));
-  const missingInFork = [...uKeys].filter((k) => !fKeys.has(k));
-  const extraInFork = [...fKeys].filter((k) => !uKeys.has(k));
-  if (missingInFork.length > 0 || extraInFork.length > 0) {
-    report.createCalls.depDiffs.push({
-      name,
-      upstream: uList.map((x) => `${x.file}:${x.line}`),
-      fork: fList.map((x) => `${x.file}:${x.line}`),
-      missingInFork,
-      extraInFork,
-    });
-  }
-}
+report.registerCalls.depDiffs = dependencyDiffs(upReg, fkReg);
+report.createCalls.depDiffs = dependencyDiffs(upCreate, fkCreate);
 
 if (JSON_OUT) {
   console.log(JSON.stringify(report, null, 2));
