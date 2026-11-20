@@ -1943,3 +1943,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** the notification test action told users a notification was delivered when none appeared; Electron 45 has no authorization query, so the `show` event is the only native signal available.
 - **Mine:** yes (requested drift classification)
 - **Revisit when:** Electron exposes notification authorization or upstream adopts native confirmation.
+
+## 2026-11-21 - Skip draft session preparation inside a worktree being removed
+
+- **Decided:** treat a directory inside a worktree whose removal is pending (`isDirectoryInRemovingWorktree`) as unavailable for speculative draft session preparation, and restore sessions archived by a refused deletion before reporting the error.
+- **Instead of:** the upstream removal state, which only answers for the worktree root path and leaves drafts preparing sessions inside the checkout being deleted.
+- **Because:** a prepared session inside the removed checkout counts as an active run and makes the deletion refuse itself.
+- **Mine:** yes (requested drift classification)
+- **Revisit when:** upstream guards draft preparation during worktree removal itself.
