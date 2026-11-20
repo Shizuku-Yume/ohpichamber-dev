@@ -5,7 +5,7 @@ Read this record before implementation, together with the [agent guide](../AGENT
 ## Current state
 
 2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
-branch `4178cd1b1` (including UI state/infra and extension waits). Earlier stages
+branch `67aedc75e` (including UI state/infra, extension waits and shared/later pages). Earlier stages
 removed 113 stale gap exceptions and reconciled all 260 contradicted ledger
 rows. The continuation restores authenticated browser uploads from the captured
 session directory, the mobile Return-key control and worktree-create search/tab
@@ -19,19 +19,42 @@ callers and dependency comparisons scoped to matching source owners. Sixteen
 more stale exceptions were removed, and reviewed Host/native differences retain
 specific reasons rather than waiving missing features.
 
-The root `bun run type-check` passes TypeScript (4,540 files / five projects),
-error-cause and CSS checks, but remains 3/5: drift reports 199 unexplained paths
-and gaps report 718 detected / 629 allowlisted / 89 unallowlisted. Audit tests
-pass 40/40; cleanup/shutdown tests pass 52/52, settings-helper tests 63/63,
-project config/context tests 139/139 and notification/bootstrap tests 28/28.
-Changed-file lint reports six errors on unchanged Host runtime code; the baseline
-source comparison is not a baseline lint execution. The extension-waits route/runtime are
-present; its retired OpenCode callback differences have native-owner citations.
-Shared/received pages and background/later-page delivery are larger retained
-feature omissions: the 628-line sharing runtime is unmounted and render-page
-differs by 324 added/removed lines. Their UI callers remain exposed as gaps,
-not accepted exclusions. Other source/parity review is unfinished, including
-notification persistence, worktree-move, terminal/control, settings and queue findings.
+Further batches restore Gemini classifier credential routes, opted-in terminal
+actions, browser-login sharing controls, profile-scoped terminal reading, durable
+bounded notification tags and session clearing, and Canonical tracker status
+fan-out. Worktree-move dependencies are captured after Git bridge registration;
+queue movement retains Canonical identity and directory-adoption ownership.
+Pinned worktrees no longer trigger automatic work classification. Render-page
+eligibility reads Host metadata and fails closed if that read fails; busy-session
+delivery uses a stable native steer admission. Quota cards now reload on the
+Host's actual extension-catalog invalidation, with a mounted-hook test covering
+normal, failed and empty reads, reconnect, unrelated events and unmount.
+
+The final root `bun run type-check` passes TypeScript (4,542 files / five
+projects), error-cause and CSS checks, but remains 3/5: drift reports 169
+unexplained paths and gaps report 669 detected / 661 allowlisted / 8
+unallowlisted. Scanner/drift tests pass 43/43; the quota hook test passes 1/1.
+Actual CI `bun run lint` exits 0, with warnings; the earlier six scoped-lint
+errors do not fail this gate. Extension waits and shared/received/later pages
+are present after the merges, not accepted omissions.
+
+Remaining gap reports cover pending chat input before a page wait, background
+activity probing, pinned-worktree eligibility for explicit work-state control,
+secret request/run construction, usage-read construction and the unmounted
+Guest service Host API (constructor and unused-function findings). The inherited
+claim that the Guest subsystem delegates to `createServiceHostApi` was false:
+the only production reference is its declaration, so both waivers were removed.
+The upstream secret-run module is 392 lines; Native secret tooling and Guest
+service callbacks need separately scoped implementation rather than a waiver.
+The remaining drift and dependency-parity reviews are not complete.
+
+`SessionSnapshotStateSchema` exists in source and is exported on main and the
+sync branch. Source development now builds agent-contract before agent-service
+to avoid stale package exports. The real Node Host with a separate Bun Agent
+Service reached `ready`, listened on loopback and returned health 200. Shutdown
+logged a worker warmup failure; a separate real native archive Git test passed
+1/1 with isolated HOME/data/userData/TMPDIR. This is source-boot evidence, not
+proof of the original live process's artifact state or platform acceptance.
 Evidence is under `/home/ubuntu/ci-logs/audit-*`. UI changes are visually
 unverified; full retained-platform acceptance is not claimed.
 
