@@ -315,6 +315,8 @@ The parent record is written once, when OpenChamber makes or rebases the branch.
  - `deleteWorktreeArchive(directory, input)`: Delete an archive's ref and, with `deleteBranch`, its local branch unless a checkout uses that branch. The Host records branch intent before finalization; after a crash, replay checks the exact ref and per-session deletion progress before removing the binding. Branch-in-use, changed-OID, or ambiguous outcomes retain the binding and native-session evidence. Returns `{ id, branchDeleted }`.
 - `isLinkedWorktree(directory)`: Check if directory is a linked worktree (not primary).
 
+If Git has unregistered a checkout but cleanup of its remaining folder fails, the Host still publishes the new topology and the DELETE route returns `WORKTREE_UNREGISTERED`. The initiating client leaves the removed checkout without reporting successful folder cleanup.
+
 ### Worktree create command
 
 A project's personal `createWorktreeCommand` (`../projects/DOCUMENTATION.md`)
