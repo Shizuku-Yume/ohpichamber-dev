@@ -1,3 +1,7 @@
+import { z } from 'zod';
+
+const SshPassphraseValueSchema = z.object({ type: z.literal('key'), key: z.string() });
+
 interface SshPassphraseEntry {
   id: string;
   integrationID: string;
@@ -20,8 +24,9 @@ export function createSshPassphraseStore(source: SshPassphraseSource) {
     },
     read: async (id: string) => {
       const entry = (await source.list()).find((item) => item.id === id && item.integrationID === INTEGRATION_ID);
-      if (!entry || entry.value.type !== 'key' || typeof entry.value.key !== 'string') return null;
-      return entry.value.key;
+      if (!entry) return null;
+      const value = SshPassphraseValueSchema.safeParse(entry.value);
+      return value.success ? value.data.key : null;
     },
     remove: async (id: string) => {
       const entry = (await source.list()).find((item) => item.id === id && item.integrationID === INTEGRATION_ID);

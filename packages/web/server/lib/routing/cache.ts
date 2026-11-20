@@ -1,15 +1,14 @@
 import { z } from 'zod';
 import { BUILTIN_CATEGORIES } from './defaults.js';
 import type { RoutingCategory, RoutingConfig, RoutingModel } from './store.js';
-import type { CacheHoldInput, RoutingRuntimeOptions } from './contracts.js';
+import type { CacheHoldInput } from './contracts.js';
+import type { JsonValue } from '../shared/json-values.js';
 
 export interface CacheHoldCategoryInput extends Pick<CacheHoldInput, 'chosen' | 'composerAgent'> {
   categories: RoutingCategory[];
   fallback: NonNullable<RoutingConfig['fallback']>;
   current: RoutingModel | null;
 }
-
-type ConfigEntries = Awaited<ReturnType<NonNullable<RoutingRuntimeOptions['readConfigEntries']>>>;
 
 export const PROMPT_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -57,7 +56,7 @@ const durationMs = (text: string) => {
 const warmingSchema = z.union([z.boolean(), z.object({ duration: z.string().optional() })]);
 const configEntriesSchema = z.array(z.object({ info: z.object({ warming: warmingSchema.optional() }).nullish() }));
 
-export const warmWindowMs = (configEntries: ConfigEntries) => {
+export const warmWindowMs = (configEntries: JsonValue) => {
   const parsed = configEntriesSchema.safeParse(configEntries);
   if (!parsed.success) return PROMPT_CACHE_TTL_MS;
   const warming = parsed.data.findLast((entry) => entry.info?.warming !== undefined)?.info?.warming;

@@ -89,7 +89,6 @@ export interface RoutingRuntimeOptions {
   readPinnedEndpoint?: typeof readPinnedCustomEndpoint;
   listCatalogModels?: ((directory: SessionScope['directory']) => Promise<{ providerID: string; modelID: string; variants: { id: string }[] }[]>) | null;
   readSessionHistory?: ((scope: SessionScope) => Promise<RoutingHistory>) | null;
-  readConfigEntries?: ((directory: SessionScope['directory']) => Promise<unknown>) | null;
   readSessionAgent?: ((scope: SessionScope) => Promise<string | null>) | null;
   isSessionWarm?: (sessionId: string, cacheLifetimeMs: number) => boolean;
   now?: () => number;

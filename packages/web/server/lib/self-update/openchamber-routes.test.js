@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as modelsMetadata from '../host/models-metadata.js';
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,6 +19,32 @@ const createApp = () => {
   });
   return { app };
 };
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('native Host model metadata routes', () => {
+  it('does not register the retired Zen catalog reader', async () => {
+    await request(createApp().app).get('/api/zen/models').expect(404);
+  });
+
+  it('returns a successfully read empty metadata catalog', async () => {
+    vi.spyOn(modelsMetadata, 'getModelsMetadata').mockResolvedValue({ metadata: {}, fromCache: false, stale: false });
+    const response = await request(createApp().app).get('/api/openchamber/models-metadata').expect(200);
+    expect(response.body).toEqual({});
+  });
+
+  it.each([
+    [new DOMException('deadline', 'TimeoutError'), 504],
+    [{ name: 'AbortError' }, 504],
+    [new Error('unavailable'), 502],
+    [null, 502],
+  ])('classifies metadata failure %s as %s', async (error, status) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(modelsMetadata, 'getModelsMetadata').mockRejectedValue(error);
+    const response = await request(createApp().app).get('/api/openchamber/models-metadata').expect(status);
+    expect(response.body).toEqual({ error: 'Failed to retrieve model metadata' });
+  });
+});
 
 describe('OhPiChamber release notes route', () => {
   it('serves the bundled notes of the requested version', async () => {

@@ -22,6 +22,14 @@ empty updates without Host polling. UI type-check and changed-source lint pass;
 server type-check and lint pass. These are source/integration checks, not a
 browser smoke certification.
 
+The remaining Host lint errors are repaired without broadening server-check
+coverage: credentials and routing use their existing domain value types, SSH
+key and dictation scope boundaries use Zod parsing, and the storage fixture
+preserves its typed file-read call. Dictation keeps opaque workspace ids
+unchanged. The unbound OpenCode Zen catalog route is retired; Canonical model
+catalogs remain authoritative, while Host metadata and autofill remain intact.
+Eight focused Host suites pass (75 tests); the server type-check and lint pass.
+
 The Web server declaration build now passes with an explicit public route-rule
 type for file-resource schemas and a named exported command-stream class.
 Schema instances and subprocess behavior are unchanged; 193 Docker-place and

@@ -25,8 +25,8 @@ const fsImpl = {
   },
 };
 const readFileSync = new Proxy(fsSync.readFileSync, {
-  apply(target, receiver, args) {
-    const result = Reflect.apply(target, receiver, args);
+  apply(target, _receiver, args: Parameters<typeof fsSync.readFileSync>) {
+    const result = target(...args);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);
     return result;
   },

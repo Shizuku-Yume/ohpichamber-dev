@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { createSshPassphraseStore } from './ssh-passphrases.js';
 
 describe('Host SSH passphrase storage', () => {
+  it('does not expose missing or malformed key values', async () => {
+    for (const value of [{ type: 'key' }, { type: 'key', key: 42 }, { type: 'oauth', key: 'not-an-ssh-key' }]) {
+      const store = createSshPassphraseStore({
+        list: async () => [{ id: 'ssh_one', integrationID: 'openchamber-git-ssh', value }],
+        create: async () => {}, remove: async () => {},
+      });
+      expect(await store.read('ssh_one')).toBeNull();
+      expect(await store.read('absent')).toBeNull();
+    }
+  });
   it('creates a Host-owned entry without activating provider credentials', async () => {
     const entries = [];
     const store = createSshPassphraseStore({

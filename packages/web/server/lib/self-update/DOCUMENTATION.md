@@ -18,8 +18,6 @@ and credentials are not owned here.
   Host model-info owner, which enforces enterprise policy before networking.
 - `GET /api/openchamber/models-metadata` reads the Host metadata cache and sets
   cache headers according to freshness. Timeouts are 504; other failures are 502.
-- `GET /api/zen/models` uses the injected model reader, preserving its cached
-  list on fetch failure when available; otherwise it returns 504 or 502.
 
 ## Boundary
 
@@ -28,3 +26,8 @@ application and explicit metadata/model readers. This module does not register
 `update-check` or `update-install`, manage agent binaries or check an OpenCode
 version. Native release/install work remains with the retained surface owners
 and the M5 packaging plan.
+
+The retired OpenCode Zen model-list endpoint is not registered. Its readers
+were not supplied by native bootstrap and there are no retained UI callers.
+The model picker reads the Canonical workspace catalog instead. Public
+models.dev metadata and OpenRouter auto-fill remain Host-owned services.

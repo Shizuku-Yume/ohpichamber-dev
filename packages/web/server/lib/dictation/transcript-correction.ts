@@ -1,3 +1,6 @@
+import { z } from 'zod';
+
+const WorkspaceIdSchema = z.string().refine((value) => value.trim().length > 0);
 
 export const CORRECTION_TIMEOUT_MS = 10000;
 
@@ -32,7 +35,8 @@ export interface TranscriptCorrectorDependencies {
 export function createTranscriptCorrector({ generate, timeoutMs = CORRECTION_TIMEOUT_MS }: TranscriptCorrectorDependencies) {
   return async (text: string, { language, workspaceId }: CorrectionOptions = {}) => {
     const original = String(text ?? '');
-    if (!original.trim() || typeof workspaceId !== 'string' || !workspaceId.trim()) {
+    const scope = WorkspaceIdSchema.safeParse(workspaceId);
+    if (!original.trim() || !scope.success) {
       return original;
     }
     const languageLine = language ? `The speaker's language is "${String(language)}".\n\n` : '';
@@ -43,7 +47,7 @@ export function createTranscriptCorrector({ generate, timeoutMs = CORRECTION_TIM
     try {
       const result = await Promise.race([
         generate({
-          workspaceId,
+        workspaceId: scope.data,
           system: SYSTEM_PROMPT,
           prompt: `${languageLine}Dictated text:\n${original}`,
           timeoutMs,

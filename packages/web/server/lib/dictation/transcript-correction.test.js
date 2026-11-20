@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { createTranscriptCorrector, isPlausibleCorrection } from './transcript-correction.js';
 
 describe('createTranscriptCorrector', () => {
+  it('preserves an opaque workspace identity exactly', async () => {
+    const calls = [];
+    const correct = createTranscriptCorrector({ generate: async (args) => {
+      calls.push(args);
+      return { text: 'hello world' };
+    } });
+    await correct('hello word', { workspaceId: ' workspace ' });
+    expect(calls[0].workspaceId).toBe(' workspace ');
+  });
   it('returns the model text and tells it the language', async () => {
     const calls = [];
     const correct = createTranscriptCorrector({
