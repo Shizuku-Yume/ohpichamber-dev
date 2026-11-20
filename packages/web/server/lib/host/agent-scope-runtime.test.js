@@ -116,7 +116,7 @@ describe('configured Host scope authority', () => {
     });
     for (const [directory, expectedDisplayPath, expectedName] of [
       [projectDirectory, '.', 'Project'],
-      [worktreeDirectory, '../linked-worktree', 'linked-worktree'],
+      [worktreeDirectory, path.join('..', 'linked-worktree'), 'linked-worktree'],
       [chatDirectory, 'chat-one', 'chat-one'],
     ]) {
       const response = await request(app).post('/api/agent/v1/workspaces/resolve')
@@ -251,7 +251,7 @@ describe('configured Host scope authority', () => {
     const worktreeDirectory = path.join(root, 'linked-worktree');
     execFileSync('git', ['-C', projectDirectory, 'worktree', 'add', '-q', '-b', 'scope-fixture', worktreeDirectory]);
     const workspaces = await runtime.listWorkspaces();
-    const linked = workspaces.items.find((item) => item.displayPath === '../linked-worktree');
+    const linked = workspaces.items.find((item) => item.displayPath === path.join('..', 'linked-worktree'));
     expect(linked).toMatchObject({ name: 'linked-worktree' });
     const scope = await runtime.resolveWorkspaceScope(linked.workspaceId);
     expect(scope.cwd).toBe(worktreeDirectory);
