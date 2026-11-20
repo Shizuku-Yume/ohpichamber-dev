@@ -51,6 +51,17 @@
 
 ## Decisions
 
+### Reserved persisted preferences
+
+`cornerRadius` and `pinnedDirectories` retain their existing profile and instance
+storage respectively for compatibility and rollback. Their `reserved` metadata
+records why they remain accepted; their effect list is empty because there is no
+current runtime consumer. Parsing, mirroring and the existing appearance cache
+binding remain intact. No UI control or consumer is invented for them. The
+consumer audit exempts only documented reserved entries and requires that they
+declare no effects and have no runtime readers. A future consumer must remove
+the reserved marker and declare its actual effect.
+
 ### Why the Settings view passes its voice availability snapshot
 
 Search and new-setting badges receive the voice fields the view subscribes to, so memoized results refresh when those fields change. Non-React callers can omit the snapshot and read the current config store; separate invalidation-only dependencies hid this relationship from hook checks.

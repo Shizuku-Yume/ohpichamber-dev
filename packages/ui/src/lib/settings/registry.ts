@@ -122,6 +122,8 @@ type SettingsFieldSpec<T> = {
  scope: SettingsScope;
  /** Who consumes the stored value; see `SettingsEffect`. */
  effect: readonly SettingsEffect[];
+ /** Persisted for compatibility, without a current runtime consumer. */
+ reserved?: string;
  parse(value: unknown, raw: SettingsRawDocument): T | undefined;
  ui?: SettingsUiBinding<T>;
  /** Profile fields the owner chose to store per surface kind (change on a phone stays on phones). */
@@ -242,16 +244,16 @@ const withOfferedBuiltInStarters = (starters: DraftStarterRef[], snapshot: Setti
 
 export const SETTINGS_REGISTRY = {
  chatWidth: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseChatWidth, ui: uiStore('chatWidth', (v) => useUIStore.getState().setChatWidth(v)) }),
- wideChatLayoutEnabled: field({ scope: 'profile', effect: [], perSurface: true, parse: parseBoolean }),
- cornerRadius: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('cornerRadius', (v) => useUIStore.getState().setCornerRadius(v)) }),
+ wideChatLayoutEnabled: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseBoolean }),
+ cornerRadius: field({ scope: 'profile', effect: [], reserved: 'Legacy appearance preference retained for rollback; no current renderer reads it.', perSurface: true, parse: parseFiniteNumber, ui: uiStore('cornerRadius', (v) => useUIStore.getState().setCornerRadius(v)) }),
  fileEditorWrapLines: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('fileEditorWrapLines', (v) => useUIStore.getState().setFileEditorWrapLines(v)) }),
  terminalOpenOnProjectAction: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('terminalOpenOnProjectAction', (v) => useUIStore.getState().setTerminalOpenOnProjectAction(v)) }),
  agentBrowserSharesLogins: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('agentBrowserSharesLogins', (v) => useUIStore.getState().setAgentBrowserSharesLogins(v)) }),
  questionsInChat: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('questionsInChat', (v) => useUIStore.getState().setQuestionsInChat(v)) }),
- savePastedImagesAsFiles: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('savePastedImagesAsFiles', (v) => useUIStore.getState().setSavePastedImagesAsFiles(v)) }),
- collapsedModelProviders: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseStringSet, ui: uiStore('collapsedModelProviders', setUi('collapsedModelProviders'), { autoSave: false }) }),
- recentAgents: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseStringSet, ui: uiStore('recentAgents', setUi('recentAgents'), { autoSave: false }) }),
- recentEfforts: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseStringRecordOfStringLists, ui: uiStore('recentEfforts', setUi('recentEfforts'), { autoSave: false }) }),
+ savePastedImagesAsFiles: field({ scope: 'profile', effect: ['ui', 'server'], parse: parseBoolean, ui: uiStore('savePastedImagesAsFiles', (v) => useUIStore.getState().setSavePastedImagesAsFiles(v)) }),
+ collapsedModelProviders: field({ scope: 'profile', effect: ['store'], parse: parseStringSet, ui: uiStore('collapsedModelProviders', setUi('collapsedModelProviders'), { autoSave: false }) }),
+ recentAgents: field({ scope: 'profile', effect: ['store'], parse: parseStringSet, ui: uiStore('recentAgents', setUi('recentAgents'), { autoSave: false }) }),
+ recentEfforts: field({ scope: 'profile', effect: ['store'], parse: parseStringRecordOfStringLists, ui: uiStore('recentEfforts', setUi('recentEfforts'), { autoSave: false }) }),
  layoutAnimations: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('layoutAnimations', (v) => useUIStore.getState().setLayoutAnimations(v)) }),
  openLinksInBrowserPanel: field({ scope: 'profile', effect: ['ui'], surfaces: ['desktop'], parse: parseBoolean, ui: uiStore('openLinksInBrowserPanel', (v) => useUIStore.getState().setOpenLinksInBrowserPanel(v)) }),
  liveBrowserTabLimit: field({ scope: 'profile', effect: ['ui'], surfaces: ['desktop'], parse: parseIntegerInRange(LIVE_BROWSER_TABS_MIN, LIVE_BROWSER_TABS_MAX), ui: uiStore('liveBrowserTabLimit', (v) => useUIStore.getState().setLiveBrowserTabLimit(v)) }),
@@ -296,7 +298,7 @@ export const SETTINGS_REGISTRY = {
  homeDirectory: field({ scope: 'instance', effect: ['server', 'shell', 'store', 'ui'], parse: parseNonEmptyString }),
  projects: field<ProjectEntry[]>({ scope: 'instance', effect: ['server', 'shell', 'store', 'ui'], parse: parseProjects }),
  activeProjectId: field({ scope: 'instance', effect: ['server', 'store', 'ui'], adopt: 'bootstrap-only', parse: parseNonEmptyString }),
- pinnedDirectories: field({ scope: 'instance', effect: ['server'], parse: parseStringSet }),
+ pinnedDirectories: field({ scope: 'instance', effect: [], reserved: 'Legacy directory pins retained on the instance; current sidebar pins have a separate owner.', parse: parseStringSet }),
  desktopLanAccessEnabled: field({ scope: 'instance', effect: ['shell', 'ui'], surfaces: ['desktop'], parse: parseBoolean }),
  desktopKeepAwakeEnabled: field({ scope: 'instance', effect: ['shell'], surfaces: ['desktop'], parse: parseBoolean }),
  desktopMinimizeToTrayEnabled: field({ scope: 'instance', effect: ['shell'], surfaces: ['desktop'], parse: parseBoolean }),
@@ -367,7 +369,7 @@ export const SETTINGS_REGISTRY = {
  // reaches the store, so the page and its command stay unreachable.
  overviewFeatureAvailable: field({
   scope: 'instance',
-  effect: ['server', 'store', 'ui'],
+  effect: ['store', 'ui'],
   computed: true,
   parse: parseBoolean,
   ui: uiStore('overviewFeatureAvailable', (v) => useUIStore.getState().setOverviewFeatureAvailable(v), { autoSave: false }),
@@ -568,9 +570,9 @@ export const SETTINGS_REGISTRY = {
  fontSize: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('fontSize', (v) => useUIStore.getState().setFontSize(v)) }),
  chatFontSize: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('chatFontSize', (v) => useUIStore.getState().setChatFontSize(v)) }),
  terminalFontSize: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('terminalFontSize', (v) => useUIStore.getState().setTerminalFontSize(v)) }),
- editorFontSize: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('editorFontSize', (v) => useUIStore.getState().setEditorFontSize(v)) }),
- uiFont: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseUiFont, ui: uiStore('uiFont', (v) => useUIStore.getState().setUiFont(v)) }),
- monoFont: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseMonoFont, ui: uiStore('monoFont', (v) => useUIStore.getState().setMonoFont(v)) }),
+ editorFontSize: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('editorFontSize', (v) => useUIStore.getState().setEditorFontSize(v)) }),
+ uiFont: field({ scope: 'profile', effect: ['ui'], parse: parseUiFont, ui: uiStore('uiFont', (v) => useUIStore.getState().setUiFont(v)) }),
+ monoFont: field({ scope: 'profile', effect: ['ui'], parse: parseMonoFont, ui: uiStore('monoFont', (v) => useUIStore.getState().setMonoFont(v)) }),
  customUiFont: field({ scope: 'profile', effect: ['ui'], parse: parseTextUpTo(100), ui: uiStore('customUiFont', (v) => useUIStore.getState().setCustomUiFont(v)) }),
  customMonoFont: field({ scope: 'profile', effect: ['ui'], parse: parseTextUpTo(100), ui: uiStore('customMonoFont', (v) => useUIStore.getState().setCustomMonoFont(v)) }),
  uiFontWeight: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(UI_FONT_WEIGHT_OPTIONS), ui: uiStore('uiFontWeight', (v) => useUIStore.getState().setUiFontWeight(v)) }),

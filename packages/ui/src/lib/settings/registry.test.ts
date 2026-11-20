@@ -26,6 +26,18 @@ import {
 } from './registry';
 
 describe('settings registry', () => {
+  test('reserved preferences retain valid and empty values and reject invalid data', () => {
+    expect(parseSettingsDocument({ cornerRadius: 12, pinnedDirectories: ['/work'] }))
+      .toEqual({ cornerRadius: 12, pinnedDirectories: ['/work'] });
+    expect(parseSettingsDocument({ cornerRadius: 0, pinnedDirectories: [] }))
+      .toEqual({ cornerRadius: 0, pinnedDirectories: [] });
+    expect(parseSettingsDocument({ cornerRadius: 'wide', pinnedDirectories: 42 })).toEqual({});
+    expect(parseSettingsDocument({})).toEqual({});
+    expect(SETTINGS_REGISTRY.cornerRadius.scope).toBe('profile');
+    expect(SETTINGS_REGISTRY.pinnedDirectories.scope).toBe('instance');
+    expect(MIRRORED_KEYS).toContain('cornerRadius');
+    expect(MIRRORED_KEYS).toContain('pinnedDirectories');
+  });
   test('round-trips sidebar batching and pin placement through the profile owner', () => {
     const previous = useSessionDisplayStore.getState();
     try {
@@ -624,6 +636,7 @@ describe('settings registry effects', () => {
   test('every key has a consumer outside the settings plumbing', () => {
     const withoutConsumer = [...SETTINGS_KEYS, ...LOCAL_DEVICE_KEYS].filter((key) => {
       const consumers = runtimeConsumersOf(key);
+      if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.reserved) return false;
       // Secret or computed instance keys are consumed in settings dialogs or server runtime
       if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.computed) return false;
       if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.secret) return false;
@@ -638,6 +651,12 @@ describe('settings registry effects', () => {
     const mismatches: string[] = [];
     for (const key of SETTINGS_KEYS) {
       const declared = SETTINGS_REGISTRY[key].effect;
+      if (SETTINGS_REGISTRY[key].reserved) {
+        expect(SETTINGS_REGISTRY[key].reserved?.trim()).toBeTruthy();
+        expect(declared).toEqual([]);
+        expect([...effectClassesOf(key)]).toEqual([]);
+        continue;
+      }
       if (!Array.isArray(declared) || declared.length === 0) {
         mismatches.push(`${key}: no effect declared`);
         continue;

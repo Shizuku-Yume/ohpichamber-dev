@@ -1,6 +1,42 @@
 {
   "version": 1,
   "fields": {
+    "chatWidth": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "wideChatLayoutEnabled": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "cornerRadius": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "fileEditorWrapLines": {
+      "scope": "profile"
+    },
+    "terminalOpenOnProjectAction": {
+      "scope": "profile"
+    },
+    "agentBrowserSharesLogins": {
+      "scope": "profile"
+    },
+    "questionsInChat": {
+      "scope": "profile"
+    },
+    "savePastedImagesAsFiles": {
+      "scope": "profile"
+    },
+    "collapsedModelProviders": {
+      "scope": "profile"
+    },
+    "recentAgents": {
+      "scope": "profile"
+    },
+    "recentEfforts": {
+      "scope": "profile"
+    },
     "layoutAnimations": {
       "scope": "profile",
       "surfaces": [
@@ -747,6 +783,90 @@
         "mobile",
         "web"
       ]
+    },
+    "workStatusSectionOrderExplicit": {
+      "scope": "device",
+      "local": true
+    },
+    "sidebarSection": {
+      "scope": "device",
+      "local": true
+    },
+    "isSessionCreateDialogOpen": {
+      "scope": "device",
+      "local": true
+    },
+    "messageLimit": {
+      "scope": "device",
+      "local": true
+    },
+    "mobileKeepScreenAwake": {
+      "scope": "device",
+      "local": true
+    },
+    "sessionSuggestionEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "sessionGoalEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "summaryLength": {
+      "scope": "device",
+      "local": true
+    },
+    "summarizeLastMessage": {
+      "scope": "device",
+      "local": true
+    },
+    "summaryThreshold": {
+      "scope": "device",
+      "local": true
+    },
+    "agentScheduleToolEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "agentMemoryToolEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "agentUsageToolEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "agentTerminalToolEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "agentImageToolEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "agentImageModel": {
+      "scope": "device",
+      "local": true
+    },
+    "agentMemoryDreamingEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "agentMemoryDreamingModel": {
+      "scope": "device",
+      "local": true
+    },
+    "agentMemoryDreamingVariant": {
+      "scope": "device",
+      "local": true
+    },
+    "agentSecretToolEnabled": {
+      "scope": "device",
+      "local": true
+    },
+    "agentMemoryViewedAt": {
+      "scope": "device",
+      "local": true
     },
     "theme": {
       "scope": "device",
