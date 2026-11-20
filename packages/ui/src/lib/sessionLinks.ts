@@ -53,7 +53,7 @@ export const parseSessionLink = (href: string, ownOrigins: readonly string[]): S
         return null;
     }
 
-    if (url.protocol === 'openchamber:') {
+    if (url.protocol === 'ohpichamber:') {
         const segments = [url.host, ...url.pathname.split('/')].filter(Boolean);
         if (segments[0]?.toLowerCase() !== 'session' || segments.length !== 2) return null;
         return parseTarget(segments[1], url.searchParams.get('message'));
@@ -70,7 +70,7 @@ export const isSessionDeepLink = (href: string): boolean => (
     href.toLowerCase().startsWith(DEEP_LINK_PREFIX) && parseSessionLink(href, []) !== null
 );
 
-const LINK_CANDIDATE = /openchamber:\/\/session\/[^\s<>()"'`]+|https?:\/\/[^\s<>()"'`]+/gi;
+const LINK_CANDIDATE = /ohpichamber:\/\/session\/[^\s<>()"'`]+|https?:\/\/[^\s<>()"'`]+/gi;
 
 interface SessionLinkRange {
     readonly start: number;

@@ -35,7 +35,7 @@ const BLOCKED_APP_LINK_SCHEMES = new Set([
   'ws', 'wss', 'ftp', 'ftps',
   'intent',
   'ms-msdt', 'search-ms', 'shell',
-  'openchamber', 'openchamber-ui', 'capacitor',
+  'ohpichamber', 'openchamber', 'openchamber-ui', 'capacitor',
 ]);
 
 const APP_LINK_SCHEME_RE = /^[a-z][a-z0-9+.-]{1,31}$/;

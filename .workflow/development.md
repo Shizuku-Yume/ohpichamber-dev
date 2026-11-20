@@ -4,6 +4,24 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The macOS tester confirmed first-send for `/tmp` aliases, `/private/tmp`, Gemini
+and devin-swe-2; all reported smoke bugs are closed. The full comparison found
+remaining integration regressions outside those smoke paths. Main's 1,274 UI
+files pass, while this branch's first aggregate reports 58 failing UI files.
+One verified cause is mixed URI branding: builders emit `ohpichamber://` but
+adopted parsers still recognize `openchamber://`. Session/pairing readers now
+use the fork scheme, and generic external-link handling blocks self links so
+Markdown cannot bypass the explicit session/extension-install allowlist.
+
+Focused link and branding checks pass: session links (10), pairing payloads (9),
+Usage deep links (4), external URL policy (13), app-link interactions (6),
+composer citation language (26), pasted session IDs (9), session references (10),
+session mention rendering (3), logo generation (5), Android QR scan (9) and
+mobile reconnect/password/pairing (3). The Markdown suite now passes its
+self-link cases but retains three literal Windows-path/math failures also
+present in the pre-fix aggregate. UI type-check passes (4,229 files); focused
+lint passes. Native rendering was not visually checked for this batch.
+
 The gap audit now compares the pinned v2.7.3 revision rather than its historical
 v2.7.0 literal, follows TypeScript source behind JavaScript import specifiers,
 checks relocated settings sanitizers and composed store owners, and recognizes
