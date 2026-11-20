@@ -1,0 +1,9 @@
+import { fileURLToPath } from 'node:url';
+
+export const UI_BLOCKS_GUIDANCE_PATH = fileURLToPath(
+  new URL('../../../../../agent-service/src/worker/ui-blocks-guidance.ts', import.meta.url),
+);
+
+export function renderUiBlocksGuidanceModule(guidance: string): string {
+  return `export const UI_BLOCKS_GUIDANCE = ${JSON.stringify(guidance)};\n`;
+}

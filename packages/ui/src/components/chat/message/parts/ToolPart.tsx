@@ -63,8 +63,10 @@ import { OpenChamberToolOutput } from './OpenChamberToolOutput';
 import { toToolView } from './toolView';
 import { hasOpenChamberView, parseOpenChamberEnvelope } from './openChamberToolEnvelope';
 import { GuestToolTable } from './GuestToolTable';
+import { GuestToolCard } from './GuestToolCard';
 import {
     guestToolTableRows,
+    resolveGuestToolCard,
     renderGuestToolHeader,
     useGuestToolPresentation,
     type GuestToolRule,
@@ -590,6 +592,11 @@ const ToolScrollableTextOutput: React.FC<{
     if (forcedMode === 'table' && presentation?.columns?.length) {
         const rows = guestToolTableRows(renderedOutput);
         if (rows) return <GuestToolTable rows={rows} columns={presentation.columns} />;
+    }
+
+    if (forcedMode === 'card' && presentation && jsonResult.isJson) {
+        const card = resolveGuestToolCard(presentation, jsonResult.data);
+        if (card) return <GuestToolCard result={card} />;
     }
 
     if (forcedMode === 'text' || forcedMode === 'code') {

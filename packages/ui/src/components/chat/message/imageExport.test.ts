@@ -262,7 +262,7 @@ describe('turn image export', () => {
             expect(source.querySelector('pre code')?.textContent).toBe(`${program}\n`);
             expect(source.textContent).toContain('could not be drawn');
             expect(source.querySelector('iframe')).toBeNull();
-            expect(cloneMessageImageExportSource(source).querySelector('button')).toBeNull();
+            expect(Boolean(cloneMessageImageExportSource(source).querySelector('button'))).toBe(false);
         } finally {
             useGuestsStore.setState({ guests });
         }

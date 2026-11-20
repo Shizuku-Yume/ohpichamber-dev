@@ -3,6 +3,7 @@ import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-sessi
 import { z } from 'zod';
 import { JsonObjectSchema, type JsonObject, type JsonValue } from '@openchamber/agent-contract';
 import { HostActionRequestSchema, type HostActionRequest } from '../native-policy-protocol.ts';
+import { UI_BLOCKS_GUIDANCE } from './ui-blocks-guidance.ts';
 
 export type HostToolName =
   | 'openchamber'
@@ -68,7 +69,7 @@ export const HOST_TOOL_DESCRIPTIONS = {
   notify: 'Invoke notify.send for an authorized OhPiChamber notification.',
   openchamber_render: 'Show a page in the chat: one complete HTML document or one openui-lang program, with a title, in the same call. '
     + 'With awaitAnswer the page waits for the user\'s answer and returns their summary and data; without it the page is only shown. '
-    + 'The chat draws the page inline, so do not restate what it already says.',
+    + 'The chat draws the page inline, so do not restate what it already says.\n\n' + UI_BLOCKS_GUIDANCE,
   openchamber_workflow: 'Propose, check, run, inspect, stop or resume multi-agent workflows in the project. Actions: workflow.run, workflow.check, workflow.status, workflow.result, workflow.stop, workflow.resume, workflow.save, workflow.list.',
 } satisfies Record<HostActionRequest['toolName'], string>;
 

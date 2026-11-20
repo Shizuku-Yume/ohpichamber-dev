@@ -23,7 +23,7 @@ const useI18n = () => {
 import { KIT_SHARED_CSS, kitVariables, seriesColor } from '../lib/visualKit';
 import { cn } from '@/lib/utils';
 import { MarkdownContent } from '../MarkdownRenderer';
-import { useMarkdownPresentation } from '../markdown/MarkdownPresentationContext';
+import { MarkdownPresentationContext } from '../markdown/MarkdownPresentationContext';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { axisTicks } from './axisTicks';
 import { ExtensionBlockFrame } from './ExtensionBlockFrame';
@@ -124,9 +124,9 @@ function useBlockProps<S extends z.ZodType>(schema: S, props: BlockValue): z.inf
 }
 
 function Markdown({ source, className }: { source?: string; className?: string }) {
- const presentation = useMarkdownPresentation();
+ const presentation = React.useContext(MarkdownPresentationContext);
  if (!source) return null;
- if (presentation.purpose) return <MarkdownContent content={source} mode="static" settled directory={presentation.directory}
+ if (presentation?.purpose) return <MarkdownContent content={source} mode="static" settled directory={presentation.directory}
   className={className} purpose={presentation.purpose} theme={presentation.theme} enableFileReferences={false}
   preparedHighlights={presentation.preparedHighlights} onExportCode={presentation.onExportCode} />;
  return <ScopedMarkdown source={source} className={className} />;
@@ -486,7 +486,7 @@ function StepMark({ status, index }: { status: StepStatus; index: number }) {
   );
  }
  return (
-  <span className={cn(base, 'typography-micro tabular-nums text-muted-foreground shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--foreground)_22%,transparent)]')}>
+  <span className={cn(base, 'typography-micro tabular-nums shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--foreground)_22%,transparent)]', status === 'todo' ? 'text-muted-foreground' : 'text-foreground')}>
    {index + 1}
   </span>
  );
@@ -547,8 +547,8 @@ function StepsRow({ items }: { items: StepItems }) {
    {items.map((item, index) => (
     <div key={index} className="flex min-w-0 flex-col gap-1.5" role="listitem">
      <div className="flex items-center">
-      <StepMark status={item.status ?? 'todo'} index={index} />
-      {index < items.length - 1 && <span className={cn('mx-1.5 h-0.5 flex-1 rounded-full', stepLine(item.status ?? 'todo'))} />}
+      <StepMark status={item.status} index={index} />
+      {index < items.length - 1 && <span className={cn('mx-1.5 h-0.5 flex-1 rounded-full', stepLine(item.status))} />}
      </div>
      <div className="min-w-0 pe-3"><StepText item={item} /></div>
     </div>
@@ -564,8 +564,8 @@ function StepsColumn({ items }: { items: StepItems }) {
    {items.map((item, index) => (
     <div key={index} className="flex gap-2.5" role="listitem">
      <div className="flex flex-col items-center pt-[3px]">
-      <StepMark status={item.status ?? 'todo'} index={index} />
-      {index < items.length - 1 && <span className={cn('my-1 min-h-3 w-0.5 flex-1 rounded-full', stepLine(item.status ?? 'todo'))} />}
+      <StepMark status={item.status} index={index} />
+      {index < items.length - 1 && <span className={cn('my-1 min-h-3 w-0.5 flex-1 rounded-full', stepLine(item.status))} />}
      </div>
      <div className={cn('min-w-0 flex-1', index < items.length - 1 && 'pb-3')}><StepText item={item} /></div>
     </div>
@@ -1327,6 +1327,7 @@ function NotDrawn({ source, errors, partial = false, showSourceInitially = false
    {[...new Set(shown)].map((error) => <div key={error} className="text-muted-foreground">{error}</div>)}
    <button
     type="button"
+    data-export-ignore
     aria-expanded={open}
     aria-controls={panelId}
     onClick={() => setOpen((current) => !current)}

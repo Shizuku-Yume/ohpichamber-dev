@@ -4,8 +4,11 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
-UI checking is down to one diagnostic: the missing generated UI-block guidance
-module. Canonical session, message, tool-call/result and private Guest-port
+UI checking now passes with zero diagnostics (4,230 files); Agent Service
+checking also passes. UI-block guidance is generated from the UI catalog into
+the native render-tool description, without importing the renderer into the
+worker or restoring session-prompt injection. Five guidance tests and eight
+native Host-tool tests pass. Canonical session, message, tool-call/result and private Guest-port
 fixtures have replaced retired SDK shapes. Timeline/history navigation now checks
 the actual renderable message-row index; the timeline, navigation, quote,
 pinned-selection and render-comparison focused suites pass. Guest-link actions
@@ -14,10 +17,14 @@ markers cannot be supplied by authored HTML. The four action-helper tests pass.
 SVG fences again use the guarded preview/failure path. Image exports receive the
 captured theme and render nested Markdown without an ambient session provider;
 extension frames are not executed during capture and their source stays visible.
-Image-export verification remains incomplete: the unavailable-extension case
-stalled after the source-notice change. Guest cards and composer draft/keystroke
-assertions still need reconciliation. Full gates, fork-parent comparison and
-visual verification remain outstanding.
+All fourteen image-export tests now pass: source-reveal controls are excluded,
+while unavailable-extension source and built-in content remain visible. Native
+guest-card rendering is restored (four tests), and static Steps retain upstream
+contrast rather than being treated as pending. Standalone block tests pass
+(22), as do extension-answer tests (13) with the real Native sync provider in
+their harness. Changed-source lint passes. Composer draft/keystroke assertions,
+registry and DiffView acceptance, full gates and fork-parent comparison remain
+outstanding. Visual verification has not been performed.
 
 Native chat-directory cleanup now consumes complete Canonical inventories,
 scoped snapshots/updates and cascading deletion events instead of SDK records.

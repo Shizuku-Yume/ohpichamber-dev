@@ -252,6 +252,9 @@ test('openchamber_render is registered and carries its call id and answer envelo
   });
   extension(mockApi as never);
   expect(registeredTools.has('openchamber_render')).toBe(true);
+  expect(registeredTools.get('openchamber_render')!.description).toContain('root = Stack(');
+  expect(registeredTools.get('openchamber_render')!.description).toContain('```openui-lang');
+  expect(registeredTools.get('web')!.description).not.toContain('UI blocks:');
   const result = await registeredTools.get('openchamber_render')!.execute('call-render', {
     action: 'render.page',
     input: { html: '<h1>Fixture</h1>', title: 'Fixture page', awaitAnswer: true },

@@ -31,6 +31,7 @@ mock.module('./ExtensionBlockFrame', () => ({
 
 const { UiBlock } = await import('./UiBlock');
 const { I18nProvider } = await import('@/lib/i18n');
+const { SyncProvider } = await import('@/sync/sync-context');
 const { ThemeSystemContext } = await import('@/contexts/theme-system-context');
 const { getDefaultTheme } = await import('@/lib/theme/themes');
 
@@ -48,7 +49,7 @@ let drawn = 0;
 const draw = (host: Host, source = SOURCE) => act(() => root.render(
   <I18nProvider>
     <ThemeSystemContext.Provider value={themeSystem}>
-      <UiBlock key={drawn++} source={source} complete host={host} />
+      <SyncProvider directory=""><UiBlock key={drawn++} source={source} complete host={host} /></SyncProvider>
     </ThemeSystemContext.Provider>
   </I18nProvider>,
 ));

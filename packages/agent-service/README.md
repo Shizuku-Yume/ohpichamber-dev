@@ -92,11 +92,13 @@ Always-allow resolves OMP's native `allow_always` handle in the worker's per-ses
 
 ## Private Host Action RPC bridge
 
-Builtin Host tools (`openchamber`, `web`, `memory`, `notify`) are registered in the worker via `createHostToolExtension`:
+Builtin Host tools are registered in the worker via `createHostToolExtension`:
 - `openchamber`: project and model discovery, session management (`list`, `create`, `send`, `fork`, `status`, `messages`, `link`), schedule tasks, and `file.open`.
 - `web`: browser navigation, page inspection, screenshot capture, clicking, typing, and scrolling. Browser credentials remain with the Host.
-- `memory`: session memory read, list, save, and delete.
+- `openchamber_knowledge`: project notes, todos and plans.
 - `notify`: notification delivery.
+- `openchamber_render`: HTML or native UI pages, including awaited user answers. Its tool description carries the generated built-in UI-block catalog guidance from `src/worker/ui-blocks-guidance.ts`; regenerate with `bun run --cwd packages/ui ui-blocks:generate`. The worker imports no renderer or UI catalog package. Disabled tools do not deliver their descriptions.
+- `openchamber_workflow`: Host workflow proposals, execution and observation.
 
 `WorkerHostActions` dispatches these requests across private child IPC (`action.request`, `action.result`, `action.cancel`). The Host executes the action through `invokeHostAction` within the captured workspace root. AbortSignal cancellation dispatches `action.cancel`, aborting pending Host execution.
 

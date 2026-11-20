@@ -2,12 +2,12 @@
 
 ## Ownership
 
-An assistant reply can carry fenced `openui-lang` blocks. This module owns the catalog of components those blocks may use (`catalog.ts`), how a block is parsed and drawn (`UiBlock.tsx`), and the text that tells an agent how to write one (`guidance.ts`). The Markdown renderer decides where a block draws (`MarkdownCode`, `MarkdownUiBlock`); the session-knowledge runtime on the server delivers the guidance (`packages/web/server/lib/session-knowledge`).
+An assistant reply can carry fenced `openui-lang` blocks. This module owns the catalog of components those blocks may use (`catalog.ts`), how a block is parsed and drawn (`UiBlock.tsx`), and the text that tells an agent how to write one (`guidance.ts`). The Markdown renderer decides where a block draws (`MarkdownCode`, `MarkdownUiBlock`). The Agent Service delivers the generated built-in guidance in the native `openchamber_render` tool description, not a session prompt or an OpenCode plugin.
 
 ## Invariants
 
 - Only an assistant reply on screen draws interactive blocks: `MarkdownRenderer` sets `uiBlocks` for the `assistant` variant. Copies keep the source; image exports draw built-in blocks with the captured Markdown theme and retain unavailable extension source. Export roots do not mount another theme service. User messages, reasoning, tool output and documents show the fence as code.
-- The catalog in `catalog.ts` is the one source for the parser, validation and the agent's signatures of the built-in components. An extension's component never takes a catalog name or one an earlier extension holds. After changing it, run `bun run --cwd packages/ui ui-blocks:generate`; `guidance.test.ts` fails while the server copy is stale.
+- The catalog in `catalog.ts` is the one source for the parser, validation and the agent's signatures of the built-in components. An extension's component never takes a catalog name or one an earlier extension holds. After changing it, run `bun run --cwd packages/ui ui-blocks:generate`; `guidance.test.ts` fails while the worker copy is stale.
 - A finished block that has any parser error, an undefined or unused name, state, a query or a mutation, or no `Stack` root draws nothing but its source and a short note. One exception: a reply's block with no fields, Buttons or expressions that is not cut short draws its sound parts and says what it lost, under the block. A block never shows with parts silently dropped.
 - While a block streams, a node keeps drawing its last props that parsed against its schema; a node that never parsed draws nothing.
 - Fields and Buttons act only once a block is finished and has somewhere to answer: an assistant reply that has settled, or a page whose call still waits. Anywhere else they show disabled.
@@ -45,9 +45,9 @@ The language streams well: the parser returns a partial tree for any prefix, so 
 
 `@openuidev/react-lang` brings devtools with a second lucide version, and `@openuidev/react-ui` a whole component kit (Radix, d3, Markdown, syntax highlighting) that we would override anyway. Drawing the evaluated tree with our own components keeps the look in our theme and the bundle small.
 
-### Why the server gets generated text and not the catalog
+### Why the worker gets generated text and not the catalog
 
-`lang-core` has an install-time telemetry `postinstall` script. Bun blocks it, but npm runs it, and `ohpichamber` is installed with npm. Keeping the package out of the server means users' installs never run it; the server reads a generated copy of the guidance instead.
+The renderer's catalog and language parser stay in the UI workspace. The worker imports only the generated string, so it does not load browser modules or acquire a runtime dependency on the renderer's catalog packages.
 
 ### Why a reply's answer is synthetic input and not a user message
 
@@ -166,3 +166,11 @@ A new source clears a drawing failure while preserving a working tree. Streaming
 ### Why answer summaries omit send controls and keep full data separately
 
 A form's Send and a lone button beneath fields only dispatch the values, so naming them adds no answer information. The server limits the summary's length, while the answer data retains the full values.
+
+### Image-export scope
+
+Image exports use the captured theme and export presentation for nested Markdown,
+without resolving a live session or probing files. Extension frames are not run
+for a snapshot: built-in content still draws and omitted source is expanded with
+its notice. Source-reveal controls carry `data-export-ignore`; model-authored
+buttons remain part of the read-only drawing.
