@@ -3,7 +3,9 @@ import { afterEach, expect, test } from 'bun:test';
 import { useUIStore } from './useUIStore';
 
 const originalLimit = useUIStore.getState().sessionGoalMaxAutoTurns;
-afterEach(() => useUIStore.setState({ sessionGoalMaxAutoTurns: originalLimit }));
+afterEach(() => {
+  useUIStore.setState({ sessionGoalMaxAutoTurns: originalLimit });
+});
 
 test('goal turn limits round and clamp finite values without storing non-finite input', () => {
   const { setSessionGoalMaxAutoTurns } = useUIStore.getState();
