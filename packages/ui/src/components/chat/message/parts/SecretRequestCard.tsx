@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n';
-import { problemMessage } from '@/lib/problemMessage';
 import type { CanonicalToolView, RequestedSecret, RequestedSecretRun } from './toolView';
 import { answerSecretRequest, readSecretRunFields, type SecretRunFields } from '@/lib/secretRequestAnswer';
 import { subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
@@ -100,8 +99,9 @@ function SecretRunPrompt({ run, card, onAnswer }: { run: RequestedSecretRun; car
             await onAnswer(answer);
             setValues({});
             setRemember({});
-        } catch (error) {
-            toast.error(problemMessage(error, t('chat.secretRun.sendFailed')));
+        } catch {
+            // The failure can echo a submitted secret, so only the fixed sentence is shown.
+            toast.error(t('chat.secretRun.sendFailed'));
         } finally {
             sending.current = false;
             setBusy(false);
