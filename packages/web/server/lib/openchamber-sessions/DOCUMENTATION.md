@@ -27,6 +27,16 @@ checkout creation, bootstrap and removal.
 
 ## Domain boundaries
 
+- Prepared sessions remain speculative until create claims them or an authorized
+  operation addresses their session ID. Inventory alone does not adopt them.
+  Adoption cancels their timer and takes the same pool entry that timeout,
+  discard and shutdown must claim before deleting. A cleanup already waiting
+  for preparation rechecks that entry; if deletion has already claimed it,
+  addressed operations fail with `COMMAND_IN_FLIGHT` rather than using a
+  session being deleted. Unused preparations are still removed.
+  This Host ownership rule is shared by web, Electron, hosted mobile and
+  Capacitor clients; it does not depend on native quit behavior.
+
 - Snapshot and inventory reads accept an optional cancellation signal. Failed
   workspace reads remain explicit inventory errors, never confirmed empty
   workspaces. Host cleanup must reject partial inventories before removing files.

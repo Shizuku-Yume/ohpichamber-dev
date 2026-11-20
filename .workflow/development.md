@@ -4,6 +4,14 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Prepared-session ownership now transfers on authorized use by ID as well as
+normal create. Timeout, discard and shutdown share the claim and cannot delete
+an adopted session; inventory behavior is unchanged. The regression failed
+before the fix (5 failures, 50 passes). Isolated session coverage passes 193
+tests, including both cleanup/adoption orderings; contract, SDK and Agent
+Service builds and server lint/types pass. Packaged-app/provider behavior was
+not rechecked; existing deleted sessions are not recovered by this fix.
+
 The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
 `no-favicon-found` discovery response: non-OK responses otherwise become an error
 toast. The three remaining runtime gaps now use Host/OMP owners: opt-in
