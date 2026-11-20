@@ -241,18 +241,18 @@ const notifyWithWebAPI = async (payload?: NotificationPayload): Promise<boolean>
   }
 };
 
-const notifyWithDesktop = async (payload?: NotificationPayload): Promise<boolean> => {
+const notifyWithDesktop = async (payload?: NotificationPayload): Promise<boolean | null> => {
   if (typeof window === 'undefined') {
-    return false;
+    return null;
   }
 
   const desktop = (window as unknown as { __OPENCHAMBER_DESKTOP__?: DesktopBridgeGlobal }).__OPENCHAMBER_DESKTOP__;
   if (!desktop?.invoke) {
-    return false;
+    return null;
   }
 
   try {
-    await desktop.invoke('desktop_notify', {
+    const shown = await desktop.invoke('desktop_notify', {
       payload: {
         title: payload?.title,
         body: payload?.body,
@@ -265,7 +265,7 @@ const notifyWithDesktop = async (payload?: NotificationPayload): Promise<boolean
         showWhenFocused: payload?.showWhenFocused,
       },
     });
-    return true;
+    return shown === true;
   } catch (error) {
     console.warn('Failed to send native notification (desktop)', error);
     return false;
@@ -274,7 +274,7 @@ const notifyWithDesktop = async (payload?: NotificationPayload): Promise<boolean
 
 export const createWebNotificationsAPI = (): NotificationsAPI => ({
   async notifyAgentCompletion(payload?: NotificationPayload): Promise<boolean> {
-    return (await notifyWithDesktop(payload)) || (await notifyWithWebAPI(payload));
+    return (await notifyWithDesktop(payload)) ?? (await notifyWithWebAPI(payload));
   },
   canNotify: () => {
     if (typeof window !== 'undefined') {

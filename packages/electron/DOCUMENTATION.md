@@ -6,6 +6,16 @@ Electron owns native windows, privileged IPC, desktop host credentials, browser-
 
 ## Invariants
 
+- Native notification IPC reports handoff only on Electron's `show` event.
+  Unsupported notifications, native failure, or five seconds without confirmation
+  report failure, without a browser fallback. Electron 45 exposes no notification
+  authorization query, and `show` fires even with Allow notifications disabled.
+  On macOS the test action acknowledges sending to macOS, not delivery, and gives
+  System Settings → Notifications guidance if no banner appeared. Its failure
+  toast keeps the same guidance without asserting permission is denied.
+  The external URL policy is unchanged. Other desktop platforms, web/PWA, hosted mobile and
+  Capacitor retain their existing feedback and delivery paths.
+
 ### Startup and storage
 
 - `entry.mjs` and `early-startup.mjs` stay small enough to paint the splash before importing the main process and server graph. Electron delays `ready` until the entry graph finishes evaluating. Both bundles share one runtime instance of `early-startup.mjs`, including its window handoff and startup clock.

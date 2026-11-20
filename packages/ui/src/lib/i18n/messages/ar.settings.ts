@@ -8,6 +8,8 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacSent': "أُرسل الإشعار التجريبي إلى macOS. إذا لم يظهر شعار إشعار، فاسمح بإشعارات OhPiChamber في إعدادات النظام ← الإشعارات.",
+  'settings.notifications.page.toast.testNotificationMacUnavailable': "تعذّر تأكيد وصول الإشعار. اسمح بإشعارات OhPiChamber في إعدادات نظام macOS ← الإشعارات، ثم حاول مجددًا.",
   'settings.openchamber.sessionRetention.field.archivedDescription': 'تُحسب مدة الاحتفاظ من وقت الأرشفة. تُحذف الجلسات التي انتهت مدتها.',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': 'تُحسب مدة الاحتفاظ من آخر نشاط للجلسة. تُؤرشف الجلسات التي انتهت مدتها.',
   'settings.openchamber.sessionRetention.field.unarchivedDeleteDescription': 'تُحسب مدة الاحتفاظ من آخر نشاط للجلسة. تُحذف الجلسات التي انتهت مدتها.',
