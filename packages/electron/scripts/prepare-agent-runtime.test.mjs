@@ -57,7 +57,7 @@ test('links platform N-API assets beside the loader package in the relocated clo
   fs.writeFileSync(path.join(platformPackage, 'pi_natives.linux-x64-modern.node'), 'native-bytes');
   stageDependencyClosure(source, output, { platform: 'linux', architecture: 'x64' });
   const link = path.join(output, 'packages/1/native/pi_natives.linux-x64-modern.node');
-  assert.equal(fs.readlinkSync(link), '../../2/pi_natives.linux-x64-modern.node');
+  assert.equal(fs.readlinkSync(link), path.join('..', '..', '2', 'pi_natives.linux-x64-modern.node'));
   assert.equal(fs.readFileSync(link, 'utf8'), 'native-bytes');
 });
 

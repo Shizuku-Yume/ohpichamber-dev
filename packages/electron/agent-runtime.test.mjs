@@ -268,9 +268,9 @@ test('detectSystemOmpRuntime searches PATH and standard locations for candidates
 
 test('probeSystemBun rejects version below minimum manifest requirement', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bun-probe-'));
-  const fakeBun = path.join(tempDir, 'bun');
-  // Script that prints an old version
-  fs.writeFileSync(fakeBun, '#!/bin/sh\necho "0.6.0"\n', { mode: 0o755 });
+  const win32 = process.platform === 'win32';
+  const fakeBun = path.join(tempDir, win32 ? 'bun.cmd' : 'bun');
+  fs.writeFileSync(fakeBun, win32 ? '@echo 0.6.0\r\n' : '#!/bin/sh\necho "0.6.0"\n', { mode: 0o755 });
 
   try {
     const probe = probeSystemBun(fakeBun, { minBunVersion: '1.1.0' });
@@ -283,9 +283,9 @@ test('probeSystemBun rejects version below minimum manifest requirement', () => 
 
 test('probeSystemOmp rejects identity output that does not contain omp identifier', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omp-identity-'));
-  const fakeOmp = path.join(tempDir, 'omp');
-  // Prints a bare semver without "omp"
-  fs.writeFileSync(fakeOmp, '#!/bin/sh\necho "1.2.3"\n', { mode: 0o755 });
+  const win32 = process.platform === 'win32';
+  const fakeOmp = path.join(tempDir, win32 ? 'omp.cmd' : 'omp');
+  fs.writeFileSync(fakeOmp, win32 ? '@echo 1.2.3\r\n' : '#!/bin/sh\necho "1.2.3"\n', { mode: 0o755 });
 
   try {
     const probe = probeSystemOmp(fakeOmp);

@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 
 import { linuxAppImageArchSuffix, readElfArchitecture, verifyExtractedPayload } from './verify-linux-appimage.mjs';
 
+const requiresExecutableMode = { skip: process.platform === 'win32' && 'Windows cannot set POSIX executable mode on AppImage fixtures' };
+
 const writeElf = (filePath, architecture) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const header = Buffer.alloc(20);
@@ -87,7 +89,7 @@ test('AppImage artifact names use electron-builder arch suffixes', () => {
   assert.equal(linuxAppImageArchSuffix('arm64'), 'arm64');
 });
 
-test('verifies identity, version, and native payload architecture', () => {
+test('verifies identity, version, and native payload architecture', requiresExecutableMode, () => {
   const root = createPayload();
   try {
     const result = verifyExtractedPayload({
@@ -101,7 +103,7 @@ test('verifies identity, version, and native payload architecture', () => {
   }
 });
 
-test('checks the selected ONNX addon for every Native ABI and skips foreign targets', () => {
+test('checks the selected ONNX addon for every Native ABI and skips foreign targets', requiresExecutableMode, () => {
   const root = createPayload();
   try {
     addAgentNative(root, 'packages/1/bin/napi-v3/darwin/arm64/onnxruntime_binding.node', 'x64');
@@ -120,7 +122,7 @@ test('checks the selected ONNX addon for every Native ABI and skips foreign targ
   }
 });
 
-test('fails when a selected ONNX addon has the wrong architecture for every ABI', () => {
+test('fails when a selected ONNX addon has the wrong architecture for every ABI', requiresExecutableMode, () => {
   for (const abi of ['napi-v3', 'napi-v6']) {
     const root = createPayload();
     try {
@@ -151,7 +153,7 @@ test('fails when the selected ONNX addon is missing', () => {
   }
 });
 
-test('skips foreign ONNX addons in unpacked host modules and checks the selected one', () => {
+test('skips foreign ONNX addons in unpacked host modules and checks the selected one', requiresExecutableMode, () => {
   const root = createPayload();
   try {
     addUnpackedNative(root, 'onnxruntime-node/bin/napi-v6/darwin/arm64/onnxruntime_binding.node', 'arm64');
@@ -174,7 +176,7 @@ test('skips foreign ONNX addons in unpacked host modules and checks the selected
   }
 });
 
-test('fails on a missing native module', () => {
+test('fails on a missing native module', requiresExecutableMode, () => {
   const root = createPayload();
   try {
     fs.rmSync(path.join(root, 'resources/app.asar.unpacked/node_modules/pty.node'));
@@ -188,7 +190,7 @@ test('fails on a missing native module', () => {
   }
 });
 
-test('fails on wrong Bun version or native architecture', () => {
+test('fails on wrong Bun version or native architecture', requiresExecutableMode, () => {
   const root = createPayload();
   try {
     assert.throws(() => verifyExtractedPayload({
@@ -207,7 +209,7 @@ test('fails on wrong Bun version or native architecture', () => {
   }
 });
 
-test('accepts a scalable theme icon', () => {
+test('accepts a scalable theme icon', requiresExecutableMode, () => {
   const root = createPayload();
   try {
     fs.rmSync(path.join(root, 'usr/share/icons/hicolor/512x512'), { recursive: true });
