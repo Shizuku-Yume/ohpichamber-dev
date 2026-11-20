@@ -532,7 +532,6 @@ export function ProjectPickerSheet({
     theme,
     title,
     searchPlaceholder,
-    addProjectLabel,
 }: ProjectPickerSheetProps) {
     const [query, setQuery] = React.useState('');
 

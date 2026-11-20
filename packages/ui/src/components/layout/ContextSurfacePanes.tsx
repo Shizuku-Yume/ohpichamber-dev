@@ -1,5 +1,3 @@
-import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
-import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import React from 'react';
 
 import { TerminalView } from '@/components/views/TerminalView';
@@ -210,9 +208,6 @@ export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<
     [effectiveDirectory],
   );
   const panelState = useUIStore((state) => (directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined));
-  const draftSpace = useDraftSpaceTarget();
-  const spacePreparing = draftSpace?.kind === 'preparing';
-  const draftSpaceDirectory = draftSpace?.kind === 'ready' ? draftSpace.directory : null;
   const contentDirectory = effectiveDirectory;
   const placement = useUIStore((state) => state.contextSurfaceZones);
   const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory);
@@ -324,7 +319,6 @@ export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<
     if (!contentDirectory || fileActiveTab?.mode !== 'file' || !fileActiveTab.targetPath) {
       return;
     }
-    const sameSide = spaceIdOfDirectory(fileActiveTab.targetPath) === spaceIdOfDirectory(contentDirectory);
     setSelectedFilePath(normalizeContextPanelDirectoryKey(contentDirectory), fileActiveTab.targetPath, { allowOutsideRoot: false });
   }, [contentDirectory, fileActiveTab, setSelectedFilePath]);
 

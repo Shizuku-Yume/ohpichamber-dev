@@ -1,4 +1,3 @@
-import { copyTextToClipboard } from '@/lib/clipboard';
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
@@ -8,7 +7,6 @@ import { streamPerfMark } from '@/stores/utils/streamDebug';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { collectSessionSubtreeIds, runSessionSubtreeAction } from './sessionSubtreeActions';
 import { describeSessionActionError } from './sessionActionError';
-import { problemMessage } from '@/lib/problemMessage';
 
 type DeleteSessionSource = {
   archivedBucket?: boolean;
@@ -123,18 +121,6 @@ export const useSessionActions = (args: Args) => {
     setEditingRowKey(null);
     setEditTitle('');
   }, [setEditTitle, setEditingId, setEditingRowKey]);
-
-  const handleCopySessionId = React.useCallback((sessionId: string) => {
-    void copyTextToClipboard(sessionId)
-      .then((result) => {
-        if (result.ok) {
-          toast.success(t('sessions.sidebar.session.copyId.success'));
-          return;
-        }
-        toast.error(t('sessions.sidebar.session.copyId.error'));
-      })
-      .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.copyId.error'))));
-  }, [t]);
 
   const executeDeleteSession = React.useCallback(
     async (

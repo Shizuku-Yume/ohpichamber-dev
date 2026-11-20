@@ -80,7 +80,7 @@ export function useComposerEditorActions({
     const { pastedSessionIds, linkPastedSessionId, setOpenSharedPageKey } = language;
     const { receivedPageBases, updateLinkedReferences } = referenceDrafts;
 
-    const autocompleteMessage = useComposerTextValue(composerText, (value) => value);
+    const autocompleteMessage = useComposerTextValue(composerText, (value) => !isMobile && openAutocomplete ? value : '');
     const {
         position: autocompleteOverlayPosition,
         update: updateAutocompleteOverlayPosition,

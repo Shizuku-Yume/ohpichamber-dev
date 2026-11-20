@@ -67,27 +67,26 @@ type Dependencies = {
 };
 
 export function useComposerQueueActions({
-    inlineContext, attachmentWork, i18n, draftText, editorState, sendHandlers, sendAvailability,
+    inlineContext, i18n, draftText, editorState, sendHandlers, sendAvailability,
     sessionScope, queueState, language, selection, mentionAttachments, props, referenceDrafts,
     preferences,
 }: Dependencies) {
-    const { isMobileCommentOpen, hasDrafts, attachmentsToSend, inlineDraftTarget, consumeDrafts } = inlineContext;
-    const { waitForPendingAttachments } = attachmentWork;
+    const { isMobileCommentOpen, hasDrafts, inlineDraftTarget, consumeDrafts } = inlineContext;
     const { t } = i18n;
     const { setMessage, confirmedMentionsRef, composerText } = draftText;
     const { composerRef } = editorState;
-    const { handleQueueMessageRef, handleSubmitRef } = sendHandlers;
+    const { handleSubmitRef } = sendHandlers;
     const { getCurrentInputSnapshot } = sendAvailability;
     const {
-        currentSessionId, inputMode, sendHeldByMissingFolderRef, consumePendingSyntheticParts,
-        projectActionsRef, clearAttachedFiles, chatDraftIdentity, currentDirectory, attachedFiles} = sessionScope;
+        currentSessionId, inputMode, consumePendingSyntheticParts,
+        clearAttachedFiles, chatDraftIdentity, currentDirectory, attachedFiles} = sessionScope;
     const { messageQueueTarget, addToQueue, popQueuedToInput } = queueState;
     const {
-        guestCommands, readSessionMentionsBeforeSend, linkedReferences, availableSkills,
-        referenceLinksIn, sessionMentionsIn, rememberSessionMentions, loadCommands} = language;
-    const { currentProviderId, currentModelId, mailboxTarget, currentAgentName, currentVariant , configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
+        guestCommands, readSessionMentionsBeforeSend, linkedReferences,
+        sessionMentionsIn, rememberSessionMentions, loadCommands} = language;
+    const { currentProviderId, currentModelId, mailboxTarget, currentVariant , configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
     const {
-        sanitizeAttachmentsForSend, prepareReadOnSendMentions, mentionableAgents,
+        sanitizeAttachmentsForSend,
         extractInlineFileMentions, prepareDocumentMentions} = mentionAttachments;
     const { scrollToLatest } = props;
     const { setLinkedReferencesFor, updateLinkedReferencesFor, updateLinkedReferences } = referenceDrafts;

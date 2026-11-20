@@ -34,7 +34,6 @@ import { useCommandsStore } from '@/stores/useCommandsStore';
 import { ROOT_SELECTION_AGENT } from '@/sync/selection-store';
 import { runForkCommand } from '@/components/chat/composer/submit/forkCommand';
 import { CanonicalApiError } from '@/api/canonicalClient';
-import { problemMessage } from '@/lib/problemMessage';
 import { selectAvailableSkillsForDirectory } from '@/stores/useSkillsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { waitForPendingDraftWorktreeRequest } from '@/lib/worktrees/pendingDraftWorktree';
@@ -95,45 +94,42 @@ type Dependencies = {
 };
 
 export function useComposerSubmission({
-    i18n, attachmentWork, draftText, historySearchState, editorState, column, sending, inlineContext,
-    sendHandlers, sendAvailability, sessionScope, parallelRun, sessionLifecycle, queueState, selection,
+    i18n, draftText, editorState, column, sending, inlineContext,
+    sendAvailability, sessionScope, parallelRun, sessionLifecycle, queueState, selection,
     language, preferences, expansion, runtime, draftHistory, queueActions, props,
     mentionAttachments, referenceDrafts,
 }: Dependencies) {
     const { t } = i18n;
-    const { waitForPendingAttachments } = attachmentWork;
-    const { confirmedMentionsRef, setMessage, currentChatDraftIdentityRef, composerText } = draftText;
-    const { setPromptHistorySearch } = historySearchState;
+    const { confirmedMentionsRef, setMessage } = draftText;
     const { composerRef } = editorState;
     const { openTimelineDialog } = column;
     const { sendMessage } = sending;
-    const { isMobileCommentOpen, hasDrafts, attachmentsToSend, inlineDraftTarget, consumeDrafts } = inlineContext;
-    const { handleSubmitRef } = sendHandlers;
-    const { pendingFirstSend, getCurrentInputSnapshot } = sendAvailability;
+    const { isMobileCommentOpen, hasDrafts, inlineDraftTarget, consumeDrafts } = inlineContext;
+    const { getCurrentInputSnapshot } = sendAvailability;
     const {
-        isBtwActive, currentSessionId, btwPanel, newSessionDraftOpen, newSessionDraft, btwDirectory,
-        currentSessionDirectoryForSync, currentDirectory, attachedFiles, inputMode, btwSessionId,
-        activeRuntimeKey, chatDraftIdentity, immediateBtwSubmitRef, sendHeldByMissingFolder,
-        setReviewDialogOpen, consumePendingSyntheticParts, projectActionsRef,
-        clearAttachedFiles, btwComposerSessionId, sessionFolder,
+        isBtwActive, currentSessionId, btwPanel, newSessionDraftOpen, newSessionDraft,
+        currentSessionDirectoryForSync, currentDirectory, attachedFiles, inputMode,
+        activeRuntimeKey, chatDraftIdentity, immediateBtwSubmitRef,
+        setReviewDialogOpen, consumePendingSyntheticParts,
+        clearAttachedFiles,
     } = sessionScope;
     const { parallel } = parallelRun;
     const { sessionPhase, autoReviewRunning } = sessionLifecycle;
     const { messageQueueTarget } = queueState;
     const {
-        currentProviderId, currentModelId, currentAgentName, currentVariant,
+        currentProviderId, currentModelId, currentVariant,
         mailboxTarget, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
     const {
-        readSessionMentionsBeforeSend, guestCommands, availableSkills, linkedReferences,
-        referenceLinksIn, sessionMentionsIn, loadCommands} = language;
+        readSessionMentionsBeforeSend, guestCommands, linkedReferences,
+        sessionMentionsIn, loadCommands} = language;
     const { isMobile } = preferences;
     const { setExpandedInput } = expansion;
     const { runtimeTrackers , runtimeFiles} = runtime;
-    const { handoffDraft, restoreDraft, persistDraftImmediately, messageHistory, migrateDraft } = draftHistory;
+    const { handoffDraft, restoreDraft, persistDraftImmediately, messageHistory } = draftHistory;
     const { handleQueueMessage } = queueActions;
     const { scrollToBottom } = props;
     const {
-        prepareReadOnSendMentions, mentionableAgents, extractInlineFileMentions,
+        extractInlineFileMentions,
         sanitizeAttachmentsForSend, prepareDocumentMentions} = mentionAttachments;
     const { updateLinkedReferencesFor } = referenceDrafts;
 

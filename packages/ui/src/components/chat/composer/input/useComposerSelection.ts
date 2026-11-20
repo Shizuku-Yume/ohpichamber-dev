@@ -16,12 +16,11 @@ type Dependencies = {
 };
 
 export function useComposerSelection({
-    column, editorState, sessionScope,
+    column, sessionScope,
 }: Dependencies) {
     const { columnPinned } = column;
-    const { composerFormRef } = editorState;
     const {
-        currentSessionId, currentDirectory, currentSessionDirectoryForSync, isBtwActive, btwComposerSessionId, sessionAgentPick,
+        currentSessionId, currentDirectory, currentSessionDirectoryForSync, sessionAgentPick,
 
     } = sessionScope;
 
@@ -61,8 +60,6 @@ export function useComposerSelection({
     const configVariant = useConfigStore((state) => state.currentVariant);
 
     const currentVariant = pinnedComposerSelection ? pinnedComposerSelection.variant ?? undefined : configVariant;
-
-    const currentVariantSelection = useConfigStore((state) => state.currentVariantSelection);
 
     const configAgentName = useConfigStore((state) => state.currentAgentName);
 

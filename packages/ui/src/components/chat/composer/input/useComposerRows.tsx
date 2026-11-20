@@ -65,7 +65,6 @@ export function useComposerRows({
     const {
         newSessionDraftOpen, isBtwActive, isBtwPanelVisible, hasPendingForm, currentSessionId,
         currentSessionDirectoryForSync, currentDirectory, setReviewDialogOpen, sessionFolder,
-        btwComposerSessionId,
     } = sessionScope;
     const { queuedMessages, parentMessageQueueTarget } = queueState;
     const { showDraftTargetSelectors, messageWaitsForSpace } = draftTarget;

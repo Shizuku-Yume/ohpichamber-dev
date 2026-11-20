@@ -1,5 +1,4 @@
 import { SESSION_GOAL_MAX_AUTO_TURNS_LIMIT } from '@/lib/sessionGoalTurnLimit';
-import { isSessionGoalMaxAutoTurns } from '@/lib/sessionGoalTurnLimit';
 import { clampLiveBrowserTabs } from '@/lib/browser/liveTabs';
 import { normalizeLargeTextPasteBehavior, normalizeFileEditorKeymap } from './preferences';
 import type { UIStoreSlice } from './types';

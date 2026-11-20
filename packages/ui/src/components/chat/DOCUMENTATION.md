@@ -1,12 +1,18 @@
 # Chat composition
 
+Closed desktop autocomplete does not subscribe its placement calculation to the
+full composer text. Opening a popup reads the current `ComposerText` value before
+measuring its caret. Draft-target fallback waits for Git classification and, for
+a repository, branch and worktree inventory; unknown discovery does not reset
+a restored worktree to the project root.
+
 ## Ownership
 
 This module connects chat columns, message rows, composer controls, discovery
 pickers and session feedback. The nested column, composer, message, Markdown
 and timeline modules own their respective contracts. Sync owns authoritative
-session records and execution state; runtime adapters own filesystem and
-OpenCode access.
+session records and execution state; the Canonical Client owns agent access.
+Host capabilities use `RuntimeAPIs` and `runtimeFetch`.
 
 ## Invariants
 

@@ -1,4 +1,3 @@
-import { useConfigStore } from '@/stores/useConfigStore';
 import { afterAll, expect, spyOn, test } from 'bun:test';
 import { plugin } from 'bun';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -87,6 +86,7 @@ Object.assign(globalThis, {
   Text: browser.Text,
   Element: browser.Element,
   HTMLElement: browser.HTMLElement,
+  Window: browser.Window,
   HTMLInputElement: browser.HTMLInputElement,
   HTMLTextAreaElement: browser.HTMLTextAreaElement,
   HTMLFormElement: browser.HTMLFormElement,
@@ -123,6 +123,15 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     return Response.json({ directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } });
   }
   if (path.endsWith('/session')) return Response.json({ data: [] });
+  if (path.startsWith('/api/projects/') && path.endsWith('/config')) return Response.json({
+    trust: { hash: null, trusted: true }, setupWorktree: [], setupWorktreeWait: false,
+    projectActions: [], projectActionsPrimaryId: null, draftStarters: [],
+    shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: [], draftStarters: [], plansDir: null },
+    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null, projectActions: [], projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
+  });
+  if (path === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' });
+  if (path === '/api/agent/v1/workspaces/workspace/commands') return Response.json({ workspaceId: 'workspace', revision: '0', commands: [], builtinCommands: [] });
+  if (path === '/api/agent/v1/workspaces/workspace/skills/catalog') return Response.json({ workspaceId: 'workspace', skills: [] });
   if (path.endsWith('/config')) return Response.json([]);
   // The project registry is instance settings: without it the session is
   // not admitted, so the composer has no session and shows no builtins.
@@ -155,6 +164,7 @@ const { setLanguageContext } = await import('../composer/editor/composerLanguage
 const { I18nProvider } = await import('@/lib/i18n');
 const { ThemeSystemProvider } = await import('@/contexts/ThemeSystemContext');
 const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
+const { useConfigStore } = await import('@/stores/useConfigStore');
 const { ChatInput } = await import('../ChatInput');
 const { SyncProvider } = await import('@/sync/sync-context');
 const { useDirectoryStore } = await import('@/stores/useDirectoryStore');

@@ -244,7 +244,7 @@ export const createModelActions: UIStoreSlice<
     if (!provider || !model) {
       return;
     }
-    const key = `${provider}/${model}`;
+    const key = modelRefKey(provider, model);
     const normalizedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant.trim() : 'default';
     set((state) => {
       const current = state.recentEfforts[key] ?? [];

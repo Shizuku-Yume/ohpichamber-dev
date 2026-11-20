@@ -120,6 +120,9 @@ export function useDraftTarget(enabled: boolean) {
     );
     const selectedDraftProjectIsGitRepo = useIsGitRepo(selectedDraftProjectPath);
     const hasDraftBranchList = Boolean(selectedDraftProjectBranches?.all);
+    const draftBranchInventoryReady = selectedDraftProjectIsGitRepo === false
+        || (selectedDraftProjectIsGitRepo === true && hasDraftBranchList
+            && Boolean(selectedDraftProjectPath && availableWorktreesByProject.has(selectedDraftProjectPath)));
     const fetchBranches = useGitStore((state) => state.fetchBranches);
     const [isDiscoveringDraftBranches, setIsDiscoveringDraftBranches] = React.useState(false);
     const [dirtyDraftDirectory, setDirtyDraftDirectory] = React.useState<string | null>(null);
@@ -521,6 +524,7 @@ export function useDraftTarget(enabled: boolean) {
         selectedDraftDirectory,
         selectedDraftBranchLabel,
         selectedDraftBranchIsKnown,
+        draftBranchInventoryReady,
         selectedDraftDirectoryHasUncommittedChanges: dirtyDraftDirectory === selectedDraftDirectory,
         projectRootBranchOption,
         worktreeBranchOptions,

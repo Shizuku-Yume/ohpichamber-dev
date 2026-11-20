@@ -2,8 +2,7 @@ import { directoryEnvironment } from './test-support/directoryEnvironment';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { createSessionFoldersStore, type SessionFoldersRuntime } from './useSessionFoldersStore';
 
-const environment = directoryEnvironment({ fakeTimers: false });
-const browserWindow = window;
+directoryEnvironment({ fakeTimers: false });
 const storage = new Map<string, string>();
 let storageSetCount = 0;
 let runtimeKey = 'runtime-a';
