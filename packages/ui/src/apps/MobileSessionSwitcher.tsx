@@ -15,6 +15,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUnread } from '@/sync/session-unread';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { registerBackLayer } from '@/lib/mobileBackLayers';
 
 const RECENT_SESSIONS_LIMIT = 10;
 const TABLET_POPOVER_WIDTH = 380;
@@ -131,6 +132,8 @@ export const MobileSessionSwitcher: React.FC<{
     }, 140);
     return () => window.clearTimeout(timeoutId);
   }, [open, shouldRender]);
+
+  React.useEffect(() => (open ? registerBackLayer(onClose) : undefined), [onClose, open]);
 
   React.useEffect(() => {
     if (!open) return;
