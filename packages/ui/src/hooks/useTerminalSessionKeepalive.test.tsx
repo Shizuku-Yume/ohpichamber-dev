@@ -158,7 +158,6 @@ describe('useTerminalSessionKeepalive', () => {
     expect(scheduledIntervals.size).toBe(0);
   });
 });
-<<<<<<< HEAD
 
 /**
  * Every app root that renders terminals must own keepalive itself: the server
@@ -181,29 +180,3 @@ describe('terminal keepalive root coverage', () => {
     });
   }
 });
-||||||| bc50ba56aa
-
-/**
- * Every app root that renders terminals must own keepalive itself: the server
- * reaps sessions with no attached socket after 30 idle minutes, and the loop
- * no longer lives in TerminalView. The mobile shell runs its own root and
- * mounts neither desktop layout, so a missing call there silently reintroduces
- * background PTY reaping (reviewer finding on the revisit fix).
- */
-describe('terminal keepalive root coverage', () => {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const rootSources: Array<[string, string]> = [
-    ['MainLayout', join(__dirname, '..', 'components', 'layout', 'MainLayout.tsx')],
-    ['VSCodeLayout', join(__dirname, '..', 'components', 'layout', 'VSCodeLayout.tsx')],
-    ['MobileApp shell', join(__dirname, '..', 'apps', 'MobileApp.tsx')],
-  ];
-
-  for (const [rootName, sourcePath] of rootSources) {
-    test(`${rootName} mounts useTerminalSessionKeepalive`, () => {
-      const source = readFileSync(sourcePath, 'utf-8');
-      expect(source).toContain('useTerminalSessionKeepalive()');
-    });
-  }
-});
-=======
->>>>>>> upstream/main

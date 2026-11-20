@@ -48,32 +48,15 @@ export const useGuestSurfaces = (): ContextSurfaceDescriptor[] => {
 
   return React.useMemo(() => {
     return enabledGuestSurfaces(guests, getRuntimeUrlResolver().authenticatedAsset);
-<<<<<<< HEAD
-    // runtimeKey: the asset resolver answers for the active runtime, so a switch recomputes the list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-||||||| bc50ba56aa
-    // runtimeKey: the asset resolver answers for the active runtime, so a switch recomputes the list.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-=======
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
->>>>>>> upstream/main
   }, [guests, runtimeKey]);
 };
 
 export const useGuestPages = () => {
   const guests = useGuestsStore((state) => state.guests);
   return React.useMemo(() => {
-<<<<<<< HEAD
     if (isMobileSurfaceRuntime()) return [];
     return guests.filter((guest) => guest.pageEntry && isGuestActive(guest));
-||||||| bc50ba56aa
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return [];
-    return guests.filter((guest) => guest.pageEntry && isGuestActive(guest));
-=======
-    if (isVSCodeRuntime()) return [];
-    const phone = isMobileSurfaceRuntime();
-    return guests.filter((guest) => guest.pageEntry && isGuestActive(guest) && (!phone || mayGuestShowOnPhone(guest, 'page')));
->>>>>>> upstream/main
   }, [guests]);
 };
 
@@ -86,99 +69,30 @@ export const usePhoneGuestPanelModes = (): PluginContextPanelMode[] => {
 
 const EMPTY_STATUS_SECTIONS: InstalledGuest[] = [];
 
-<<<<<<< HEAD
-/**
- * Active guests that contribute a Work Status section. Empty on mobile,
- * which never mounts guests (the panel itself is web/desktop only).
- * Reads the store only; the rail owns loading the catalog.
- */
-||||||| bc50ba56aa
-/**
- * Active guests that contribute a Work Status section. Empty on VS Code and
- * mobile, which never mount guests (the panel itself is web/desktop only).
- * Reads the store only; the rail owns loading the catalog.
- */
-=======
->>>>>>> upstream/main
 export const useGuestStatusSections = (): InstalledGuest[] => {
   const guests = useGuestsStore((state) => state.guests);
   return React.useMemo(() => {
-<<<<<<< HEAD
     if (isMobileSurfaceRuntime()) return EMPTY_STATUS_SECTIONS;
     const sections = guests.filter((guest) => guest.statusEntry && isGuestActive(guest));
-||||||| bc50ba56aa
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return EMPTY_STATUS_SECTIONS;
-    const sections = guests.filter((guest) => (guest.statusEntry || guest.statusSource) && isGuestActive(guest));
-=======
-    if (isVSCodeRuntime()) return EMPTY_STATUS_SECTIONS;
-    const sections = guests.filter((guest) => (guest.statusEntry || guest.statusSource) && isGuestActive(guest));
->>>>>>> upstream/main
     return sections.length > 0 ? sections : EMPTY_STATUS_SECTIONS;
   }, [guests]);
 };
 
-<<<<<<< HEAD
-/**
- * Message and session menu entries from active guests. Empty on mobile,
- * which never mounts guests. Reads the store only: every transcript
- * row and sidebar row calls this, and the rail (`useGuestSurfaces`) already
- * owns loading the catalog and following runtime switches. The store is
- * emptied on a switch, so a memo on `guests` alone stays current.
- */
-||||||| bc50ba56aa
-/**
- * Message and session menu entries from active guests. Empty on VS Code and
- * mobile, which never mount guests. Reads the store only: every transcript
- * row and sidebar row calls this, and the rail (`useGuestSurfaces`) already
- * owns loading the catalog and following runtime switches. The store is
- * emptied on a switch, so a memo on `guests` alone stays current.
- */
-=======
->>>>>>> upstream/main
 export const useGuestActions = (): GuestActionEntry[] => {
   const guests = useGuestsStore((state) => state.guests);
 
   return React.useMemo(() => {
-<<<<<<< HEAD
     if (isMobileSurfaceRuntime()) return EMPTY_ACTIONS;
     const entries = guestActionEntries(guests, getRuntimeUrlResolver().authenticatedAsset);
-||||||| bc50ba56aa
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return EMPTY_ACTIONS;
-    const entries = guestActionEntries(guests, getRuntimeUrlResolver().authenticatedAsset);
-=======
-    if (isVSCodeRuntime()) return EMPTY_ACTIONS;
-    const entries = guestActionEntries(guests, getRuntimeUrlResolver().authenticatedAsset)
-      .filter((entry) => entry.action.mode === 'background' || guestPanelOpensHere(entry.guest));
->>>>>>> upstream/main
     return entries.length > 0 ? entries : EMPTY_ACTIONS;
   }, [guests]);
 };
 
-<<<<<<< HEAD
-/**
- * Slash commands from active guests, minus any name in `reservedNames` (the
- * composer's own commands, OpenCode commands, skills). Empty on mobile.
- * Store read only, like `useGuestActions`.
- */
-||||||| bc50ba56aa
-/**
- * Slash commands from active guests, minus any name in `reservedNames` (the
- * composer's own commands, OpenCode commands, skills). Empty on VS Code and
- * mobile. Store read only, like `useGuestActions`.
- */
-=======
->>>>>>> upstream/main
 export const useGuestCommands = (reservedNames: ReadonlySet<string>): GuestCommandEntry[] => {
   const guests = useGuestsStore((state) => state.guests);
 
   return React.useMemo(() => {
-<<<<<<< HEAD
     if (isMobileSurfaceRuntime()) return EMPTY_COMMANDS;
-||||||| bc50ba56aa
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return EMPTY_COMMANDS;
-=======
-    if (isVSCodeRuntime()) return EMPTY_COMMANDS;
->>>>>>> upstream/main
     const entries = guestCommandEntries(guests, reservedNames);
     return entries.length > 0 ? entries : EMPTY_COMMANDS;
   }, [guests, reservedNames]);
@@ -188,13 +102,7 @@ export const useGuestAttachItems = (): GuestAttachItem[] => {
   const { guests, runtimeKey } = useGuestCatalog();
 
   return React.useMemo(() => {
-<<<<<<< HEAD
     if (isMobileSurfaceRuntime()) return [];
-||||||| bc50ba56aa
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return [];
-=======
-    if (isVSCodeRuntime()) return [];
->>>>>>> upstream/main
     const authenticatedAsset = getRuntimeUrlResolver().authenticatedAsset;
     const items: GuestAttachItem[] = [];
     for (const guest of guests) {
@@ -210,14 +118,6 @@ export const useGuestAttachItems = (): GuestAttachItem[] => {
       });
     }
     return items;
-<<<<<<< HEAD
-    // runtimeKey: the asset resolver answers for the active runtime, so a switch recomputes the list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-||||||| bc50ba56aa
-    // runtimeKey: the asset resolver answers for the active runtime, so a switch recomputes the list.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-=======
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
->>>>>>> upstream/main
   }, [guests, runtimeKey]);
 };
