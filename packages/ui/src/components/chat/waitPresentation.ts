@@ -27,7 +27,7 @@ export const waitSubject = (wait: NamedWait, t: Translate): string => {
 export const timerMinutesLeft = (wait: NamedWait & { startedAt: number }, now: number): number | undefined => {
   const minutes = wait.args?.minutes;
   if (wait.source !== TIMER_SOURCE || minutes === undefined) return undefined;
-  const left = Math.ceil((wait.startedAt + minutes * MINUTE_MS - now) / MINUTE_MS);
+  const left = Math.min(minutes, Math.ceil((wait.startedAt + minutes * MINUTE_MS - now) / MINUTE_MS));
   return left > 0 ? left : undefined;
 };
 
