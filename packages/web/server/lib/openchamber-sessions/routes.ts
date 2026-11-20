@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
@@ -147,6 +148,17 @@ const createCanonicalSessionService = (dependencies) => {
       ? { ...resolved, parentSessionId: subagentSessions.get(sessionId) }
       : resolved;
     return scope;
+  };
+  const readScopeFor = async (sessionId) => {
+    try { return await scopeFor(sessionId); }
+    catch (error) {
+      if (error?.code !== 'METADATA_READ_FAILED' || !resolveHostRelocationScope) throw error;
+      const owner = await resolveHostRelocationScope(sessionId);
+      if (!owner || owner.sessionId !== sessionId) throw error;
+      const present = await fs.promises.lstat(owner.cwd).then(() => true, (cause) => cause?.code !== 'ENOENT');
+      if (present) throw error;
+      return owner;
+    }
   };
   const hostScopeFor = async (sessionId) => { const scope = await resolveHostSessionScope(sessionId); if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404); adoptPrepared(scope); return scope; };
   const assertWritableScope = (scope) => {
@@ -521,8 +533,8 @@ const createCanonicalSessionService = (dependencies) => {
       throw error;
     }
   };
-  const open = async (id, { signal }: { signal?: AbortSignal } = {}) => { const scope = await scopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`, { signal })); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
-  const history = async (id, query = '') => { const scope = await scopeFor(id); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
+  const open = async (id, { signal }: { signal?: AbortSignal } = {}) => { const scope = await readScopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`, { signal })); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
+  const history = async (id, query = '') => { const scope = await readScopeFor(id); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
   const list = async (workspaceId?: string, { signal }: { signal?: AbortSignal } = {}) => {
     const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (listWorkspaceScopes instanceof Function ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
     const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), ProblemCodeSchema) }).parse(scopePage);

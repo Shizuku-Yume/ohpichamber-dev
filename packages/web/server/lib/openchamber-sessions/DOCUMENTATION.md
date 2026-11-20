@@ -27,6 +27,7 @@ checkout creation, bootstrap and removal.
 
 ## Domain boundaries
 
+- Snapshot and history reads fall back to the relocation owner when a session's checkout has been removed (its workspace no longer validates and the directory is absent). Chats archived by deleting their worktree stay readable; every other operation still requires the full workspace authorization.
 - Prepared sessions remain speculative until create claims them or an authorized
   operation addresses their session ID. Inventory alone does not adopt them
   and omits them until they are adopted, so another client never lists an
