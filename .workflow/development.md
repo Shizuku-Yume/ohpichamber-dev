@@ -22,6 +22,17 @@ Bun 1.4.4 clean installation, native
 `cap sync`, 13 focused path/environment tests, mobile lint, and
 `LANG=C LC_ALL=C bun run mobile:build:ios:simulator` pass. This verifies the build, not app launch, Android compilation, or SwiftPM builds.
 
+Desktop notification IPC now waits for Electron's `show`/`failed` events with a
+five-second deadline; native failure cannot fall back to browser success.
+The macOS test action gives localized System Settings → Notifications guidance
+when delivery is unconfirmed. Focused native/routing, adapter and UI coverage
+passes 42 tests; workspace types and changed-file lint pass, and the unsigned
+arm64 app rebuilds. Root checks still fail unrelated upstream drift and, with
+packaged web assets present, stale createAgent/createScanner gap allowlisting;
+both reproduce on main source. Native disabled/enabled permission behavior
+and visible presentation still need manual retesting; the running app was left
+untouched.
+
 The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
 `no-favicon-found` discovery response: non-OK responses otherwise become an error
 toast. The three remaining runtime gaps now use Host/OMP owners: opt-in

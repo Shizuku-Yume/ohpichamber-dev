@@ -6,6 +6,14 @@ Electron owns native windows, privileged IPC, desktop host credentials, browser-
 
 ## Invariants
 
+- Native notification IPC confirms success only on Electron's `show` event.
+  Unsupported notifications, native failure, or five seconds without confirmation
+  report failure, without a browser fallback. Electron 45 exposes no notification
+  authorization query; macOS test failures point to System Settings → Notifications
+  rather than asserting that permission is denied. A `show` event is Electron's
+  confirmation, not a guarantee of a visible banner under Focus or OS presentation
+  preferences. Web/PWA, hosted mobile and Capacitor retain their own delivery paths.
+
 ### Startup and storage
 
 - `entry.mjs` and `early-startup.mjs` stay small enough to paint the splash before importing the main process and server graph. Electron delays `ready` until the entry graph finishes evaluating. Both bundles share one runtime instance of `early-startup.mjs`, including its window handoff and startup clock.

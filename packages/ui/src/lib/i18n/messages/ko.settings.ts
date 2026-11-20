@@ -8,6 +8,7 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacUnavailable': "알림 전달을 확인할 수 없습니다. macOS 시스템 설정 → 알림에서 OhPiChamber 알림을 허용한 후 다시 시도하세요.",
   'settings.openchamber.sessionRetention.field.archivedDescription': '보존 기간은 보관 시점부터 계산합니다. 기간이 지난 세션은 삭제됩니다.',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': '보존 기간은 세션의 마지막 활동부터 계산합니다. 기간이 지난 세션은 보관됩니다.',
   'settings.openchamber.sessionRetention.field.unarchivedDeleteDescription': '보존 기간은 세션의 마지막 활동부터 계산합니다. 기간이 지난 세션은 삭제됩니다.',

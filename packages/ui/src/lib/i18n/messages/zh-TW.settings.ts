@@ -8,6 +8,7 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacUnavailable': "無法確認通知是否已送達。請在 macOS 系統設定 → 通知中允許 OhPiChamber 傳送通知，然後再試一次。",
   'settings.openchamber.sessionRetention.field.archivedDescription': '保留期限從封存時開始計算。過期的工作階段會被刪除。',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': '保留期限從工作階段的最後活動時間開始計算。過期的工作階段會被封存。',
   'settings.openchamber.sessionRetention.field.unarchivedDeleteDescription': '保留期限從工作階段的最後活動時間開始計算。過期的工作階段會被刪除。',
