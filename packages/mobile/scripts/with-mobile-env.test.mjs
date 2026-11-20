@@ -9,6 +9,20 @@ import { resolveMobileEnv } from './with-mobile-env.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./with-mobile-env.mjs', import.meta.url));
 
+test('darwin supplies a UTF-8 CocoaPods locale even with empty or non-UTF-8 overrides', () => {
+  for (const env of [{}, { LANG: '', LC_ALL: '' }, { LANG: 'C', LC_ALL: 'C' }]) {
+    const resolved = resolveMobileEnv({ env, platform: 'darwin', pathExists: () => false, selectDeveloperDir: () => null });
+    assert.equal(resolved.LANG, 'en_US.UTF-8');
+    assert.equal(resolved.LC_ALL, 'en_US.UTF-8');
+  }
+});
+
+test('non-darwin tooling preserves the caller locale', () => {
+  const resolved = resolveMobileEnv({ env: { LANG: 'C', LC_ALL: 'C' }, platform: 'linux', pathExists: () => false });
+  assert.equal(resolved.LANG, 'C');
+  assert.equal(resolved.LC_ALL, 'C');
+});
+
 test('linux discovers JDK 21 by precedence and ~/Android/Sdk without setting DEVELOPER_DIR', () => {
   const homeDir = '/home/tester';
   const existing = new Set([

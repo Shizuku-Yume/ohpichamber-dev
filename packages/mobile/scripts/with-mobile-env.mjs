@@ -92,6 +92,11 @@ export const resolveMobileEnv = ({
 
   const nextEnv = { ...env };
 
+  if (platform === 'darwin') {
+    nextEnv.LANG = 'en_US.UTF-8';
+    nextEnv.LC_ALL = 'en_US.UTF-8';
+  }
+
   if (developerDir) {
     nextEnv.DEVELOPER_DIR = developerDir;
   } else {

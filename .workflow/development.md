@@ -12,6 +12,16 @@ tests, including both cleanup/adoption orderings; contract, SDK and Agent
 Service builds and server lint/types pass. Packaged-app/provider behavior was
 not rechecked; existing deleted sessions are not recovered by this fix.
 
+The iOS clean-install build now uses stable mobile `node_modules` links in the
+Podfile and lockfile; Android's generated settings use the same package links.
+Capacitor CLI 8.6.0 is patched through Bun to preserve symlinks during package
+resolution and CocoaPods generation, preventing native sync from restoring
+store hashes. There is no committed SwiftPM manifest; its plugin paths share
+the patched resolver. macOS mobile tooling sets a UTF-8 CocoaPods locale.
+Bun 1.4.4 clean installation, native
+`cap sync`, 13 focused path/environment tests, mobile lint, and
+`LANG=C LC_ALL=C bun run mobile:build:ios:simulator` pass. This verifies the build, not app launch, Android compilation, or SwiftPM builds.
+
 The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
 `no-favicon-found` discovery response: non-OK responses otherwise become an error
 toast. The three remaining runtime gaps now use Host/OMP owners: opt-in
