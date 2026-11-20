@@ -13,6 +13,10 @@ This module provides notification message preparation utilities for the web serv
 - `packages/web/server/lib/notifications/session-key.js`: the key both push stores group registrations under, a `sha256:` hash of the UI session token, never the token. Files written before the hashing are rewritten with hashed keys on first read. Both stores are written `0600`.
 - `packages/web/server/lib/notifications/emitter-runtime.js`: desktop/stdout + UI SSE notification emission runtime.
 - `packages/web/server/lib/notifications/runtime.js`: trigger runtime for canonical OMP session events (run completion/failure, approvals, questions) with debouncing, subtask/goal suppression and push fanout.
+  Host composition supplies APNs clearing and UI visibility. Bootstrap forwards
+  the context snapshot and session-view/message-sent clearing callbacks. Remote
+  client push admission authenticates bearer tokens against the paired-client
+  store before deciding whether the client is local-only.
 - `packages/web/server/lib/notifications/template-runtime.js`: notification template variables and session text/title enrichment over the canonical session service, including the session's project, worktree, branch and Host title.
 - `packages/web/server/lib/notifications/template-locales.js`: the notification text OpenChamber writes itself, per interface language. An empty template field means "no custom text", so the notification uses these defaults. The server keeps its own list because it cannot import `packages/ui`; an unknown tag falls back to English.
 - `packages/web/server/lib/notifications/message.js`: helper implementation module.

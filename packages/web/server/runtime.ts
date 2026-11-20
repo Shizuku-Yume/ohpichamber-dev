@@ -13,7 +13,7 @@ import http2 from 'node:http2';
 import { RuntimeSessionSchema } from '@openchamber/agent-contract';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
-import { createUiAuth } from './lib/ui-auth/ui-auth.js';
+import { createUiAuth, getBearerTokenFromRequest } from './lib/ui-auth/ui-auth.js';
 import { createTunnelAuth } from './lib/tunnels/tunnel-auth.js';
 import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.js';
 import { createTunnelProviderRegistry } from './lib/tunnels/registry.js';
@@ -843,6 +843,7 @@ const projectConfigRuntime = createProjectConfigRuntime({
  fsPromises,
  path,
  projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
+ switchNotesTodosStorage: (...args) => projectContextRuntime.switchNotesTodosStorage(...args),
 });
 // Git asks the canonical project config for the personal worktree folder; it
 // never reads OpenCode's JSONC configuration.
@@ -853,6 +854,7 @@ const projectContextRuntime = createProjectContextRuntime({
  path,
  projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
  resolveSharedPlansDir: (projectId) => projectConfigRuntime.resolveSharedPlansDir(projectId),
+ resolveNotesTodosFile: (projectId) => projectConfigRuntime.resolveNotesTodosFile(projectId),
  onChanged: (projectId) => broadcastOpenChamberUiEvent({
   type: 'openchamber:project-context-changed',
   properties: { projectId },
@@ -903,6 +905,8 @@ const extensionNotificationChannels = createExtensionNotificationChannels({
 let autoReviewRuntime = null;
 let prWatchRuntime = null;
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
+ clearApnsNotifications: apnsRuntime.clearApnsNotifications,
+ isAnyUiVisible,
  readSettingsFromDisk,
  prepareNotificationLastMessage,
  buildTemplateVariables,
@@ -1219,6 +1223,7 @@ const clientPairingRuntime = createClientPairingRuntime({
 const clientPushAccess = createClientPushAccess({
  listClients: remoteClientAuthRuntime.listClients,
  removeDevicesOfSessions: [apnsRuntime.removeApnsDevicesOfSessions, pushRuntime.removePushDevicesOfSessions],
+ authenticateBearerClient: async (req) => (await remoteClientAuthRuntime.authenticateBearerToken(getBearerTokenFromRequest(req), req))?.client ?? null,
 });
 const featureRoutesRuntime = createFeatureRoutesRuntime();
 const bootstrapRuntime = createBootstrapRuntime({
@@ -2013,6 +2018,7 @@ async function main(options = {}) {
   isLocalOnlyPushRequest: (req, uiSessionToken) => clientPushAccess.isLocalOnlyRequest(req, uiSessionToken),
   updateUiVisibility,
   clearPendingPushBadge: () => clearPendingPushBadge(),
+  clearSessionPushNotifications: notificationTriggerRuntime.clearSessionPushNotifications,
   isUiVisible,
   getUiNotificationClients: () => uiNotificationClients,
   writeSseEvent,
