@@ -76,7 +76,6 @@ let providerReads = 0;
 
 /** The connected server: it serves acme and lists its items through the neutral reads. */
 const sourceControl: SourceControlAPI = {
-<<<<<<< HEAD
  authSetSshUrl: async () => ({ sshUrl: null }),
  providers: async () => { providerReads += 1; return [acme]; },
  references: async (_context, query): Promise<RepositoryReferencePage> => ({
@@ -99,53 +98,6 @@ const sourceControl: SourceControlAPI = {
  issuesList: unexpected, issueGet: unexpected, issueComments: unexpected, projectUpstream: unexpected,
  projectBranches: unexpected, referenceDetail: unexpected, changeRequestListStatuses: unexpected,
  changeRequestReviewState: unexpected, changeRequestReviewComment: unexpected, changeRequestReviewCommentUpdate: unexpected, changeRequestReviewCommentDelete: unexpected, changeRequestReviewDiscard: unexpected,
-||||||| bc50ba56aa
-  providers: async () => { providerReads += 1; return [acme]; },
-  references: async (_context, query): Promise<RepositoryReferencePage> => ({
-    connected: true, repo: null, items: servedReferences[query.kind], cursor: null, hasMore: false, total: servedReferences[query.kind].length,
-  }),
-  // The binding of the dialog's project never answers: nothing about the repository is known yet.
-  repositoryBinding: () => new Promise(() => {}),
-  repositoryContext: unexpected, resetRepositoryBinding: unexpected, repositoryProviderBindingMutate: unexpected,
-  authInstances: unexpected, capabilities: unexpected, authStatus: unexpected, authStart: unexpected,
-  authComplete: unexpected, authSetToken: unexpected, authSetSshUrl: unexpected, authDisconnect: unexpected, authActivate: unexpected,
-  authSetCliDisabled: unexpected,
-  changeRequestStatus: unexpected, changeRequestCreate: unexpected, changeRequestUpdate: unexpected,
-  changeRequestMerge: unexpected, changeRequestReady: unexpected, changeRequestComment: unexpected,
-  changeRequestStartThread: unexpected, changeRequestReplyToThread: unexpected, changeRequestResolveThread: unexpected,
-  changeRequestReview: unexpected, issueComment: unexpected, changeRequestSetState: unexpected,
-  issueSetState: unexpected, changeRequestSetLabels: unexpected, issueSetLabels: unexpected,
-  discussionComment: unexpected, discussionSetState: unexpected, discussionSetAnswer: unexpected, discussionSetLabels: unexpected,
-  changeRequestReviewState: unexpected, changeRequestReviewComment: unexpected, changeRequestReviewCommentUpdate: unexpected,
-  changeRequestReviewCommentDelete: unexpected, changeRequestReviewDiscard: unexpected,
-  changeRequestSetReviewers: unexpected, refreshProviderReads: unexpected, referenceLabels: unexpected,
-  referenceReviewers: unexpected, changeRequestsList: unexpected, changeRequestContext: unexpected,
-  issuesList: unexpected, issueGet: unexpected, issueComments: unexpected, projectUpstream: unexpected,
-  projectBranches: unexpected, referenceDetail: unexpected, changeRequestListStatuses: unexpected,
-=======
-  providers: async () => { providerReads += 1; return [acme]; },
-  references: async (_context, query): Promise<RepositoryReferencePage> => ({
-    connected: true, repo: null, items: servedReferences[query.kind], cursor: null, hasMore: false, total: servedReferences[query.kind].length,
-  }),
-  // The binding of the dialog's project never answers: nothing about the repository is known yet.
-  repositoryBinding: () => new Promise(() => {}),
-  repositoryContext: unexpected, resetRepositoryBinding: unexpected, repositoryProviderBindingMutate: unexpected,
-  authInstances: unexpected, capabilities: unexpected, authStatus: unexpected, authStart: unexpected,
-  authComplete: unexpected, authSetToken: unexpected, authSetSshUrl: unexpected, setInstanceAliases: unexpected, authDisconnect: unexpected, authActivate: unexpected,
-  authSetCliDisabled: unexpected,
-  changeRequestStatus: unexpected, changeRequestCreate: unexpected, changeRequestUpdate: unexpected, issueUpdate: unexpected,
-  changeRequestMerge: unexpected, changeRequestReady: unexpected, changeRequestDraft: unexpected, changeRequestComment: unexpected, changeRequestCommentUpdate: unexpected, changeRequestCommentDelete: unexpected,
-  changeRequestStartThread: unexpected, changeRequestReplyToThread: unexpected, changeRequestResolveThread: unexpected,
-  changeRequestReview: unexpected, issueComment: unexpected, issueCommentUpdate: unexpected, issueCommentDelete: unexpected, changeRequestSetState: unexpected,
-  issueSetState: unexpected, changeRequestSetLabels: unexpected, issueSetLabels: unexpected,
-  discussionComment: unexpected, discussionCommentUpdate: unexpected, discussionCommentDelete: unexpected, discussionSetState: unexpected, discussionSetAnswer: unexpected, discussionSetLabels: unexpected, discussionUpdate: unexpected,
-  changeRequestReviewState: unexpected, changeRequestReviewComment: unexpected, changeRequestReviewCommentUpdate: unexpected,
-  changeRequestReviewCommentDelete: unexpected, changeRequestReviewDiscard: unexpected,
-  changeRequestSetReviewers: unexpected, refreshProviderReads: unexpected, referenceLabels: unexpected,
-  referenceReviewers: unexpected, changeRequestsList: unexpected, changeRequestContext: unexpected,
-  issuesList: unexpected, issueGet: unexpected, issueComments: unexpected, projectUpstream: unexpected,
-  projectBranches: unexpected, referenceDetail: unexpected, changeRequestListStatuses: unexpected,
->>>>>>> upstream/main
 };
 
 const readContext = {
@@ -320,7 +272,6 @@ describe('a source-control provider no UI code names', () => {
   }
  });
 
-<<<<<<< HEAD
  // The board's repository list title is built inline in `SourceBoardView`,
  // and rendering the whole board needs the folder's repositories, the binding
  // and the board store. This checks the sentence that title reads for the
@@ -337,103 +288,4 @@ describe('a source-control provider no UI code names', () => {
   expect(container.textContent).toBe('Acme Forge issues and pull requests');
   expect(namesOtherProvider(container.textContent)).toBe(false);
  });
-||||||| bc50ba56aa
-    const issues = buildSessionIssueItems(getLinkedSidebarIssues(session, matcher), [null]);
-    expect(issues.map((item) => item.label)).toEqual(['#7']);
-
-    // The row's change-request badge and the short label other surfaces show.
-    const descriptor = matcher.descriptorOf('acme');
-    expect(formatChangeRequestReference(descriptor, 12)).toBe('!12');
-    // Its own prefix already tells a change request apart: no "CR" in front.
-    expect(formatChangeRequestLabel(descriptor, 12)).toBe('!12');
-  });
-
-  test('New Worktree names the repository source after it and draws its mark', async () => {
-    const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
-    const { createWebAPIs } = await import('../../../../../web/src/api/index');
-    const { useProjectsStore } = await import('@/stores/useProjectsStore');
-    const { NewWorktreeDialog } = await import('@/components/session/NewWorktreeDialog');
-    const apis: RuntimeAPIs = { ...createWebAPIs(), sourceControl };
-    const projectsBefore = useProjectsStore.getState();
-    useProjectsStore.setState({ projects: [{ id: 'project-tool', path: '/work/tool' }], activeProjectId: 'project-tool' });
-    try {
-      await render(
-        <RuntimeAPIContext.Provider value={apis}>
-          <NewWorktreeDialog open onOpenChange={() => {}} />
-        </RuntimeAPIContext.Provider>,
-      );
-      const fromItem = [...document.body.querySelectorAll<HTMLElement>('button, [role="button"], [role="radio"]')]
-        .find((entry) => entry.textContent?.startsWith('PR or issue'));
-      if (!fromItem) throw new Error('Missing the "PR or issue" option');
-      await act(async () => { fromItem.click(); });
-
-      const source = [...document.body.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === 'Acme Forge');
-      if (!source) throw new Error('Missing the Acme Forge source');
-      expect(source.querySelector(`svg path[d="${ACME_PATH}"]`)).not.toBeNull();
-      // What the dialog shows on screen names no other provider.
-      expect(namesOtherProvider(document.body.textContent)).toBe(false);
-      expect(source.getAttribute('aria-label')).toBe('A Acme Forge issue or pull request');
-    } finally {
-      useProjectsStore.setState({ projects: projectsBefore.projects, activeProjectId: projectsBefore.activeProjectId });
-    }
-  });
-
-  // The board's repository list title is built inline in `SourceBoardView`,
-  // and rendering the whole board needs the folder's repositories, the binding
-  // and the board store. This checks the sentence that title reads for the
-  // provider's term, with its label.
-  test('the board titles its repository list with the provider label', async () => {
-    const { useI18n } = await import('@/lib/i18n');
-    const Title: React.FC = () => {
-      const { t } = useI18n();
-      const descriptor = useSourceControlProviderRegistry((state) => state.byId.get('acme'));
-      if (!descriptor) return null;
-      return <h2>{t(`sourceBoard.list.repository.${descriptor.terminology.changeRequest}`, { provider: descriptor.label })}</h2>;
-    };
-    await render(<Title />);
-    expect(container.textContent).toBe('Acme Forge issues and pull requests');
-    expect(namesOtherProvider(container.textContent)).toBe(false);
-  });
-=======
-    const issues = buildSessionIssueItems(getLinkedSidebarIssues(session, matcher), [null]);
-    expect(issues.map((item) => item.label)).toEqual(['#7']);
-
-    // The row's change-request badge and the short label other surfaces show.
-    const descriptor = matcher.descriptorOf('acme');
-    expect(formatChangeRequestReference(descriptor, 12)).toBe('!12');
-    // Its own prefix already tells a change request apart: no "CR" in front.
-    expect(formatChangeRequestLabel(descriptor, 12)).toBe('!12');
-  });
-
-  test('New Worktree names the repository source after it and draws its mark', async () => {
-    const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
-    const { createWebAPIs } = await import('../../../../../web/src/api/index');
-    const { useProjectsStore } = await import('@/stores/useProjectsStore');
-    const { NewWorktreeDialog } = await import('@/components/session/NewWorktreeDialog');
-    const apis: RuntimeAPIs = { ...createWebAPIs(), sourceControl };
-    const projectsBefore = useProjectsStore.getState();
-    useProjectsStore.setState({ projects: [{ id: 'project-tool', path: '/work/tool' }], activeProjectId: 'project-tool' });
-    try {
-      await render(
-        <RuntimeAPIContext.Provider value={apis}>
-          <NewWorktreeDialog open onOpenChange={() => {}} />
-        </RuntimeAPIContext.Provider>,
-      );
-      const fromItem = [...document.body.querySelectorAll<HTMLElement>('button, [role="button"], [role="radio"]')]
-        .find((entry) => entry.textContent?.startsWith('PR or issue'));
-      if (!fromItem) throw new Error('Missing the "PR or issue" option');
-      await act(async () => { fromItem.click(); });
-
-      const source = [...document.body.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === 'Acme Forge');
-      if (!source) throw new Error('Missing the Acme Forge source');
-      expect(source.querySelector(`svg path[d="${ACME_PATH}"]`)).not.toBeNull();
-      // What the dialog shows on screen names no other provider.
-      expect(namesOtherProvider(document.body.textContent)).toBe(false);
-      expect(source.getAttribute('aria-label')).toBe('A Acme Forge issue or pull request');
-    } finally {
-      useProjectsStore.setState({ projects: projectsBefore.projects, activeProjectId: projectsBefore.activeProjectId });
-    }
-  });
-
->>>>>>> upstream/main
 });

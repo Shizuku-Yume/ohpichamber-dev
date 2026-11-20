@@ -196,17 +196,7 @@ let hostStatusReadGate: ((read: number) => Promise<void>) | null = null;
 // Sessions whose move reached the local stores: the real move publishes only while its caller's server is current.
 const publishedMoves: string[] = [];
 
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
-    getSession: async (sessionId: string, via?: string | null, signal?: AbortSignal) => {
-      if (sessionReadGate) await sessionReadGate(signal);
-      const directory = serverDirectoryImplementation(sessionId);
-      serverSessionReads.push({ sessionId, directory });
-      sessionReadFolders.push(via ?? null);
-      return { id: sessionId, directory };
-    },
-  },
-}));
+
 
 mock.module('@/lib/openchamberConfig', () => ({
   getWorktreeCreateCommand: async () => '',
@@ -275,41 +265,11 @@ const getSessionLiveActivity = (sessionId: string): 'unknown' | 'idle' | 'active
 };
 
 mock.module('@/sync/session-actions', () => ({
-<<<<<<< HEAD
   moveSessionToDirectory: (session: Session, sourceDirectory: string, destinationDirectory: string) => {
     moveCalls.push({ sessionId: session.sessionId, sourceDirectory, destinationDirectory });
     return moveSessionImplementation(session, sourceDirectory, destinationDirectory);
-||||||| bc50ba56aa
-  moveSessionToDirectory: (session: Session, sourceDirectory: string, destinationDirectory: string) => {
-    moveCalls.push({ sessionId: session.id, sourceDirectory, destinationDirectory });
-    return moveSessionImplementation(session, sourceDirectory, destinationDirectory);
-=======
-  moveSessionToDirectory: async (session: Session, sourceDirectory: string, destinationDirectory: string, isCurrent?: () => boolean) => {
-    moveCalls.push({ sessionId: session.id, sourceDirectory, destinationDirectory });
-    await moveSessionImplementation(session, sourceDirectory, destinationDirectory);
-    if (!isCurrent || isCurrent()) publishedMoves.push(session.id);
->>>>>>> upstream/main
   },
-<<<<<<< HEAD
   getSessionLiveActivity,
-||||||| bc50ba56aa
-  readSessionsLiveActivity: async (sessionIds: string[]) => {
-    const activities = sessionIds.map(getSessionLiveActivity);
-    return activities.find((activity) => activity === 'active') ?? activities.find((activity) => activity === 'unknown') ?? 'idle';
-  },
-=======
-  // As the real one: the stores answer first, then the server's map of running sessions.
-  readSessionsLiveActivity: async (sessionIds: string[], directory: string) => {
-    const activities = sessionIds.map(getSessionLiveActivity);
-    if (activities.includes('active')) return 'active';
-    if (!activities.includes('unknown')) return 'idle';
-    hostStatusReads.push(directory);
-    if (hostStatusReadGate) await hostStatusReadGate(hostStatusReads.length);
-    if (hostActiveSessions === null) return 'unknown';
-    const running = hostActiveSessions;
-    return sessionIds.some((id) => running[id]) ? 'active' : 'idle';
-  },
->>>>>>> upstream/main
   isSessionBusyNow: (sessionId: string) => getSessionLiveActivity(sessionId) === 'active',
 }));
 
@@ -1267,4 +1227,3 @@ describe('moveWorktreeSessionsThenRemove', () => {
     expect(removals).toBe(0);
   });
 });
-

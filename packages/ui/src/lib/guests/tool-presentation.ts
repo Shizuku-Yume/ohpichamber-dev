@@ -1,23 +1,5 @@
 import React from 'react';
-<<<<<<< HEAD
 import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from 'ohpichamber-sdk';
-||||||| bc50ba56aa
-import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from '@openchamber/sdk';
-import type { ToolInput } from '@/lib/opencode/model';
-=======
-import {
-  GUEST_TOOL_CARD_TEMPLATE_ROOTS,
-  GUEST_TOOL_CARD_URL_MAX,
-  GUEST_TOOL_TEMPLATE_ROOTS,
-  GUEST_TOOL_TEMPLATE_VALUE_MAX,
-  guestToolPlaceholderPattern,
-  type GuestTone,
-  type GuestToolCard,
-  type GuestToolContribution,
-  type JsonValue,
-} from '@openchamber/sdk';
-import type { ToolInput } from '@/lib/opencode/model';
->>>>>>> upstream/main
 
 import { isGuestActive } from './capabilities.ts';
 import { useGuestsStore } from './store.ts';
@@ -81,22 +63,6 @@ export const resolveGuestToolPresentation = (fullToolName: string | undefined | 
   return rules.length === 0 ? null : matchGuestToolRule(rules, fullToolName);
 };
 
-<<<<<<< HEAD
-/**
- * The rule for one rendered tool part. Subscribes to the catalog array only,
- * which changes on load, install, pause, approval, and runtime switch, never
- * while a tool streams. Mobile keeps the store empty, so this is
- * `null` there.
- */
-||||||| bc50ba56aa
-/**
- * The rule for one rendered tool part. Subscribes to the catalog array only,
- * which changes on load, install, pause, approval, and runtime switch, never
- * while a tool streams. VS Code and mobile keep the store empty, so this is
- * `null` there.
- */
-=======
->>>>>>> upstream/main
 export const useGuestToolPresentation = (fullToolName: string | undefined | null): GuestToolRule | null => {
   const guests = useGuestsStore((state) => state.guests);
   return React.useMemo(() => {
@@ -159,15 +125,8 @@ export const renderTemplate = (template: string, context: TemplateContext): stri
 
 const TEMPLATE_NEEDS_OUTPUT = /\{output(?:\.|\})/;
 
-<<<<<<< HEAD
 /** Whether the rule's header reads the call's output, which a collapsed row then needs. */
 const guestToolHeaderReadsOutput = (rule: GuestToolRule): boolean => Boolean(
-||||||| bc50ba56aa
-/** Whether the rule's header reads the call's output, which a collapsed row then needs. */
-export const guestToolHeaderReadsOutput = (rule: GuestToolRule): boolean => Boolean(
-=======
-export const guestToolHeaderReadsOutput = (rule: GuestToolRule): boolean => Boolean(
->>>>>>> upstream/main
   (rule.title && TEMPLATE_NEEDS_OUTPUT.test(rule.title))
   || (rule.subtitle && TEMPLATE_NEEDS_OUTPUT.test(rule.subtitle)),
 );
@@ -188,17 +147,6 @@ const templateOutputValue = (output: string | undefined): TemplateValue => {
 /** Tool input and metadata are JSON objects and need no assertion. */
 type ToolStateData = { [key: string]: JsonValue };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * Tool input and metadata as the domain model types them. `ToolInput` and
- * `Metadata` are both `Record<string, JsonValue>`, so a tool part's input and
- * metadata already are template values and need no assertion.
- */
-type ToolStateData = ToolInput;
-=======
-type ToolStateData = ToolInput;
->>>>>>> upstream/main
 
 type GuestToolHeader = {
   title: string | null;
@@ -223,25 +171,12 @@ export const renderGuestToolHeader = (
   };
 };
 
-<<<<<<< HEAD
 /** Rows for `output: "table"`: the parsed output array, or its `items` array. `null` when neither. */
 export const guestToolTableRows = (output: string | undefined): JsonValue[] | null => {
   const value = templateOutputValue(output);
   if (isJsonArray(value)) return value;
   if (isJsonObject(value)) {
     const items = value.items;
-||||||| bc50ba56aa
-/** Rows for `output: "table"`: the parsed output array, or its `items` array. `null` when neither. */
-export const guestToolTableRows = (output: TemplateValue): JsonValue[] | null => {
-  if (isJsonArray(output)) return output;
-  if (isJsonObject(output)) {
-    const items = output.items;
-=======
-export const guestToolTableRows = (output: TemplateValue): JsonValue[] | null => {
-  if (isJsonArray(output)) return output;
-  if (isJsonObject(output)) {
-    const items = output.items;
->>>>>>> upstream/main
     if (isJsonArray(items)) return items;
   }
   return null;
