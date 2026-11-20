@@ -84,7 +84,6 @@ export function useComposerEditorActions({
         update: updateAutocompleteOverlayPosition,
     } = useAutocompletePosition({
         openAutocomplete,
-        query: autocompleteQuery,
         text: composerText,
         editorRef: composerRef,
         containerRef: dropZoneRef,

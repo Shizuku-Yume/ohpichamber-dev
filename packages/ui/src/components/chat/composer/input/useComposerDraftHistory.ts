@@ -1,3 +1,4 @@
+import { useUIStore } from '@/stores/useUIStore';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerInlineContext } from './useComposerInlineContext';
 import type { useComposerHistorySearchState } from './useComposerHistorySearchState';
@@ -129,12 +130,14 @@ export function useComposerDraftHistory({
         currentChatDraftIdentityRef.current = chatDraftIdentity;
     }, [chatDraftIdentity, currentChatDraftIdentityRef]);
 
+    const persistChatDraft = useUIStore((state) => state.persistChatDraft);
     const {
         persistNow: persistDraftImmediately,
         handoffDraft,
         restoreDraft,
         migrateDraft,
     } = useComposerDraft({
+        persistEnabled: persistChatDraft,
         text: composerText,
         setMessage,
         confirmedMentionsRef,

@@ -134,7 +134,7 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
   if (pinned.length === 0) return null;
 
   return (
-    <WorkStatusSection title={t('chat.workStatus.section.pinned')} icon="pushpin">
+    <WorkStatusSection title={t('chat.workStatus.section.pinned')}>
       {pinned.map((entry) => (
         <WorkStatusRow
           key={entry.id}

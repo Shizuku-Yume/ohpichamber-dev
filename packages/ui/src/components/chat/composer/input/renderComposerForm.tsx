@@ -242,7 +242,6 @@ export function renderComposerForm({
                             showBranchSelector={shouldShowDraftBranchSelector}
                             onProjectChange={handleDraftProjectChange}
                             onDirectoryChange={handleDraftDirectoryChange}
-                            onRefreshTarget={refreshDraftTarget}
                             onCreateSpace={handleCreateSpace}
                             onCreateCustomWorktree={handleCreateCustomWorktree}
                             theme={currentTheme}
@@ -333,7 +332,6 @@ export function renderComposerForm({
                         emojiRef={emojiRef}
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
-                        snippetDraftText={snippetDraftText}
                         onSnippetDraftSaved={handleSnippetDraftSaved}
                         onFileSelect={handleFileSelect}
                         onAgentSelect={handleAgentSelect}
@@ -476,7 +474,6 @@ export function renderComposerForm({
                         sessionId={currentSessionId}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                         newSessionDraftOpen={newSessionDraftOpen}
-                        messageLength={goalObjectiveLength}
                         radius={chatInputRadius}
                         footerPaddingClass={footerPaddingClass}
                         footerGapClass={footerGapClass}
