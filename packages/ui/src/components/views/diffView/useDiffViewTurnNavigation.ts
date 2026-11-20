@@ -23,7 +23,7 @@ interface DiffViewTurnNavigationOptions {
     currentSessionId: string | null;
     turnDiffSettled: boolean;
     rootDirectory: string | undefined;
-    lastTurnDiffs: TurnSnapshotDiff[];
+    lastTurnDiffs: TurnSnapshotDiff[] | null;
     onDiffScopeChange: DiffViewProps['onDiffScopeChange'];
     effectiveDirectory: string | undefined;
     repositoriesKnown: boolean;
@@ -60,6 +60,7 @@ export function useDiffViewTurnNavigation({
         }
         if (!turnDiffSettled || activeDiffScope !== 'turn') return;
         setPendingTurnDiffFile(null);
+        if (lastTurnDiffs === null) return;
         const file = toAbsoluteFilePath(rootDirectory, pendingTurnDiffFile.file);
         const listed = findRepoFile(file, rootDirectory, lastTurnDiffs.flatMap((diff) => diff.file ?? []));
         if (listed) {

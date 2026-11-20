@@ -1,4 +1,3 @@
-import type { TurnSnapshotDiff } from '../turnSnapshotDiff';
 import React from 'react';
 import { useCommitComparison } from '@/hooks/useCommitComparison';
 import { usePullRequestComparison } from '@/hooks/usePullRequestComparison';
@@ -11,14 +10,12 @@ import {
     branchPathRevisions, coerceDiffScope, isBranchScopeAvailable, isBranchScopeDefinitelyUnavailable, useRangeKeyedCache,
     useBoundedDirectoryRetry,
 } from '../branchDiffScope';
-import { statusToGitCode } from '../turnSnapshotDiff';
 import { isDocumentVersions } from '../files/documentVersions';
 import { isOfficePreviewFile } from '@/lib/toolHelpers';
 import { useComparisonReview } from '@/components/review/useChangeRequestReview';
 import { useChangeRequestTerm } from '@/lib/source-control/providers/registry';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionStore';
-import { useLastTurnDiff } from '../useLastTurnDiff';
 import { parseDiffFromFile } from '@pierre/diffs';
 import { diffCommentOriginFromSource } from '@/lib/diffCommentOrigin';
 import type { FileEntry, DiffData, DiffScope, ComparisonDiffResult, DiffViewProps } from './types';
@@ -31,8 +28,6 @@ import type { useI18n } from '@/lib/i18n';
 const BRANCH_METADATA_MAX_ATTEMPTS = 3;
 
 interface DiffViewComparisonsOptions {
-    currentSessionId: string | null;
-    rootDirectory: string | undefined;
     activeDiffScope: DiffScope;
     status: GitStatus | null;
     effectiveDirectory: string | undefined;
@@ -49,34 +44,10 @@ interface DiffViewComparisonsOptions {
 }
 
 export function useDiffViewComparisons({
-    currentSessionId, rootDirectory, visible, activeDiffScope, status, effectiveDirectory, binding, setActiveDiffScope,
+    visible, activeDiffScope, status, effectiveDirectory, binding, setActiveDiffScope,
     onDiffScopeChange, fetchBranches, git, isGitRepo, diffScope, expandedFiles, t,
 }: DiffViewComparisonsOptions) {
-    const {
-        diffs: lastTurnDiffs,
-        count: turnFileCount,
-        loaded: turnDiffLoaded,
-        settled: turnDiffSettled,
-        error: turnDiffError,
-        retry: retryTurnDiff,
-    }: { diffs: TurnSnapshotDiff[]; count: number | null; loaded: boolean; settled: boolean; error: string | null; retry: () => void } = useLastTurnDiff(currentSessionId, rootDirectory ?? undefined, { enabled: visible, live: activeDiffScope === 'turn' });
-
-    const lastTurnDiffData = React.useMemo(() => {
-        const map = new Map<string, DiffData>();
-        for (const diff of lastTurnDiffs) {
-            if (!diff.file) continue;
-            if (typeof diff.patch === 'string') {
-                map.set(diff.file, createTextDiffDataFromPatch(diff.file, diff.patch, 'patch'));
-                continue;
-            }
-            map.set(diff.file, {
-                original: diff.before ?? '',
-                modified: diff.after ?? '',
-                contextMode: 'full',
-            });
-        }
-        return map;
-    }, [lastTurnDiffs]);
+    const lastTurnDiffData = React.useMemo(() => new Map<string, DiffData>(), []);
 
     const workingFileCount = React.useMemo(() => {
         if (!status?.files) return 0;
@@ -272,17 +243,7 @@ export function useDiffViewComparisons({
         }
 
         if (activeDiffScope === 'turn') {
-            return lastTurnDiffs
-                .map((diff) => ({
-                    path: diff.file ?? '',
-                    index: '',
-                    working_dir: statusToGitCode(diff.status),
-                    insertions: diff.additions ?? 0,
-                    deletions: diff.deletions ?? 0,
-                    isNew: diff.status === 'added',
-                }))
-                .filter((file) => file.path)
-                .sort((a, b) => a.path.localeCompare(b.path));
+            return [];
         }
 
         if (!status?.files) return [];
@@ -320,7 +281,7 @@ export function useDiffViewComparisons({
                 };
             })
             .sort((a, b) => a.path.localeCompare(b.path));
-    }, [activeDiffScope, branchFiles, comparison.files, lastTurnDiffs, status]);
+    }, [activeDiffScope, branchFiles, comparison.files, status]);
 
     const changedFilePathsKey = React.useMemo(
         () => changedFiles.map((file) => file.path).join('\0'),
@@ -328,7 +289,7 @@ export function useDiffViewComparisons({
     );
 
     return {
-        lastTurnDiffs, turnFileCount, turnDiffLoaded, turnDiffSettled, turnDiffError, retryTurnDiff, lastTurnDiffData,
+        lastTurnDiffs: null, turnFileCount: null, turnDiffSettled: true, lastTurnDiffData,
         workingFileCount, stagedFileCount, currentBranch, prComparison, pullRequestContext, selectedPr,
         prChangeRequestTerm, commitComparison, selectedCommitHash, branches, setBaseOverride, clearBaseOverride,
         qualifiedBranchBase, branchBaseSource, isBranchBaseResolved, showBranchOption, setComparisonRetryRevision,
