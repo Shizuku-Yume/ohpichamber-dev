@@ -315,3 +315,4 @@ export function createGlobalMessageStreamHub({
     },
   };
 }
+export type GlobalMessageStreamHub = ReturnType<typeof createGlobalMessageStreamHub>;

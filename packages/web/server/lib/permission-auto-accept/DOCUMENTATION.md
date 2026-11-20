@@ -2,6 +2,10 @@
 
 This module owns the authoritative Host-side per-session permission policy (`ask`, `safety`, `auto`) and the seam the Agent Service uses to have tool execution approvals answered without a card.
 
+`contracts.ts` describes those Host policy callbacks, including parent lookup
+and policy-change notification. It does not expose SDK clients, directory
+headers or a separate OpenCode event subscription/approval authority.
+
 ## Modes
 
 - `ask`: every tool execution request waits for the user.

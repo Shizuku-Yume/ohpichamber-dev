@@ -9,6 +9,10 @@ Server-owned scheduled task runtime and routes for OpenChamber-only automation.
 - Runtime orchestration and execution is owned by `packages/web/server/lib/scheduled-tasks/runtime.ts`.
 - This module is OpenChamber feature logic; it is intentionally separate from OpenCode proxy/runtime internals.
 - The chats scope is owned by `packages/web/server/lib/scheduled-tasks/chats-scope.ts`.
+- `service.ts` owns the Host composition dependencies shared with the routes:
+  settings/projects, project configuration, the scheduler, and authorized
+  workspace-to-project resolution. Session dispatch stays in the Canonical
+  session service; this dependency contract has no SDK client.
 
 ## Invariants
 

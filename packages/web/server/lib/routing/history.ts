@@ -7,14 +7,26 @@
  * is never cut.
  */
 import { HISTORY_LIMITS } from './defaults.js';
+import type { AssistTurn } from '../session-assist/contracts.js';
+import type { RoutingModel } from './store.js';
 
-export const excerptHead = (text, limit) => (text.length <= limit ? text : `${text.slice(0, limit).trimEnd()} […]`);
+export interface HistoryEntry {
+  role: 'user' | 'assistant';
+  text: string;
+}
 
-export const excerptHeadTail = (text, head, tail) =>
+export interface RoutingHistory {
+  history: HistoryEntry[];
+  lastAnswer: (RoutingModel & { finishedAt: number }) | null;
+}
+
+export const excerptHead = (text: string, limit: number) => (text.length <= limit ? text : `${text.slice(0, limit).trimEnd()} […]`);
+
+export const excerptHeadTail = (text: string, head: number, tail: number) =>
   (text.length <= head + tail ? text : `${text.slice(0, head).trimEnd()} […] ${text.slice(-tail).trimStart()}`);
 
-export const turnsToHistory = (turns, limits = HISTORY_LIMITS) => {
-  const history = [];
+export const turnsToHistory = (turns: readonly AssistTurn[], limits = HISTORY_LIMITS): HistoryEntry[] => {
+  const history: HistoryEntry[] = [];
   for (const turn of turns.slice(-limits.turns)) {
     if (turn.user?.text) history.push({ role: 'user', text: excerptHead(turn.user.text, limits.user) });
     if (turn.assistant?.text) history.push({ role: 'assistant', text: excerptHeadTail(turn.assistant.text, limits.answerHead, limits.answerTail) });

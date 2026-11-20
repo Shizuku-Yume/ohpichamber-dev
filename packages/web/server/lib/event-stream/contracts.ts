@@ -1,5 +1,3 @@
-import type { UpstreamFetch, UpstreamResponse } from './upstream-reader.js';
-
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 export interface JsonObject {
   [key: string]: JsonValue | undefined;
@@ -57,14 +55,6 @@ export interface GlobalReadyFrame {
   cursor?: string;
 }
 
-export interface UpstreamConnection {
-  buildOpenCodeUrl: (route: string, query: string) => string | URL;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
-  fetchImpl?: UpstreamFetch;
-  upstreamStallTimeoutMs?: TimeoutMs | undefined;
-  upstreamReconnectDelayMs?: TimeoutMs | undefined;
-}
-
 export type ForwardEventPayload = (
   payload: JsonValue,
   emit: (payload: JsonValue) => void,
@@ -76,10 +66,4 @@ export interface BridgeOptions {
   processForwardedEventPayload: ForwardEventPayload;
   triggerHealthCheck?: (() => void) | undefined;
   heartbeatIntervalMs: number;
-}
-
-export interface InitialStreamError {
-  message: string;
-  closeReason?: string;
-  triggerHealthCheckFor?: boolean | UpstreamResponse | null;
 }

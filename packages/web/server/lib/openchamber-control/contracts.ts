@@ -1,4 +1,3 @@
-import type { ControlOptions, SessionActionResult, TextMessage } from './service.js';
 import type { JsonValue } from '../shared/json-values.js';
 
 export type { SessionMetadata as StoredSessionMetadata } from '../openchamber-sessions/session-metadata-store.js';
@@ -10,7 +9,29 @@ export interface PendingPermission {
 
 export type PublicSessionStatus = { type: 'idle' | 'waiting' | 'busy' };
 
-export interface SessionStatusResult extends Pick<SessionActionResult, 'sessionId' | 'directory'> {
+export interface ControlOptions {
+  signal?: AbortSignal | undefined;
+  contextSessionId?: string | null | undefined;
+}
+
+export interface TextMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  createdAt: number | null;
+  completedAt: number | null;
+  model: string | null;
+  text: string;
+}
+
+export interface SessionActionResult {
+  sessionId: string;
+  promptDispatched: boolean;
+  sessionStatus?: PublicSessionStatus;
+  lastAssistantMessage?: TextMessage | null;
+}
+
+export interface SessionStatusResult {
+  sessionId: string;
   sessionStatus: PublicSessionStatus;
 }
 

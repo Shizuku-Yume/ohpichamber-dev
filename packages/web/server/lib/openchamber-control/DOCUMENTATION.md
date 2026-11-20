@@ -3,7 +3,7 @@
 ## Purpose
 
 This module owns the typed control contract shared by the OpenChamber CLI and
-the managed OpenCode `openchamber` tool. Both adapters delegate to
+the native Agent Service's Host tool boundary. Both adapters delegate to
 `createOpenChamberControlService()`; neither adapter may call or spawn the
 other.
 
@@ -33,26 +33,24 @@ other.
 
 ## Invariants
 
-- Session status and messages come from official directory-scoped OpenCode
-  APIs. Message output includes only ordered `text` parts.
+- Session status and messages come from the Canonical session service. The
+  Host control read views expose status or text-only history, not SDK records.
+  `contracts.ts` owns these CLI and Guest read shapes, cancellation options and
+  dispatch results. A status/message result does not promise a directory.
 - Wait never treats an initial idle response as completion after dispatch. It
   requires observed activity or a newly completed assistant message.
 - Timeout and cancellation are failures, never authoritative idle results.
 - Validation that protects side effects runs before session creation or
-  dispatch. An explicitly requested model, agent, or variant is checked against
-  the directory's own OpenCode agent and provider lists before any session,
-  worktree, or goal is created, because `prompt_async` accepts an unusable
-  selection and then fails only on the event stream. A failed or empty lookup
-  never turns a valid selection into a rejection.
-- `promptDispatched` reports an observed dispatch, never an accepted request.
-  After `prompt_async` the service confirms a new user message reached the
-  session; when it does not, the result reports `promptDispatched: false` with
-  `promptError` instead of claiming success.
+  dispatch. Model, agent and variant selection uses the native catalogs and
+  session options; no OpenCode configuration or provider client is consulted.
+- `promptDispatched` becomes true after a Canonical send acknowledgement or
+  goal start. It does not promise completion. With no prompt or goal, creation
+  alone leaves it false.
 - Send and fork dispatches without an explicit model/agent/variant reuse the
   target session's last user-message selection before falling back to the
   configured defaults; only session creation resolves defaults directly.
 - Default agents resolve from the owning project before global settings and
-  OpenCode defaults. Directory-based requests identify the project before
+  native defaults. Directory-based requests identify the project before
   creating a worktree; existing linked worktrees resolve through Git's primary
   worktree root. Send/fork fallback uses that same owner. Configured model IDs
   and effort preferences survive missing catalog entries rather than silently

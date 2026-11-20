@@ -1,4 +1,3 @@
-import type { GlobalMessageStreamHub } from '../event-stream/global-hub.js';
 import type { JsonValue } from '../shared/json-values.js';
 import type { RoutingPermission } from '../routing/jev.js';
 import type { PermissionMode } from './modes.js';
@@ -22,17 +21,6 @@ export interface PermissionSettings {
 export type PermissionDirectory = JsonValue | undefined;
 export type PermissionOutcome = 'ignored' | 'held' | 'replied' | 'failed';
 
-export interface CachedSession {
-  parentID: string | null | undefined;
-  directory: PermissionDirectory;
-}
-
-export interface PermissionRequestHeaders {
-  Accept: string;
-  'Content-Type'?: string;
-  'x-opencode-directory'?: string;
-}
-
 export type PermissionUiEvent =
   | { type: 'openchamber:permission-auto-accept.updated'; properties: PermissionPolicySnapshot }
   | {
@@ -41,17 +29,11 @@ export type PermissionUiEvent =
   };
 
 export interface PermissionAutoAcceptOptions {
-  globalEventHub: Pick<GlobalMessageStreamHub, 'subscribeEvent' | 'subscribeStatus'>;
-  buildOpenCodeUrl: (path: string, query: string) => string | URL;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
   readSettingsFromDiskMigrated: () => Promise<PermissionSettings | null | undefined>;
   persistSettings: (changes: { permissionAutoAccept: PermissionPolicy }) => Promise<PermissionSettings | void>;
   broadcastGlobalUiEvent?: ((event: PermissionUiEvent) => void) | undefined;
   evaluatePermission?: ((permission: RoutingPermission, directory: PermissionDirectory) => Promise<{ action: string } | null | undefined>) | null | undefined;
-  onPermissionReplied?: ((permissionId: string) => void) | null | undefined;
+  onSessionPolicyChanged?: ((sessionId: string, mode: PermissionMode, directory: PermissionDirectory) => Promise<void> | void) | null | undefined;
+  resolveSessionParent?: ((sessionId: string) => Promise<string | null> | string | null) | undefined;
   resolveLegacyEnabledMode?: (() => Promise<PermissionMode>) | undefined;
-  readDefaultMode?: (() => Promise<JsonValue | undefined>) | undefined;
-  fetchImpl?: typeof fetch;
-  retryDelaysMs?: number[];
-  requestTimeoutMs?: number;
 }

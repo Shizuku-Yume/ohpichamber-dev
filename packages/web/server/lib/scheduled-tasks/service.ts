@@ -2,13 +2,27 @@ import { asNonEmptyString } from '../shared/guards.js';
 import fs from 'node:fs';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
 import { discoverLoopFiles, loopFingerprint, parseLoopDefinition, setLoopFileEnabled } from './loops.js';
+import type { SessionProject } from '../projects/contracts.js';
+import type { createProjectConfigRuntime } from '../projects/project-config.js';
+import type { SettingsDocument } from '../settings/settings-helpers.js';
+import type { createChatsScope } from './chats-scope.js';
+import type { createScheduledTasksRuntime } from './runtime.js';
+
+export interface ScheduledTaskServiceDependencies {
+  readSettingsFromDiskMigrated: () => Promise<SettingsDocument | null | undefined>;
+  sanitizeProjects: (projects: SettingsDocument[string]) => SessionProject[];
+  projectConfigRuntime: ReturnType<typeof createProjectConfigRuntime>;
+  scheduledTasksRuntime: ReturnType<typeof createScheduledTasksRuntime>;
+  resolveWorkspaceScope?: (workspaceId: string) => Promise<{ workspaceId: string; hostProjectId?: string | null } | null>;
+  chatsScope?: Pick<ReturnType<typeof createChatsScope>, 'id' | 'root' | 'toStorageID'> | null;
+}
 
 // Same scope rule the scheduler applies: a file under the project's own
 // `.agents/loops` is a repository loop, even where it is also the user folder.
 const isRepositoryLoop = (projectPath, loopFile) => discoverLoopFiles(projectPath)
   .some((entry) => entry.scope === 'project' && entry.filePath === loopFile);
 
-export const createScheduledTaskService = (dependencies) => {
+export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDependencies) => {
   const {
     readSettingsFromDiskMigrated,
     sanitizeProjects,
@@ -210,6 +224,7 @@ export const createScheduledTaskService = (dependencies) => {
           if (task?.state?.lastStatus === 'running') runningCount += 1;
         }
       } catch {
+        continue;
       }
     }
     return {

@@ -48,7 +48,7 @@ coverage. The carried-body declaration boundary records 212 explicit paths
 and their original JavaScript owners. New/upstream roots remain strict and
 retain ambient declarations. Regression tests prove a new neighbor and a new
 root imported by a legacy module are checked, not hidden by the project
-reference. Remaining server diagnostics are 35, down from 4,597; they include
+reference. Remaining server diagnostics are 3, down from 4,597; they include
 stale OpenCode imports, missing owner types and actual contract mismatches and
 are not waived. No server or full-merge acceptance is claimed.
 
@@ -71,8 +71,24 @@ validator. Assist context exposes its checked final answer as `last`, while
 turn-array lookups remain optional and no SDK snapshot/diff fields are claimed.
 Eleven affected Host files pass 326 tests, including managed Git network,
 cross-process persistence, catalog/install, quota, shared-page and assist
-coverage. Changed strict-source lint passes. The 35 remaining server diagnostics
+coverage. Changed strict-source lint passes. The remaining server diagnostics
 and broader UI/root gates are still unresolved.
+
+The strict Web frontier now uses native Host control read views and policy
+callbacks, the storage owner's inferred metadata type, canonical text history
+and checked scheduler composition dependencies. Removed the unreferenced
+OpenCode listed-session, wait-projection and archive-projection helpers rather
+than restoring their deleted SDK dependencies; the Native entry graph remains
+615 modules with zero missing relative imports/named value exports. The existing
+Canonical control service and Host SQLite archive authority remain in place.
+The generic upstream npm registry/config helper is retained as Host package
+metadata functionality, with scoped-header and invalid-config coverage.
+
+Seventeen focused files pass 266 tests for these boundaries. Follow-up npm and
+scheduler checks pass 28 tests; changed strict-source lint passes. The scoped
+server check still fails on two chat-cleanup SDK declarations and dictation's
+missing Canonical workspace scope. The dead-code report remains non-green:
+105 unused UI files plus export/type findings, not classified as pre-existing.
 
 **2026-11-20 Upstream main merge in progress:** The real merge of upstream `1928155551` is still under repair on `devin/upstream-sync-1795118808`; historical green results below are not acceptance of this merge. Both `useUIStore` and `useConfigStore` now compose extracted owners. Config owners use canonical provider/model catalogs, native agent-catalog ownership and existing Host settings/voice services. Explicit reloads retire obsolete catalog reads without clearing published snapshots; joined agent reads can refresh only in the current runtime. Host permission-policy events are validated as Host envelopes, not routed through a retired SDK classifier. Focused config coverage passed 109 tests with 423 assertions; Host-event coverage passed 26 tests with 76 assertions, including empty/malformed policy events. The broader UI type-check remains red, retired imports remain, and root guards, full UI/web suites and fork-parent comparisons are unfinished. No runtime or visual certification is claimed.
 

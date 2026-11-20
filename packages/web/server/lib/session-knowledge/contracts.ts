@@ -1,7 +1,3 @@
-import type { createOpenCodeClient } from '../openchamber-sessions/opencode-client.js';
-
-type InstructionEntries = ReturnType<typeof createOpenCodeClient>['experimental']['session']['instructions']['entry'];
-
 export interface KnowledgeNote {
   id: string;
   body: string;
@@ -113,10 +109,6 @@ export interface SessionKnowledgeDependencies {
   persistSessionMetadata?: ((sessionId: string, directory: string, patch: {
     openchamber: { project_context_pins: SessionPins };
   }) => Promise<SessionMetadata>) | null;
-  instructionEntries?: {
-    put: (sessionId: string, directory: string, key: string, text: string) => ReturnType<InstructionEntries['put']>;
-    remove: (sessionId: string, directory: string, key: string) => ReturnType<InstructionEntries['remove']>;
-  } | null;
 }
 export interface SessionMetadata {
   openchamber?: unknown;

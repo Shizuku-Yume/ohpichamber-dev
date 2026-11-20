@@ -13,6 +13,7 @@ const JsonObjectSchema = z.record(z.string(), JsonValueSchema);
 const MetadataSchema = z.object({
   openchamber: JsonObjectSchema.optional(), title: z.string().optional(), directory: z.string().optional(), projectID: z.string().optional(),
 }).catchall(JsonValueSchema);
+export type SessionMetadata = z.infer<typeof MetadataSchema>;
 const RevisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const SelectedProjectionSchema = z.object({
   id: z.string().trim().min(1), title: z.string().optional(), directory: z.string().optional(), projectID: z.string().optional(),

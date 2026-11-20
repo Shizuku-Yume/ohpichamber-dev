@@ -139,6 +139,7 @@ export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdle
     errorMessage: typeof terminalTurn.error === 'string' ? terminalTurn.error.trim() : '',
   };
 };
+export type DispatchOutcome = NonNullable<ReturnType<typeof readDispatchOutcome>>;
 const outcomeBody = ({ state, text, errorMessage }, sessionId) => {
   const answer = text.length > ANSWER_CHAR_LIMIT
     ? `${text.slice(0, ANSWER_CHAR_LIMIT)}\n\n[Cut at ${ANSWER_CHAR_LIMIT} characters; read the rest with session.messages for ${sessionId}.]`

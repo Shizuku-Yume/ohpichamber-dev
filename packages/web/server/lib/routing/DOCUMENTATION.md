@@ -35,7 +35,8 @@ There is no env gate — the feature shipped dark behind
   one throws.
 - `jev.js` — request builders, answer parsing, and the HTTP call with a
   timeout to the endpoint `classifierEndpoint` chose.
-- `history.js` — bounded text excerpts from settled turns. `runtime.js` reads
+- `history.js` — bounded text excerpts from settled turns, with Host-owned
+  `HistoryEntry`/`RoutingHistory` types (role and text only). `runtime.js` reads
   chronological canonical session history through session assist's
   `loadSettledTurns`. Only `Turn.status === 'completed'` settles an answer;
   the matching Turn's `finishedAt` establishes the prompt-cache age. It keeps

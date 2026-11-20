@@ -4,6 +4,9 @@
 
 This module owns reads of npm package metadata: the registry and credentials a request goes to, and the cached package lookups built on that.
 
+`npm-registry-config.ts` owns registry selection and credential header scoping.
+This is Host npm configuration, not an agent provider/config reader.
+
 ## Invariants
 
 - Registry selection reads inherited npm environment variables and the user's `.npmrc`. Scoped registries take precedence over general registries. Credentials are sent in headers and removed from request URLs.
