@@ -40,9 +40,9 @@ preferences are inputs to these owners.
   keyCode 229 fallback.
 - Shell-mode entry consumes its trigger in the same transaction, including
   mobile keyboard and paste paths, so a later caret write cannot use stale text.
-- Empty-composer history recall edits the newest queued message when present;
-  recalling a copy would queue it twice. Local and extension action commands
-  execute before attached context or queue items are consumed.
+- Empty-composer recall cannot edit a queued message; the Host retains delivery
+  authority. Local and extension action commands execute before attached context
+  is consumed.
 - A new worktree stays pinned while its list refreshes so target validation
   cannot reset the draft to the project root. Target dialogs retain the project
   they opened for even if the draft changes.
@@ -70,9 +70,9 @@ preferences are inputs to these owners.
 - Every failed send restores consumed text and context under its captured owner
   while preserving newly typed content and new attachments. A failed queue
   write restores its captured items by the same rule.
-- Editing a queued message removes it from the queue and restores its complete
-  content from the owner, including attachments and armed goal. Scheduled or
-  already-delivering items stay outside manual delivery to prevent duplicates.
+- Queued edit and send-now controls are disabled. Queued-only submissions are
+  rejected before consumption; ordinary sends never drain the Host queue or use
+  queued items' captured model choices.
 - A queued goal travels with its captured message. A queued-only send leaves
   the normal composer's armed goal and remembered effort unchanged.
 - A question that still holds a turn requires inbox delivery because waiting

@@ -665,17 +665,8 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         return message ?? null;
                     },
 
-                    takeForSend: async (target, messageId) => {
-                        const key = getMessageQueueKey(target);
-                        const currentQueue = get().queuedMessages[key] ?? [];
-                        const sending = new Set(get().sendingIds[key] ?? []);
-                        const candidates = messageId
-                            ? currentQueue.filter((m) => m.id === messageId)
-                            : currentQueue.filter((m) => !sending.has(m.id));
-                        for (const msg of candidates) {
-                            get().removeFromQueue(target, msg.id);
-                        }
-                        return candidates;
+                    takeForSend: async () => {
+                        throw new Error('Queued message restoration is unavailable; the Host owns delivery.');
                     },
 
                     clearQueue: (target) => {

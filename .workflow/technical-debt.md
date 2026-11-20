@@ -30,6 +30,24 @@ An entry leaves this file in one of two ways:
 
 ## Entries
 
+## Queued message editing needs preserved original drafts and atomic Host take
+
+- **Where:** `packages/ui/src/stores/messageQueueStore.ts`, `packages/web/server/lib/message-queue/`
+- **Priority:** worth-doing
+- **Problem:** Canonical queue projections omit context text, and durable records retain the Host-captured request rather than a separate original UI draft. Client-side removal followed by sending races Host delivery and cannot faithfully restore the original context.
+- **Impact:** editing and send-now are disabled for every queued message. The Host remains the sole delivery authority on web, Electron, hosted mobile and Capacitor.
+- **Solution:** preserve the original public draft alongside the Host capture; add an authenticated, atomic Host CAS take/restore operation that rejects leased or stale items and returns the full original draft only after successful ownership transfer. Define explicit behavior for old records without recoverable originals. Preserve attachments, model options, context and delivery receipts; test concurrent delivery, failures and runtime switches.
+- **Cost:** Host persistence and product API changes, plus shared UI restoration and concurrency coverage. No new API is introduced by this sync.
+
+## Fork-owned server JavaScript awaits TypeScript conversion
+
+- **Where:** `packages/web/scripts/fork-owned-server-javascript.mjs`, `packages/web/server/`
+- **Priority:** worth-doing
+- **Problem:** the upstream TypeScript-only guard conflicts with 95 retained fork-owned JavaScript modules, including excluded isolated-space modules. The explicit generated list freezes only those existing paths; new server modules still require TypeScript.
+- **Impact:** the listed implementations are not covered by the server TypeScript conversion gate.
+- **Solution:** convert the retained modules by owner with real types and existing runtime tests, removing each path from the explicit list. Preserve the isolated-space release exclusion and Canonical/Host boundaries.
+- **Cost:** a separate server migration rather than mechanical renames or broad guard exemptions.
+
 ## Interrupted sends lack durable Canonical receipts
 
 - **Where:** Canonical prompt submission and `packages/ui/src/sync/send-failure-classification.ts`.

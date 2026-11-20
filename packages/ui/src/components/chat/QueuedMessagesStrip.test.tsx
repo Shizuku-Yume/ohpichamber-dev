@@ -70,7 +70,10 @@ describe('QueuedMessagesStrip', () => {
     expect(host.querySelector('[aria-expanded]')).toBeNull();
     expect(button('Drag to reorder')).toBeUndefined();
     await act(async () => button('send')?.click());
-    expect(sent).toEqual(['q1']);
+    expect(sent).toEqual([]);
+    expect(button('send')?.disabled).toBe(true);
+    expect(button('edit')?.disabled).toBe(true);
+    expect(button('send')?.getAttribute('title')).toBe('Unavailable');
     expect(button('Remove from queue')).toBeDefined();
   });
 
@@ -86,6 +89,7 @@ describe('QueuedMessagesStrip', () => {
     expect(useUIStore.getState().messageQueueExpanded).toBe(true);
     expect(host.textContent).toContain('First');
     expect(host.textContent).toContain('Second');
+    expect(buttons().filter((item) => item.textContent === 'send' || item.textContent === 'edit').every((item) => item.disabled)).toBe(true);
     expect(buttons().filter((item) => item.getAttribute('aria-label') === 'Drag to reorder')).toHaveLength(2);
   });
 });

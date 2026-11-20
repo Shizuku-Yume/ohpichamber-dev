@@ -383,7 +383,7 @@ export function useComposerQueueActions({
             if (queued) handleQueuedMessageEdit(queued);
         }).catch((error) => {
             console.warn('[queue] failed to take queued message for editing:', error);
-            toast.error(t('chat.queuedMessage.toast.takeFailed'));
+            toast.info(t('common.unavailable'));
         });
     }, [messageQueueTarget, popQueuedToInput, handleQueuedMessageEdit, t]);
 

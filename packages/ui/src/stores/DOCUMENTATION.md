@@ -326,9 +326,10 @@ the store projects authoritative snapshots and revisioned session updates.
 Scheduled queue items also retain their `scheduledTask` provenance. An inherited
 scheduled item has no pinned send config; ordinary items keep their captured
 provider and model. Both appear in the same queue. Scheduled items allow reorder
-and removal, but not editing or manual send. Bulk take leaves them queued.
+and removal. Editing and manual send are unavailable for every queued item;
+the Host is the sole delivery authority.
 `sync/message-queue-sync.ts` receives queue events through the shared control SSE
-stream at `/api/openchamber/events`, including while OpenCode uses SSE fallback.
+stream at `/api/openchamber/events`.
 It adds no poller or per-session connection. Either stream reconnecting requests
 `resync()`, independently of directory-bootstrap suppression.
 
@@ -343,8 +344,10 @@ session events newer than that snapshot survive reconciliation.
 Mutations are optimistic and then settled on the server's copy; failed
 round-trips re-read instead of guessing. Empty legacy events without a directory
 clear all projections of their session in that runtime. Projection items carry
-attachment metadata only, so `popToInput()` and `takeForSend()` asynchronously
-remove the message on the server and retrieve its complete captured payload.
+attachment metadata only. `popToInput()` and `takeForSend()` reject without
+mutating the queue or issuing a request. There is no atomic Host take/restore
+operation or separately preserved original draft; manual restoration must not
+be implemented by deleting a descriptor and sending its preview.
 
 `lib/messages/queuedMessagePreview.ts` derives the queue row from typed text,
 then attached comments/context, then the first filename. The store sends a

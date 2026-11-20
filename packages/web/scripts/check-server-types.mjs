@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertServerProgramBoundary } from './server-program-boundary.mjs';
+import { FORK_OWNED_JAVASCRIPT } from './fork-owned-server-javascript.mjs';
 
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -29,7 +30,8 @@ export function findServerJavaScript(root = webRoot) {
     .filter((entry) => entry.isFile())
     .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).replaceAll(path.sep, '/')))
     .filter((file) => file.endsWith('.js') && !file.startsWith('server/built-in-extensions/')
-      && !NOT_IMPLEMENTATION.test(file) && !JAVASCRIPT_ENTRIES.includes(file));
+      && !NOT_IMPLEMENTATION.test(file) && !JAVASCRIPT_ENTRIES.includes(file)
+      && !FORK_OWNED_JAVASCRIPT.includes(file));
 }
 
 const COMMAND_LENGTH_BUDGET = 20_000;

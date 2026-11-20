@@ -22,7 +22,6 @@ import type { useComposerDraftHistory } from './useComposerDraftHistory';
 import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import type { ComposerSendHandlers } from './composerSendHandlers';
-import type { QueuedMessage } from '@/stores/messageQueueStore';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import type { ChatInputProps } from './chatInputProps';
 import type { SubmitOptions } from './chatInputProps';
@@ -78,11 +77,11 @@ type Dependencies = {
     sending: Pick<ReturnType<typeof useSessionUIStore.getState>, 'sendMessage'>;
     inlineContext: Pick<ReturnType<typeof useComposerInlineContext>, 'isMobileCommentOpen' | 'hasDrafts' | 'attachmentsToSend' | 'inlineDraftTarget' | 'consumeDrafts'>;
     sendHandlers: Pick<ComposerSendHandlers, 'handleSubmitRef'>;
-    sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'composerQueuedMessages' | 'getCurrentInputSnapshot' | 'hasQueuedMessages'>;
+    sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'getCurrentInputSnapshot'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'isBtwActive' | 'currentSessionId' | 'btwPanel' | 'newSessionDraftOpen' | 'newSessionDraft' | 'btwDirectory' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'attachedFiles' | 'inputMode' | 'btwSessionId' | 'activeRuntimeKey' | 'chatDraftIdentity' | 'immediateBtwSubmitRef' | 'sendHeldByMissingFolder' | 'setReviewDialogOpen' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'btwComposerSessionId' | 'sessionFolder'>;
     parallelRun: Pick<ReturnType<typeof useComposerParallelRun>, 'parallel'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'autoReviewRunning'>;
-    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'takeForSend'>;
+    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget'>;
     selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'currentAgentName' | 'currentVariant' | 'mailboxTarget' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
     language: Pick<ReturnType<typeof useComposerLanguage>, 'readSessionMentionsBeforeSend' | 'guestCommands' | 'availableSkills' | 'linkedReferences' | 'referenceLinksIn' | 'sessionMentionsIn' | 'loadCommands'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
@@ -110,7 +109,7 @@ export function useComposerSubmission({
     const { sendMessage } = sending;
     const { isMobileCommentOpen, hasDrafts, attachmentsToSend, inlineDraftTarget, consumeDrafts } = inlineContext;
     const { handleSubmitRef } = sendHandlers;
-    const { pendingFirstSend, composerQueuedMessages, getCurrentInputSnapshot, hasQueuedMessages } = sendAvailability;
+    const { pendingFirstSend, getCurrentInputSnapshot } = sendAvailability;
     const {
         isBtwActive, currentSessionId, btwPanel, newSessionDraftOpen, newSessionDraft, btwDirectory,
         currentSessionDirectoryForSync, currentDirectory, attachedFiles, inputMode, btwSessionId,
@@ -120,7 +119,7 @@ export function useComposerSubmission({
     } = sessionScope;
     const { parallel } = parallelRun;
     const { sessionPhase, autoReviewRunning } = sessionLifecycle;
-    const { messageQueueTarget, takeForSend } = queueState;
+    const { messageQueueTarget } = queueState;
     const {
         currentProviderId, currentModelId, currentAgentName, currentVariant,
         mailboxTarget, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
@@ -153,7 +152,10 @@ export function useComposerSubmission({
         const submitRuntimeKey = getRuntimeKey();
         const submitRuntimeRevision = getRuntimeSwitchRevision();
         const queuedOnly = options?.queuedOnly ?? false;
-        const queuedMessageId = options?.queuedMessageId;
+        if (queuedOnly) {
+            toast.info(t('common.unavailable'));
+            return;
+        }
         const delivery = options?.delivery === 'steer' && sessionPhase !== 'idle' ? 'steer' : undefined;
         const capturedTarget = messageQueueTarget;
         // Snapshot the draft and current-session identity before the first
@@ -168,13 +170,7 @@ export function useComposerSubmission({
                 hasContent: options.presetText.trim().length > 0 || attachedFiles.length > 0 || hasDrafts || (!isBtwActive && hasLinkedReferences),
             }
             : getCurrentInputSnapshot();
-        if (queuedOnly && autoReviewRunning) {
-            return;
-        }
-
-        if (queuedOnly) {
-            if (!composerQueuedMessages.some((message) => !queuedMessageId || message.id === queuedMessageId) || !currentSessionId) return;
-        } else if ((!inputSnapshot.hasContent && !hasQueuedMessages) || (!currentSessionId && !newSessionDraftOpen)) {
+        if (!inputSnapshot.hasContent || (!currentSessionId && !newSessionDraftOpen)) {
             return;
         }
 
@@ -268,16 +264,9 @@ export function useComposerSubmission({
             return;
         }
 
-        // The projection knows the captured send configuration; the full
-        // messages are taken from the queue only once nothing below can still
-        // bail out, so an early return leaves the queue untouched.
-        const queuedProjection = queuedMessageId
-            ? composerQueuedMessages.filter((message) => message.id === queuedMessageId)
-            : composerQueuedMessages;
-        const capturedSendConfig = queuedProjection[0]?.sendConfig;
-        const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
-        const modelIdToSend = capturedSendConfig?.modelID ?? currentModelId;
-        const variantToSend = capturedSendConfig ? capturedSendConfig.variant : currentVariant;
+        const providerIdToSend = currentProviderId;
+        const modelIdToSend = currentModelId;
+        const variantToSend = currentVariant;
         const sessionEffortAgent = currentSessionId
             ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
             ?? useConfigStore.getState().currentAgentName
@@ -288,12 +277,7 @@ export function useComposerSubmission({
                 currentSessionId, sessionEffortAgent, providerIdToSend, modelIdToSend,
             )
             : undefined;
-        // A queued item owns the effort it captured: its explicit value (or
-        // unset/auto) is delivered as captured, never re-resolved against a
-        // later session or preference change.
-        const reasoningEffortToSend = reasoningEffortForModel(providerIdToSend, modelIdToSend, capturedSendConfig
-            ? { captured: capturedSendConfig }
-            : {
+        const reasoningEffortToSend = reasoningEffortForModel(providerIdToSend, modelIdToSend, {
                 session: sessionReasoningEffort,
                 native: currentSessionId ? persistedThinkingLevel : undefined,
                 draft: configuredReasoningEffort,
@@ -399,10 +383,10 @@ export function useComposerSubmission({
                     const forkOutcome = await runForkCommand(currentSessionId, commandPlan.command.argument, {
                         // The fork branches the main session, so it keeps that session's
                         // selection even while the btw panel owns the composer.
-                        providerID: capturedSendConfig?.providerID ?? currentProviderId,
-                        modelID: capturedSendConfig?.modelID ?? currentModelId,
+                        providerID: currentProviderId,
+                        modelID: currentModelId,
                         agent: undefined,
-                        variant: capturedSendConfig?.variant ?? currentVariant ?? undefined,
+                        variant: currentVariant ?? undefined,
                     }, {
                         fork: sessionActions.forkFromLastCompletedTurn,
                         directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.sessionId) || currentDirectory || null,
@@ -486,20 +470,6 @@ export function useComposerSubmission({
         }
         const preparedDocumentMentions = documentMentions.prepared;
 
-        // The composer delivers these itself, so they leave the queue now. The
-        // server skips anything already in flight so it cannot go out twice.
-        let queuedMessagesToSend: QueuedMessage[] = [];
-        if (capturedTarget && hasQueuedMessages && !commandPlan) {
-            try {
-                queuedMessagesToSend = await takeForSend(capturedTarget, queuedMessageId);
-            } catch (error) {
-                console.warn('[queue] failed to take queued messages for sending:', error);
-                toast.error(problemMessage(error, t('chat.queuedMessage.toast.takeFailed')));
-                return;
-            }
-            if (queuedOnly && queuedMessagesToSend.length === 0) return;
-        }
-
         const historySubmissions = buildChatInputHistorySubmissions({
             inputMode,
             // Server-owned items were recorded on acceptance.
@@ -555,7 +525,7 @@ export function useComposerSubmission({
         }
 
         const outgoing = buildOutgoingMessage({
-            queued: queuedMessagesToSend,
+            queued: [],
             composerText: !queuedOnly && inputSnapshot.hasContent ? inputSnapshot.message : null,
             composerAttachments: attachedFiles,
             inlineComments: expandedDrafts,

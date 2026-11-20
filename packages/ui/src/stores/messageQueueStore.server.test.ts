@@ -356,7 +356,7 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["srv-1"])
   })
 
-  test("accepted queue history survives automatic delivery and manual take without recapture", async () => {
+  test("accepted queue history survives Host delivery and rejected manual take without recapture", async () => {
     const historyTarget = { runtimeKey: 'runtime-a', directory: '/repo', sessionId: 'history-accepted' };
     const item = serverItem('history-item', 'original prompt');
     respond = () => json(queueState([item], "100", historyTarget.sessionId));
@@ -372,7 +372,7 @@ describe("server-owned message queue", () => {
     // A server delivery broadcast removes the projection, never the history.
     applyMessageQueueUpdatedEvent(updated("101", queueState([], "101", historyTarget.sessionId)), historyTarget.runtimeKey);
     expect(entries()).toHaveLength(1);
-    await useMessageQueueStore.getState().takeForSend(historyTarget);
+    await expect(useMessageQueueStore.getState().takeForSend(historyTarget)).rejects.toThrow('Host owns delivery');
     expect(entries()).toHaveLength(1);
   });
 
@@ -398,7 +398,7 @@ describe("server-owned message queue", () => {
     expect(selectInputHistoryEntries({ ...useInputHistoryStore.getState(), scope: 'session' }, historyTarget)).toEqual([]);
   });
 
-  test("addToQueue hands the captured context to the server, and a take brings it back", async () => {
+  test("addToQueue hands captured context to the Host without allowing client restoration", async () => {
     const context = [
       { kind: "context" as const, text: "issue body", metadata: issueMetadata },
       { kind: "synthetic" as const, text: "conflict payload" },
@@ -414,12 +414,12 @@ describe("server-owned message queue", () => {
     expect(callBody?.contextPreview).toBe("Bug")
     expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.context).toBe(undefined)
 
-    const [taken] = await useMessageQueueStore.getState().takeForSend(target, "srv-1")
-    expect(taken?.id).toBe("srv-1")
-    expect(taken?.text).toBe("with context")
+    await expect(useMessageQueueStore.getState().takeForSend(target, "srv-1")).rejects.toThrow('Host owns delivery')
+    expect(calls).toHaveLength(1)
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.id).toBe('srv-1')
   })
 
-  test("captured reasoning effort survives queue acceptance, reload and take", async () => {
+  test("captured reasoning effort survives queue acceptance and reload under Host ownership", async () => {
     const sendConfig = { providerID: "p", modelID: "m", reasoningEffort: "high" }
     const item = serverItem("effort-1", "think carefully", {
       options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: "high" },
@@ -435,9 +435,9 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
 
     respond = () => json(queueState([], "8"))
-    const [taken] = await useMessageQueueStore.getState().takeForSend(target, item.queueItemId)
-    expect(taken?.sendConfig).toEqual(sendConfig)
-    expect(taken?.sendConfig?.variant).toBeUndefined()
+    await expect(useMessageQueueStore.getState().takeForSend(target, item.queueItemId)).rejects.toThrow('Host owns delivery')
+    expect(calls).toHaveLength(2)
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
   })
 
   test("a server item with malformed context is rejected at the boundary", async () => {
@@ -465,24 +465,20 @@ describe("server-owned message queue", () => {
     expect(calls).toHaveLength(0)
   })
 
-  test("takeForSend brings the full message back and removes it from the server", async () => {
+  test("manual editing is unsupported and preserves the Host-owned message", async () => {
     useMessageQueueStore.setState({
       queuedMessages: {
         [key]: [{ id: "q1", content: "with file", text: "with file", createdAt: 1, attachments: [attachment] }],
       },
     })
     respond = () => json(queueState([]))
-    const [taken] = await useMessageQueueStore.getState().takeForSend(target, "q1")
-
-    expect(calls[0]?.path).toBe("/api/message-queue/sessions/session-1/items/q1")
-    expect(calls[0]?.method).toBe("DELETE")
-    expect(calls[0]?.body).toEqual({ expectedRevision: "0", queueItemId: "q1" })
-    expect(taken?.content).toBe("with file")
-    expect(taken?.attachments?.[0]?.serverPath).toBe("attachment://att-1")
-    expect(useMessageQueueStore.getState().queuedMessages[key]).toBe(undefined)
+    await expect(useMessageQueueStore.getState().popToInput(target, "q1")).rejects.toThrow('Host owns delivery')
+    expect(calls).toHaveLength(0)
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.content).toBe('with file')
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.attachments?.[0]?.serverPath).toBe('attachment://att-1')
   })
 
-  test("takeForSend without an id takes everything not in flight", async () => {
+  test("manual send-now is unsupported for queued and leased entries", async () => {
     useMessageQueueStore.setState({
       queuedMessages: {
         [key]: [
@@ -493,12 +489,17 @@ describe("server-owned message queue", () => {
       sendingIds: { [key]: ["q1"] },
     })
     respond = () => json(queueState([]))
-    const taken = await useMessageQueueStore.getState().takeForSend(target)
+    await expect(useMessageQueueStore.getState().takeForSend(target)).rejects.toThrow('Host owns delivery')
+    await expect(useMessageQueueStore.getState().takeForSend(target, 'q1')).rejects.toThrow('Host owns delivery')
+    expect(calls).toHaveLength(0)
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q1", "q2"])
+    expect(useMessageQueueStore.getState().sendingIds[key]).toEqual(['q1'])
+  })
 
-    expect(calls[0]?.path).toBe("/api/message-queue/sessions/session-1/items/q2")
-    expect(calls[0]?.method).toBe("DELETE")
-    expect(taken.map((m) => m.content)).toEqual(["second"])
-    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q1"])
+  test("an empty queue cannot be claimed by a client either", async () => {
+    await expect(useMessageQueueStore.getState().takeForSend(target)).rejects.toThrow('Host owns delivery')
+    expect(calls).toHaveLength(0)
+    expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
   })
 
   test("broadcasts update the projection but never move it backwards", () => {
