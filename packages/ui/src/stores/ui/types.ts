@@ -295,7 +295,6 @@ export interface UIStore {
   agentRenderToolEnabled: boolean;
   agentSecretToolEnabled: boolean;
   agentWorkflowToolEnabled: boolean;
-  agentWorkflowAutoApprove: boolean;
   isolatedSpacesEnabled: boolean;
   permissionDefaultMode: PermissionMode;
   agentMemoryFeatureAvailable: boolean;

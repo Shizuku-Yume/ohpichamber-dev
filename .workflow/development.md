@@ -4,21 +4,30 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
-2026-11-20 upstream-sync audit reconciliation is partial. The first two commits
-remove 113 stale gap exceptions, repair surviving converted-owner citations and
-reconcile all 260 Git-contradicted ledger rows against `cf18602cc`. A further 162
-mechanically compared paths now cite package naming or runtime-equivalent source
-cleanup; the route audit recognizes typed Express calls and converted router
-owners, and request-method inference no longer reads a later request's options.
-Fifty-nine additional gap exceptions cover only the recorded OpenCode-engine,
-folder-trust and isolated-spaces exclusions or explicitly retired OpenCode
-dependencies. After merging the concurrent composer/reference/settings fixes,
-`bun run type-check` still reports 3/5 root checks passing: 222 unexplained paths
-and 146 unallowlisted gaps remain. Those entries are not accepted exceptions;
-the remaining source/parity review is unfinished. No retained feature, UI or Git
-implementation was changed by the audit commits. Detailed current evidence is
-under `/home/ubuntu/ci-logs/audit-*`; full retained-platform acceptance is not
-claimed.
+2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
+branch `4178cd1b1` (including UI state/infra and extension waits). Earlier stages
+removed 113 stale gap exceptions and reconciled all 260 contradicted ledger
+rows. The continuation restores authenticated browser uploads from the captured
+session directory, the mobile Return-key control and worktree-create search/tab
+mapping, forwarded-client tunnel scoping, and managed chat cleanup subscriptions
+with shutdown detachment. It removes the unused workflow auto-approval field and
+sanitizer. Scanner regressions cover typed calls, spread properties, same-file
+callers and dependency comparisons scoped to matching source owners. Sixteen
+more stale exceptions were removed, and reviewed Host/native differences retain
+specific reasons rather than waiving missing features.
+
+The root `bun run type-check` passes TypeScript (4,540 files / five projects),
+error-cause and CSS checks, but remains 3/5: drift reports 199 unexplained paths
+and gaps remain unallowlisted. Audit tests pass 40/40; cleanup/shutdown tests
+pass 52/52, settings-helper tests 63/63. The extension-waits route/runtime are
+present; its retired OpenCode callback differences have native-owner citations.
+Shared/received pages and background/later-page delivery are larger retained
+feature omissions: the 628-line sharing runtime is unmounted and render-page
+differs by 324 added/removed lines. Their UI callers remain exposed as gaps,
+not accepted exclusions. Other source/parity review is unfinished, including
+notification, worktree-move, terminal/control, settings and queue findings.
+Evidence is under `/home/ubuntu/ci-logs/audit-*`. UI changes are visually
+unverified; full retained-platform acceptance is not claimed.
 
 2026-11-20 upstream-sync tooling: excluded the inherited OpenCode-only
 `scripts/verify` stand (absent on main) and the orphan `.github` policy test;

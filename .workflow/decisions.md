@@ -5,7 +5,8 @@
 - **Decided:** compose one Host upload store into browser control and its authenticated download route; expose the existing file-input upload driver as `browser.upload`. Resolve files only inside the captured session folder, never a model-supplied directory or an OpenCode temporary directory. Keep the existing token expiry and file limits.
 - **Settings:** restore the mobile Return-key checkbox that still has live composer/comment consumers, and index the existing worktree-creation command section. No stores, sync infrastructure, sidebar/search or router ownership changes.
 - **Surfaces:** browser bytes stay on the connected Host for Web/PWA, Electron and mobile clients; browser driving remains subject to the existing renderer/provider capability. The Return-key checkbox is mobile-only, matching its search guard.
-- **Remaining:** extension waits is separately owned. Other missing capabilities are not waived by this decision.
+- **Remaining:** shared/received and later pages still require retained-feature restoration, not exceptions. Other unresolved audit findings are not waived by this decision.
+- **Follow-up:** after merging the extension-waits port, its Canonical session service replaces the retired OpenCode callbacks. Restore managed chat-directory cleanup with scoped snapshot/event subscriptions, connection gating and shutdown detachment. Remove the unused `agentWorkflowAutoApprove` store/sanitizer fields; no runtime consumed them and workflow admission still requires explicit approval.
 
 Every choice that mattered, with the option it beat. Newest last.
 

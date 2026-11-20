@@ -193,7 +193,6 @@ export const createInitialUIState = (): Pick<UIStore,
   | 'agentRenderToolEnabled'
   | 'agentSecretToolEnabled'
   | 'agentWorkflowToolEnabled'
-  | 'agentWorkflowAutoApprove'
   | 'isolatedSpacesEnabled'
   | 'permissionDefaultMode'
   | 'agentMemoryFeatureAvailable'
@@ -422,7 +421,6 @@ export const createInitialUIState = (): Pick<UIStore,
   agentRenderToolEnabled: true,
   agentSecretToolEnabled: true,
   agentWorkflowToolEnabled: true,
-  agentWorkflowAutoApprove: false,
   isolatedSpacesEnabled: false,
   permissionDefaultMode: 'ask',
   agentMemoryFeatureAvailable: false,

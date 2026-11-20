@@ -204,7 +204,7 @@ import {
 
 const AGENT_TOOL_BOOLEAN_KEYS = [
   'agentControlToolEnabled', 'agentScheduleToolEnabled', 'agentMemoryToolEnabled', 'agentMemoryDreamingEnabled',
-  'agentKnowledgeToolEnabled', 'agentWorkflowToolEnabled', 'agentWorkflowAutoApprove', 'agentNotifyToolEnabled',
+  'agentKnowledgeToolEnabled', 'agentWorkflowToolEnabled', 'agentNotifyToolEnabled',
   'agentRenderToolEnabled', 'agentImageToolEnabled', 'agentSecretToolEnabled', 'agentUsageToolEnabled', 'agentTerminalToolEnabled',
 ] as const;
 
