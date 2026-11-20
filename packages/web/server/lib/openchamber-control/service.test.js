@@ -228,13 +228,48 @@ describe('OhPiChamber control service canonical consumers', () => {
     });
     const announced = await waiting;
     expect(announced).toMatchObject({ type: 'waiting', sessionId: 'session-1', callId: 'call-ask', title: 'Ask' });
-    expect(control.answerPage({ sessionId: 'session-1', callId: 'call-ask', summary: 'chose one', data: { n: 1 } }))
-      .toEqual({ answered: true });
+    await expect(control.answerPage({ sessionId: 'session-1', callId: 'call-ask', summary: 'chose one', data: { n: 1 } }))
+      .resolves.toEqual({ answered: true });
     await expect(pending).resolves.toMatchObject({
       ok: true,
       value: { title: 'Ask', answer: { answered: true, summary: 'chose one' } },
     });
   });
+  it('keeps an answerLater page with its owner and routes the later answer there', async () => {
+    const laterPages = { open: vi.fn(async () => undefined), answer: vi.fn(async () => ({ answered: true })) };
+    const { control } = createHarness(undefined, { laterPages });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const result = await control.invokeHostAction(scope, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Which layout?</p>', title: 'Later', answerLater: true }, toolCallId: 'call-later',
+    });
+    expect(result).toMatchObject({ ok: true, value: { shown: true, title: 'Later', answerLater: true } });
+    expect(laterPages.open).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session-1', callId: 'call-later', title: 'Later', question: 'Which layout?' }));
+    const answer = { sessionId: 'session-1', callId: 'call-later', summary: 'B' };
+    await expect(control.answerPage(answer)).resolves.toEqual({ answered: true });
+    expect(laterPages.answer).toHaveBeenCalledWith(answer);
+  });
+
+  it('creates a share group for a shared page without handing the agent its links', async () => {
+    const sharePages = {
+      isAvailable: () => true,
+      parseRequest: vi.fn((share) => share),
+      createGroup: vi.fn(async () => ({ recipients: [{ recipientId: 'r1', label: 'Ana', status: 'preparing' }], expiresAt: Date.UTC(2030, 0, 1) })),
+    };
+    const { control } = createHarness(undefined, { sharePages });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const call = (input) => control.invokeHostAction(scope, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', input, toolCallId: 'call-share',
+    });
+    const result = await call({ html: '<p>Approve?</p>', title: 'Review', share: { recipients: ['Ana'] } });
+    expect(result).toMatchObject({ ok: true, value: { title: 'Review', shared: { recipients: [{ label: 'Ana' }], expiresAt: '2030-01-01T00:00:00.000Z' } } });
+    expect(result.value.shared.recipients[0]).not.toHaveProperty('url');
+    expect(result.value.shared.recipients[0]).not.toHaveProperty('pin');
+    expect(sharePages.createGroup).toHaveBeenCalledWith({ sessionId: 'session-1', callId: 'call-share', title: 'Review', share: { recipients: ['Ana'] } });
+    await expect(call({ html: '<p>Approve?</p>', share: { recipients: ['Ana'] }, awaitAnswer: true })).resolves.toMatchObject({ ok: false });
+    expect(sharePages.createGroup).toHaveBeenCalledTimes(1);
+  });
+
   it('returns canonical project and workspace-scoped model projections', async () => {
     const { control, requests } = createHarness();
 

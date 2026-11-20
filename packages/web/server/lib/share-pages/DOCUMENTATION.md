@@ -90,7 +90,7 @@ Every change to a group is broadcast on the OpenChamber control stream as
 - The poller makes one batched `/p/states` call per relay per minute (50 ids
   per request) while any share is open or locked, and keeps ticking while an
   answer is undelivered or an ack is pending. It polls at once on start, after
-  OpenCode's event hub connects, after a wake (a 15 s heartbeat that fires more
+  the canonical event hub connects, after a wake (a 15 s heartbeat that fires more
   than 45 s late means the clock jumped), and on the relay's control-socket
   nudge `{ type: 'share-state', shareId }` while the private relay host runs
   (`../relay/host-client.js`).
@@ -98,13 +98,15 @@ Every change to a group is broadcast on the OpenChamber control stream as
   locally expires after 8 days past its deadline even if no state arrives,
   because the relay can no longer report it.
 - An answer is decrypted and stored with a message id minted before the first
-  delivery attempt, so a retry never posts it twice. Delivery is
-  `POST /api/session/:id/synthetic` with `delivery: 'steer'`, `resume: true`;
-  409 counts as delivered, 404 (session gone) too. Four attempts with backoff
+  delivery attempt, so a retry never posts it twice. Delivery goes through
+  `../openchamber-control/synthetic-delivery.js`: a canonical session send
+  keyed by that message id (an idle session starts a run), or a steer into
+  the active run (`RUN_ACTIVE`); 409 counts as delivered, 404 (session gone)
+  too. Four attempts with backoff
   per poll; what is still undelivered goes out on the next poll, after a
   restart as well.
-- Each answer OpenCode admitted (a 2xx, not a 409 replay or a 404) is
-  reported once through `onAnswerDelivered`, which `index.js` wires to the
+- Each answer the session admitted (a 2xx, not a 409 replay or a 404) is
+  reported once through `onAnswerDelivered`, which `runtime.ts` wires to the
   notifications runtime's `notifyShareAnswer` (toast, desktop, push). A crash
   between the admission and that call loses only the notification.
 - Only after delivery is the share closed on the relay (ack), which deletes the
@@ -370,8 +372,7 @@ one request per relay, and the relay's own state is authoritative either way.
 
 ## Runtime parity
 
-- Web and desktop with a managed OpenCode: available (the agent tool exists only there).
-- VS Code and an external OpenCode: the agent tool is not injected, so no share is ever made.
+- Web and desktop: available through the OMP Host; the agent asks with `openchamber_render` `render.page` and `share`.
 - Hosted and Capacitor mobile: the card and its routes work through the server
   they are connected to, relayed or direct; nothing runs in the client.
 - Receiving: web, desktop and both mobile shells through their server; the
