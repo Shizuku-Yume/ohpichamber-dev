@@ -28,6 +28,8 @@ Neighbouring stores still own terminal state and the files view's open paths.
   and same-version persisted-layout sanitization live in these owners too.
 - Runtime status dialog state is transient; no OpenCode updater preference is
   initialized or persisted.
+- Expanded chat sizes and goal turn caps ignore non-finite updates before
+  rounding or clamping, so live state cannot acquire `NaN` or infinity.
 
 ## Decisions
 

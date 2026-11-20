@@ -140,6 +140,7 @@ export const createPreferenceActions: UIStoreSlice<
   },
 
   setSessionGoalMaxAutoTurns: value => {
+    if (!Number.isFinite(value)) return;
     set({
       sessionGoalMaxAutoTurns: Math.min(SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, Math.max(1, Math.floor(value)))
     });
