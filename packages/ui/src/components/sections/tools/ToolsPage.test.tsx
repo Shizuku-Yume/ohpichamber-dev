@@ -40,7 +40,7 @@ describe('retained Host tool settings', () => {
       spyOn(models, 'useSettingsModels').mockReturnValue([]),
       spyOn(omp, 'useOmpPageSettings').mockReturnValue({ state: null, form: {}, loading: false, saving: false, pageSettings: [], getSectionSettings: () => [], updateSetting: async () => {}, setState: () => {}, setForm: () => {} }),
       spyOn(guests, 'loadGuestCatalog').mockResolvedValue(undefined),
-      spyOn(persistence, 'updateDesktopSettings').mockResolvedValue(undefined),
+      spyOn(persistence, 'updateDesktopSettings').mockResolvedValue({ ok: true }),
     ];
     restore = spies.map((spy) => () => spy.mockRestore());
   });
