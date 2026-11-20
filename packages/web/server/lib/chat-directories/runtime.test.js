@@ -37,7 +37,7 @@ const fixture = async () => {
   return { root, chats, directory, screenshot };
 };
 
-const makeRuntime = ({ roots, sessions = [] }) => {
+const makeRuntime = ({ roots, sessions = [], eventHub }) => {
   const state = { sessions, owner: Symbol('Native Host') };
   const list = vi.fn(async () => page(state.sessions));
   const logger = { warn: vi.fn() };
@@ -53,10 +53,57 @@ const makeRuntime = ({ roots, sessions = [] }) => {
     resolveSessionScope,
     getOwner: () => state.owner,
     logger,
+    eventHub,
   });
   runtimes.push(runtime);
   return { runtime, state, list, open, resolveSessionScope, logger };
 };
+
+const makeHub = () => {
+  const listeners = new Map();
+  const subscribe = (name) => (listener) => {
+    listeners.set(name, listener);
+    return () => listeners.delete(name);
+  };
+  return {
+    listeners,
+    emit: (name, ...args) => listeners.get(name)?.(...args),
+    subscribeSnapshot: subscribe('snapshot'),
+    subscribeEvent: subscribe('event'),
+    subscribeStatus: subscribe('status'),
+  };
+};
+
+it('reclaims confirmed deletions through the captured Canonical hub subscriptions', async () => {
+  const { chats, directory } = await fixture();
+  const hub = makeHub();
+  const { state } = makeRuntime({ roots: [chats], sessions: [session('root', directory)], eventHub: hub });
+  await hub.emit('snapshot', ...created('root', directory));
+  await hub.emit('status', { type: 'connect' });
+  state.sessions = [];
+  await hub.emit('event', deleted('root'), locations.get('root'));
+  expect(await exists(directory)).toBe(false);
+});
+
+it('keeps unknown and disconnected folders, retries on reconnect and detaches on stop', async () => {
+  const { chats, directory } = await fixture();
+  const hub = makeHub();
+  const { runtime, state, list } = makeRuntime({ roots: [chats], sessions: [session('root', directory)], eventHub: hub });
+  await hub.emit('status', { type: 'connect' });
+  await hub.emit('event', deleted('unknown'));
+  expect(await exists(directory)).toBe(true);
+  await hub.emit('status', { type: 'error' });
+  state.sessions = [];
+  await hub.emit('event', deleted('root'));
+  expect(await exists(directory)).toBe(true);
+  list.mockImplementationOnce(async () => { throw new Error('inventory unavailable'); });
+  await hub.emit('status', { type: 'connect' });
+  expect(await exists(directory)).toBe(true);
+  await hub.emit('status', { type: 'connect' });
+  expect(await exists(directory)).toBe(false);
+  await runtime.stop();
+  expect(hub.listeners.size).toBe(0);
+});
 
 afterEach(async () => {
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.stop()));

@@ -77,6 +77,7 @@ import { createGracefulShutdownRuntime } from './lib/server-frame/shutdown-runti
 import { runCliEntryIfMain } from './lib/server-frame/cli-entry-runtime.js';
 import { configureAgentService } from './lib/small-model/client.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
+import { createChatDirectoryCleanupRuntime } from './lib/chat-directories/runtime.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
 import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js';
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
@@ -961,6 +962,14 @@ const globalMessageStreamHub = createGlobalMessageStreamHub({
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
 });
 
+const chatDirectoryCleanupRuntime = createChatDirectoryCleanupRuntime({
+ roots: [OPENCHAMBER_CHATS_DIR, path.join(OPENCHAMBER_DEFAULT_CONFIG_ROOT, 'chats')],
+ sessionService: openChamberSessionService,
+ resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+ getOwner: () => isShuttingDown ? null : hostAgentRuntime,
+ eventHub: globalMessageStreamHub,
+});
+
 autoReviewRuntime = createAutoReviewRuntime({
  globalEventHub: globalMessageStreamHub,
  sessionService: openChamberSessionService,
@@ -1557,6 +1566,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  syncToHmrState: () => { },
  hostAgentRuntime,
  openChamberSessionService,
+ chatDirectoryCleanupRuntime,
  sessionAssistRuntime,
  sessionWorkRuntime,
  contextObligatoryRuntime,

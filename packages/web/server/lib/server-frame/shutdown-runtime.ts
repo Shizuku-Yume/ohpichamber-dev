@@ -9,6 +9,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     globalMessageStreamHub,
     hostAgentRuntime,
     openChamberSessionService,
+    chatDirectoryCleanupRuntime,
     sessionRuntime,
     sessionAssistRuntime,
     sessionWorkRuntime,
@@ -79,6 +80,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       () => getSpacesHost()?.close(),
       () => getRelayService()?.stop(),
       () => getDictationRuntime()?.stop(),
+      () => chatDirectoryCleanupRuntime?.stop(),
       // Discard prepared-but-unused sessions before their workers are stopped, so a
       // speculative prepare never outlives the Host.
       () => openChamberSessionService?.close?.(),

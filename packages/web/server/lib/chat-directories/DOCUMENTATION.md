@@ -4,6 +4,11 @@
 
 This module removes generated managed chat folders after confirmed host session deletions. `scheduled-tasks/chats-scope.js` and the shared UI own folder creation. The filesystem routes still serve explicit file operations and draft rollback.
 
+The Host constructs this runtime with its Canonical event hub before session
+observers start. Snapshots and events retain their captured Host scope; stream
+connection changes gate reclamation. Shutdown detaches all three subscriptions
+and aborts outstanding cleanup before stopping the Agent Service.
+
 ## Invariants
 
 - Only the current Host owner authorizes cleanup. An unavailable owner or

@@ -6,12 +6,14 @@ import { CanonicalEventSchema, RuntimeSessionSchema, SessionSchema, SessionSnaps
 import type { CanonicalEvent, RuntimeSession, SessionSnapshot } from '@openchamber/agent-contract';
 import { canonicalDirectoryPath } from '../fs/canonical-path.js';
 import type { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
+import type { createGlobalMessageStreamHub } from '../event-stream/global-hub.js';
 
 export interface ChatDirectoryCleanupOptions<Owner> {
   roots: string[];
   sessionService: Pick<ReturnType<typeof createOpenChamberSessionService>, 'list' | 'open'>;
   resolveSessionScope: (sessionId: string) => Promise<SessionDirectoryScope | null>;
   getOwner: () => Owner | null;
+  eventHub?: Pick<ReturnType<typeof createGlobalMessageStreamHub>, 'subscribeSnapshot' | 'subscribeEvent' | 'subscribeStatus'>;
   logger?: Pick<Console, 'warn'>;
 }
 
@@ -107,7 +109,7 @@ const captureDirectory = async (directory: string, roots: string[]): Promise<Cap
   return null;
 };
 
-export const createChatDirectoryCleanupRuntime = <Owner>({ roots, sessionService, resolveSessionScope, getOwner, logger = console }: ChatDirectoryCleanupOptions<Owner>) => {
+export const createChatDirectoryCleanupRuntime = <Owner>({ roots, sessionService, resolveSessionScope, getOwner, eventHub, logger = console }: ChatDirectoryCleanupOptions<Owner>) => {
   const managedRoots = [...new Set(roots.map((root) => path.resolve(root)))];
   const controller = new AbortController();
   let owner: Owner | null = null;
@@ -315,7 +317,7 @@ export const createChatDirectoryCleanupRuntime = <Owner>({ roots, sessionService
     return running;
   };
 
-  return {
+  const runtime = {
     onConnected() {
       if (stopped || !adoptOwner()) return;
       connected = true;
@@ -354,4 +356,17 @@ export const createChatDirectoryCleanupRuntime = <Owner>({ roots, sessionService
       return running;
     },
   };
+  if (eventHub) {
+    const unsubscribe = [
+      eventHub.subscribeSnapshot((snapshot, scope) => runtime.processSnapshot(snapshot, scope)),
+      eventHub.subscribeEvent((event, scope) => runtime.processPayload(event, scope)),
+      eventHub.subscribeStatus((status) => status.type === 'connect' ? runtime.onConnected() : runtime.onDisconnected()),
+    ];
+    const stop = runtime.stop;
+    runtime.stop = () => {
+      for (const detach of unsubscribe) detach();
+      return stop();
+    };
+  }
+  return runtime;
 };
