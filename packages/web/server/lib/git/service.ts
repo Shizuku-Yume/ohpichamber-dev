@@ -6590,7 +6590,12 @@ export async function teardownWorktree(directory: string, input: WorktreeRemoval
   return true;
 }
 
-export async function removeWorktree(directory: string, input: WorktreeRemovalInput = {}, { bootstrapStore }: BootstrapOptions = {}) {
+export async function removeWorktree(directory: string, input: WorktreeRemovalInput = {}, { bootstrapStore, removalWorkers }: BootstrapOptions & {
+  removalWorkers?: {
+    acquire: (directory: string, leaseId: string) => Promise<unknown>;
+    release: (leaseId: string) => Promise<void>;
+  };
+} = {}) {
 const targetDirectory = input?.directory === undefined ? undefined : normalizeDirectoryPath(input.directory);
 
 if (!targetDirectory) {
@@ -6670,15 +6675,23 @@ if (!matchedEntry?.worktree) {
 
 await runWorktreeTeardown(matchedEntry.worktree, input?.teardownCommand, input?.isContributorCheckout);
 
-await clearWorktreeBootstrapState(matchedEntry.worktree, bootstrapStore);
-
-const createdByCommand = await readWorktreeCreatedByCommand(matchedEntry.worktree);
-
+const leaseId = process.platform === 'win32' && removalWorkers && await checkPathExists(matchedEntry.worktree) ? randomUUID() : null;
 const settleRemoval = trackWorktreeRemoval(targetCanonical);
 
 const releaseInstance = () => disposeWorktreeInstanceBestEffort(input?.disposeInstance, matchedEntry.worktree);
+let releaseLease = leaseId !== null;
 
 try {
+    if (leaseId && removalWorkers) {
+      try {
+        await removalWorkers.acquire(matchedEntry.worktree, leaseId);
+      } catch (error) {
+        if (error?.releaseNotNeeded === true) releaseLease = false;
+        throw error;
+      }
+    }
+    await clearWorktreeBootstrapState(matchedEntry.worktree, bootstrapStore);
+    const createdByCommand = await readWorktreeCreatedByCommand(matchedEntry.worktree);
     await releaseInstance();
 
     const restoreGitDirectoryLink = await replaceWorktreeGitDirectoryLink(context.primaryWorktree, matchedEntry.worktree);
@@ -6705,6 +6718,7 @@ try {
       throw error;
     }
   } finally {
+    if (releaseLease && leaseId && removalWorkers) await removalWorkers.release(leaseId).catch(() => undefined);
     settleRemoval();
   }
 

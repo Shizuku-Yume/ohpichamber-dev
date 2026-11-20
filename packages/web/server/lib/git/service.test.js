@@ -5716,6 +5716,45 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
   }
  });
 
+ it.skipIf(process.platform !== 'win32')('leases an existing Windows checkout before Git removes it', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+  const checkout = path.join(createTempDir(), 'linked');
+  runGit(repo, ['worktree', 'add', '-b', 'linked', checkout]);
+
+  const child = spawn(process.execPath, ['-e', 'process.stdin.resume(); console.log("ready")'], { cwd: checkout });
+  const exited = once(child, 'exit');
+  const refusal = Object.assign(new Error('The session still has an active run'), { status: 409 });
+  const acquire = vi.fn()
+    .mockRejectedValueOnce(refusal)
+    .mockImplementationOnce(async (directory) => {
+      expect(fs.realpathSync(directory)).toBe(fs.realpathSync(checkout));
+      expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('refs/heads/linked');
+      child.stdin.end();
+      await exited;
+    });
+  const release = vi.fn(async () => {});
+  const options = { removalWorkers: { acquire, release } };
+  try {
+   await once(child.stdout, 'data');
+   await expect(removeWorktree(repo, { directory: checkout }, options)).rejects.toBe(refusal);
+   expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('refs/heads/linked');
+   expect(child.exitCode).toBeNull();
+   expect(release).toHaveBeenNthCalledWith(1, acquire.mock.calls[0][1]);
+
+   await expect(removeWorktree(repo, { directory: checkout }, options)).resolves.toBe(true);
+   expect(fs.existsSync(checkout)).toBe(false);
+   expect(release).toHaveBeenNthCalledWith(2, acquire.mock.calls[1][1]);
+  } finally {
+   child.stdin.end();
+   await exited;
+  }
+ }, 20_000);
+
  it('releases the worktree instance again before retrying a busy removal', async () => {
   if (!canRunGit() || process.platform === 'win32' || process.getuid?.() === 0) return;
 

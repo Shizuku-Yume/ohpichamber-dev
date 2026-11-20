@@ -1971,6 +1971,7 @@ export function registerGitRoutes(app: Application, {
 
       }, {
         bootstrapStore: worktreeBootstrapStore,
+        ...(worktreeLeaseControl ? { removalWorkers: worktreeLeaseControl } : {}),
       });
       res.json({ success: Boolean(result) });
     } catch (error) {

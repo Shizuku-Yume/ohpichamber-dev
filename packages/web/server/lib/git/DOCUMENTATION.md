@@ -317,6 +317,8 @@ The parent record is written once, when OpenChamber makes or rebases the branch.
 
 If Git has unregistered a checkout but cleanup of its remaining folder fails, the Host still publishes the new topology and the DELETE route returns `WORKTREE_UNREGISTERED`. The initiating client leaves the removed checkout without reporting successful folder cleanup.
 
+On Windows, the DELETE route acquires the same scoped Agent Service lease used by archiving before Git removes an existing registered checkout. The lease stops idle workers in that checkout and blocks new workers until removal finishes. An active run or command can refuse the lease and leave the checkout registered.
+
 ### Worktree create command
 
 A project's personal `createWorktreeCommand` (`../projects/DOCUMENTATION.md`)
