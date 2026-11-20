@@ -134,7 +134,6 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         if (!initialDraft.text) return;
 
         if (!persistEnabled) {
-            messageRef.current = '';
             confirmedMentionsRef.current = new Set();
             setMessage('');
             return;
@@ -157,7 +156,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         skipNextPersistRef.current = true;
 
         if (!skipOutgoingDraftRef.current && previousKey) {
-            const outgoing = { text: messageRef.current, confirmedMentions: new Set(confirmedMentionsRef.current) };
+            const outgoing = { text: text.get(), confirmedMentions: new Set(confirmedMentionsRef.current) };
             draftMemoryRef.current.set(previousKey, outgoing);
             if (persistEnabled) persistNow(previous, outgoing.text);
         }
@@ -165,13 +164,12 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
 
         const restored = (currentKey && draftMemoryRef.current.get(currentKey))
             || (persistEnabled ? readChatDraft(identity) : { text: '', confirmedMentions: new Set<string>() });
-        messageRef.current = restored.text;
         setMessage(restored.text);
         confirmedMentionsRef.current = new Set(restored.confirmedMentions);
         if (restored.text) {
             requestAnimationFrame(() => callbacksRef.current.onDraftRestored?.('saved'));
         }
-    }, [clearPending, confirmedMentionsRef, identity, messageRef, persistEnabled, persistNow, setMessage]);
+    }, [clearPending, confirmedMentionsRef, identity, text, persistEnabled, persistNow, setMessage]);
 
     React.useEffect(() => {
         if (!pendingComposerRestore) return;
@@ -193,7 +191,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
                 callbacksRef.current.onDraftRestored?.('fork');
             }
         });
-    }, [clearPending, confirmedMentionsRef, identity, messageRef, pendingComposerRestore, persistEnabled, persistNow, setMessage]);
+    }, [clearPending, confirmedMentionsRef, identity, text, pendingComposerRestore, persistEnabled, persistNow, setMessage]);
 
     React.useEffect(() => subscribeChatDraftDeletion((deleted) => {
         const deletedKey = getChatDraftIdentityKey(deleted);
@@ -231,7 +229,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     React.useEffect(() => {
         const flush = () => {
             clearPending();
-            if (persistEnabled) persistNow(currentIdentityRef.current, messageRef.current);
+            if (persistEnabled) persistNow(currentIdentityRef.current, text.get());
         };
         const onVisibilityChange = () => {
             if (document.visibilityState === 'hidden') flush();
@@ -246,14 +244,14 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             window.removeEventListener('pagehide', flush);
             flush();
         };
-    }, [clearPending, messageRef, persistEnabled, persistNow]);
+    }, [clearPending, text, persistEnabled, persistNow]);
 
     const restoreDraft = React.useCallback((target: ChatDraftIdentity | null, draft: string, confirmedMentions: Set<string>) => {
         const targetKey = target ? getChatDraftIdentityKey(target) : null;
         const current = currentIdentityRef.current;
         const isCurrent = target && current && getChatDraftIdentityKey(target) === getChatDraftIdentityKey(current);
         const existing = isCurrent
-            ? { text: messageRef.current, confirmedMentions: confirmedMentionsRef.current }
+            ? { text: text.get(), confirmedMentions: confirmedMentionsRef.current }
             : (targetKey && draftMemoryRef.current.get(targetKey)) || (isBtwPendingComposerKey(target?.sessionId) ? null : persistEnabled ? readChatDraft(target) : null);
         const text = existing?.text && existing.text !== draft ? `${existing.text}\n\n${draft}` : draft;
         const mentions = new Set([...(existing?.confirmedMentions ?? []), ...confirmedMentions]);
@@ -266,7 +264,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             writeChatDraft(target, text, mentions);
             lastPersistedRef.current.set(getChatDraftIdentityKey(target), draftSignature(text, mentions));
         }
-    }, [confirmedMentionsRef, messageRef, persistEnabled, setMessage]);
+    }, [confirmedMentionsRef, text, persistEnabled, setMessage]);
 
     const handoffDraft = React.useCallback((target: ChatDraftIdentity | null, draft: string | null) => {
         const targetKey = target ? getChatDraftIdentityKey(target) : null;
@@ -322,7 +320,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         lastPersistedRef.current.delete(fromKey);
         // Only clear what was actually moved; an unrelated draft stays.
         if (from && readChatDraft(from).text === draft.text) clearChatDraft(from);
-    }, [confirmedMentionsRef, messageRef, persistEnabled]);
+    }, [confirmedMentionsRef, text, persistEnabled]);
 
     return { persistNow, handoffDraft, restoreDraft, migrateDraft };
 }

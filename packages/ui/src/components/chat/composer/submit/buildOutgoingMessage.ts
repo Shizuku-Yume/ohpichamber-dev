@@ -44,7 +44,7 @@ export const selectComposerQueue = (messages: readonly QueuedMessage[]): readonl
 export type ComposerContextReference =
     | { kind: 'repository-issue'; provider?: SourceControlProvider; number: number; title: string; url: string; contextText: string }
     | { kind: 'change-request'; provider: SourceControlProvider; number: number; title: string; url: string; context: string }
-    | { kind: 'linear-issue'; identifier: string; title: string; url: string; contextText: string }
+    | { kind: 'shared-page'; receivedId: string | null; host: string; title: string; opened: boolean; contextText: string }
     | { kind: 'repository-discussion'; provider: SourceControlProvider; number: number; title: string; url: string; contextText: string }
     | { kind: 'tracker-item'; provider: string; identifier: string; title: string; url: string; contextText: string }
     | { kind: 'session'; sessionId: string; title: string; contextText: string; messageId?: string }
@@ -176,9 +176,9 @@ export function buildComposerContext(
                 attach(createContextPart({ kind: 'change-request', provider, number, title, url }, prContext));
                 break;
             }
-            case 'linear-issue': {
-                const { identifier, title, url, contextText } = reference;
-                attach(createContextPart({ kind: 'tracker-item', provider: 'linear', identifier, title, url }, contextText));
+            case 'shared-page': {
+                const { receivedId, host, title, opened, contextText } = reference;
+                attach(createContextPart({ kind: 'shared-page', receivedId, host, title, opened }, contextText));
                 break;
             }
             case 'tracker-item': {
