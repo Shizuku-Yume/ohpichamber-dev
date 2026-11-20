@@ -87,7 +87,15 @@ full gates remain outstanding. Fork parent `881705d19b` has no chat-directory
 cleanup composition, so the incoming standalone controller stays unmounted per
 the maintainer's conditional wiring instruction.
 
-The upstream `1928155551` merge remains in progress, not accepted. The maintainer
+The real upstream merge now includes `v2.7.3` (`cf18602cc7`), after `1928155551`.
+Its four verification-runner slot changes are adopted; fork guidance, release
+notes, retired VS Code paths, 1.0.0 manifests and lockfile are retained by the
+standing exclusions. No resolved manifest changed, so no lockfile regeneration
+was needed for this increment. Baseline metadata and the drift pin now agree.
+Slot and drift unit tests pass (19); the verify-runner suite cannot collect
+because its stand still imports the retired `bundled-opencode-server.mjs`.
+That stand needs native adaptation, not restoration of an OpenCode launcher.
+Overall integration acceptance remains pending. The maintainer
 selected Host-only queue delivery: edit/send-now are disabled for every entry,
 store take/restore calls reject without mutation, and ordinary sends never drain
 the queue or inherit queued model choices. Queue tests pass 39/39 and disabled
