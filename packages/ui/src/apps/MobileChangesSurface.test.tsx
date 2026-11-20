@@ -418,6 +418,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'docs/moved.md', previousPath: 'docs/orig.md', index: 'R', working_dir: ' ' }] }); });
     initialDiff = { path: 'docs/moved.md', staged: true };
     await render();
+    expect(container.querySelector('h2')?.textContent).toBe('moved.md');
     expect(container.textContent).toContain('Renamed from docs/orig.md — content unchanged');
     const workingRenameRequest = [...requests].reverse().find((url) => url.pathname === '/api/git/file-diff');
     expect(workingRenameRequest?.searchParams.get('previousPath')).toBe('docs/orig.md');
