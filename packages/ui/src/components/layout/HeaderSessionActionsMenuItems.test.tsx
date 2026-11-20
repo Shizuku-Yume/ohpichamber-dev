@@ -2,16 +2,8 @@ import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-<<<<<<< HEAD:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
 import type { Session } from '@openchamber/agent-contract';
-import type { SessionTabMenuComponents } from './SessionTabsStrip';
-||||||| bc50ba56aa:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
-import type { Session } from '@/lib/opencode/model';
-import type { SessionTabMenuComponents } from './SessionTabsStrip';
-=======
-import type { Session } from '@/lib/opencode/model';
 import type { SessionMenuSlots } from '@/components/session/sidebar/sessions/sessionMenuSlots';
->>>>>>> upstream/main:packages/ui/src/components/layout/HeaderSessionActionsMenuItems.test.tsx
 
 const browser = new Window({ url: 'http://localhost' });
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -37,19 +29,6 @@ const { HeaderSessionActionsMenuItems } = await import('./HeaderSessionActionsMe
 const initialSessions = useGlobalSessionsStore.getState();
 const initialUI = useSessionUIStore.getState();
 const initialShortcutOverrides = useUIStore.getState().shortcutOverrides;
-<<<<<<< HEAD:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
-const Item: SessionTabMenuComponents['Item'] = (props) => <button {...props} />;
-const session = (sessionId: string, archivedAt?: number): Session => ({
-  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  archivedAt, title: archivedAt === undefined ? undefined : `session ${sessionId}`, metadata: null, metadataRevision: '0', archiveRevision: archivedAt === undefined ? '0' : '1',
-||||||| bc50ba56aa:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
-const Item: SessionTabMenuComponents['Item'] = (props) => <button {...props} />;
-const session = (id: string, archived?: number): Session => ({
-  id, title: id, directory: '/workspace', projectID: 'project', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1, archived },
-=======
 const Passthrough = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
 const slots: SessionMenuSlots = {
   Item: (props: React.ComponentProps<'button'>) => <button type="button" {...props} />,
@@ -59,11 +38,10 @@ const slots: SessionMenuSlots = {
   SubContent: () => null,
 };
 const noop = () => undefined;
-const session = (id: string, archived?: number): Session => ({
-  id, title: id, directory: '/workspace', projectID: 'project', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1, archived },
->>>>>>> upstream/main:packages/ui/src/components/layout/HeaderSessionActionsMenuItems.test.tsx
+const session = (sessionId: string, archivedAt?: number): Session => ({
+  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+  archivedAt, title: archivedAt === undefined ? undefined : `session ${sessionId}`, metadata: null, metadataRevision: '0', archiveRevision: archivedAt === undefined ? '0' : '1',
 });
 let root: Root;
 let archiveRequests: number;
@@ -189,19 +167,9 @@ test('restores the menu session, including an inactive tab, and reacts to archiv
   expect(useSessionUIStore.getState().currentSessionId).toBe('another-session');
   expect(successMessages).toEqual(['Session restored']);
   expect(errorMessages).toEqual([]);
-<<<<<<< HEAD:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
-  expect(button.textContent).toBe('Archive');
-  await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...session('target', 3), archiveRevision: '3' }));
-  expect(button.textContent).toBe('Restore');
-||||||| bc50ba56aa:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
-  expect(button.textContent).toBe('Archive');
-  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('target', 3)));
-  expect(button.textContent).toBe('Restore');
-=======
   expect(retentionButton()?.textContent).toBe('Archive');
-  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('target', 3)));
+  await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...session('target', 3), archiveRevision: '3' }));
   expect(retentionButton()?.textContent).toBe('Restore');
->>>>>>> upstream/main:packages/ui/src/components/layout/HeaderSessionActionsMenuItems.test.tsx
 });
 
 test('waits for confirmation and leaves a failed restore available for retry', async () => {
@@ -238,54 +206,16 @@ test('offers no restore for an archived subsession, which comes back only with i
 });
 
 test('offers no restore for an archived subsession whose parent is archived or unknown', async () => {
-<<<<<<< HEAD:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
   useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentSessionId: 'parent', rootSessionId: 'parent' });
-  await act(async () => root.render(
-    <I18nProvider>
-      <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />
-    </I18nProvider>,
-  ));
-  expect(document.querySelector('button')).toBeNull();
-||||||| bc50ba56aa:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
-  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentID: 'parent' });
-  await act(async () => root.render(
-    <I18nProvider>
-      <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />
-    </I18nProvider>,
-  ));
-  expect(document.querySelector('button')).toBeNull();
-=======
-  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentID: 'parent' });
   await renderMenu();
   expect(retentionButton()).toBeNull();
->>>>>>> upstream/main:packages/ui/src/components/layout/HeaderSessionActionsMenuItems.test.tsx
   await act(async () => { useGlobalSessionsStore.getState().upsertSession(session('parent', 3)); });
   expect(retentionButton()).toBeNull();
 });
 
 test('offers restore for an archived subsession whose parent is active', async () => {
-<<<<<<< HEAD:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
   useGlobalSessionsStore.getState().upsertSession(session('parent'));
   useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentSessionId: 'parent', rootSessionId: 'parent' });
-  await act(async () => root.render(
-    <I18nProvider>
-      <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />
-    </I18nProvider>,
-  ));
-  expect(document.querySelector('button')?.textContent).toBe('Restore');
-||||||| bc50ba56aa:packages/ui/src/components/layout/HeaderSessionArchiveMenuItem.test.tsx
-  useGlobalSessionsStore.getState().upsertSession(session('parent', 0));
-  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentID: 'parent' });
-  await act(async () => root.render(
-    <I18nProvider>
-      <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />
-    </I18nProvider>,
-  ));
-  expect(document.querySelector('button')?.textContent).toBe('Restore');
-=======
-  useGlobalSessionsStore.getState().upsertSession(session('parent', 0));
-  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentID: 'parent' });
   await renderMenu();
   expect(retentionButton()?.textContent).toBe('Restore');
->>>>>>> upstream/main:packages/ui/src/components/layout/HeaderSessionActionsMenuItems.test.tsx
 });

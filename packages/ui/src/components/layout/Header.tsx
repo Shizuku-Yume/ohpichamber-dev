@@ -22,16 +22,8 @@ import { useDirectoryStore as useAppDirectoryStore } from '@/stores/useDirectory
 import { isChatDirectoryForHome } from '@/lib/chatDirectories';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitBranchLabel } from '@/stores/useGitStore';
-<<<<<<< HEAD
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
-import { archiveUndoToastOptions, collectSessionMoveDescendants, collectSessionSubtreeIds } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
-||||||| bc50ba56aa
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { archiveUndoToastOptions, collectSessionMoveDescendants, collectSessionSubtreeIds } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
-=======
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { archiveUndoToastOptions, collectSessionSubtreeIds } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
->>>>>>> upstream/main
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
@@ -40,34 +32,13 @@ import { useDeviceInfo, useTabletStandalonePwaRuntime } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { useKeybinds } from '@/hooks/useKeybind';
 
-<<<<<<< HEAD
-import {
-} from '@/components/ui/collapsible';
-||||||| bc50ba56aa
-import {
-} from '@/components/ui/collapsible';
-import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
-import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
-=======
-import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
-import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
->>>>>>> upstream/main
 import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
 import { SessionTabsStrip, type SessionTabMenuArgs } from './SessionTabsStrip';
 import { SessionMenuItemHint } from '@/components/session/SessionMenuItemHint';
 import { MoveSessionDialog } from '@/components/session/MoveSessionDialog';
-<<<<<<< HEAD
-import { HeaderSessionArchiveMenuItem } from './HeaderSessionArchiveMenuItem';
-import { HeaderSessionMarkDoneMenuItem } from './HeaderSessionMarkDoneMenuItem';
-||||||| bc50ba56aa
-import { isSpaceDirectory } from '@/lib/spaces/space-route';
-import { HeaderSessionArchiveMenuItem } from './HeaderSessionArchiveMenuItem';
-import { HeaderSessionMarkDoneMenuItem } from './HeaderSessionMarkDoneMenuItem';
-=======
 import { HeaderSessionActionsMenuItems } from './HeaderSessionActionsMenuItems';
 import { dropdownSessionMenuSlots } from '@/components/session/sidebar/sessions/sessionMenuSlots';
 import { useSessionMarkdownExport } from '@/components/session/sidebar/sessions/useSessionMarkdownExport';
->>>>>>> upstream/main
 import { HeaderContextUsage } from './HeaderContextUsage';
 import { HeaderProjectControls } from './HeaderProjectControls';
 import { HeaderTerminalAction } from './HeaderTerminalAction';
@@ -105,20 +76,6 @@ type HeaderSessionSnapshot = {
   slug: string | null;
 };
 
-<<<<<<< HEAD
-// A subsession moves with its parent; a space's sessions stay inside its container.
-const canMoveSessionOutOf = (session: HeaderSessionSnapshot): boolean => (
-  !session.parentId && !session.archived
-);
-
-||||||| bc50ba56aa
-// A subsession moves with its parent; a space's sessions stay inside its container.
-const canMoveSessionOutOf = (session: HeaderSessionSnapshot): boolean => (
-  !session.parentId && !session.archived && !isSpaceDirectory(session.directory)
-);
-
-=======
->>>>>>> upstream/main
 export const Header: React.FC = () => {
   streamPerfCount('ui.header.render');
   const { t, direction } = useI18n();
@@ -136,23 +93,9 @@ export const Header: React.FC = () => {
       if (!session) return null;
       return {
         title: session.title ?? null,
-<<<<<<< HEAD
         directory: resolveGlobalSessionDirectory(session) || null,
         created: session.createdAt ?? null,
         slug: null,
-        parentId: session.parentSessionId ?? null,
-        archived: session.archivedAt !== undefined,
-||||||| bc50ba56aa
-        directory: record.directory ?? null,
-        created: session.time?.created ?? null,
-        slug: record.slug ?? null,
-        parentId: session.parentID ?? null,
-        archived: Boolean(session.time?.archived),
-=======
-        directory: record.directory ?? null,
-        created: session.time?.created ?? null,
-        slug: record.slug ?? null,
->>>>>>> upstream/main
       };
     },
     [currentSessionId],
@@ -376,17 +319,7 @@ export const Header: React.FC = () => {
   const selectedSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
   const homeDirectory = useAppDirectoryStore((state) => state.homeDirectory);
 
-<<<<<<< HEAD
-  // A draft waiting for a new space shows the space's branch and actions once it runs, and none
-  // of this computer's while it is made.
-
-||||||| bc50ba56aa
-  // A draft waiting for a new space shows the space's branch and actions once it runs, and none
-  // of this computer's while it is made.
   const draftSpace = useDraftSpaceTarget();
-=======
-  const draftSpace = useDraftSpaceTarget();
->>>>>>> upstream/main
   const openDirectory = React.useMemo(() => {
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
@@ -493,7 +426,6 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
   }, [isRenamingHeaderSession, saveHeaderSessionRename]);
 
-<<<<<<< HEAD
   const copySessionIdFor = React.useCallback((sessionId: string) => {
     if (!sessionId) return;
     void copyTextToClipboard(sessionId).then((result) => {
@@ -572,85 +504,6 @@ export const Header: React.FC = () => {
     });
   }, [currentSessionId, isCurrentSessionActive, isCurrentSessionMovingToWorktree, sessionDirectory, t]);
 
-||||||| bc50ba56aa
-  const copySessionIdFor = React.useCallback((sessionId: string) => {
-    if (!sessionId) return;
-    void copyTextToClipboard(sessionId).then((result) => {
-      toast[result.ok ? 'success' : 'error'](t(result.ok
-        ? 'sessions.sidebar.session.copyId.success'
-        : 'sessions.sidebar.session.copyId.error'));
-    }).catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
-  }, [t]);
-
-  const exportCurrentSession = React.useCallback(async () => {
-    if (!currentSessionId || !openDirectory) {
-      toast.error(t('sessions.sidebar.session.export.nothingToExport'));
-      return;
-    }
-    const records = await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory }).catch(() => null);
-    if (!records) {
-      toast.error(t('sessions.sidebar.session.export.failedLoadHistory'));
-      return;
-    }
-    if (records.length === 0) {
-      toast.error(t('sessions.sidebar.session.export.nothingToExport'));
-      return;
-    }
-    const markdown = formatSessionAsMarkdown(records, currentSession?.title ?? null);
-    const filename = buildExportFilename(currentSession?.title ?? null);
-    const savedPath = await saveAsMarkdownDesktop(markdown, filename);
-    if (!savedPath) downloadAsMarkdown(markdown, filename);
-    toast.success(t('sessions.sidebar.session.export.success'));
-  }, [currentSession?.title, currentSessionId, loadSessionRecords, openDirectory, t]);
-
-  // Extension session actions on the current session. The conversation is
-  // loaded the same way Export as Markdown loads it.
-  const guestActionEntries = useGuestActions();
-  const guestSessionActionEntries = React.useMemo(() => guestSessionActions(guestActionEntries), [guestActionEntries]);
-  const runCurrentSessionGuestAction = React.useCallback((entry: GuestActionEntry) => {
-    if (!currentSessionId) return;
-    void runGuestSessionAction({
-      entry,
-      t,
-      session: { id: currentSessionId, title: currentSession?.title, directory: sessionDirectory ?? openDirectory },
-      loadRecords: async () => {
-        if (!openDirectory) return null;
-        try {
-          return await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory });
-        } catch {
-          return null;
-        }
-      },
-      onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
-    });
-  }, [currentSession?.title, currentSessionId, loadSessionRecords, openDirectory, sessionDirectory, t]);
-  const renderGuestSessionActionItems = React.useCallback((Item: React.ElementType) => guestSessionActionEntries.map((entry) => (
-    <Item key={`${entry.guest.id}:${entry.action.id}`} onClick={() => runCurrentSessionGuestAction(entry)}>
-      <GuestIcon icon={entry.icon} iconSrc={entry.iconSrc} className="me-1 size-4" />{entry.action.label}
-    </Item>
-  )), [guestSessionActionEntries, runCurrentSessionGuestAction]);
-
-  const isCurrentSessionActive = currentSessionStatus?.type === 'busy' || currentSessionStatus?.type === 'retry';
-  const moveCurrentSessionToWorktree = React.useCallback(() => {
-    if (!currentSessionId || !sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree) return;
-    const sessions = useGlobalSessionsStore.getState().activeSessions;
-    const root = sessions.find((session) => session.id === currentSessionId);
-    if (!root) return;
-
-    requestSessionTreeMove({
-      kind: 'quick',
-      root,
-      descendants: collectSessionMoveDescendants(root, []),
-      sourceDirectory: sessionDirectory,
-      messages: buildSessionTreeMoveMessages(t, {
-        success: 'sessions.sidebar.session.moveToWorktree.success',
-        failure: 'sessions.sidebar.session.moveToWorktree.failed',
-      }),
-    });
-  }, [currentSessionId, isCurrentSessionActive, isCurrentSessionMovingToWorktree, sessionDirectory, t]);
-
-=======
->>>>>>> upstream/main
   const runHeaderRetentionAction = React.useCallback(async (action: 'archive' | 'delete', sessionId: string) => {
     const ids = [sessionId, ...collectSessionSubtreeIds(sessionId, [], action === 'delete')];
     const reopenId = useSessionUIStore.getState().currentSessionId === sessionId ? sessionId : null;
@@ -756,7 +609,6 @@ export const Header: React.FC = () => {
   }, [currentSessionId, handleOpenDraftMiniChat, isNewSessionDraftOpen, selectedSessionDirectory, sessionDirectory, worktreeDirectory]);
   const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
 
-<<<<<<< HEAD
   const openSessionInMiniChat = React.useCallback((sessionId: string, directory: string | undefined) => {
     void invokeDesktop('desktop_open_session_mini_chat_window', {
       sessionId,
@@ -766,18 +618,6 @@ export const Header: React.FC = () => {
       console.warn('[header] failed to open session mini chat window', error);
     });
   }, []);
-||||||| bc50ba56aa
-  const openSessionInMiniChat = React.useCallback((sessionId: string, directory: string) => {
-    void invokeDesktop('desktop_open_session_mini_chat_window', {
-      sessionId,
-      directory,
-      ...getMiniChatRuntimeArgs(),
-    }).catch((error) => {
-      console.warn('[header] failed to open session mini chat window', error);
-    });
-  }, []);
-=======
->>>>>>> upstream/main
 
 
 
@@ -989,7 +829,6 @@ export const Header: React.FC = () => {
     const { Item, Separator } = components;
     return (
       <>
-<<<<<<< HEAD
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}>
           <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.sessionId; }}>
             <Icon name="pencil-ai" className="me-1 size-4" />{t('sessions.sidebar.session.menu.rename')}
@@ -1051,114 +890,27 @@ export const Header: React.FC = () => {
           </SessionMenuItemHint>
         ) : null}
         <Separator />
-||||||| bc50ba56aa
-        <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}>
-          <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.id; }}>
-            <Icon name="pencil-ai" className="me-1 size-4" />{t('sessions.sidebar.session.menu.rename')}
-            {isActive && renameShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{renameShortcut}</span> : null}
-          </Item>
-        </SessionMenuItemHint>
-        <SessionAiRenameMenuItem sessionID={session.id} directory={session.directory} open={open} Item={Item} />
-        <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.copyId')}>
-          <Item onClick={() => copySessionIdFor(session.id)}>
-            <Icon name="file-copy" className="me-1 size-4" />{t('sessions.sidebar.session.menu.copyId')}
-          </Item>
-        </SessionMenuItemHint>
-        <Separator />
-        {isActive ? (
-          <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.exportMarkdown')}>
-            <Item onClick={() => void exportCurrentSession()}>
-              <Icon name="download" className="me-1 size-4" />{t('sessions.sidebar.session.menu.exportMarkdown')}
-            </Item>
-          </SessionMenuItemHint>
-        ) : null}
-        {hasElectronDesktopIPC ? (
-          <Item onClick={() => openSessionInMiniChat(session.id, isActive ? currentSessionOpenDirectory : session.directory ?? '')}>
-            <Icon name="picture-in-picture-2" className="me-1 size-4" />{t('sessions.sidebar.session.menu.openInMiniChat')}
-          </Item>
-        ) : null}
-        {isActive ? renderGuestSessionActionItems(Item) : null}
-        {canMoveToWorktree ? (
-          <SessionMenuItemHint hint={isCurrentSessionMovingToWorktree
-            ? t('sessions.sidebar.session.moveToWorktree.tooltipMoving')
-            : isCurrentSessionActive
-              ? t('sessions.sidebar.session.moveToWorktree.tooltipBusy')
-              : t('sessions.sidebar.session.moveToWorktree.tooltip')}>
-            <span className="block">
-              <Item
-                disabled={!sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree}
-                onClick={moveCurrentSessionToWorktree}
-                className="w-full"
-              >
-                <Icon name="folder-shared" className="me-1 size-4" />
-                {t('sessions.sidebar.session.menu.moveToWorktree')}
-              </Item>
-            </span>
-          </SessionMenuItemHint>
-        ) : null}
-        {canMoveSession ? (
-          <SessionMenuItemHint hint={isCurrentSessionActive
-            ? t('sessions.sidebar.session.moveToWorktree.tooltipBusy')
-            : t('sessions.moveSession.hint')}>
-            <span className="block">
-              <Item
-                disabled={!sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree}
-                onClick={() => setMoveSessionDialogOpen(true)}
-                className="w-full"
-              >
-                <Icon name="folder-shared" className="me-1 size-4" />
-                {t('sessions.moveSession.menu')}
-              </Item>
-            </span>
-          </SessionMenuItemHint>
-        ) : null}
-        <Separator />
-=======
->>>>>>> upstream/main
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.closeOtherTabs')}>
           <Item onClick={closeOtherTabs} className="[&>svg]:me-1">
             <Icon name="close-circle" className="me-1 h-4 w-4" />{t('header.sessionTabs.closeOtherTabs')}
           </Item>
         </SessionMenuItemHint>
         <Separator />
-<<<<<<< HEAD
-        <HeaderSessionMarkDoneMenuItem session={session} Item={Item} />
-        <HeaderSessionArchiveMenuItem
-          sessionId={session.sessionId}
-          Item={Item}
-          onArchive={() => void runHeaderRetentionAction('archive', session.sessionId)}
-||||||| bc50ba56aa
-        <HeaderSessionMarkDoneMenuItem session={session} Item={Item} />
-        <HeaderSessionArchiveMenuItem
-          sessionId={session.id}
-          Item={Item}
-          onArchive={() => void runHeaderRetentionAction('archive', session.id)}
-=======
         <HeaderSessionActionsMenuItems
-          sessionId={session.id}
+          sessionId={session.sessionId}
           open={open}
           slots={components}
           onRename={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.id; }}
           onExport={exportSession}
           onMoveSession={requestSessionMove}
-          onArchive={() => void runHeaderRetentionAction('archive', session.id)}
+          onArchive={() => void runHeaderRetentionAction('archive', session.sessionId)}
           onDelete={() => setPendingDeleteSessionId(session.id)}
->>>>>>> upstream/main
         />
-<<<<<<< HEAD
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}>
           <Item className="text-destructive focus:text-destructive" onClick={() => setPendingDeleteSessionId(session.sessionId)}>
             <Icon name="delete-bin" className="me-1 size-4" />{t('sessions.sidebar.bulkActions.delete')}
           </Item>
         </SessionMenuItemHint>
-||||||| bc50ba56aa
-        <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}>
-          <Item className="text-destructive focus:text-destructive" onClick={() => setPendingDeleteSessionId(session.id)}>
-            <Icon name="delete-bin" className="me-1 size-4" />{t('sessions.sidebar.bulkActions.delete')}
-          </Item>
-        </SessionMenuItemHint>
-=======
->>>>>>> upstream/main
       </>
     );
   }, [exportSession, requestSessionMove, runHeaderRetentionAction, t]);
@@ -1351,69 +1103,17 @@ export const Header: React.FC = () => {
                 }
               }}
             >
-<<<<<<< HEAD
               <div className="flex min-w-0 flex-col justify-center">
                 {isRenamingHeaderSession ? (
                   <form
                     ref={headerRenameFormRef}
-                    className="flex w-full min-w-0 items-center gap-2 leading-tight"
+                  data-session-rename-form="header"
+                  className="flex w-full min-w-0 items-center gap-2 leading-tight"
                     onPointerDown={(event) => event.stopPropagation()}
                     onSubmit={(event) => {
                       event.preventDefault();
                       void saveHeaderSessionRename();
                     }}
-||||||| bc50ba56aa
-            <div className="flex min-w-0 flex-col justify-center">
-              {isRenamingHeaderSession ? (
-                <form
-                  ref={headerRenameFormRef}
-                  className="flex w-full min-w-0 items-center gap-2 leading-tight"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveHeaderSessionRename();
-                  }}
-                >
-                  <input
-                    ref={focusHeaderRenameInput}
-                    value={headerSessionTitleDraft}
-                    onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
-                    placeholder={t('sessions.sidebar.session.menu.rename')}
-                    className="min-w-0 flex-1 bg-transparent text-[0.8125rem] font-medium leading-4 outline-none placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="submit"
-                    aria-label={t('sessions.sidebar.session.rename.save')}
-                    title={t('sessions.sidebar.session.rename.save')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-=======
-            <div className="flex min-w-0 flex-col justify-center">
-              {isRenamingHeaderSession ? (
-                <form
-                  ref={headerRenameFormRef}
-                  data-session-rename-form="header"
-                  className="flex w-full min-w-0 items-center gap-2 leading-tight"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveHeaderSessionRename();
-                  }}
-                >
-                  <input
-                    ref={focusHeaderRenameInput}
-                    value={headerSessionTitleDraft}
-                    onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
-                    placeholder={t('sessions.sidebar.session.menu.rename')}
-                    className="min-w-0 flex-1 bg-transparent text-[0.8125rem] font-medium leading-4 outline-none placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="submit"
-                    aria-label={t('sessions.sidebar.session.rename.save')}
-                    title={t('sessions.sidebar.session.rename.save')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
->>>>>>> upstream/main
                   >
                     <input
                       ref={focusHeaderRenameInput}

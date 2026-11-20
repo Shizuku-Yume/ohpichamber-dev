@@ -1,11 +1,5 @@
 import React from 'react';
-<<<<<<< HEAD
-import type { FileTabCloseGuard } from '@/components/views/FilesView';
-import type { FileTabSelectionGuard } from '@/components/views/files/fileTabSelectionGuard';
-||||||| bc50ba56aa
-=======
 import { ReceivedPagesTab } from '@/components/chat/sharePages/received/ReceivedPagesTab';
->>>>>>> upstream/main
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
@@ -379,23 +373,7 @@ const maxPanelHeight = (availableHeight: number | null): number => {
   return Math.max(CONTEXT_PANEL_MIN_HEIGHT, availableHeight - CONTEXT_CHAT_MIN_HEIGHT);
 };
 
-<<<<<<< HEAD
-/**
- * One zone around the chat (`lib/workspace/zones.ts`): its frame, header,
- * size and the surfaces that remount on every switch. The keep-alive
- * surfaces are portalled into its body from `ContextSurfacePanes`.
- */
 export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null>; fileTabSelectionGuard: React.RefObject<FileTabSelectionGuard | null> }> = ({ zone = 'right', fileTabCloseGuard, fileTabSelectionGuard }) => {
-||||||| bc50ba56aa
-/**
- * One zone around the chat (`lib/workspace/zones.ts`): its frame, header,
- * size and the surfaces that remount on every switch. The keep-alive
- * surfaces are portalled into its body from `ContextSurfacePanes`.
- */
-export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' }) => {
-=======
-export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' }) => {
->>>>>>> upstream/main
   const geometry = ZONE_GEOMETRY[zone];
   const layoutAnimationMs = useLayoutAnimationMs();
   const isVertical = geometry.axis === 'y';
@@ -825,13 +803,6 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
         return null;
       }
       const { id, index, allIds, close } = args;
-<<<<<<< HEAD
-      const closeOthers = () => requestCloseTabs(allIds.filter((tabId) => tabId !== id));
-      // "Left" and "right" name the screen sides; in RTL the earlier tabs are on the right.
-||||||| bc50ba56aa
-      const closeOthers = () => closeContextPanelTabs(directoryKey, allIds.filter((tabId) => tabId !== id));
-      // "Left" and "right" name the screen sides; in RTL the earlier tabs are on the right.
-=======
       const filePath = tabs.find((tab) => tab.id === id && tab.mode === 'file')?.targetPath;
       const copyPath = (value: string, relative: boolean) => {
         void copyTextToClipboard(value).then((result) => {
@@ -842,8 +813,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
           }
         });
       };
-      const closeOthers = () => closeContextPanelTabs(directoryKey, allIds.filter((tabId) => tabId !== id));
->>>>>>> upstream/main
+      const closeOthers = () => requestCloseTabs(allIds.filter((tabId) => tabId !== id));
       const before = allIds.slice(0, index);
       const after = allIds.slice(index + 1);
       const closeToLeft = () => requestCloseTabs(isRtl ? after : before);
@@ -903,13 +873,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
         </>
       );
     },
-<<<<<<< HEAD
-    [activeTab, directoryKey, isRtl, requestCloseTabs, t],
-||||||| bc50ba56aa
-    [activeTab, closeContextPanelTabs, directoryKey, isRtl, t],
-=======
-    [activeTab, closeContextPanelTabs, directoryKey, effectiveDirectory, files, isRtl, runtime.platform, t, tabs],
->>>>>>> upstream/main
+    [activeTab, directoryKey, effectiveDirectory, files, isRtl, runtime.platform, t, tabs],
   );
 
   const handleTabDragOut = React.useCallback((tabId: string, isOutside: (point: { x: number; y: number }) => boolean) => {

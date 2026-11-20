@@ -23,16 +23,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS as DndCSS } from '@dnd-kit/utilities';
 import { ContextMenu } from '@base-ui/react/context-menu';
-<<<<<<< HEAD
-import { ContextMenu as ContextMenuRoot } from '@/components/ui/context-menu';
-import type { Session } from '@openchamber/agent-contract';
-||||||| bc50ba56aa
-import { ContextMenu as ContextMenuRoot } from '@/components/ui/context-menu';
-import type { Session } from '@/lib/opencode/model';
-=======
 import { ContextMenu as ContextMenuRoot, ContextMenuContent } from '@/components/ui/context-menu';
-import type { Session } from '@/lib/opencode/model';
->>>>>>> upstream/main
+import type { Session } from '@openchamber/agent-contract';
 
 import { contextSessionMenuSlots, type SessionMenuSlots } from '@/components/session/sidebar/sessions/sessionMenuSlots';
 import { Icon } from '@/components/icon/Icon';

@@ -17,15 +17,7 @@ import { AGENT_TAB_IDLE_MS, dropIdleAgentTabs, pickLiveBrowserTabs, touchRecentB
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { useGuestsStore } from '@/lib/guests/store';
 import { guestHasSharedSurface, guestSurfaceDocking, type GuestSurfaceDocking } from '@/lib/guests/surfaces';
-<<<<<<< HEAD
-import { GUEST_SURFACE_DOCK_SIZE_MIN } from 'ohpichamber-sdk';
-import { isPluginContextPanelMode, pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
-||||||| bc50ba56aa
-import { GUEST_SURFACE_DOCK_SIZE_MIN } from '@openchamber/sdk';
-import { isPluginContextPanelMode, pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
-=======
 import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
->>>>>>> upstream/main
 import {
   getZoneView,
   resolveZoneActiveTab,
@@ -208,33 +200,7 @@ const ZonePane: React.FC<{
   );
 };
 
-<<<<<<< HEAD
-/**
- * Every keep-alive context surface, mounted once for the whole layout and
- * placed into the zone its surface lives in (`MovablePane`). The zone frames
- * (`ContextPanel`) render their chrome and the surfaces that remount on
- * switch (git, notes, plan, ...); these hold state a remount would lose.
- *
- * Rendered after every zone frame: the frames register their bodies from
- * refs and begin their layout animation in layout effects, both of which have
- * to run before the panes attach and the settle step queues behind them.
- */
 export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null>; fileTabSelectionGuard: React.RefObject<FileTabSelectionGuard | null> }> = ({ fileTabCloseGuard, fileTabSelectionGuard }) => {
-||||||| bc50ba56aa
-/**
- * Every keep-alive context surface, mounted once for the whole layout and
- * placed into the zone its surface lives in (`MovablePane`). The zone frames
- * (`ContextPanel`) render their chrome and the surfaces that remount on
- * switch (git, notes, plan, ...); these hold state a remount would lose.
- *
- * Rendered after every zone frame: the frames register their bodies from
- * refs and begin their layout animation in layout effects, both of which have
- * to run before the panes attach and the settle step queues behind them.
- */
-export const ContextSurfacePanes: React.FC = () => {
-=======
-export const ContextSurfacePanes: React.FC = () => {
->>>>>>> upstream/main
   const { t } = useI18n();
   const effectiveDirectory = useEffectiveDirectory() ?? '';
   const directoryKey = React.useMemo(
@@ -242,21 +208,10 @@ export const ContextSurfacePanes: React.FC = () => {
     [effectiveDirectory],
   );
   const panelState = useUIStore((state) => (directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined));
-<<<<<<< HEAD
+  const draftSpace = useDraftSpaceTarget();
+  const spacePreparing = draftSpace?.kind === 'preparing';
+  const draftSpaceDirectory = draftSpace?.kind === 'ready' ? draftSpace.directory : null;
   const contentDirectory = effectiveDirectory;
-||||||| bc50ba56aa
-  // A draft waiting for a new space keeps its tabs here, under the project's folder, while what they
-  // show comes from the space: nothing while the space is made, the space once it runs.
-  const draftSpace = useDraftSpaceTarget();
-  const spacePreparing = draftSpace?.kind === 'preparing';
-  const draftSpaceDirectory = draftSpace?.kind === 'ready' ? draftSpace.directory : null;
-  const contentDirectory = panelContentDirectory(draftSpace, effectiveDirectory) ?? '';
-=======
-  const draftSpace = useDraftSpaceTarget();
-  const spacePreparing = draftSpace?.kind === 'preparing';
-  const draftSpaceDirectory = draftSpace?.kind === 'ready' ? draftSpace.directory : null;
-  const contentDirectory = panelContentDirectory(draftSpace, effectiveDirectory) ?? '';
->>>>>>> upstream/main
   const placement = useUIStore((state) => state.contextSurfaceZones);
   const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory);
   const closeContextPanelTab = useUIStore((state) => state.closeContextPanelTab);
@@ -367,24 +322,9 @@ export const ContextSurfacePanes: React.FC = () => {
     if (!contentDirectory || fileActiveTab?.mode !== 'file' || !fileActiveTab.targetPath) {
       return;
     }
-<<<<<<< HEAD
-    // The editor reads its file under the folder the panel shows. A draft waiting for a space
-    // shows only the space's files, so a tab opened on this computer's before stays empty; and a
-    // tab the draft opened in the space stays empty in the project's other chats.
+    const sameSide = spaceIdOfDirectory(fileActiveTab.targetPath) === spaceIdOfDirectory(contentDirectory);
     setSelectedFilePath(normalizeContextPanelDirectoryKey(contentDirectory), fileActiveTab.targetPath, { allowOutsideRoot: false });
   }, [contentDirectory, fileActiveTab, setSelectedFilePath]);
-||||||| bc50ba56aa
-    // The editor reads its file under the folder the panel shows. A draft waiting for a space
-    // shows only the space's files, so a tab opened on this computer's before stays empty; and a
-    // tab the draft opened in the space stays empty in the project's other chats.
-    const sameSide = spaceIdOfDirectory(fileActiveTab.targetPath) === spaceIdOfDirectory(contentDirectory);
-    setSelectedFilePath(normalizeContextPanelDirectoryKey(contentDirectory), fileActiveTab.targetPath, { allowOutsideRoot: !draftSpace && sameSide });
-  }, [contentDirectory, draftSpace, fileActiveTab, setSelectedFilePath]);
-=======
-    const sameSide = spaceIdOfDirectory(fileActiveTab.targetPath) === spaceIdOfDirectory(contentDirectory);
-    setSelectedFilePath(normalizeContextPanelDirectoryKey(contentDirectory), fileActiveTab.targetPath, { allowOutsideRoot: !draftSpace && sameSide });
-  }, [contentDirectory, draftSpace, fileActiveTab, setSelectedFilePath]);
->>>>>>> upstream/main
 
   const hasOpenEditorFile = React.useMemo(
     () => tabs.some((tab) => tab.mode === 'file' && tab.targetPath),
@@ -568,19 +508,7 @@ export const ContextSurfacePanes: React.FC = () => {
           hidden={contentHidden(fileZone.zone)}
           className={cn('absolute inset-0 flex', fileTreeSide === 'left' && 'flex-row-reverse', isFileTabActive ? 'flex' : 'hidden')}
         >
-<<<<<<< HEAD
           {hasOpenEditorFile || !contextEditorTreeVisible ? (
-            // Hidden rather than unmounted so a hidden editor keeps its state.
-||||||| bc50ba56aa
-          {spacePreparing ? (
-            <div className="h-full min-w-0 flex-1"><SpacePreparing /></div>
-          ) : hasOpenEditorFile || !contextEditorTreeVisible ? (
-            // Hidden rather than unmounted so a hidden editor keeps its state.
-=======
-          {spacePreparing ? (
-            <div className="h-full min-w-0 flex-1"><SpacePreparing /></div>
-          ) : hasOpenEditorFile || !contextEditorTreeVisible ? (
->>>>>>> upstream/main
             <div className={cn('h-full min-w-0 flex-1', hasOpenEditorFile && !showsEditor && 'hidden')}>
               {hasOpenEditorFile ? (
                 <React.Suspense fallback={null}>
@@ -619,14 +547,7 @@ export const ContextSurfacePanes: React.FC = () => {
       ) : null}
       {loadedBrowserTabs.map((tab) => {
         const shown = tab.directory === directoryKey && browserZone.activeTab?.id === tab.id;
-<<<<<<< HEAD
         const siteDirectory = tab.directory;
-||||||| bc50ba56aa
-        // A tab of the draft on screen browses the space it waits for once the space runs.
-        const siteDirectory = tab.directory === directoryKey ? draftSpaceDirectory ?? tab.directory : tab.directory;
-=======
-        const siteDirectory = tab.directory === directoryKey ? draftSpaceDirectory ?? tab.directory : tab.directory;
->>>>>>> upstream/main
         return (
           <ZonePane
             key={browserTabRenderKey(tab.directory, tab.id)}
@@ -638,19 +559,8 @@ export const ContextSurfacePanes: React.FC = () => {
           >
             <div className="h-full" aria-hidden={!shown || undefined}>
               <PauseClock paused={!shown}>
-<<<<<<< HEAD
               <BrowserPane
-                  key={siteDirectory}
-||||||| bc50ba56aa
-              {tab.directory === directoryKey && spacePreparing ? <SpacePreparing /> : (
-                <BrowserPane
-                  // Remounted when the space starts: its page runs in the space's own session.
-                  key={siteDirectory}
-=======
-              {tab.directory === directoryKey && spacePreparing ? <SpacePreparing /> : (
-                <BrowserPane
                   key={tab.ownerSessionId !== null && !agentBrowserSharesLogins ? `${siteDirectory}\u0000agent` : siteDirectory}
->>>>>>> upstream/main
                   initialUrl={tab.targetPath ?? ''}
                   directory={tab.directory}
                   siteDirectory={siteDirectory}

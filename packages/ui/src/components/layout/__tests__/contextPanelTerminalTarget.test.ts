@@ -10,56 +10,6 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useTerminalStore } from '@/stores/useTerminalStore';
 
-<<<<<<< HEAD
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const surfacePanesSource = readFileSync(join(__dirname, '..', 'ContextSurfacePanes.tsx'), 'utf-8');
-
-describe('context panel terminal target wiring', () => {
-  test('keeps a singleton terminal tab lookup independent of the active tab', () => {
-    expect(surfacePanesSource).toContain('const terminalTab = React.useMemo(');
-    expect(surfacePanesSource).toContain("tabs.find((tab) => tab.mode === 'terminal')");
-    expect(surfacePanesSource).not.toContain('const hasTerminalTab = React.useMemo(');
-  });
-
-  test('passes the stored terminal targetDirectory into the mounted TerminalView', () => {
-    const renderStart = surfacePanesSource.indexOf('{terminalTab ? (');
-    expect(renderStart).toBeGreaterThan(-1);
-    const renderEnd = surfacePanesSource.indexOf('{walkthroughTab ? (', renderStart);
-    expect(renderEnd).toBeGreaterThan(renderStart);
-    const renderBlock = surfacePanesSource.slice(renderStart, renderEnd);
-
-    expect(renderBlock).toContain("terminalZone.activeTab?.mode === 'terminal' ? 'block' : 'hidden'");
-    expect(renderBlock).toContain('<TerminalView');
-    expect(renderBlock).toContain("visible={terminalZone.isOpen && terminalZone.activeTab?.mode === 'terminal'}");
-    expect(renderBlock).toContain('directory={terminalTab.targetDirectory}');
-    expect(renderBlock).not.toContain('directory={terminalZone.activeTab?.targetDirectory}');
-    expect(renderBlock).not.toContain('directory={effectiveDirectory}');
-||||||| bc50ba56aa
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// The keep-alive terminal pane lives in ContextSurfacePanes, portalled into its zone.
-const contextPanelSource = readFileSync(join(__dirname, '..', 'ContextSurfacePanes.tsx'), 'utf-8');
-
-describe('context panel terminal target wiring', () => {
-  test('keeps a singleton terminal tab lookup independent of the active tab', () => {
-    expect(contextPanelSource).toContain('const terminalTab = React.useMemo(');
-    expect(contextPanelSource).toContain("tabs.find((tab) => tab.mode === 'terminal')");
-    expect(contextPanelSource).not.toContain('const hasTerminalTab = React.useMemo(');
-  });
-
-  test('passes the stored terminal targetDirectory into the mounted TerminalView', () => {
-    const renderStart = contextPanelSource.indexOf('{terminalTab ? (');
-    expect(renderStart).toBeGreaterThan(-1);
-    const renderEnd = contextPanelSource.indexOf('{walkthroughTab ? (', renderStart);
-    expect(renderEnd).toBeGreaterThan(renderStart);
-    const renderBlock = contextPanelSource.slice(renderStart, renderEnd);
-
-    expect(renderBlock).toContain("terminalZone.activeTab?.mode === 'terminal' ? 'block' : 'hidden'");
-    expect(renderBlock).toContain('<TerminalView');
-    expect(renderBlock).toContain("visible={terminalZone.isOpen && terminalZone.activeTab?.mode === 'terminal'}");
-    expect(renderBlock).toContain('directory={terminalTab.targetDirectory}');
-    expect(renderBlock).not.toContain('directory={activeTab?.targetDirectory}');
-    expect(renderBlock).not.toContain('directory={effectiveDirectory}');
-=======
 let dom: Window;
 let root: Root;
 let observedDirectories: string[];
@@ -95,7 +45,6 @@ beforeEach(async () => {
   const captureSpy = spyOn(useTerminalStore.getState(), 'captureStartedActionMutationRevisions').mockImplementation((directory) => {
     observedDirectories.push(directory);
     return capture(directory);
->>>>>>> upstream/main
   });
   restoreCapture = () => captureSpy.mockRestore();
   useUIStore.getState().openContextPanelTab('/repo', { mode: 'terminal', targetDirectory: '/worktree' });
