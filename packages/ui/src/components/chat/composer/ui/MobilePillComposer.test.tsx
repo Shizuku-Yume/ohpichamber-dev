@@ -110,21 +110,6 @@ describe('MobilePillComposer', () => {
         expect(markup.match(/oc-action-disc/g)).toHaveLength(1);
     });
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    test('offers a plain send between mic and stop when follow-ups steer', async () => {
-        const markup = await renderPill({ hasContent: true, newSessionDraftOpen: false, canAbort: true, followUpBehavior: 'steer' });
-
-        expect(markup).not.toContain('aria-label="Queue message"');
-        expect(markup).not.toContain('-rotate-90');
-        const mic = markup.indexOf('aria-label="Start dictation"');
-        const send = markup.indexOf('aria-label="Send message"');
-        const stop = markup.indexOf('aria-label="Stop generating"');
-        expect(mic).toBeLessThan(send);
-        expect(send).toBeLessThan(stop);
-    });
-
-=======
     test('the same disc sends when follow-ups steer', async () => {
         const markup = await renderPill({ hasContent: true, newSessionDraftOpen: false, canAbort: true, followUpBehavior: 'steer' });
 
@@ -140,7 +125,6 @@ describe('MobilePillComposer', () => {
         expect(markup.match(/oc-action-disc/g)).toHaveLength(1);
     });
 
->>>>>>> upstream/main
     test('uses the inline send action for content in a new-session draft', async () => {
         const markup = await renderPill({ hasContent: true, newSessionDraftOpen: true });
 

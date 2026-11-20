@@ -102,33 +102,13 @@ const mountToolPart = () => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-<<<<<<< HEAD
-  const render = async () => {
-||||||| bc50ba56aa
-  const sdk = OpenCode.make({
-    baseUrl: 'http://localhost',
-    fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-  });
-  const render = async () => {
-=======
-  const sdk = OpenCode.make({
-    baseUrl: 'http://localhost',
-    fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-  });
   const render = async (shown: ToolPartData) => {
->>>>>>> upstream/main
     await act(async () => {
       root.render(
         <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
-<<<<<<< HEAD
-              <ToolPart part={result} pairedCall={part} isExpanded isMobile={false} onToggle={() => {}} />
-||||||| bc50ba56aa
-              <ToolPart part={part} isExpanded isMobile={false} onToggle={() => {}} />
-=======
-              <ToolPart part={shown} isExpanded isMobile={false} onToggle={() => {}} />
->>>>>>> upstream/main
+              <ToolPart part={result} pairedCall={shown} isExpanded isMobile={false} onToggle={() => {}} />
             </ThemeSystemContext.Provider>
           </I18nProvider>
         </SyncProvider>,

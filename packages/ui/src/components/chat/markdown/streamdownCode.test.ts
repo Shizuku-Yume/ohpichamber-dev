@@ -6,16 +6,8 @@ import type { HighlightResult } from 'streamdown';
 test('file annotations use source offsets after CRLF and Unicode', async () => {
   const code = '// 😀\r\nsrc/a.ts';
   const start = code.indexOf('src/a.ts');
-<<<<<<< HEAD
-  const original = await streamdownCodeWorker.highlight(code, 'typescript', false);
-  const plugin = createMarkdownCodePlugin({ resolvePaths: async () => [
-||||||| bc50ba56aa
-  const original = await streamdownCodeWorker.highlight(code, 'typescript', false);
-  const plugin = createMarkdownCodePlugin({ isVSCode: false, resolvePaths: async () => [
-=======
   const original = await markdownCodeHighlighter.highlight(code, 'typescript', false);
-  const plugin = createMarkdownCodePlugin({ isVSCode: false, resolvePaths: async () => [
->>>>>>> upstream/main
+  const plugin = createMarkdownCodePlugin({ resolvePaths: async () => [
     { start, end: code.length, raw: 'src/a.ts', path: '/project/src/a.ts' },
   ] });
   const annotated = await new Promise<HighlightResult>((resolve) => {
@@ -31,16 +23,8 @@ test('file annotations use source offsets after CRLF and Unicode', async () => {
 
 test('a warm plugin returns the cached result synchronously without redundant empty-path callbacks', async () => {
   const code = 'const cachedPlugin = "中文";';
-<<<<<<< HEAD
-  const highlighted = await streamdownCodeWorker.highlight(code, 'ts', false);
-  const plugin = createMarkdownCodePlugin({ resolvePaths: async () => [] });
-||||||| bc50ba56aa
-  const highlighted = await streamdownCodeWorker.highlight(code, 'ts', false);
-  const plugin = createMarkdownCodePlugin({ isVSCode: false, resolvePaths: async () => [] });
-=======
   const highlighted = await markdownCodeHighlighter.highlight(code, 'ts', false);
-  const plugin = createMarkdownCodePlugin({ isVSCode: false, resolvePaths: async () => [] });
->>>>>>> upstream/main
+  const plugin = createMarkdownCodePlugin({ resolvePaths: async () => [] });
   const callbacks: HighlightResult[] = [];
   const result = plugin.highlight({ code, language: 'ts', themes: plugin.getThemes() }, (next) => callbacks.push(next));
   expect(result).toBe(highlighted!);
@@ -51,16 +35,8 @@ test('a warm plugin returns the cached result synchronously without redundant em
 
 test('annotated results are reused within one resolver and never leak into another directory', async () => {
   const code = 'src/a.ts';
-<<<<<<< HEAD
-  await streamdownCodeWorker.highlight(code, 'typescript', false);
-  const plugin = createMarkdownCodePlugin({ resolvePaths: async () => [{ start: 0, end: code.length, raw: code, path: '/project-a/src/a.ts' }] });
-||||||| bc50ba56aa
-  await streamdownCodeWorker.highlight(code, 'typescript', false);
-  const plugin = createMarkdownCodePlugin({ isVSCode: false, resolvePaths: async () => [{ start: 0, end: code.length, raw: code, path: '/project-a/src/a.ts' }] });
-=======
   await markdownCodeHighlighter.highlight(code, 'typescript', false);
-  const plugin = createMarkdownCodePlugin({ isVSCode: false, resolvePaths: async () => [{ start: 0, end: code.length, raw: code, path: '/project-a/src/a.ts' }] });
->>>>>>> upstream/main
+  const plugin = createMarkdownCodePlugin({ resolvePaths: async () => [{ start: 0, end: code.length, raw: code, path: '/project-a/src/a.ts' }] });
   const options = { code, language: 'typescript', themes: plugin.getThemes() };
   const annotated = await new Promise<HighlightResult>((resolve) => { plugin.highlight(options, resolve); });
   expect(annotated.tokens.flat().some((token) => token.htmlAttrs?.['data-openchamber-file-path'] === '/project-a/src/a.ts')).toBe(true);

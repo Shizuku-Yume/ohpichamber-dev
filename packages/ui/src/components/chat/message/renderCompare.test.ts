@@ -51,17 +51,7 @@ describe('completed-turn changed files', () => {
   });
 });
 
-<<<<<<< HEAD
 describe('message render comparison', () => {
-  const running: Message = {
-    messageId: 'msg_1', sessionId: 'ses_1', turnId: 'turn_1', role: 'assistant', createdAt: 1,
-    parts: [{ type: 'text', partId: 'part_1', content: 'Summary so far' }],
-||||||| bc50ba56aa
-describe('running compaction', () => {
-  const running: CompactionMessage = {
-    id: 'msg_compact', sessionID: 'ses_1', role: 'compaction', time: { created: 1 }, status: 'running', reason: 'auto', summary: '',
-=======
-describe('running compaction', () => {
   test('re-renders when compaction model attribution arrives or changes', () => {
     const before = { ...running, status: 'completed' as const };
     const after = { ...before, model: { providerID: 'p', id: 'm' } };
@@ -73,9 +63,9 @@ describe('running compaction', () => {
     expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: { ...after, model: { ...after.model } }, parts: [] })).toBe(true);
   });
 
-  const running: CompactionMessage = {
-    id: 'msg_compact', sessionID: 'ses_1', role: 'compaction', time: { created: 1 }, status: 'running', reason: 'auto', summary: '',
->>>>>>> upstream/main
+  const running: Message = {
+    messageId: 'msg_1', sessionId: 'ses_1', turnId: 'turn_1', role: 'assistant', createdAt: 1,
+    parts: [{ type: 'text', partId: 'part_1', content: 'Summary so far' }],
   };
 
   test('re-renders as message content changes', () => {

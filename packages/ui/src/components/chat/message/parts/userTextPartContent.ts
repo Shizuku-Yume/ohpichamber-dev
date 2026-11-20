@@ -14,18 +14,7 @@ import { findAttachmentCitationRanges } from '../../attachmentCitations';
 import { findSessionLinks, sessionLinkKey } from '@/lib/sessionLinks';
 import type { SessionMentionChips } from './sessionMentionChips';
 
-<<<<<<< HEAD
-// Skills are named with `$`; messages sent before that used `/`, which history
-// still shows as a chip.
 export const SKILL_TOKEN_PATTERN = /(^|\s)[$/]([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g;
-||||||| bc50ba56aa
-// Skills are named with `$`; messages sent before that used `/`, which history
-// still shows as a chip. A CJK IME types `¥`, `￥` or `＄` for the same key, so
-// a hand-typed token can arrive with any of those spellings.
-export const SKILL_TOKEN_PATTERN = /(^|\s)[$/¥￥＄]([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g;
-=======
-export const SKILL_TOKEN_PATTERN = /(^|\s)[$/¥￥＄]([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g;
->>>>>>> upstream/main
 
 const FENCED_CODE_SEGMENT_PATTERN = /(```[\s\S]*?```|~~~[\s\S]*?~~~)/g;
 
@@ -57,41 +46,13 @@ const mapNonInlineCode = (segment: string, mapSegment: (text: string) => string)
 
 const escapeMarkdownLinkText = (text: string): string => text.replace(/[\\`*_~[\]]/g, '\\$&');
 
-<<<<<<< HEAD
-/**
- * Escapes a non-code segment and turns each `[name.png]` citation of one of
- * the message's own attachments into an attachment link, which the Markdown
- * renderer draws as a file chip. Brackets around anything else stay text.
- */
-const escapeWithAttachmentCitations = (
-||||||| bc50ba56aa
-// A word joiner after a chip's link when punctuation follows, so the line
-// never breaks between the chip and its comma (`CHIP_TRAILING_PUNCTUATION`).
-const joinTrailing = (text: string, at: number): string => (CHIP_TRAILING_PUNCTUATION.test(text.slice(at, at + 8)) ? '\u2060' : '');
-
-/**
- * Turns each `[name.png]` citation of one of
- * the message's own attachments into an attachment link, which the Markdown
- * renderer draws as a file chip. Brackets around anything else stay text.
- */
-const withAttachmentCitations = (
-=======
 const joinTrailing = (text: string, at: number): string => (CHIP_TRAILING_PUNCTUATION.test(text.slice(at, at + 8)) ? '\u2060' : '');
 
 const withAttachmentCitations = (
->>>>>>> upstream/main
     segment: string,
     attachments: ReadonlyArray<AttachmentCitationLink>,
 ): string => {
-<<<<<<< HEAD
     if (attachments.length === 0) return escapeHtml(segment);
-||||||| bc50ba56aa
-    // HTML and character references stay text in the renderer (`literalText`),
-    // so the text needs no escaping: entities would show inside code and formulas.
-    if (attachments.length === 0) return segment;
-=======
-    if (attachments.length === 0) return segment;
->>>>>>> upstream/main
     const byName = new Map(attachments.map((attachment) => [attachment.filename.trim().toLowerCase(), attachment]));
     let output = '';
     let cursor = 0;
@@ -116,24 +77,9 @@ const withSessionMentionLinks = (
     for (const range of findSessionLinks(segment, mentions.origins)) {
         const chip = mentions.chips.get(sessionLinkKey(range.target));
         if (!chip) continue;
-<<<<<<< HEAD
-        // Markdown links already reach MarkdownLink. Convert angle autolinks
-        // ourselves because escaping the remaining text would make them literal.
         if (segment.slice(Math.max(0, range.start - 2), range.start) === '](') continue;
         const angleLink = segment[range.start - 1] === '<' && segment[range.end] === '>';
         output += escapeRest(segment.slice(cursor, angleLink ? range.start - 1 : range.start));
-||||||| bc50ba56aa
-        // A link the user already wrote as one (`[this](link)`, `<link>`) draws as
-        // the chip on its own (`MarkdownLink`); one in inline code stays code.
-        if (segment.slice(Math.max(0, range.start - 2), range.start) === '](' || segment[range.start - 1] === '<') continue;
-        if (codeSpans.some(([start, end]) => range.start >= start && range.start < end)) continue;
-        output += escapeRest(segment.slice(cursor, range.start));
-        // Escaped so the pointy destination cannot be closed or broken from inside.
-=======
-        if (segment.slice(Math.max(0, range.start - 2), range.start) === '](' || segment[range.start - 1] === '<') continue;
-        if (codeSpans.some(([start, end]) => range.start >= start && range.start < end)) continue;
-        output += escapeRest(segment.slice(cursor, range.start));
->>>>>>> upstream/main
         const destination = range.link.replace(/[\\<>]/g, (char) => encodeURIComponent(char));
         output += `[${escapeMarkdownLinkText(escapeHtml(chip.label))}](<${destination}>)`;
         cursor = range.end + (angleLink ? 1 : 0);
@@ -198,16 +144,8 @@ export const prepareUserMarkdownContent = ({
     const loneListMarker = LONE_LIST_MARKER_PATTERN.exec(textContent);
     if (loneListMarker) return `\\${loneListMarker[1]}`;
 
-<<<<<<< HEAD
-    let content = mapNonFencedSegments(textContent, (segment) => mapNonInlineCode(segment, (part) => withSessionMentionLinks(
+    let content = mapNonFencedSegments(escapeBackslashesBeforePunctuation(textContent), (segment) => mapNonInlineCode(segment, (part) => withSessionMentionLinks(
         part,
-||||||| bc50ba56aa
-    let content = mapNonFencedSegments(textContent, (segment) => withSessionMentionLinks(
-        segment,
-=======
-    let content = mapNonFencedSegments(escapeBackslashesBeforePunctuation(textContent), (segment) => withSessionMentionLinks(
-        segment,
->>>>>>> upstream/main
         sessionMentions,
         (rest) => escapeWithAttachmentCitations(rest, attachments),
     )));

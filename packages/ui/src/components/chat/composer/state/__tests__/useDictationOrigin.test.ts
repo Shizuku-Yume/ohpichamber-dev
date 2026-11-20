@@ -39,13 +39,7 @@ function renderComposer(initialText = '') {
         const identityRef = React.useRef<ChatDraftIdentity | null>(identity);
         React.useEffect(() => { identityRef.current = identity; }, [identity]);
         const { restoreDraft } = useComposerDraft({
-<<<<<<< HEAD
-            message, messageRef, setMessage, confirmedMentionsRef, identity, persistEnabled: true,
-||||||| bc50ba56aa
-            message, messageRef, setMessage, confirmedMentionsRef, identity,
-=======
-            text, setMessage, confirmedMentionsRef, identity,
->>>>>>> upstream/main
+            text, setMessage, confirmedMentionsRef, identity, persistEnabled: true,
             initialDraft: { text: initialText, identity: started },
         });
         result.dictation = useDictationOrigin({

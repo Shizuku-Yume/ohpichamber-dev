@@ -37,70 +37,10 @@ describe('turn telemetry', () => {
     expect(formatTelemetryTokens(1500000)).toBe('1.5M');
     expect(formatThroughputRate(52.3)).toBe('~52 tok/s');
   });
-<<<<<<< HEAD
   test('aggregates canonical assistant usage for the latest user-bounded turn', () => {
     const stats = getLatestCompletedTurnStats([
       user('old-user', 0), assistant('old', 1000, usage(10, 20)),
       user('new-user', 2000), assistant('new', 5000, usage(100, 300, 200, 0)),
-||||||| bc50ba56aa
-
-  test('aggregates a multi-step turn, subtracting the tool union and including reasoning tokens', () => {
-    const records = turn(assistant({
-      time: { created: 10000, completed: 20000 }, cost: 0.01,
-      tokens: { input: 1000, output: 200, reasoning: 300, cache: { read: 2000, write: 0 } },
-    }), [text(11500), tool(13000, 15000), tool(14000, 16000)]);
-    records.push({ info: assistant({ id: 'a2', time: { created: 21000, completed: 24000 }, cost: 0.005,
-      tokens: { input: 1500, output: 100, reasoning: 0, cache: { read: 0, write: 0 } },
-    }), parts: [text(21500)] });
-    const stats = getLatestCompletedTurnStats(records);
-    expect(stats).toEqual({ stepsCount: 2, lastAssistantMessageId: 'a2', previousTurn: false, elapsedDurationMs: 24000, totalToolDurationMs: 3000,
-      totalLlmDurationMs: 10000, outputTokens: 300, reasoningTokens: 300, totalGeneratedTokens: 600,
-      inputTokens: 2500, cost: 0.015, tokensPerSecond: 60, responseTokensPerSecond: null, avgTtftMs: 1000, cacheHitPercent: 44 });
-  });
-
-  test('omits elapsed time when turn boundary timestamps are invalid', () => {
-    const invalidStartStats = getLatestCompletedTurnStats([
-      { info: { ...user, time: { created: Number.NaN } }, parts: [] },
-      { info: assistant(), parts: [] },
-=======
-
-  test('aggregates a multi-step turn, subtracting the tool union and including reasoning tokens', () => {
-    const records = turn(assistant({
-      time: { created: 10000, completed: 20000 }, cost: 0.01,
-      tokens: { input: 1000, output: 200, reasoning: 300, cache: { read: 2000, write: 0 } },
-    }), [text(11500), tool(13000, 15000), tool(14000, 16000)]);
-    records.push({ info: assistant({ id: 'a2', time: { created: 21000, completed: 24000 }, cost: 0.005,
-      tokens: { input: 1500, output: 100, reasoning: 0, cache: { read: 0, write: 0 } },
-    }), parts: [text(21500)] });
-    const stats = getLatestCompletedTurnStats(records);
-    expect(stats).toEqual({ stepsCount: 2, lastAssistantMessageId: 'a2', previousTurn: false, elapsedDurationMs: 24000, totalToolDurationMs: 3000,
-      totalLlmDurationMs: 10000, outputTokens: 300, reasoningTokens: 300, totalGeneratedTokens: 600,
-      inputTokens: 2500, cost: 0.015, tokensPerSecond: 60, responseTokensPerSecond: null, avgTtftMs: 1000, avgFirstOutputMs: null, cacheHitPercent: 44 });
-  });
-
-  test('first output averages OpenCode\'s recorded first output across steps, a tool-first step included', () => {
-    // A step that opens with a tool call has no text start for TTFT, but
-    // OpenCode still records its first output.
-    const records = turn(assistant({ time: { created: 1000, firstToken: 1400, completed: 5000 } }), [text(1000), tool(1400, 4000)]);
-    records.push({ info: assistant({ id: 'a2', time: { created: 6000, firstToken: 6200, completed: 7000 } }), parts: [] });
-    const stats = getLatestCompletedTurnStats(records);
-    expect(stats?.avgFirstOutputMs).toBe(300);
-    expect(stats?.avgTtftMs).toBeNull();
-  });
-
-  test('first output is hidden when a step has no record of it or the record is outside the step', () => {
-    const missing = [...turn(assistant({ time: { created: 1000, firstToken: 1400, completed: 5000 } }))];
-    missing.push({ info: assistant({ id: 'a2', time: { created: 6000, completed: 7000 } }), parts: [] });
-    expect(getLatestCompletedTurnStats(missing)?.avgFirstOutputMs).toBeNull();
-    expect(getLatestCompletedTurnStats(turn(assistant({ time: { created: 1000, firstToken: 900, completed: 5000 } })))?.avgFirstOutputMs).toBeNull();
-    expect(getLatestCompletedTurnStats(turn(assistant({ time: { created: 1000, firstToken: 6000, completed: 5000 } })))?.avgFirstOutputMs).toBeNull();
-  });
-
-  test('omits elapsed time when turn boundary timestamps are invalid', () => {
-    const invalidStartStats = getLatestCompletedTurnStats([
-      { info: { ...user, time: { created: Number.NaN } }, parts: [] },
-      { info: assistant(), parts: [] },
->>>>>>> upstream/main
     ]);
     expect(stats).toMatchObject({ stepsCount: 1, lastAssistantMessageId: 'new', elapsedDurationMs: 3000, inputTokens: 100, outputTokens: 300, totalGeneratedTokens: 300, cost: 0 });
     expect(stats?.tokensPerSecond).toBeNull();

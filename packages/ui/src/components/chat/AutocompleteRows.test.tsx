@@ -1,17 +1,7 @@
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
-<<<<<<< HEAD
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import { Window } from 'happy-dom';
-||||||| bc50ba56aa
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import { Window, type HTMLElement as HappyHTMLElement } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-=======
 import { afterEach, beforeEach, expect, spyOn, test, vi } from 'bun:test';
-import { Window, type HTMLElement as HappyHTMLElement } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
->>>>>>> upstream/main
+import { Window } from 'happy-dom';
 
 import type { CommandAutocompleteHandle } from './CommandAutocomplete';
 

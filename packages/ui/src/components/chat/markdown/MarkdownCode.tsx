@@ -13,13 +13,7 @@ import { Button } from '@/components/ui/button';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
-<<<<<<< HEAD
-import { useMarkdownPresentation } from './MarkdownPresentationContext';
-||||||| bc50ba56aa
-import { useMarkdownPresentation, type MarkdownPresentation } from './MarkdownPresentationContext';
-=======
-import { MarkdownSvgFailureContext, useMarkdownPresentation, type MarkdownPresentation } from './MarkdownPresentationContext';
->>>>>>> upstream/main
+import { MarkdownSvgFailureContext, useMarkdownPresentation } from './MarkdownPresentationContext';
 import { activateMarkdownFile, useOpenMarkdownFile } from './markdownFileReferences';
 import { stripAnsi } from './highlightsEngine';
 import type { MarkdownCodePlugin } from './streamdownCode';
@@ -110,42 +104,6 @@ const MarkdownCodeBody = React.memo(function MarkdownCodeBody({ source, language
   );
 });
 
-<<<<<<< HEAD
-export function MarkdownCode({ children, className, node, ...props }: React.ComponentProps<'code'> & ExtraProps) {
-||||||| bc50ba56aa
-type CodeProps = React.ComponentProps<'code'> & ExtraProps;
-
-const languageOf = (className: string | undefined): string => /language-([^\s]+)/.exec(className ?? '')?.[1] ?? '';
-const sourceOf = (node: CodeProps['node']): string => (
-  node?.children.map((child) => child.type === 'text' ? child.value : '').join('') ?? ''
-).replace(/\n$/, '');
-
-// Loaded with the first command block; it keeps the session sync out of the Markdown renderer.
-const useReplyCommandCode = onDemand(() => import('./ReplyCommand').then((module) => module.ReplyCommandCode));
-
-function RunnableCode({ reply, ...props }: CodeProps & { reply: NonNullable<MarkdownPresentation['settledReply']> }) {
-  const { directory } = useMarkdownPresentation();
-  const ReplyCommandCode = useReplyCommandCode();
-  if (!ReplyCommandCode) return <MarkdownCodeBlock {...props} command={null} />;
-  return (
-    <ReplyCommandCode reply={reply} directory={directory} source={sourceOf(props.node)}>
-      {(command) => <MarkdownCodeBlock {...props} command={command} />}
-    </ReplyCommandCode>
-  );
-}
-
-export function MarkdownCode(props: CodeProps) {
-  const { settledReply } = useMarkdownPresentation();
-  const surface = useChatSurfaceMode();
-  // Only a finished reply on a surface with controls: a command still arriving
-  // could run cut short.
-  const runnable = settledReply !== null && surface !== 'peek'
-    && isRunnableLanguage(languageOf(props.className)) && sourceOf(props.node).trim().length > 0;
-  return runnable ? <RunnableCode {...props} reply={settledReply} /> : <MarkdownCodeBlock {...props} command={null} />;
-}
-
-function MarkdownCodeBlock({ children, className, node, command, ...props }: CodeProps & { command: RenderedCommand | null }) {
-=======
 const shownCode = (source: string, language: string): { code: string; language: string } => (
   language.toLowerCase() === 'ansi' ? { code: stripAnsi(source), language: 'text' } : { code: source, language }
 );
@@ -180,8 +138,7 @@ export function MarkdownCode(props: CodeProps) {
   return runnable ? <RunnableCode {...props} reply={settledReply} /> : <MarkdownCodeBlock {...props} command={null} />;
 }
 
-function MarkdownCodeBlock({ children, className, node, command, ...props }: CodeProps & { command: RenderedCommand | null }) {
->>>>>>> upstream/main
+function MarkdownCodeBlock({ children, className, node, ...props }: React.ComponentProps<'code'> & ExtraProps) {
   const presentation = useMarkdownPresentation();
   const { t } = useI18n();
   const wrap = useUIStore((state) => state.codeBlockLineWrap);
@@ -203,25 +160,12 @@ function MarkdownCodeBlock({ children, className, node, command, ...props }: Cod
   const { purpose, onExportCode } = presentation;
   const customRenderer = language === 'mermaid' || (language === 'openui-lang' && presentation.uiBlocks);
   React.useLayoutEffect(() => {
-<<<<<<< HEAD
-    if (purpose && language !== 'mermaid' && language !== 'svg') onExportCode?.(code, language);
-  }, [purpose, onExportCode, code, language]);
-||||||| bc50ba56aa
-    if (purpose && language !== 'mermaid') onExportCode?.(code, language);
-  }, [purpose, onExportCode, code, language]);
-=======
     if (purpose && !customRenderer) {
       const shown = shownCode(code, language);
       onExportCode?.(shown.code, shown.language);
     }
   }, [purpose, customRenderer, onExportCode, code, language]);
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-  if (language === 'mermaid' || language === 'svg' || (language === 'openui-lang' && presentation.uiBlocks)) {
-||||||| bc50ba56aa
-  if (language === 'mermaid' || (language === 'openui-lang' && presentation.uiBlocks)) {
-=======
   if (language === 'svg' && presentation.svgFences && !activeSvg.test(code) && failedSvg !== code) {
     return (
       <MarkdownSvgFailureContext.Provider value={() => setFailedSvg(code)}>
@@ -233,7 +177,6 @@ function MarkdownCodeBlock({ children, className, node, command, ...props }: Cod
   }
 
   if (customRenderer) {
->>>>>>> upstream/main
     return (
       <defaultComponents.code {...props} node={node} className={className}>
         {children}

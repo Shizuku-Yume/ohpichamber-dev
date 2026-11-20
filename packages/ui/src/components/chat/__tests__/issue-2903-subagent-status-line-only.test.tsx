@@ -32,17 +32,10 @@ mock.module('@/stores/permissionStore', () => ({
 }));
 mock.module('@/stores/useConfigStore', () => ({
   markConfigCatalogStale: () => undefined,
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  selectCatalogLoadedForDirectory: () => false,
-  selectConfigAgentsForDirectory: () => [],
-  invalidateConfigAgentsLoad: () => undefined,
-=======
   invalidateConfigCatalogsForReload: () => undefined,
   selectCatalogLoadedForDirectory: () => false,
   selectConfigAgentsForDirectory: () => [],
   invalidateConfigAgentsLoad: () => undefined,
->>>>>>> upstream/main
   useConfigStore: {
     getState: () => ({ isConnected: true, hasEverConnected: true }),
     setState: () => undefined,
@@ -57,20 +50,12 @@ const { ChildStoreManager } = await import('@/sync/child-store');
 const { getSessionMaterializationStatus } = await import('@/sync/materialization');
 import type { State } from '@/sync/types';
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const chatContainerSource = readFileSync(join(__dirname, '..', 'ChatContainer.tsx'), 'utf-8');
-const syncContextSource = readFileSync(join(__dirname, '..', '..', '..', 'sync', 'sync-context.tsx'), 'utf-8');
-
-=======
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const readSource = (...segments: string[]) => readFileSync(join(__dirname, '..', ...segments), 'utf-8');
 const sessionPlaceholderSource = readSource('column', 'sessionPlaceholder.tsx');
 const composerSlotSource = readSource('column', 'ComposerSlot.tsx');
 const syncContextSource = readSource('..', '..', 'sync', 'session-message-records.ts');
 
->>>>>>> upstream/main
 const SESSION_ID = 'ses_subagent_2903';
 const DIRECTORY = '/repo';
 
@@ -213,62 +198,4 @@ describe('issue #2903 busy subagent status-line-only', () => {
       dom.restore();
     }
   });
-<<<<<<< HEAD
-||||||| bc50ba56aa
-
-  test('sync gate still returns empty on cold disabled reads', () => {
-    const hookStart = syncContextSource.indexOf('export function useSessionMessageRecords(');
-    const hookBody = syncContextSource.slice(hookStart, hookStart + 1800);
-    expect(hookBody).toContain('if (options?.enabled === false)');
-    expect(hookBody).toContain('EMPTY_SESSION_MESSAGE_RECORDS');
-    expect(hookBody).toContain('snapshotRef.current.sessionID === sessionID ? snapshotRef.current.list');
-  });
-
-  test('the empty and idle branch leaves the status row to the busy path', () => {
-    // A busy session with no messages yet must fall through to the viewport so
-    // StatusRowContainer is the only thing on screen. The idle branch returns
-    // before it and must not render one of its own. The empty state itself no
-    // longer lives here: the draft surface owns it since the draft transition
-    // animation landed.
-    expect(chatContainerSource).toContain('if (sessionMessages.length === 0 && !sessionIsWorking)');
-    expect(chatContainerSource).toContain('<StatusRowContainer />');
-
-    const emptyIdleGuard = 'if (sessionMessages.length === 0 && !sessionIsWorking)';
-    const emptyIdleReturn = chatContainerSource.indexOf(emptyIdleGuard);
-    expect(emptyIdleReturn).toBeGreaterThan(-1);
-    const emptyIdleBlock = chatContainerSource.slice(
-      emptyIdleReturn,
-      emptyIdleReturn + 1600,
-    );
-    expect(emptyIdleBlock).not.toContain('<StatusRowContainer />');
-  });
-=======
-
-  test('sync gate still returns empty on cold disabled reads', () => {
-    const hookStart = syncContextSource.indexOf('export function useSessionMessageRecords(');
-    const hookBody = syncContextSource.slice(hookStart, hookStart + 1800);
-    expect(hookBody).toContain('if (options?.enabled === false)');
-    expect(hookBody).toContain('EMPTY_SESSION_MESSAGE_RECORDS');
-    expect(hookBody).toContain('snapshotRef.current.sessionID === sessionID ? snapshotRef.current.list');
-  });
-
-  test('the empty and idle branch leaves the status row to the busy path', () => {
-    // A busy session with no messages yet must fall through to the viewport so
-    // StatusRowContainer is the only thing on screen. The idle branch returns
-    // before it and must not render one of its own. The empty state itself no
-    // longer lives here: the draft surface owns it since the draft transition
-    // animation landed.
-    expect(sessionPlaceholderSource).toContain('if (messageCount === 0 && !sessionIsWorking)');
-    expect(composerSlotSource).toContain('<StatusRowContainer />');
-
-    const emptyIdleGuard = 'if (messageCount === 0 && !sessionIsWorking)';
-    const emptyIdleReturn = sessionPlaceholderSource.indexOf(emptyIdleGuard);
-    expect(emptyIdleReturn).toBeGreaterThan(-1);
-    const emptyIdleBlock = sessionPlaceholderSource.slice(
-      emptyIdleReturn,
-      emptyIdleReturn + 1600,
-    );
-    expect(emptyIdleBlock).not.toContain('<StatusRowContainer />');
-  });
->>>>>>> upstream/main
 });

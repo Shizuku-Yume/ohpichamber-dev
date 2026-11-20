@@ -49,29 +49,9 @@ type UserTextPartProps = {
     onExpandMessage: () => void;
     partIndex: number;
     onTruncationChange: (partIndex: number, truncated: boolean) => void;
-<<<<<<< HEAD
-    /** How many lines the collapsed text takes, 0 for a context card; context rows get what is left. */
     onCollapsedLinesChange?: (partIndex: number, lines: number) => void;
-    /** Names of the files attached to this message; `[name]` in the text renders as a file chip. */
-||||||| bc50ba56aa
-    /** How many lines the collapsed text takes, 0 for a context card; context rows get what is left. */
-    onCollapsedLinesChange: (partIndex: number, lines: number) => void;
-    /** Names of the files attached to this message; `[name]` in the text renders as a file chip. */
-=======
-    onCollapsedLinesChange: (partIndex: number, lines: number) => void;
->>>>>>> upstream/main
     attachmentFilenames: readonly string[];
-<<<<<<< HEAD
-    /** The message's file parts; a citation of one the app can show opens it on click. */
     attachmentFiles?: readonly AttachmentFile[];
-    /** The message's popup opener, for images and inline text. */
-||||||| bc50ba56aa
-    /** The message's file parts; a citation of one the app can show opens it on click. */
-    attachmentFiles?: readonly FilePart[];
-    /** The message's popup opener, for images and inline text. */
-=======
-    attachmentFiles?: readonly FilePart[];
->>>>>>> upstream/main
     onShowPopup?: (content: ToolPopupContent) => void;
     sessionMentionChips?: SessionMentionChips;
     referenceLinkChips?: ReferenceLinkChips;
@@ -381,27 +361,6 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
             >
                 {normalizedRenderingMode === 'markdown' ? (
                     <SessionMentionChipsContext.Provider value={sessionMentionChips}>
-<<<<<<< HEAD
-                        <SimpleMarkdownRenderer
-                            singleTilde={false}
-                            content={processedMarkdownContent}
-                            // The collapsed look lives in index.css under data-user-message-collapsed.
-                            className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
-                            disableLinkSafety
-                            enableFileReferences={false}
-                        />
-||||||| bc50ba56aa
-                        <SimpleMarkdownRenderer
-                            singleTilde={false}
-                            content={processedMarkdownContent}
-                            // The collapsed look lives in index.css under data-user-message-collapsed.
-                            className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
-                            disableLinkSafety
-                            enableFileReferences={false}
-                            literalText
-                            guestLinks={guestLinks}
-                        />
-=======
                         <ReferenceLinkChipsContext.Provider value={referenceLinkChips}>
                             <SimpleMarkdownRenderer
                                 singleTilde={false}
@@ -413,7 +372,6 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
                                 guestLinks={guestLinks}
                             />
                         </ReferenceLinkChipsContext.Provider>
->>>>>>> upstream/main
                     </SessionMentionChipsContext.Provider>
                 ) : (
                     plainTextContent

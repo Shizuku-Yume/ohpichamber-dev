@@ -362,18 +362,10 @@ test('a status frame keeps subscriptions and storage alive while project changes
 
     await act(async () => { send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resize', id: 'h-1', payload: { height: 96 } }); await tick(); });
     expect(box.style.height).toBe('96px');
-<<<<<<< HEAD
-    await act(async () => { send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resize', id: 'h-2', payload: { height: 2000 } }); await tick(); });
-    expect(box.style.height).toBe('320px');
-||||||| bc50ba56aa
-    await act(async () => { send({ channel: 'openchamber.sdk', v: 1, type: 'resize', id: 'h-2', payload: { height: 2000 } }); });
-    expect(box.style.height).toBe('320px');
-=======
     await act(async () => { send({ channel: 'openchamber.sdk', v: 1, type: 'resize', id: 'h-mid', payload: { height: 400 } }); });
     expect(box.style.height).toBe('400px');
-    await act(async () => { send({ channel: 'openchamber.sdk', v: 1, type: 'resize', id: 'h-2', payload: { height: 2000 } }); });
+    await act(async () => { send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resize', id: 'h-2', payload: { height: 2000 } }); await tick(); });
     expect(box.style.height).toBe('480px');
->>>>>>> upstream/main
     expect(messages.some((message) => message.type === 'result' && message.id === 'h-2' && message.ok)).toBe(true);
     // Status-only: the catalog has no panel entry, and that must not tear the section down.
     expect(container.querySelector('iframe')).not.toBeNull();

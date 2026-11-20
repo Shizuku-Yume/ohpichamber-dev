@@ -6,12 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useInputStore } from '@/sync/input-store';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { attachmentWireName } from '@/lib/attachmentIdentity';
-=======
 import { attachmentWireName, attachmentsCitedIn } from '@/lib/attachmentIdentity';
->>>>>>> upstream/main
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -107,15 +102,7 @@ export function useParallelComposer(input: {
   const addModel = React.useCallback((model: ParallelComposerModelInput) => {
     if (isAutoModel(model.providerId, model.modelId)) return;
     updateActiveModels((models) => {
-<<<<<<< HEAD
-      // The same model with another thinking effort is a separate lane.
       const existing = models.findIndex((entry) => entry.providerId === model.providerId && entry.modelId === model.modelId && entry.variant === model.variant);
-||||||| bc50ba56aa
-      // The same model with another thinking effort is a separate lane.
-      const existing = models.findIndex((entry) => entry.providerID === model.providerID && entry.modelID === model.modelID && entry.variant === model.variant);
-=======
-      const existing = models.findIndex((entry) => entry.providerID === model.providerID && entry.modelID === model.modelID && entry.variant === model.variant);
->>>>>>> upstream/main
       if (existing >= 0) return models.map((entry, index) => (index === existing ? { ...entry, count: entry.count + 1 } : entry));
       return [...models, { ...model, count: 1 }];
     });
@@ -193,8 +180,7 @@ export function useParallelComposer(input: {
     if (projectId !== projects.activeProjectId) projects.setActiveProjectIdOnly(projectId);
 
     const title = runTitleFrom(variants[0].text) || t('chat.parallel.defaultTitle');
-<<<<<<< HEAD
-    const attachments = useInputStore.getState().attachedFiles;
+    const attachments = attachmentsCitedIn(variants.map((variant) => variant.text).join('\n'), useInputStore.getState().attachedFiles);
     const attachmentWorkspaceId = attachments.length > 0
       ? (await canonicalClient.resolveWorkspace(project.path)).workspaceId
       : undefined;
@@ -205,15 +191,6 @@ export function useParallelComposer(input: {
         file.dataUrl,
       )))
       : [];
-||||||| bc50ba56aa
-    const attachments = useInputStore.getState().attachedFiles;
-    const config = useConfigStore.getState();
-    const ui = useUIStore.getState();
-=======
-    const attachments = attachmentsCitedIn(variants.map((variant) => variant.text).join('\n'), useInputStore.getState().attachedFiles);
-    const config = useConfigStore.getState();
-    const ui = useUIStore.getState();
->>>>>>> upstream/main
     const params: CreateMultiRunParams = {
       name: title,
       title,

@@ -39,15 +39,9 @@ import {
     knowledgeListedSchema,
     knowledgeSavedSchema,
     linkedSchema,
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    memoriesListedSchema,
-    memorySavedSchema,
-=======
     unlinkedSchema,
     memoriesListedSchema,
     memorySavedSchema,
->>>>>>> upstream/main
     modelPreferencesSchema,
     modelsFoundSchema,
     movedSchema,
@@ -325,40 +319,6 @@ const ModelsFoundBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const MemoriesListedBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    const parsed = memoriesListedSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { memories, globalUnavailable, projectUnavailable } = parsed.data;
-    const open = () => {
-        const store = useUIStore.getState();
-        store.setProjectContextTab('memory');
-        store.openContextPanelTab(directory, { mode: 'notes' });
-    };
-    return (
-        <>
-            {/* A scope that failed to load is said so, never shown as empty. */}
-            <Warning text={globalUnavailable ? t('chat.toolPart.openchamber.memory.globalUnavailable') : undefined} />
-            <Warning text={projectUnavailable ? t('chat.toolPart.openchamber.memory.projectUnavailable') : undefined} />
-            <List count={memories.length}>
-                {memories.map((memory) => (
-                    <ListRow
-                        key={`${memory.scope ?? ''}:${memory.memoryId}`}
-                        primary={memory.title ?? memory.memoryId}
-                        secondary={memory.scope === 'global' ? t('chat.toolPart.openchamber.memory.scope.global')
-                            : memory.scope === 'project' ? t('chat.toolPart.openchamber.memory.scope.project') : undefined}
-                    />
-                ))}
-            </List>
-            <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: open } : null} />
-        </>
-    );
-};
-
-=======
 const MemoriesListedBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
     const { t } = useI18n();
     const panels = usePanelsAvailable(isMobile);
@@ -389,7 +349,6 @@ const MemoriesListedBody: React.FC<{ data: unknown; directory: string; isMobile:
     );
 };
 
->>>>>>> upstream/main
 const KnowledgeListedBody: React.FC<{ data: unknown; call: OpenChamberCallInput; directory: string; isMobile: boolean }> = ({ data, call, directory, isMobile }) => {
     const { t } = useI18n();
     const panels = usePanelsAvailable(isMobile);
@@ -496,35 +455,6 @@ const ScreenshotBody: React.FC<{ data: unknown; part: CanonicalToolView; onShowP
     );
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/** A memory the agent read: what kind it is, its title and its text. */
-const MemoryReadBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    const describeKind = useMemoryKind();
-    const parsed = memoryReadSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { memory } = parsed.data;
-    const kind = describeKind(memory);
-    return (
-        <>
-            {kind ? <div className="typography-meta text-muted-foreground">{kind}</div> : null}
-            {memory.title ? <div className="typography-meta font-medium text-foreground break-words">{memory.title}</div> : null}
-            {memory.body ? <div className="typography-meta whitespace-pre-wrap break-words text-foreground">{memory.body}</div> : null}
-            <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />
-        </>
-    );
-};
-
-/** A call whose description already says what it did: only where to look next. */
-const MemoryDeletedBody: React.FC<{ directory: string; isMobile: boolean }> = ({ directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    return <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />;
-};
-
-=======
 const MemoryReadBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
     const { t } = useI18n();
     const panels = usePanelsAvailable(isMobile);
@@ -549,7 +479,6 @@ const MemoryDeletedBody: React.FC<{ directory: string; isMobile: boolean }> = ({
     return <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />;
 };
 
->>>>>>> upstream/main
 const KnowledgeTouchedBody: React.FC<{ call: OpenChamberCallInput; directory: string; isMobile: boolean; tab: 'todos' | 'notes' | 'plans' }> = ({ call, directory, isMobile, tab }) => {
     const { t } = useI18n();
     const panels = usePanelsAvailable(isMobile) && isOwnProject(call, directory);
@@ -872,22 +801,6 @@ const WorkflowSavedBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
-<<<<<<< HEAD
-/**
- * What one of OpenChamber's own tools did, in its own terms: the pull
- * request it linked, the session it started, the note it saved. `null`
- * for an action without its own view, and for an answer this view cannot
- * read, so the row falls back to the plain output.
- */
-||||||| bc50ba56aa
-/**
- * What one of OpenChamber's own tools did, in its own terms: the pull
- * request it linked, the session it started, the memory it saved. `null`
- * for an action without its own view, and for an answer this view cannot
- * read, so the row falls back to the plain output.
- */
-=======
->>>>>>> upstream/main
 export const OpenChamberToolOutput: React.FC<{
     envelope: OpenChamberEnvelope;
     part: CanonicalToolView;
@@ -984,4 +897,3 @@ const OpenChamberView: React.FC<{
         default: return null;
     }
 };
-

@@ -16,15 +16,7 @@ import { reservedComposerCommandNames } from './composer/submit/guestCommands';
 import { AutocompleteRowDetail } from './composer/ui/AutocompleteRowParts';
 import { useAutocompleteSelectionScroll } from './composer/ui/useAutocompleteSelectionScroll';
 
-<<<<<<< HEAD
-// Skills are not here: they have their own `$` picker.
 type CommandSource = 'openchamber' | 'native' | 'extension';
-||||||| bc50ba56aa
-// Skills are not here: they have their own `$` picker.
-type CommandSource = 'openchamber' | 'opencode' | 'extension';
-=======
-type CommandSource = 'openchamber' | 'opencode' | 'extension';
->>>>>>> upstream/main
 
 export interface CommandInfo {
   id: string;
@@ -39,51 +31,6 @@ export interface CommandInfo {
   extensionName?: string;
 }
 
-<<<<<<< HEAD
-// Every name the composer runs itself; an extension command with one of
-// these names is dropped before it reaches the list.
-const LOCAL_COMMAND_NAMES = [
-  'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'handoff-review',
-  'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
-];
-// Descriptions resolve through the dictionary so a locale switch re-renders
-// every builtin command; `compact` already owns a key on the openchamber list.
-const BUILTIN_COMMAND_DESCRIPTION_KEYS: Record<string, I18nKey> = {
-  compact: 'chat.commandAutocomplete.command.compactDescription',
-  shake: 'chat.commandAutocomplete.command.shakeDescription',
-  todo: 'chat.commandAutocomplete.command.todoDescription',
-  jobs: 'chat.commandAutocomplete.command.jobsDescription',
-  usage: 'chat.commandAutocomplete.command.usageDescription',
-  context: 'chat.commandAutocomplete.command.contextDescription',
-  tools: 'chat.commandAutocomplete.command.toolsDescription',
-  handoff: 'chat.commandAutocomplete.command.handoffDescription',
-  retry: 'chat.commandAutocomplete.command.retryDescription',
-  rename: 'chat.commandAutocomplete.command.renameDescription',
-  effort: 'chat.commandAutocomplete.command.effortDescription',
-  model: 'chat.commandAutocomplete.command.modelDescription',
-  switch: 'chat.commandAutocomplete.command.switchDescription',
-  fast: 'chat.commandAutocomplete.command.fastDescription',
-  slow: 'chat.commandAutocomplete.command.slowDescription',
-  prewalk: 'chat.commandAutocomplete.command.prewalkDescription',
-  force: 'chat.commandAutocomplete.command.forceDescription',
-  pin: 'chat.commandAutocomplete.command.pinDescription',
-  fresh: 'chat.commandAutocomplete.command.freshDescription',
-  clear: 'chat.commandAutocomplete.command.clearDescription',
-  dirs: 'chat.commandAutocomplete.command.dirsDescription',
-  session: 'chat.commandAutocomplete.command.sessionDescription',
-  memory: 'chat.commandAutocomplete.command.memoryDescription',
-};
-
-||||||| bc50ba56aa
-// Every name the composer runs itself; an extension command with one of
-// these names is dropped before it reaches the list.
-const LOCAL_COMMAND_NAMES = [
-  'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'handoff-review',
-  'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
-];
-
-=======
->>>>>>> upstream/main
 export interface CommandAutocompleteHandle {
   handleKeyDown: (key: string) => void;
 }
@@ -119,15 +66,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const { listRef, onKeyboardNavigate } = useAutocompleteSelectionScroll(selectedIndex, itemRefs);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // Narrowing as the user types, the box eases into its new height; the
-  // edge it is anchored to stays put.
   useHeightMorph(containerRef);
-  // A caret placement brings its own max-height.
-=======
-  useHeightMorph(containerRef);
->>>>>>> upstream/main
   const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined);
   const ignoreClickRef = React.useRef(false);
   const pointerStartRef = React.useRef<{ x: number; y: number } | null>(null);
@@ -155,25 +94,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     void refreshCommands();
   }, [refreshCommands]);
 
-<<<<<<< HEAD
-  const reservedCommandNames = React.useMemo(() => {
-    const names = new Set<string>(LOCAL_COMMAND_NAMES);
-    for (const name of builtinCommandNames) names.add(name);
-    for (const command of commandsWithMetadata) names.add(command.name.toLowerCase());
-    return names;
-  }, [builtinCommandNames, commandsWithMetadata]);
-||||||| bc50ba56aa
-  const reservedCommandNames = React.useMemo(() => {
-    const names = new Set<string>(LOCAL_COMMAND_NAMES);
-    for (const command of commandsWithMetadata) names.add(command.name.toLowerCase());
-    return names;
-  }, [commandsWithMetadata]);
-=======
   const reservedCommandNames = React.useMemo(
     () => reservedComposerCommandNames(commandsWithMetadata),
-    [commandsWithMetadata],
+    [builtinCommandNames, commandsWithMetadata],
   );
->>>>>>> upstream/main
   const guestCommands = useGuestCommands(reservedCommandNames);
 
   const allCommands = React.useMemo<CommandInfo[]>(() => {
@@ -185,13 +109,6 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       agentId: cmd.agentId,
       modelSelection: cmd.modelSelection,
       isBuiltIn: cmd.name === 'init' || cmd.name === 'review',
-<<<<<<< HEAD
-||||||| bc50ba56aa
-      // It reaches OpenCode through our managed config, but it is ours.
-      isOpenChamber: cmd.name === 'new-extension',
-=======
-      isOpenChamber: cmd.name === 'new-extension',
->>>>>>> upstream/main
       scope: cmd.scope,
     }));
 

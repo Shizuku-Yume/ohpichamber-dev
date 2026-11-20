@@ -53,14 +53,7 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
       : 'unavailable', [sessionId]),
     directory ?? undefined,
   );
-<<<<<<< HEAD
   const eligibleForStats = Boolean(sessionId && expanded && status === 'idle');
-||||||| bc50ba56aa
-  // The collapsed header still needs the latest completed response speed.
-  const eligibleForStats = Boolean(sessionId && status === 'idle');
-=======
-  const eligibleForStats = Boolean(sessionId && status === 'idle');
->>>>>>> upstream/main
 
   const records = useSessionMessageRecords(
     sessionId ?? '',
@@ -82,45 +75,11 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
   React.useEffect(() => {
     if (eligibleForStats) {
       setRetained({ scope, stats: computed });
-<<<<<<< HEAD
     } else {
       setRetained((previous) => previous?.scope === scope && status !== 'unavailable' ? previous : null);
-||||||| bc50ba56aa
-    } else if (status === 'unknown') {
-      setRetained(null);
-    } else if (retained?.scope !== scope) {
-      // A mid-run mount reads warm history once without subscribing to the stream.
-      const snapshot = buildSessionMessageRecordsSnapshot(store.getState(), sessionId ?? '');
-      setRetained({ scope, stats: getPreviousCompletedTurnStats(snapshot.list) });
-=======
-    } else if (status === 'unknown') {
-      setRetained(null);
-    } else if (retained?.scope !== scope) {
-      const snapshot = buildSessionMessageRecordsSnapshot(store.getState(), sessionId ?? '');
-      setRetained({ scope, stats: getPreviousCompletedTurnStats(snapshot.list) });
->>>>>>> upstream/main
     }
-<<<<<<< HEAD
   }, [scope, status, eligibleForStats, computed]);
   const stats = eligibleForStats ? computed : status !== 'unavailable' && retained?.scope === scope ? retained.stats : null;
-  const summary = stats && stats.responseTokensPerSecond !== null
-    ? formatThroughputRate(stats.responseTokensPerSecond)
-    : undefined;
-||||||| bc50ba56aa
-  }, [scope, status, eligibleForStats, computed, retained?.scope, store, sessionId]);
-  const stats = eligibleForStats ? computed : status !== 'unknown' && retained?.scope === scope ? retained.stats : null;
-  const previousTurn = stats !== null && (stats.previousTurn || !eligibleForStats);
-  const rate = stats && stats.responseTokensPerSecond !== null
-    ? formatThroughputRate(stats.responseTokensPerSecond)
-    : undefined;
-  const summary = previousTurn
-    ? rate !== undefined
-      ? t('chat.workStatus.telemetry.previousTurnRate', { rate })
-      : t('chat.workStatus.telemetry.previousTurn')
-    : rate;
-=======
-  }, [scope, status, eligibleForStats, computed, retained?.scope, store, sessionId]);
-  const stats = eligibleForStats ? computed : status !== 'unknown' && retained?.scope === scope ? retained.stats : null;
   const previousTurn = stats !== null && (stats.previousTurn || !eligibleForStats);
   const hasCost = stats !== null && stats.cost !== null && stats.cost > 0;
   const figures = stats ? [
@@ -133,7 +92,6 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
       ? t('chat.workStatus.telemetry.previousTurnRate', { rate: figures })
       : t('chat.workStatus.telemetry.previousTurn')
     : figures || undefined;
->>>>>>> upstream/main
 
   useReportWorkStatusPresence('telemetry', Boolean(sessionId));
 

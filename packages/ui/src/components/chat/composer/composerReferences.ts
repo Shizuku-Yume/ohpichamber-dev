@@ -11,17 +11,6 @@ export type ComposerReferenceAuthor = { login: string; avatarUrl?: string };
 
 export type ComposerReference =
     | {
-<<<<<<< HEAD
-        kind: 'linear-issue';
-        identifier: string;
-        title: string;
-        url: string;
-        contextText: string;
-        author?: ComposerReferenceAuthor;
-    }
-    | {
-||||||| bc50ba56aa
-=======
         kind: 'shared-page';
         shareKey: string;
         receivedId: string | null;
@@ -32,7 +21,6 @@ export type ComposerReference =
         link?: string;
     }
     | {
->>>>>>> upstream/main
         kind: 'repository-issue';
         provider?: SourceControlProvider;
         number: number;

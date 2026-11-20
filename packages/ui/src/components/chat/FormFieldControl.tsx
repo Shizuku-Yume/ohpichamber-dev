@@ -1,12 +1,4 @@
 import React from 'react';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import type { FormField } from '@opencode/client';
-import { useEmojiPicker } from '@/components/emoji/useEmojiPicker';
-=======
-import type { FormField } from '@/lib/opencode/model';
-import { useEmojiPicker } from '@/components/emoji/useEmojiPicker';
->>>>>>> upstream/main
 import { Checkbox } from '@/components/ui/checkbox';
 import { Radio } from '@/components/ui/radio';
 import { Icon } from '@/components/icon/Icon';
@@ -22,22 +14,11 @@ import {
  toggleAskOption,
 } from './questionRequest';
 
-<<<<<<< HEAD
 /**
  * One native `omp.ask` question: its header/question, option rows as radios or
  * checkboxes, and a free-text answer. The card and the dock share this control
  * so both answer the request the same way.
  */
-||||||| bc50ba56aa
-/**
- * One form field as the user answers it: label, description, and the control
- * for its type (options as radios or checkboxes with an "Other" free-text
- * entry, a text box, a number box, a yes/no checkbox, or an external link).
- * Shared by the inline card (the BTW sheet) and the composer dock, so both
- * answer a field the same way.
- */
-=======
->>>>>>> upstream/main
 
 interface AutoGrowTextareaProps {
  value: string;
@@ -48,19 +29,6 @@ interface AutoGrowTextareaProps {
  onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
-<<<<<<< HEAD
-/**
- * Free-text answer box. It keeps its own value while typing so a keystroke does
- * not re-render the whole request, and grows with the content up to the cap in
- * `formTextareaSizing`.
- */
-||||||| bc50ba56aa
-/**
- * Free-text answer box, sized to its content up to the cap in
- * `formTextareaSizing`.
- */
-=======
->>>>>>> upstream/main
 const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
  value,
  placeholder,
@@ -76,12 +44,11 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
   setLocalValue(value);
  }, [value]);
 
-<<<<<<< HEAD
  React.useLayoutEffect(() => {
   const textarea = textareaRef.current;
   const wrapper = textarea?.parentElement;
   if (!textarea || !wrapper) return;
-  const minHeight = wrapper.style.minHeight;
+        const minHeight = wrapper.style.minHeight;
   wrapper.style.minHeight = `${wrapper.offsetHeight}px`;
   try {
    textarea.style.height = '0px';
@@ -94,48 +61,6 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
    wrapper.style.minHeight = minHeight;
   }
  }, [localValue]);
-||||||| bc50ba56aa
-    React.useLayoutEffect(() => {
-        const textarea = textareaRef.current;
-        const wrapper = textarea?.parentElement;
-        if (!textarea || !wrapper) return;
-        // Measure intrinsic content after deletion too. scrollHeight excludes
-        // borders; feeding it back through height state shrinks a border-box
-        // textarea by its border height on every layout effect until React throws.
-        // Hold the wrapper's space so a scrolling form body cannot clamp its
-        // scrollTop while the textarea is temporarily collapsed for measurement.
-        const minHeight = wrapper.style.minHeight;
-        wrapper.style.minHeight = `${wrapper.offsetHeight}px`;
-        try {
-            textarea.style.height = '0px';
-            textarea.style.overflowY = 'hidden';
-            const contentHeight = textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight;
-            const nextHeight = getFormCustomTextareaHeight(contentHeight);
-            textarea.style.height = `${nextHeight}px`;
-            textarea.style.overflowY = contentHeight > nextHeight ? 'auto' : 'hidden';
-        } finally {
-            wrapper.style.minHeight = minHeight;
-        }
-    }, [localValue]);
-=======
-    React.useLayoutEffect(() => {
-        const textarea = textareaRef.current;
-        const wrapper = textarea?.parentElement;
-        if (!textarea || !wrapper) return;
-        const minHeight = wrapper.style.minHeight;
-        wrapper.style.minHeight = `${wrapper.offsetHeight}px`;
-        try {
-            textarea.style.height = '0px';
-            textarea.style.overflowY = 'hidden';
-            const contentHeight = textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight;
-            const nextHeight = getFormCustomTextareaHeight(contentHeight);
-            textarea.style.height = `${nextHeight}px`;
-            textarea.style.overflowY = contentHeight > nextHeight ? 'auto' : 'hidden';
-        } finally {
-            wrapper.style.minHeight = minHeight;
-        }
-    }, [localValue]);
->>>>>>> upstream/main
 
  return (
   <textarea
@@ -161,38 +86,16 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
 });
 
 export interface FormFieldControlProps {
-<<<<<<< HEAD
  question: AskQuestion;
  answer: AskAnswerState;
- index: number;
+    missing: number;
  showErrors: boolean;
  isMissing: boolean;
  isResponding: boolean;
  onChange: (answer: AskAnswerState) => void;
- /** Enter advances or submits; the owner decides which. */
- onTextKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-||||||| bc50ba56aa
-    field: FormField;
-    values: FormValues;
-    /** Keys of required fields still unanswered, used to mark the label. */
-    missing: string[];
-    showErrors: boolean;
-    isResponding: boolean;
-    updateValue: (key: string, patch: Partial<FormValues[string]>) => void;
-    /** Enter in a text box submits or advances; the owner decides which. */
     onTextKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-=======
-    field: FormField;
-    values: FormValues;
-    missing: string[];
-    showErrors: boolean;
-    isResponding: boolean;
-    updateValue: (key: string, patch: Partial<FormValues[string]>) => void;
-    onTextKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
->>>>>>> upstream/main
 }
 
-<<<<<<< HEAD
 export function FormFieldControl({
  question,
  answer,
@@ -206,7 +109,7 @@ export function FormFieldControl({
  const { t } = useI18n();
  const fallbackLabel = t('chat.questionCard.questionFallback', { index: String(index + 1) });
  const label = question.header?.trim() || question.question?.trim() || fallbackLabel;
- const body = question.header && question.question ? question.question : undefined;
+const body = question.header && question.question ? question.question : undefined;
  const missing = showErrors && isMissing;
  const customTextarea = (
   <AutoGrowTextarea
@@ -218,32 +121,6 @@ export function FormFieldControl({
    onKeyDown={onTextKeyDown}
   />
  );
-||||||| bc50ba56aa
-export function FormFieldControl({ field, values, missing, showErrors, isResponding, updateValue, onTextKeyDown }: FormFieldControlProps) {
-const { t } = useI18n();
-const value = valueOf(values, field.key);
-const isMissing = showErrors && missing.includes(field.key);
-const label = field.title?.trim() || field.key;
-// The field runs the way most of its own words do, so a Persian question sets
-// its label, options and radios from the right even when an option opens
-// with a Latin term. Translated controls inside it follow along.
-const dir = dominantTextDirection(
-    label,
-    field.description,
-    ...('options' in field ? field.options ?? [] : []).flatMap((option) => [option.label, option.description]),
-);
-=======
-export function FormFieldControl({ field, values, missing, showErrors, isResponding, updateValue, onTextKeyDown }: FormFieldControlProps) {
-const { t } = useI18n();
-const value = valueOf(values, field.key);
-const isMissing = showErrors && missing.includes(field.key);
-const label = field.title?.trim() || field.key;
-const dir = dominantTextDirection(
-    label,
-    field.description,
-    ...('options' in field ? field.options ?? [] : []).flatMap((option) => [option.label, option.description]),
-);
->>>>>>> upstream/main
 
  return (
   <div className="px-1.5 py-1">
@@ -257,7 +134,6 @@ const dir = dominantTextDirection(
     <div className="typography-micro whitespace-pre-wrap text-muted-foreground mb-1">{body}</div>
    ) : null}
 
-<<<<<<< HEAD
    {question.options.length === 0 ? customTextarea : (
     <div className="space-y-0.5" role={question.multi ? 'group' : 'radiogroup'} aria-label={label}>
      {question.options.map((option, optionIndex) => {
@@ -276,8 +152,6 @@ const dir = dominantTextDirection(
          isResponding ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
         )}
        >
-        {/* The control and label share one centred row; the
-                                    description hangs under the label. */}
         <div className="flex items-center gap-2">
          {question.multi ? (
           <Checkbox checked={selected} onChange={toggle} disabled={isResponding} ariaLabel={option.label} />
@@ -297,324 +171,6 @@ const dir = dominantTextDirection(
            {t('chat.questionCard.recommended')}
           </span>
          ) : null}
-||||||| bc50ba56aa
-            {field.type === 'external' ? (
-                <a
-                    href={field.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-flex items-center gap-1 typography-meta text-primary hover:underline"
-                >
-                    <Icon name="external-link" className="h-3 w-3" />
-                    {t('chat.formCard.openLink')}
-                </a>
-            ) : null}
-
-            {field.type === 'boolean' ? (
-                <button
-                    type="button"
-                    onClick={() => updateValue(field.key, { boolean: !value.boolean })}
-                    disabled={isResponding}
-                    className="flex items-center gap-2 rounded px-1 py-1 hover:bg-interactive-hover/30 transition-colors"
-                >
-                    <Checkbox
-                        checked={value.boolean}
-                        onChange={() => updateValue(field.key, { boolean: !value.boolean })}
-                        disabled={isResponding}
-                    />
-                    <span className="typography-meta text-foreground/80">{t('chat.formCard.yes')}</span>
-                </button>
-            ) : null}
-
-            {field.type === 'number' || field.type === 'integer' ? (
-                <input
-                    type="number"
-                    inputMode={field.type === 'integer' ? 'numeric' : 'decimal'}
-                    step={field.type === 'integer' ? 1 : 'any'}
-                    min={toFiniteNumber(field.minimum) ?? undefined}
-                    max={toFiniteNumber(field.maximum) ?? undefined}
-                    value={value.number ?? ''}
-                    disabled={isResponding}
-                    onChange={(event) => {
-                        const parsed = event.target.value === '' ? null : Number(event.target.value);
-                        updateValue(field.key, { number: parsed !== null && Number.isFinite(parsed) ? parsed : null });
-                    }}
-                    className={cn(
-                        'w-full rounded border border-edge-muted bg-background/50 px-2 py-1',
-                        'typography-meta text-foreground focus:outline-none focus:border-edge',
-                    )}
-                />
-            ) : null}
-
-            {(field.type === 'string' || field.type === 'multiselect') && (field.options?.length ?? 0) > 0 ? (
-                <div className="space-y-0.5">
-                    {(field.options ?? []).map((option) => {
-                        const multiple = field.type === 'multiselect';
-                        const selected = !value.custom || multiple ? value.selected.includes(option.value) : false;
-                        const toggle = () => {
-                            if (multiple) {
-                                const next = value.selected.includes(option.value)
-                                    ? value.selected.filter((entry) => entry !== option.value)
-                                    : [...value.selected, option.value];
-                                updateValue(field.key, { selected: next });
-                                return;
-                            }
-                            updateValue(field.key, { selected: [option.value], custom: false });
-                        };
-                        return (
-                            <button
-                                key={option.value}
-                                type="button"
-                                onClick={toggle}
-                                disabled={isResponding}
-                                className={cn(
-                                    'w-full px-1.5 py-1 text-start rounded transition-colors hover:bg-interactive-hover/30',
-                                    selected ? 'bg-interactive-selection/20' : null,
-                                    isResponding ? 'opacity-60 cursor-not-allowed' : null,
-                                )}
-                            >
-                                {/* The control and the label share one centred row; the
-                                    description hangs under the label, so the control never
-                                    depends on a line height to line up. */}
-                                <div className="flex items-center gap-2">
-                                    {multiple ? (
-                                        <Checkbox checked={selected} onChange={toggle} disabled={isResponding} />
-                                    ) : (
-                                        <Radio checked={selected} onChange={toggle} disabled={isResponding} />
-                                    )}
-                                    <span
-                                        className={cn(
-                                            'typography-meta min-w-0 break-all',
-                                            selected ? 'text-foreground font-medium' : 'text-foreground/80',
-                                        )}
-                                    >
-                                        {stripRecommendedMarker(option.label)}
-                                    </span>
-                                    {isRecommendedOption(option.label) ? (
-                                        <span className="typography-micro shrink-0 text-primary/80">
-                                            {t('chat.questionCard.recommended')}
-                                        </span>
-                                    ) : null}
-                                </div>
-                                {option.description ? (
-                                    <div className="typography-micro break-words ps-[22px] text-muted-foreground">
-                                        {option.description}
-                                    </div>
-                                ) : null}
-                            </button>
-                        );
-                    })}
-
-                    {field.custom ? (
-                        <>
-                            <button
-                                type="button"
-                                onClick={() => updateValue(field.key, { custom: true, selected: field.type === 'multiselect' ? value.selected : [] })}
-                                disabled={isResponding}
-                                className={cn(
-                                    'w-full px-1.5 py-1 text-start rounded transition-colors hover:bg-interactive-hover/30',
-                                    value.custom ? 'bg-interactive-selection/20' : null,
-                                )}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Icon
-                                        name="edit"
-                                        className={cn('h-3.5 w-3.5', value.custom ? 'text-primary' : 'text-muted-foreground')}
-                                    />
-                                    <span
-                                        className={cn(
-                                            'typography-meta',
-                                            value.custom ? 'text-foreground font-medium' : 'text-muted-foreground',
-                                        )}
-                                    >
-                                        {t('chat.formCard.other')}
-                                    </span>
-                                </div>
-                            </button>
-                            {value.custom ? (
-                                <div className="ps-6 pe-1 pt-0.5">
-                                    <AutoGrowTextarea
-                                        value={value.text}
-                                        placeholder={t('chat.formCard.yourAnswer')}
-                                        disabled={isResponding}
-                                        autoFocus
-                                        onValueChange={(next) => updateValue(field.key, { text: next })}
-                                        onKeyDown={onTextKeyDown}
-                                    />
-                                </div>
-                            ) : null}
-                        </>
-                    ) : null}
-                </div>
-            ) : null}
-
-            {field.type === 'string' && (field.options?.length ?? 0) === 0 ? (
-                <AutoGrowTextarea
-                    value={value.text}
-                    placeholder={field.placeholder ?? t('chat.formCard.yourAnswer')}
-                    disabled={isResponding}
-                    onValueChange={(next) => updateValue(field.key, { text: next })}
-                    onKeyDown={onTextKeyDown}
-                />
-            ) : null}
-=======
-            {field.type === 'external' ? (
-                <a
-                    href={field.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-flex items-center gap-1 typography-meta text-primary hover:underline"
-                >
-                    <Icon name="external-link" className="h-3 w-3" />
-                    {t('chat.formCard.openLink')}
-                </a>
-            ) : null}
-
-            {field.type === 'boolean' ? (
-                <button
-                    type="button"
-                    onClick={() => updateValue(field.key, { boolean: !value.boolean })}
-                    disabled={isResponding}
-                    className="flex items-center gap-2 rounded px-1 py-1 hover:bg-interactive-hover/30 transition-colors"
-                >
-                    <Checkbox
-                        checked={value.boolean}
-                        onChange={() => updateValue(field.key, { boolean: !value.boolean })}
-                        disabled={isResponding}
-                    />
-                    <span className="typography-meta text-foreground/80">{t('chat.formCard.yes')}</span>
-                </button>
-            ) : null}
-
-            {field.type === 'number' || field.type === 'integer' ? (
-                <input
-                    type="number"
-                    inputMode={field.type === 'integer' ? 'numeric' : 'decimal'}
-                    step={field.type === 'integer' ? 1 : 'any'}
-                    min={toFiniteNumber(field.minimum) ?? undefined}
-                    max={toFiniteNumber(field.maximum) ?? undefined}
-                    value={value.number ?? ''}
-                    disabled={isResponding}
-                    onChange={(event) => {
-                        const parsed = event.target.value === '' ? null : Number(event.target.value);
-                        updateValue(field.key, { number: parsed !== null && Number.isFinite(parsed) ? parsed : null });
-                    }}
-                    className={cn(
-                        'w-full rounded border border-edge-muted bg-background/50 px-2 py-1',
-                        'typography-meta text-foreground focus:outline-none focus:border-edge',
-                    )}
-                />
-            ) : null}
-
-            {(field.type === 'string' || field.type === 'multiselect') && (field.options?.length ?? 0) > 0 ? (
-                <div className="space-y-0.5">
-                    {(field.options ?? []).map((option) => {
-                        const multiple = field.type === 'multiselect';
-                        const selected = !value.custom || multiple ? value.selected.includes(option.value) : false;
-                        const toggle = () => {
-                            if (multiple) {
-                                const next = value.selected.includes(option.value)
-                                    ? value.selected.filter((entry) => entry !== option.value)
-                                    : [...value.selected, option.value];
-                                updateValue(field.key, { selected: next });
-                                return;
-                            }
-                            updateValue(field.key, { selected: [option.value], custom: false });
-                        };
-                        return (
-                            <button
-                                key={option.value}
-                                type="button"
-                                onClick={toggle}
-                                disabled={isResponding}
-                                className={cn(
-                                    'w-full px-1.5 py-1 text-start rounded transition-colors hover:bg-interactive-hover/30',
-                                    selected ? 'bg-interactive-selection/20' : null,
-                                    isResponding ? 'opacity-60 cursor-not-allowed' : null,
-                                )}
-                            >
-                                <div className="flex items-center gap-2">
-                                    {multiple ? (
-                                        <Checkbox checked={selected} onChange={toggle} disabled={isResponding} />
-                                    ) : (
-                                        <Radio checked={selected} onChange={toggle} disabled={isResponding} />
-                                    )}
-                                    <span
-                                        className={cn(
-                                            'typography-meta min-w-0 break-all',
-                                            selected ? 'text-foreground font-medium' : 'text-foreground/80',
-                                        )}
-                                    >
-                                        {stripRecommendedMarker(option.label)}
-                                    </span>
-                                    {isRecommendedOption(option.label) ? (
-                                        <span className="typography-micro shrink-0 text-primary/80">
-                                            {t('chat.questionCard.recommended')}
-                                        </span>
-                                    ) : null}
-                                </div>
-                                {option.description ? (
-                                    <div className="typography-micro break-words ps-[22px] text-muted-foreground">
-                                        {option.description}
-                                    </div>
-                                ) : null}
-                            </button>
-                        );
-                    })}
-
-                    {field.custom ? (
-                        <>
-                            <button
-                                type="button"
-                                onClick={() => updateValue(field.key, { custom: true, selected: field.type === 'multiselect' ? value.selected : [] })}
-                                disabled={isResponding}
-                                className={cn(
-                                    'w-full px-1.5 py-1 text-start rounded transition-colors hover:bg-interactive-hover/30',
-                                    value.custom ? 'bg-interactive-selection/20' : null,
-                                )}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Icon
-                                        name="edit"
-                                        className={cn('h-3.5 w-3.5', value.custom ? 'text-primary' : 'text-muted-foreground')}
-                                    />
-                                    <span
-                                        className={cn(
-                                            'typography-meta',
-                                            value.custom ? 'text-foreground font-medium' : 'text-muted-foreground',
-                                        )}
-                                    >
-                                        {t('chat.formCard.other')}
-                                    </span>
-                                </div>
-                            </button>
-                            {value.custom ? (
-                                <div className="ps-6 pe-1 pt-0.5">
-                                    <AutoGrowTextarea
-                                        value={value.text}
-                                        placeholder={t('chat.formCard.yourAnswer')}
-                                        disabled={isResponding}
-                                        autoFocus
-                                        onValueChange={(next) => updateValue(field.key, { text: next })}
-                                        onKeyDown={onTextKeyDown}
-                                    />
-                                </div>
-                            ) : null}
-                        </>
-                    ) : null}
-                </div>
-            ) : null}
-
-            {field.type === 'string' && (field.options?.length ?? 0) === 0 ? (
-                <AutoGrowTextarea
-                    value={value.text}
-                    placeholder={field.placeholder ?? t('chat.formCard.yourAnswer')}
-                    disabled={isResponding}
-                    onValueChange={(next) => updateValue(field.key, { text: next })}
-                    onKeyDown={onTextKeyDown}
-                />
-            ) : null}
->>>>>>> upstream/main
         </div>
         {option.description ? (
          <div className="typography-micro break-words ps-[22px] text-muted-foreground">

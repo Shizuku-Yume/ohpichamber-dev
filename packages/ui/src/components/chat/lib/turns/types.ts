@@ -35,28 +35,12 @@ export interface TurnDiffStats {
 
 export interface TurnChangedFile {
     file: string;
-<<<<<<< HEAD
-    /** Absent when the tool result does not report line counts. */
-||||||| bc50ba56aa
-    /** Absent when neither the turn diff nor the tool call reports line counts. */
-=======
->>>>>>> upstream/main
     additions?: number;
     deletions?: number;
-<<<<<<< HEAD
-}
-
-export interface TurnActivityGroup {
     id: string;
     anchorMessageId: string;
     afterToolPartId: string | null;
     parts: TurnActivityRecord[];
-||||||| bc50ba56aa
-    /** False when the turn diff view has no entry for this path, so a pill cannot open it. */
-    inTurnDiff?: boolean;
-=======
-    inTurnDiff?: boolean;
->>>>>>> upstream/main
 }
 
 export interface TurnSummaryRecord {
@@ -81,17 +65,7 @@ export interface TurnRecord {
     messages: TurnMessageRecord[];
     assistantMessageIds: string[];
     assistantMessages: ChatMessageEntry[];
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    /**
-     * Session notices that came after the prompt before the run's first step
-     * existed. They render in the turn until that step arrives and takes them
-     * as rows (`attachSyntheticContext`).
-     */
     waitingNotices?: ChatMessageEntry[];
-=======
-    waitingNotices?: ChatMessageEntry[];
->>>>>>> upstream/main
     activityParts: TurnActivityRecord[];
     activitySegments: TurnActivityGroup[];
     summary: TurnSummaryRecord;
@@ -138,19 +112,8 @@ export interface TurnGroupingContext {
     activityOwnerMessageId?: string;
     isFirstAssistantInTurn: boolean;
     isLastAssistantInTurn: boolean;
-<<<<<<< HEAD
-    hasEarlierAssistantText?: boolean;
-||||||| bc50ba56aa
-    /**
-     * Text the turn's earlier assistant messages wrote, one entry per text
-     * part, in order. Set on the last assistant message only, so the turn
-     * footer can copy and save the whole reply.
-     */
-    earlierAssistantText?: string[];
-=======
     opensAnswerText?: boolean;
-    earlierAssistantText?: string[];
->>>>>>> upstream/main
+    earlierAssistantText?: boolean;
     isLatestTurn: boolean;
     summaryBody?: string;
     activityParts?: TurnActivityRecord[];

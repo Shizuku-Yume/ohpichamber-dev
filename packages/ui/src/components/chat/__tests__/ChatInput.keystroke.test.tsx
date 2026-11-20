@@ -133,21 +133,10 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
 plugin({
   name: 'composer-keystroke-vite-modules',
   setup(build) {
-<<<<<<< HEAD
-    build.onResolve({ filter: /\?worker&url$/ }, ({ path }) => ({ path, namespace: 'worker-url' }));
-    build.onLoad({ filter: /.*/, namespace: 'worker-url' }, () => ({ contents: 'export default "";', loader: 'js' }));
-||||||| bc50ba56aa
-    // A load transform, as the sibling tests do it, and never an onResolve into a namespace of
-    // its own: Bun keeps transpiled files in a cache on disk that every test process shares, and
-    // a rewritten import specifier cached from this file broke every later file that imports
-    // markdown-worker with "Cannot find module 'worker-url:...'".
-    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, () => ({ contents: 'export default "";', loader: 'js' }));
-=======
     // A load transform, as the sibling tests do it, and never an onResolve into a namespace of
     // its own: Bun keeps transpiled files in a cache on disk that every test process shares, and
     // a rewritten import specifier cached from this file broke every later file that imports
     // the rewritten module.
->>>>>>> upstream/main
     build.onLoad({ filter: /useProviderLogo\.ts$/ }, ({ path }) => {
       const directory = resolve(dirname(path), '../assets/provider-logos');
       const logos = Object.fromEntries(readdirSync(directory).filter((name) => name.endsWith('.svg')).map((name) => [
@@ -174,39 +163,6 @@ const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
 const runtimeAPIs = { runtime: { platform: 'web', isDesktop: false }, sourceControl: {} } as RuntimeAPIs;
 
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const { useProjectsStore } = await import('@/stores/useProjectsStore');
-useProjectsStore.setState({ projects: [{ id: 'project', path: '/workspace' }] });
-const { dispatchPromptHistorySearch } = await import('../composer/state/promptHistorySearchRoute');
-const { createInputHistoryIdentity, useInputHistoryStore } = await import('@/stores/useInputHistoryStore');
-const { getRuntimeKey } = await import('@/lib/runtime-switch');
-
-// Stands in for the window keydown listener that useKeyboardShortcuts installs
-// for search_prompt_history: the combo match is the dispatcher's job, and the
-// route it hands the event to is the real one the composer registers.
-window.addEventListener('keydown', (event: KeyboardEvent) => {
-  if (event.key === 'ArrowUp' && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
-    dispatchPromptHistorySearch(event);
-  }
-});
-=======
-const { useProjectsStore } = await import('@/stores/useProjectsStore');
-useProjectsStore.setState({ projects: [{ id: 'project', path: '/workspace' }] });
-const { dispatchPromptHistorySearch } = await import('../composer/state/promptHistorySearchRoute');
-const { createInputHistoryIdentity, useInputHistoryStore } = await import('@/stores/useInputHistoryStore');
-const { getRuntimeKey } = await import('@/lib/runtime-switch');
-const { useConfigStore } = await import('@/stores/useConfigStore');
-
-// Stands in for the window keydown listener that useKeyboardShortcuts installs
-// for search_prompt_history: the combo match is the dispatcher's job, and the
-// route it hands the event to is the real one the composer registers.
-window.addEventListener('keydown', (event: KeyboardEvent) => {
-  if (event.key === 'ArrowUp' && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
-    dispatchPromptHistorySearch(event);
-  }
-});
->>>>>>> upstream/main
 
 const KEYSTROKES = 20;
 

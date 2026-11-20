@@ -8,13 +8,6 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getProjectDraftStarters, saveProjectDraftStarters, updateSharedProjectSetup, type ProjectDraftStarter } from '@/lib/openchamberConfig';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
-=======
-import { isVSCodeRuntime } from '@/lib/desktop';
->>>>>>> upstream/main
 import type { IconName } from '@/components/icon/icons';
 import {
     BUILTIN_STARTERS,
@@ -99,17 +92,7 @@ export function useDraftStarters(): UseDraftStartersResult {
             .then((refs) => { if (!cancelled) setProjectStarters(refs); })
             .catch(() => { if (!cancelled) setProjectStarters([]); });
         return () => { cancelled = true; };
-<<<<<<< HEAD
-        // Keyed on project id to avoid reloading when the memoized ref object
-        // changes identity but still points at the same project.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-||||||| bc50ba56aa
-        // Keyed on project id to avoid reloading when the memoized ref object
-        // changes identity but still points at the same project.
-        // oxlint-disable-next-line react-hooks/exhaustive-deps
-=======
-        // oxlint-disable-next-line react-hooks/exhaustive-deps
->>>>>>> upstream/main
     }, [projectRef?.id]);
 
     const ensureLoaded = React.useCallback(() => {
@@ -124,15 +107,6 @@ export function useDraftStarters(): UseDraftStartersResult {
     const commandNames = React.useMemo(() => new Set(commands.map((c) => c.name)), [commands]);
     const skillNames = React.useMemo(() => new Set(skills.map((s) => s.name)), [skills]);
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // Only a managed OpenCode has this command, and only where extensions load.
-    const offersNewExtension = !isVSCode && !isMobileSurfaceRuntime() && commandNames.has('new-extension');
-
-=======
-    const offersNewExtension = !isVSCode && commandNames.has('new-extension');
-
->>>>>>> upstream/main
     const resolve = React.useCallback((ref: DraftStarterRef, group: StarterGroup, shared = false): ResolvedStarter | null => {
         const plain: DraftStarterRef = { type: ref.type, name: ref.name };
         if (ref.type === 'command') {

@@ -7,15 +7,9 @@ import { useI18n } from '@/lib/i18n';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
 import { isDoneSuggested } from '@/lib/sessionWorkMetadata';
 import { setSessionWorkState } from '@/sync/session-actions';
-<<<<<<< HEAD
+import { settleRunningOperatorChildren } from '@/sync/operator-children-done';
 import { useDirectorySync, useSession, useSessionStatus } from '@/sync/sync-context';
 import { selectBoundRunId, sessionActivityPhase } from '@/hooks/useSessionActivity';
-||||||| bc50ba56aa
-import { useSession, useSessionStatus } from '@/sync/sync-context';
-=======
-import { settleRunningOperatorChildren } from '@/sync/operator-children-done';
-import { useSession, useSessionStatus } from '@/sync/sync-context';
->>>>>>> upstream/main
 import { useUIStore } from '@/stores/useUIStore';
 import { problemMessage } from '@/lib/problemMessage';
 

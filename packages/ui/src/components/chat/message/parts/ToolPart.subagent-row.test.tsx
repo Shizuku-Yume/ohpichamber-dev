@@ -14,29 +14,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 
-<<<<<<< HEAD
-plugin({
-  name: 'task-child-worker-url',
-  setup(build) {
-    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-      contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`, loader: 'js',
-    }));
-  },
-});
-||||||| bc50ba56aa
-// Bun does not implement Vite's worker asset-query imports.
-plugin({
-  name: 'tool-guest-worker-url',
-  setup(build) {
-    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-      contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`,
-      loader: 'js',
-    }));
-  },
-});
-
-=======
->>>>>>> upstream/main
 const { default: ToolPart } = await import('./ToolPart');
 const { default: TurnActivity } = await import('../../components/TurnActivity');
 const noAction = () => {};

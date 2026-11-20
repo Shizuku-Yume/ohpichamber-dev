@@ -203,17 +203,6 @@ function referenceChips(text: string, context: ComposerLanguageContext, typingEn
         }
     }
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // So is a linked issue, change request or tracker item once read.
-    if (context.referenceLinkChips?.size) {
-        for (const range of findWebLinks(text)) {
-            const chip = context.referenceLinkChips.get(range.link);
-            if (chip) chips.push({ start: range.start, end: range.end, widget: new ReferenceChipWidget(chip.label, chip.title, chip.iconHref, true) });
-        }
-    }
-
-=======
     if (context.referenceLinkChips?.size) {
         for (const range of findWebLinks(text)) {
             const chip = context.referenceLinkChips.get(range.link);
@@ -221,7 +210,6 @@ function referenceChips(text: string, context: ComposerLanguageContext, typingEn
         }
     }
 
->>>>>>> upstream/main
     chips.sort((a, b) => a.start - b.start);
     const builder = new RangeSetBuilder<Decoration>();
     const glue = new RangeSetBuilder<Decoration>();

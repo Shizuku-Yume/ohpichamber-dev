@@ -2,16 +2,6 @@ import { expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-<<<<<<< HEAD
-import { plugin } from 'bun';
-import { pathToFileURL } from 'node:url';
-||||||| bc50ba56aa
-import { plugin } from 'bun';
-import { pathToFileURL } from 'node:url';
-import { OpenCode } from '@opencode/client';
-=======
-import { OpenCode } from '@opencode/client';
->>>>>>> upstream/main
 import { SyncProvider } from '@/sync/sync-context';
 import type { MessageListHandle } from './MessageList';
 import { KeepAlive } from '@/components/ui/KeepAlive';

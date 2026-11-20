@@ -66,13 +66,7 @@ const HISTORY_RENDER_WAIT_TIMEOUT_MS = 250
 const HISTORY_LOAD_WAIT_LIMIT = 40
 const HISTORY_INTERACTION_GUARD_MS = 2000
 const SCROLL_PIN_TIMEOUT_MS = 2500
-<<<<<<< HEAD
-||||||| bc50ba56aa
-// Derived models must not keep transcripts alive after sync trims or evicts them.
 const turnModelCache = new WeakMap<ChatMessageEntry[], TurnWindowModel>()
-=======
-const turnModelCache = new WeakMap<ChatMessageEntry[], TurnWindowModel>()
->>>>>>> upstream/main
 
 export const isOlderHistoryPrependCommit = (input: {
     previousOldestId: string | null;
@@ -394,24 +388,8 @@ export const useChatTimelineController = ({
 
         let snap = prePrependScrollRef.current;
         const prev = prependTrackingRef.current;
-<<<<<<< HEAD
         const currentOldestId = renderedMessages[0]?.messageId ?? null;
         const currentNewestId = renderedMessages[renderedMessages.length - 1]?.messageId ?? null;
-        // A prepend = content inserted ABOVE the viewport: either the newest
-        // stayed fixed, or the old first message still exists below a new first
-        // message. The latter keeps preservation alive if a tail append lands in
-        // the same commit as the history page.
-||||||| bc50ba56aa
-        const currentOldestId = renderedMessages[0]?.info?.id ?? null;
-        const currentNewestId = renderedMessages[renderedMessages.length - 1]?.info?.id ?? null;
-        // A prepend = content inserted ABOVE the viewport: either the newest
-        // stayed fixed, or the old first message still exists below a new first
-        // message. The latter keeps preservation alive if a tail append lands in
-        // the same commit as the history page.
-=======
-        const currentOldestId = renderedMessages[0]?.info?.id ?? null;
-        const currentNewestId = renderedMessages[renderedMessages.length - 1]?.info?.id ?? null;
->>>>>>> upstream/main
         const isPrepend = prev
             ? isOlderHistoryPrependCommit({
                 previousOldestId: prev.oldestId,
@@ -610,14 +588,8 @@ export const useChatTimelineController = ({
         options: { maxBatches: number },
     ): Promise<boolean> => {
         const targetIdentity = timelineIdentityRef.current;
-<<<<<<< HEAD
-        const isLoaded = () => messagesRef.current.some((message) => message.messageId === messageId);
-||||||| bc50ba56aa
-        const isLoaded = () => messagesRef.current.some((message) => message.info.id === messageId);
-=======
         const isLoaded = () => messageListRef.current?.hasMessageRow(messageId)
-            ?? messagesRef.current.some((message) => message.info.id === messageId);
->>>>>>> upstream/main
+            ?? messagesRef.current.some((message) => message.messageId === messageId);
         let batches = 0;
         let waits = 0;
         while (timelineIdentityRef.current === targetIdentity) {

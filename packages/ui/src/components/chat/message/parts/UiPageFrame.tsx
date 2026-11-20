@@ -2,17 +2,9 @@ import React from 'react';
 import { toast } from '@/components/ui';
 import { dispatchPageWaiting } from '@/components/chat/lib/scroll/timelineScrollIntent';
 import { useI18n } from '@/lib/i18n';
-<<<<<<< HEAD
 import type { CanonicalToolView, RenderedPageAsk } from './toolView';
 
-||||||| bc50ba56aa
-import type { ToolPart } from '@/lib/opencode/model';
-import type { RenderedPageAsk } from '@/lib/opencode/tools';
-=======
-import type { ToolPart } from '@/lib/opencode/model';
-import type { RenderedPageAsk } from '@/lib/opencode/tools';
 import { useGuestsStore } from '@/lib/guests/store';
->>>>>>> upstream/main
 import { answerRenderedPage } from '@/lib/renderPageAnswer';
 import { pageAnswerSummary, uiBlockAnswerData, type UiBlockAnswer } from '../../uiBlocks/answer';
 import type { UiBlockHost } from '../../uiBlocks/UiBlock';
@@ -22,27 +14,7 @@ import { usePageDecline } from './usePageDecline';
 import { PageAskStatus } from './PageAskStatus';
 import { pageBlocksTurn } from './usePageAsk';
 
-<<<<<<< HEAD
-/**
- * A page an agent showed with `openchamber_render` as a `ui` program: drawn
- * with the chat's own components, like a UI block in a reply. While the call
- * waits, a Button answers it; a program this client cannot draw answers it
- * with the parser's errors instead, so the agent is not left waiting on
- * fields nobody can see.
- */
 export function UiPageFrame({ part, source, ask }: { part: CanonicalToolView; source: string; ask: RenderedPageAsk }) {
-||||||| bc50ba56aa
-/**
- * A page an agent showed with `openchamber_render` as a `ui` program: drawn
- * with the chat's own components, like a UI block in a reply. While the call
- * waits, a Button answers it; a program this client cannot draw answers it
- * with the parser's errors instead, so the agent is not left waiting on
- * fields nobody can see.
- */
-export function UiPageFrame({ part, source, ask }: { part: ToolPart; source: string; ask: RenderedPageAsk }) {
-=======
-export function UiPageFrame({ part, source, ask }: { part: ToolPart; source: string; ask: RenderedPageAsk }) {
->>>>>>> upstream/main
     const { t } = useI18n();
     const UiBlock = useUiBlockComponent();
     const [sentSummary, setSentSummary] = React.useState<string | null>(null);

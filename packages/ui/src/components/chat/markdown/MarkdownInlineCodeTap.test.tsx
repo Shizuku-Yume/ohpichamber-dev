@@ -48,13 +48,7 @@ const host = document.createElement('div');
 document.body.append(host);
 const root = createRoot(host);
 let drawerOpened = 0;
-<<<<<<< HEAD
-const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { drawerOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined };
-||||||| bc50ba56aa
-const actions = { openChanges: () => undefined, openFiles: () => { drawerOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined };
-=======
-const actions = { openChanges: () => undefined, openFiles: () => { drawerOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined, openReceivedPage: () => undefined };
->>>>>>> upstream/main
+const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { drawerOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined, openReceivedPage: () => undefined };
 const toastError = spyOn(toast, 'error').mockImplementation(() => 'test-toast');
 let toastsSeen = 0;
 const toasts = () => toastError.mock.calls.slice(toastsSeen).map(([message]) => message);

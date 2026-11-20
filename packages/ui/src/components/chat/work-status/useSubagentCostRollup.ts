@@ -1,13 +1,7 @@
 import React from 'react';
-<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
-||||||| bc50ba56aa
-import type { Session } from '@/lib/opencode/model';
-=======
-import type { Session } from '@/lib/opencode/model';
 import { useShallow } from 'zustand/react/shallow';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
->>>>>>> upstream/main
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { buildChildrenIndex, computeSubtreeCost } from './subagentCost';
 

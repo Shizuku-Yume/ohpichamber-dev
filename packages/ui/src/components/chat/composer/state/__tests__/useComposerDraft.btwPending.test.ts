@@ -40,14 +40,8 @@ function renderComposer(initialText: string) {
     function Probe({ identity }: { identity: ChatDraftIdentity }) {
         const { text, setMessage } = useProbeText(initialText);
         const controls = useComposerDraft({
-<<<<<<< HEAD
-            message, messageRef, setMessage, confirmedMentionsRef: mentionsRef, identity,
-            persistEnabled: true,
-||||||| bc50ba56aa
-            message, messageRef, setMessage, confirmedMentionsRef: mentionsRef, identity,
-=======
             text, setMessage, confirmedMentionsRef: mentionsRef, identity,
->>>>>>> upstream/main
+            persistEnabled: true,
             initialDraft: { text: '', identity },
         });
         result.text = text.get();

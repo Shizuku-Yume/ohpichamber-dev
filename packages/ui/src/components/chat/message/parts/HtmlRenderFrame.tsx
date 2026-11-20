@@ -53,12 +53,7 @@ import { usePageDecline } from './usePageDecline';
 import { pageBlocksTurn, usePageAsk } from './usePageAsk';
 import { PageAskStatus } from './PageAskStatus';
 import { UiPageFrame } from './UiPageFrame';
-<<<<<<< HEAD
-import { problemMessage } from '@/lib/problemMessage';
-||||||| bc50ba56aa
-=======
 import { SharedPageCard } from '../../sharePages/SharedPageCard';
->>>>>>> upstream/main
 
 const MAX_REMEMBERED_HEIGHTS = 500;
 const rememberedHeights = new Map<string, number>();
@@ -311,32 +306,9 @@ function PageSelectionScope({
     );
 }
 
-<<<<<<< HEAD
-/** The page an `openchamber_render` call showed, or nothing for any other part. */
 export function ShownPage({ part }: { part: CanonicalToolView }) {
-    // Kept while the call's state is the same object, so the page is not sent
-    // its answer state again on every render.
-||||||| bc50ba56aa
-/** The page an `openchamber_render` call showed, or nothing for any other part. */
-export function ShownPage({ part }: { part: ToolPart }) {
-    // Kept while the call's state is the same object, so the page is not sent
-    // its answer state again on every render.
-=======
-export function ShownPage({ part }: { part: ToolPart }) {
->>>>>>> upstream/main
     const { t } = useI18n();
-<<<<<<< HEAD
     const page = React.useMemo(() => renderedPage(part), [part]);
-    if (!page) return null;
-    if (page.ui) return <UiPageFrame part={part} source={page.ui} ask={page.ask} />;
-    return <HtmlRenderFrame part={part} html={page.html} title={page.title || t('chat.htmlRender.untitled')} ask={page.ask} />;
-||||||| bc50ba56aa
-    const page = React.useMemo(() => renderedPage(part.tool, part.state), [part.tool, part.state]);
-    if (!page) return null;
-    if (page.ui) return <UiPageFrame part={part} source={page.ui} ask={page.ask} />;
-    return <HtmlRenderFrame part={part} html={page.html} title={page.title || t('chat.htmlRender.untitled')} ask={page.ask} />;
-=======
-    const page = React.useMemo(() => renderedPage(part.tool, part.state), [part.tool, part.state]);
     const ask = usePageAsk(part, page?.ask);
     if (!page || !ask) return null;
     const plainPage = page.ui
@@ -344,19 +316,10 @@ export function ShownPage({ part }: { part: ToolPart }) {
         : <HtmlRenderFrame part={part} html={page.html} title={page.title || t('chat.htmlRender.untitled')} ask={ask} />;
     if (page.share) return <SharedPageCard part={part} page={{ ...page, share: page.share }} plainPage={plainPage} />;
     return plainPage;
->>>>>>> upstream/main
 }
 
 interface HtmlRenderFrameProps {
-<<<<<<< HEAD
-    /** The call; selections and quotes in the page are attributed to its message. */
     part: CanonicalToolView;
-||||||| bc50ba56aa
-    /** The call; selections and quotes in the page are attributed to its message. */
-    part: ToolPart;
-=======
-    part: ToolPart;
->>>>>>> upstream/main
     html: string;
     title: string;
     ask: RenderedPageAsk;

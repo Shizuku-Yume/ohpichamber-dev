@@ -22,18 +22,7 @@ import type { ChatMessageEntry, TurnChangedFile, TurnRecord } from '../lib/turns
 plugin({
     name: 'live-activity-provider-logos',
     setup(build) {
-<<<<<<< HEAD
-        build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-            contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`, loader: 'js',
-        }));
-||||||| bc50ba56aa
-        build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-            contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`, loader: 'js',
-        }));
         // Expand Vite's eager asset glob into the same real file URL map for
-=======
-        // Expand Vite's eager asset glob into the same real file URL map for
->>>>>>> upstream/main
         // Bun. This is a loader transform, not a replacement of the logo hook.
         build.onLoad({ filter: /useProviderLogo\.ts$/ }, ({ path }) => {
             const folder = resolve(dirname(path), '../assets/provider-logos');
@@ -45,15 +34,8 @@ plugin({
     },
 });
 
-<<<<<<< HEAD
-// Loaded after the plugin above, so the worker URL resolves through its stub.
-||||||| bc50ba56aa
-// Loaded after the plugin: its markdown imports reach the worker URL import
-// that Bun cannot resolve on its own.
-=======
 // Loaded after the plugin: its imports reach the logo glob that Bun cannot
 // expand on its own.
->>>>>>> upstream/main
 const { TurnFold, TurnPagesRow } = await import('./LiveTurnActivity');
 const { buildTimelineRows } = await import('../lib/turns/timelineRows');
 const { useTurnFoldContexts } = await import('./useTurnFold');
@@ -331,10 +313,9 @@ describe('live Activity with the real message body', () => {
             { file: 'src/c.ts', additions: 1, deletions: 0 },
         ]} />));
         expect(container.querySelector('button[aria-label="Open src/a.ts"]')?.textContent).toBe('a.ts');
-<<<<<<< HEAD
-        expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1/-2');
+        expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1 −2');
         const fileButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open src/c.ts"]');
-        expect(fileButton?.textContent).toBe('c.ts+1/-0');
+        expect(fileButton?.textContent).toBe('c.ts+1 −0');
         await act(async () => fileButton?.click());
         const state = useUIStore.getState();
         expect(state.pendingFileFocusPath).toBe('/project/src/c.ts');
@@ -362,15 +343,6 @@ describe('live Activity with the real message body', () => {
         expect(useUIStore.getState().pendingFileFocusPath).toBe('/project/src/mobile.ts');
         expect(useUIStore.getState().pendingDiffScope).toBe('working');
         expect(useUIStore.getState().pendingDiffFile).toBe('existing.ts');
-||||||| bc50ba56aa
-        expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1/-2');
-        expect(container.querySelector('button[aria-label="Open src/c.ts"]')).toBeNull();
-        expect(container.querySelector('span[title="src/c.ts"]')?.textContent).toBe('c.ts+1/-0');
-=======
-        expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1 −2');
-        expect(container.querySelector('button[aria-label="Open src/c.ts"]')).toBeNull();
-        expect(container.querySelector('span[title="src/c.ts"]')?.textContent).toBe('c.ts+1 −0');
->>>>>>> upstream/main
     });
 
     test('keeps historical files informational and withholds the list before stop', async () => {
