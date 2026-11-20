@@ -93,10 +93,10 @@ export function createHostAgentRuntime({
   });
   skillFileOwner = createSkillFileOwner({ service });
   const admitWorkspace = async (scope) => {
-    // A removed checkout registers its catalogs from the project root; the Host refuses its execution admissions.
-    const cwd = scope.checkoutRemoved ? scope.projectDirectory : scope.cwd;
+    // The Agent Service keeps a removed checkout's registered cwd, so re-registering it would conflict.
+    if (scope.checkoutRemoved) return { ...scope, env: {} };
     const env = isEnterpriseMode(enterprisePolicyOptions)
-      ? {} : await getEnvironmentForDirectory(cwd);
+      ? {} : await getEnvironmentForDirectory(scope.cwd);
     // The workspace catalog answers from this admission, so the Host's current
     // tool enablement travels with it rather than a worker-side default.
     const hostTools = await resolveHostTools();
@@ -105,7 +105,7 @@ export function createHostAgentRuntime({
       {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId: scope.projectId, cwd, agentDirectory: scope.agentDirectory,
+          projectId: scope.projectId, cwd: scope.cwd, agentDirectory: scope.agentDirectory,
           agentDirectoryId: scope.agentDirectoryId, env, hostTools,
         }),
       },
