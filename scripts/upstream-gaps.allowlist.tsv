@@ -1,4 +1,13 @@
 class	item	citation	effect
+runtime-constructor	createUpdateCommand	## 2026-11-16 - Cut the fork off from upstream-hosted services	The removed CLI updater targets upstream OpenCode packages; fork desktop updates use its own GitHub Releases.
+route-deps	registerOpenChamberRoutes.cliEntry	## 2026-11-16 - Cut the fork off from upstream-hosted services	The Host does not spawn the retired upstream CLI updater.
+runtime-constructor	createEmptyMemory	## 2026-11-13 - OMP owns image generation and agent memory	The removed Host memory store is not an additional backend beside OMP memory.backend.
+runtime-constructor	createMemoryDreaming	## 2026-11-13 - OMP owns image generation and agent memory	Dreaming belongs to the removed OpenChamber memory store, not the retained native OMP memory backend.
+runtime-constructor	createImageGenerationAction	## 2026-11-13 - OMP owns image generation and agent memory	OMP generate_image owns generation; do not resurrect the duplicate OpenChamber image tool.
+settings-item	sessions.agent-memory-dreaming	## 2026-11-13 - OMP owns image generation and agent memory	The retired Host memory store has no independent dreaming toggle; native memory configuration has its own page.
+settings-item	sessions.agent-memory-dreaming-model	## 2026-11-13 - OMP owns image generation and agent memory	Do not expose a model picker for the removed Host memory implementation.
+runtime-constructor	createWorkNamer	## 2026-10-26 - OMP owns session titles	Native worker session/worktree title generation replaces the duplicate OpenCode title request.
+route-deps	createJevClient.timeoutMs	OMP packages/web/server/lib/routing/jev.ts	The constructor defaults to the same JEV_TIMEOUT_MS constant; omitting the explicit dependency does not change its timeout.
 route-deps	createChatDirectoryCleanupRuntime.createClient	OMP packages/web/server/lib/chat-directories/runtime.ts	The wired cleanup validates Canonical inventory through sessionService and resolves captured Host scopes; no OpenCode SDK client remains.
 settings-item	sessions.agent-workflow-auto-approve	## 2026-11-12 - A dead settings row is deleted, not kept for later	No runtime consumes this flag; remove the orphan store and sanitizer fields rather than expose an ineffective approval bypass.
 settings-registry	agentWorkflowAutoApprove	## 2026-11-12 - A dead settings row is deleted, not kept for later	Remove the unused flag throughout store and sanitizer plumbing; workflow admission does not read this setting.

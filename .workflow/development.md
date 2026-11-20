@@ -11,21 +11,27 @@ rows. The continuation restores authenticated browser uploads from the captured
 session directory, the mobile Return-key control and worktree-create search/tab
 mapping, forwarded-client tunnel scoping, and managed chat cleanup subscriptions
 with shutdown detachment. It removes the unused workflow auto-approval field and
-sanitizer. Scanner regressions cover typed calls, spread properties, same-file
+sanitizer. A further composition pass restores repository notes/todos switching
+and exports its file resolver; paired-client bearer authentication, session
+context snapshots, push clearing and visibility now reach their retained owners.
+Scanner regressions cover typed calls, spread properties, same-file
 callers and dependency comparisons scoped to matching source owners. Sixteen
 more stale exceptions were removed, and reviewed Host/native differences retain
 specific reasons rather than waiving missing features.
 
 The root `bun run type-check` passes TypeScript (4,540 files / five projects),
 error-cause and CSS checks, but remains 3/5: drift reports 199 unexplained paths
-and gaps remain unallowlisted. Audit tests pass 40/40; cleanup/shutdown tests
-pass 52/52, settings-helper tests 63/63. The extension-waits route/runtime are
+and gaps report 718 detected / 629 allowlisted / 89 unallowlisted. Audit tests
+pass 40/40; cleanup/shutdown tests pass 52/52, settings-helper tests 63/63,
+project config/context tests 139/139 and notification/bootstrap tests 28/28.
+Changed-file lint reports six errors on unchanged Host runtime code; the baseline
+source comparison is not a baseline lint execution. The extension-waits route/runtime are
 present; its retired OpenCode callback differences have native-owner citations.
 Shared/received pages and background/later-page delivery are larger retained
 feature omissions: the 628-line sharing runtime is unmounted and render-page
 differs by 324 added/removed lines. Their UI callers remain exposed as gaps,
 not accepted exclusions. Other source/parity review is unfinished, including
-notification, worktree-move, terminal/control, settings and queue findings.
+notification persistence, worktree-move, terminal/control, settings and queue findings.
 Evidence is under `/home/ubuntu/ci-logs/audit-*`. UI changes are visually
 unverified; full retained-platform acceptance is not claimed.
 
