@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { event } from '../event-stream/canonical-test-fixtures.js';
 
 import { trackerProviderTimeoutMs } from 'ohpichamber-sdk';
 
@@ -448,13 +449,13 @@ describe('session comments on an extension tracker', () => {
     expect(await post(h, { kind: 'started', sessionId: 'ses_1' })).toEqual({ connected: true, posted: false, skipped: 'already-posted' });
     // The runtime posts completed and failure for a started session, without an identifier or origin of its own.
     const runtime = h.tracker.sessionStatus.createRuntime();
-    runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'idle' } } });
-    runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_other', status: { type: 'idle' } } });
-    runtime.processPayload({ type: 'session.error', properties: { sessionID: 'ses_1', error: { name: 'MessageAbortedError' } } });
+    runtime.processPayload(event(1, { type: 'session.status', sessionId: 'ses_1', runtimeStatus: 'idle', activeRunId: null }));
+    runtime.processPayload(event(2, { type: 'session.status', sessionId: 'ses_other', runtimeStatus: 'idle', activeRunId: null }));
+    runtime.processPayload(event(3, { type: 'run.cancelled', sessionId: 'ses_1', runId: 'run', finishedAt: 2 }));
     await vi.waitFor(() => expect(h.calls.filter((call) => call.request.method === 'comments.create')).toHaveLength(2));
     expect(h.calls.at(-1).request.input.body).toBe('[OhPiChamber session completed](https://app.example.com/?session=ses_1)');
     runtime.stop();
-    runtime.processPayload({ type: 'session.error', properties: { sessionID: 'ses_1', error: { name: 'Boom' } } });
+    runtime.processPayload(event(4, { type: 'run.failed', sessionId: 'ses_1', runId: 'run', finishedAt: 3, error: 'ProviderError' }));
     await new Promise((resolve) => { setTimeout(resolve, 10); });
     expect(h.calls.filter((call) => call.request.method === 'comments.create')).toHaveLength(2);
     // A private origin publishes no link.

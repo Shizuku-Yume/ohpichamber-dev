@@ -10,10 +10,25 @@ and CLI, rather than assuming a fixed set of bootstrap monoliths. Electron
 references count when checking public Host exports. Tests, fixtures, dependency
 trees and generated output are not production coverage. Imports alone never
 count as using a constructor or mounting routes.
+Callback transaction helpers and typed Map/Set mutators named `register*` are
+not Express mounts. Actual app/router registrations remain independently audited.
+Typed and optional (`createRuntime?.(...)`) constructor calls count too. Dependency comparison tracks named object
+properties, not spread-variable names, whose contents cannot be inferred.
+A same-file reference outside an export's declaration counts as a caller.
+Dependency keys are compared within the same logical source owner (`.ts` and
+`.js` are equivalent), not pooled across unrelated factories with the same name.
+An indirect options argument does not prove that its properties are absent.
+Such calls remain failing `route-deps-indirect` findings requiring an explicit
+owner review, rather than a separate false missing-property claim for every key.
+Literal empty objects and removed arguments still report named omissions.
 
 The route audit follows source imports from the server entry, including `.js`
 specifiers whose source owner is TypeScript. A reachable route module must still
 be used, and a mounted 404 fallback is not endpoint coverage.
+Express calls with TypeScript type arguments count as registrations, and
+converted `.ts` router owners keep the same mount prefixes as their `.js` owners.
+Request-method inference reads only that request's options object, not a later
+request in the same source file.
 
 The settings audit follows relative store imports so split type, action and
 persistence owners retain their checks. A setter declaration without an

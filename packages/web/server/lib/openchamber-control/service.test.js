@@ -7,6 +7,7 @@ import { SessionJournal } from '../../../../agent-service/src/projection/journal
 import { createOpenChamberControlService } from './service.js';
 import { createPrWatchRuntime, parsePullRequestUrl } from '../pr-watch/runtime.js';
 import { trackedItemKey } from '../tracked-items/items.js';
+import { createUploadStore } from '../browser-control/uploads.js';
 
 const scopeForWorkspace = {
   projectId: 'project-1',
@@ -50,6 +51,7 @@ const createHarness = (settings = {
       return { session: { sessionId: 'session-forked', projectId: 'project-1', workspaceId: 'workspace-1' } };
     },
     open: async (sessionId) => ({ session: { sessionId, runtimeStatus: 'idle' } }),
+    getMetadata: async (sessionId) => ({ sessionId, revision: '0', metadata: null }),
     history: async () => ({ turns: [], messages: [] }),
     list: async () => ({ items: [], errors: {} }),
   };
@@ -84,10 +86,38 @@ const createHarness = (settings = {
     },
     ...overrides,
   });
-  return { control, created, sent, forked, goalControls, callOrder, requests };
+  return { control, created, sent, forked, goalControls, callOrder, requests, sessionService };
 };
 
 describe('OhPiChamber control service canonical consumers', () => {
+  it('reads opted-in terminal output only within the captured workspace and hides Host directory fields', async () => {
+    const runtime = {
+      listTerminals: vi.fn(() => [{ sessionId: 'terminal-1', cwd: scopeForWorkspace.cwd, status: 'running' }]),
+      readTerminal: vi.fn(() => ({ sessionId: 'terminal-1', cwd: scopeForWorkspace.cwd, text: `output in ${scopeForWorkspace.cwd}`, status: 'running' })),
+    };
+    const { control } = createHarness({ agentTerminalToolEnabled: true }, { getTerminalRuntime: () => runtime });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const invoke = (action, input = {}) => control.invokeHostAction(scope, { sessionId: 'session-1', toolName: 'openchamber', action, input });
+    const listed = await invoke('terminal.list');
+    expect(listed).toMatchObject({ ok: true, value: { terminals: [{ sessionId: 'terminal-1', directory: '.' }] } });
+    const read = await invoke('terminal.read', { sessionId: 'terminal-1' });
+    expect(read.ok).toBe(true);
+    expect(JSON.stringify(read)).not.toContain(scopeForWorkspace.cwd);
+    expect(read.value.cwd).toBeUndefined();
+    await expect(invoke('terminal.list', { workspaceId: 'workspace-2' })).resolves.toMatchObject({ ok: false, status: 403 });
+    runtime.listTerminals.mockReturnValue([]);
+    runtime.readTerminal.mockClear();
+    await expect(invoke('terminal.read', { sessionId: 'foreign' })).resolves.toMatchObject({ ok: false, status: 404 });
+    expect(runtime.readTerminal).not.toHaveBeenCalled();
+    await expect(invoke('terminal.list')).resolves.toMatchObject({ ok: true, value: { terminals: [] } });
+  });
+
+  it('keeps terminal reads off by default and reports an unavailable panel explicitly', async () => {
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const call = { sessionId: 'session-1', toolName: 'openchamber', action: 'terminal.list' };
+    await expect(createHarness().control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 403 });
+    await expect(createHarness({ agentTerminalToolEnabled: true }).control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 503 });
+  });
   it('reads complete and most-recent messages through the canonical paginated journal across workspaces', async () => {
     const sessionId = 'session-other';
     const turns = Array.from({ length: 205 }, (_, index) => ({
@@ -200,6 +230,27 @@ describe('OhPiChamber control service canonical consumers', () => {
 
     expect(created).toHaveLength(0);
     expect(sent).toHaveLength(0);
+  });
+
+  it('refuses to wait for human input in a Host-metadata operator child', async () => {
+    const { control, sessionService } = createHarness();
+    sessionService.getMetadata = async (sessionId) => ({ sessionId, revision: '1', metadata: { openchamber: { kind: 'operator-child', parentID: 'operator-root' } } });
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true }, toolCallId: 'child-call',
+    });
+    expect(result).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it('does not treat failed Host metadata reads as permission to wait for a human', async () => {
+    const { control, sessionService } = createHarness();
+    sessionService.getMetadata = async () => { throw new Error('/host/private/metadata.db is unreadable'); };
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true }, toolCallId: 'unavailable-call',
+    });
+    expect(result).toMatchObject({ ok: false, status: 503 });
+    expect(JSON.stringify(result)).not.toContain('/host/private');
   });
 
   it('serves render.page through the render feature policy and carries the call id to a waiting page', async () => {
@@ -380,6 +431,48 @@ describe('browser.close over the browser control bridge', () => {
     const { control } = createHarness(undefined, { browserControl: { request } });
     await expect(control.execute('browser.close', { tabId: 'tab-1' }, '/repo/app')).resolves.toEqual({ closed: true });
     expect(request).toHaveBeenCalledWith('browser.close', { tabId: 'tab-1' }, expect.objectContaining({ timeoutMs: 20_000 }));
+  });
+});
+
+describe('browser.upload over the browser control bridge', () => {
+  it('stages session files in the same store the download route reads', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-upload-'));
+    try {
+      await fs.writeFile(path.join(directory, 'a.txt'), 'hello');
+      const browserUploads = createUploadStore();
+      const request = vi.fn(async () => ({ uploaded: true }));
+      const { control } = createHarness(undefined, { browserControl: { request }, browserUploads });
+      await expect(control.execute('browser.upload', { selector: '#file', paths: ['a.txt'], directory: '/ignored' }, directory))
+        .resolves.toEqual({ uploaded: true });
+      const [action, parameters, options] = request.mock.calls[0];
+      expect(action).toBe('browser.upload');
+      expect(parameters.selector).toBe('#file');
+      expect(parameters.upload.files).toEqual([{ name: 'a.txt', size: 5 }]);
+      expect(browserUploads.get(parameters.upload.token, 0).bytes.toString()).toBe('hello');
+      expect(options).toMatchObject({ timeoutMs: 45_000, context: { directory } });
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses empty paths, missing context and escaping files before dispatch', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-upload-'));
+    try {
+      await fs.mkdir(path.join(directory, 'session'));
+      await fs.writeFile(path.join(directory, 'outside.txt'), 'private');
+      await fs.symlink(path.join(directory, 'outside.txt'), path.join(directory, 'session', 'link.txt'));
+      const request = vi.fn();
+      const { control } = createHarness(undefined, { browserControl: { request }, browserUploads: createUploadStore() });
+      for (const paths of [[], ['../outside.txt'], ['link.txt'], ['absent']]) {
+        await expect(control.execute('browser.upload', { selector: '#file', paths }, path.join(directory, 'session')))
+          .rejects.toMatchObject({ statusCode: 400 });
+      }
+      await expect(control.execute('browser.upload', { paths: ['outside.txt'] }, directory)).rejects.toMatchObject({ statusCode: 400 });
+      await expect(control.execute('browser.upload', { selector: '#file', paths: ['outside.txt'] })).rejects.toMatchObject({ statusCode: 400 });
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

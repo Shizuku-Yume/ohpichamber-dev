@@ -1,25 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSessionStatusRuntime } from './session-status-runtime.js';
+import { event } from '../event-stream/canonical-test-fixtures.js';
+
+const idle = (sessionId) => event(1, { type: 'session.status', sessionId, runtimeStatus: 'idle', activeRunId: null });
+const failed = (sessionId) => event(2, { type: 'run.failed', sessionId, runId: 'run', finishedAt: 2, error: 'ProviderError' });
 
 describe('session status event decoding', () => {
-  it('keeps session-id precedence and falls back past malformed or blank fields', () => {
+  it('uses Canonical session IDs and only completed or failed transitions', () => {
     const post = vi.fn(async () => ({ connected: false }));
     const runtime = createSessionStatusRuntime({ label: 'test', post });
-    runtime.processPayload({
-      type: 'session.status',
-      properties: { info: { sessionID: ' first ', sessionId: 'second' }, sessionID: 'third', status: { type: ' idle ' } },
-    });
-    runtime.processPayload({
-      type: 'session.status',
-      properties: { info: { sessionID: 42, sessionId: ' ' }, sessionID: [], sessionId: ' alias ', status: null, session: 'last' },
-    });
-    runtime.processPayload({
-      type: 'session.status',
-      properties: { info: { sessionID: false, type: ' idle ' }, session: ' fallback ' },
-    });
+    runtime.processPayload(idle('first'));
+    runtime.processPayload(event(2, { type: 'session.status', runtimeStatus: 'running', activeRunId: 'run' }));
+    runtime.processPayload(failed('second'));
     expect(post.mock.calls.map(([input]) => input)).toEqual([
       { kind: 'completed', sessionId: 'first' },
-      { kind: 'completed', sessionId: 'fallback' },
+      { kind: 'failure', sessionId: 'second' },
     ]);
   });
 
@@ -30,11 +25,12 @@ describe('session status event decoding', () => {
     runtime.processPayload({ type: ' session.status ', properties: { sessionID: 's', status: { type: 'idle' } } });
     runtime.processPayload({ type: 'session.status', properties: { sessionID: Object('s'), status: { type: 'idle' } } });
     runtime.processPayload({ type: 'session.error', properties: { sessionID: 's', error: { name: ' MessageAbortedError ' } } });
+    runtime.processPayload(event(2, { type: 'run.cancelled', runId: 'run', finishedAt: 2 }));
     expect(post).not.toHaveBeenCalled();
-    runtime.processPayload({ type: 'session.error', properties: { sessionID: 's', error: null } });
+    runtime.processPayload(failed('s'));
     expect(post).toHaveBeenCalledWith({ kind: 'failure', sessionId: 's' });
     runtime.stop();
-    runtime.processPayload({ type: 'session.error', properties: { sessionID: 'other' } });
+    runtime.processPayload(failed('other'));
     expect(post).toHaveBeenCalledTimes(1);
   });
 
@@ -42,7 +38,7 @@ describe('session status event decoding', () => {
     const post = vi.fn(() => Promise.reject({ message: 'unavailable' }));
     const warn = vi.fn();
     const runtime = createSessionStatusRuntime({ label: 'test', post, warn });
-    runtime.processPayload({ type: 'session.error', properties: { sessionID: 's' } });
+    runtime.processPayload(failed('s'));
     await Promise.resolve();
     expect(warn).toHaveBeenCalledWith('[trackers] test: failed to post the session failure comment:', 'unavailable');
     expect(post).toHaveBeenCalledTimes(1);

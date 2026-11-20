@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-21 - Restore audit-discovered upload and settings reachability
+
+- **Decided:** compose one Host upload store into browser control and its authenticated download route; expose the existing file-input upload driver as `browser.upload`. Resolve files only inside the captured session folder, never a model-supplied directory or an OpenCode temporary directory. Keep the existing token expiry and file limits.
+- **Settings:** restore the mobile Return-key checkbox that still has live composer/comment consumers, and index the existing worktree-creation command section. No stores, sync infrastructure, sidebar/search or router ownership changes.
+- **Surfaces:** browser bytes stay on the connected Host for Web/PWA, Electron and mobile clients; browser driving remains subject to the existing renderer/provider capability. The Return-key checkbox is mobile-only, matching its search guard.
+- **Remaining:** shared/received and later pages still require retained-feature restoration, not exceptions. Other unresolved audit findings are not waived by this decision.
+- **Follow-up:** after merging the extension-waits port, its Canonical session service replaces the retired OpenCode callbacks. Restore managed chat-directory cleanup with scoped snapshot/event subscriptions, connection gating and shutdown detachment. Remove the unused `agentWorkflowAutoApprove` store/sanitizer fields; no runtime consumed them and workflow admission still requires explicit approval.
+
 Every choice that mattered, with the option it beat. Newest last.
 
 This file exists so the same argument is not had twice. A decision recorded here
@@ -1871,3 +1879,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** the owner expanded the merge bar to every retained platform and explicitly transferred testing ownership.
 - **Mine:** no; owner instruction.
 - **Scope:** acceptance and verification ownership only. Canonical `/api/agent/v1`, OMP 19, the Host/Agent Service boundary and Guest MessagePort v2 remain unchanged.
+
+## 2026-11-20 - Retain runtime-equivalent source compatibility cleanup
+
+- **Decided:** retain removal of unused default React imports under the automatic JSX transform, source formatting and type-only Host/Canonical contract repairs where the normalized runtime output is unchanged. Package renames remain owned by the first-release naming decision, not this exception.
+- **Instead of:** reverting mechanically equivalent source solely to match the new upstream baseline, or treating every type-related change as equivalent.
+- **Because:** the JSX/import-only rows have identical source after removing the unused React default import and blank-line differences; the remaining compatibility rows emit identical JavaScript under the same Bun transpiler after the separately recorded package rename. Neither comparison licenses deleting a route, setting, feature or assertion.
+- **Mine:** yes, limited to the mechanically compared source rows in the audit reconciliation.
+- **Revisit when:** the upstream source converges, or a row gains a behavioral difference requiring its own review.

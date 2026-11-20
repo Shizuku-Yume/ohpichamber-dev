@@ -265,7 +265,7 @@ const isOperatorChild = async (readSession: NonNullable<RenderPageDependencies['
   try {
     return isOperatorChildSession(await readSession(sessionId));
   } catch {
-    return false;
+    throw new OpenChamberControlError('Session metadata is unavailable', 503);
   }
 };
 

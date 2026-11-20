@@ -36,6 +36,9 @@ checkout creation, bootstrap and removal.
   matching preserve unrelated fields and reject ambiguous unlink requests.
 - Worktree moves carry explicitly named files. They do not infer ownership
   from a whole-worktree diff, and Git setup remains in the Git owner.
+  The session service captures its mover on first use, after Git registration
+  fills the Host bridge. Before that it refuses with 503 without caching missing
+  dependencies. The cached mover retains setup-wait retries across calls.
 - Unread baselines and turn-duration data are persisted projections, not
   sources of live activity. Shared UI uses the Canonical unread mutation.
 - Session creation, dispatch, status and waiting in the control service use

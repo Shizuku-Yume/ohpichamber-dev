@@ -8,6 +8,8 @@
  * visible in a shared schema.
  */
 const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
+  { action: 'terminal.list', title: 'List terminal panels', description: 'List terminal panels in the captured workspace; requires the user to enable terminal reading in Settings' },
+  { action: 'terminal.read', title: 'Read terminal panel output', description: 'Read output from a terminal sessionId listed in this workspace; optional maxBytes; requires terminal reading enabled in Settings' },
   { action: 'projects.list', title: 'List configured projects', description: 'List configured projects; no parameters' },
   { action: 'models.search', title: 'Search models', description: 'The model catalog, favorites and recent models first; optional query, provider, all, limit, offset' },
   { action: 'models.list', title: 'Show model preferences', description: 'Show default, favorite, and recent model preferences; no parameters' },
@@ -47,6 +49,7 @@ const OPENCHAMBER_WEB_ACTION_DEFINITIONS = Object.freeze([
   { action: 'browser.click', title: 'Click on the open page', description: 'Click an element; give selector, or text to match a link or button by its visible label' },
   { action: 'browser.type', title: 'Type into the open page', description: 'Type value into the field matched by selector; set submit to press Enter afterwards' },
   { action: 'browser.select', title: 'Select an option on the open page', description: 'One exact option by label or value in the native select matched by selector' },
+  { action: 'browser.upload', title: 'Upload files to the open page', description: 'Attach files from the session folder to the file input matched by selector; paths is a list of file paths' },
   { action: 'browser.scroll', title: 'Scroll the open page', description: 'Scroll the page; direction is up, down, top, or bottom, or pass selector to bring one element into view' },
   { action: 'browser.back', title: 'Go back in the browser panel', description: 'Return to the previous page in this tab; no parameters' },
   { action: 'browser.forward', title: 'Go forward in the browser panel', description: 'Move forward again in this tab; no parameters' },

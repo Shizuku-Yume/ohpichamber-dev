@@ -1315,6 +1315,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     readSharedProjectFile,
     updateSharedProjectEntry,
     resolveSharedPlansDir,
+    resolveNotesTodosFile,
     migrateProjectScheduledTasks,
     listScheduledTasks,
     listScheduledWorktreeCleanups,

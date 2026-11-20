@@ -21,7 +21,11 @@ describe('synthetic delivery', () => {
     const busy = Object.assign(new OpenChamberControlError('A run is already active', 409), { code: 'RUN_ACTIVE' });
     const sessionService = { send: vi.fn(async () => { throw busy; }), steer: vi.fn(async () => ({})) };
     await createSyntheticDelivery({ sessionService })('ses_1', message);
-    expect(sessionService.steer).toHaveBeenCalledWith('ses_1', { request });
+    expect(sessionService.steer).toHaveBeenCalledWith('ses_1', { request }, expect.any(String));
+    const commandId = sessionService.steer.mock.calls[0][2];
+    expect(commandId).not.toBe(message.id);
+    await createSyntheticDelivery({ sessionService })('ses_1', message);
+    expect(sessionService.steer.mock.calls[1][2]).toBe(commandId);
   });
 
   it('posts nothing for a message that must not wake the session', async () => {

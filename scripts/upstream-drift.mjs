@@ -102,6 +102,7 @@ export const EXCLUDED_PREFIXES = [
   '.github/',
   '.workflow/',
   'scripts/omp-m0/',
+  'scripts/verify/',
 ];
 
 /** Root files the exclusion rule keeps; prefixes are directories, these are paths. */

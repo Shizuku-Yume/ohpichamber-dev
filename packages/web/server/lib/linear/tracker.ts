@@ -357,6 +357,10 @@ export function createLinearTracker(libraries: TrackerLibraries): TrackerImpleme
     },
 
     sessionStatus: {
+      createRuntime: () => {
+        const runtime = libraries.createLinearSessionStatusRuntime();
+        return { processPayload: runtime.processCanonicalEvent, stop: runtime.stop };
+      },
       post: ({ kind, sessionId, identifier, sessionOrigin }) => postLinearSessionStatus({
         kind,
         sessionId,
@@ -395,10 +399,11 @@ export function createLinearTracker(libraries: TrackerLibraries): TrackerImpleme
 export const linearTracker = Object.freeze({
   descriptor: LINEAR_TRACKER_DESCRIPTOR,
   load: async () => {
-    const [{ linearLibraries }, { HOST_LINEAR_API_ORIGIN }] = await Promise.all([
+    const [{ linearLibraries }, { HOST_LINEAR_API_ORIGIN }, { createLinearSessionStatusRuntime }] = await Promise.all([
       import('./index.js'),
       import('ohpichamber-sdk'),
+      import('./status-runtime.js'),
     ]);
-    return createLinearTracker({ ...linearLibraries, HOST_LINEAR_API_ORIGIN });
+    return createLinearTracker({ ...linearLibraries, HOST_LINEAR_API_ORIGIN, createLinearSessionStatusRuntime });
   },
 });

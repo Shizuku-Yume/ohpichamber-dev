@@ -95,9 +95,7 @@ const createCanonicalSessionService = (dependencies) => {
   // worktree dialog, one stash for the carried files, and `relocate` for the
   // move itself. Every dependency is injected so the decision stays testable
   // and the Host owns the Git and bootstrap authority.
-  const worktreeMover = typeof dependencies.createSessionWorktreeMover === 'function'
-    ? dependencies.createSessionWorktreeMover(dependencies.worktreeMove ?? {})
-    : createSessionWorktreeMover(dependencies.worktreeMove ?? {});
+  let worktreeMover;
   const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
     registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted,
   directCommandAdmissionStore?.claim, directCommandAdmissionStore?.accept];
@@ -1059,6 +1057,15 @@ const createCanonicalSessionService = (dependencies) => {
       return { workspaceId: destination.workspaceId, sessions: relocated.sessions };
     };
 
+    if (!worktreeMover) {
+      const moveDependencies = dependencies.worktreeMove ?? {};
+      if (typeof moveDependencies.createWorktree !== 'function') {
+        throw new OpenChamberControlError('Worktree creation is not available on this server', 503);
+      }
+      worktreeMover = typeof dependencies.createSessionWorktreeMover === 'function'
+        ? dependencies.createSessionWorktreeMover(moveDependencies)
+        : createSessionWorktreeMover(moveDependencies);
+    }
     const moved = await worktreeMover.move({
       sessionId,
       directory: source.cwd,

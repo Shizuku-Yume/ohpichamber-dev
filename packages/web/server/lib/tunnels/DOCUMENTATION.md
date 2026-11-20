@@ -4,6 +4,9 @@
 This module contains tunnel provider orchestration for OpenChamber, including provider registry/service wiring, managed remote token config lifecycle, and tunnel HTTP route registration.
 
 Public tunnels require a UI password on the running server. The shared tunnel start operation enforces this for startup tunnels and HTTP requests; the HTTP route rejects passwordless starts before touching an existing tunnel.
+While a tunnel is active, a local Host header and socket do not grant local
+scope when the forwarded chain names a non-loopback client. Such requests stay
+unknown-public instead of bypassing tunnel authentication as local traffic.
 
 In enterprise mode (`../enterprise-mode.js`) no tunnel starts at all: Cloudflare and ngrok terminate TLS at their edge and see plain text, and Tailscale opens this machine to other devices. The same shared start operation refuses first (so `--tunnel` at startup fails too), the HTTP route answers 403 `enterprise_mode` ahead of the password check, and an inactive status reports `enterpriseMode` so Settings shows why.
 

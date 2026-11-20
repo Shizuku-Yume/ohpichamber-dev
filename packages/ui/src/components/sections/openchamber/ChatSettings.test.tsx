@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { act } from 'react';
 import type { Root } from 'react-dom/client';
@@ -8,6 +8,7 @@ import { I18nProvider } from '@/lib/i18n';
 import type { I18nKey } from '@/lib/i18n/store';
 import { buildSettingsSearchResults } from '@/lib/settings/search';
 import { useUIStore } from '@/stores/useUIStore';
+import * as device from '@/lib/device';
 
 import { ChatSettings } from './ChatSettings';
 import { chatSettingsTabForSearchTarget, useChatSettingsTabStore } from './chatSettingsTabs';
@@ -35,7 +36,7 @@ describe('ChatSettings', () => {
   let globalDescriptors: Map<string, PropertyDescriptor | undefined>;
 
   // The tab strip measures itself, so it needs ResizeObserver too.
-  const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'Event', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT'];
+  const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'Event', 'CustomEvent', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT'];
 
   beforeEach(async () => {
     windowInstance = new Window();
@@ -49,6 +50,7 @@ describe('ChatSettings', () => {
       Element: windowInstance.Element,
       Node: windowInstance.Node,
       Event: windowInstance.Event,
+      CustomEvent: windowInstance.CustomEvent,
       ResizeObserver: windowInstance.ResizeObserver,
       localStorage: windowInstance.localStorage,
       sessionStorage: windowInstance.sessionStorage,
@@ -71,6 +73,26 @@ describe('ChatSettings', () => {
         if (descriptor) Object.defineProperty(globalThis, name, descriptor);
         else Reflect.deleteProperty(globalThis, name);
       }
+    }
+  });
+
+  test('mobile Return-to-send is reachable and updates the existing preference', async () => {
+    const previous = useUIStore.getState().mobileReturnKeySends;
+    const mobile = spyOn(device, 'useDeviceInfo').mockReturnValue({ isMobile: true } as ReturnType<typeof device.useDeviceInfo>);
+    try {
+      useUIStore.setState({ mobileReturnKeySends: false });
+      useChatSettingsTabStore.setState({ tab: 'composer' });
+      await act(async () => root.render(<I18nProvider><ChatSettings /></I18nProvider>));
+      const anchor = host.querySelector('[data-settings-item="chat.mobile-return-key-sends"]');
+      expect(anchor).not.toBeNull();
+      const checkbox = anchor?.querySelector('button[role="checkbox"]') ?? anchor?.querySelector('input[type="checkbox"]');
+      expect(checkbox).not.toBeNull();
+      await act(async () => (checkbox as HTMLElement).click());
+      expect(useUIStore.getState().mobileReturnKeySends).toBe(true);
+    } finally {
+      await act(async () => root.unmount());
+      mobile.mockRestore();
+      useUIStore.setState({ mobileReturnKeySends: previous });
     }
   });
 

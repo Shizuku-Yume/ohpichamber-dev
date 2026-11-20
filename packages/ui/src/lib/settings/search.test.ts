@@ -21,6 +21,23 @@ const runtimeCtx = {
 };
 
 describe('settings search', () => {
+  test('terminal reading is searchable on every surface, while browser profile sharing is desktop-only', () => {
+    for (const isDesktop of [false, true]) {
+      const context = { ...runtimeCtx, isDesktop };
+      const find = (query: string) => buildSettingsSearchResults({ query, runtimeCtx: context, t, getPageTitle: (page) => page });
+      expect(find('terminal').some((item) => item.id === 'sessions.agent-terminal-tool')).toBe(true);
+      expect(find('logins').some((item) => item.id === 'sessions.agent-browser-logins')).toBe(isDesktop);
+    }
+  });
+  test('indexes worktree creation and keeps the mobile Return-key control mobile-only', () => {
+    const create = SETTINGS_SEARCH_ITEMS.find((item) => item.id === 'projects.worktree.create');
+    expect(create?.page).toBe('projects');
+    expect(create?.titleKey).toBe('settings.openchamber.worktrees.create.title');
+    const query = 'return send';
+    const results = (isMobile: boolean) => buildSettingsSearchResults({ query, runtimeCtx: { ...runtimeCtx, isMobile }, t, getPageTitle: (page) => page });
+    expect(results(true).some((item) => item.id === 'chat.mobile-return-key-sends')).toBe(true);
+    expect(results(false).some((item) => item.id === 'chat.mobile-return-key-sends')).toBe(false);
+  });
   test('finds double-paste on every shared Settings surface', () => {
     for (const query of ['double paste', 'ctrl v', 'cmd v']) {
       for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {

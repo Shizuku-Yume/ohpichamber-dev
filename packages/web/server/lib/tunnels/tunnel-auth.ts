@@ -304,7 +304,7 @@ export const createTunnelAuth = () => {
       return 'tunnel';
     }
 
-    if (isLocalHost(reqHost, req)) {
+    if (isLocalHost(reqHost, req) && !(activeTunnelId && isForwardedForRemoteClient(req))) {
       return 'local';
     }
 

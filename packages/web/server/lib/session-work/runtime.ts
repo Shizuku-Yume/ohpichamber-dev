@@ -66,6 +66,7 @@ export function createSessionWorkRuntime({
   /** `(sessionID, decide, { directory }) => { metadata, changed }`, decided against the record at write time. */
   updateMetadata,
   isSessionArchived = async () => false,
+  isWorktreePinned = async () => false,
   /** Roots of managed Chats: plain conversations, never work. */
   chatRoots = [],
   /** `../session-lineage.js`: known subsessions are skipped without reading them. */
@@ -130,6 +131,7 @@ export function createSessionWorkRuntime({
     const session = snapshot?.session;
     if (!session || session.sessionId !== sessionId || session.rootSessionId !== sessionId) return null;
     if (isChatDirectory(scope.cwd)) return null;
+    if (await isWorktreePinned(scope.cwd)) return null;
     const metadata = await readMetadata(sessionId, scope.cwd);
     if (metadata?.openchamber?.kind === 'review') return null;
     if (await isSessionArchived(sessionId)) return null;

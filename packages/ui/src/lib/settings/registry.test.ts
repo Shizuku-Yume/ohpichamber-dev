@@ -21,11 +21,28 @@ import {
   SETTINGS_KEYS,
   SETTINGS_REGISTRY,
   applySettingsToStores,
+  isWritableSettingsKey,
   parseSettingsDocument,
   readAutoSaveSnapshot,
 } from './registry';
 
 describe('settings registry', () => {
+  test('terminal reading is a parsed Host-writable preference, not a local-only flag', () => {
+    const previous = useUIStore.getState().agentTerminalToolEnabled;
+    try {
+      expect(LOCAL_DEVICE_KEYS).not.toContain('agentTerminalToolEnabled');
+      expect(isWritableSettingsKey('agentTerminalToolEnabled')).toBe(true);
+      expect(parseSettingsDocument({ agentTerminalToolEnabled: 'yes' })).toEqual({});
+      for (const enabled of [true, false]) {
+        const parsed = parseSettingsDocument({ agentTerminalToolEnabled: enabled });
+        expect(parsed).toEqual({ agentTerminalToolEnabled: enabled });
+        applySettingsToStores({ agentTerminalToolEnabled: enabled });
+        expect(readAutoSaveSnapshot().agentTerminalToolEnabled).toBe(enabled);
+      }
+    } finally {
+      useUIStore.getState().setAgentTerminalToolEnabled(previous);
+    }
+  });
   test('reserved preferences retain valid and empty values and reject invalid data', () => {
     expect(parseSettingsDocument({ cornerRadius: 12, pinnedDirectories: ['/work'] }))
       .toEqual({ cornerRadius: 12, pinnedDirectories: ['/work'] });

@@ -13,7 +13,7 @@ import http2 from 'node:http2';
 import { RuntimeSessionSchema } from '@openchamber/agent-contract';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
-import { createUiAuth } from './lib/ui-auth/ui-auth.js';
+import { createUiAuth, getBearerTokenFromRequest } from './lib/ui-auth/ui-auth.js';
 import { createTunnelAuth } from './lib/tunnels/tunnel-auth.js';
 import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.js';
 import { createTunnelProviderRegistry } from './lib/tunnels/registry.js';
@@ -77,6 +77,7 @@ import { createGracefulShutdownRuntime } from './lib/server-frame/shutdown-runti
 import { runCliEntryIfMain } from './lib/server-frame/cli-entry-runtime.js';
 import { configureAgentService } from './lib/small-model/client.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
+import { createChatDirectoryCleanupRuntime } from './lib/chat-directories/runtime.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
 import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js';
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
@@ -93,6 +94,7 @@ import { createStartupPipelineRuntime } from './lib/server-frame/startup-pipelin
 import { registerNotificationRoutes } from './lib/notifications/routes.js';
 import { createNotificationEmitterRuntime } from './lib/notifications/emitter-runtime.js';
 import { createNotificationTriggerRuntime } from './lib/notifications/runtime.js';
+import { createPushTagsStore } from './lib/notifications/push-tags-store.js';
 import { createPushRuntime } from './lib/notifications/push-runtime.js';
 import { createApnsRuntime } from './lib/notifications/apns-runtime.js';
 import { createNotificationTemplateRuntime } from './lib/notifications/template-runtime.js';
@@ -121,7 +123,7 @@ import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
 import { spacesHostEnabled } from './lib/spaces/release.js';
-import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, validateWorktreeDirectory, getWorktrees } from './lib/git/service.js';
+import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, validateWorktreeDirectory, getWorktrees, isWorktreeDirectoryPinned } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
 import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-storage.js';
@@ -136,6 +138,7 @@ import { createBrowserControlRouter } from './lib/browser-control/provider.js';
 import { createDevServerScanner } from './lib/dev-servers/routes.js';
 import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
 import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
+import { createUploadStore, registerUploadRoute } from './lib/browser-control/uploads.js';
 import { createOpenChamberSessionService, registerCanonicalSessionRoutes } from './lib/openchamber-sessions/routes.js';
 import { createHostSessionState } from './lib/host/session-state.js';
 import { createHostAgentScopeRuntime } from './lib/host/agent-scope-runtime.js';
@@ -856,6 +859,7 @@ const projectConfigRuntime = createProjectConfigRuntime({
  fsPromises,
  path,
  projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
+ switchNotesTodosStorage: (...args) => projectContextRuntime.switchNotesTodosStorage(...args),
 });
 // Git asks the canonical project config for the personal worktree folder; it
 // never reads OpenCode's JSONC configuration.
@@ -866,6 +870,7 @@ const projectContextRuntime = createProjectContextRuntime({
  path,
  projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
  resolveSharedPlansDir: (projectId) => projectConfigRuntime.resolveSharedPlansDir(projectId),
+ resolveNotesTodosFile: (projectId) => projectConfigRuntime.resolveNotesTodosFile(projectId),
  onChanged: (projectId) => broadcastOpenChamberUiEvent({
   type: 'openchamber:project-context-changed',
   properties: { projectId },
@@ -916,6 +921,9 @@ const extensionNotificationChannels = createExtensionNotificationChannels({
 let autoReviewRuntime = null;
 let prWatchRuntime = null;
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
+ openPushTagsStore: createPushTagsStore(path.join(OPENCHAMBER_DATA_DIR, 'push-tags.json')),
+ clearApnsNotifications: apnsRuntime.clearApnsNotifications,
+ isAnyUiVisible,
  readSettingsFromDisk,
  prepareNotificationLastMessage,
  buildTemplateVariables,
@@ -973,6 +981,14 @@ const linearSessionStatusRuntime = createLinearSessionStatusRuntime();
 const globalMessageStreamHub = createGlobalMessageStreamHub({
  service: hostAgentRuntime.service,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+});
+
+const chatDirectoryCleanupRuntime = createChatDirectoryCleanupRuntime({
+ roots: [OPENCHAMBER_CHATS_DIR, path.join(OPENCHAMBER_DEFAULT_CONFIG_ROOT, 'chats')],
+ sessionService: openChamberSessionService,
+ resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+ getOwner: () => isShuttingDown ? null : hostAgentRuntime,
+ eventHub: globalMessageStreamHub,
 });
 
 autoReviewRuntime = createAutoReviewRuntime({
@@ -1106,6 +1122,7 @@ const sessionWorkRuntime = createSessionWorkRuntime({
  readMetadata: (sessionID, directory) => sessionMetadataStore.get(sessionID, { directory }),
  updateMetadata: updateSessionMetadataWith,
  isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+ isWorktreePinned: isWorktreeDirectoryPinned,
  chatRoots: [path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR],
  lineage: sessionLineage,
 });
@@ -1258,6 +1275,7 @@ const clientPairingRuntime = createClientPairingRuntime({
 const clientPushAccess = createClientPushAccess({
  listClients: remoteClientAuthRuntime.listClients,
  removeDevicesOfSessions: [apnsRuntime.removeApnsDevicesOfSessions, pushRuntime.removePushDevicesOfSessions],
+ authenticateBearerClient: async (req) => (await remoteClientAuthRuntime.authenticateBearerToken(getBearerTokenFromRequest(req), req))?.client ?? null,
 });
 const featureRoutesRuntime = createFeatureRoutesRuntime();
 const bootstrapRuntime = createBootstrapRuntime({
@@ -1517,6 +1535,7 @@ const pluginNotificationEmitter = createPluginNotificationEmitter({
  broadcastUiNotification,
 });
 
+const browserUploads = createUploadStore();
 const openChamberControlService = createOpenChamberControlService({
  readSettingsFromDiskMigrated,
  service: hostAgentRuntime.service,
@@ -1527,6 +1546,8 @@ const openChamberControlService = createOpenChamberControlService({
  sessionService: openChamberSessionService,
  scheduledTaskService,
  browserControl: browserControlRouter,
+ browserUploads,
+ getTerminalRuntime: () => terminalRuntime,
  fileOpen: fileOpenRequester,
  // The tool is off by default; a plugin generated before it was switched off
  // must not keep paging the user.
@@ -1605,6 +1626,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  syncToHmrState: () => { },
  hostAgentRuntime,
  openChamberSessionService,
+ chatDirectoryCleanupRuntime,
  sessionAssistRuntime,
  sessionWorkRuntime,
  contextObligatoryRuntime,
@@ -2051,6 +2073,7 @@ async function main(options = {}) {
   isLocalOnlyPushRequest: (req, uiSessionToken) => clientPushAccess.isLocalOnlyRequest(req, uiSessionToken),
   updateUiVisibility,
   clearPendingPushBadge: () => clearPendingPushBadge(),
+  clearSessionPushNotifications: notificationTriggerRuntime.clearSessionPushNotifications,
   isUiVisible,
   getUiNotificationClients: () => uiNotificationClients,
   writeSseEvent,
@@ -2170,6 +2193,7 @@ async function main(options = {}) {
  relayService.registerRoutes(app);
 
  registerBrowserControlRoutes(app, { express, broker: browserControlBroker });
+ registerUploadRoute(app, { store: browserUploads });
 
  // One scanner backs both discovery and the tunnel allowlist, so a port the
  // user can see is exactly a port the tunnel will dial.

@@ -67,6 +67,14 @@ const createTestHelpersWithRealSanitizers = () => {
 };
 
 describe('settings helpers', () => {
+  it('does not persist the retired workflow auto-approval switch', () => {
+    const helpers = createTestHelpers();
+    for (const agentWorkflowAutoApprove of [true, false, null, 'true']) {
+      expect(helpers.sanitizeSettingsUpdate({ agentWorkflowAutoApprove })).toEqual({});
+    }
+    expect(helpers.sanitizeSettingsUpdate({})).toEqual({});
+  });
+
   it('persists either question presentation and rejects non-boolean values', () => {
     const helpers = createTestHelpers();
     for (const questionsInChat of [true, false]) {

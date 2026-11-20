@@ -22,6 +22,9 @@
     "agentBrowserSharesLogins": {
       "scope": "profile"
     },
+    "agentTerminalToolEnabled": {
+      "scope": "profile"
+    },
     "questionsInChat": {
       "scope": "profile"
     },
@@ -833,10 +836,6 @@
       "local": true
     },
     "agentUsageToolEnabled": {
-      "scope": "device",
-      "local": true
-    },
-    "agentTerminalToolEnabled": {
       "scope": "device",
       "local": true
     },

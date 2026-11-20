@@ -13,7 +13,10 @@ import {
 } from './actions.js';
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
+import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploads.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
+import { createTerminalReadAction } from './terminal-read.js';
+import { redactGitText } from '../git/redaction.js';
 import type { PageAnswerInput } from './render-page.js';
 import { formatModelRef, modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 
@@ -253,6 +256,8 @@ export const createOpenChamberControlService = (dependencies) => {
   listProjects,
   scheduledTaskService,
   browserControl = null,
+  browserUploads = null,
+  getTerminalRuntime = null,
   fileOpen = null,
   notifyUser = null,
   // Notes, todos and plans behind the `openchamber_knowledge` tool.
@@ -428,7 +433,8 @@ export const createOpenChamberControlService = (dependencies) => {
  };
 
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
- const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, laterPages, sharePages });
+ const readTerminal = createTerminalReadAction({ readSettings: readSettingsFromDiskMigrated, getTerminalRuntime });
+ const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, readSession: (sessionId) => sessionService.getMetadata(sessionId), laterPages, sharePages });
  const answerPage = async (input: PageAnswerInput) => {
   try {
    return pageAnswers.answer(input);
@@ -873,10 +879,26 @@ export const createOpenChamberControlService = (dependencies) => {
    if (direction) parameters.direction = direction;
   }
 
+  if (action === 'browser.upload') {
+   const selector = asNonEmptyString(input.selector);
+   if (!selector) throw new OpenChamberControlError('selector is required for browser.upload', 400);
+   if (!browserUploads) throw new OpenChamberControlError('Uploads are not available on this server', 503);
+   const directory = asNonEmptyString(contextDirectory);
+   let files;
+   try {
+    files = await resolveUploadFiles({ paths: input.paths, directory, tempDirectory: directory ?? undefined });
+   } catch (error) {
+    if (error instanceof UploadRefusedError) throw new OpenChamberControlError(error.message, 400);
+    throw error;
+   }
+   parameters.selector = selector;
+   parameters.upload = browserUploads.put(files);
+  }
+
   // Opening a page waits for the navigation to settle, so its budget has to
   // exceed the client's own wait; sharing one timeout with the quick actions
   // made a slow page indistinguishable from an unreachable browser.
-  const timeoutMs = action === 'browser.open' ? 45_000 : 20_000;
+  const timeoutMs = action === 'browser.open' || action === 'browser.upload' ? 45_000 : 20_000;
   // Where the call came from, for a provider that keeps one browser per
   // project or chat. Filled by the tool plugin, never by the model.
   const context = {
@@ -927,6 +949,18 @@ export const createOpenChamberControlService = (dependencies) => {
    }
    if (OPENCHAMBER_KNOWLEDGE_ACTIONS.includes(action)) {
     return await knowledgeActions.execute(action, input, contextDirectory, options.contextSessionId);
+   }
+   if (action === 'terminal.list' || action === 'terminal.read') {
+    const scope = await resolveReadScope(input, contextDirectory, options.contextSessionId, options.contextSessionId);
+    const result = await readTerminal(action, { ...input, directory: scope.cwd }, scope.cwd);
+    const present = ({ cwd: _cwd, ...terminal }) => ({
+     ...terminal,
+     directory: scope.displayPath ?? '.',
+     ...(typeof terminal.text === 'string' ? {
+      text: redactGitText(terminal.text, { secrets: [scope.cwd, scope.agentDirectory], maxChars: terminal.text.length }),
+     } : {}),
+    });
+    return 'terminals' in result ? { terminals: result.terminals.map(present) } : present(result);
    }
    if (action.startsWith('browser.')) {
     if (!browserControl) {

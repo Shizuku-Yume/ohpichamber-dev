@@ -4,14 +4,16 @@ import path from 'path';
 import { mkdtemp, rm, readFile, writeFile } from 'fs/promises';
 import { createProjectConfigRuntime } from './project-config.js';
 import { createProjectIdFromPath } from './project-id.js';
+import { createProjectContextRuntime } from '../project-context/runtime.js';
 
-const createRuntime = async () => {
+const createRuntime = async (options = {}) => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'oc-scheduled-project-config-'));
   const runtime = createProjectConfigRuntime({
     fsPromises: await import('fs/promises'),
     path,
     projectsDirPath: tempRoot,
     createTaskID: () => 'task-fixed-id',
+    ...options,
   });
   return {
     runtime,
@@ -23,6 +25,53 @@ const createRuntime = async () => {
 };
 
 describe('project-config runtime', () => {
+  it('moves notes and todos through the real project storage owners and preserves writes after switching back', async () => {
+    const fsPromises = await import('fs/promises');
+    let context;
+    const { runtime, tempRoot, cleanup } = await createRuntime({ switchNotesTodosStorage: (...args) => context.switchNotesTodosStorage(...args) });
+    try {
+      const repo = path.join(tempRoot, 'repo');
+      await fsPromises.mkdir(repo);
+      const id = createProjectIdFromPath(repo);
+      context = createProjectContextRuntime({ fsPromises, path, projectsDirPath: tempRoot, resolveNotesTodosFile: runtime.resolveNotesTodosFile });
+      const first = await context.createTodo(id, { text: 'Keep this task' });
+      await runtime.updateProjectSetup(id, { notesTodosInRepository: true });
+      const file = path.join(repo, '.openchamber', 'notes-todos.json');
+      expect(await runtime.resolveNotesTodosFile(id)).toBe(file);
+      expect(JSON.parse(await readFile(file, 'utf8')).todos).toEqual([first.todo]);
+      await context.createTodo(id, { text: 'Written to the repository' });
+      await runtime.updateProjectSetup(id, { notesTodosInRepository: false });
+      expect(await runtime.resolveNotesTodosFile(id)).toBe(null);
+      expect((await context.readContext(id)).todos.map((todo) => todo.text)).toEqual(['Keep this task', 'Written to the repository']);
+      await runtime.updateProjectSetup(id, { notesTodosInRepository: true });
+      expect((await context.readContext(id)).todos).toHaveLength(2);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('switches empty storage without inventing entries and leaves the option unchanged on a failed move', async () => {
+    const fsPromises = await import('fs/promises');
+    let context;
+    const { runtime, tempRoot, cleanup } = await createRuntime({ switchNotesTodosStorage: (...args) => context.switchNotesTodosStorage(...args) });
+    try {
+      const repo = path.join(tempRoot, 'repo');
+      await fsPromises.mkdir(repo);
+      const id = createProjectIdFromPath(repo);
+      context = createProjectContextRuntime({ fsPromises, path, projectsDirPath: tempRoot, resolveNotesTodosFile: runtime.resolveNotesTodosFile });
+      await runtime.updateProjectSetup(id, { notesTodosInRepository: true });
+      expect((await context.readContext(id)).todos).toEqual([]);
+      await runtime.updateProjectSetup(id, { notesTodosInRepository: false });
+      await context.createTodo(id, { text: 'Must survive' });
+      await writeFile(path.join(repo, '.openchamber'), 'not a directory');
+      await expect(runtime.updateProjectSetup(id, { notesTodosInRepository: true })).rejects.toThrow();
+      expect(await runtime.resolveNotesTodosFile(id)).toBe(null);
+      expect((await context.readContext(id)).todos.map((todo) => todo.text)).toEqual(['Must survive']);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it.each([
     ['claim', 'stop'], ['claim', 'timeout'], ['discard', 'stop'],
     ['discard', 'timeout'], ['clear', 'stop'], ['clear', 'timeout'],

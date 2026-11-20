@@ -50,13 +50,14 @@ describe('graceful shutdown runtime', () => {
     const order = [];
     const server = { close: vi.fn((callback) => { callback(); }) };
     const runtime = createRuntime(server, {
+      chatDirectoryCleanupRuntime: { stop: vi.fn(async () => { order.push('chat-cleanup'); }) },
       openChamberSessionService: { close: vi.fn(async () => { order.push('session-service'); }) },
       hostAgentRuntime: { close: vi.fn(async () => { order.push('agent-runtime'); }) },
     });
     await runtime.gracefulShutdown({ exitProcess: false });
     // A prepared session owns a worker; closing the service first means the
     // speculative root is discarded rather than left for the runtime to kill.
-    expect(order).toEqual(['session-service', 'agent-runtime']);
+    expect(order).toEqual(['chat-cleanup', 'session-service', 'agent-runtime']);
   });
 
   it('clears the server close timeout when the server closes first', async () => {

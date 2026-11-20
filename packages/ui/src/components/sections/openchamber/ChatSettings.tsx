@@ -434,6 +434,8 @@ const ComposerTab: React.FC = () => {
   const setEnterToSend = useUIStore((state) => state.setEnterToSend);
   const enterToSendConfigured = useUIStore((state) => state.enterToSendConfigured);
   const setEnterToSendConfigured = useUIStore((state) => state.setEnterToSendConfigured);
+  const mobileReturnKeySends = useUIStore((state) => state.mobileReturnKeySends);
+  const setMobileReturnKeySends = useUIStore((state) => state.setMobileReturnKeySends);
   const followUpBehavior = useMessageQueueStore((state) => state.followUpBehavior);
   const setFollowUpBehavior = useMessageQueueStore((state) => state.setFollowUpBehavior);
   const largeTextPasteBehavior = useUIStore((state) => state.largeTextPasteBehavior);
@@ -475,7 +477,18 @@ const ComposerTab: React.FC = () => {
     <>
       <SettingsSection title={t('settings.layout.chat.section.sending')} settingsItem="chat.composer" contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <div>
-          {isMobile ? null : (
+          {isMobile ? (
+            <SettingsCheckboxRow
+              checked={mobileReturnKeySends}
+              onChange={(enabled) => {
+                setMobileReturnKeySends(enabled);
+                void updateDesktopSettings({ mobileReturnKeySends: enabled });
+              }}
+              label={t('settings.openchamber.visual.field.mobileReturnKeySends')}
+              info={t('settings.openchamber.visual.field.mobileReturnKeySendsHint')}
+              settingsItem="chat.mobile-return-key-sends"
+            />
+          ) : (
             <SettingsFieldRow
               label={t('settings.openchamber.visual.field.enterToSend')}
               info={t('settings.openchamber.visual.field.enterToSendHint')}

@@ -22,7 +22,7 @@ and session-status implementations have `.ts` source files.
 - `packages/web/server/lib/linear/teams.ts`: list Linear teams for mapping UI.
 - `packages/web/server/lib/linear/mapping.js`: persist default and per-team OpenChamber project paths. Separate from the auth file so disconnect does not wipe maps.
 - `packages/web/server/lib/linear/status.js`: persist per-session started/completed/failure flags and post the matching Linear comment with an open-session URL. Posts nothing unless the user opted in and the session origin is public; `isPublicSessionOrigin` rejects loopback, private LAN, carrier-grade NAT, link-local and single-label hosts. The dedupe file keeps the newest 500 sessions.
-- `packages/web/server/lib/linear/status-runtime.js`: on the OpenCode event hub, first `session.status` idle after started posts completed once; `session.error` (except abort) posts failure once.
+- `packages/web/server/lib/linear/status-runtime.js`: the tracker status fan-out supplies Canonical `session.status` idle and `run.failed` events. Started-session persistence deduplicates completion/failure comments; cancellation posts no failure comment.
 - `packages/web/src/api/linear.ts`: web client wrapper. Electron and hosted/Capacitor mobile reuse it.
 
 ## Public routes

@@ -34,6 +34,10 @@ export const createTerminalReadAction = ({ readSettings, getTerminalRuntime }: T
   if (!sessionId) {
     throw new OpenChamberControlError('sessionId is required; terminal.list names them', 400);
   }
+  const directory = asNonEmptyString(contextDirectory);
+  if (directory && !runtime.listTerminals({ directory }).some((terminal) => terminal.sessionId === sessionId)) {
+    throw new OpenChamberControlError('No terminal in this folder with that sessionId; terminal.list names this folder\'s terminals', 404);
+  }
   const maxBytes = input.maxBytes;
   const terminal = runtime.readTerminal(sessionId, isFiniteBytes(maxBytes) ? { maxBytes } : {});
   if (!terminal) {

@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 
 import { createDevServerWatchCommand } from './dev-server-watch.mjs';
 
 describe('createDevServerWatchCommand', () => {
+  it('prepares compiled native package exports before either source server command', async () => {
+    const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(scripts['dev:server:prepare']).toBe('bun run --cwd ../agent-contract build && bun run --cwd ../agent-service build');
+    for (const command of ['dev:server', 'dev:server:watch']) {
+      expect(scripts[command]).toMatch(/^bun run dev:server:prepare && /);
+    }
+  });
   it('preserves the injected desktop dev data directory for the HMR server', () => {
     const command = createDevServerWatchCommand({
       platform: 'linux', bunExecutable: 'bun',

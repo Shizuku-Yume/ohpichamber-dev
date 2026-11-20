@@ -62,6 +62,12 @@ There is no env gate — the feature shipped dark behind
 
 ## Invariants
 
+- Gemini classification retains its Host-owned key store and authenticated
+  `PUT`/`DELETE /api/routing/classifier/gemini` routes. Saving selects Gemini;
+  deleting removes only its key. State exposes presence, never the key. Enterprise
+  mode refuses new keys and cannot select Gemini for execution. All four retained
+  clients use the same Host policy and transport.
+
 - The Auto sentinel is a Host choice, never an OMP model. A native send passes
   `{ providerId: 'openchamber', modelId: 'auto' }` to `resolveAutoSelection`.
   The returned `{ model: { providerId, modelId, variant? }, agent, decision }`

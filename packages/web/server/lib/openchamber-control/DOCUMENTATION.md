@@ -25,6 +25,10 @@ other.
   answer keyed by session and tool call id (`pageAnswers`). Every inner host
   action request for `openchamber_render` carries that `toolCallId`, so an
   answer reaches the call that showed the page.
+  Operator-child eligibility reads the Host metadata through the Canonical
+  session metadata service, not the SDK transcript or a second session store.
+  An unavailable metadata read fails the waiting action rather than treating
+  the child as a human-facing session.
   With `answerLater` the call returns at once and `later-pages.js` keeps the
   page, across restarts, in `render-later-pages.json`; `GET
   /api/openchamber/render/later` serves its snapshot and the answer route
@@ -33,7 +37,9 @@ other.
 - `synthetic-delivery.js` posts a later or shared page's answer into the
   author's session as synthetic context through the canonical session
   service: a send keyed by the answer's message id when the session is idle, a
-  steer into its active run on `RUN_ACTIVE`. A message with `resume: false`
+  steer into its active run on `RUN_ACTIVE`. The steer has its own stable
+  command ID so it cannot reuse the send admission with a different action.
+  A message with `resume: false`
   (an archived session) is not posted, since a canonical send always starts a
   run; the answer still shows under the page.
 - `../agent-tool/runtime.js` is the managed-tool adapter. It wraps service
@@ -43,6 +49,12 @@ other.
   their domain operations and are composed into this service.
 
 ## Invariants
+
+- `terminal.list` and `terminal.read` use the Host terminal owner on all four
+  retained client surfaces. They require the explicit, default-off terminal
+  reading preference. Agent calls cannot select another workspace, and a read
+  checks membership in that folder before accessing output. Results omit Host
+  cwd fields and redact captured Host paths. Missing panels fail with 503.
 
 - Session status and messages come from the Canonical session service. The
   Host control read views expose status or text-only history, not SDK records.

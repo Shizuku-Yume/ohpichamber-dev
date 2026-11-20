@@ -27,6 +27,13 @@ Or install manually: `bun add -g ohpichamber` (or npm, pnpm, yarn).
 
 ### Monorepo development scripts
 
+Source server commands rebuild the Canonical contract and Agent Service before
+starting. Their public package exports deliberately resolve compiled `dist`
+files even when the Host entrypoint is source. After a merge that adds schema
+exports, an old `dist` can reject an otherwise correct source import. Direct
+embedders of `server/index.js` run `bun run --cwd packages/web dev:server:prepare`
+from the repository root before booting; reinstalling dependencies is not needed.
+
 ```bash
 # From repository root
 bun run build:web       # Build web assets and server dependencies

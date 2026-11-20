@@ -1051,6 +1051,21 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['agent', 'tool', 'orchestration', 'openchamber', 'sessions', 'schedule', 'control'],
   },
   {
+    id: 'sessions.agent-terminal-tool',
+    page: 'tools',
+    titleKey: 'settings.openchamber.tools.field.agentTerminalTool',
+    descriptionKey: 'settings.openchamber.tools.field.agentTerminalToolSummary',
+    keywords: ['agent', 'terminal', 'panel', 'read', 'output'],
+  },
+  {
+    id: 'sessions.agent-browser-logins',
+    page: 'tools',
+    titleKey: 'settings.openchamber.tools.agentBrowserLogins.label',
+    descriptionKey: 'settings.openchamber.tools.agentBrowserLogins.info',
+    keywords: ['agent', 'browser', 'logins', 'cookies', 'profile'],
+    isAvailable: (ctx) => ctx.isDesktop,
+  },
+  {
     id: 'sessions.agent-web-tool',
     page: 'tools',
     titleKey: 'settings.openchamber.tools.field.agentWebTool',
@@ -1232,6 +1247,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'projects',
     titleKey: 'settings.projects.page.section.worktree',
     keywords: ['worktree', 'branch', 'repository'],
+  },
+  {
+    id: 'projects.worktree.create',
+    page: 'projects',
+    titleKey: 'settings.openchamber.worktrees.create.title',
+    descriptionKey: 'settings.openchamber.worktrees.create.info',
+    keywords: ['worktree', 'create', 'commands', 'bootstrap'],
   },
   {
     id: 'projects.worktree.directory',
