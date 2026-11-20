@@ -260,6 +260,7 @@ export const createFeatureRoutesRuntime = () => {
       sanitizeProjects,
       readSettingsFromDiskMigrated,
       persistSettings,
+      persistResolvedSettings: routeDependencies.persistResolvedSettings,
       createFsSearchRuntime,
       spawn,
       resolveGitBinaryForSpawn,
