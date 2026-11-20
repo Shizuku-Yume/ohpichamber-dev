@@ -1,13 +1,13 @@
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
-import { useShallow } from 'zustand/react/shallow';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { buildChildrenIndex, computeSubtreeCost } from './subagentCost';
 
 export type SubagentCostRollup = {
   totalCost: number | null;
+  /** The root session's own spend, excluding every subagent. */
   ownCost: number;
+  /** Everything the subagents cost between them: `totalCost - ownCost`. */
   subagentCost: number;
   subagentCount: number;
   perChildCost: Map<string, number>;
@@ -30,6 +30,10 @@ function countDescendants(id: string, childrenByParent: Map<string, Session[]>, 
   return count;
 }
 
+/**
+ * Pure core of useSubagentCostRollup, kept separate so it can be unit-tested
+ * directly against a plain session array instead of rendering the hook.
+ */
 export function computeRollup(liveSessions: Session[], sessionId: string | null): SubagentCostRollup {
   if (!sessionId) return EMPTY_ROLLUP;
 
@@ -52,37 +56,20 @@ export function computeRollup(liveSessions: Session[], sessionId: string | null)
     subagentCost += childSubtree;
   }
 
+  // Derived by subtraction rather than read back off the session, so the split
+  // always adds up to the total the panel shows even if a cycle guard trimmed
+  // part of the walk.
   const ownCost = totalCost - subagentCost;
 
   return { totalCost, ownCost, subagentCost, subagentCount, perChildCost };
 }
 
-const NO_SESSIONS: Session[] = [];
-
-export function useSessionsWithListedChildren(sessionId: string | null): Session[] {
-  const liveSessions = useAllLiveSessions();
-  const listedChildren = useGlobalSessionsStore(useShallow((state) => {
-    const childIds = sessionId ? state.structure.activeChildrenByParentId.get(sessionId) : undefined;
-    if (!childIds) return NO_SESSIONS;
-    return childIds.flatMap((id) => {
-      const child = state.entityById.get(id);
-      return child ? [child] : [];
-    });
-  }));
-  return React.useMemo(() => {
-    if (listedChildren.length === 0) return liveSessions;
-    const listedById = new Map(listedChildren.map((child) => [child.sessionId, child]));
-    const merged = liveSessions.map((session) => {
-      const listed = listedById.get(session.sessionId);
-      if (!listed) return session;
-      listedById.delete(session.sessionId);
-      return session.model || !listed.model ? session : { ...session, agent: session.agent ?? listed.agent, model: listed.model };
-    });
-    return [...merged, ...listedById.values()];
-  }, [listedChildren, liveSessions]);
-}
-
+/**
+ * Own cost plus every descendant subagent's cost, recursively summed, for a
+ * given root session. Reads the same `useAllLiveSessions()` subscription
+ * WorkStatusSubagentsSection already holds — no new store subscription.
+ */
 export function useSubagentCostRollup(sessionId: string | null): SubagentCostRollup {
-  const sessions = useSessionsWithListedChildren(sessionId);
-  return React.useMemo(() => computeRollup(sessions, sessionId), [sessions, sessionId]);
+  const liveSessions = useAllLiveSessions();
+  return React.useMemo(() => computeRollup(liveSessions, sessionId), [liveSessions, sessionId]);
 }

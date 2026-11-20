@@ -59,7 +59,7 @@ import { DiffViewToggle, type DiffViewMode } from '../DiffViewToggle';
 import { EvalPresenter } from './EvalPresenter';
 import { MinDurationShineText } from './MinDurationShineText';
 import { getToolIcon } from './toolPresentation';
-import { OpenChamberToolOutput } from './OhPiChamberToolOutput';
+import { OpenChamberToolOutput } from './OpenChamberToolOutput';
 import { toToolView } from './toolView';
 import { hasOpenChamberView, parseOpenChamberEnvelope } from './openChamberToolEnvelope';
 import { GuestToolTable } from './GuestToolTable';

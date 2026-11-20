@@ -8,7 +8,6 @@ export type CompletedTurnStats = {
   totalLlmDurationMs: number | null;
   totalToolDurationMs: number | null;
   avgTtftMs: number | null;
-  avgFirstOutputMs: number | null;
   tokensPerSecond: number | null;
   responseTokensPerSecond: number | null;
   inputTokens: number | null;
@@ -124,6 +123,7 @@ const deriveTimingMetrics = (steps: readonly Message[], totalGeneratedTokens: nu
   };
 };
 
+/** Timing-derived metrics come from `Message.timing` (task 23); a metric without a source stays null. */
 export function getLatestCompletedTurnStats(
   messages: readonly Message[] | null | undefined,
   turns?: readonly Turn[] | null,

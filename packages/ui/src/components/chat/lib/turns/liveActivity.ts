@@ -1,10 +1,10 @@
-
 import type { Part, ToolResultPart } from '@openchamber/agent-contract';
 import { fenceUiBlocks } from '../../uiBlocks/taggedBlocks';
 import type { ChatMessageEntry, TurnRecord } from './types';
 import { isShownInPlace } from '../../message/parts/pageRenderView';
 import { toToolView } from '../../message/parts/toolView';
 
+/** A queued user message alone does not retire the previous turn. */
 export function getTurnsWithLaterAssistant(turns: readonly TurnRecord[]): Set<string> {
     const retired = new Set<string>();
     let hasLaterAssistant = false;
@@ -41,6 +41,7 @@ export function hasLiveActivity(turn: TurnRecord, showReasoning: boolean): boole
 /** Something a turn showed the user that a collapsed Activity never folds away. */
 export type ShownPart = Extract<Part, { type: 'tool_call' } | { type: 'text' }>;
 
+// An opening `openui-lang` fence; `openui-lang literal` is a code sample and stays text.
 const UI_BLOCK_FENCE = /^ {0,3}(`{3,}|~{3,})openui-lang[ \t]*$/m;
 
 /**
@@ -84,11 +85,4 @@ export function toolResultsByCall(messages: readonly ChatMessageEntry[]): Map<st
 /** The message a shown part belongs to, so a card can name its session and message. */
 export function messageOwningPart(messages: readonly ChatMessageEntry[], partId: string): ChatMessageEntry | undefined {
     return messages.find((message) => message.parts.some((part) => part.partId === partId));
-}
-
-export function uiPageMessageId(turn: TurnRecord | undefined, expanded: boolean, messageId: string, partId: string): string {
-    const final = turn ? getLiveFinalMessage(turn.assistantMessages) : undefined;
-    return !expanded && turn && final && getShownPages(turn.assistantMessages, final).some((part) => part.id === partId && part.messageID === messageId)
-        ? final.info.id
-        : messageId;
 }
