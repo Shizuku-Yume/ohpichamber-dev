@@ -2,51 +2,75 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { inspectLocalImage } from '../markdown-image-grants/inspect-image.js';
 import { isString } from '../shared/guards.js';
-import { OpenChamberControlError } from './error.js';
+import { isOperatorChildSession } from '../session-lineage.js';
+import { OpenChamberControlError, controlErrorFields } from './error.js';
+import type { LocalImageInspection } from '../markdown-image-grants/inspect-image.js';
+import type { ControlInput, ActionContext } from './contracts.js';
+import type { createLaterPages } from './later-pages.js';
+import type { createSharePagesRuntime } from '../share-pages/runtime.js';
 
-// The page travels in the tool call's input, which OpenCode stores with the
-// message and streams to every client, and through the callback request, whose
-// JSON body is capped at 1 MB. 200,000 characters stays under that cap even for
-// text that encodes to several bytes per character, and is far more than a
-// chart or table page needs.
-const RENDER_PAGE_MAX_HTML_LENGTH = 200_000;
-const RENDER_PAGE_MAX_TITLE_LENGTH = 120;
-// An answer is a choice and a few values, never a document: the page sends
-// what the user picked and the agent builds the rest itself.
+export type PageImageInspection = { source: string } & (LocalImageInspection | { status: 'too-heavy'; size: number });
+export interface PageAnswerInput {
+  sessionId?: unknown;
+  callId?: unknown;
+  notDrawn?: unknown;
+  declined?: unknown;
+  summary?: unknown;
+  data?: unknown;
+}
+export interface ReadPageAnswerResult {
+  sessionId: string;
+  callId: string;
+  answer: PageAnswer;
+}
+export interface AgentPromptInput {
+  metadata?: unknown;
+}
+export type PageAnswer =
+  | { answered: true; summary: string; data: unknown; reason?: never; errors?: never }
+  | { answered: false; reason: 'declined'; summary?: never; data?: never; errors?: never }
+  | { answered: false; reason: 'ui-not-drawn'; errors: string[]; summary?: never; data?: never };
+export type PageWaitChange =
+  | { type: 'waiting'; sessionId: string; callId: string; title: string; directory: string | null }
+  | { type: 'settled'; sessionId: string; callId: string };
+export interface PageWaitOptions extends ActionContext {
+  sessionId: string;
+  callId: string;
+  title: string;
+}
+export interface PageAnswersOptions {
+  onWaitChange?: ((change: PageWaitChange) => void) | undefined;
+}
+export interface RenderPageContext extends ActionContext {
+  sessionId?: string | null;
+  callId?: string | null;
+}
+export interface RenderPageDependencies {
+  isEnabled: () => Promise<boolean>;
+  pageAnswers: ReturnType<typeof createPageAnswers>;
+  hasUnreadChat?: (sessionId: string) => Promise<boolean>;
+  readSession?: (sessionId: string) => Promise<Parameters<typeof isOperatorChildSession>[0]>;
+  laterPages?: ReturnType<typeof createLaterPages> | null;
+  sharePages?: ReturnType<typeof createSharePagesRuntime> | null;
+}
+const isText = (value: unknown): value is string => isString(value);
+
+export const RENDER_PAGE_MAX_HTML_LENGTH = 200_000;
+export const RENDER_PAGE_MAX_TITLE_LENGTH = 120;
 const RENDER_PAGE_MAX_SUMMARY_LENGTH = 500;
 const RENDER_PAGE_MAX_ANSWER_DATA_LENGTH = 16_000;
 
-// A local image a page names by its absolute path: a quoted string (an src
-// attribute, a CSS url("..."), a string in the page's script) or an unquoted
-// CSS url(...). The chat swaps each for the file's contents before drawing the
-// page, which cannot read files itself. The UI reads pages with the same rule
-// (packages/ui/src/components/chat/message/parts/renderPageImages.ts).
-// A quoted path may hold spaces (macOS names screenshots that way); an
-// unquoted url() ends at the first space or parenthesis.
 const LOCAL_IMAGE_RE = /(["'`])((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>\n]*?\.(?:png|jpe?g|gif|webp))\1|url\(\s*((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>()\s]*?\.(?:png|jpe?g|gif|webp))\s*\)/gi;
-// How much the local images a page shows may weigh together, in file bytes.
-// The chat reads each one into the page as a data URL, and the browser holds
-// it decoded on top, so the weight of a page is what bounds the chat's memory.
-const RENDER_PAGE_IMAGE_BUDGET_BYTES = 25 * 1024 * 1024;
+export const RENDER_PAGE_IMAGE_BUDGET_BYTES = 25 * 1024 * 1024;
 
-/** The local image paths a page names, in order, once each. */
-const renderPageImageSources = (html) => {
-  const sources = new Set();
-  for (const match of html.matchAll(LOCAL_IMAGE_RE)) sources.add(match[2] ?? match[3]);
+export const renderPageImageSources = (html: string) => {
+  const sources = new Set<string>();
+  for (const match of html.matchAll(LOCAL_IMAGE_RE)) sources.add(match[2] ?? match[3] ?? '');
   return [...sources];
 };
 
-/**
- * Checks every local image a page names and decides which the chat shows: in
- * page order, while their sizes add up to at most the budget. From the first
- * image that does not fit on, none does (`too-heavy`), so the page shows a
- * run from its top. A missing or unreadable image weighs nothing.
- * `inspect(source)` resolves to what `inspectLocalImage` does. The image grant
- * route serves a page with this rule and the agent is told with it, so both
- * agree on what the user sees.
- */
-const fitRenderPageImages = async (html, inspect) => {
-  const images = [];
+export const fitRenderPageImages = async (html: string, inspect: (source: string) => Promise<LocalImageInspection>) => {
+  const images: PageImageInspection[] = [];
   let shownBytes = 0;
   let totalBytes = 0;
   let full = false;
@@ -73,16 +97,11 @@ const NOT_SHOWN_REASONS = {
   missing: 'file not found',
   error: 'not a readable PNG, JPEG, GIF or WebP of at most 10 MB',
 };
-const toMegabytes = (bytes) => Math.round(bytes / (1024 * 1024) * 10) / 10;
+const toMegabytes = (bytes: number) => Math.round(bytes / (1024 * 1024) * 10) / 10;
 
-/**
- * What the agent hears about the page's local images the user will not see,
- * or null when every one shows. Without it the agent heard "shown" and
- * reported a gallery whose later images were broken.
- */
-const describeHiddenImages = async (html, directory) => {
+const describeHiddenImages = async (html: string, directory: string | null | undefined) => {
   const { images, totalBytes } = await fitRenderPageImages(html, (source) => (
-    inspectLocalImage({ source, directory, fsPromises: fs, path }).catch(() => ({ status: 'error' }))
+    inspectLocalImage({ source, directory, fsPromises: fs, path }).catch((): LocalImageInspection => ({ status: 'error' }))
   ));
   const hidden = images.filter((image) => image.status !== 'ready');
   if (hidden.length === 0) return null;
@@ -99,26 +118,41 @@ const describeHiddenImages = async (html, directory) => {
   };
 };
 
-// A page sent without a title is named after its own <title>, else its first
-// h1 to h3, else "Page". Weaker models sent title and html in separate calls,
-// and every call refused for a missing title cost the whole page again. The
-// chat names such a page with the same rule (pageTitleFromHtml in
-// packages/ui/src/lib/opencode/tools.ts); change both together.
 const TITLE_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
-const elementText = (html, pattern) => (pattern.exec(html)?.[1] ?? '')
+const elementText = (html: string, pattern: RegExp) => (pattern.exec(html)?.[1] ?? '')
   .replace(/<[^>]*>/g, ' ')
-  .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, entity) => TITLE_ENTITIES[entity])
+  .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, entity: keyof typeof TITLE_ENTITIES) => TITLE_ENTITIES[entity])
   .replace(/\s+/g, ' ')
   .trim();
-const renderPageTitleFromHtml = (html) => (
+const renderPageTitleFromHtml = (html: string) => (
   elementText(html, /<title\b[^>]*>([\s\S]*?)<\/title>/i)
   || elementText(html, /<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/i)
 ).slice(0, RENDER_PAGE_MAX_TITLE_LENGTH).trim();
 const RENDER_PAGE_FALLBACK_TITLE = 'Page';
 
+const RENDER_PAGE_MAX_QUESTION_LENGTH = 2_000;
+const renderPageQuestion = (field: string, content: string) => {
+  const text = field === 'ui'
+    ? content.trim()
+    : content
+      .replace(/<(script|style|template|title)\b[\s\S]*?<\/\1\s*>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, entity: keyof typeof TITLE_ENTITIES) => TITLE_ENTITIES[entity])
+      .replace(/\s+/g, ' ')
+      .trim();
+  const question = text.slice(0, RENDER_PAGE_MAX_QUESTION_LENGTH);
+  const questionCaptured: 'none' | 'truncated' | 'static-text' | undefined = !question ? 'none'
+    : text.length > question.length ? 'truncated'
+      : field === 'html' && /<script\b/i.test(content) ? 'static-text' : undefined;
+  return { question, questionCaptured };
+};
+
 const SHOWN_NOTE = "Shown to the user in the chat above your reply. Don't announce, describe or restate the page; reply with only what it doesn't already say.";
 
 const ANSWERED_NOTE = "The user answered on the page. summary is their choice in words, data is what the page sent. Continue the task from it; the chat already shows the summary under the page, so don't repeat it back.";
+
+export const RENDER_PAGE_CLOSED_IN_CHAT_NOTE = "The user did not answer on the page and wrote in the chat instead; their message follows this result. Continue from that message and don't ask the same question on a page again unless they want it.";
 
 const UI_NOT_DRAWN_NOTE = "The chat could not draw this ui, so the user saw its source instead of fields. Fix the program from the errors below and call again.";
 
@@ -126,34 +160,37 @@ const DECLINED_NOTE = "The user declined to answer on the page. Don't choose for
 
 const CHAT_SENT_EARLIER_NOTE = "The page did not wait: the user had already written in the chat before it appeared, and that message follows this result. They wrote it without seeing the page, so it is not an answer to it. Continue from that message; show the page again only if it still fits.";
 
-const pageKey = (sessionId, callId) => `${sessionId}\u0000${callId}`;
+export const isAgentPrompt = (metadata: AgentPromptInput['metadata']) => {
+  const isText = (value: unknown): value is string => Object.prototype.toString.call(value) === '[object String]';
+  const fields = (value: AgentPromptInput['metadata']): { openchamber?: unknown; promptedBy?: unknown; sessionID?: unknown; schedule?: unknown; id?: unknown } | undefined => value == null ? undefined : Object(value);
+  const record = fields(metadata);
+  return [fields(fields(record?.openchamber)?.promptedBy)?.sessionID, fields(record?.schedule)?.id].some((value) => isText(value) && value.trim() !== '');
+};
 
-/**
- * Pages that wait for the user's answer, keyed by session and tool call. The
- * call's request stays open while its page waits: an answer resolves it, and an
- * aborted request (the user stopped the turn, wrote in the chat, or OpenCode
- * went away) drops it, and so does the end of the session's turn (`release`).
- * Nothing is kept once a call ends, so a page answers at most once and a stale
- * answer finds nothing to resolve.
- *
- * `onWaitChange` hears when a page starts and stops waiting, so the server can
- * show the session as waiting for the user the way it does for a form.
- */
-export const readPageAnswer = (input = {}) => {
-  const sessionId = isString(input.sessionId) ? input.sessionId.trim() : "";
-  const callId = isString(input.callId) ? input.callId.trim() : "";
+const SHARED_NOTE = "Shown to the user in the chat with a card per recipient, where the user copies each link and PIN and sends them; you never get them. Each answer arrives later in this session as an <openchamber-share-answer> message. End your turn or go on with other work; don't wait, poll or ask the user to paste the answer.";
+
+const SHARED_REMOTE_IMAGES_NOTE = "The page names https images: they show here but not on the shared page, which loads only data: and the local images the chat inlines.";
+
+const REMOTE_IMAGE_RE = /(?:src\s*=\s*["']?|url\(\s*["']?)https?:\/\//i;
+
+const LATER_NOTE = "Shown to the user, and you are not waiting: they answer it whenever they like, and the page stays open until they do. Their answer reaches you later as a message in this session, with the page's title and what it asked, their summary and data. Go on with work that does not depend on it, or end your turn; don't ask the same question again meanwhile.";
+
+const pageKey = (sessionId: string, callId: string) => `${sessionId}\u0000${callId}`;
+
+export const readPageAnswer = (input: PageAnswerInput = {}): ReadPageAnswerResult => {
+  const sessionId = isText(input.sessionId) ? input.sessionId.trim() : '';
+  const callId = isText(input.callId) ? input.callId.trim() : '';
   if (!sessionId || !callId) {
-    throw new OpenChamberControlError("sessionId and callId are required", 400);
+    throw new OpenChamberControlError('sessionId and callId are required', 400);
   }
   if (Array.isArray(input.notDrawn)) {
-    const errors = input.notDrawn.filter(isString).map((error) => error.slice(0, 500)).slice(0, 20);
-    return { sessionId, callId, answer: { answered: false, reason: "ui-not-drawn", errors } };
+    const errors = input.notDrawn.filter(isText).map((error) => error.slice(0, 500)).slice(0, 20);
+    return { sessionId, callId, answer: { answered: false, reason: 'ui-not-drawn', errors } };
   }
-  if (input.declined === true)
-    return { sessionId, callId, answer: { answered: false, reason: "declined" } };
-  const summary = isString(input.summary) ? input.summary.trim() : "";
+  if (input.declined === true) return { sessionId, callId, answer: { answered: false, reason: 'declined' } };
+  const summary = isText(input.summary) ? input.summary.trim() : '';
   if (!summary) {
-    throw new OpenChamberControlError("summary is required: what the user chose, in a few words", 400);
+    throw new OpenChamberControlError('summary is required: what the user chose, in a few words', 400);
   }
   if (summary.length > RENDER_PAGE_MAX_SUMMARY_LENGTH) {
     throw new OpenChamberControlError(`summary is ${summary.length} characters; the limit is ${RENDER_PAGE_MAX_SUMMARY_LENGTH}`, 400);
@@ -166,19 +203,18 @@ export const readPageAnswer = (input = {}) => {
   return { sessionId, callId, answer: { answered: true, summary, data } };
 };
 
-export const createPageAnswers = ({ onWaitChange = () => { } } = {}) => {
-  const waiting = new Map();
+export const createPageAnswers = ({ onWaitChange = () => {} }: PageAnswersOptions = {}) => {
+  const waiting = new Map<string, (answer: PageAnswer) => void>();
 
-  // A listener failure must not break the call the user is answering.
-  const announce = (change) => {
+  const announce = (change: PageWaitChange) => {
     try {
       onWaitChange(change);
     } catch (error) {
-      console.warn('[render.page] wait listener failed:', error?.message ?? error);
+      console.warn('[render.page] wait listener failed:', controlErrorFields(error)?.message ?? error);
     }
   };
 
-  const wait = ({ sessionId, callId, title, directory, signal }) => new Promise((resolve, reject) => {
+  const wait = ({ sessionId, callId, title, directory, signal }: PageWaitOptions) => new Promise<PageAnswer>((resolve, reject) => {
     const key = pageKey(sessionId, callId);
     if (waiting.has(key)) {
       reject(new OpenChamberControlError('This call already shows a page that waits for an answer', 409));
@@ -202,59 +238,17 @@ export const createPageAnswers = ({ onWaitChange = () => { } } = {}) => {
     announce({ type: 'waiting', sessionId, callId, title, directory: directory || null });
   });
 
-  const answer = (input = {}) => {
-    const sessionId = isString(input.sessionId) ? input.sessionId.trim() : '';
-    const callId = isString(input.callId) ? input.callId.trim() : '';
-    if (!sessionId || !callId) {
-      throw new OpenChamberControlError('sessionId and callId are required', 400);
-    }
-    // A client that cannot draw a page's ui reports it, so the agent hears the
-    // parser's errors instead of waiting on fields nobody can see.
-    if (Array.isArray(input.notDrawn)) {
-      const errors = input.notDrawn.filter(isString).map((error) => error.slice(0, 500)).slice(0, 20);
-      const resolveNotDrawn = waiting.get(pageKey(sessionId, callId));
-      if (!resolveNotDrawn) {
-        throw new OpenChamberControlError('This page is no longer waiting for an answer', 404);
-      }
-      resolveNotDrawn({ answered: false, reason: 'ui-not-drawn', errors });
-      return { answered: false };
-    }
-    // The user declined: the call ends without an answer they did not mean.
-    if (input.declined === true) {
-      const resolveDeclined = waiting.get(pageKey(sessionId, callId));
-      if (!resolveDeclined) {
-        throw new OpenChamberControlError('This page is no longer waiting for an answer', 404);
-      }
-      resolveDeclined({ answered: false, reason: 'declined' });
-      return { answered: false };
-    }
-    const summary = isString(input.summary) ? input.summary.trim() : '';
-    if (!summary) {
-      throw new OpenChamberControlError('summary is required: what the user chose, in a few words', 400);
-    }
-    if (summary.length > RENDER_PAGE_MAX_SUMMARY_LENGTH) {
-      throw new OpenChamberControlError(`summary is ${summary.length} characters; the limit is ${RENDER_PAGE_MAX_SUMMARY_LENGTH}`, 400);
-    }
-    const data = input.data === undefined ? null : input.data;
-    const dataLength = JSON.stringify(data).length;
-    if (dataLength > RENDER_PAGE_MAX_ANSWER_DATA_LENGTH) {
-      throw new OpenChamberControlError(`data is ${dataLength} characters as JSON; the limit is ${RENDER_PAGE_MAX_ANSWER_DATA_LENGTH}`, 413);
-    }
+  const answer = (input: PageAnswerInput = {}) => {
+    const { sessionId, callId, answer: given } = readPageAnswer(input);
     const resolve = waiting.get(pageKey(sessionId, callId));
     if (!resolve) {
       throw new OpenChamberControlError('This page is no longer waiting for an answer', 404);
     }
-    resolve({ answered: true, summary, data });
-    return { answered: true };
+    resolve(given);
+    return { answered: given.answered };
   };
 
-  /**
-   * The session's turn ended, so these pages wait for nobody. In one OpenCode
-   * no call outlives its turn; this finds a call a second OpenCode on the same
-   * database runs (see DOCUMENTATION.md). Its request stays open on purpose:
-   * ending it would wake that OpenCode's turn beside the one the user is in.
-   */
-  const release = (sessionId) => {
+  const release = (sessionId: string) => {
     for (const key of waiting.keys()) {
       if (!key.startsWith(pageKey(sessionId, ''))) continue;
       waiting.delete(key);
@@ -265,51 +259,81 @@ export const createPageAnswers = ({ onWaitChange = () => { } } = {}) => {
   return { wait, answer, release };
 };
 
-/**
- * `render.page`: the chat draws the page straight from the call's input, so
- * this checks that the input is a page the chat will draw and that the tool is
- * still on (a plugin generated before it was switched off must not keep
- * drawing). With `awaitAnswer` the call then waits for the user's answer,
- * unless `hasUnreadChat` finds a message the user sent before the page
- * appeared: OpenCode delivers that message only once this call returns, so
- * waiting would hold it back and let an answer on the page reach the agent
- * first. The plugin's prompt hook cannot catch it, since it fired before the
- * page existed.
- */
-export const createRenderPageAction = ({ isEnabled, pageAnswers, hasUnreadChat = async () => false }) => async (input, { sessionId, callId, directory, signal } = {}) => {
+const OPERATOR_CHILD_REFUSAL = 'Nobody answers pages in this session: the user does not interact with it, and your final answer goes to the agent that started it. Show the page without awaitAnswer or answerLater, and write your question in plain text in your answer';
+
+const isOperatorChild = async (readSession: NonNullable<RenderPageDependencies['readSession']>, sessionId: string) => {
+  try {
+    return isOperatorChildSession(await readSession(sessionId));
+  } catch {
+    return false;
+  }
+};
+
+export const createRenderPageAction = ({ isEnabled, pageAnswers, hasUnreadChat = async () => false, readSession = async () => null, laterPages = null, sharePages = null }: RenderPageDependencies) => async (input: ControlInput, { sessionId, callId, directory, signal }: RenderPageContext = {}) => {
   if (!await isEnabled()) {
     throw new OpenChamberControlError('The render tool is turned off in OhPiChamber settings', 403);
   }
-  // A page is an HTML document or a ui program in the UI block language; the
-  // chat draws the program with its own components (packages/ui
-  // components/chat/uiBlocks). The server cannot parse that language: a
-  // client that cannot draw it reports so through the answer route.
-  const html = isString(input.html) ? input.html : '';
-  const ui = isString(input.ui) ? input.ui : '';
+  if ((input.awaitAnswer === true || input.answerLater === true) && sessionId && await isOperatorChild(readSession, sessionId)) {
+    throw new OpenChamberControlError(OPERATOR_CHILD_REFUSAL, 403);
+  }
+  const shareRequested = input.share !== undefined && input.share !== null;
+  const sharing = shareRequested ? sharePages : null;
+  if (shareRequested) {
+    if (!sharing) throw new OpenChamberControlError('Sharing pages is not available on this server', 503);
+    if (!sharing.isAvailable()) {
+      throw new OpenChamberControlError('Sharing pages is not available in enterprise mode without a relay the policy allows.', 403, { code: 'enterprise_mode' });
+    }
+    if (input.awaitAnswer === true) {
+      throw new OpenChamberControlError('share and awaitAnswer do not go together: a shared page is answered by other people, later, as messages. Drop awaitAnswer', 400);
+    }
+    if (input.answerLater === true) {
+      throw new OpenChamberControlError('share and answerLater do not go together: a shared page is answered by other people, not in this chat. Drop answerLater', 400);
+    }
+  }
+  const html = isText(input.html) ? input.html : '';
+  const ui = isText(input.ui) ? input.ui : '';
   if (html.trim() && ui.trim()) {
     throw new OpenChamberControlError('Send html or ui, not both', 400);
   }
   if (!html.trim() && !ui.trim()) {
     throw new OpenChamberControlError('html or ui is required: one complete, self-contained HTML document, or one complete openui-lang program. Send it and title together in one call', 400);
   }
-  const [field, content] = ui.trim() ? ['ui', ui] : ['html', html];
+  const [field, content] = ui.trim() ? ['ui', ui] as const : ['html', html] as const;
   if (content.length > RENDER_PAGE_MAX_HTML_LENGTH) {
     throw new OpenChamberControlError(`${field} is ${content.length} characters; the limit is ${RENDER_PAGE_MAX_HTML_LENGTH}. Make the page smaller`, 400);
   }
-  const title = (isString(input.title) ? input.title.trim() : '')
+  const title = (isText(input.title) ? input.title.trim() : '')
     || (html ? renderPageTitleFromHtml(html) : '')
     || RENDER_PAGE_FALLBACK_TITLE;
   if (title.length > RENDER_PAGE_MAX_TITLE_LENGTH) {
     throw new OpenChamberControlError(`title is ${title.length} characters; the limit is ${RENDER_PAGE_MAX_TITLE_LENGTH}`, 400);
   }
   const hidden = html ? await describeHiddenImages(html, directory) : null;
-  const withHidden = (result, note) => (hidden
+  const withHidden = <Result>(result: Result, note: string) => (hidden
     ? { ...result, note: `${note} ${hidden.note}`, images: hidden.images }
     : { ...result, note });
+  if (sharing) {
+    const share = sharing.parseRequest(input.share);
+    const shared = await sharing.createGroup({ sessionId, callId, title, share });
+    const note = REMOTE_IMAGE_RE.test(html) ? `${SHARED_NOTE} ${SHARED_REMOTE_IMAGES_NOTE}` : SHARED_NOTE;
+    return withHidden({ title, shared: { recipients: shared.recipients, expiresAt: new Date(shared.expiresAt).toISOString() } }, note);
+  }
+  if (input.answerLater === true) {
+    if (input.awaitAnswer === true) {
+      throw new OpenChamberControlError('Send awaitAnswer or answerLater, not both: awaitAnswer waits for the answer, answerLater returns at once and the answer comes later as a message', 400);
+    }
+    if (!sessionId || !callId) {
+      throw new OpenChamberControlError('This connection cannot keep a page open for a later answer; ask in text', 400);
+    }
+    if (!laterPages) {
+      throw new OpenChamberControlError('This server cannot keep a page open for a later answer; ask in text', 503);
+    }
+    await laterPages.open({ sessionId, callId, title, ...renderPageQuestion(field, content), directory });
+    return withHidden({ shown: true, title, answerLater: true }, LATER_NOTE);
+  }
   if (input.awaitAnswer !== true) {
     return withHidden({ shown: true, title }, SHOWN_NOTE);
   }
-  // A plugin generated before pages could wait sends no call id.
   if (!sessionId || !callId) {
     throw new OpenChamberControlError('This connection cannot wait for an answer on a page; show the page without awaitAnswer and ask in text', 400);
   }

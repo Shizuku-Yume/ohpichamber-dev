@@ -70,6 +70,8 @@ export const HOST_TOOL_DESCRIPTIONS = {
   notify: 'Invoke notify.send for an authorized OhPiChamber notification.',
   openchamber_render: 'Show a page in the chat: one complete HTML document or one openui-lang program, with a title, in the same call. '
     + 'With awaitAnswer the page waits for the user\'s answer and returns their summary and data; without it the page is only shown. '
+    + 'With answerLater, for a decision the rest of the task does not wait on, the call returns at once and the page stays open, across restarts, until the user answers or declines; the answer arrives later as a message in this session. '
+    + 'With share ({"recipients":["Name"]}) the page is for people outside this chat: the user sends each link and PIN from the card, you never see them, and each answer arrives later as a message; it goes with neither awaitAnswer nor answerLater. '
     + 'The chat draws the page inline, so do not restate what it already says.\n\n' + UI_BLOCKS_GUIDANCE,
   openchamber_workflow: 'Propose, check, run, inspect, stop or resume multi-agent workflows in the project. Actions: workflow.run, workflow.check, workflow.status, workflow.result, workflow.stop, workflow.resume, workflow.save, workflow.list.',
 } satisfies Record<HostActionRequest['toolName'], string>;
