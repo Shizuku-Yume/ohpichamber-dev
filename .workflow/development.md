@@ -4,6 +4,16 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+PR #68 integration merges `origin/devin/upstream-sync-1795118808` at `a7aee9947`
+without replacing either feature set. The only conflict was this progress
+record; both the secret/Guest evidence and upstream test-repair entry remain.
+Contract/service/SDK builds pass on the combined tree. Nine focused web suites
+pass 169 tests; supervisor/tool/interaction suites pass 36 and both actual SDK
+secret approval cases pass. Nine isolated UI suites pass 100 tests, including
+the incoming mobile rename, PR target and attachment repairs. Server lint and
+server/service/UI type checks pass. Evidence: `/home/ubuntu/secret-merge-checks/`.
+These are focused tests, not a full-suite or visual verification claim.
+
 PR #68 review: secret-run card parsing now accepts the native `{ action, input }`
 envelope preserved by worker projection and the canonical tool join, alongside
 upstream forms. Canonical-join regressions include malformed native arguments.
@@ -65,6 +75,24 @@ lint exits 0 with 97 hook-dependency warnings in unchanged files; no changed-fil
 diagnostics. Full UI type-check passes 4,234 files across two projects. Evidence:
 `/home/ubuntu/secret-step-c-checks/`. No visual verification or real-provider run
 is claimed.
+
+2026-11-21 upstream-sync test repair: mobile Changes now keeps rename paths in
+comparison rows, shows the destination basename in detail, forwards the previous
+path for working-tree reads and renders unchanged-rename summaries. Retired
+VS Code PR-opening and PDF-webview assertions were removed or replaced with
+retained behavior; the settings registry fixture now includes the supported
+terminal-tool toggle. The isolated CI tests job passes SDK (36 files), UI (1,407
+files), agent-contract (274 tests), Electron (80 files) and Web (615 files,
+9 skipped; 9,768 tests, 127 skipped). Scripts remain 35/38 because of the known
+PIDFD environment limitation. Agent Service remains red at the native RPC
+three-turn goal test (682 passed, one failed, 12 skipped); its cause is unresolved
+and its original assertion is unchanged. No message-queue UI failure reproduced.
+The Git smudge-filter boundary test failed intermittently on an execution marker,
+then passed alone, with all 205 network-operation tests and in the full Web run;
+no Git security assertion or implementation was changed. `bun run build` exits 0.
+Runs use fresh isolated HOME, data, desktop-data and TMPDIR directories. UI is
+DOM-tested but visually unverified. Secret tooling and Guest service wiring are
+outside this test-repair branch.
 
 2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
 branch `67aedc75e` (including UI state/infra, extension waits and shared/later pages). Earlier stages
