@@ -121,17 +121,9 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
     return { visibleText, instructionsText, payloadText };
   }, [conflictDetails, directory, operation]);
 
-<<<<<<< HEAD
   // The context, null without conflict details, or undefined when the magic
   // prompts could not be read: that failure is shown here and the dialog stays.
   const prepareConflictContext = async (isCurrent: () => boolean) => {
-||||||| bc50ba56aa
-  // The context, null without conflict details, or undefined when the magic
-  // prompts could not be read: that failure is shown here and the dialog stays.
-  const prepareConflictContext = async () => {
-=======
-  const prepareConflictContext = async () => {
->>>>>>> upstream/main
     try {
       return await buildConflictContext();
     } catch (error) {

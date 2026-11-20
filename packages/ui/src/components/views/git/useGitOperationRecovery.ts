@@ -72,23 +72,10 @@ export function useGitOperationRecovery(
     } catch {
       if (currentScope.current === key) setScopeFailed(true);
     }
-<<<<<<< HEAD
   }, [directory, isGitRepo, key, kind, owner, runtime, sourceControl]);
   // A binding read fails while Git refuses the folder (`safe.directory`). Once
   // the folder reads as a repository again, the scope is read again, so the
   // "couldn't read this repository" blocker does not outlive the cause.
-||||||| bc50ba56aa
-  }, [directory, key, kind, owner, runtime, sourceControl]);
-  React.useEffect(() => { void resolveScope(); }, [resolveScope]);
-  // A binding read fails while Git refuses the folder (`safe.directory`). Once
-  // the folder reads as a repository again, the scope is read again, so the
-  // "couldn't read this repository" blocker does not outlive the cause.
-  const isGitRepo = useIsGitRepo(kind === 'clone' ? null : directory ?? null);
-=======
-  }, [directory, key, kind, owner, runtime, sourceControl]);
-  React.useEffect(() => { void resolveScope(); }, [resolveScope]);
-  const isGitRepo = useIsGitRepo(kind === 'clone' ? null : directory ?? null);
->>>>>>> upstream/main
   React.useEffect(() => {
     if (isGitRepo !== true && kind !== 'clone') return;
     if (scope?.key === key && !scopeFailed) return;

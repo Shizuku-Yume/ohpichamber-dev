@@ -191,14 +191,7 @@ export const IntegrateCommitsSection: React.FC<{
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
 
   const buildConflictContext = React.useCallback(async (payload: { state: IntegrateInProgress; details: IntegrateConflictDetails }) => {
-<<<<<<< HEAD
     const prompts = await loadMagicPrompts(promptDirectory ?? payload.state.repoRoot);
-||||||| bc50ba56aa
-    // The temporary worktree belongs to the repository's project, so its prompts are the project's.
-    const prompts = await loadMagicPrompts(payload.state.repoRoot);
-=======
-    const prompts = await loadMagicPrompts(payload.state.repoRoot);
->>>>>>> upstream/main
     const visibleText = prompts.render('git.integrate.cherrypick.resolve.visible', {
       current_commit: payload.state.currentCommit,
       target_branch: payload.state.targetBranch,
@@ -242,15 +235,8 @@ export const IntegrateCommitsSection: React.FC<{
     try {
       context = await buildConflictContext(payload);
     } catch (error) {
-<<<<<<< HEAD
       // The magic prompts could not be read; nothing is opened or filled in.
       if (isCurrent()) toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
-||||||| bc50ba56aa
-      // The magic prompts could not be read; nothing is opened or filled in.
-      toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
-=======
-      toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
->>>>>>> upstream/main
       return;
     }
     if (!isCurrent()) return;

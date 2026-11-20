@@ -7,7 +7,6 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-sw
 
 import { isSameLocalDay, rangeStart, type UsageRange } from './usageStatsModel';
 
-<<<<<<< HEAD
 /**
  * In-memory cache of Stats page reports for the app session, one entry per
  * (runtime, range, project). Reopening the page or going back to a filter
@@ -23,27 +22,6 @@ import { isSameLocalDay, rangeStart, type UsageRange } from './usageStatsModel';
  */
 
 export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null; providerId?: string | null };
-||||||| bc50ba56aa
-/**
- * In-memory cache of Stats page reports for the app session, one entry per
- * (runtime, range, project). Reopening the page or going back to a filter
- * shows the cached report without refetching; only a key with nothing cached
- * loads on its own, and the refresh button forces a new read. A runtime
- * switch drops every entry and ignores answers still in flight.
- *
- * `7d`/`30d` are relative to now: an entry reports the range it was fetched
- * for (`stats.range`) and when (`fetchedAt`), which the page shows.
- *
- * `1d` is the one range that expires: its name says today, so a report read on
- * an earlier local day is dropped and read again, whether or not it was forced.
- */
-
-export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null };
-
-=======
-export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null };
-
->>>>>>> upstream/main
 export type UsageStatsEntry = {
   stats: UsageStats | null;
   fetchedAt: number | null;
@@ -53,19 +31,6 @@ export type UsageStatsEntry = {
 
 export type UsageStatsFetcher = (request: UsageStatsRequest, signal: AbortSignal) => Promise<UsageStats>;
 
-<<<<<<< HEAD
-/**
- * Native tool calls for a loaded report, fetched only on request.
- * `range` is the loaded report's window, so the numbers match the page.
- */
-||||||| bc50ba56aa
-/**
- * Tool calls for a loaded report, fetched only on request: counting them makes
- * OpenCode read every tool call in the range. `range` is the loaded report's
- * window, so the tool numbers match the rest of the page.
- */
-=======
->>>>>>> upstream/main
 export type UsageToolsEntry = {
   tools: UsageToolsResponse | null;
   loading: boolean;
@@ -82,7 +47,6 @@ export const usageStatsKey = (runtimeKey: string, request: UsageStatsRequest): s
   `${runtimeKey}::${request.range}::${request.projectDirectory ?? '__all__'}::${request.providerId ?? '__all__'}`;
 type UsageStatsStore = {
   entries: Record<string, UsageStatsEntry>;
-<<<<<<< HEAD
   selectedProvider: string | null;
   setSelectedProvider: (provider: string | null) => void;
   /**
@@ -90,14 +54,6 @@ type UsageStatsStore = {
    * this only reads a key that has no report, no error and no read running,
    * or whose `1d` report is from an earlier local day.
    */
-||||||| bc50ba56aa
-  /**
-   * Loads a report for the request under the current runtime. Without `force`
-   * this only reads a key that has no report, no error and no read running,
-   * or whose `1d` report is from an earlier local day.
-   */
-=======
->>>>>>> upstream/main
   load: (request: UsageStatsRequest, options?: { force?: boolean }) => Promise<void>;
   toolEntries: Record<string, UsageToolsEntry>;
   toolsRequested: boolean;
@@ -107,19 +63,8 @@ type UsageStatsStore = {
 
 const viewerTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-<<<<<<< HEAD
 const fetchFromCanonical: UsageStatsFetcher = async ({ range, projectDirectory, providerId }, signal) => {
   const workspace = projectDirectory ? await canonicalClient.resolveWorkspace(projectDirectory, { signal }) : undefined;
-||||||| bc50ba56aa
-const fetchFromOpencode: UsageStatsFetcher = async ({ range, projectDirectory }, signal) => {
-  // The `project` filter takes OpenCode's project id, which only OpenCode
-  // knows: ask it for the id of the project's directory. A failed lookup is
-  // an error for this choice, never an unfiltered or empty report.
-  const projectID = projectDirectory ? await resolveUsageProjectID(projectDirectory) : undefined;
-=======
-const fetchFromOpencode: UsageStatsFetcher = async ({ range, projectDirectory }, signal) => {
-  const projectID = projectDirectory ? await resolveUsageProjectID(projectDirectory) : undefined;
->>>>>>> upstream/main
   signal.throwIfAborted();
   const to = Date.now();
   return canonicalClient.getUsageStats({
@@ -190,19 +135,10 @@ export function createUsageStatsStore(
         }
         try {
           const stats = await fetcher(request, signal);
-<<<<<<< HEAD
           if (signal.aborted || runtimeKey() !== runtime) return;
           // Written under the key the read started for: switching filters
           // while it runs never lets it land on another filter.
-||||||| bc50ba56aa
-          if (signal.aborted) return;
-          // Written under the key the read started for: switching filters
-          // while it runs never lets it land on another filter.
-=======
-          if (signal.aborted) return;
->>>>>>> upstream/main
           patch(key, { stats, fetchedAt: startedAt, loading: false, error: null });
-<<<<<<< HEAD
           // A refreshed report moves the window: any tool read still in flight
           // answered for the old one and must not land, and the tools shown
           // follow the report that is now on screen.
@@ -211,22 +147,9 @@ export function createUsageStatsStore(
             if (get().toolEntries[key]) patchTools(key, { loading: false });
             void get().loadTools(request, { force: true });
           }
-||||||| bc50ba56aa
-          // A refreshed report moves the window, so tools already shown follow it.
-          if (get().toolsRequested) void get().loadTools(request, { force: Boolean(get().toolEntries[key]?.tools) });
-=======
-          if (get().toolsRequested) void get().loadTools(request, { force: Boolean(get().toolEntries[key]?.tools) });
->>>>>>> upstream/main
         } catch (error) {
-<<<<<<< HEAD
           if (signal.aborted || runtimeKey() !== runtime) return;
           // A failed read keeps the last report; it never becomes zeros.
-||||||| bc50ba56aa
-          if (signal.aborted) return;
-          // A failed read keeps the last report; it never becomes zeros.
-=======
-          if (signal.aborted) return;
->>>>>>> upstream/main
           patch(key, { loading: false, error: error instanceof Error ? error.message : String(error) });
         }
       },

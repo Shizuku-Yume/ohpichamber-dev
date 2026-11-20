@@ -48,7 +48,6 @@ export const WalkthroughBlocker = ({
       const value = modelRefKey(providerId, modelId);
       setSaving(true);
       try {
-<<<<<<< HEAD
         const workspaceId = getDirectoryState()?.workspace?.workspaceId;
         if (workspaceId) {
           const state = await canonicalClient.getOmpSettings(workspaceId);
@@ -58,14 +57,6 @@ export const WalkthroughBlocker = ({
             changes: [{ id: 'modelRoles', value: { ...currentRoles, smol: value } }],
           });
         }
-||||||| bc50ba56aa
-        // Scoped to this feature: fixing the walkthrough must not quietly
-        // change the model used for commit messages and recaps.
-        // A level saved for the previous model does not carry over.
-        await updateDesktopSettings({ walkthroughModelOverride: value, walkthroughModelVariant: '' });
-=======
-        await updateDesktopSettings({ walkthroughModelOverride: value, walkthroughModelVariant: '' });
->>>>>>> upstream/main
         onRetry();
       } catch (error) {
         console.warn('Failed to save small model role:', error);

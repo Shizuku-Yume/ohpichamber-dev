@@ -132,18 +132,6 @@ export const useDiffFindSurface = ({ find, visible, rootRef, reveal }: UseDiffFi
     setFocusNonce((nonce) => nonce + 1);
   });
 
-<<<<<<< HEAD
-  // Escape while the bar is open closes it from anywhere in the surface, not
-  // only from its input. It is claimed in the capture phase so it runs before
-  // bubble-phase Escape handlers and stops propagation once handled.
-||||||| bc50ba56aa
-  // Escape while the bar is open closes it from anywhere in the surface, not
-  // only from its input. It is claimed in the capture phase: the zone frame
-  // closes the panel on Escape from a React capture handler on the root
-  // container (zoneEscape.ts), which stops native propagation, so a bubble
-  // listener here would never see the key.
-=======
->>>>>>> upstream/main
   React.useEffect(() => {
     if (!visible || !isOpen) return;
     const onKeyDownCapture = (event: KeyboardEvent) => {

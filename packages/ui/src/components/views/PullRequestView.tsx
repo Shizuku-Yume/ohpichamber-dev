@@ -33,16 +33,9 @@ export const PullRequestView: React.FC = () => {
   const status = useGitStatus(gitDirectory ?? null);
   const branches = useGitBranches(gitDirectory ?? null);
   const isGitRepo = useIsGitRepo(gitDirectory ?? null);
-<<<<<<< HEAD
   // The binding follows the repository actually in view, and is asked only once
   // that directory proved to be a repository: the route answers 422 otherwise.
   const binding = useRepositoryBinding(gitDirectory, sourceControl, isGitRepo === true);
-||||||| bc50ba56aa
-  // The binding follows the repository actually in view.
-  const binding = useRepositoryBinding(gitDirectory, sourceControl);
-=======
-  const binding = useRepositoryBinding(gitDirectory, sourceControl);
->>>>>>> upstream/main
   const { ensureAll, ensureNestedRepos, selectNestedRepo } = useGitStore(useShallow((state) => ({
     ensureAll: state.ensureAll,
     ensureNestedRepos: state.ensureNestedRepos,

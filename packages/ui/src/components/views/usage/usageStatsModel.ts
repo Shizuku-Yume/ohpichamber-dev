@@ -29,20 +29,6 @@ export type ActivityBar = {
 
 export type ActivitySeries = { unit: 'day' | 'week'; bars: ActivityBar[]; max: number };
 
-<<<<<<< HEAD
-/**
- * Every calendar day of the report range, active or not, so gaps read as
- * gaps. The worker lists active days only. Local dates are used because the
- * request sends the viewer's own time zone.
- */
-||||||| bc50ba56aa
-/**
- * Every calendar day of the report range, active or not, so gaps read as
- * gaps. OpenCode lists active days only. Local dates are used because the
- * request sends the viewer's own time zone.
- */
-=======
->>>>>>> upstream/main
 export function buildActivitySeries(stats: Pick<UsageStats, 'range' | 'activity'>): ActivitySeries {
   const stepsByDay = new Map(stats.activity.map((day) => [day.date, day.steps]));
   const from = new Date(stats.range.from);
@@ -91,15 +77,6 @@ export const toolSuccessRate = (totals: { succeeded: number; failed: number }): 
 export const costPerMillionTokens = (cost: number, tokens: number): number | null =>
   (tokens > 0 ? (cost / tokens) * 1_000_000 : null);
 
-<<<<<<< HEAD
-/** Share of reasoning inside the model's output. OMP's `output` already
- * includes reasoning, so reasoning is a subset of it; null when the model
- * produced no output or reasoning is unknown. */
-||||||| bc50ba56aa
-/** Share of reasoning inside everything the model produced; null when it
- * produced nothing. */
-=======
->>>>>>> upstream/main
 export const reasoningShare = (tokens: Pick<UsageTokens, 'output' | 'reasoning'>): number | null => {
   if (tokens.reasoning === null) return null;
   return tokens.output > 0 ? tokens.reasoning / tokens.output : null;
@@ -109,25 +86,9 @@ export type TokenSegmentKey = 'input' | 'output' | 'cacheRead' | 'cacheWrite';
 
 interface TokenSegment {
   key: TokenSegmentKey
-<<<<<<< HEAD
-  /** Output already includes reasoning, so it is never added again. */
-||||||| bc50ba56aa
-  /** Output merges reasoning: the model's own production. */
-=======
->>>>>>> upstream/main
   value: number
 }
 
-<<<<<<< HEAD
-/** Token totals as stacked-bar segments in fixed order: fresh input, model
- * output (reasoning included), cache reads, cache writes. Zero segments stay in
- * the list so legend order is stable; renderers skip them. */
-||||||| bc50ba56aa
-/** Token totals as stacked-bar segments in fixed order: fresh input, model
- * output plus reasoning, cache reads, cache writes. Zero segments stay in the
- * list so legend order is stable; renderers skip them. */
-=======
->>>>>>> upstream/main
 export const tokenSegments = (tokens: UsageTokens): TokenSegment[] => [
   { key: 'input', value: tokens.input },
   { key: 'output', value: tokens.output },

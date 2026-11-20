@@ -33,24 +33,11 @@ export const sqliteTables = (database: Database): string[] => {
   return result[0]?.values.map((row) => String(row[0])) ?? [];
 };
 
-<<<<<<< HEAD
 /**
  * The last result of a query, its rows past the cap only counted: a table of
  * millions never lands in memory. The database is a copy, so a query changes
  * nothing on disk.
  */
-||||||| bc50ba56aa
-export const quoteSqlName = (name: string): string => `"${name.replace(/"/g, '""')}"`;
-
-/**
- * The last result of a query, its rows past the cap only counted: a table of
- * millions never lands in memory. The database is a copy, so a query changes
- * nothing on disk.
- */
-=======
-export const quoteSqlName = (name: string): string => `"${name.replace(/"/g, '""')}"`;
-
->>>>>>> upstream/main
 export const queryCapped = (database: Database, query: string, rowCap: number): DataTable => {
   let result: DataTable = { columns: [], rows: [], totalRows: 0 };
   for (const statement of database.iterateStatements(query)) {

@@ -79,15 +79,8 @@ const WorkbookView: React.FC<{
   readBytes: () => Promise<Uint8Array<ArrayBuffer>>;
   onSave?: (bytes: Uint8Array<ArrayBuffer>) => Promise<boolean>;
   onChangedOnDisk: () => void;
-<<<<<<< HEAD
   /** Stays with the owner, who closes the book only once this has drained. */
   queue: WorkQueue;
-||||||| bc50ba56aa
-  /** Stays with the owner, who closes the book only once this has drained. */
-  queue: React.RefObject<Promise<void>>;
-=======
-  queue: React.RefObject<Promise<void>>;
->>>>>>> upstream/main
 }> = ({ path, book, bytes, sizeBytes, readBytes, onSave, onChangedOnDisk, queue }) => {
   const { t } = useI18n();
   const { sheets } = book.opened;
@@ -151,15 +144,8 @@ const WorkbookView: React.FC<{
   };
 
   const enqueue = (task: () => Promise<void>) => {
-<<<<<<< HEAD
     queue.enqueue(task, () => {
       // The session is back on the last good file, so the view must follow it.
-||||||| bc50ba56aa
-    queue.current = queue.current.then(task).catch(() => {
-      // The session is back on the last good file, so the view must follow it.
-=======
-    queue.current = queue.current.then(task).catch(() => {
->>>>>>> upstream/main
       setSaveStatus('failed');
       reloadView();
     });
@@ -395,15 +381,8 @@ export const OfficeArtifact: React.FC<{
     })();
     return () => {
       controller.abort();
-<<<<<<< HEAD
       // An edit may still be on its way to the file.
       work.afterIdle(() => book?.close());
-||||||| bc50ba56aa
-      // An edit may still be on its way to the file.
-      void work.current.finally(() => book?.close());
-=======
-      void work.current.finally(() => book?.close());
->>>>>>> upstream/main
     };
   }, [name, path, loadBytes, readPreview, attempt, work]);
 

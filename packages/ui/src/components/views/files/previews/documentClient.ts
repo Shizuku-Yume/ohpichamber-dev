@@ -68,15 +68,8 @@ let transport: Promise<Transport> | null = null;
 
 export const documentTransport = (): Promise<Transport> => {
   transport ??= (async () => {
-<<<<<<< HEAD
     // Bun's test runtime has no bundler for the worker, and a webview cannot load it from its origin.
     if ('Bun' in globalThis || !('Worker' in globalThis)) return localTransport;
-||||||| bc50ba56aa
-    // Bun's test runtime has no bundler for the worker, and a webview cannot load it from its origin.
-    if ('Bun' in globalThis || !('Worker' in globalThis) || isVSCodeRuntime(null)) return localTransport;
-=======
-    if ('Bun' in globalThis || !('Worker' in globalThis) || isVSCodeRuntime(null)) return localTransport;
->>>>>>> upstream/main
     try {
       return await startWorker(() => { transport = null; }) ?? localTransport;
     } catch {
@@ -163,28 +156,3 @@ export const openWorkbook = async (path: string, name: string, bytes: Uint8Array
   const opened = await call('workbook.open', { book: id, path, name, bytes });
   return opened ? new WorkbookBook(call, id, opened) : null;
 };
-<<<<<<< HEAD
-||||||| bc50ba56aa
-
-/** Rows that arrive in pieces, so reading them never stops the app. */
-export const collectRows = () => {
-  const rows: string[][] = [];
-  return {
-    rows,
-    add: (chunk: { rows: string[][] }) => {
-      for (const row of chunk.rows) rows.push(row);
-    },
-  };
-};
-=======
-
-export const collectRows = () => {
-  const rows: string[][] = [];
-  return {
-    rows,
-    add: (chunk: { rows: string[][] }) => {
-      for (const row of chunk.rows) rows.push(row);
-    },
-  };
-};
->>>>>>> upstream/main

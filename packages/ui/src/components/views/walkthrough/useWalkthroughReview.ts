@@ -18,7 +18,6 @@ interface WalkthroughReviewOptions {
   enabled?: boolean;
 }
 
-<<<<<<< HEAD
 /**
  * One walkthrough of one target: reading and generating it, the model and the
  * language it is asked in, what blocks it, and where the reader is in it. The
@@ -26,17 +25,6 @@ interface WalkthroughReviewOptions {
  * through this hook and differ only in how they lay it out.
  */
 export const useWalkthroughReview = ({ directory, target, visible, needsSourceSelection, revision, enabled = true }: WalkthroughReviewOptions) => {
-||||||| bc50ba56aa
-/**
- * One walkthrough of one target: reading and generating it, the model and the
- * language it is asked in, what blocks it, and where the reader is in it. The
- * desktop panel and the phone's Changes screen show the same walkthrough
- * through this hook and differ only in how they lay it out.
- */
-export const useWalkthroughReview = ({ directory, target, visible, needsSourceSelection, revision }: WalkthroughReviewOptions) => {
-=======
-export const useWalkthroughReview = ({ directory, target, visible, needsSourceSelection, revision }: WalkthroughReviewOptions) => {
->>>>>>> upstream/main
   const { locale, locales } = useI18n();
   const runtimeKey = useGitStore((state) => state.runtimeKey);
   const entry: WalkthroughEntry = useWalkthroughStore((state) => state.getEntry(directory, target));
