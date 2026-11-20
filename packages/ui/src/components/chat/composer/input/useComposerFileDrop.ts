@@ -12,8 +12,7 @@ import { toast } from '@/components/ui';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { confirmMention } from '../../composer/language/mentions';
 import { appendInlineText } from '../../composer/text';
-import { collectDroppedFileUris, collectDroppedFiles, hasDraggedFiles } from '../../composer/attachments/dataTransfer';
-import { normalizeDroppedPath } from '../../composer/attachments/filePaths';
+import { collectDroppedFiles, hasDraggedFiles } from '../../composer/attachments/dataTransfer';
 
 type Dependencies = {
     mentionPaths: Pick<ReturnType<typeof useComposerMentionPaths>, 'toMentionPath'>;
@@ -48,29 +47,6 @@ export function useComposerFileDrop({
     React.useEffect(() => {
         canAcceptDropRef.current = Boolean(currentSessionId || newSessionDraftOpen);
     }, [currentSessionId, newSessionDraftOpen, canAcceptDropRef]);
-
-    const addVSCodeDroppedUrisAsMentions = React.useCallback((uris: string[]) => {
-        if (uris.length === 0) return;
-
-        const paths = uris
-            .map((entry) => normalizeDroppedPath(entry))
-            .map((entry) => toMentionPath(entry))
-            .map((entry) => entry.trim().replace(/^\.\//, ''))
-            .filter((entry) => entry.length > 0);
-
-        for (const p of paths) {
-            confirmMention(p, confirmedMentionsRef.current);
-        }
-
-        const mentions = Array.from(new Set(paths.map((entry) => `@${entry}`)));
-
-        if (mentions.length === 0) {
-            return;
-        }
-
-        setPendingInputText(mentions.join(' '), 'append-inline', mailboxTarget);
-        toast.success(t('chat.chatInput.toast.addedFileMentions', { count: mentions.length }));
-    }, [mailboxTarget, setPendingInputText, t, toMentionPath, confirmedMentionsRef]);
 
     const handleDragEnter = (e: React.DragEvent) => {
         if (!hasDraggedFiles(e.dataTransfer)) {
@@ -156,20 +132,6 @@ export function useComposerFileDrop({
         }
 
         const files = collectDroppedFiles(e.dataTransfer);
-
-        if (files.length === 0 && isVSCodeRuntime()) {
-            const droppedUris = collectDroppedFileUris(e.dataTransfer);
-            if (droppedUris.length > 0) {
-                pendingDroppedAbsolutePathsRef.current = droppedUris
-                    .map((entry) => normalizeDroppedPath(entry))
-                    .map((entry) => entry.trim())
-                    .filter((entry) => entry.length > 0);
-                addVSCodeDroppedUrisAsMentions(droppedUris);
-            } else {
-                clearDropTextSuppression();
-            }
-            return;
-        }
 
         if (files.length > 0) {
             await attachFilesWithCitation(files);
