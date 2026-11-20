@@ -14,7 +14,7 @@ export function writeServerCheckProjects(root, files, legacyFiles = legacy.files
   fs.mkdirSync(directory, { recursive: true });
   const legacyProject = path.join(directory, 'legacy.json');
   const strictProject = path.join(directory, 'strict.json');
-  const declarations = ['server/**/*.d.ts', 'bin/**/*.d.ts'].map((pattern) => path.join(root, pattern));
+  const declarations = ['server/**/*.d.ts', 'bin/**/*.d.ts'].map((pattern) => path.join(root, pattern).split(path.sep).join('/'));
   fs.writeFileSync(legacyProject, JSON.stringify({
     extends: path.join(root, 'tsconfig.server-check.json'),
     compilerOptions: {

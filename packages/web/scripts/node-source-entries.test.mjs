@@ -5,6 +5,7 @@ import { spawnSync, fork } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
+import { linkFixtureNodeModules } from './fixture-node-modules.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const entries = [
@@ -42,8 +43,8 @@ beforeAll(() => {
   for (const relative of ['package.json', 'packages/web/package.json']) {
     fs.copyFileSync(path.join(repo, relative), path.join(root, relative));
   }
-  fs.symlinkSync(path.join(repo, 'node_modules'), path.join(root, 'node_modules'), 'junction');
-  fs.symlinkSync(path.join(repo, 'packages/web/node_modules'), path.join(root, 'packages/web/node_modules'), 'junction');
+  linkFixtureNodeModules(path.join(repo, 'node_modules'), path.join(root, 'node_modules'));
+  linkFixtureNodeModules(path.join(repo, 'packages/web/node_modules'), path.join(root, 'packages/web/node_modules'));
   const sentinel = path.join(root, 'packages/web/server/node-entry-sentinel.ts');
   fs.writeFileSync(sentinel, 'const loaded: boolean = true; if (loaded) process.stderr.write("typescript-entry-loaded\\n");');
   for (const dependency of new Set([...entries.map(([, dependency]) => dependency), ...preloadedEntries, ...fixtures])) {

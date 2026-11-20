@@ -7,7 +7,7 @@ import { expect, test } from 'vitest';
 
 test('Node source consumers resolve converted server modules through unchanged package imports', () => {
   const result = spawnSync(process.execPath, [
-    '--import', fileURLToPath(new URL('./register-server-sources.mjs', import.meta.url)),
+    '--import', new URL('./register-server-sources.mjs', import.meta.url).href,
     '--conditions=openchamber-source', '--input-type=module', '-e', `
       const { collectSshBufferDiagnostics } = await import('ohpichamber/server/lib/diagnostics/local-files.js');
       console.log(JSON.stringify(collectSshBufferDiagnostics({
@@ -28,7 +28,7 @@ test('the source resolver leaves unrelated missing imports unchanged', () => {
   try {
     fs.writeFileSync(path.join(root, 'outside.ts'), 'export const outside = true;');
     const result = spawnSync(process.execPath, [
-      '--import', fileURLToPath(new URL('./register-server-sources.mjs', import.meta.url)),
+      '--import', new URL('./register-server-sources.mjs', import.meta.url).href,
       '--input-type=module', '-e', "await import('./outside.js');",
     ], { cwd: root, encoding: 'utf8' });
     expect(result.status).not.toBe(0);
