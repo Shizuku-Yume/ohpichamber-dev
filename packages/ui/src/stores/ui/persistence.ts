@@ -9,8 +9,9 @@ import {
   DEFAULT_EDITOR_FONT_SIZE,
   DEFAULT_CONTEXT_EDITOR_TREE_WIDTH,
 } from './preferences';
-import { withoutForeignComparisons, sanitizeContextPanelByDirectory } from './contextPanelState';
+import { withoutForeignComparisons, sanitizeContextPanelByDirectory, sanitizeContextZoneSizes } from './contextPanelState';
 import type { LegacyZoneSizes, UIStore } from './types';
+import type { ContextZonePlacement } from '@/lib/workspace/zones';
 
 export const uiStorePersistOptions = {
   name: 'ui-store',
@@ -260,6 +261,25 @@ export const uiStorePersistOptions = {
 
     return state;
   },
+  merge: (persistedState, currentState) => {
+    const persisted = persistedState && typeof persistedState === 'object'
+      ? persistedState as Record<string, unknown>
+      : {};
+    const contextRailOrder = Array.isArray(persisted.contextRailOrder)
+      ? persisted.contextRailOrder.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+      : currentState.contextRailOrder;
+    return {
+      ...currentState,
+      ...persisted,
+      contextPanelByDirectory: sanitizeContextPanelByDirectory(persisted.contextPanelByDirectory),
+      contextSurfaceZones: zonePlacementSchema.parse(persisted.contextSurfaceZones) as ContextZonePlacement,
+      contextZoneSizes: sanitizeContextZoneSizes(persisted.contextZoneSizes),
+      contextZoneExpandedChatSizes: sanitizeContextZoneSizes(persisted.contextZoneExpandedChatSizes),
+      contextRailOrder,
+      fileTreeSide: persisted.fileTreeSide === 'left' ? 'left' : 'right',
+      sidebarFoldedForExpandedZone: persisted.sidebarFoldedForExpandedZone === true,
+    } as UIStore;
+  },
   partialize: (state) => ({
     theme: state.theme,
     isSidebarOpen: state.isSidebarOpen,
@@ -380,7 +400,6 @@ export const uiStorePersistOptions = {
     summaryThreshold: state.summaryThreshold,
     summaryLength: state.summaryLength,
     maxLastMessageLength: state.maxLastMessageLength,
-    showOpenCodeUpdateNotifications: state.showOpenCodeUpdateNotifications,
     agentControlToolEnabled: state.agentControlToolEnabled,
     agentScheduleToolEnabled: state.agentScheduleToolEnabled,
     agentWebToolEnabled: state.agentWebToolEnabled,
@@ -432,5 +451,7 @@ export const uiStorePersistOptions = {
     shortcutOverrides: state.shortcutOverrides,
     fileEditorKeymap: state.fileEditorKeymap,
     fileEditorVimMappings: state.fileEditorVimMappings,
-  })
+    defaultSessionMode: state.defaultSessionMode,
+    suggestionGenerator: state.suggestionGenerator,
+  }),
 } satisfies PersistOptions<UIStore, unknown>;

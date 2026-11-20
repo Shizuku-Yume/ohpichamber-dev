@@ -1,6 +1,5 @@
 import { directoryMayHaveActiveProjectAction, useTerminalStore } from '@/stores/useTerminalStore';
 import { useFilesViewTabsStore } from '../useFilesViewTabsStore';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { noteBrowserTabOpenedWithAddress, requestBrowserTabLoad } from '@/lib/browser/devServerWait';
 import { getZoneView, resolveZoneActiveTabId, withZoneView, zoneOfMode } from '@/lib/workspace/zones';
 import type { ContextPanelTab, ContextPanelDirectoryState, UIStore, UIStoreSlice } from './types';
@@ -72,12 +71,13 @@ export const createContextTabActions: UIStoreSlice<
   | 'closeContextFile'
   | 'closeContextPanelTabs'
 > = (set, get) => ({
-  openContextSurface: (directory, mode) => {
+  // Activates the most recent tab of the requested mode, or opens one.
+// Rail presses also toggle an already visible surface closed.
+  openContextSurface: (directory, mode, intent = 'toggle') => {
     const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
     if (!normalizedDirectory) {
       return;
     }
-
     const state = get();
     const placement = state.contextSurfaceZones;
     const panelState = state.contextPanelByDirectory[normalizedDirectory];
@@ -85,10 +85,10 @@ export const createContextTabActions: UIStoreSlice<
     const zone = zoneOfMode(placement, mode);
     const zoneView = panelState ? getZoneView(panelState, zone) : null;
     const activeTabId = resolveZoneActiveTabId(tabs, placement, zone, zoneView?.activeTabId ?? null);
-    const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+    const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
     const clearTerminalTarget = () => {
       if (mode === 'terminal') {
-        const terminalTab = tabs.find((tab) => tab.mode === 'terminal') ?? null;
+        const terminalTab = tabs.find(tab => tab.mode === 'terminal') ?? null;
         const targetDirectory = terminalTab?.targetDirectory ?? null;
         if (targetDirectory) {
           const targetState = useTerminalStore.getState().getDirectoryState(targetDirectory);
@@ -96,32 +96,46 @@ export const createContextTabActions: UIStoreSlice<
             return;
           }
         }
-        state.openContextPanelTab(normalizedDirectory, { mode: 'terminal', targetDirectory: null }, { reveal: false });
+        state.openContextPanelTab(normalizedDirectory, {
+          mode: 'terminal',
+          targetDirectory: null
+        }, {
+          reveal: false
+        });
       }
     };
-
     if (zoneView?.isOpen && activeTab?.mode === mode) {
-      clearTerminalTarget();
-      state.closeContextZone(normalizedDirectory, zone);
-      return;
+      if (intent === 'toggle') {
+        clearTerminalTarget();
+        state.closeContextZone(normalizedDirectory, zone);
+        return;
+      }
+      if (!activeTab.targetDirectory) return;
     }
 
-    if (mode === 'file' && !state.contextEditorTreeVisible
-      && !tabs.some((tab) => tab.mode === 'file' && tab.targetPath)) {
-      set({ contextEditorTreeVisible: true });
+    // A hidden tree stays hidden while a file is open, so the editor
+    // shows alone. With no file open the tree is all the surface has,
+    // and it comes back.
+    if (mode === 'file' && !state.contextEditorTreeVisible && !tabs.some(tab => tab.mode === 'file' && tab.targetPath)) {
+      set({
+        contextEditorTreeVisible: true
+      });
     }
-
-    const tabsOfMode = tabs.filter((tab) => tab.mode === mode);
+    const tabsOfMode = tabs.filter(tab => tab.mode === mode && (intent !== 'link' || !tab.targetDirectory));
     if (tabsOfMode.length > 0) {
-      clearTerminalTarget();
-      const mostRecent = tabsOfMode.reduce((best, tab) => (tab.touchedAt >= best.touchedAt ? tab : best));
+      if (intent === 'toggle') clearTerminalTarget();
+      // `>=` so equal timestamps (same-millisecond opens) resolve to the
+      // later tab in insertion order.
+      const mostRecent = tabsOfMode.reduce((best, tab) => tab.touchedAt >= best.touchedAt ? tab : best);
+      // The rail's Changes and walkthrough are this project's: a pull
+      // request of another project opened from the Tracker gives way.
       if ((mode === 'diff' || mode === 'walkthrough') && mostRecent.targetDirectory) {
         state.openContextPanelTab(normalizedDirectory, {
           mode,
           targetPath: mostRecent.targetPath,
           stagedDiff: mostRecent.stagedDiff,
           diffScope: mostRecent.diffScope,
-          targetDirectory: null,
+          targetDirectory: null
         });
         return;
       }
@@ -129,11 +143,18 @@ export const createContextTabActions: UIStoreSlice<
       return;
     }
 
+    // Content-driven modes need a payload (a session to split); the rail
+    // renders them disabled until content exists. 'file' opens an empty
+    // editor whose embedded tree picks the first file.
     if (mode === 'chat') {
       return;
     }
-
-    state.openContextPanelTab(normalizedDirectory, { mode });
+    state.openContextPanelTab(normalizedDirectory, intent === 'link' ? {
+      mode,
+      targetPath: null
+    } : {
+      mode
+    });
   },
 
   openContextPanelTab: (directory, tab, options) => {
@@ -264,22 +285,26 @@ export const createContextTabActions: UIStoreSlice<
   openContextPreview: (directory, url) => {
     const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
     const normalizedUrl = (url || '').trim();
-    if (!normalizedDirectory || !normalizedUrl || isVSCodeRuntime()) {
+    if (!normalizedDirectory || !normalizedUrl) {
       return;
     }
-
     noteBrowserTabAddressRequested(get().contextPanelByDirectory, normalizedDirectory, normalizedUrl, normalizedUrl);
+    // No stored label: a browser tab is named after wherever it has
+    // navigated to, which the panel derives from targetPath.
     get().openContextPanelTab(normalizedDirectory, {
       mode: 'browser',
       targetPath: normalizedUrl,
       dedupeKey: normalizedUrl,
-      label: null,
+      label: null
     });
   },
 
+  // An agent's page gets its own tab in the background: never the tab
+// the user is on, never an existing tab that happens to show the same
+// address, and the panel stays as the user left it.
   openAgentBrowserTab: (directory, url, ownerSessionId) => {
     const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-    if (!normalizedDirectory || isVSCodeRuntime()) return null;
+    if (!normalizedDirectory) return null;
     browserTabSequence += 1;
     const dedupeKey = `browser:agent:${Date.now()}-${browserTabSequence}`;
     if (url.trim()) noteBrowserTabAddressRequested(get().contextPanelByDirectory, normalizedDirectory, dedupeKey, url.trim());
@@ -288,33 +313,37 @@ export const createContextTabActions: UIStoreSlice<
       targetPath: url.trim(),
       dedupeKey,
       label: null,
-      ownerSessionId,
-    }, { reveal: false });
+      ownerSessionId
+    }, {
+      reveal: false
+    });
     return buildContextPanelTabID('browser', dedupeKey);
   },
 
-  openNewContextBrowserTab: (directory) => {
+  // Always a new tab, never the existing one: the whole point of asking
+// for one is to keep what is already open.
+  openNewContextBrowserTab: directory => {
     const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-    if (!normalizedDirectory || isVSCodeRuntime()) return;
+    if (!normalizedDirectory) return;
     browserTabSequence += 1;
     get().openContextPanelTab(normalizedDirectory, {
       mode: 'browser',
       targetPath: '',
       dedupeKey: `browser:new:${Date.now()}-${browserTabSequence}`,
-      label: null,
+      label: null
     });
   },
 
   openContextBrowser: (directory, url = '', options) => {
     const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-    if (!normalizedDirectory || isVSCodeRuntime()) return;
+    if (!normalizedDirectory) return;
     const targetUrl = typeof url === 'string' && url.trim().length > 0 ? url.trim() : '';
     if (targetUrl) noteBrowserTabAddressRequested(get().contextPanelByDirectory, normalizedDirectory, targetUrl, targetUrl);
     get().openContextPanelTab(normalizedDirectory, {
       mode: 'browser',
       targetPath: targetUrl,
       dedupeKey: targetUrl || 'browser',
-      label: null,
+      label: null
     }, options);
   },
 

@@ -276,7 +276,6 @@ export interface UIStore {
   showTerminalQuickKeysOnDesktop: boolean;
   sessionTabsEnabled: boolean;
   sessionTabsPerWorkspace: boolean;
-  showOpenCodeUpdateNotifications: boolean;
   agentControlToolEnabled: boolean;
   agentScheduleToolEnabled: boolean;
   agentWebToolEnabled: boolean;
@@ -345,7 +344,7 @@ export interface UIStore {
   toggleContextEditorTree: () => void;
   toggleContextEditor: () => void;
   setContextEditorTreeWidth: (width: number) => void;
-  openContextSurface: (directory: string, mode: ContextPanelMode) => void;
+  openContextSurface: (directory: string, mode: ContextPanelMode, intent?: 'toggle' | 'link') => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor, options?: { reveal?: boolean }) => void;
   openTrackerItem: (directory: string, item: { url: string; key: string; label: string; targetDirectory: string | null }) => string | null;
   openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
@@ -354,7 +353,9 @@ export interface UIStore {
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number, options?: { preview?: boolean }) => void;
   openContextOverview: (directory: string) => void;
   openContextPreview: (directory: string, url: string) => void;
-  openContextBrowser: (directory: string, url?: string, options?: { reveal?: boolean }) => void;
+  openContextBrowser: (directory: string, url?: string, options?: {
+    reveal?: boolean;
+  }) => void;
   openNewContextBrowserTab: (directory: string) => void;
   openAgentBrowserTab: (directory: string, url: string, ownerSessionId: string | null) => string | null;
   setContextPanelTabTargetPath: (directory: string, tabID: string, targetPath: string) => void;
@@ -506,7 +507,7 @@ export interface UIStore {
   addRecentAgent: (agentName: string) => void;
   toggleFavoriteAgent: (agentName: string) => void;
   addRecentEffort: (providerID: string, modelID: string, variant: string | undefined) => void;
-  rememberLastUsedEffort: (providerID: string, modelID: string, variant: string | null) => void;
+  rememberLastUsedEffort: (provider: string, model: string, variant: string | null) => void;
   setDiffLayoutPreference: (mode: 'dynamic' | 'inline' | 'side-by-side') => void;
   setDiffLayoutForAllFiles: (mode: 'inline' | 'side-by-side') => void;
   setDiffFileLayout: (filePath: string, mode: 'inline' | 'side-by-side') => void;
@@ -543,7 +544,6 @@ export interface UIStore {
   setSummaryThreshold: (value: number) => void;
   setSummaryLength: (value: number) => void;
   setMaxLastMessageLength: (value: number) => void;
-  setShowOpenCodeUpdateNotifications: (value: boolean) => void;
   setAgentControlToolEnabled: (value: boolean) => void;
   setAgentScheduleToolEnabled: (value: boolean) => void;
   setAgentWebToolEnabled: (value: boolean) => void;
@@ -609,6 +609,40 @@ export interface UIStore {
   resetAllShortcutOverrides: () => void;
   setFileEditorKeymap: (value: FileEditorKeymap) => void;
   setFileEditorVimMappings: (value: string) => void;
+
+  setPersistChatDraft: (value: boolean) => void;
+
+  setChatRenderMode: (mode: 'live' | 'sorted') => void;
+
+  setPlanModeAllowAgents: (value: boolean) => void;
+
+  setSuggestionGenerator: (value: 'session' | 'small' | 'off') => void;
+
+  setSessionWorkAutoOpen: (value: boolean) => void;
+
+  setRuntimeStatusText: (text: string) => void;
+
+  setRuntimeStatusDialogOpen: (open: boolean) => void;
+
+/** Keep the subagent task tool available while Plan mode is active. */
+  planModeAllowAgents: boolean;
+
+  setDefaultSessionMode: (mode: 'main' | 'plan' | 'vibe' | 'goal') => void;
+
+  defaultSessionMode: 'main' | 'plan' | 'vibe' | 'goal';
+
+  suggestionGenerator: 'session' | 'small' | 'off';
+/** The "In work" sidebar block, the Track / Done actions, and sessions going in on a sent message. */
+
+  sessionWorkAutoOpen: boolean;
+
+  persistChatDraft: boolean;
+
+  chatRenderMode: 'live' | 'sorted';
+
+  runtimeStatusText: string;
+
+  isRuntimeStatusDialogOpen: boolean;
 }
 
 

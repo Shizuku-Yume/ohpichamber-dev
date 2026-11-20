@@ -1,3 +1,4 @@
+import { SESSION_GOAL_MAX_AUTO_TURNS_LIMIT } from '@/lib/sessionGoalTurnLimit';
 import { isSessionGoalMaxAutoTurns } from '@/lib/sessionGoalTurnLimit';
 import { clampLiveBrowserTabs } from '@/lib/browser/liveTabs';
 import { normalizeLargeTextPasteBehavior, normalizeFileEditorKeymap } from './preferences';
@@ -61,7 +62,6 @@ export const createPreferenceActions: UIStoreSlice<
   | 'setAlwaysShowScrollbars'
   | 'setMobileKeepScreenAwake'
   | 'setQuestionsInChat'
-  | 'setShowOpenCodeUpdateNotifications'
   | 'setInputSpellcheckEnabled'
   | 'setLargeTextPasteBehavior'
   | 'setEnterToSend'
@@ -91,7 +91,7 @@ export const createPreferenceActions: UIStoreSlice<
   | 'clearShortcutOverride'
   | 'resetAllShortcutOverrides'
   | 'setFileEditorKeymap'
-  | 'setFileEditorVimMappings'
+  | 'setFileEditorVimMappings' | 'setRuntimeStatusDialogOpen' | 'setRuntimeStatusText' | 'setSessionWorkAutoOpen' | 'setSuggestionGenerator' | 'setChatRenderMode' | 'setPersistChatDraft' | 'setDefaultSessionMode' | 'setPlanModeAllowAgents'
 > = (set) => ({
   setTerminalShell: (shell) => {
     set({ terminalShell: shell });
@@ -140,9 +140,10 @@ export const createPreferenceActions: UIStoreSlice<
     set({ sessionGoalChecker: value });
   },
 
-  setSessionGoalMaxAutoTurns: (value) => {
-    if (!isSessionGoalMaxAutoTurns(value)) return;
-    set({ sessionGoalMaxAutoTurns: value });
+  setSessionGoalMaxAutoTurns: value => {
+    set({
+      sessionGoalMaxAutoTurns: Math.min(SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, Math.max(1, Math.floor(value)))
+    });
   },
 
   setSessionGoalDefaultBudgetEnabled: (value) => {
@@ -233,8 +234,10 @@ export const createPreferenceActions: UIStoreSlice<
     }));
   },
 
-  setSessionRetentionIncludeInWork: (value) => {
-    set({ sessionRetentionIncludeInWork: value });
+  setSessionRetentionIncludeInWork: (value: boolean) => {
+    set({
+      sessionRetentionIncludeInWork: value
+    });
   },
 
   setAutoDeleteLastRunAt: (timestamp) => {
@@ -331,9 +334,6 @@ export const createPreferenceActions: UIStoreSlice<
     set({ questionsInChat: value });
   },
 
-  setShowOpenCodeUpdateNotifications: (value) => {
-    set({ showOpenCodeUpdateNotifications: value });
-  },
 
   setInputSpellcheckEnabled: (value) => {
     set({ inputSpellcheckEnabled: value });
@@ -464,4 +464,45 @@ export const createPreferenceActions: UIStoreSlice<
     set({ fileEditorVimMappings: value.slice(0, 10_000) });
   },
 
+
+  setRuntimeStatusDialogOpen: open => {
+    set({
+      isRuntimeStatusDialogOpen: open
+    });
+  },
+  setRuntimeStatusText: text => {
+    set({
+      runtimeStatusText: text
+    });
+  },
+  setSessionWorkAutoOpen: value => {
+    set({
+      sessionWorkAutoOpen: value
+    });
+  },
+  setSuggestionGenerator: value => {
+    set({
+      suggestionGenerator: value
+    });
+  },
+  setChatRenderMode: value => {
+    set({
+      chatRenderMode: value
+    });
+  },
+  setPersistChatDraft: value => {
+    set({
+      persistChatDraft: value
+    });
+  },
+  setDefaultSessionMode: value => {
+    set({
+      defaultSessionMode: value
+    });
+  },
+  setPlanModeAllowAgents: value => {
+    set({
+      planModeAllowAgents: value
+    });
+  },
 });

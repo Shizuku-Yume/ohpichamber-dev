@@ -24,6 +24,10 @@ Neighbouring stores still own terminal state and the files view's open paths.
 - Browser tab IDs share one module-level sequence across user and agent tabs.
 - Consumers continue to import the store, public types, constants, and helpers
   from `../useUIStore.ts`.
+- Native modes, reasoning-effort keys, draft/render preferences, browser ownership,
+  and same-version persisted-layout sanitization live in these owners too.
+- Runtime status dialog state is transient; no OpenCode updater preference is
+  initialized or persisted.
 
 ## Decisions
 

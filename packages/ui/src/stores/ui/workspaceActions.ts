@@ -134,8 +134,12 @@ export const createWorkspaceActions: UIStoreSlice<
   },
 
   setContextZoneExpandedChatSize: (zone, size) => {
-    if (!Number.isFinite(size)) return;
-    set((state) => ({ contextZoneExpandedChatSizes: { ...state.contextZoneExpandedChatSizes, [zone]: Math.max(0, Math.round(size)) } }));
+    set(state => ({
+      contextZoneExpandedChatSizes: {
+        ...state.contextZoneExpandedChatSizes,
+        [zone]: Math.max(0, Math.round(size))
+      }
+    }));
   },
 
   moveContextSurfaceToZone: (mode, zone) => {
@@ -237,8 +241,10 @@ export const createWorkspaceActions: UIStoreSlice<
     set({ mobileWorkStatusHiddenSections: [...new Set(sectionIds)] });
   },
 
-  setWorkStatusSectionOrder: (sectionIds) => {
-    set({ workStatusSectionOrder: sanitizeWorkStatusSectionOrder(sectionIds), workStatusSectionOrderExplicit: true });
+  setWorkStatusSectionOrder: sectionIds => {
+    set({
+      workStatusSectionOrder: sanitizeWorkStatusSectionOrder(sectionIds)
+    });
   },
 
   setContextRailSurfaceVisible: (surfaceId, visible) => {

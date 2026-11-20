@@ -12,6 +12,7 @@ import {
   CONTEXT_ZONES,
 } from '@/lib/workspace/zones';
 import type { ContextZone, ContextZonePlacement, ContextZoneView } from '@/lib/workspace/zones';
+
 import type { ContextPanelTab, ContextPanelTabDescriptor, ContextPanelDirectoryState, LegacyZoneSizes } from './types';
 import {
   CONTEXT_PANEL_MAX_TABS,
@@ -23,6 +24,19 @@ import {
   sanitizeContextPanelTabs,
   resolveActiveContextPanelTabID,
 } from './contextTabs';
+
+export const sanitizeContextZoneSizes = (value: unknown): Partial<Record<ContextZone, number>> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const source = value as Partial<Record<ContextZone, unknown>>;
+  const next: Partial<Record<ContextZone, number>> = {};
+  for (const zone of CONTEXT_ZONES) {
+    const pixels = source[zone];
+    if (typeof pixels === 'number' && Number.isFinite(pixels)) {
+      next[zone] = clampContextZoneSize(zone, pixels);
+    }
+  }
+  return next;
+};
 
 const persistedPixelsSchema = z.number().finite().optional().catch(undefined);
 

@@ -174,7 +174,6 @@ export const createInitialUIState = (): Pick<UIStore,
   | 'showTerminalQuickKeysOnDesktop'
   | 'sessionTabsEnabled'
   | 'sessionTabsPerWorkspace'
-  | 'showOpenCodeUpdateNotifications'
   | 'agentControlToolEnabled'
   | 'agentScheduleToolEnabled'
   | 'agentWebToolEnabled'
@@ -233,7 +232,7 @@ export const createInitialUIState = (): Pick<UIStore,
   | 'reportUsage'
   | 'shortcutOverrides'
   | 'fileEditorKeymap'
-  | 'fileEditorVimMappings'
+  | 'fileEditorVimMappings' | 'isRuntimeStatusDialogOpen' | 'runtimeStatusText' | 'chatRenderMode' | 'persistChatDraft' | 'sessionWorkAutoOpen' | 'suggestionGenerator' | 'defaultSessionMode' | 'planModeAllowAgents'
 > => ({
   theme: 'system',
   runOverviewKey: null,
@@ -313,7 +312,7 @@ export const createInitialUIState = (): Pick<UIStore,
   sessionWorkEnabled: true,
   sessionReviewOfferEnabled: false,
   sessionGoalEnabled: true,
-  sessionGoalChecker: 'small-model',
+  sessionGoalChecker: 'classifier',
   sessionGoalMaxAutoTurns: DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS,
   sessionGoalDefaultBudgetEnabled: false,
   sessionGoalDefaultBudget: 200_000,
@@ -404,7 +403,6 @@ export const createInitialUIState = (): Pick<UIStore,
   showTerminalQuickKeysOnDesktop: false,
   sessionTabsEnabled: false,
   sessionTabsPerWorkspace: false,
-  showOpenCodeUpdateNotifications: true,
   agentControlToolEnabled: true,
   agentScheduleToolEnabled: true,
   agentWebToolEnabled: true,
@@ -423,7 +421,7 @@ export const createInitialUIState = (): Pick<UIStore,
   agentMemoryDreamingVariant: '',
   agentRenderToolEnabled: true,
   agentSecretToolEnabled: true,
-  agentWorkflowToolEnabled: false,
+  agentWorkflowToolEnabled: true,
   agentWorkflowAutoApprove: false,
   isolatedSpacesEnabled: false,
   permissionDefaultMode: 'ask',
@@ -464,4 +462,13 @@ export const createInitialUIState = (): Pick<UIStore,
   shortcutOverrides: {},
   fileEditorKeymap: 'default',
   fileEditorVimMappings: '',
+
+  isRuntimeStatusDialogOpen: false,
+  runtimeStatusText: '',
+  chatRenderMode: 'live',
+  persistChatDraft: true,
+  sessionWorkAutoOpen: true,
+  suggestionGenerator: 'session',
+  defaultSessionMode: 'main',
+  planModeAllowAgents: false,
 });

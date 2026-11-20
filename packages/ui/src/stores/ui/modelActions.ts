@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 import type { UIStoreSlice } from './types';
 
 const MAX_LAST_USED_EFFORTS = 512;
@@ -204,9 +205,11 @@ export const createModelActions: UIStoreSlice<
   },
 
   setLastSelectedModel: (providerID, modelID) => {
-    const next = `${providerID}/${modelID}`;
+    const next = modelRefKey(providerID, modelID);
     if (get().lastSelectedModel === next) return;
-    set({ lastSelectedModel: next });
+    set({
+      lastSelectedModel: next
+    });
   },
 
   toggleFavoriteAgent: (agentName) => {
@@ -258,22 +261,18 @@ export const createModelActions: UIStoreSlice<
     });
   },
 
-  rememberLastUsedEffort: (providerID, modelID, variant) => {
-    const provider = typeof providerID === 'string' ? providerID.trim() : '';
-    const model = typeof modelID === 'string' ? modelID.trim() : '';
-    if (!provider || !model) {
-      return;
-    }
-    const key = `${provider}/${model}`;
+  rememberLastUsedEffort: (provider, model, variant) => {
+    if (!provider || !model) return;
+    const key = modelRefKey(provider, model);
     const normalizedVariant = variant?.trim() || null;
-    set((state) => {
+    set(state => {
       if (state.lastUsedEfforts[key] === normalizedVariant) {
         return state;
       }
       const entries = Object.entries(state.lastUsedEfforts).filter(([entryKey]) => entryKey !== key);
       entries.push([key, normalizedVariant]);
       return {
-        lastUsedEfforts: Object.fromEntries(entries.slice(-MAX_LAST_USED_EFFORTS)),
+        lastUsedEfforts: Object.fromEntries(entries.slice(-MAX_LAST_USED_EFFORTS))
       };
     });
   },
