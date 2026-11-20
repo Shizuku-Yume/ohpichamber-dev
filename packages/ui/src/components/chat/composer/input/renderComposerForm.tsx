@@ -65,7 +65,7 @@ type Dependencies = {
     historySearchState: Pick<ReturnType<typeof useComposerHistorySearchState>, 'setPromptHistorySearchForm' | 'promptHistorySearch'>;
     largePasteState: Pick<ReturnType<typeof useComposerLargePasteState>, 'largeTextPasteGesture' | 'largeTextPasteOffer'>;
     column: Pick<ReturnType<typeof useComposerColumn>, 'chatColumnSession' | 'columnPinned'>;
-    autocompleteState: Pick<ReturnType<typeof useComposerAutocompleteState>, 'openAutocomplete' | 'autocompleteQuery' | 'commandRef' | 'skillRef' | 'snippetRef' | 'mentionRef' | 'emojiRef' | 'closeAutocomplete'>;
+    autocompleteState: Pick<ReturnType<typeof useComposerAutocompleteState>, 'openAutocomplete' | 'autocompleteQuery' | 'commandRef' | 'skillRef' | 'mentionRef' | 'emojiRef' | 'closeAutocomplete'>;
     dropState: Pick<ReturnType<typeof useComposerDropState>, 'isDragging' | 'dropZoneRef' | 'isInternalDrag'>;
     i18n: Pick<ReturnType<typeof useI18n>, 't'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef' | 'composerViewStore'>;
@@ -111,7 +111,7 @@ export function renderComposerForm({
     const { largeTextPasteGesture, largeTextPasteOffer } = largePasteState;
     const { chatColumnSession, columnPinned } = column;
     const {
-        openAutocomplete, autocompleteQuery, commandRef, skillRef, snippetRef, mentionRef, emojiRef,
+        openAutocomplete, autocompleteQuery, commandRef, skillRef, mentionRef, emojiRef,
         closeAutocomplete,
     } = autocompleteState;
     const { isDragging, dropZoneRef, isInternalDrag } = dropState;
@@ -330,7 +330,6 @@ export function renderComposerForm({
                         overlayPosition={autocompleteOverlayPosition}
                         commandRef={commandRef}
                         skillRef={skillRef}
-                        snippetRef={snippetRef}
                         mentionRef={mentionRef}
                         emojiRef={emojiRef}
                         onCommandSelect={handleCommandSelect}

@@ -24,7 +24,7 @@ type Dependencies = {
     largePasteState: Pick<ReturnType<typeof useComposerLargePasteState>, 'largeTextPasteGesture'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
     draftText: Pick<ReturnType<typeof useComposerDraftText>, 'setInputMode' | 'composerText'>;
-    autocompleteState: Pick<ReturnType<typeof useComposerAutocompleteState>, 'closeAutocomplete' | 'openAutocomplete' | 'commandRef' | 'skillRef' | 'snippetRef' | 'mentionRef' | 'emojiRef'>;
+    autocompleteState: Pick<ReturnType<typeof useComposerAutocompleteState>, 'closeAutocomplete' | 'openAutocomplete' | 'commandRef' | 'skillRef' | 'mentionRef' | 'emojiRef'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'largeTextPasteBehavior' | 'cycleAgentShortcut' | 'isMobile' | 'enterToSend' | 'enterToSendConfigured' | 'mobileReturnKeySends'>;
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'isDesktopExpanded' | 'setExpandedInput'>;
     mobileActions: Pick<ReturnType<typeof useComposerMobileActions>, 'handlePromptHistoryShortcut'>;
@@ -32,7 +32,7 @@ type Dependencies = {
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'handleExitBtw' | 'currentSessionPhase' | 'autoReviewRunning'>;
     editorActions: Pick<ReturnType<typeof useComposerEditorActions>, 'handleCycleAgent'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'queuedMessages' | 'followUpBehavior'>;
-    queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEdit' | 'handleQueueMessage'>;
+    queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEditById' | 'handleQueueMessage'>;
     draftHistory: Pick<ReturnType<typeof useComposerDraftHistory>, 'messageHistory' | 'applyHistoryValue'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'isPageWaiting' | 'getCurrentInputSnapshot'>;
     submission: Pick<ReturnType<typeof useComposerSubmission>, 'handleSubmit'>;
@@ -47,7 +47,7 @@ export function createComposerKeyHandler({
     const { composerRef } = editorState;
     const { setInputMode, composerText } = draftText;
     const {
-        closeAutocomplete, openAutocomplete, commandRef, skillRef, snippetRef, mentionRef, emojiRef,
+        closeAutocomplete, openAutocomplete, commandRef, skillRef, mentionRef, emojiRef,
     } = autocompleteState;
     const {
         largeTextPasteBehavior, cycleAgentShortcut, isMobile, enterToSend, enterToSendConfigured,
@@ -59,7 +59,7 @@ export function createComposerKeyHandler({
     const { handleExitBtw, currentSessionPhase, autoReviewRunning } = sessionLifecycle;
     const { handleCycleAgent } = editorActions;
     const { queuedMessages, followUpBehavior } = queueState;
-    const { handleQueuedMessageEdit, handleQueueMessage } = queueActions;
+    const { handleQueuedMessageEditById, handleQueueMessage } = queueActions;
     const { messageHistory, applyHistoryValue } = draftHistory;
     const { pendingFirstSend, isPageWaiting, getCurrentInputSnapshot } = sendAvailability;
     const { handleSubmit } = submission;
@@ -108,7 +108,6 @@ export function createComposerKeyHandler({
 
         const autocomplete = openAutocomplete === 'command' ? commandRef.current
             : openAutocomplete === 'skill' ? skillRef.current
-                : openAutocomplete === 'snippet' ? snippetRef.current
                     : openAutocomplete === 'mention' ? mentionRef.current
                         : openAutocomplete === 'emoji' && emojiRef.current?.hasResults?.() ? emojiRef.current
                             : null;
@@ -201,7 +200,7 @@ export function createComposerKeyHandler({
             e.preventDefault();
             const lastQueued = queuedMessages[queuedMessages.length - 1];
             if (lastQueued && message.length === 0 && attachedFiles.length === 0) {
-                handleQueuedMessageEdit(lastQueued.id);
+                handleQueuedMessageEditById(lastQueued.id);
                 return;
             }
             const recalled = messageHistory.older({ text: message, attachments: attachedFiles });

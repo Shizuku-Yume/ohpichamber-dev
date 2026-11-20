@@ -180,7 +180,7 @@ export function useComposerCompletions({
 
     const snippetDraftText = useComposerTextValue(
         composerText,
-        (text) => (openAutocomplete === 'snippet' ? withoutSnippetToken(text, autocompleteQuery) : undefined),
+        (): string | undefined => undefined,
     );
 
     const handleSnippetDraftSaved = useStableHandler((typedName: string) => {

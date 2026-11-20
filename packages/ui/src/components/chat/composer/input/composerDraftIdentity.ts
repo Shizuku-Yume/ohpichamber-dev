@@ -3,13 +3,12 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { createChatDraftIdentity, workDraftComposerKey, type ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { type ChatColumnSession } from '../../chatColumnSession';
-import { getSettingsSurface } from '@/lib/settings/surface';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 export const NEW_CHAT_DRAFT_DIRECTORY = CHAT_DRAFT_PROJECT_ID;
 
 export const resolveWorkDraftComposerKey = (draft: NewSessionDraftState | null | undefined): string | null => {
-    return draft?.open && draft.target === 'project' && draft.workDraftId && getSettingsSurface() !== 'vscode'
+    return draft?.open && draft.target === 'project' && draft.workDraftId
         ? workDraftComposerKey(draft.workDraftId)
         : null;
 };
