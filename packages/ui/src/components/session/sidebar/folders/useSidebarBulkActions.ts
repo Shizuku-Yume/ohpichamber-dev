@@ -13,14 +13,8 @@ import { bulkDoneWorkLabel, selectFinishedWorks, type FinishWorktreeWorkOutcome 
 import { toastFinishWorkOutcome } from '../works/useWorktreeWork';
 import type { BulkDeleteSessionsConfirmState } from '../shell/ConfirmDialogs';
 
-<<<<<<< HEAD
-const EMPTY_SESSIONS_BY_ID = new Map<string, { archivedAt?: number }>();
-||||||| bc50ba56aa
-const EMPTY_SESSIONS_BY_ID = new Map<string, { time?: { archived?: number | null } }>();
-=======
 const EMPTY_SESSIONS_BY_ID: ReadonlyMap<string, Session> = new Map();
 const EMPTY_LIFECYCLE_BY_ID: ReadonlyMap<string, SessionRowLifecycle> = new Map();
->>>>>>> upstream/main
 
 type Args = {
   isInlineEditing: boolean;
@@ -81,13 +75,7 @@ export const selectSessionsToMarkDone = (
 
 export const resolveBulkDeleteConfirmation = (
   value: NonNullable<BulkDeleteSessionsConfirmState>,
-<<<<<<< HEAD
-  sessionsById: ReadonlyMap<string, { archivedAt?: number }>,
-||||||| bc50ba56aa
-  sessionsById: ReadonlyMap<string, { time?: { archived?: number | null } }>,
-=======
   sessionsById: ReadonlyMap<string, SessionRowLifecycle>,
->>>>>>> upstream/main
 ): { ready: true; value: NonNullable<BulkDeleteSessionsConfirmState> }
   | { ready: false; value: NonNullable<BulkDeleteSessionsConfirmState> | null } => {
   const sessionIds = value.sessionIds.filter((id) => sessionsById.has(id));

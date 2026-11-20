@@ -22,15 +22,9 @@ export function mergeSessionRowLifecycle(entries: readonly SessionRowOrderEntry[
 type SessionRowOrderRegistry = {
   getEntries: () => readonly SessionRowOrderEntry[];
   getDescendantIds: () => readonly string[];
-<<<<<<< HEAD
-  getSessionsById: () => ReadonlyMap<string, { archivedAt?: number }>;
-||||||| bc50ba56aa
-  getSessionsById: () => ReadonlyMap<string, { time?: { archived?: number | null } }>;
-=======
   getSessionsById: () => ReadonlyMap<string, Session>;
   getLifecycleById: () => ReadonlyMap<string, SessionRowLifecycle>;
   getWorks: () => readonly SessionRowOrderWork[];
->>>>>>> upstream/main
 };
 
 export type SessionRowOrderWork = { group: SessionGroup; projectId: string };
@@ -42,14 +36,8 @@ const SessionRowOrderContext = React.createContext<SessionRowOrderRegistry | nul
 export const SessionRowOrderProvider: React.FC<{
   entries: readonly SessionRowOrderEntry[];
   descendantIds: readonly string[];
-<<<<<<< HEAD
-  sessionsById: ReadonlyMap<string, { archivedAt?: number }>;
-||||||| bc50ba56aa
-  sessionsById: ReadonlyMap<string, { time?: { archived?: number | null } }>;
-=======
   sessionsById: ReadonlyMap<string, Session>;
   works?: readonly SessionRowOrderWork[];
->>>>>>> upstream/main
   children: React.ReactNode;
 }> = ({ entries, descendantIds, sessionsById, works = EMPTY_WORKS, children }) => {
   const entriesRef = React.useRef(entries);
@@ -105,24 +93,12 @@ export const deriveSessionRowBulkSelectAll = (
 
 export const deriveSessionRowSelectionArchived = (
   selectedIds: ReadonlySet<string>,
-<<<<<<< HEAD
-  sessionsById: ReadonlyMap<string, { archivedAt?: number }>,
-||||||| bc50ba56aa
-  sessionsById: ReadonlyMap<string, { time?: { archived?: number | null } }>,
-=======
   sessionsById: ReadonlyMap<string, SessionRowLifecycle>,
->>>>>>> upstream/main
 ): boolean => {
   if (selectedIds.size === 0) return false;
   for (const id of selectedIds) {
-<<<<<<< HEAD
-    if (!sessionsById.get(id)?.archivedAt) return false;
-||||||| bc50ba56aa
-    if (!sessionsById.get(id)?.time?.archived) return false;
-=======
     const session = sessionsById.get(id);
-    if (!(session?.archived ?? Boolean(session?.time?.archived))) return false;
->>>>>>> upstream/main
+    if (!(session?.archived ?? Boolean(session?.archivedAt))) return false;
   }
   return true;
 };

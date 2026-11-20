@@ -14,15 +14,10 @@ import { EMPTY_MULTI_RUN_INDEX, type MultiRunIndex, type MultiRunSummary } from 
 import { isGroupWork, worktreeFolderMemberId } from './works/sidebarWorks';
 import type { SessionDraft } from '@/stores/useSessionDraftsStore';
 import type { DirectoryOwner } from './sessions/sessionOwnership';
-<<<<<<< HEAD
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
-||||||| bc50ba56aa
-=======
 import type { ConversationResult } from '@/hooks/useConversationSearch';
 import { conversationContextFromLocation, type ConversationResultContext, type ConversationResultProject } from '@/components/search/conversationResultContext';
 import type { SidebarSessionLocation } from './recent/sessionLocation';
 import { SIDEBAR_SESSION_BATCH_DEFAULT } from '@/lib/sidebarSections';
->>>>>>> upstream/main
 
 export type SessionSidebarActivityItem = {
   node: SessionNode;
@@ -209,7 +204,6 @@ const collapseRunEntries = (nodes: readonly SessionNode[], runIndex: MultiRunInd
   return entries;
 };
 
-<<<<<<< HEAD
 /**
  * How many sessions of search-filtered trees a group reports as matches: for
  * a `ses_` id query the exact id only, otherwise every session the search
@@ -225,24 +219,6 @@ export const countSessionSearchMatches = (nodes: readonly SessionNode[], normali
   return count(nodes);
 };
 
-||||||| bc50ba56aa
-/**
- * How many sessions of search-filtered trees a group reports as matches: for
- * a `ses_` id query the exact id only, otherwise every session the search
- * kept. Group search data and the row model both count with this, so taking
- * trees out of a group takes exactly their share out of its count.
- */
-export const countSessionSearchMatches = (nodes: readonly SessionNode[], normalizedQuery: string): number => {
-  const idQuery = normalizedQuery.trim().toLowerCase();
-  const isIdQuery = idQuery.startsWith('ses_');
-  const count = (list: readonly SessionNode[]): number => list.reduce((total, node) => (
-    total + (!isIdQuery || node.session.id.toLowerCase() === idQuery ? 1 : 0) + count(listedChildren(node))
-  ), 0);
-  return count(nodes);
-};
-
-=======
->>>>>>> upstream/main
 const EMPTY_FOLDERS: readonly SessionFolder[] = [];
 const EMPTY_ZONE_SESSION_IDS: ReadonlySet<string> = new Set();
 const EMPTY_DRAFTS: readonly SessionDraft[] = [];
@@ -425,31 +401,11 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   const isMovedToZone = (sessionId: string): boolean => movedSessionIds.has(sessionId);
   const movedFolderMembers = new Set<string>();
   const runIndex = args.runIndex ?? EMPTY_MULTI_RUN_INDEX;
-<<<<<<< HEAD
-  // A lane of a run lists under the project root wherever it runs, so it files
-  // like the root's sessions.
-  const folderOwnerKeyOf = (session: Session): string | null => {
-    const owner = args.sessionOwnerById.get(session.sessionId);
-    return owner && owner.kind !== 'project' && !runIndex.runKeyBySessionId.has(session.sessionId)
-      ? getWorkFolderOwnerKey(owner.scopeDirectory)
-      : getAuthoritativeSessionFolderOwnerKey(session, owner);
-  };
-||||||| bc50ba56aa
-  // A lane of a run lists under the project root wherever it runs, so it files
-  // like the root's sessions.
-  const folderOwnerKeyOf = (session: Session): string | null => {
-    const owner = args.sessionOwnerById.get(session.id);
-    return owner && owner.kind !== 'project' && !runIndex.runKeyBySessionId.has(session.id)
-      ? getWorkFolderOwnerKey(owner.scopeDirectory)
-      : getAuthoritativeSessionFolderOwnerKey(session, owner);
-  };
-=======
   const folderOwnerKeyOf = (session: Session): string | null => resolveSessionFolderOwnerKey(
     session,
-    args.sessionOwnerById.get(session.id),
-    runIndex.runKeyBySessionId.has(session.id),
+    args.sessionOwnerById.get(session.sessionId),
+    runIndex.runKeyBySessionId.has(session.sessionId),
   );
->>>>>>> upstream/main
 
   const authoritativeRoots = [
     ...args.authoritativeSections.flatMap((section) => section.groups.flatMap((group) => group.sessions)),
@@ -595,20 +551,8 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
         ?? null;
       const selectionScopeKey = options.zoneScopeKey ?? (options.selectionScopeKey === null
         ? null
-<<<<<<< HEAD
-        : getAuthoritativeSessionFolderOwnerKey(current.node.session, sessionOwner) ?? ownerKey;
-      // Whether its subsessions show, for a row that has some: the sidebar
-      // animates the change like a header's.
-      const expanded = search || args.expandedParents.has(expandedKey(rowContext, options.archived, current.node.session.sessionId));
-||||||| bc50ba56aa
-        : getAuthoritativeSessionFolderOwnerKey(current.node.session, sessionOwner) ?? ownerKey;
-      // Whether its subsessions show, for a row that has some: the sidebar
-      // animates the change like a header's.
-      const expanded = search || args.expandedParents.has(expandedKey(rowContext, options.archived, current.node.session.id));
-=======
         : getAuthoritativeSessionFolderOwnerKey(current.node.session, sessionOwner) ?? ownerKey);
-      const expanded = args.expandedParents.has(expandedKey(rowContext, options.archived, current.node.session.id));
->>>>>>> upstream/main
+      const expanded = args.expandedParents.has(expandedKey(rowContext, options.archived, current.node.session.sessionId));
       const children = listedChildren(current.node);
       push({
         kind: 'session',
@@ -655,7 +599,6 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     }
   };
 
-<<<<<<< HEAD
   // A group's search matches once the trees listed in a zone are taken out:
   // those render in Pinned or In work, which counts them. Zero means nothing to show.
   const groupSearchMatches = (group: SessionGroup): number => {
@@ -666,19 +609,6 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     return sessionMatches + searchData.folderNameMatchCount + (searchData.groupMatches ? 1 : 0);
   };
 
-||||||| bc50ba56aa
-  // A group's search matches once the trees listed in a zone are taken out:
-  // those render in Pinned or In work, which counts them. Zero means nothing to show.
-  const groupSearchMatches = (group: SessionGroup): number => {
-    const searchData = args.groupSearchDataByGroup.get(group);
-    if (searchData?.hasMatch !== true) return 0;
-    const movedToZone = inZone.size > 0 ? searchData.filteredNodes.filter((node) => isMovedToZone(node.session.id)) : [];
-    const sessionMatches = Math.max(0, searchData.matchedSessionCount - countSessionSearchMatches(movedToZone, args.normalizedQuery));
-    return sessionMatches + searchData.folderNameMatchCount + (searchData.groupMatches ? 1 : 0);
-  };
-
-=======
->>>>>>> upstream/main
   const appendGroup = (
     group: SessionGroup,
     groupKey: string,
@@ -690,28 +620,8 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     listedWorktrees: readonly WorktreeInFolder[] = [],
   ): void => {
     const rowKeyBase = `${placement.keyPrefix}${groupKey}`;
-<<<<<<< HEAD
-    const searchData = args.groupSearchDataByGroup.get(group);
-    if (search) {
-      const matches = groupSearchMatches(group);
-      if (matches === 0) return;
-      searchMatchCount += matches;
-    }
-    const sourceNodes = (search ? searchData?.filteredNodes ?? [] : group.sessions)
-      .filter((node) => !isMovedToZone(node.session.sessionId))
-||||||| bc50ba56aa
-    const searchData = args.groupSearchDataByGroup.get(group);
-    if (search) {
-      const matches = groupSearchMatches(group);
-      if (matches === 0) return;
-      searchMatchCount += matches;
-    }
-    const sourceNodes = (search ? searchData?.filteredNodes ?? [] : group.sessions)
-      .filter((node) => !isMovedToZone(node.session.id))
-=======
     const sourceNodes = group.sessions
-      .filter((node) => !isMovedToZone(node.session.id))
->>>>>>> upstream/main
+      .filter((node) => !isMovedToZone(node.session.sessionId))
       .sort((left, right) => compareNodes(left, right, pinned, args.sessionOrderIndex));
     const indexed = indexNodes(sourceNodes);
     const selectionPoolOffset = selectionDescendantIds.length;
@@ -858,17 +768,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     const increment = limits?.increment ?? sessionBatchSize ?? SESSIONS_INCREMENT;
     const requested = Math.max(initialLimit, args.visibleCountByContainer.get(groupKey) ?? initialLimit);
     const isPinnedNode = (entry: ListedEntry): boolean => !isWorktreeEntry(entry) && !isRunEntry(entry) && limits?.pinnedAlwaysVisible === true
-<<<<<<< HEAD
       && isSessionPinned(pinned, resolveGlobalSessionDirectory(entry.session) ?? group.directory, entry.session.sessionId);
-    // A run spends one slot of the reveal limit, whatever its lane count, and
-    // so does a worktree work.
-||||||| bc50ba56aa
-      && isSessionPinned(pinned, entry.session.directory ?? group.directory, entry.session.id);
-    // A run spends one slot of the reveal limit, whatever its lane count, and
-    // so does a worktree work.
-=======
-      && isSessionPinned(pinned, entry.session.directory ?? group.directory, entry.session.id);
->>>>>>> upstream/main
     const ungroupedEntries = mergeWorktreeEntries(collapseRunEntries(ungrouped, runIndex, group.isArchivedBucket === true), listedWorktrees, args.sessionOrderIndex, args.worktreeArchiveAnchors ?? EMPTY_ARCHIVE_ANCHORS, args.liveSpaceIds ?? EMPTY_SPACE_IDS);
     const limitedNodes = ungroupedEntries.filter((entry) => !isPinnedNode(entry));
     let budget = requested;

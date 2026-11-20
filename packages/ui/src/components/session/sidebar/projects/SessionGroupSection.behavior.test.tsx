@@ -243,16 +243,8 @@ describe('SessionGroupSection public behavior', () => {
       expect(rowPropsCapture?.deleteSessionConfirm).toBeNull();
 
       // SAFETY: the confirmation is only forwarded by identity to the row mock.
-<<<<<<< HEAD
       const confirmation = { session: { sessionId: 'session-a' } as Session, descendantCount: 0, descendantIds: [], archivedBucket: false };
-      await act(async () => root.render(<I18nProvider><SessionGroupSection {...initialProps} group={groupWithSession} allowReselect onSessionSelected={nextSelected} resetSessionSearch={nextResetSearch} deleteSessionConfirm={confirmation} /></I18nProvider>));
-||||||| bc50ba56aa
-      const confirmation = { session: { id: 'session-a' } as Session, descendantCount: 0, descendantIds: [], archivedBucket: false };
-      await act(async () => root.render(<I18nProvider><SessionGroupSection {...initialProps} group={groupWithSession} allowReselect onSessionSelected={nextSelected} resetSessionSearch={nextResetSearch} deleteSessionConfirm={confirmation} /></I18nProvider>));
-=======
-      const confirmation = { session: { id: 'session-a' } as Session, descendantCount: 0, descendantIds: [], archivedBucket: false };
       await act(async () => root.render(<I18nProvider><SessionGroupSection {...initialProps} group={groupWithSession} allowReselect onSessionSelected={nextSelected} deleteSessionConfirm={confirmation} /></I18nProvider>));
->>>>>>> upstream/main
       expect(rowPropsCapture?.allowReselect).toBe(true);
       expect(rowPropsCapture?.onSessionSelected).toBe(nextSelected);
       expect(rowPropsCapture?.deleteSessionConfirm).toBe(confirmation);

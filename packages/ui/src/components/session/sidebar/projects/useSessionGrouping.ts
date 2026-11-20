@@ -64,86 +64,6 @@ export const useSessionGrouping = (args: Args) => {
     }
     return sessionOwnersRef.current;
   }, [args.sessionOwners]);
-<<<<<<< HEAD
-  const buildGroupSearchText = React.useCallback((group: SessionGroup): string => {
-    return [group.label, group.branch ?? '', group.description ?? '', group.directory ?? ''].join(' ').toLowerCase();
-  }, []);
-
-  const buildSessionSearchText = React.useCallback((session: Session): string => {
-    const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session) ?? null) ?? '';
-    const sessionTitle = (session.title || t('sessions.sidebar.session.untitled')).trim();
-    return `${sessionTitle} ${sessionDirectory}`.toLowerCase();
-  }, [t]);
-
-  const filterSessionNodesForSearch = React.useCallback(
-    (nodes: SessionNode[], query: string): SessionNode[] => {
-      if (!query) {
-        return nodes;
-      }
-
-      const normalizedQuery = query.trim().toLowerCase();
-      const isIdQuery = normalizedQuery.startsWith('ses_');
-      return nodes.flatMap((node) => {
-        if (isIdQuery && isArchivedSession(node.session)) return [];
-        const nodeMatches = isIdQuery
-          ? node.session.sessionId.toLowerCase() === normalizedQuery
-          : matchesRankQuery([buildSessionSearchText(node.session)], query, SIDEBAR_SEARCH);
-        if (nodeMatches) {
-          return [node];
-        }
-
-        const filteredChildren = filterSessionNodesForSearch([...listedChildren(node)], query);
-        if (filteredChildren.length === 0) {
-          return [];
-        }
-
-        return [{ ...node, children: filteredChildren }];
-      });
-    },
-    [buildSessionSearchText],
-  );
-
-||||||| bc50ba56aa
-  const buildGroupSearchText = React.useCallback((group: SessionGroup): string => {
-    return [group.label, group.branch ?? '', group.description ?? '', group.directory ?? ''].join(' ').toLowerCase();
-  }, []);
-
-  const buildSessionSearchText = React.useCallback((session: Session): string => {
-    const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null) ?? '';
-    const sessionTitle = (session.title || t('sessions.sidebar.session.untitled')).trim();
-    return `${sessionTitle} ${sessionDirectory}`.toLowerCase();
-  }, [t]);
-
-  const filterSessionNodesForSearch = React.useCallback(
-    (nodes: SessionNode[], query: string): SessionNode[] => {
-      if (!query) {
-        return nodes;
-      }
-
-      const normalizedQuery = query.trim().toLowerCase();
-      const isIdQuery = normalizedQuery.startsWith('ses_');
-      return nodes.flatMap((node) => {
-        if (isIdQuery && isArchivedSession(node.session)) return [];
-        const nodeMatches = isIdQuery
-          ? node.session.id.toLowerCase() === normalizedQuery
-          : matchesRankQuery([buildSessionSearchText(node.session)], query, SIDEBAR_SEARCH);
-        if (nodeMatches) {
-          return [node];
-        }
-
-        const filteredChildren = filterSessionNodesForSearch([...listedChildren(node)], query);
-        if (filteredChildren.length === 0) {
-          return [];
-        }
-
-        return [{ ...node, children: filteredChildren }];
-      });
-    },
-    [buildSessionSearchText],
-  );
-
-=======
->>>>>>> upstream/main
   const buildGroupedSessions = React.useCallback(
     (
       projectSessions: Session[],
@@ -229,21 +149,7 @@ export const useSessionGrouping = (args: Args) => {
       const archivedKey = '__archived__';
 
       const getGroupKey = (session: Session) => {
-<<<<<<< HEAD
         if (session.archivedAt !== undefined) return archivedKey;
-        // VS Code groups by open workspace, not by worktree: every non-archived
-        // session in a project belongs to that project's single (root) group.
-        // Worktrees aren't registered in VS Code, so the desktop directory-match
-        // below would otherwise dump these sessions into the archived bucket.
-||||||| bc50ba56aa
-        if (session.time?.archived) return archivedKey;
-        // VS Code groups by open workspace, not by worktree: every non-archived
-        // session in a project belongs to that project's single (root) group.
-        // Worktrees aren't registered in VS Code, so the desktop directory-match
-        // below would otherwise dump these sessions into the archived bucket.
-=======
-        if (session.time?.archived) return archivedKey;
->>>>>>> upstream/main
         if (args.isVSCode) return normalizedProjectRoot ?? '__project_root__';
         if (args.runKeyBySessionId?.has(session.sessionId)) return normalizedProjectRoot ?? '__project_root__';
         const resolvedScope = sessionOwners?.get(session.sessionId)?.scopeDirectory;

@@ -123,7 +123,6 @@ export const useSessionActions = (args: Args) => {
     setEditTitle('');
   }, [setEditTitle, setEditingId, setEditingRowKey]);
 
-<<<<<<< HEAD
   const handleCopySessionId = React.useCallback((sessionId: string) => {
     void copyTextToClipboard(sessionId)
       .then((result) => {
@@ -136,21 +135,6 @@ export const useSessionActions = (args: Args) => {
       .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.copyId.error'))));
   }, [t]);
 
-||||||| bc50ba56aa
-  const handleCopySessionId = React.useCallback((sessionId: string) => {
-    void copyTextToClipboard(sessionId)
-      .then((result) => {
-        if (result.ok) {
-          toast.success(t('sessions.sidebar.session.copyId.success'));
-          return;
-        }
-        toast.error(t('sessions.sidebar.session.copyId.error'));
-      })
-      .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
-  }, [t]);
-
-=======
->>>>>>> upstream/main
   const executeDeleteSession = React.useCallback(
     async (
       session: Session,

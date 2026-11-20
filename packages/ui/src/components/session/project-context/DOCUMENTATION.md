@@ -12,25 +12,8 @@ drawer.
 | `KnowledgeSearchBar.tsx` | the floating search bar |
 | `NotesSection.tsx` | note list, per-note title/preview, the open note, pin, delete |
 | `NoteEditor.tsx` | the note editor: Markdown that reads formatted while you type |
-<<<<<<< HEAD
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder |
 | `PlansSection.tsx` | plan list, create, import, pin, share, delete, open |
-||||||| bc50ba56aa
-| `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder |
-| `PlansSection.tsx` | plan list, create, import, pin, share, delete, open |
-| `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, edit, forget, the Tidy up button |
-| `memoryTidy.ts` | starting the tidy-up session: the store as prompt text, the default model, the send |
-=======
-| `TodosSection.tsx` | todo list, add/toggle/edit/delete/clear, drag reorder, the plan a todo belongs to |
-| `todoList.ts` | todo list order: completed last, check and uncheck, what a todo waits for |
-| `PlansSection.tsx` | plan list, create, import, pin, open; the progress mark |
-| `usePlanActions.ts` | a plan's menu actions, shared by its row and the open plan: open session, share, delete |
-| `PlanTodos.tsx` | the todos filed under a plan, under the open plan's text |
-| `openPlanViews.ts` | the plans open in a `PlanView`, held and saved before a move |
-| `useSessionKnowledgePins.ts` | the current session's pins, one store for the lists and the open plan |
-| `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, edit, forget, the Tidy up button |
-| `memoryTidy.ts` | starting the tidy-up session: the store as prompt text, the default model, the send |
->>>>>>> upstream/main
 | `KnowledgeCard.tsx` | the list card for notes and memory: fixed height, opens on click |
 | `KnowledgeSplit.tsx` | the wide layout: list column and open entry side by side |
 | `KnowledgeEntryView.tsx` | the shell an opened note or memory renders in, in place of the list |
@@ -317,32 +300,10 @@ before that first message, then reads them from the created session metadata.
 
 ## Agent memory is owned natively by OMP
 
-<<<<<<< HEAD
 Agent memory is owned by OMP's `memory.backend` (local, mnemopi, hindsight) and
 native memory tools (`retain`, `recall`, `reflect`, `learn`, `memory_edit`),
 managed in Settings → Memory. The legacy host-owned store, client store, and
 panel tab were retired.
-||||||| bc50ba56aa
-=======
-### Dreaming
-
-With Organize memory on (Settings, under the memory tool), the server tidies the store
-on its own in a session nobody sees (`packages/web/server/lib/agent-memory/DOCUMENTATION.md`).
-The panel shows only the last pass of the scope on show, one line under the
-chips: when it ran, how many entries it merged, removed and rewrote, and Undo.
-There is no review and no notification: checking memories by hand is the chore
-dreaming removes. Undo puts back the store as the pass found it and keeps what
-was written after the pass. When the pass found project entries that belong in
-the project's agent docs, a second line counts the ones still in memory and
-offers Move: it starts a visible session (`memoryTidy.ts`, the `memory.toDocs`
-magic prompt) that adds each entry to the right AGENTS.md, skill or module doc,
-deletes it from memory and leaves the edits uncommitted. The pass itself never
-writes to the repository; moving is the user's click, in a session they watch
-and a diff they review. The lines come with `/api/agent-memory/all`, so they are
-as fresh as the list, and a pass that ends announces itself with the same
-`openchamber:agent-memory-changed` event a tool write does.
-
->>>>>>> upstream/main
 ## Data flow
 
 Storage is server-owned; see

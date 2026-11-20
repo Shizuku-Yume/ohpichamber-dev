@@ -33,18 +33,17 @@ const selectTurnOutcomeKey = (state: ReturnType<typeof useGlobalSessionsStore.ge
 };
 
 export const useSidebarLiveFacts = (enabled: boolean): SidebarLiveFacts => {
-<<<<<<< HEAD
- // Membership of these sets changes only when a turn or its background work starts or ends.
  const activeIds = useGlobalSessionStatusStore((state) => (enabled ? state.activeSessionIds : EMPTY_IDS));
  const workflowIds = useWorkflowActivityStore((state) => (enabled ? state.runningSessionIds : EMPTY_IDS));
  const shellIds = useBackgroundShellsStore((state) => (enabled ? state.sessionIds : EMPTY_IDS));
  const prWatches = usePrWatchStore((state) => (enabled ? state.bySession : EMPTY_PR_WATCHES));
- const blocking = useGlobalBlockingRequestsStore((state) => (enabled ? state.bySession : EMPTY_BLOCKING));
+ const extensionWaits = useExtensionWaitsStore((state) => (enabled ? state.bySession : EMPTY_EXTENSION_WAITS));
+  const blocking = useGlobalBlockingRequestsStore((state) => (enabled ? state.bySession : EMPTY_BLOCKING));
  const outcomeKey = useGlobalSessionsStore(React.useCallback((state) => (enabled ? selectTurnOutcomeKey(state) : ''), [enabled]));
  return React.useMemo(() => {
   if (!enabled) return EMPTY_SIDEBAR_LIVE_FACTS;
   const [unread = '', failed = ''] = outcomeKey.split('|');
-  const openTurnIds = collectOpenTurnSessionIds(activeIds, [workflowIds, shellIds, prWatches.keys()]);
+  const openTurnIds = collectOpenTurnSessionIds(activeIds, [workflowIds, shellIds, prWatches.keys(), extensionWaits.keys()]);
   return {
    activeIds: openTurnIds,
    blockingIds: new Set([...blocking].flatMap(([sessionId, pending]) => (
@@ -53,52 +52,7 @@ export const useSidebarLiveFacts = (enabled: boolean): SidebarLiveFacts => {
    unreadIds: new Set(unread ? unread.split(',').filter((sessionId) => !openTurnIds.has(sessionId)) : []),
    failedIds: new Set(failed ? failed.split(',') : []),
   };
- }, [activeIds, blocking, enabled, outcomeKey, prWatches, shellIds, workflowIds]);
-||||||| bc50ba56aa
-  // Membership of these sets changes only when a turn or its background work starts or ends.
-  const activeIds = useGlobalSessionStatusStore((state) => (enabled ? state.activeSessionIds : EMPTY_IDS));
-  const workflowIds = useWorkflowActivityStore((state) => (enabled ? state.runningSessionIds : EMPTY_IDS));
-  const shellIds = useBackgroundShellsStore((state) => (enabled ? state.sessionIds : EMPTY_IDS));
-  const imageIds = useBackgroundImagesStore((state) => (enabled ? state.sessionIds : EMPTY_IDS));
-  const prWatches = usePrWatchStore((state) => (enabled ? state.bySession : EMPTY_PR_WATCHES));
-  const blocking = useGlobalBlockingRequestsStore((state) => (enabled ? state.bySession : EMPTY_BLOCKING));
-  const outcomeKey = useGlobalSessionsStore(React.useCallback((state) => (enabled ? selectTurnOutcomeKey(state) : ''), [enabled]));
-  return React.useMemo(() => {
-    if (!enabled) return EMPTY_SIDEBAR_LIVE_FACTS;
-    const [unread = '', failed = ''] = outcomeKey.split('|');
-    const openTurnIds = collectOpenTurnSessionIds(activeIds, [workflowIds, shellIds, imageIds, prWatches.keys()]);
-    return {
-      activeIds: openTurnIds,
-      blockingIds: new Set([...blocking].flatMap(([sessionId, pending]) => (
-        pending.permissions.length + pending.forms.length + pending.pages.length > 0 ? [sessionId] : []
-      ))),
-      unreadIds: new Set(unread ? unread.split(',').filter((sessionId) => !openTurnIds.has(sessionId)) : []),
-      failedIds: new Set(failed ? failed.split(',') : []),
-    };
-  }, [activeIds, blocking, enabled, imageIds, outcomeKey, prWatches, shellIds, workflowIds]);
-=======
-  const activeIds = useGlobalSessionStatusStore((state) => (enabled ? state.activeSessionIds : EMPTY_IDS));
-  const workflowIds = useWorkflowActivityStore((state) => (enabled ? state.runningSessionIds : EMPTY_IDS));
-  const shellIds = useBackgroundShellsStore((state) => (enabled ? state.sessionIds : EMPTY_IDS));
-  const imageIds = useBackgroundImagesStore((state) => (enabled ? state.sessionIds : EMPTY_IDS));
-  const prWatches = usePrWatchStore((state) => (enabled ? state.bySession : EMPTY_PR_WATCHES));
-  const extensionWaits = useExtensionWaitsStore((state) => (enabled ? state.bySession : EMPTY_EXTENSION_WAITS));
-  const blocking = useGlobalBlockingRequestsStore((state) => (enabled ? state.bySession : EMPTY_BLOCKING));
-  const outcomeKey = useGlobalSessionsStore(React.useCallback((state) => (enabled ? selectTurnOutcomeKey(state) : ''), [enabled]));
-  return React.useMemo(() => {
-    if (!enabled) return EMPTY_SIDEBAR_LIVE_FACTS;
-    const [unread = '', failed = ''] = outcomeKey.split('|');
-    const openTurnIds = collectOpenTurnSessionIds(activeIds, [workflowIds, shellIds, imageIds, prWatches.keys(), extensionWaits.keys()]);
-    return {
-      activeIds: openTurnIds,
-      blockingIds: new Set([...blocking].flatMap(([sessionId, pending]) => (
-        pending.permissions.length + pending.forms.length + pending.pages.length > 0 ? [sessionId] : []
-      ))),
-      unreadIds: new Set(unread ? unread.split(',').filter((sessionId) => !openTurnIds.has(sessionId)) : []),
-      failedIds: new Set(failed ? failed.split(',') : []),
-    };
-  }, [activeIds, blocking, enabled, extensionWaits, imageIds, outcomeKey, prWatches, shellIds, workflowIds]);
->>>>>>> upstream/main
+ }, [activeIds, blocking, enabled, extensionWaits, imageIds, outcomeKey, prWatches, shellIds, workflowIds]);
 };
 
 const localHourStart = (): number => {

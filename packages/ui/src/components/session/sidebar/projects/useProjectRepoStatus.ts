@@ -67,24 +67,9 @@ export const useProjectRepoStatus = (args: Args): void => {
       const state = useGitStore.getState().directories.get(path);
       if (state?.isGitRepo !== false && !state?.status) paths.delete(path);
     };
-<<<<<<< HEAD
-    // Read the paths this sidebar has not populated yet in one scheduled pass.
-    // The fork's Git runtime contract has no batched status prefetch, so each
-    // project reads through the store's own cache and connection path.
-||||||| bc50ba56aa
-    // Read the paths this sidebar has not populated yet in one scheduled pass.
-    // The prefetch answers every status in one batched request, so the store's
-    // per-project reads after it are cache hits instead of a connection each.
-=======
->>>>>>> upstream/main
     const isCurrent = captureRuntimeInstance();
     void runBackgroundNetworkTask(async () => {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-      await git.prefetchProjectStatuses?.(newPaths);
-=======
       void git.prefetchProjectStatuses?.(newPaths).catch(() => undefined);
->>>>>>> upstream/main
       if (!isCurrent()) return;
       await Promise.all(newPaths.map((path) => ensureStatus(path, git).then(
         () => forgetIfUnknown(path),

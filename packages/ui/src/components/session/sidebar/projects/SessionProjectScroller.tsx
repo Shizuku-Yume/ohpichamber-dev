@@ -82,15 +82,7 @@ type SessionProjectScrollerState = Pick<SessionGroupSectionProps,
 };
 
 type GroupProps = Pick<SessionGroupSectionProps,
-<<<<<<< HEAD
-  | 'hasSessionSearchQuery' | 'normalizedSessionSearchQuery' | 'groupSearchDataByGroup'
   | 'collapsedGroups' | 'mobileVariant' | 'alwaysShowActions'
-||||||| bc50ba56aa
-  | 'hasSessionSearchQuery' | 'normalizedSessionSearchQuery' | 'groupSearchDataByGroup'
-  | 'collapsedGroups' | 'hideDirectoryControls' | 'mobileVariant' | 'alwaysShowActions'
-=======
-  | 'collapsedGroups' | 'hideDirectoryControls' | 'mobileVariant' | 'alwaysShowActions'
->>>>>>> upstream/main
   | 'activeProjectId' | 'expandedParents' | 'editTitle'
   | 'editingRowKey'
   | 'folderRename' | 'setFolderRenameDraft' | 'clearFolderRename'

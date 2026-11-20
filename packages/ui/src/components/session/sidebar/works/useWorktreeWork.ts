@@ -23,21 +23,9 @@ import type { SpaceMark } from '@/lib/spaces/spaces-store';
 import type { ProjectEntry } from '@/lib/api/types';
 import type { Session } from '@openchamber/agent-contract';
 import { formatProjectLabel, isPathWithinProject, normalizePath } from '../utils';
-<<<<<<< HEAD
 import type { CollapsedActivityState } from '../sessions/collapsedActivityState';
-import { collectWorkSessions, finishSpaceWork, finishWorktreeWork, isWorkInWork, pickWorkSessionToOpen, trackWork } from './workActions';
-import { problemMessage } from '@/lib/problemMessage';
-||||||| bc50ba56aa
-import { refreshSpacesJourney, useSpaceTakesNoNewSession } from '@/lib/spaces/spaces-store';
-import { setSpaceTaskTitle } from '@/lib/spaces/spaces-api';
-import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
-import { collectWorkSessions, finishSpaceWork, finishWorktreeWork, isWorkInWork, pickWorkSessionToOpen, trackWork } from './workActions';
-=======
-import { refreshSpacesJourney, useSpaceTakesNoNewSession } from '@/lib/spaces/spaces-store';
-import { setSpaceTaskTitle } from '@/lib/spaces/spaces-api';
-import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
 import { collectWorkSessions, finishSpaceWork, finishWorktreeWork, isWorkInWork, pickWorkSessionToOpen, trackWork, type FinishWorktreeWorkOutcome } from './workActions';
->>>>>>> upstream/main
+import { problemMessage } from '@/lib/problemMessage';
 
 const CURRENT_SESSION = '\u0000session';
 
@@ -74,15 +62,6 @@ type Args = {
   onNavigate: () => void;
 };
 
-<<<<<<< HEAD
-/**
- * What a worktree's or a space's work row knows and does, whatever draws it:
- * the desktop row with hover actions and menus, the phone's with swipe
- * actions. The row reads like a session row (live state, the task's name, its
- * reference) and opens what the user last worked on there. A space's task
- * name lives on the space record, its own name stands where a branch would, it has
- * no pin or archive, and its Done leaves the space as it is.
- */
 export type UseWorktreeWorkResult = {
   worktree: WorktreeMetadata | null | undefined;
   space: SpaceMark | null;
@@ -119,36 +98,15 @@ export type UseWorktreeWorkResult = {
 };
 
 export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Args): UseWorktreeWorkResult {
-||||||| bc50ba56aa
-/**
- * What a worktree's or a space's work row knows and does, whatever draws it:
- * the desktop row with hover actions and menus, the phone's with swipe
- * actions. The row reads like a session row (live state, the task's name, its
- * reference) and opens what the user last worked on there. A space's task
- * name lives on the space record, its own name stands where a branch would, it has
- * no pin or archive, and its Done leaves the space as it is.
- */
-export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Args) {
-=======
-export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Args) {
->>>>>>> upstream/main
   const { t } = useI18n();
   const worktree = group.worktree;
   const space = group.space ?? null;
   const directory = normalizePath(group.directory ?? null);
-<<<<<<< HEAD
   // A space whose making failed, whose container is gone or whose machine is
   // out of reach would open a new chat in an empty folder, or fail.
   // Isolated spaces are unreleased (`ISOLATED_SPACES_RELEASED = false`), so a
   // space's work row offers the same actions as a worktree's.
   const spaceTakesNoNewSession = space?.state === 'stale' || space?.state === 'unknown';
-||||||| bc50ba56aa
-  // A space whose making failed, whose container is gone or whose machine is
-  // out of reach would open a new chat in an empty folder, or fail.
-  const spaceTakesNoNewSession = useSpaceTakesNoNewSession(space?.id);
-=======
-  const spaceTakesNoNewSession = useSpaceTakesNoNewSession(space?.id);
->>>>>>> upstream/main
   const worktreeRemoving = useWorktreeRemoving(worktree ? worktree.path : null);
   const sessions = React.useMemo(() => collectWorkSessions(group.sessions), [group.sessions]);
   const project = useProjectsStore(React.useCallback(
@@ -204,44 +162,9 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
       return;
     }
     prepare();
-<<<<<<< HEAD
-    useSessionUIStore.getState().setCurrentSession(session.sessionId, resolveGlobalSessionDirectory(session) ?? directory);
-||||||| bc50ba56aa
-    useSessionUIStore.getState().setCurrentSession(session.id, session.directory ?? directory);
-=======
-    useSessionUIStore.getState().setCurrentSession(session.id, openDirectory);
->>>>>>> upstream/main
+    useSessionUIStore.getState().setCurrentSession(session.sessionId, openDirectory);
   };
-<<<<<<< HEAD
-  // The pin lives in the branch's config, so a detached worktree has none.
-  // The row moves once the server's topology event lists the change. The fork's
-  // Git runtime contract has no worktree read/unpin write yet, so the row
-  // reports the state it is given and offers no write.
-  const pinned = worktree?.pinnedAt !== undefined;
-||||||| bc50ba56aa
-  // The pin lives in the branch's config, so a detached worktree has none.
-  // The row moves once the server's topology event lists the change.
-  const pinned = worktree?.pinnedAt !== undefined;
-  // The pin list it is filed in (Pin to), Pinned when none.
-=======
->>>>>>> upstream/main
   const pinList = pinned ? worktree?.pinList ?? DEFAULT_PIN_LIST : null;
-<<<<<<< HEAD
-  const canPin = false;
-||||||| bc50ba56aa
-  const canPin = Boolean(group.directory && worktree?.branch?.trim()) && !worktreeRemoving;
-  /** `list` null is Pinned; `pin` false unpins. */
-  const setPin = async (pin: boolean, list: string | null = null): Promise<void> => {
-    if (!group.directory || !canPin) return;
-    try {
-      await setGitWorktreePinned(group.directory, pin, list);
-    } catch (error) {
-      toast.error(pin ? t('sessions.sidebar.work.pin.failed') : t('sessions.sidebar.work.unpin.failed'), {
-        description: error instanceof Error ? error.message : undefined,
-      });
-    }
-  };
-=======
   const canPin = Boolean(group.directory && worktree?.branch?.trim()) && !worktreeRemoving;
   const setPin = async (pin: boolean, list: string | null = null): Promise<void> => {
     if (!group.directory || !canPin) return;
@@ -253,7 +176,6 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
       });
     }
   };
->>>>>>> upstream/main
   const saveTitle = async (next: string): Promise<void> => {
     if (!group.directory || !next.trim() || next.trim() === (title ?? '')) return;
     try {

@@ -512,13 +512,7 @@ export const SessionDialogs: React.FC = () => {
                 openDeleteDialog({ sessions, mode: 'worktree', worktree });
                 return;
             }
-<<<<<<< HEAD
-            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.sessionId), true);
-||||||| bc50ba56aa
-            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.id), true);
-=======
-            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.id), true, false);
->>>>>>> upstream/main
+            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.sessionId), true, false);
         } finally {
             quickDeletePathsRef.current.delete(pathKey);
         }

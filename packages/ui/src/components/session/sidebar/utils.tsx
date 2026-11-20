@@ -1,21 +1,6 @@
-<<<<<<< HEAD
-import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
-||||||| bc50ba56aa
-import React from 'react';
-import type { Session } from '@/lib/opencode/model';
-=======
-import type { Session } from '@/lib/opencode/model';
->>>>>>> upstream/main
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
-<<<<<<< HEAD
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
-||||||| bc50ba56aa
-import { matchSegments, type MatchRange } from '@/lib/search/matchSegments';
-import { MatchHighlight } from '@/components/ui/MatchHighlight';
-=======
->>>>>>> upstream/main
 
 import { normalizePath } from '@/lib/pathNormalization';
 export { normalizePath };
@@ -182,68 +167,3 @@ export const resolveArchivedFolderName = (session: Session, projectRoot: string 
 };
 
 export const formatProjectLabel = (label: string): string => label.trim();
-<<<<<<< HEAD
-
-export const renderHighlightedText = (text: string, query: string): React.ReactNode => {
-  if (!query) {
-    return text;
-  }
-
-  const loweredText = text.toLowerCase();
-  const loweredQuery = query.toLowerCase();
-  const queryLength = loweredQuery.length;
-  if (queryLength === 0) {
-    return text;
-  }
-
-  const parts: React.ReactNode[] = [];
-  let cursor = 0;
-  let matchIndex = loweredText.indexOf(loweredQuery, cursor);
-
-  while (matchIndex !== -1) {
-    if (matchIndex > cursor) {
-      parts.push(text.slice(cursor, matchIndex));
-    }
-    const matchText = text.slice(matchIndex, matchIndex + queryLength);
-    parts.push(
-      <mark
-        key={`${matchIndex}-${matchText}`}
-        className="bg-primary text-primary-foreground ring-1 ring-primary/90"
-      >
-        {matchText}
-      </mark>,
-    );
-    cursor = matchIndex + queryLength;
-    matchIndex = loweredText.indexOf(loweredQuery, cursor);
-  }
-
-  if (cursor < text.length) {
-    parts.push(text.slice(cursor));
-  }
-
-  return parts.length > 0 ? parts : text;
-};
-||||||| bc50ba56aa
-
-// The sidebar's filter marks every occurrence of the query.
-export const renderHighlightedText = (text: string, query: string): React.ReactNode => {
-  if (!query) {
-    return text;
-  }
-
-  const loweredText = text.toLowerCase();
-  const loweredQuery = query.toLowerCase();
-  const ranges: MatchRange[] = [];
-  let matchIndex = loweredText.indexOf(loweredQuery);
-  while (matchIndex !== -1) {
-    ranges.push([matchIndex, matchIndex + loweredQuery.length]);
-    matchIndex = loweredText.indexOf(loweredQuery, matchIndex + loweredQuery.length);
-  }
-  if (ranges.length === 0) {
-    return text;
-  }
-
-  return <MatchHighlight segments={matchSegments(text, ranges)} />;
-};
-=======
->>>>>>> upstream/main

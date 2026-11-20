@@ -1,14 +1,6 @@
 import React from 'react';
-<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
-import type { SessionGroup, SessionNode, GroupSearchData } from '../types';
-||||||| bc50ba56aa
-import type { Session } from '@/lib/opencode/model';
-import type { SessionGroup, SessionNode, GroupSearchData } from '../types';
-=======
-import type { Session } from '@/lib/opencode/model';
 import type { SessionGroup } from '../types';
->>>>>>> upstream/main
 import { dedupeSessionsById, normalizePath } from '../utils';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { streamPerfCount } from '@/stores/utils/streamDebug';

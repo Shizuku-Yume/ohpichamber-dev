@@ -78,14 +78,7 @@ type LinkedItem =
     includeDiff: boolean;
     selection: ReferencePickerSelection;
   }
-<<<<<<< HEAD
   | { kind: 'issue'; number: number; title: string; url: string; selection: ReferencePickerSelection }
-||||||| bc50ba56aa
-  /** An issue, or a discussion (`discussion`), which starts work the same way. */
-  | { kind: 'issue'; number: number; title: string; url: string; discussion: boolean; selection: ReferencePickerSelection }
-=======
-  | { kind: 'issue'; number: number; title: string; url: string; discussion: boolean; selection: ReferencePickerSelection }
->>>>>>> upstream/main
   | { kind: 'tracker'; provider: string; identifier: string; title: string; url: string; selection: ReferencePickerSelection }
   | { kind: 'guest'; guest: AttachIssueRequest };
 
@@ -241,93 +234,43 @@ export function NewWorktreeDialog({
 
   const linkedPr = mode === 'from-item' && linked?.kind === 'pr' ? linked.pr : null;
   const linkedPrContext = mode === 'from-item' && linked?.kind === 'pr' ? linked.context : null;
-<<<<<<< HEAD
   const githubContext = useGitHubReadContext(open ? projectDirectory : null);
   // A GitLab project's items are merge requests: the PR-or-issue copy says so.
   const itemProvider = useRepositoryReferenceProvider(open ? projectDirectory : null);
   const changeRequestTerm = useChangeRequestTerm(itemProvider);
-||||||| bc50ba56aa
-  const repositoryContext = useRepositoryReadContext(open ? projectDirectory : null);
-  const repositorySourceStatus = useRepositorySourceStatus(open ? projectDirectory : null);
-  // The project's provider names its items: a GitLab project's are merge requests.
   const itemDescriptor = useSourceControlProvider(useRepositoryReferenceProvider(open ? projectDirectory : null));
   const itemTerm = itemDescriptor.terminology.changeRequest;
-=======
-  const repositoryContext = useRepositoryReadContext(open ? projectDirectory : null);
-  const repositorySourceStatus = useRepositorySourceStatus(open ? projectDirectory : null);
-  const itemDescriptor = useSourceControlProvider(useRepositoryReferenceProvider(open ? projectDirectory : null));
-  const itemTerm = itemDescriptor.terminology.changeRequest;
->>>>>>> upstream/main
   const tItem = React.useCallback(
     (key: I18nKey) => t(changeRequestCopy(key, changeRequestTerm)),
     [changeRequestTerm, t],
   );
-<<<<<<< HEAD
-  // The fields the visible tab edits.
-||||||| bc50ba56aa
   const descriptorOf = useSourceControlDescriptorOf();
-  // The fields the visible tab edits.
-=======
-  const descriptorOf = useSourceControlDescriptorOf();
->>>>>>> upstream/main
   const draft = mode === 'from-item' ? itemBranch : newBranch;
   const setDraft = mode === 'from-item' ? setItemBranch : setNewBranch;
   const branchName = mode === 'existing-branch' ? existingBranch.selectedBranch : draft.branchName;
   const worktreeName = mode === 'existing-branch' ? existingBranch.worktreeName : draft.worktreeName;
   const startsNewBranch = mode === 'new-branch' || (mode === 'from-item' && !linkedPr);
 
-<<<<<<< HEAD
-  // A stacked worktree starts from the branch it was asked for, which the
-  // server fetches before creating; it never falls back to the root's branch.
   const onTopRemote = githubContext && githubContext !== 'missing' ? githubContext.primaryRemote : 'origin';
-||||||| bc50ba56aa
-  // A branch on top of another starts from it, once branches are known. One
-  // not fetched here yet starts from its copy on the bound remote, which the
-  // server fetches before creating; it never falls back to the root's branch.
-  const onTopRemote = repositoryContext && repositoryContext !== 'missing' ? repositoryContext.primaryRemote : 'origin';
-=======
-  const onTopRemote = repositoryContext && repositoryContext !== 'missing' ? repositoryContext.primaryRemote : 'origin';
->>>>>>> upstream/main
   React.useEffect(() => {
     if (!open || !initialSourceBranch || !fetchedBranchList || sourceBranch) return;
     setSourceBranch(resolveBranchOnTopSource(fetchedBranchList, initialSourceBranch) || `remotes/${onTopRemote}/${initialSourceBranch}`);
   }, [open, initialSourceBranch, fetchedBranchList, sourceBranch, onTopRemote]);
 
-<<<<<<< HEAD
-  // Start from the branch the project root is on, once branches are known.
-||||||| bc50ba56aa
-  // Start from the bound remote's default branch as it is on the remote, else
-  // the branch the project root is on, once branches are known.
-=======
->>>>>>> upstream/main
   React.useEffect(() => {
     if (!open || initialSourceBranch || !fetchedBranchList || !projectDirectory || sourceBranch) return;
     let cancelled = false;
     void getRootBranch(projectDirectory).catch(() => null).then((rootBranch) => {
       if (cancelled) return;
-<<<<<<< HEAD
-      const preferred = resolveDefaultSourceBranch({ branches: branches.all, rootBranch });
-||||||| bc50ba56aa
-      const defaultBranches = branches.defaultBranches ?? {};
-      const defaultBranch = defaultBranches[onTopRemote] ?? null;
-      const preferred = resolveDefaultSourceBranch({ branches: branches.all, rootBranch, defaultBranch, remote: onTopRemote });
-=======
       const defaultBranches = branches?.defaultBranches ?? {};
       const defaultBranch = defaultBranches[onTopRemote] ?? null;
-      const preferred = resolveDefaultSourceBranch({ branches: fetchedBranchList, rootBranch, defaultBranch, remote: onTopRemote });
->>>>>>> upstream/main
+      const preferred = resolveDefaultSourceBranch({ branches: fetchedBranchList, rootBranch });
       if (preferred) setSourceBranch((current) => current || preferred);
     });
     return () => {
       cancelled = true;
     };
-<<<<<<< HEAD
-  }, [open, initialSourceBranch, branches?.all, projectDirectory, sourceBranch]);
-||||||| bc50ba56aa
-  }, [open, initialSourceBranch, branches?.all, branches?.defaultBranches, projectDirectory, sourceBranch, onTopRemote]);
-=======
-  }, [open, initialSourceBranch, fetchedBranchList, branches?.defaultBranches, projectDirectory, sourceBranch, onTopRemote]);
->>>>>>> upstream/main
+  }, [open, initialSourceBranch, fetchedBranchList, projectDirectory, sourceBranch]);
 
   React.useLayoutEffect(() => {
     if (!open) {
@@ -519,13 +462,7 @@ export function NewWorktreeDialog({
           existingBranch: mode === 'existing-branch' ? normalizedBranch : undefined,
           setupCommands: resolvedSetupCommands,
           returnAfterDirectoryCreated: true,
-<<<<<<< HEAD
-||||||| bc50ba56aa
-          // A worktree for an issue is named by it until the agent names the task.
           taskTitle: item?.kind === 'issue' || item?.kind === 'tracker' ? item.title : item?.kind === 'guest' ? item.guest.title : undefined,
-=======
-          taskTitle: item?.kind === 'issue' || item?.kind === 'tracker' ? item.title : item?.kind === 'guest' ? item.guest.title : undefined,
->>>>>>> upstream/main
         };
         if (sourceBranch && startsNewBranch) baseArgs.startRef = sourceBranch;
         return baseArgs;
@@ -590,18 +527,8 @@ export function NewWorktreeDialog({
       return null;
     }
 
-<<<<<<< HEAD
     const reference = 'reference' in choice ? choice.reference : null;
-    if (!reference) return null;
     if (reference.kind === 'issue') {
-||||||| bc50ba56aa
-    const { reference } = choice;
-    // A discussion starts work the way an issue does: a new branch named after it.
-    if (reference.kind === 'issue' || reference.kind === 'discussion') {
-=======
-    const { reference } = choice;
-    if (reference.kind === 'issue' || reference.kind === 'discussion') {
->>>>>>> upstream/main
       linkItem(
         { kind: 'issue', number: reference.number, title: reference.title, url: reference.url, selection: choice },
         `issue-${reference.number}-${generateBranchSlug()}`,
@@ -610,19 +537,8 @@ export function NewWorktreeDialog({
     }
     if (reference.kind !== 'pull') return null;
 
-<<<<<<< HEAD
-    // A PR's branch can live in one worktree only.
+    const branch = descriptorOf(reference.provider).features.branchHeads ? reference.head : `change-${reference.number}`;
     if (projectRef && reference.kind === 'pull') {
-||||||| bc50ba56aa
-    // A review host's head is a patchset ref, not a branch: the worktree's
-    // branch is named after the change, as the server names it.
-    const branch = descriptorOf(reference.provider).features.branchHeads ? reference.head : `change-${reference.number}`;
-    // A PR's branch can live in one worktree only.
-    if (projectRef) {
-=======
-    const branch = descriptorOf(reference.provider).features.branchHeads ? reference.head : `change-${reference.number}`;
-    if (projectRef) {
->>>>>>> upstream/main
       const failure = (message: string): ReferencePickerConfirmFailure => ({ failedKeys: [referencePickerItemKey(choice)], message });
       try {
         const result = await validateWorktreeCreate(projectRef, { mode: 'new', branchName: reference.head, worktreeName: reference.head });
@@ -676,19 +592,6 @@ export function NewWorktreeDialog({
     setItemBranch(EMPTY_DRAFT);
   };
 
-<<<<<<< HEAD
-  // The picker lists the project's issues and change requests: the same
-  // answer it gives itself, offered while the read context loads.
-  const repositorySourceStatus = useRepositorySourceStatus(open ? projectDirectory : null);
-  const itemDescriptor = useSourceControlProvider(useRepositoryReferenceProvider(open ? projectDirectory : null));
-  const descriptorOf = useSourceControlDescriptorOf();
-  const itemTerm = itemDescriptor.terminology.changeRequest;
-  const trackerSources = useTrackerSources();
-||||||| bc50ba56aa
-  // The picker can list the project's issues and change requests: the same
-  // answer the picker itself gives, offered while the read context loads.
-=======
->>>>>>> upstream/main
   const isRepositoryConnected = repositorySourceStatus === 'ready';
   const canLinkItems = isRepositoryConnected || trackerSources.length > 0 || dialogGuests.length > 0;
 

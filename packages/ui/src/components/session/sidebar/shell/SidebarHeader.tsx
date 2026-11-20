@@ -25,18 +25,11 @@ import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { SessionSearchInput } from '@/components/session/SessionSearchInput';
 import { markAllSessionsViewed } from '@/sync/notification-store';
-<<<<<<< HEAD
 import { isSessionUnread } from '@/sync/session-unread';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-||||||| bc50ba56aa
-import { useHasUnreadSession } from '@/sync/session-unread';
-=======
-import { useHasUnreadSession } from '@/sync/session-unread';
 import type { SearchScope } from '@/lib/search/omniQuery';
 import { SearchInMenu } from '@/components/search/SearchInMenu';
 import { SearchStatusMark } from '@/components/search/SearchStatusMark';
 import type { ContentSearchStatus } from '@/hooks/useConversationSearch';
->>>>>>> upstream/main
 
 type Props = {
   hideDirectoryControls: boolean;
