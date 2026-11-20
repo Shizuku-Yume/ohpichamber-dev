@@ -765,7 +765,7 @@ export function useComposerSubmission({
                 ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
                 ?? currentDirectory;
             if (linkTargetSessionId && getRuntimeKey() === submitRuntimeKey) {
-                void recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences).catch((error: unknown) => {
+                void Promise.resolve().then(() => recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences)).catch((error: unknown) => {
                     console.error('Session link update failed:', error);
                     toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
                 });

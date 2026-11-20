@@ -98,7 +98,7 @@ export function useComposerCompletions({
         const lastAtSymbol = message.substring(0, cursorPosition).lastIndexOf('@');
         const start = lastAtSymbol === -1 ? cursorPosition : lastAtSymbol;
         const inserted = `${sessionLinkText(session.sessionId)} `;
-        rememberSessionMentions([sessionReference(session)]);
+        rememberSessionMentions([sessionReference({ id: session.sessionId, title: session.title ?? '' })]);
         const newMessage = message.substring(0, start) + inserted + message.substring(cursorPosition);
         setMessage(newMessage);
         const nextCursor = start + inserted.length;

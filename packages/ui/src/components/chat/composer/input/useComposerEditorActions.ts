@@ -17,7 +17,7 @@ import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { getCycledPrimaryAgentName } from '../../mobileControlsUtils';
+import { getCycledAgentId } from '../../mobileControlsUtils';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { composerReferenceKey, withComposerReferences } from '../../composer/composerReferences';
 import type { FileMentionAutocompleteInputSource } from '../../fileMentionAutocompleteState';
@@ -83,7 +83,6 @@ export function useComposerEditorActions({
         position: autocompleteOverlayPosition,
         update: updateAutocompleteOverlayPosition,
     } = useAutocompletePosition({
-        fullWidth: isMobile,
         openAutocomplete,
         query: autocompleteQuery,
         text: composerText,
@@ -106,7 +105,7 @@ export function useComposerEditorActions({
 
     const handleCycleAgent = React.useCallback((direction: 1 | -1 = 1) => {
         if (isAutoModel(currentProviderId, currentModelId)) return;
-        const nextAgentName = getCycledPrimaryAgentName(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
+        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
         if (!nextAgentName) return;
 
         if (currentSessionId) {

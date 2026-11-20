@@ -144,7 +144,6 @@ export function useComposerDraftHistory({
             text: initialDraftRef.current ?? '',
             identity: initialDraftIdentityRef.current,
         },
-        newSessionDraftId: newSessionDraftOpen ? newSessionDraft.draftId : null,
         onIdentityChange: () => {
             mentionCompletion.clear();
             closeAutocomplete();
