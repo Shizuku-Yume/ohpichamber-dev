@@ -1935,3 +1935,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** on Windows the shim lookup and the `components|share-document` filter never match, so the generated messages miss keys there.
 - **Mine:** yes (requested drift classification)
 - **Revisit when:** upstream normalizes these paths itself.
+
+## 2026-11-21 - Report desktop notification success only after native confirmation
+
+- **Decided:** treat a desktop notification as sent only when the Electron IPC confirms Electron's `show` event; an unconfirmed or failed native result reports failure with no browser `Notification` fallback.
+- **Instead of:** the upstream behavior, which treats any resolved desktop IPC call as success and lets the browser path mask a native failure.
+- **Because:** the notification test action told users a notification was delivered when none appeared; Electron 45 has no authorization query, so the `show` event is the only native signal available.
+- **Mine:** yes (requested drift classification)
+- **Revisit when:** Electron exposes notification authorization or upstream adopts native confirmation.
