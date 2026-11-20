@@ -50,15 +50,8 @@ const pending = new Map<string, { sessionIds: Map<string, boolean>; request: Pro
 let generation = 0;
 subscribeRuntimeEndpointWillChange(() => { generation += 1; pending.clear(); });
 
-<<<<<<< HEAD
 /** A discovered directory is admitted through the project it belongs to, without a trust prompt. */
 const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean> => {
-||||||| bc50ba56aa
-/** The same trust prompt serves background discoveries and explicit navigation. */
-const tryAdmitSession = (sessionId: string, directory: string, deliberate = false): Promise<boolean> => {
-=======
-const tryAdmitSession = (sessionId: string, directory: string, deliberate = false): Promise<string | null> => {
->>>>>>> upstream/main
   const normalized = normalizePath(directory);
   if (!normalized) return Promise.resolve(null);
   if (isSessionAdmitted(normalized)) return Promise.resolve(normalized);
@@ -84,18 +77,8 @@ const tryAdmitSession = (sessionId: string, directory: string, deliberate = fals
   };
   const request = (async () => {
     if (!isVSCodeRuntime()) await ensureChatsRootDirectory();
-<<<<<<< HEAD
     if (!currentSession()) return false;
     if (isSessionAdmitted(normalized)) return true;
-||||||| bc50ba56aa
-    if (!currentSession()) return false;
-    if (isSessionAdmitted(normalized)) return true;
-    if (!await requestOpenCodeTrust(normalized, { deliberate, background: !deliberate, throwOnError: true })) return false;
-=======
-    if (!currentSession()) return null;
-    if (isSessionAdmitted(normalized)) return normalized;
-    if (!await requestOpenCodeTrust(normalized, { deliberate, background: !deliberate, throwOnError: true })) return null;
->>>>>>> upstream/main
     const currentId = currentSession();
     if (!currentId) return null;
     if (isSessionAdmitted(normalized)) return normalized;
@@ -111,24 +94,6 @@ const tryAdmitSession = (sessionId: string, directory: string, deliberate = fals
   return request;
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-export const admitSession = (sessionId: string, directory: string, deliberate = false): Promise<boolean> => (
-  tryAdmitSession(sessionId, directory, deliberate).catch((error) => {
-    console.warn('[session-admission] Could not register the session project:', error);
-    return false;
-  })
-);
-
-=======
-export const admitSession = (sessionId: string, directory: string, deliberate = false): Promise<string | null> => (
-  tryAdmitSession(sessionId, directory, deliberate).catch((error) => {
-    console.warn('[session-admission] Could not register the session project:', error);
-    return null;
-  })
-);
-
->>>>>>> upstream/main
 const RETRY_DELAYS = [1000, 2000, 4000];
 type AdmissionAttempt = { sessionId: string; retries: number; timer: ReturnType<typeof setTimeout> | null };
 
@@ -172,19 +137,10 @@ export const subscribeSessionAdmission = (): (() => void) => {
     if (parked) {
       const record = records.get(parked.id);
       const directory = record ? resolveGlobalSessionDirectory(record) : null;
-<<<<<<< HEAD
       // Any navigation since replaces the parked session; keep waiting while
       // cold discovery has not yet indexed it or resolved its directory.
       if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision()) parked = null;
       else if (directory && isSessionAdmitted(directory)) {
-||||||| bc50ba56aa
-      // Any navigation since, a draft included, replaces the parked session.
-      if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision() || !directory) parked = null;
-      else if (isSessionAdmitted(directory)) {
-=======
-      if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision() || !directory) parked = null;
-      else if (isSessionAdmitted(directory)) {
->>>>>>> upstream/main
         const { id } = parked;
         parked = null;
         void ui.setCurrentSession(id, directory);

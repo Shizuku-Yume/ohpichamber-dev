@@ -1,14 +1,6 @@
 import { describe, expect, test } from "bun:test"
-<<<<<<< HEAD
 import type { Message, Part } from "@openchamber/agent-contract"
 import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry } from "./form-recovery"
-||||||| bc50ba56aa
-import type { Message, Part } from "@/lib/opencode/model"
-import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry } from "./form-recovery"
-=======
-import type { Message, Part } from "@/lib/opencode/model"
-import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry, resolveRecoveryDirectory } from "./form-recovery"
->>>>>>> upstream/main
 
 const message = (role: Message["role"], parts: Part[] = []): Message => ({
   messageId: `${role}-${parts.length}`, sessionId: "ses_1", turnId: "turn_1", role, createdAt: 1, parts,
