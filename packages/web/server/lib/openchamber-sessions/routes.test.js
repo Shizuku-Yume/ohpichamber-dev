@@ -10,6 +10,7 @@ import { createHostSessionState } from '../host/session-state.js';
 import { history as historyFixture, runtimeSession, snapshot as snapshotFixture } from '../event-stream/canonical-test-fixtures.js';
 import { mergeMetadataPatch } from './session-metadata-store.js';
 import * as routes from './routes.js';
+import { createSessionWorktreeMover } from './worktree-move.js';
 
 
 let routeFixture;
@@ -1208,6 +1209,33 @@ describe('session.moveToWorktree', () => {
     for (const name of ['../escape', '/abs', 'a/b', '..', '', 'x:y']) {
       await expect(service.moveToWorktree('ses_1', { worktree: { name } })).rejects.toMatchObject({ statusCode: 400 });
     }
+  });
+
+  it('captures the Git move owner on first use, after route registration rather than service startup', async () => {
+    let registered = false;
+    const factory = vi.fn((dependencies) => {
+      if (!registered) throw new Error('Git has not registered');
+      return createSessionWorktreeMover(dependencies);
+    });
+    const { service, scopes, calls } = await createMoveService({ createSessionWorktreeMover: factory });
+    expect(factory).not.toHaveBeenCalled();
+    scopes.set('ses_1', scope('ses_1'));
+    registered = true;
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'fix-login' } })).rejects.toMatchObject({ statusCode: 503 });
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(calls.some(([action]) => action === 'removeWorktree')).toBe(true);
+  });
+
+  it('refuses an unavailable Git bridge before constructing a mover or changing a checkout', async () => {
+    const factory = vi.fn();
+    const { service, scopes, calls } = await createMoveService({
+      createSessionWorktreeMover: factory,
+      worktreeMove: { createWorktree: undefined },
+    });
+    scopes.set('ses_1', scope('ses_1'));
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'fix-login' } })).rejects.toMatchObject({ statusCode: 503 });
+    expect(factory).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
   });
 
   it('refuses an unknown session and a caller from another session family', async () => {
