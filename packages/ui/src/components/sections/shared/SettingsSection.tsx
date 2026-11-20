@@ -4,76 +4,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Radio } from '@/components/ui/radio';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
-<<<<<<< HEAD
-import { Icon } from '@/components/icon/Icon';
-||||||| bc50ba56aa
-=======
 import { useI18n } from '@/lib/i18n';
 import { isNewSetting } from '@/lib/settings/newSettings';
 import { isSettingsAnchorAvailable, type SettingsSearchAvailabilityContext } from '@/lib/settings/search';
->>>>>>> upstream/main
 import { cn } from '@/lib/utils';
 import { SettingsInfoHint } from './SettingsInfoHint';
 
-<<<<<<< HEAD
-/**
- * Width cap shared by the settings pickers that hug their value.
- *
- * `applyTypography` scales the `--typography-*` vars but never the root rem,
- * so a rem-based cap (`max-w-48`) stays 192px while the label inside it grows,
- * and the value clips at 150–200% interface font size. `ch` is measured
- * against the trigger's own `typography-ui-label` font, so the cap grows with
- * the setting.
- *
- * A trigger hugs its value, the chevron right after it, so a short value is a
- * short button rather than a wide box with the chevron pushed to its edge.
- * The cap keeps a long value from stretching across the pane; it truncates.
- */
 const SETTINGS_HUG_WIDTH_CLASS = 'w-fit max-w-[28ch]';
-||||||| bc50ba56aa
-/**
- * Width cap shared by every settings value picker.
- *
- * `applyTypography` scales the `--typography-*` vars but never the root rem,
- * so a rem-based cap (`max-w-48`) stays 192px while the label inside it grows,
- * and the value clips at 150–200% interface font size. `ch` is measured
- * against the trigger's own `typography-ui-label` font, so the cap grows with
- * the setting.
- *
- * A trigger hugs its value, the chevron right after it, so a short value is a
- * short button rather than a wide box with the chevron pushed to its edge.
- * The cap keeps a long value from stretching across the pane; it truncates.
- */
-const SETTINGS_TRIGGER_WIDTH_CLASS = 'w-fit max-w-[28ch]';
-=======
-const SETTINGS_TRIGGER_WIDTH_CLASS = 'w-fit max-w-[28ch]';
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-/**
- * Settings select trigger in stacked cells — two-column cells, dialogs and
- * wrap rows, where there is no shared control column to line up with, so it
- * hugs its value.
- */
 export const SETTINGS_SELECT_TRIGGER_CLASS = SETTINGS_HUG_WIDTH_CLASS;
-||||||| bc50ba56aa
-/** Settings select trigger in stacked cells. */
-export const SETTINGS_SELECT_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;
-=======
-export const SETTINGS_SELECT_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-/**
- * Settings select trigger in a `SettingsFieldRow` control column.
- *
- * Hugs its selected value between `8ch` and `28ch` (font-relative `ch`, so the
- * bounds scale with interface font size). Short labels (`Default`, `500 行`,
- * `Low`) stay compact instead of stretching into wide empty bars, while long
- * labels cap at `28ch` and truncate. `SettingsFieldRow` packs the control
- * column to the trailing edge (`@xl:justify-end`), so row selects still share
- * one right edge.
- */
 export const SETTINGS_WIDTH_SELECT_CLASS = 'w-fit min-w-[8ch] max-w-[28ch]';
 
 /**
@@ -89,45 +29,9 @@ export const SETTINGS_WIDTH_SHORT_TEXT_CLASS = 'w-full @xl:w-56';
  * reset): fills its column up to a readable cap.
  */
 export const SETTINGS_WIDTH_LONG_TEXT_CLASS = 'w-full max-w-[24rem]';
-||||||| bc50ba56aa
-/** Settings select trigger in SettingsFieldRow control columns. */
-export const SETTINGS_SELECT_ROW_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;
-=======
-export const SETTINGS_SELECT_ROW_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-/**
- * Width for every settings NumberInput stepper. Font-relative for the same
- * reason as the trigger cap above: a rem-fixed `w-16`/`w-20`/`w-24`/`w-32`
- * clips its own digits once the interface font is scaled up. The explicit
- * `typography-ui-label` pins `ch` to the same scaled font the inner numeric
- * field renders in, since the wrapper would otherwise inherit an unscaled one.
- * The rem part holds the two buttons, which are wider on a phone than `ch`
- * grows; the `ch` part holds five digits, the longest value (a port).
- */
 export const SETTINGS_WIDTH_NUMBER_CLASS = 'typography-ui-label w-[calc(5.75rem+5ch)]';
-||||||| bc50ba56aa
-/**
- * Width for every settings NumberInput stepper. Font-relative for the same
- * reason as the trigger cap above: a rem-fixed `w-16`/`w-20`/`w-24`/`w-32`
- * clips its own digits once the interface font is scaled up. The explicit
- * `typography-ui-label` pins `ch` to the same scaled font the inner numeric
- * field renders in, since the wrapper would otherwise inherit an unscaled one.
- * The rem part holds the two buttons, which are wider on a phone than `ch`
- * grows; the `ch` part holds five digits, the longest value (a port).
- */
-export const SETTINGS_NUMBER_INPUT_CLASS = 'typography-ui-label w-[calc(5.75rem+5ch)]';
-=======
-export const SETTINGS_NUMBER_INPUT_CLASS = 'typography-ui-label w-[calc(5.75rem+5ch)]';
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-/** Compact reset / icon action next to a settings-pane control (matches h-7 controls). */
-||||||| bc50ba56aa
-/** Compact reset / icon action next to a settings control (matches h-8 controls). */
-=======
->>>>>>> upstream/main
 export const SETTINGS_ICON_BUTTON_CLASS =
   'h-7 w-7 px-0 text-muted-foreground hover:text-foreground';
 
@@ -145,54 +49,20 @@ export const SETTINGS_CUSTOM_TRIGGER_CLASS = cn(
   SETTINGS_HUG_WIDTH_CLASS,
 );
 
-<<<<<<< HEAD
-/**
- * Row wrapping a NumberInput + unit label + reset.
- * Keep the stepper intrinsic — never flex-grow it or +/- buttons stretch unevenly.
- * The row is block-level, so it still fills a stacked cell, while in a field
- * row it stays content-wide and the row's trailing alignment pushes it across.
- */
+export const SETTINGS_CONTROL_CLUSTER_CLASS = 'w-full max-w-[24rem]';
+
 export const SETTINGS_NUMBER_STEPPER_ROW_CLASS = 'flex min-w-0 items-center gap-2';
-||||||| bc50ba56aa
-/** Shared width for stacked control clusters (select/input + reset). */
-export const SETTINGS_CONTROL_CLUSTER_CLASS = 'w-full max-w-[24rem]';
-
-/**
- * Row wrapping a NumberInput + unit label + reset.
- * Keep the stepper intrinsic — never flex-grow it or +/- buttons stretch unevenly.
- */
-export const SETTINGS_NUMBER_STEPPER_ROW_CLASS = 'flex w-full min-w-0 items-center gap-2';
-=======
-export const SETTINGS_CONTROL_CLUSTER_CLASS = 'w-full max-w-[24rem]';
-
-export const SETTINGS_NUMBER_STEPPER_ROW_CLASS = 'flex w-full min-w-0 items-center gap-2';
->>>>>>> upstream/main
 
 export const SETTINGS_NUMBER_UNIT_CLASS =
   'typography-meta shrink-0 text-muted-foreground tabular-nums';
 
-<<<<<<< HEAD
 /**
  * Stack of field rows and mixed shapes (a field row next to a checkbox row,
  * a role editor next to OMP rows). Never the 6px checkbox stack.
  */
 export const SETTINGS_SPACE_ROW_CLASS = 'space-y-4';
-||||||| bc50ba56aa
-/** Vertical stack spacing for fields inside a column. */
-export const SETTINGS_FIELDS_STACK_CLASS = 'space-y-4';
-=======
-export const SETTINGS_FIELDS_STACK_CLASS = 'space-y-4';
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-/** Pure checkbox / radio list stack. */
 export const SETTINGS_SPACE_CHECKBOX_CLASS = 'space-y-1.5';
-||||||| bc50ba56aa
-/** Compact checkbox / radio list stack. */
-export const SETTINGS_OPTION_STACK_CLASS = 'space-y-1.5';
-=======
-export const SETTINGS_OPTION_STACK_CLASS = 'space-y-1.5';
->>>>>>> upstream/main
 
 export const SETTINGS_PAGE_TITLE_CLASS =
   'typography-settings-page-title text-muted-foreground';
@@ -416,34 +286,6 @@ interface SettingsFieldRowProps {
   alignEnd?: boolean;
 }
 
-<<<<<<< HEAD
-/**
- * Side-by-side form row: fixed label column + control column that grows to
- * the row's trailing edge.
- *
- * The control column is `flex-1` at every width, so `alignEnd` (`@xl:justify-end`)
- * packs its content to the trailing edge (a `w-fit` column would have no free
- * space to distribute). That lets hug-width row selects (`SETTINGS_WIDTH_SELECT_CLASS`)
- * and other controls share one right edge without stretching short labels into
- * fixed-width bars. Below `@xl` the row stacks, so a narrow pane keeps label
- * above control. A control that fills the column (a row-filling input) passes
- * `controlClassName`.
- *
- * The row's own vertical padding keeps two stacked rows of 32px controls
- * apart (8px between them), so a list of field rows needs no spacing of its
- * own and labels keep one rhythm whatever control sits beside them.
- */
-||||||| bc50ba56aa
-/**
- * Side-by-side form row: fixed label column + control cluster.
- * Use inside full-width sections or single columns.
- *
- * The row's own vertical padding keeps two stacked rows of 32px controls
- * apart (8px between them), so a list of field rows needs no spacing of its
- * own and labels keep one rhythm whatever control sits beside them.
- */
-=======
->>>>>>> upstream/main
 export const SettingsFieldRow: React.FC<SettingsFieldRowProps> = ({
   label,
   description,

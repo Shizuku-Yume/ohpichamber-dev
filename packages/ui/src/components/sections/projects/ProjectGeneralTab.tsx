@@ -13,23 +13,11 @@ import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-<<<<<<< HEAD
-import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-
-import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
-||||||| bc50ba56aa
-import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { modelVariantNames } from '@/lib/modelVariants';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
-import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
-=======
 import { selectIsModelMissingFromCatalog, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { modelVariantNames } from '@/lib/modelVariants';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
+
 import { updateProjectSetup, updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
 import { isVSCodeRuntime } from '@/lib/desktop';
->>>>>>> upstream/main
 import { ensureSharedSetupTrusted, resetSharedSetupTrust } from '@/lib/sharedTrustConfirmation';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -76,31 +64,6 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
       info={t('settings.projects.page.section.chatDefaultsDescription')}
       contentClassName="space-y-0"
     >
-<<<<<<< HEAD
-      <SettingsFieldRow settingsItem="projects.default-model" label={t('settings.projects.page.field.projectModel')}>
-||||||| bc50ba56aa
-      <SettingsFieldRow settingsItem="projects.default-agent" label={t('settings.projects.page.field.projectAgent')}>
-        <AgentSelector
-          directory={form.project.path}
-          agentName={form.defaultAgent || ''}
-          onChange={(agentName) => form.setDefaultAgent(agentName || undefined)}
-          filter={(agent) => isPrimaryMode(agent.mode)}
-          className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-        />
-      </SettingsFieldRow>
-
-      <SettingsFieldRow settingsItem="projects.default-model" label={t('settings.projects.page.field.projectModel')}>
-=======
-      <SettingsFieldRow settingsItem="projects.default-agent" label={t('settings.projects.page.field.projectAgent')}>
-        <AgentSelector
-          directory={form.project.path}
-          agentName={form.defaultAgent || ''}
-          onChange={(agentName) => form.setDefaultAgent(agentName || undefined)}
-          filter={(agent) => isPrimaryMode(agent.mode)}
-          className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-        />
-      </SettingsFieldRow>
-
       <SettingsFieldRow
         settingsItem="projects.default-model"
         label={t('settings.projects.page.field.projectModel')}
@@ -108,7 +71,6 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
           ? <span className="text-[var(--status-warning)]">{t(modelUnavailableNote)}</span>
           : undefined}
       >
->>>>>>> upstream/main
         <ModelSelector
           directory={form.project.path}
           providerId={parsedDefaultModel.providerId}

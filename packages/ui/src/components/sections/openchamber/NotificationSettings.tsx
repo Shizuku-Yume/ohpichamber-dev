@@ -568,26 +568,11 @@ export const NotificationSettings: React.FC = () => {
         </SettingsSection>
 
         {nativeNotificationsEnabled && canShowNotifications && (
-<<<<<<< HEAD
-          <>
-            <SettingsSection
-              settingsItem="notifications.events"
-              title={t('settings.notifications.page.events.title')}
-            >
-              <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
-||||||| bc50ba56aa
-          <>
-            <SettingsSection
-              settingsItem="notifications.events"
-              title={t('settings.notifications.page.events.title')}
-            >
-              <div className={SETTINGS_OPTION_STACK_CLASS}>
-=======
           <SettingsSection
             settingsItem="notifications.events"
             title={t('settings.notifications.page.events.title')}
           >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
               <SettingsCheckboxRow
                 checked={notifyOnCompletion}
                 onChange={setNotifyOnCompletion}
@@ -595,7 +580,6 @@ export const NotificationSettings: React.FC = () => {
                 ariaLabel={t('settings.notifications.page.events.completionAria')}
               />
               {!isVSCode && (
->>>>>>> upstream/main
                 <SettingsCheckboxRow
                   settingsItem="notifications.pullRequests"
                   checked={notifyOnPullRequests}
@@ -604,74 +588,6 @@ export const NotificationSettings: React.FC = () => {
                   info={t('settings.notifications.pullRequests.info')}
                 />
               )}
-<<<<<<< HEAD
-            >
-              <SettingsTwoColumn className="gap-2 @xl:grid-cols-2 @xl:gap-3">
-                {(['completion', 'subtask', 'error', 'question'] as const).map((event: NotificationTemplateEvent) => (
-                  <section key={event} className="p-2">
-                    <SettingsGroupTitle className="capitalize">
-                      {t(TEMPLATE_EVENT_LABEL_KEYS[event])}
-                    </SettingsGroupTitle>
-                    <div className={`mt-1.5 ${SETTINGS_SPACE_ROW_CLASS}`}>
-                      <div>
-                        <label className="typography-micro text-muted-foreground block mb-1">{t('settings.notifications.page.template.field.title')}</label>
-                        <Input
-                          value={notificationTemplates[event].title}
-                          onChange={(e) => updateTemplate(event, 'title', e.target.value)}
-                          className="h-7"
-                          placeholder={t(DEFAULT_NOTIFICATION_TEMPLATES[event].titleKey)}
-                        />
-                      </div>
-                      <div>
-                        <label className="typography-micro text-muted-foreground block mb-1">{t('settings.notifications.page.template.field.message')}</label>
-                        <Input
-                          value={notificationTemplates[event].message}
-                          onChange={(e) => updateTemplate(event, 'message', e.target.value)}
-                          className="h-7"
-                          placeholder={t(DEFAULT_NOTIFICATION_TEMPLATES[event].messageKey)}
-                        />
-                      </div>
-                    </div>
-                  </section>
-                ))}
-              </SettingsTwoColumn>
-            </SettingsSection>
-            )}
-||||||| bc50ba56aa
-            >
-              <SettingsTwoColumn className="gap-2 md:grid-cols-2 md:gap-3 lg:gap-3">
-                {(['completion', 'subtask', 'error', 'question'] as const).map((event: NotificationTemplateEvent) => (
-                  <section key={event} className="p-2">
-                    <SettingsGroupTitle className="capitalize">
-                      {t(TEMPLATE_EVENT_LABEL_KEYS[event])}
-                    </SettingsGroupTitle>
-                    <div className="mt-1.5 space-y-2">
-                      <div>
-                        <label className="typography-micro text-muted-foreground block mb-1">{t('settings.notifications.page.template.field.title')}</label>
-                        <Input
-                          value={notificationTemplates[event].title}
-                          onChange={(e) => updateTemplate(event, 'title', e.target.value)}
-                          className="h-7"
-                          placeholder={t(DEFAULT_NOTIFICATION_TEMPLATES[event].titleKey)}
-                        />
-                      </div>
-                      <div>
-                        <label className="typography-micro text-muted-foreground block mb-1">{t('settings.notifications.page.template.field.message')}</label>
-                        <Input
-                          value={notificationTemplates[event].message}
-                          onChange={(e) => updateTemplate(event, 'message', e.target.value)}
-                          className="h-7"
-                          placeholder={t(DEFAULT_NOTIFICATION_TEMPLATES[event].messageKey)}
-                        />
-                      </div>
-                    </div>
-                  </section>
-                ))}
-              </SettingsTwoColumn>
-            </SettingsSection>
-            )}
-=======
->>>>>>> upstream/main
 
               <SettingsCheckboxRow
                 checked={notifyOnSubtasks}

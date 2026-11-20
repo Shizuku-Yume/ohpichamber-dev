@@ -147,21 +147,12 @@ export const GitPage: React.FC = () => {
               />
             ))}
 
-<<<<<<< HEAD
-            {/* Empty state, only once the instance answered: an unread list is
-                not "this instance has no identities". */}
             {phase === 'unknown' && (
               <p className="px-4 py-8 text-center typography-meta text-muted-foreground">
                 {t('gitIdentities.state.unknown')}
               </p>
             )}
             {phase !== 'unknown' && !globalIdentity && profiles.length === 0 && (
-||||||| bc50ba56aa
-            {/* Empty state */}
-            {!globalIdentity && profiles.length === 0 && (
-=======
-            {!globalIdentity && profiles.length === 0 && (
->>>>>>> upstream/main
               <div className="py-8 px-4 text-center text-muted-foreground">
                 <Icon name="shield-keyhole" className="mx-auto mb-2 h-8 w-8 opacity-40" />
                 <p className="typography-ui-label">{t('settings.gitIdentities.page.empty.title')}</p>

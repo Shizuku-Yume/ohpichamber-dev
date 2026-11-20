@@ -319,13 +319,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
             />
           </div>
 
-<<<<<<< HEAD
           {(availableIdentities.length > 0 || selectedIdentityValue !== 'none') ? (
-||||||| bc50ba56aa
-          {(availableIdentities.length > 0 || selectedIdentityValue !== 'none') && !isVSCodeRuntime() ? (
-=======
-          {showIdentityPicker ? (
->>>>>>> upstream/main
             <div className="space-y-2">
               <div className="flex items-center gap-1">
                 <span className="typography-ui-label text-foreground">{t('settings.skills.catalog.shared.auth.description')}</span>

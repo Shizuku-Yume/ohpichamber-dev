@@ -1,5 +1,5 @@
 import React from 'react';
-import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
+import { OpenChamberVisualSettings } from './OhPiChamberVisualSettings';
 import { ChatSettings } from './ChatSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
 import { MergedWorktreeCleanupSettings } from './MergedWorktreeCleanupSettings';
@@ -14,16 +14,8 @@ import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
-<<<<<<< HEAD
 import { GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
-||||||| bc50ba56aa
-import { ChatSettings } from './ChatSettings';
-import { GeneralConnectionAndPrivacySettings, GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
-=======
-import { ChatSettings } from './ChatSettings';
-import { GeneralConnectionAndPrivacySettings, GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
 import { MobileAppSettings } from './MobileAppSettings';
->>>>>>> upstream/main
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from '@/lib/desktop';
@@ -116,58 +108,23 @@ const ShortcutsSectionContent: React.FC = () => {
     return <KeyboardShortcutsSettings />;
 };
 
-<<<<<<< HEAD
 // General, by what people come here for: the desktop app itself, the agent's
 // tools, how other devices reach this app, the window, global shortcuts,
 // files and the terminal, then trusted links.
 // The layout drops the divider above whichever section renders first.
-||||||| bc50ba56aa
-// General, by what people come here for: the desktop app itself, the agent's
-// tools, how other devices reach this app, the window, global shortcuts, the
-// OpenCode CLI and its environment, files and the terminal, then trusted
-// links, message transport and privacy. The layout drops the divider above
-// whichever section renders first.
-=======
->>>>>>> upstream/main
 const GeneralSectionContent: React.FC = () => {
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
     const isLocalDesktop = isDesktopShell() && isDesktopLocalOriginActive();
-<<<<<<< HEAD
-    // Passkeys only work against the browser's WebAuthn UI on the web surface —
-    // desktop shell and the Capacitor app never show the login screen.
     const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isCapacitorApp();
-||||||| bc50ba56aa
-    // Passkeys only work against the browser's WebAuthn UI on the web surface —
-    // desktop shell, VS Code, and the Capacitor app never show the login screen.
-    const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isVSCode && !isCapacitorApp();
-=======
-    const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isVSCode && !isCapacitorApp();
->>>>>>> upstream/main
     return (
         <>
             {isDesktopShell() && <DesktopAppSettings />}
-<<<<<<< HEAD
-||||||| bc50ba56aa
-            {!isVSCode && <OpenChamberToolsSettings />}
-=======
-            <MobileAppSettings />
-            {!isVSCode && <OpenChamberToolsSettings />}
->>>>>>> upstream/main
             {isLocalDesktop && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <GeneralInterfaceSettings />
             {isLocalDesktop && <DesktopQuickAccessSettings />}
-<<<<<<< HEAD
             {/* Remounts on a runtime switch: the names come from that server. */}
             <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
-||||||| bc50ba56aa
-            {!isVSCode && <OpenCodeCliSettings />}
-            {/* Remounts on a runtime switch: the names come from that server. */}
-            {!isVSCode && <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />}
-=======
-            {!isVSCode && <OpenCodeCliSettings />}
-            {!isVSCode && <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />}
->>>>>>> upstream/main
             <GeneralFilesAndTerminalSettings />
             <AppLinkSecuritySettings />
         </>
@@ -205,14 +162,8 @@ const SessionsSectionContent: React.FC<{ runtimeEndpointEpoch: number }> = ({ ru
             <DefaultsSettings key={`defaults-${runtimeEndpointEpoch}`} />
             <SessionWorkSettings />
             <SessionRetentionSettings />
-<<<<<<< HEAD
             <MergedWorktreeCleanupSettings />
-||||||| bc50ba56aa
-            {!isVSCodeRuntime() && <FinishedWorktreesSettings />}
-=======
-            {!isVSCodeRuntime() && <FinishedWorktreesSettings />}
             <SessionContextSettings key={`context-${runtimeEndpointEpoch}`} />
->>>>>>> upstream/main
         </>
     );
 };
@@ -229,27 +180,6 @@ const VoiceSectionContent: React.FC = () => {
     return <VoiceSettings />;
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-// Isolated spaces: the switch, the idle stop, the places with their disk, and the spaces without a
-// project. Never in VS Code (decision 16); whether Settings offers the page at all is the page's
-// `isAvailable` in lib/settings/metadata.ts.
-const SpacesSectionContent: React.FC = () => {
-    if (isVSCodeRuntime()) {
-        return null;
-    }
-    return <IsolatedSpacesSettings />;
-};
-
-=======
-const SpacesSectionContent: React.FC = () => {
-    if (isVSCodeRuntime()) {
-        return null;
-    }
-    return <IsolatedSpacesSettings />;
-};
-
->>>>>>> upstream/main
 const TunnelSectionContent: React.FC = () => {
     return <TunnelSettings />;
 };

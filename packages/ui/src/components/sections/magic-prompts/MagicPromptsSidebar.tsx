@@ -49,15 +49,6 @@ export const MagicPromptsSidebar: React.FC<MagicPromptsSidebarProps> = ({ onItem
           { id: 'session.fusion', titleKey: 'settings.magicPrompts.sidebar.item.sessionFusion' },
         ],
       },
-<<<<<<< HEAD
-||||||| bc50ba56aa
-      {
-        groupKey: 'settings.magicPrompts.sidebar.group.memory',
-        items: [
-          { id: 'memory.tidy', titleKey: 'settings.magicPrompts.sidebar.item.memoryTidy' },
-        ],
-      },
-=======
       {
         groupKey: 'settings.magicPrompts.sidebar.group.memory',
         items: [
@@ -65,7 +56,6 @@ export const MagicPromptsSidebar: React.FC<MagicPromptsSidebarProps> = ({ onItem
           { id: 'memory.toDocs', titleKey: 'settings.magicPrompts.sidebar.item.memoryToDocs' },
         ],
       },
->>>>>>> upstream/main
     ] as const;
   }, []);
 

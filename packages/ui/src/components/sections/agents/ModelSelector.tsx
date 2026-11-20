@@ -35,16 +35,7 @@ interface ModelSelectorProps {
     compact?: boolean;
     offerAuto?: boolean;
     triggerTooltip?: string;
-<<<<<<< HEAD
-    /**
-     * The caller's value is still being read. The trigger shows the loading
-     * state rather than the placeholder that the value replaces a moment later.
-     */
-    loading?: boolean;
-||||||| bc50ba56aa
-=======
     disabled?: boolean;
->>>>>>> upstream/main
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -61,12 +52,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     directory,
     offerAuto = false,
     triggerTooltip,
-<<<<<<< HEAD
-    loading = false,
-||||||| bc50ba56aa
-=======
     disabled = false,
->>>>>>> upstream/main
 }) => {
     const { t } = useI18n();
     const autoReady = useRoutingStore(selectAutoReady);
@@ -74,20 +60,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         ? { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID, model: { modelId: AUTO_MODEL_ID, provider: AUTO_PROVIDER_ID, name: t('chat.modelControls.autoModel'), modalities: ['text'], contextWindow: 1, maxOutputTokens: 1, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null } }
         : null), [autoReady, offerAuto, t]);
     const isAutoSelected = isAutoModel(providerId, modelId);
-<<<<<<< HEAD
     const readiness = useCatalogReadiness('models', directory);
+    const canOpen = isReady && !disabled;
     // A pending value is not ready: the trigger spins and cannot open until it arrives.
     const isReady = !loading && readiness.isReady;
     const isUnavailable = !loading && readiness.isUnavailable;
     const catalogProviders = useConfigStore((state) => directory === undefined
-||||||| bc50ba56aa
-    const { isReady, isUnavailable } = useOpenCodeReadiness('models', directory);
-    const providers: ModelPickerProvider[] = useConfigStore((state) => directory === undefined
-=======
-    const { isReady, isUnavailable } = useOpenCodeReadiness('models', directory);
-    const canOpen = isReady && !disabled;
-    const providers: ModelPickerProvider[] = useConfigStore((state) => directory === undefined
->>>>>>> upstream/main
         ? state.providers : selectProvidersForDirectory(state, directory));
     const providers: ModelPickerProvider[] = catalogProviders;
     const loadProviders = useConfigStore((state) => state.loadProviders);
@@ -115,18 +93,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }, []);
 
     const handleSelect = React.useCallback((entry: ModelPickerEntry) => {
-<<<<<<< HEAD
         onChange(entry.providerId, entry.modelId);
-        // Auto has its own pinned row; it does not belong in Recent.
         if (!isAutoModel(entry.providerId, entry.modelId)) addRecentModel(entry.providerId, entry.modelId);
-||||||| bc50ba56aa
-        onChange(entry.providerID, entry.modelID);
-        // Auto has its own pinned row; it does not belong in Recent.
-        if (!isAutoModel(entry.providerID, entry.modelID)) addRecentModel(entry.providerID, entry.modelID);
-=======
-        onChange(entry.providerID, entry.modelID);
-        if (!isAutoModel(entry.providerID, entry.modelID)) addRecentModel(entry.providerID, entry.modelID);
->>>>>>> upstream/main
         closePicker();
     }, [addRecentModel, closePicker, onChange]);
 
@@ -155,15 +123,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }), [placeholder, t]);
 
     const selectedModel = providerId && modelId ? { providerID: providerId, modelID: modelId } : null;
-<<<<<<< HEAD
     const displayReady = isReady || (!loading && Boolean(selectedModel));
-    // Show the model's display name (as in the picker list), not the raw provider/model id.
-||||||| bc50ba56aa
-    const displayReady = isReady || Boolean(selectedModel);
-    // Show the model's display name (as in the picker list), not the raw provider/model id.
-=======
-    const displayReady = isReady || Boolean(selectedModel);
->>>>>>> upstream/main
     const triggerLabel = React.useMemo(() => {
         if (!providerId || !modelId) {
             return placeholder || t('settings.agents.modelSelector.notSelected');

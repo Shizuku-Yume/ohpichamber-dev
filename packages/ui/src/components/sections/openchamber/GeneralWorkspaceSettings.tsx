@@ -18,19 +18,9 @@ import {
   SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
-<<<<<<< HEAD
-  SettingsBadge,
   SETTINGS_SPACE_CHECKBOX_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
-||||||| bc50ba56aa
-  SettingsBadge,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-=======
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
->>>>>>> upstream/main
 } from '@/components/sections/shared/SettingsSection';
 import { LIVE_BROWSER_TABS_MAX, LIVE_BROWSER_TABS_MIN } from '@/lib/browser/liveTabs';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -417,62 +407,6 @@ export const GeneralFilesAndTerminalSettings: React.FC = () => (
   </>
 );
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/** The last sections of General: how messages stream in, and usage reports. */
-export const GeneralConnectionAndPrivacySettings: React.FC = () => {
-  const { t } = useI18n();
-  const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport);
-  const setMessageStreamTransport = useConfigStore((state) => state.setSettingsMessageStreamTransport);
-  const reportUsage = useUIStore((state) => state.reportUsage);
-  const setReportUsage = useUIStore((state) => state.setReportUsage);
-  const selectedTransport = MESSAGE_STREAM_TRANSPORT_OPTIONS.find((option) => option.id === messageStreamTransport);
-
-  const handleMessageStreamTransportChange = React.useCallback((mode: 'auto' | 'ws' | 'sse') => {
-    setMessageStreamTransport(mode);
-    void updateDesktopSettings({ messageStreamTransport: mode });
-  }, [setMessageStreamTransport]);
-
-  // Sync reportUsage changes to server settings
-  const handleReportUsageChange = React.useCallback((enabled: boolean) => {
-    setReportUsage(enabled);
-    void updateDesktopSettings({ reportUsage: enabled });
-  }, [setReportUsage]);
-
-  return (
-    <>
-      <SettingsSection
-        title={t('settings.openchamber.visual.section.messageStreamTransport')}
-        settingsItem="chat.message-transport"
-        contentClassName="space-y-2"
-      >
-        <SettingsChipGroup
-          value={messageStreamTransport}
-          options={MESSAGE_STREAM_TRANSPORT_OPTIONS.map((option) => ({
-            value: option.id,
-            label: t(option.labelKey),
-          }))}
-          onChange={handleMessageStreamTransportChange}
-          aria-label={t('settings.openchamber.visual.section.messageStreamTransport')}
-        />
-        {selectedTransport ? (
-          <p className="typography-meta text-muted-foreground">{t(selectedTransport.descriptionKey)}</p>
-        ) : null}
-      </SettingsSection>
-      <SettingsSection title={t('settings.openchamber.visual.section.privacy')}>
-        <SettingsCheckboxRow
-          checked={reportUsage}
-          onChange={handleReportUsageChange}
-          label={t('settings.openchamber.visual.field.sendAnonymousUsageReports')}
-          info={t('settings.openchamber.visual.field.sendAnonymousUsageReportsHint')}
-          ariaLabel={t('settings.openchamber.visual.field.sendAnonymousUsageReportsAria')}
-          settingsItem="appearance.usage-reports"
-        />
-      </SettingsSection>
-    </>
-  );
-};
-=======
 export const GeneralConnectionAndPrivacySettings: React.FC = () => {
   const { t } = useI18n();
   const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport);
@@ -524,4 +458,3 @@ export const GeneralConnectionAndPrivacySettings: React.FC = () => {
     </>
   );
 };
->>>>>>> upstream/main

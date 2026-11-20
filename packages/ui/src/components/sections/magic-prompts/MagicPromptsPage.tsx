@@ -183,17 +183,6 @@ const PROMPT_PAGE_MAP: Record<string, PromptPageConfig> = {
       { id: 'session.fusion.codeInstructions', titleKey: 'settings.magicPrompts.page.block.codeFusionInstructions' },
     ],
   },
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  'memory.tidy': {
-    titleKey: 'settings.magicPrompts.page.group.memoryTidy.title',
-    descriptionKey: 'settings.magicPrompts.page.group.memoryTidy.description',
-    blocks: [
-      { id: 'memory.tidy.visible', titleKey: 'settings.magicPrompts.page.block.visiblePrompt' },
-      { id: 'memory.tidy.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
-    ],
-  },
-=======
   'memory.tidy': {
     titleKey: 'settings.magicPrompts.page.group.memoryTidy.title',
     descriptionKey: 'settings.magicPrompts.page.group.memoryTidy.description',
@@ -210,7 +199,6 @@ const PROMPT_PAGE_MAP: Record<string, PromptPageConfig> = {
       { id: 'memory.toDocs.instructions', titleKey: 'settings.magicPrompts.page.block.instructions' },
     ],
   },
->>>>>>> upstream/main
 };
 
 const isVisiblePromptId = (id: MagicPromptId): boolean => id.endsWith('.visible');

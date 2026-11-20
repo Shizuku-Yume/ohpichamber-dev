@@ -18,12 +18,7 @@ import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { useDurationTickerNow, useWaitingBlink } from '@/hooks/useDurationTicker';
 import { SettingsChipGroup, SettingsFieldRow, SettingsSection, SettingsStackedField, SettingsGroupTitle, SETTINGS_FIELD_LABEL_CLASS, SETTINGS_CALLOUT_TITLE_CLASS, SETTINGS_DESCRIPTION_CLASS, SETTINGS_HELPER_CLASS, SETTINGS_WIDTH_SELECT_CLASS, SETTINGS_SPACE_ROW_CLASS, SETTINGS_SPACE_CHECKBOX_CLASS } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
-<<<<<<< HEAD
-import { problemMessage } from '@/lib/problemMessage';
-||||||| bc50ba56aa
-=======
 import { SETTINGS_LINK_CLASS } from '@/components/sections/classification/JevAccessNote';
->>>>>>> upstream/main
 
 type TunnelState =
   | 'checking'
@@ -1214,15 +1209,7 @@ export const TunnelSettings: React.FC = () => {
             <p>{t('settings.openchamber.tunnel.note.connectLinksOneTime')}</p>
           </div>
         )}
-<<<<<<< HEAD
-        divider={false}
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
-||||||| bc50ba56aa
-        divider={false}
-        contentClassName="space-y-4"
-=======
-        contentClassName="space-y-4"
->>>>>>> upstream/main
       >
         {state === 'not-available' && (
           <div className="flex items-start gap-2 rounded-lg bg-[var(--status-warning)]/10 p-3">

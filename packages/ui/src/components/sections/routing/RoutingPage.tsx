@@ -44,22 +44,6 @@ import {
 
 const SAVE_DEBOUNCE_MS = 500;
 
-<<<<<<< HEAD
-/**
- * Whether the server's copy is the draft as the server stores it. The server
- * trims names and descriptions, so a mid-typing "- " or trailing newline comes
- * back without it; adopting that copy would eat what the user just typed.
- */
-||||||| bc50ba56aa
-
-/**
- * Whether the server's copy is the draft as the server stores it. The server
- * trims names and descriptions, so a mid-typing "- " or trailing newline comes
- * back without it; adopting that copy would eat what the user just typed.
- */
-=======
-
->>>>>>> upstream/main
 const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean => {
   const trimmed = (config: RoutingConfig) => JSON.stringify({
     ...config,
@@ -68,7 +52,6 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
   return trimmed(server) === trimmed(draft);
 };
 
-<<<<<<< HEAD
 /**
  * Ids of the categories the server would reject: it trims both fields and
  * requires each to be non-empty. The save gate and the page's own signal use
@@ -77,111 +60,8 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
 const invalidCategoryIds = (config: RoutingConfig): string[] => config.categories
   .filter((category) => category.name.trim().length === 0 || category.description.trim().length === 0)
   .map((category) => category.id);
-||||||| bc50ba56aa
-const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
-
-/** The thinking levels OpenCode reports for one model; empty when the model has none. */
-const useModelVariants = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
-  const providers = useConfigStore((state) => state.providers);
-  return React.useMemo(() => {
-    if (!providerID || !modelID) return [];
-    const provider = providers.find((entry) => entry.id === providerID);
-    const model = provider?.models.find((entry) => entry.id === modelID);
-    return modelVariantNames(model);
-  }, [modelID, providerID, providers]);
-};
-
-/**
- * The saved level, or null when the model does not list it: list positions
- * saved before #4133 run as the model's default on the server, so they read
- * as Default here too. A model with no known levels keeps what was saved.
- */
-const knownVariant = (value: string | null | undefined, variants: string[]): string | null => (
-  value && (variants.length === 0 || variants.includes(value)) ? value : null
-);
-
-const VariantSelect: React.FC<{
-  providerID: string | null | undefined;
-  modelID: string | null | undefined;
-  value: string | null;
-  onChange: (variant: string | null) => void;
-  ariaLabel: string;
-  className?: string;
-}> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
-  const { t } = useI18n();
-  const variants = useModelVariants(providerID, modelID);
-  const selected = knownVariant(value, variants) ?? DEFAULT_VARIANT_VALUE;
-  const label = (variant: string) => (variant === DEFAULT_VARIANT_VALUE
-    ? t('settings.routing.thinking.default')
-    : variant.charAt(0).toUpperCase() + variant.slice(1));
-  return (
-    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={variants.length === 0}>
-      <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
-        <SelectValue>{label(selected)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={DEFAULT_VARIANT_VALUE}>{label(DEFAULT_VARIANT_VALUE)}</SelectItem>
-        {variants.map((variant) => (
-          <SelectItem key={variant} value={variant}>{label(variant)}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-};
-=======
-const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
-
-const useModelVariants = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
-  const providers = useConfigStore((state) => state.providers);
-  return React.useMemo(() => {
-    if (!providerID || !modelID) return [];
-    const provider = providers.find((entry) => entry.id === providerID);
-    const model = provider?.models.find((entry) => entry.id === modelID);
-    return modelVariantNames(model);
-  }, [modelID, providerID, providers]);
-};
-
-const knownVariant = (value: string | null | undefined, variants: string[]): string | null => (
-  value && (variants.length === 0 || variants.includes(value)) ? value : null
-);
-
-const VariantSelect: React.FC<{
-  providerID: string | null | undefined;
-  modelID: string | null | undefined;
-  value: string | null;
-  onChange: (variant: string | null) => void;
-  ariaLabel: string;
-  className?: string;
-}> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
-  const { t } = useI18n();
-  const variants = useModelVariants(providerID, modelID);
-  const selected = knownVariant(value, variants) ?? DEFAULT_VARIANT_VALUE;
-  const label = (variant: string) => (variant === DEFAULT_VARIANT_VALUE
-    ? t('settings.routing.thinking.default')
-    : variant.charAt(0).toUpperCase() + variant.slice(1));
-  return (
-    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={variants.length === 0}>
-      <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
-        <SelectValue>{label(selected)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={DEFAULT_VARIANT_VALUE}>{label(DEFAULT_VARIANT_VALUE)}</SelectItem>
-        {variants.map((variant) => (
-          <SelectItem key={variant} value={variant}>{label(variant)}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-};
->>>>>>> upstream/main
 
 
-<<<<<<< HEAD
-/** One category: a flat disclosure row that expands into its editor. */
-||||||| bc50ba56aa
-/** One category: a summary row that expands into its editor. */
-=======
->>>>>>> upstream/main
 const CategoryRow: React.FC<{
   category: RoutingCategory;
   expanded: boolean;
@@ -302,20 +182,8 @@ export const RoutingPage: React.FC = () => {
   const saveConfig = useRoutingStore((state) => state.saveConfig);
 
   const [draft, setDraft] = React.useState<RoutingConfig | null>(serverConfig);
-<<<<<<< HEAD
   const [expandedIds, setExpandedIds] = React.useState<string[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
-  // A pending edit remembers the server it was made against; a save that would
-  // run after a runtime switch is dropped rather than sent to the new server.
-||||||| bc50ba56aa
-  const [newCategoryName, setNewCategoryName] = React.useState('');
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  // A pending edit remembers the server it was made against; a save that would
-  // run after a runtime switch is dropped rather than sent to the new server.
-=======
-  const [newCategoryName, setNewCategoryName] = React.useState('');
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
->>>>>>> upstream/main
   const pendingRef = React.useRef<{ config: RoutingConfig; runtimeKey: string } | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveChainRef = React.useRef<Promise<void>>(Promise.resolve());
@@ -370,33 +238,15 @@ export const RoutingPage: React.FC = () => {
   const prefilledRef = React.useRef(false);
   React.useEffect(() => {
     if (prefilledRef.current || !loaded || !serverConfig || serverConfig.fallback) return;
-<<<<<<< HEAD
     const parsed = parseModelSelector(settingsDefaultModel);
-    // A default of Auto is what this fallback exists to resolve; nothing to prefill from it.
-||||||| bc50ba56aa
-    const parsed = parseModelIdentifier(settingsDefaultModel);
-    // A default of Auto is what this fallback exists to resolve; nothing to prefill from it.
-=======
-    const parsed = parseModelIdentifier(settingsDefaultModel);
->>>>>>> upstream/main
     if (!parsed || isAutoModel(parsed.providerId, parsed.modelId)) return;
     prefilledRef.current = true;
     update((config) => (config.fallback ? config : {
       ...config,
       fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: null },
     }));
-<<<<<<< HEAD
-    // `update` is stable; the effect keys on what decides whether to prefill.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, serverConfig, settingsDefaultModel]);
-||||||| bc50ba56aa
-  // `update` is stable; the effect keys on what decides whether to prefill.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, serverConfig, settingsDefaultModel, settingsDefaultVariant]);
-=======
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, serverConfig, settingsDefaultModel, settingsDefaultVariant]);
->>>>>>> upstream/main
 
   const update = React.useCallback((mutate: (config: RoutingConfig) => RoutingConfig) => {
     setDraft((current) => {
@@ -500,16 +350,8 @@ export const RoutingPage: React.FC = () => {
         <p className={SETTINGS_DESCRIPTION_CLASS}>{t('settings.routing.unavailable')}</p>
       ) : (
         <>
-<<<<<<< HEAD
-          <SettingsSection title={t('settings.routing.auto.title')} divider={false}>
-            <div className={SETTINGS_SPACE_ROW_CLASS}>
-||||||| bc50ba56aa
-          <SettingsSection title={t('settings.routing.auto.title')} divider={false}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
-=======
           <SettingsSection title={t('settings.routing.auto.title')}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
->>>>>>> upstream/main
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <JevAccessNote />
               <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
                 <SettingsCheckboxRow

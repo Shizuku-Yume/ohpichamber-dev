@@ -37,22 +37,12 @@ export const SettingsCardPill: React.FC<{ tone: SettingsCardTone; children: Reac
   </span>
 );
 
-<<<<<<< HEAD
-/** Small outlined chip for the card footer (scope, source). */
 export const SettingsCardChip: React.FC<{ children: React.ReactNode; className?: string; title?: string }> = ({
   children,
   className,
   title,
 }) => (
   <span title={title} className={cn('oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium', className)}>
-||||||| bc50ba56aa
-/** Small outlined chip for the card footer (scope, source). */
-export const SettingsCardChip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">
-=======
-export const SettingsCardChip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">
->>>>>>> upstream/main
     {children}
   </span>
 );
@@ -105,17 +95,7 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({ icon, title, subtitl
           <div className="mt-1 line-clamp-2 typography-micro text-muted-foreground">{description}</div>
         ) : null}
       </div>
-<<<<<<< HEAD
-      {/* The ⋯ button shows on touch screens only; with a mouse the card's
-          menu is its right click, so the footer keeps no room for it there. */}
       <div className={cn('mt-auto flex min-w-0 shrink-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', (hasControl || hasActions) && 'min-h-10 @xl:min-h-0', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
-||||||| bc50ba56aa
-      {/* The ⋯ button shows on touch screens only; with a mouse the card's
-          menu is its right click, so the footer keeps no room for it there. */}
-      <div className={cn('mt-auto flex min-w-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
-=======
-      <div className={cn('mt-auto flex min-w-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
->>>>>>> upstream/main
         {footer}
         {onOpen ? (
           <Icon
@@ -224,12 +204,6 @@ export const SettingsCardSearch: React.FC<{
   onChange: (value: string) => void;
   placeholder: string;
   className?: string;
-<<<<<<< HEAD
-  /** 28px, matching toolbar dropdowns and buttons; defaults true in settings. */
-||||||| bc50ba56aa
-  /** 28px, to match the dropdowns and buttons of a toolbar row. */
-=======
->>>>>>> upstream/main
   compact?: boolean;
 }> = ({ value, onChange, placeholder, className, compact = true }) => (
   <div className={cn('relative mb-4', SETTINGS_WIDTH_LONG_TEXT_CLASS, className)}>

@@ -67,9 +67,6 @@ type InstallSource =
 
 const isZipFile = (file: File): boolean => file.name.toLowerCase().endsWith('.zip');
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-// Website locales that have their own extensions page; the rest read the English one.
 const WEBSITE_LOCALE_PATHS = {
   uk: 'uk', 'zh-CN': 'zh', 'zh-TW': 'zh', es: 'es', 'pt-BR': 'pt', ko: 'ko',
   pl: 'pl', fr: 'fr', ja: 'ja', de: 'de', tr: 'tr', nl: 'nl',
@@ -82,20 +79,6 @@ const communityExtensionsUrl = (locale: Locale): string => {
 };
 
 
-=======
-const WEBSITE_LOCALE_PATHS = {
-  uk: 'uk', 'zh-CN': 'zh', 'zh-TW': 'zh', es: 'es', 'pt-BR': 'pt', ko: 'ko',
-  pl: 'pl', fr: 'fr', ja: 'ja', de: 'de', tr: 'tr', nl: 'nl',
-  en: null, ar: null, he: null,
-} as const satisfies Record<Locale, string | null>;
-
-const communityExtensionsUrl = (locale: Locale): string => {
-  const path = WEBSITE_LOCALE_PATHS[locale];
-  return path ? `https://openchamber.dev/${path}/extensions/` : 'https://openchamber.dev/extensions/';
-};
-
-
->>>>>>> upstream/main
 const sourceKey = (source?: GuestSource): I18nKey => {
   if (source === 'path') return 'settings.extensions.source.path';
   if (source === 'zip') return 'settings.extensions.source.zip';
@@ -268,20 +251,6 @@ type ExtensionHandlers = {
   onUpdate: (guest: InstalledGuest) => Promise<void>;
 };
 
-<<<<<<< HEAD
-/** The enable/disable action's mark: a running extension pauses, a stopped one runs. */
-const ENABLED_TOGGLE_ICON: Record<'enabled' | 'disabled', IconName> = {
-  enabled: 'pause',
-  disabled: 'play',
-};
-
-const enabledToggleIcon = (enabled: boolean): IconName => (enabled ? ENABLED_TOGGLE_ICON.enabled : ENABLED_TOGGLE_ICON.disabled);
-
-/** One extension in the grid: name, state, source; opens its detail screen. */
-||||||| bc50ba56aa
-/** One extension in the grid: name, state, source; opens its detail screen. */
-=======
->>>>>>> upstream/main
 const ExtensionCard: React.FC<ExtensionHandlers & { guest: InstalledGuest; onOpen: () => void }> = ({
   guest,
   busy,
@@ -379,32 +348,7 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
   }, [guest.id, guest.revision, watchesService]);
   const location = guest.path || guest.id;
   const hasPermissions = Boolean(permissions) || Boolean(guest.service);
-<<<<<<< HEAD
   const hasNotices = state.enterpriseBlocked || state.needsApproval || Boolean(state.update);
-||||||| bc50ba56aa
-  const opencodePlugins = useGuestsStore((store) => store.opencodePlugins);
-  // The file the button wrote, shown on this screen until the user leaves it.
-  const [pluginAdded, setPluginAdded] = React.useState<string | null>(null);
-  React.useEffect(() => { setPluginAdded(null); }, [guest.id]);
-  const pluginNotice = openCodePluginNotice({
-    guest,
-    plugins: opencodePlugins,
-    active: state.enabled && !state.needsApproval && !state.enterpriseBlocked,
-    added: pluginAdded,
-  });
-  const hasNotices = state.enterpriseBlocked || state.needsApproval || Boolean(state.update) || pluginNotice !== null;
-=======
-  const opencodePlugins = useGuestsStore((store) => store.opencodePlugins);
-  const [pluginAdded, setPluginAdded] = React.useState<string | null>(null);
-  React.useEffect(() => { setPluginAdded(null); }, [guest.id]);
-  const pluginNotice = openCodePluginNotice({
-    guest,
-    plugins: opencodePlugins,
-    active: state.enabled && !state.needsApproval && !state.enterpriseBlocked,
-    added: pluginAdded,
-  });
-  const hasNotices = state.enterpriseBlocked || state.needsApproval || Boolean(state.update) || pluginNotice !== null;
->>>>>>> upstream/main
 
   return (
     <SettingsPageLayout
@@ -450,13 +394,7 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
       )}
     >
       {hasNotices ? (
-<<<<<<< HEAD
-        <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
-||||||| bc50ba56aa
-        <SettingsSection divider={false} contentClassName="space-y-2">
-=======
-        <SettingsSection contentClassName="space-y-2">
->>>>>>> upstream/main
+        <SettingsSection contentClassName={SETTINGS_SPACE_ROW_CLASS}>
           {state.enterpriseBlocked ? (
             <div className="rounded-lg bg-[var(--status-warning)]/10 p-3 typography-meta text-[var(--status-warning)]">
               {t('settings.extensions.enterpriseBlocked')}
@@ -497,15 +435,7 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
 
       <SettingsSection
         title={t('settings.extensions.detail.section.details')}
-<<<<<<< HEAD
-        divider={hasNotices}
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
-||||||| bc50ba56aa
-        divider={hasNotices}
-        contentClassName="space-y-3"
-=======
-        contentClassName="space-y-3"
->>>>>>> upstream/main
       >
         <div>
           <SettingsFieldRow label={t('settings.extensions.detail.field.source')}>
@@ -1199,9 +1129,6 @@ export const ExtensionsPage: React.FC = () => {
         description={t('settings.page.extensions.description')}
         headerEnd={unsupported ? null : (
           <div className="flex items-center gap-2">
-<<<<<<< HEAD
-||||||| bc50ba56aa
-            {/* Enterprise mode installs only from approved repositories, so the public list stays out of it. */}
             {enterpriseMode ? null : (
               <Button
                 type="button"
@@ -1217,23 +1144,6 @@ export const ExtensionsPage: React.FC = () => {
                 <Icon name="external-link" className="size-3.5 text-muted-foreground" />
               </Button>
             )}
-=======
-            {enterpriseMode ? null : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0 gap-1.5"
-                data-settings-item="extensions.browse"
-                title={t('settings.extensions.browse.hint')}
-                onClick={() => void openExternalUrl(communityExtensionsUrl(locale))}
-              >
-                <Icon name="compass-3" className="size-4" />
-                {t('settings.extensions.browse.label')}
-                <Icon name="external-link" className="size-3.5 text-muted-foreground" />
-              </Button>
-            )}
->>>>>>> upstream/main
             {updatable.length > 1 ? (
               <Button
                 type="button"

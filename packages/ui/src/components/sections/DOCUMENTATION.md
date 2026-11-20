@@ -157,7 +157,7 @@ environment shows "From $VAR" with the variable's name and never its value;
 its API-key form stays available, so a key can still be saved for it. The
 environment source is read from the Agent Service's
 `ProviderAuthState.environment` (`{ variable, active }`) on every provider the
-workspace reports. A key saved in OpenChamber outranks the environment
+workspace reports. A key saved in OhPiChamber outranks the environment
 variable, and the environment badge stays on the card because the variable is
 still set. The connect picker lists only providers with no credential yet, so
 an env-backed provider is not in it; the key form for one is reached from its
@@ -247,7 +247,7 @@ is known (a saved model, a catalog answer, or the user's edit); an unknown
 tool-support value is left out of the request so a save never replaces what
 the native runner knows with a text-only default.
 
-Custom-provider icons are OpenChamber profile preferences, keyed by provider
+Custom-provider icons are OhPiChamber profile preferences, keyed by provider
 ID. They are not written into OpenCode config because OpenCode has no provider
 icon field. "Default" stores nothing, so the provider's own logo (or the
 generic fallback) still shows; `ProviderLogo` reads a chosen icon before trying
@@ -272,7 +272,7 @@ was last configured, or one another client just uploaded). A failed image write
 is its own toast and does not reopen the form, whose next Save would store the
 key again. Every other provider, and a custom one while
 enterprise mode hides its form, sets it in a Logo section on its page, applied
-at once. The chosen icon stays the fallback. VS Code runs no OpenChamber server,
+at once. The chosen icon stays the fallback. VS Code runs no OhPiChamber server,
 so it neither offers the upload nor draws an uploaded logo; it shows the icon.
 
 The "Connect provider" page lists `GET /api/integration` minus the
@@ -321,39 +321,12 @@ nor delete because no config entry backs them.
 
 ### MCP OAuth
 
-<<<<<<< HEAD
 Signing in to an MCP server is one panel, `mcp/McpOAuthSignIn.tsx`, used by the
 MCP Settings page and by the Integrations catalog. It reads and drives the
 Agent Service's own OAuth state (`GET`/`POST
 .../mcp/servers/:id/oauth`) rather than a provider integration: the server's
 pending flow, its authorization URL and its connection are the worker's, and
 the panel only shows them.
-||||||| bc50ba56aa
-A remote MCP server with OAuth enabled is registered by OpenCode as an
-integration (`mcp_<hash>`, `metadata.source: "mcp"`, named after the server)
-with `oauth` methods, so signing in is the same connect / status /
-complete flow the Providers page runs. `mcp/McpOAuthSignIn.tsx` looks the
-integration up by server name in the server's directory (the registration is
-per Location) and mounts the shared `providers/ProviderOAuthMethods.tsx`
-with that directory. While the server reports `needs_auth`, the status card
-shows its sign-in row; once the credential is stored, the page connects the
-server again, which is what moves it out of `needs_auth` or `failed`.
-=======
-A remote MCP server with OAuth enabled is registered by OpenCode as an
-integration (`mcp_<hash>`, `metadata.source: "mcp"`, named after the server)
-with `oauth` methods, so signing in is the same connect / status /
-complete flow the Providers page runs. `mcp/McpOAuthSignIn.tsx` looks the
-integration up by server name in the server's directory (the registration is
-per Location) and mounts the shared `providers/ProviderOAuthMethods.tsx`
-with that directory. It renders nothing until the integration shows up; a
-caller with nothing else on screen passes `onUnavailable` to hear when the
-lookup gives up. While the server reports `needs_auth`, the status card
-shows its sign-in row, whose button reads "Sign in" so it is not confused with
-the header's Connect, which only retries the connection. Once the credential
-is stored, the page connects the server again, which is what moves it out of
-`needs_auth` or `failed`. The Work status panel's MCP rows start the same
-sign-in from their Sign in pill (`chat/work-status/DOCUMENTATION.md`).
->>>>>>> upstream/main
 
 Props: `serverId`, `directory`, `onConnected` (runs the server's connect) and
 two install hooks, `autoStart` and `onAutoStartConsumed`.
@@ -479,7 +452,7 @@ or Off. A skill's id is its `SKILL.md` folder name, not its display name. Off
 writes an exact `skill.use` deny for the id where the skill lives (project config for a
 project skill, global config otherwise) and leaves the file's flag alone;
 leaving Off removes the exact deny, in either spelling (`skill.use` `<id>` or
-the legacy `integration.use` `skill:<id>` an older OpenChamber wrote), from
+the legacy `integration.use` `skill:<id>` an older OhPiChamber wrote), from
 every config file OpenCode reads for the directory, hand-written ones included. A skill an exact deny turns off
 reads "Off" in the sidebar. A wildcard deny is someone else's rule: the choice
 is locked, the row reads "Blocked", and the page names the rule and its file.
@@ -503,14 +476,14 @@ clears the skill's exact deny wherever it is, so no file keeps a stale rule.
 
 The Plugins list is the only place a plugin is switched on or off; the detail
 page carries no control. The switch records the entry's `plugin:` resource in
-OpenChamber's own store, and the config layer of the OpenCode OpenChamber starts
+OhPiChamber's own store, and the config layer of the OpenCode OhPiChamber starts
 denies it there. The user's OpenCode config is not written, so the TUI and any
 external server keep loading the plugin. A switched-off plugin reports what
 OpenCode reports for any plugin that does not load: `Not loaded` on the card's
 status pill. The pill keeps that wording, and the card never adds a "Disabled"
 pill, because the switch beside it already says who turned it off.
 
-The switch belongs to OpenChamber and covers every project of the OpenCode it
+The switch belongs to OhPiChamber and covers every project of the OpenCode it
 starts, while web and VS Code each keep their own. The page description says
 that plainly, because a project-scope card suggests otherwise.
 
@@ -518,9 +491,9 @@ When a deny the user wrote themselves blocks the entry, the switch is disabled
 and the detail page says under the status banner that a rule in the config
 blocks it. The switch also stays disabled until the policy read succeeds, and
 while it is failing, because a denied plugin and an enabled one look the same
-before the config is read. A runtime OpenChamber did not start, or a store it
+before the config is read. A runtime OhPiChamber did not start, or a store it
 cannot read, reports `unavailable`: the switch stays disabled and says the switch
-applies only to the OpenCode OpenChamber starts. VS Code renders the same switch
+applies only to the OpenCode OhPiChamber starts. VS Code renders the same switch
 through its bridge; an external OpenCode server (`openchamber.apiUrl`) reports
 every row as unavailable because the extension applies a switch only to the
 OpenCode it starts.
@@ -534,7 +507,7 @@ system and Console policies. The absence of a deny proves nothing there: OpenCod
 applies a rewritten managed file a moment after the write, and the
 `OPENCODE_CONFIG_CONTENT` path only at the next launch.
 
-The same delay keeps OpenChamber's own deny in `/api/config` after a plugin is
+The same delay keeps OhPiChamber's own deny in `/api/config` after a plugin is
 switched back on. A row switched on ignores an exact deny from that layer
 (`opencode.managed.json`, or the pathless `OPENCODE_CONFIG_CONTENT` document),
 so the page never tells the user to remove a rule that is ours. `config.updated`
@@ -630,7 +603,7 @@ Invariants:
   `github-com-device`; the instance list under it, titled "Other instances",
   leaves that instance out.
 - A descriptor that names a settings field kind this version cannot draw shows
-  an "update OpenChamber" line instead of the instance setup.
+  an "update OhPiChamber" line instead of the instance setup.
 - Settings search anchors: the card is `integrations.source-control.<id>`, its
   body `.connect`; tracker cards keep `integrations.<id>` and its
   `.add-workspace`, `.mapping` and `.session-comments` anchors, the ids
@@ -681,7 +654,7 @@ or desktop, and the phone shows the tracker's items once they are.
 
 The maintainer placed it beside the extension's notification channel rather
 than among the built-in integrations: everything one extension owns is in one
-place, and "Built-in integrations" stays what ships with OpenChamber. The card
+place, and "Built-in integrations" stays what ships with OhPiChamber. The card
 itself is `TrackerSettings`, so mapping and session comments read the same.
 
 ### Why `{provider}` keys and not keys per provider
@@ -981,7 +954,7 @@ the browser, and a second meaning there confuses both.
 - Binary selection owns OpenCode restart because other configuration is watched live. Process environment changes reach OpenCode on restart and Git, terminals and project actions on their next run.
 - Project environment never reaches shared managed OpenCode because it serves every project. A changed environment command runs immediately to expose its result.
 - Passkeys are web-only because the other shells do not display the login screen. Capacitor uses native notification permission, suppresses focused notifications and uses generic notification text.
-- Classification, goal automation and per-session warming require an OpenChamber server. VS Code offers OpenCode's global warming and renders existing goal state.
+- Classification, goal automation and per-session warming require an OhPiChamber server. VS Code offers OpenCode's global warming and renders existing goal state.
 - Unavailable classification shows the server's effective safety-mode and goal-checker fallback without erasing the saved choice. Administrator-pinned endpoints remain read-only; empty custom-endpoint keys keep the saved key, including draft tests.
 - Server-persisted language survives lost browser storage and reaches other clients. Enterprise font previews show the effective system font where a stored font needs a CDN.
 - Session defaults preserve a chat's manual model and an explicitly selected agent's pinned model. Offered choices require verified credentials and the live catalog.
@@ -1050,7 +1023,7 @@ the browser, and a second meaning there confuses both.
 
 ### Why Jev has a dedicated page and not an OpenCode provider editor
 
-Jev answers OpenChamber classification requests and the server owns its selection and keys. A dedicated Gemini key enables Jev without enabling Gemini chat models.
+Jev answers OhPiChamber classification requests and the server owns its selection and keys. A dedicated Gemini key enables Jev without enabling Gemini chat models.
 
 ### Why settings links use text color and not the accent
 
