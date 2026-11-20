@@ -7,23 +7,10 @@ import { useI18n } from '@/lib/i18n';
 import { isCapacitorApp } from '@/lib/platform';
 import { buildMessageLink, type MessageLinkForm } from '@/lib/sessionLinks';
 
-<<<<<<< HEAD
 // Desktop and the mobile app hand out the native deep link: their own page
 // address (a loopback port, a packaged scheme) opens nothing elsewhere. The
 // web hands out its own address.
 const resolveMessageLinkForm = (): MessageLinkForm => {
-||||||| bc50ba56aa
-// Desktop and the mobile app hand out the native deep link: their own page
-// address (a loopback port, a packaged scheme) opens nothing elsewhere. The
-// web hands out its own address. VS Code has no link: its extension runs its
-// own OpenCode, so a link would open a desktop app that usually lacks the
-// session.
-const resolveMessageLinkForm = (): MessageLinkForm | null => {
-    if (isVSCodeRuntime()) return null;
-=======
-const resolveMessageLinkForm = (): MessageLinkForm | null => {
-    if (isVSCodeRuntime()) return null;
->>>>>>> upstream/main
     if (isDesktopShell() || isCapacitorApp()) return { kind: 'deep-link' };
     return { kind: 'web', origin: window.location.origin, pathname: window.location.pathname };
 };

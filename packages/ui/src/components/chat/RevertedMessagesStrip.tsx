@@ -20,7 +20,6 @@ import {
     type RevertedMessageDockState,
 } from './revertedMessageDockState';
 
-<<<<<<< HEAD
 /**
  * A one-line preview of a reverted message: its text parts joined and
  * collapsed to a single line, falling back to an attached filename and then to
@@ -34,28 +33,6 @@ const getRevertedPreview = (parts: Part[], fallback: string): string => {
         .replace(/\s+/g, ' ')
         .trim();
 
-||||||| bc50ba56aa
-/**
- * A one-line preview of a reverted prompt, read the way the navigator reads
- * it: the typed text, else a label for its attached context (a quote, a
- * terminal selection), else an attached filename, else `fallback`.
- */
-const getRevertedPreview = (
-    parts: Part[],
-    fallback: string,
-    t: Parameters<typeof getPromptPreviewText>[1],
-    descriptorOf: SourceControlDescriptorOf,
-): string => {
-    const text = getPromptPreviewText(parts, t, descriptorOf).replace(/\s+/g, ' ').trim();
-=======
-const getRevertedPreview = (
-    parts: Part[],
-    fallback: string,
-    t: Parameters<typeof getPromptPreviewText>[1],
-    descriptorOf: SourceControlDescriptorOf,
-): string => {
-    const text = getPromptPreviewText(parts, t, descriptorOf).replace(/\s+/g, ' ').trim();
->>>>>>> upstream/main
     if (text) return text;
     const filePart = parts.find((part) => part.type === 'attachment');
     return filePart?.name ? `[${attachmentBasename(filePart.name)}]` : fallback;
@@ -83,33 +60,10 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
         directory,
     );
     const noTextContent = t('chat.revertPopover.noTextContent');
-<<<<<<< HEAD
     const items = React.useMemo(() => revertedState.records.map((record) => ({
         id: record.message.messageId,
         text: getRevertedPreview(record.parts, noTextContent),
     })), [noTextContent, revertedState]);
-||||||| bc50ba56aa
-    const items = React.useMemo(() => {
-        // Attached context arrives as synthetic messages around its prompt;
-        // folding it back on gives a quote-only prompt its label, and drops
-        // plugin plumbing. A background report stays its own row.
-        const entries = attachSyntheticContext(revertedState.records.map((record) => ({ info: record.message, parts: record.parts })));
-        return entries.flatMap(({ info, parts }) => {
-            if (info.role === 'user') return [{ id: info.id, text: getRevertedPreview(parts, noTextContent, t, descriptorOf) }];
-            if (info.role === 'synthetic' && readSubagentRun(info)) return [{ id: info.id, text: info.description?.trim() || noTextContent }];
-            return [];
-        });
-    }, [descriptorOf, noTextContent, revertedState, t]);
-=======
-    const items = React.useMemo(() => {
-        const entries = attachSyntheticContext(revertedState.records.map((record) => ({ info: record.message, parts: record.parts })));
-        return entries.flatMap(({ info, parts }) => {
-            if (info.role === 'user') return [{ id: info.id, text: getRevertedPreview(parts, noTextContent, t, descriptorOf) }];
-            if (info.role === 'synthetic' && readSubagentRun(info)) return [{ id: info.id, text: info.description?.trim() || noTextContent }];
-            return [];
-        });
-    }, [descriptorOf, noTextContent, revertedState, t]);
->>>>>>> upstream/main
 
     if (!sessionId || !revertedState.revertMessageID || items.length === 0) return null;
 

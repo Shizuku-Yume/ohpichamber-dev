@@ -14,15 +14,8 @@ const LOCAL_IMAGE_RE = /(["'`])((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>\n]*
 const PAGE_IMAGE_BUDGET_BYTES = 25 * 1024 * 1024;
 const OLDER_SERVER_MAX_IMAGES = 12;
 
-<<<<<<< HEAD
 /** The local image paths a page names, in order, once each. */
 function renderPageImageSources(html: string): string[] {
-||||||| bc50ba56aa
-/** The local image paths a page names, in order, once each. */
-export function renderPageImageSources(html: string): string[] {
-=======
-export function renderPageImageSources(html: string): string[] {
->>>>>>> upstream/main
     const sources = new Set<string>();
     for (const match of html.matchAll(LOCAL_IMAGE_RE)) {
         const source = match[2] ?? match[3];
@@ -33,15 +26,8 @@ export function renderPageImageSources(html: string): string[] {
 
 const dataUrlBytes = (url: string): number => Math.floor((url.length - url.indexOf(',') - 1) * 3 / 4);
 
-<<<<<<< HEAD
 /** The page with each loaded image's path swapped for its data URL; an image that did not load keeps its path. */
 function inlineRenderPageImages(html: string, images: ReadonlyMap<string, string>): string {
-||||||| bc50ba56aa
-/** The page with each loaded image's path swapped for its data URL; an image that did not load keeps its path. */
-export function inlineRenderPageImages(html: string, images: ReadonlyMap<string, string>): string {
-=======
-export function inlineRenderPageImages(html: string, images: ReadonlyMap<string, string>): string {
->>>>>>> upstream/main
     return html.replace(LOCAL_IMAGE_RE, (match: string, quote: string | undefined, quoted: string | undefined, bare: string | undefined) => {
         const url = images.get(quoted ?? bare ?? '');
         if (!url) return match;
@@ -51,7 +37,6 @@ export function inlineRenderPageImages(html: string, images: ReadonlyMap<string,
 
 type PrepareImages = typeof prepareLocalMarkdownImages;
 
-<<<<<<< HEAD
 /**
  * Asks the image grant route for a page's images. A server from before the
  * weight budget refuses the whole request with a 400 when the page names more
@@ -60,18 +45,6 @@ type PrepareImages = typeof prepareLocalMarkdownImages;
  * id gets no weight budget.
  */
 function prepareRenderPageImages(
-||||||| bc50ba56aa
-/**
- * Asks the image grant route for a page's images. A server from before the
- * weight budget refuses the whole request with a 400 when the page names more
- * than 12 images; the page then gets its first 12, as it did from that server
- * before. Any other failure stays a failure: a request without the page's call
- * id gets no weight budget.
- */
-export function prepareRenderPageImages(
-=======
-export function prepareRenderPageImages(
->>>>>>> upstream/main
     request: Parameters<PrepareImages>[0] & { callId: string },
     prepare: PrepareImages = prepareLocalMarkdownImages,
 ): ReturnType<PrepareImages> {
@@ -135,7 +108,6 @@ const rememberPage = (partId: string, html: string, inlined: string) => {
     }
 };
 
-<<<<<<< HEAD
 /**
  * The page's HTML with its local images in place, or null while they load. A
  * page that names none is ready at once. The page is drawn once its images are
@@ -143,17 +115,6 @@ const rememberPage = (partId: string, html: string, inlined: string) => {
  * holds.
  */
 export function useRenderPageHtml(part: CanonicalToolView, html: string): string | null {
-||||||| bc50ba56aa
-/**
- * The page's HTML with its local images in place, or null while they load. A
- * page that names none is ready at once. The page is drawn once its images are
- * in, not before: drawing it again would reload it and lose what its script
- * holds.
- */
-export function useRenderPageHtml(part: ToolPart, html: string): string | null {
-=======
-export function useRenderPageHtml(part: ToolPart, html: string): string | null {
->>>>>>> upstream/main
     const directory = useEffectiveDirectory() ?? '';
     const sources = React.useMemo(() => renderPageImageSources(html), [html]);
     const [loaded, setLoaded] = React.useState(() => rememberedPages.get(part.id) ?? null);

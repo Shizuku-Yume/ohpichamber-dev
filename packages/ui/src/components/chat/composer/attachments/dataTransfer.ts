@@ -1,38 +1,5 @@
-<<<<<<< HEAD
-/**
- * Reading a drop's payload.
- *
- * Browser and native pickers expose `File` entries. OpenChamber's own file
- * tree marks internal drags with a private type so the composer inserts a
- * project-relative mention instead of attaching the file's contents.
- */
-||||||| bc50ba56aa
-/**
- * Reading a drop's payload.
- *
- * Hosts describe a dragged file in incompatible ways: a browser exposes real
- * `File` entries, VS Code's explorer offers only proprietary data types whose
- * payloads must be parsed for paths, and OpenChamber's own file tree marks an
- * internal drag with a private type. These helpers answer the three questions
- * the composer actually asks of a `DataTransfer`, and are pure so they can be
- * exercised without a browser.
- *
- * `getData` throws in some hosts when called during dragover rather than drop;
- * every read here is guarded so one unreadable type cannot abort the scan.
- */
-=======
->>>>>>> upstream/main
-
-<<<<<<< HEAD
-/** Data type marking a drag that started in OpenChamber's own file tree. */
-||||||| bc50ba56aa
-import { parseDroppedFileReferences, VS_CODE_DROP_DATA_TYPES } from './filePaths';
 
 /** Data type marking a drag that started in OpenChamber's own file tree. */
-=======
-import { parseDroppedFileReferences, VS_CODE_DROP_DATA_TYPES } from './filePaths';
-
->>>>>>> upstream/main
 export const INTERNAL_FILE_PATH_TYPE = 'application/x-openchamber-file-path';
 
 const FILE_BEARING_TYPES = [
@@ -40,37 +7,11 @@ const FILE_BEARING_TYPES = [
     INTERNAL_FILE_PATH_TYPE,
 ];
 
-<<<<<<< HEAD
 /**
  * Whether this drag carries files at all, used to decide if the composer
  * should show its drop target. Checked on dragenter/dragover, where payloads
  * are often unreadable, so declared file types identify the drag before drop.
  */
-||||||| bc50ba56aa
-function readData(dataTransfer: DataTransfer, type: string): string {
-    try {
-        return dataTransfer.getData(type);
-    } catch {
-        return '';
-    }
-}
-
-/**
- * Whether this drag carries files at all, used to decide if the composer
- * should show its drop target. Checked on dragenter/dragover, where payloads
- * are often unreadable, so the declared types are the primary signal and the
- * payload scan is the fallback for hosts that declare nothing useful.
- */
-=======
-function readData(dataTransfer: DataTransfer, type: string): string {
-    try {
-        return dataTransfer.getData(type);
-    } catch {
-        return '';
-    }
-}
-
->>>>>>> upstream/main
 export function hasDraggedFiles(dataTransfer: DataTransfer | null | undefined): boolean {
     if (!dataTransfer) return false;
     if (dataTransfer.files && dataTransfer.files.length > 0) return true;
@@ -94,38 +35,3 @@ export function collectDroppedFiles(dataTransfer: DataTransfer | null | undefine
         .map((item) => item.getAsFile())
         .filter((file): file is File => Boolean(file));
 }
-
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * File references from a drop that carries no `File` objects — VS Code hands
- * over paths and expects the receiver to resolve them itself.
- */
-export function collectDroppedFileUris(dataTransfer: DataTransfer | null | undefined): string[] {
-    if (!dataTransfer || typeof dataTransfer.getData !== 'function') return [];
-
-    const extracted = new Set<string>();
-    for (const dataType of VS_CODE_DROP_DATA_TYPES) {
-        const rawPayload = readData(dataTransfer, dataType);
-        if (!rawPayload) continue;
-        for (const candidate of parseDroppedFileReferences(rawPayload)) {
-            extracted.add(candidate);
-        }
-    }
-    return Array.from(extracted);
-}
-=======
-export function collectDroppedFileUris(dataTransfer: DataTransfer | null | undefined): string[] {
-    if (!dataTransfer || typeof dataTransfer.getData !== 'function') return [];
-
-    const extracted = new Set<string>();
-    for (const dataType of VS_CODE_DROP_DATA_TYPES) {
-        const rawPayload = readData(dataTransfer, dataType);
-        if (!rawPayload) continue;
-        for (const candidate of parseDroppedFileReferences(rawPayload)) {
-            extracted.add(candidate);
-        }
-    }
-    return Array.from(extracted);
-}
->>>>>>> upstream/main

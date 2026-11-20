@@ -1,34 +1,3 @@
-<<<<<<< HEAD
-/**
- * Which autocomplete a caret position asks for.
- *
- * Four pickers: native commands/templates, inline skills, file/agent mentions, and emoji shortcodes.
- * This module owns the caret trigger rules, not expansion or authorization.
- * The editor reports text and caret position, then renders the selected picker.
- *
- * Exactly one trigger is active: a leading slash command/template invocation,
- * then inline `$skill`, then file/agent mentions, then `:emoji`. Comment fields expose their
- * own leading-slash template picker through matchSnippetTrigger.
- */
-||||||| bc50ba56aa
-/**
- * Which autocomplete a caret position asks for.
- *
- * The composer has four pickers (command, skill, snippet, file/agent mention)
- * and the rule that opens each of them used to be inlined in a single 90-line
- * `updateAutocompleteState` callback, duplicating the boundary logic that
- * `scanPrefixTokens` and `scanMentions` already own. This module answers the
- * one question the composer actually asks — "given the text and the caret,
- * what should be open?" — as a pure function, so the editor layer only has to
- * report the caret and render the result.
- *
- * Exactly one trigger can be active, and order matters: the command palette
- * (a leading `/`) outranks the skill picker (`$`, anywhere in the text), which
- * outranks snippets, which outrank mentions, which outrank emoji (`:tada`). Commands and skills use separate
- * sigils so the palette lists commands only.
- */
-=======
->>>>>>> upstream/main
 
 import {
     getFileMentionAutocompleteQuery,
@@ -68,19 +37,6 @@ function matchCommandPalette(value: string, cursorPosition: number): Autocomplet
     return { kind: 'command', query: value.substring(1, commandEnd) };
 }
 
-<<<<<<< HEAD
-/**
- * A `$skill` still being typed: the nearest sigil before the
- * caret, at a word boundary, with no separator between it and the caret.
- */
-||||||| bc50ba56aa
-/**
- * A `$skill` or `#snippet` still being typed: the nearest sigil before the
- * caret, at a word boundary, with no separator between it and the caret. The
- * skill sigil matches every spelling a CJK IME produces for the same key.
- */
-=======
->>>>>>> upstream/main
 function matchInlineToken(
     value: string,
     cursorPosition: number,
@@ -98,7 +54,6 @@ function matchInlineToken(
     return { kind, query };
 }
 
-<<<<<<< HEAD
 const INTERNAL_SCHEMES = ['skill://', 'local://', 'proc://', 'agent://', 'history://'] as const;
 
 /** Match OMP internal URL schemes typed at a word boundary (e.g. `skill://`). */
@@ -134,13 +89,6 @@ function matchEmoji(value: string, cursorPosition: number, context: TriggerConte
  * A native `/template` query at the start of a comment field.
  * Argument substitution is owned by the worker, not by this picker.
  */
-||||||| bc50ba56aa
-/**
- * The `#snippet` query being typed at the caret, or null. For text fields that
- * offer only the snippet picker (comment inputs), with the composer's rule.
- */
-=======
->>>>>>> upstream/main
 export function matchSnippetTrigger(value: string, cursorPosition: number): string | null {
     return matchCommandPalette(value, cursorPosition)?.query ?? null;
 }
@@ -159,23 +107,6 @@ export function resolveAutocompleteTrigger(
         ?? matchEmoji(value, cursorPosition, context);
 }
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/** Only typing opens it: pasted text that ends in `:word` is not asking for an emoji. */
-function matchEmoji(value: string, cursorPosition: number, context: TriggerContext): AutocompleteTrigger | null {
-    if (context.inputSource === 'paste') return null;
-    const query = matchEmojiTrigger(value, cursorPosition);
-    return query === null ? null : { kind: 'emoji', query };
-}
-
-=======
-function matchEmoji(value: string, cursorPosition: number, context: TriggerContext): AutocompleteTrigger | null {
-    if (context.inputSource === 'paste') return null;
-    const query = matchEmojiTrigger(value, cursorPosition);
-    return query === null ? null : { kind: 'emoji', query };
-}
-
->>>>>>> upstream/main
 function matchMention(
     value: string,
     cursorPosition: number,

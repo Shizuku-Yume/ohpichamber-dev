@@ -23,12 +23,6 @@ export interface ComposerLanguageContext {
     confirmedMentionsRevision?: number;
     mentionDismissal?: { dismiss: (name: string) => void; hint: string };
     knownSlashNames: ReadonlySet<string>;
-<<<<<<< HEAD
-    /** Native prompt template names invocable with a leading `/`. */
-||||||| bc50ba56aa
-    /** Lowercased snippet names and aliases invocable with `#`. */
-=======
->>>>>>> upstream/main
     knownSnippetTriggers: ReadonlySet<string>;
     attachmentFilenames: readonly string[];
     pendingAttachmentFilenames?: ReadonlySet<string>;
@@ -36,34 +30,8 @@ export interface ComposerLanguageContext {
     onChipOpen?: (target: ComposerChipTarget) => void;
     knownSkillNames?: ReadonlySet<string>;
     fileIconVariant?: 'light' | 'dark';
-<<<<<<< HEAD
-    /**
-     * The session or message each `[[…]]` link mention resolves to, keyed by
-     * `sessionLinkKey`; without it a resolved link stays plain text.
-     */
-||||||| bc50ba56aa
-    /**
-     * Session and message links the composer has resolved, by `sessionLinkKey`:
-     * each draws as a chip with its session's title or the start of its message.
-     * A link not resolved (yet) stays text.
-     */
-=======
->>>>>>> upstream/main
     sessionLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
-<<<<<<< HEAD
-    /** Link origins the mention syntax accepts; the app's own when absent. */
-||||||| bc50ba56aa
-    /** This instance's web addresses, which a web session link must point at (`parseSessionLink`). */
-=======
->>>>>>> upstream/main
     sessionLinkOrigins?: readonly string[];
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    /** Links to issues, change requests and tracker items the composer has read, by the link as written; each draws as a chip. */
-    referenceLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
-=======
-    referenceLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
->>>>>>> upstream/main
 }
 
 export function tokenizeMentions(

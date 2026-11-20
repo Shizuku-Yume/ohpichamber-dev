@@ -58,55 +58,6 @@ const DraftTime: React.FC<{ draft: SessionDraft }> = ({ draft }) => (
 );
 
 const DraftMenuItem: React.FC<{ draft: SessionDraft }> = ({ draft }) => {
-<<<<<<< HEAD
- const { t } = useI18n();
- const { label, open, discard } = useSessionDraftRow(draft, noop);
- return (
-  <DropdownMenuItem onClick={open} className="group/draft gap-2">
-   <span dir="auto" className="oc-ui-start-align min-w-0 flex-1 truncate italic">{label}</span>
-   <span className="grid shrink-0 place-items-end [&>*]:[grid-area:1/1]">
-    <span className="group-data-[highlighted]/draft:invisible"><DraftTime draft={draft} /></span>
-    <button
-     type="button"
-     aria-label={t('sessions.sidebar.draft.discard')}
-     // The entry keeps the menu open and the draft closed: the
-     // click stops here before the item's own handlers.
-     onClick={(event) => {
-      event.stopPropagation();
-      discard();
-     }}
-     className="pointer-events-none inline-flex size-4 items-center justify-center self-center rounded-md text-muted-foreground opacity-0 hover:text-foreground group-data-[highlighted]/draft:pointer-events-auto group-data-[highlighted]/draft:opacity-100"
-    >
-     <Icon name="close" className="size-3" />
-    </button>
-   </span>
-  </DropdownMenuItem>
- );
-||||||| bc50ba56aa
-    const { t } = useI18n();
-    const { label, open, discard } = useSessionDraftRow(draft, noop);
-    return (
-        <DropdownMenuItem onClick={open} className="group/draft gap-2">
-            <span dir="auto" className="oc-ui-start-align min-w-0 flex-1 truncate italic">{label}</span>
-            <span className="grid shrink-0 place-items-end [&>*]:[grid-area:1/1]">
-                <span className="group-data-[highlighted]/draft:invisible"><DraftTime draft={draft} /></span>
-                <button
-                    type="button"
-                    aria-label={t('sessions.sidebar.draft.discard')}
-                    // The entry keeps the menu open and the draft closed: the
-                    // click stops here before the item's own handlers.
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        discard();
-                    }}
-                    className="pointer-events-none inline-flex size-4 items-center justify-center self-center rounded-md text-muted-foreground opacity-0 hover:text-foreground group-data-[highlighted]/draft:pointer-events-auto group-data-[highlighted]/draft:opacity-100"
-                >
-                    <Icon name="close" className="size-3" />
-                </button>
-            </span>
-        </DropdownMenuItem>
-    );
-=======
     const { t } = useI18n();
     const { label, open, discard } = useSessionDraftRow(draft, noop);
     return (
@@ -128,7 +79,6 @@ const DraftMenuItem: React.FC<{ draft: SessionDraft }> = ({ draft }) => {
             </span>
         </DropdownMenuItem>
     );
->>>>>>> upstream/main
 };
 
 const DraftsHerePickerView: React.FC = () => {

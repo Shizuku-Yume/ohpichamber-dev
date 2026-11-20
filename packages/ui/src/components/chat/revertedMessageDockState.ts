@@ -2,18 +2,7 @@ import type { Message, Part } from '@openchamber/agent-contract';
 import type { State } from '@/sync/types';
 
 type RevertedMessageRecord = {
-<<<<<<< HEAD
     message: Message;
-||||||| bc50ba56aa
-    /**
-     * A prompt, a background subagent run report (it stands where a prompt
-     * would), or a synthetic message that may carry a prompt's attached context
-     * (a quote, a terminal selection), which the strip folds back onto it.
-     */
-    message: UserMessage | SyntheticMessage;
-=======
-    message: UserMessage | SyntheticMessage;
->>>>>>> upstream/main
     parts: Part[];
 };
 

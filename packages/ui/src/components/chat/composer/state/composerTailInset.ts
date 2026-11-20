@@ -1,5 +1,4 @@
 
-<<<<<<< HEAD
 /**
  * Gap between the last transcript row and the resting composer's top edge,
  * on top of the status row reserve. Generous on purpose: the recap note and
@@ -15,25 +14,6 @@ const FLOATING_COMPOSER_GAP_PX = 80;
  * The recap hint hides while the composer is grown, so nothing else needs
  * the band.
  */
-||||||| bc50ba56aa
-/**
- * Gap between the last transcript row and the resting composer's top edge,
- * on top of the status row reserve. Generous on purpose: the recap note and
- * the rows docked above the composer (context chips, linked references, the
- * queue) land in this band, and a follow glide that trails the live edge
- * should still leave the last line clear of the glass.
- */
-export const FLOATING_COMPOSER_GAP_PX = 80;
-/**
- * How far the composer grows above its resting height before it pushes the
- * transcript. The visible band at rest is the gap plus the last turn's own
- * bottom padding (about 104px); this leaves about 16px of it above the glass.
- * The recap hint hides while the composer is grown, so nothing else needs
- * the band.
- */
-=======
-export const FLOATING_COMPOSER_GAP_PX = 80;
->>>>>>> upstream/main
 const FLOATING_COMPOSER_GROWTH_ALLOWANCE_PX = 88;
 const FLOATING_COMPOSER_DEFAULT_HEIGHT = 128;
 export const FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX = FLOATING_COMPOSER_DEFAULT_HEIGHT + FLOATING_COMPOSER_GAP_PX;

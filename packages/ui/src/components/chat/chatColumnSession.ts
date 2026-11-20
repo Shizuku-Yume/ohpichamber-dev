@@ -22,45 +22,12 @@ export const useChatSessionSelection = (): ChatColumnSession => {
   );
 };
 
-<<<<<<< HEAD
 /**
  * What a column does on behalf of the chat inside it. The app's main chat
  * acts on the global selection and the global panels; a pinned column (a chat
  * opened in the side panel) keeps its own session, navigates inside itself,
  * and leaves the main chat's selection and panels alone.
  */
-||||||| bc50ba56aa
-/**
- * The store directory of a transcript nested in a column that renders from
- * another store: a `/btw` fork sits in its parent's column and reads its
- * records from the fork's directory. Everything else in that transcript still
- * acts on the column's session, so this stays apart from the column context.
- */
-export const ChatTranscriptDirectoryContext = React.createContext<string | null>(null);
-
-/** The directory of the store the transcript around this component renders from. */
-export const useChatTranscriptDirectory = (): string | null => {
-  const nested = React.useContext(ChatTranscriptDirectoryContext);
-  const { directory } = useChatSessionSelection();
-  return nested ?? directory;
-};
-
-/**
- * What a column does on behalf of the chat inside it. The app's main chat
- * acts on the global selection and the global panels; a pinned column (a chat
- * opened in the side panel) keeps its own session, navigates inside itself,
- * and leaves the main chat's selection and panels alone.
- */
-=======
-export const ChatTranscriptDirectoryContext = React.createContext<string | null>(null);
-
-export const useChatTranscriptDirectory = (): string | null => {
-  const nested = React.useContext(ChatTranscriptDirectoryContext);
-  const { directory } = useChatSessionSelection();
-  return nested ?? directory;
-};
-
->>>>>>> upstream/main
 export type ChatColumnActions = {
   pinned: boolean;
   openSession: (sessionId: string, directory: string | null) => void;
@@ -79,24 +46,12 @@ export const ChatColumnActionsContext = React.createContext<ChatColumnActions>(M
 
 export const useChatColumnActions = (): ChatColumnActions => React.useContext(ChatColumnActionsContext);
 
-<<<<<<< HEAD
 /**
  * Whether the composer is expanded to fill the column (focus mode). The main
  * chat keeps it as an app-wide preference; a pinned column keeps its own, so
  * expanding one composer leaves the other chat as it was.
  */
 export type ChatColumnExpandedInput = {
-||||||| bc50ba56aa
-/**
- * Whether the composer is expanded to fill the column (focus mode). Only the
- * main chat has it, as an app-wide preference toggled by the `expand_input`
- * shortcut; a pinned column's composer never expands, so the shortcut leaves
- * the side panel as it was.
- */
-type ChatColumnExpandedInput = {
-=======
-type ChatColumnExpandedInput = {
->>>>>>> upstream/main
   expanded: boolean;
   setExpanded: (expanded: boolean) => void;
 };

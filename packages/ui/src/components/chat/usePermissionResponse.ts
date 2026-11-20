@@ -12,25 +12,15 @@ export type PermissionResponse = 'once' | 'always' | 'reject';
 type ColumnKind = 'main' | 'pinned';
 type ActivePermissionCard = { id: string; column: ColumnKind };
 
-<<<<<<< HEAD
 // The newest pending card of a chat owns that chat's keyboard; older cards
 // wait their turn. With a chat pinned in the side panel, each chat answers only
 // the keys pressed inside it (anywhere else counts as the main chat).
 const activePermissionCards: ActivePermissionCard[] = [];
-||||||| bc50ba56aa
-// Newest pending card of a chat owns that chat's keyboard; older cards wait
-// their turn. With a chat pinned in the side panel, each chat answers only the
-// keys pressed inside it (anywhere else counts as the main chat).
-const activePermissionCards: Array<{ id: string; column: ColumnKind }> = [];
-=======
-const activePermissionCards: Array<{ id: string; column: ColumnKind }> = [];
->>>>>>> upstream/main
 
 const columnOfEvent = (event: KeyboardEvent): ColumnKind => (
     event.target instanceof Element && event.target.closest('[data-chat-column="pinned"]') ? 'pinned' : 'main'
 );
 
-<<<<<<< HEAD
 /** The request was raised by a child of the session the user is looking at. */
 export const usePermissionFromSubagent = (permission: ApprovalRequest): boolean => {
     const { sessionId: currentSessionId, directory } = useChatSessionSelection();
@@ -40,75 +30,8 @@ export const usePermissionFromSubagent = (permission: ApprovalRequest): boolean 
         const sourceSession = sessions.find((session) => session.sessionId === permission.sessionId);
         return Boolean(sourceSession?.parentSessionId && sourceSession.parentSessionId === currentSessionId);
     }, [currentSessionId, permission.sessionId, sessions]);
-||||||| bc50ba56aa
-/**
- * The reply a key press gives. "Always" needs something to save. Bindings are
- * single chords matched here, in the capture phase, because the composer would
- * otherwise take the default Alt+Enter as a new line.
- */
-export const permissionShortcutReply = (
-  event: KeyboardEvent,
-  canSave: boolean,
-  overrides?: Record<string, string>,
-): PermissionReply | null => {
-  const pressed = (actionId: ShortcutActionId) => (
-    eventMatchesShortcut(event, getEffectiveShortcutCombo(actionId, overrides))
-  );
-  if (pressed('permission_allow_once')) return 'once';
-  if (pressed('permission_deny')) return 'reject';
-  return canSave && pressed('permission_allow_always') ? 'always' : null;
 };
 
-/** The request was raised by a child of the session the user is looking at. */
-export const usePermissionFromSubagent = (permission: PermissionRequest): boolean => {
-  const { sessionId: currentSessionId, directory: currentSessionDirectory } = useChatSessionSelection();
-  const sessions = useSessions(currentSessionDirectory ?? undefined);
-  return React.useMemo(() => {
-    if (!currentSessionId || permission.sessionID === currentSessionId) return false;
-    const sourceSession = sessions.find((session) => session.id === permission.sessionID);
-    return Boolean(sourceSession?.parentID && sourceSession.parentID === currentSessionId);
-  }, [permission.sessionID, currentSessionId, sessions]);
-=======
-export const permissionShortcutReply = (
-  event: KeyboardEvent,
-  canSave: boolean,
-  overrides?: Record<string, string>,
-): PermissionReply | null => {
-  const pressed = (actionId: ShortcutActionId) => (
-    eventMatchesShortcut(event, getEffectiveShortcutCombo(actionId, overrides))
-  );
-  if (pressed('permission_allow_once')) return 'once';
-  if (pressed('permission_deny')) return 'reject';
-  return canSave && pressed('permission_allow_always') ? 'always' : null;
-};
-
-export const usePermissionFromSubagent = (permission: PermissionRequest): boolean => {
-  const { sessionId: currentSessionId, directory: currentSessionDirectory } = useChatSessionSelection();
-  const sessions = useSessions(currentSessionDirectory ?? undefined);
-  return React.useMemo(() => {
-    if (!currentSessionId || permission.sessionID === currentSessionId) return false;
-    const sourceSession = sessions.find((session) => session.id === permission.sessionID);
-    return Boolean(sourceSession?.parentID && sourceSession.parentID === currentSessionId);
-  }, [permission.sessionID, currentSessionId, sessions]);
->>>>>>> upstream/main
-};
-
-<<<<<<< HEAD
-/**
- * Replies to one native approval and owns its keyboard shortcuts while it is
- * the newest pending one: Alt+Enter allows once, Alt+Shift+Enter allows for
- * the session, Alt+Backspace denies. A session allowance exists only when the
- * request carries a native policy target. A rejected reply keeps the card
- * visible and refreshes the authoritative pending set.
- */
-||||||| bc50ba56aa
-/**
- * Replies to one request and owns its keyboard shortcuts while it is the
- * newest pending one (see `permissionShortcutReply`). Shared by the inline
- * card and the dock.
- */
-=======
->>>>>>> upstream/main
 export const usePermissionResponse = (
     permission: ApprovalRequest,
     onResponse?: (response: PermissionResponse) => void,

@@ -9,18 +9,6 @@ export type WorkStatusExtensionSections = {
   byId: ReadonlyMap<ExtensionSectionId, InstalledGuest>;
 };
 
-<<<<<<< HEAD
-/**
- * Guest sections the panel and the sections dialog may place. Empty on
- * mobile surfaces, where no guest is loaded (`useGuestStatusSections`).
- */
-||||||| bc50ba56aa
-/**
- * Extension sections the panel and the sections dialog may place. Empty on
- * VS Code and mobile, where no guest is loaded (`useGuestStatusSections`).
- */
-=======
->>>>>>> upstream/main
 export const useWorkStatusExtensionSections = (): WorkStatusExtensionSections => {
   const guests = useGuestStatusSections();
   return React.useMemo(() => {

@@ -4,38 +4,10 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 
 export type MobileControlsPanel = 'model' | 'agent' | 'variant' | 'effort' | null;
 
-<<<<<<< HEAD
 /** Cycle through available favorites, or the complete enabled native roster. */
 export const getCycledAgentId = (
     agents: readonly Pick<Agent, 'agentId'>[],
     currentAgentId: string | undefined,
-||||||| bc50ba56aa
-/** What agent cycling reads from an agent. */
-type CyclableAgent = Pick<Agent, 'name' | 'mode'>;
-
-export const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
-const getCyclablePrimaryAgents = (agents: readonly CyclableAgent[]) => agents.filter((agent) => isPrimaryMode(agent.mode));
-
-/**
- * The agent Tab moves to. While any starred agent is available, the cycle runs
- * through the starred ones only (from a non-starred agent it enters at the
- * first or last of them); otherwise through every primary agent, as before.
- */
-export const getCycledPrimaryAgentName = (
-    agents: readonly CyclableAgent[],
-    currentAgentName: string | undefined,
-=======
-type CyclableAgent = Pick<Agent, 'name' | 'mode'>;
-
-export const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
-const getCyclablePrimaryAgents = (agents: readonly CyclableAgent[]) => agents.filter((agent) => isPrimaryMode(agent.mode));
-
-export const getCycledPrimaryAgentName = (
-    agents: readonly CyclableAgent[],
-    currentAgentName: string | undefined,
->>>>>>> upstream/main
     direction: 1 | -1 = 1,
     favoriteAgentIds: readonly string[] = [],
 ) => {
@@ -119,4 +91,3 @@ export const formatEffortLabel = (
     const name = trimmed.toLowerCase();
     return isKnownEffortLabel(name) ? t(EFFORT_LABEL_KEYS[name]) : capitalizeLabel(trimmed);
 };
-

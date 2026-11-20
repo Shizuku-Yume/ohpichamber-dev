@@ -27,15 +27,8 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type PhaseGroup = ReturnType<typeof groupWorkflowAgentsByPhase>[number];
 
-<<<<<<< HEAD
 /** The model id without its provider, the part that tells two agents apart. */
 const shortModel = (model: string): string => parseModelString(model)?.modelId ?? model;
-||||||| bc50ba56aa
-/** The model id without its provider, the part that tells two agents apart. */
-const shortModel = (model: string): string => model.slice(model.indexOf('/') + 1);
-=======
-const shortModel = (model: string): string => model.slice(model.indexOf('/') + 1);
->>>>>>> upstream/main
 
 const Duration: React.FC<{ start: number | undefined; end: number | undefined; className?: string }> = ({ start, end, className }) => {
   const now = useDurationTickerNow(start !== undefined && end === undefined);

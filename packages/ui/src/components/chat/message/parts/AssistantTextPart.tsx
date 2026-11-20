@@ -8,23 +8,6 @@ import { resolveAssistantDisplayText, resolveAssistantTextStreaming, shouldRende
 import { streamPerfCount, streamPerfObserve } from '@/stores/utils/streamDebug';
 import { GeneratedJsonResultCard } from './GeneratedJsonResultCard';
 import { parseGeneratedJsonResult } from './generatedJsonResult';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { useGuestLinkRules } from '@/lib/guests/links';
-
-type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
-
-// A streaming reply is read a block at a time (see streamTextCommit.ts); taking
-// new text at most this often lets the blocks finished in between land, and
-// move the chat, together.
-const REPLY_REVEAL_INTERVAL_MS = 400;
-=======
-import { useGuestLinkRules } from '@/lib/guests/links';
-
-type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
-
-const REPLY_REVEAL_INTERVAL_MS = 400;
->>>>>>> upstream/main
 
 interface AssistantTextPartProps {
     part: Part;
@@ -45,32 +28,9 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     onShowPopup,
     range,
 }) => {
-<<<<<<< HEAD
     // Use part directly from props — parent provides the latest version from the store.
     // No store subscription here to avoid re-render cascade from unrelated delta events.
     const fullText = part.type === 'text' || part.type === 'reasoning' ? part.content : '';
-||||||| bc50ba56aa
-    // Use part directly from props — parent provides the latest version from the store.
-    // No store subscription here to avoid re-render cascade from unrelated delta events.
-    // The extension catalog changes on install or pause, never per delta.
-    const guestLinks = useGuestLinkRules();
-    const partWithText = part as PartWithText;
-    const rawText = typeof partWithText.text === 'string' ? partWithText.text : '';
-    const contentText = typeof partWithText.content === 'string' ? partWithText.content : '';
-    const valueText = typeof partWithText.value === 'string' ? partWithText.value : '';
-    const fullText = [rawText, contentText, valueText].reduce((best, candidate) => {
-        return candidate.length > best.length ? candidate : best;
-    }, '');
-=======
-    const guestLinks = useGuestLinkRules();
-    const partWithText = part as PartWithText;
-    const rawText = typeof partWithText.text === 'string' ? partWithText.text : '';
-    const contentText = typeof partWithText.content === 'string' ? partWithText.content : '';
-    const valueText = typeof partWithText.value === 'string' ? partWithText.value : '';
-    const fullText = [rawText, contentText, valueText].reduce((best, candidate) => {
-        return candidate.length > best.length ? candidate : best;
-    }, '');
->>>>>>> upstream/main
     const textContent = range ? fullText.slice(range.start, range.end) : fullText;
     // Canonical text parts have no per-part timing; completion comes from
     // the owning message's stream phase.
@@ -128,37 +88,16 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         <div
             className={cn(
                 'group/assistant-text relative break-words',
-<<<<<<< HEAD
                 // Rows of one answer stack as the whole text did: only its
                 // outer edges keep their spacing.
                 chatRenderMode === 'live' && !range?.start ? 'mt-1' : null,
                 chatRenderMode === 'live' && range?.end === undefined ? 'mb-1' : null,
-||||||| bc50ba56aa
-                // Rows of one answer stack as the whole text did: only its
-                // outer edges keep their spacing.
-                range?.start ? null : 'mt-1',
-                range?.end !== undefined ? null : 'mb-1',
-=======
-                range?.start ? null : 'mt-1',
-                range?.end !== undefined ? null : 'mb-1',
->>>>>>> upstream/main
             )}
             data-answer-continues={range?.start ? '' : undefined}
-<<<<<<< HEAD
             // The rows of one answer read as one text when a selection crosses them.
             data-answer-part={range ? `${messageId}:${part.partId}` : undefined}
             // The chat scroll stops following once the start of the reply
             // being written would leave the screen (useChatTimelineScroll).
-||||||| bc50ba56aa
-            // Its rows read as one text when a selection crosses them.
-            data-answer-part={range ? `${messageId}:${part.id}` : undefined}
-            key={part.id || `${messageId}-text`}
-            // The chat scroll stops following once the start of the reply
-            // being written would leave the screen (useChatTimelineScroll).
-=======
-            data-answer-part={range ? `${messageId}:${part.id}` : undefined}
-            key={part.id || `${messageId}-text`}
->>>>>>> upstream/main
             data-streaming-reply={isStreaming && part.type === 'text' ? '' : undefined}
             key={part.partId || `${messageId}-text`}
         >

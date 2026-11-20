@@ -49,17 +49,6 @@ interface ProjectTurnRecordsOptions {
     showTextJustificationActivity: boolean;
     showTurnChangedFiles: boolean;
     mergeHiddenUserTurns?: boolean;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    /**
-     * The messages are one turn's own records, so the first one opens the
-     * turn whatever its role: a notice that split a turn has no answer ahead
-     * of it once the turn is re-projected alone.
-     */
-    firstMessageOpensTurn?: boolean;
-=======
-    firstMessageOpensTurn?: boolean;
->>>>>>> upstream/main
 }
 
 const DEFAULT_OPTIONS: ProjectTurnRecordsOptions = {
@@ -108,7 +97,6 @@ const hydrateTurnRecord = (
         return summary;
     };
 
-<<<<<<< HEAD
     let changes: TurnChanges | undefined;
     const readChanges = (): TurnChanges => {
         if (changes) return changes;
@@ -121,25 +109,6 @@ const hydrateTurnRecord = (
             changedFiles: showTurnChangedFiles ? changedFiles : undefined,
         };
         return changes;
-||||||| bc50ba56aa
-    let changedFiles: { value: TurnRecord['changedFiles'] } | undefined;
-    const readChangedFiles = (): TurnRecord['changedFiles'] => {
-        if (changedFiles) return changedFiles.value;
-        // Changed files and their line counts are only shown under a finished
-        // answer, so tool patches are not parsed while the turn still streams.
-        const finalMessage = assistantMessages[assistantMessages.length - 1];
-        const hasFinalAnswer = finalMessage?.info.role === 'assistant' && finalMessage.info.finish === 'stop';
-        changedFiles = { value: showTurnChangedFiles && hasFinalAnswer ? projectTurnChangedFiles(assistantMessages) : undefined };
-        return changedFiles.value;
-=======
-    let changedFiles: { value: TurnRecord['changedFiles'] } | undefined;
-    const readChangedFiles = (): TurnRecord['changedFiles'] => {
-        if (changedFiles) return changedFiles.value;
-        const finalMessage = assistantMessages[assistantMessages.length - 1];
-        const hasFinalAnswer = finalMessage?.info.role === 'assistant' && finalMessage.info.finish === 'stop';
-        changedFiles = { value: showTurnChangedFiles && hasFinalAnswer ? projectTurnChangedFiles(assistantMessages) : undefined };
-        return changedFiles.value;
->>>>>>> upstream/main
     };
 
     let activity: TurnActivity | undefined;
@@ -231,71 +200,8 @@ export const projectTurnRecords = (
 
     const mergeHiddenUserTurns = effectiveOptions.mergeHiddenUserTurns;
 
-<<<<<<< HEAD
     // Ordered messages retain their canonical turn identity. Hidden user
     // prompts can still be merged into the preceding visible turn.
-||||||| bc50ba56aa
-    // v2 assistant messages carry no parent id: a reply belongs to the last
-    // user message before it, so one ordered pass does the grouping. An
-    // assistant message with no user message ahead of it stays ungrouped. A
-    // background subagent run opens a turn too: the parent reacts to its result.
-    // So does a notice between two answers (see `createNoticeTurnSplitter`).
-    let currentTurn: TurnRecord | undefined;
-    const splitAtNotice = createNoticeTurnSplitter();
-
-    const openTurn = (message: ChatMessageEntry, index: number): TurnRecord => {
-        const turn: TurnRecord = {
-            turnId: message.info.id,
-            userMessageId: message.info.id,
-            userMessage: message,
-            headerMessageId: undefined,
-            messages: [createTurnMessageRecord(message, index)],
-            assistantMessageIds: [],
-            assistantMessages: [],
-            activityParts: [],
-            summary: {},
-            summaryText: undefined,
-            hasTools: false,
-            hasReasoning: false,
-            changedFiles: undefined,
-            stream: {
-                isStreaming: false,
-                isRetrying: false,
-            },
-        };
-        turns.push(turn);
-        groupedMessageIds.add(message.info.id);
-        return turn;
-    };
-=======
-    let currentTurn: TurnRecord | undefined;
-    const splitAtNotice = createNoticeTurnSplitter();
-
-    const openTurn = (message: ChatMessageEntry, index: number): TurnRecord => {
-        const turn: TurnRecord = {
-            turnId: message.info.id,
-            userMessageId: message.info.id,
-            userMessage: message,
-            headerMessageId: undefined,
-            messages: [createTurnMessageRecord(message, index)],
-            assistantMessageIds: [],
-            assistantMessages: [],
-            activityParts: [],
-            summary: {},
-            summaryText: undefined,
-            hasTools: false,
-            hasReasoning: false,
-            changedFiles: undefined,
-            stream: {
-                isStreaming: false,
-                isRetrying: false,
-            },
-        };
-        turns.push(turn);
-        groupedMessageIds.add(message.info.id);
-        return turn;
-    };
->>>>>>> upstream/main
 
     messages.forEach((message, index) => {
         const role = resolveMessageRole(message);
@@ -321,26 +227,7 @@ export const projectTurnRecords = (
             groupedMessageIds.add(message.messageId);
             return;
         }
-<<<<<<< HEAD
         if (role !== 'user') {
-||||||| bc50ba56aa
-        // A notice before the run's first step stays in the prompt's turn.
-        if (currentTurn && currentTurn.assistantMessages.length === 0 && readSessionNotice(message.info)) {
-            currentTurn.waitingNotices = [...(currentTurn.waitingNotices ?? []), message];
-            currentTurn.messages.push(createTurnMessageRecord(message, index));
-            groupedMessageIds.add(message.info.id);
-            return;
-        }
-        if (role !== 'user' && !isTurnOpeningNotice(message.info)) {
-=======
-        if (currentTurn && currentTurn.assistantMessages.length === 0 && readSessionNotice(message.info)) {
-            currentTurn.waitingNotices = [...(currentTurn.waitingNotices ?? []), message];
-            currentTurn.messages.push(createTurnMessageRecord(message, index));
-            groupedMessageIds.add(message.info.id);
-            return;
-        }
-        if (role !== 'user' && !isTurnOpeningNotice(message.info)) {
->>>>>>> upstream/main
             return;
         }
 

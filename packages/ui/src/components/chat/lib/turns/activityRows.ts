@@ -7,24 +7,9 @@ import { filterVisibleParts, isEmptyTextPart } from '../../message/partUtils';
 export const LIVE_ACTIVITY_VISIBLE_ROWS = 7;
 
 
-<<<<<<< HEAD
 /** Whether a tool call gets a row: while it runs, and once it ended with sane timing. */
 const isToolRowShown = (toolPart: ToolCallPart): boolean => {
     return toolPart.status !== 'cancelled';
-||||||| bc50ba56aa
-/** Whether a tool call gets a row: while it runs, and once it ended with sane timing. */
-export const isToolRowShown = (toolPart: ToolPart): boolean => {
-    const { state } = toolPart;
-    if (isToolRunning(state.status)) return true;
-    if (state.status !== 'completed' && state.status !== 'error') return false;
-    return state.time.end >= state.time.start;
-=======
-export const isToolRowShown = (toolPart: ToolPart): boolean => {
-    const { state } = toolPart;
-    if (isToolRunning(state.status)) return true;
-    if (state.status !== 'completed' && state.status !== 'error') return false;
-    return state.time.end >= state.time.start;
->>>>>>> upstream/main
 };
 
 export const isActivityRowPart = (part: Part): boolean => {

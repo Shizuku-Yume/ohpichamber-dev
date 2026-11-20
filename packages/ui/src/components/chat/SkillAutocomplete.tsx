@@ -41,14 +41,6 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
 }, ref) => {
   const { t } = useI18n();
   const containerRef = React.useRef<HTMLDivElement | null>(null);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // Narrowing as the user types, the box eases into its new height; its
-  // bottom edge stays on the composer (`bottom-full`), so it moves upward.
-  useHeightMorph(containerRef);
-=======
-  useHeightMorph(containerRef);
->>>>>>> upstream/main
   const isMobile = useUIStore((state) => state.isMobile);
   const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined, 240);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -56,27 +48,8 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const { listRef, onKeyboardNavigate } = useAutocompleteSelectionScroll(selectedIndex, itemRefs);
   const effectiveDirectory = useEffectiveDirectory();
-<<<<<<< HEAD
   const skills = useSkillsStore((s) => selectAvailableSkillsForDirectory(s, effectiveDirectory));
   const skillsLoading = useSkillsStore((s) => s.isLoading);
-||||||| bc50ba56aa
-  const target = useComposerConfigDirectory(effectiveDirectory);
-  const directory = target.status === 'resolved' ? target.directory : null;
-  const skills = useSkillsStore((s) => target.status === 'pending'
-    ? EMPTY_SKILLS
-    : selectAvailableSkillsForDirectory(s, target.directory));
-  // An empty list before the first read is not "no skills".
-  const skillsLoading = useSkillsStore((s) => target.status === 'pending'
-    || (Boolean(directory) && !selectSkillsLoadedForDirectory(s, target.directory)));
-=======
-  const target = useComposerConfigDirectory(effectiveDirectory);
-  const directory = target.status === 'resolved' ? target.directory : null;
-  const skills = useSkillsStore((s) => target.status === 'pending'
-    ? EMPTY_SKILLS
-    : selectAvailableSkillsForDirectory(s, target.directory));
-  const skillsLoading = useSkillsStore((s) => target.status === 'pending'
-    || (Boolean(directory) && !selectSkillsLoadedForDirectory(s, target.directory)));
->>>>>>> upstream/main
   const loadSkills = useSkillsStore((s) => s.loadSkills);
 
   React.useEffect(() => {

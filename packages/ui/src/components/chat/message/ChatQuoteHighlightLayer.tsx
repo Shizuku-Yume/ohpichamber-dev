@@ -21,14 +21,9 @@ const FLASH_DURATION_MS = 1600;
 const POPOVER_OPEN_DELAY_MS = 400;
 const POPOVER_CLOSE_DELAY_MS = 250;
 const CORRIDOR_PADDING_PX = 6;
-<<<<<<< HEAD
 // Frames a scrolled-to row may take to mount, and a renderer to settle.
 const ROW_MOUNT_FRAMES = 20;
 // Page frames may mount after scrolling.
-||||||| bc50ba56aa
-// Page frames may mount after scrolling.
-=======
->>>>>>> upstream/main
 const REVEAL_ATTEMPTS = 10;
 
 const supportsHighlights = (): boolean => 'Highlight' in window && 'highlights' in CSS;
@@ -293,7 +288,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                     pageRowRequested = true;
                     return;
                 }
-<<<<<<< HEAD
                 // A row mounts on the frame after the scroll request, and a lazy
                 // renderer draws raw source first; an absent row or one still
                 // settling says nothing yet.
@@ -307,13 +301,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                     }
                     return;
                 }
-||||||| bc50ba56aa
-                // A lazy fallback can contain raw Markdown on mobile. Wait for
-                // the renderer before treating a failed match as final.
-                if (roots.length === 0 || roots.some((root) => root.querySelector('[data-chat-quote-pending]'))) return;
-=======
-                if (roots.length === 0 || roots.some((root) => root.querySelector('[data-chat-quote-pending]'))) return;
->>>>>>> upstream/main
                 const parts = resolveChatQuoteRanges(roots, anchor);
                 if (!parts && steps < REVEAL_ATTEMPTS && messageContinuesBelow(scrollNode, targetMessageId)) {
                     dispatchNavigationRelease(scrollNode);

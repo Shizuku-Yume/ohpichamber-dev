@@ -10,18 +10,9 @@ function plainCode(code: string): HighlightResult {
   return { tokens: code.split('\n').map((content) => [{ content }]) };
 }
 
-<<<<<<< HEAD
 // Preserve the original renderer's line budgets for settled and open fences.
 function canHighlight(options: HighlightOptions): boolean {
   const maxLines = options.isIncomplete ? 300 : 1200;
-||||||| bc50ba56aa
-// Preserve the original renderer's line budgets for settled and open fences.
-function canHighlight(options: HighlightOptions, isVSCode: boolean): boolean {
-  const maxLines = isVSCode ? 200 : options.isIncomplete ? 300 : 1200;
-=======
-function canHighlight(options: HighlightOptions, isVSCode: boolean): boolean {
-  const maxLines = isVSCode ? 200 : options.isIncomplete ? 300 : 1200;
->>>>>>> upstream/main
   let lines = 1;
   for (let index = 0; index < options.code.length; index++) {
     if (options.code.charCodeAt(index) === 10 && ++lines > maxLines) return false;

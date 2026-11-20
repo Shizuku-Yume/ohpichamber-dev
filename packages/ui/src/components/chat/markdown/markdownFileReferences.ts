@@ -62,46 +62,6 @@ export function useOpenTappedMarkdownFile() {
   }, [directory, open]);
 }
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-// A `file:` link the click rules do not take as a file is usually a folder.
-// It opens in the system file manager, as "Reveal in Finder" in the Files
-// tree does, and only where that tree offers it: not in a browser, which
-// hides the item, and not in VS Code, which mounts no Files tree (#5521).
-export function useRevealMarkdownPath(): ((path: string) => void) | null {
-  const apis = React.useContext(RuntimeAPIContext);
-  const { t } = useI18n();
-  const files = apis?.files;
-  const platform = apis?.runtime.platform;
-  return React.useMemo(() => {
-    const reveal = files?.revealPath?.bind(files);
-    if (!reveal || !platform || platform === 'vscode' || isBrowserClientRuntime(platform)) return null;
-    return (path: string) => {
-      void reveal(path).catch(() => {
-        toast.error(t('sidebarFilesTree.toast.revealFailed'));
-      });
-    };
-  }, [files, platform, t]);
-}
-
-=======
-export function useRevealMarkdownPath(): ((path: string) => void) | null {
-  const apis = React.useContext(RuntimeAPIContext);
-  const { t } = useI18n();
-  const files = apis?.files;
-  const platform = apis?.runtime.platform;
-  return React.useMemo(() => {
-    const reveal = files?.revealPath?.bind(files);
-    if (!reveal || !platform || platform === 'vscode' || isBrowserClientRuntime(platform)) return null;
-    return (path: string) => {
-      void reveal(path).catch(() => {
-        toast.error(t('sidebarFilesTree.toast.revealFailed'));
-      });
-    };
-  }, [files, platform, t]);
-}
-
->>>>>>> upstream/main
 const KNOWN_FILE_BASENAMES = new Set(['dockerfile', 'makefile', 'readme', 'license', '.env', '.gitignore', '.npmrc']);
 
 type FileReferencePurpose = 'probe' | 'click';

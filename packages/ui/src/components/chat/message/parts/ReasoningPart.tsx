@@ -321,17 +321,6 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
         };
     }, []);
 
-<<<<<<< HEAD
-    // While genuinely streaming, the busy header must appear as soon as
-    // reasoning starts, before any text has arrived — otherwise "Thinking…"
-    // never shows for the first moments of a short response.
-||||||| bc50ba56aa
-    // While genuinely streaming, the busy header must appear as soon as
-    // reasoning starts even before the block-level reveal (commitStreamedText)
-    // has committed a first complete line — otherwise "Thinking…" never shows
-    // for the first moments of a short, single-paragraph response.
-=======
->>>>>>> upstream/main
     if (!isStreaming && isInvisibleText(text)) {
         return null;
     }
@@ -483,54 +472,21 @@ const ReasoningPart = React.memo(({
     const revealRequest = useReasoningReveal(messageId);
     const rawText = part.type === 'reasoning' ? part.content : '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
-<<<<<<< HEAD
     // Canonical reasoning parts have no persisted timing data.
     const isLiveStreamPhase = streamPhase === 'streaming';
     const isStreaming = part.type === 'reasoning' && chatRenderMode === 'live' && isLiveStreamPhase;
-||||||| bc50ba56aa
-    const time = partWithText.time;
-    // Live activity derives from the live stream phase, never from the absence
-    // of persisted timing data: cached parts may lack `time.end` even though
-    // the message finished long ago (issue #2020). A part that has ended is
-    // never streaming, even while the rest of the message still streams.
-    const isLiveStreamPhase = streamPhase === 'streaming' || streamPhase === 'cooldown';
-    const isStreaming = isLiveStreamPhase && typeof time?.end !== 'number';
-=======
-    const time = partWithText.time;
-    // external: #2020 Cached reasoning without time.end is not evidence of live streaming.
-    const isLiveStreamPhase = streamPhase === 'streaming' || streamPhase === 'cooldown';
-    const isStreaming = isLiveStreamPhase && typeof time?.end !== 'number';
->>>>>>> upstream/main
     const throttledTextRaw = useStreamingTextThrottle({
         text: textContent,
         isStreaming,
         identityKey: `${messageId}:${part.partId}`,
     });
-<<<<<<< HEAD
     // Same hold as assistant text: only an unfinished table row waits, so
     // thinking streams live while it is expanded.
     const throttledText = isStreaming ? holdPartialTableRow(throttledTextRaw) : throttledTextRaw;
-||||||| bc50ba56aa
-    // Same block-level reveal as assistant text: a shown reasoning paragraph
-    // never mutates in place.
-    const throttledText = isStreaming ? commitStreamedText(throttledTextRaw) : throttledTextRaw;
-=======
-    const throttledText = isStreaming ? commitStreamedText(throttledTextRaw) : throttledTextRaw;
->>>>>>> upstream/main
 
-<<<<<<< HEAD
     // While genuinely streaming, keep the block mounted even before any text
     // arrives, so the busy header appears immediately.
     if (part.type !== 'reasoning' || (!isStreaming && (!throttledText || throttledText.trim().length === 0))) {
-||||||| bc50ba56aa
-    // Show reasoning even if time.end isn't set yet (during streaming).
-    // While genuinely streaming, keep the block mounted even before the
-    // block-level reveal commits a first line, so the busy header appears
-    // immediately instead of waiting on committed text.
-    if (!isStreaming && isInvisibleText(throttledText)) {
-=======
-    if (!isStreaming && isInvisibleText(throttledText)) {
->>>>>>> upstream/main
         return null;
     }
 

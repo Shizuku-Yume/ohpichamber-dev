@@ -1,14 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-<<<<<<< HEAD
 import type { GuestStatusControl } from 'ohpichamber-sdk';
-import type React from 'react';
-||||||| bc50ba56aa
-import type { GuestStatusControl } from '@openchamber/sdk';
-import type React from 'react';
-=======
-import type { GuestStatusControl } from '@openchamber/sdk';
 import React from 'react';
->>>>>>> upstream/main
 
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';

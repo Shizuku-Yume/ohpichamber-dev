@@ -39,20 +39,6 @@ export const mentionListState = (rowCount: number, pending: boolean): MentionLis
   return pending ? 'loading' : 'empty';
 };
 
-<<<<<<< HEAD
-/**
- * Merge directory and file hits into one list ranked by match quality against
- * the full relative path. Multi-token queries require every token to appear
- * somewhere in the path, in any order.
- */
-||||||| bc50ba56aa
-/**
- * Merge directory and file hits into one list ranked by match quality against
- * the relative path, letters in order like the server's own file search;
- * matches in the name rank above matches only across folders. Multi-token queries require every token to match the path, in any order.
- */
-=======
->>>>>>> upstream/main
 export function rankFileMentionResults(
   files: ProjectFileSearchHit[],
   directories: ProjectFileSearchHit[],
@@ -90,4 +76,3 @@ export function filterStaleRecentFiles<T extends { path: string }>(
   }
   return files.filter((file) => !stalePaths.has(file.path));
 }
-

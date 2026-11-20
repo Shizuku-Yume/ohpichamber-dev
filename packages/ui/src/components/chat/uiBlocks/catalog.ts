@@ -256,18 +256,9 @@ const canDropParts = (source: string, kept: BlockValue): boolean => (
 export function parseUiBlock(source: string, complete: boolean, salvage = false, extensions: ExtensionBlocks = NO_EXTENSION_BLOCKS): UiBlockParse {
   const result = parserFor(extensions).parse(source);
   const errors = result.meta.errors
-<<<<<<< HEAD
     .filter((error: { component?: string; path?: string; code?: string; message: string }) => !(error.component === 'Details' && error.path === '/children' && error.code === 'missing-required'))
     .map((error: { component?: string; path?: string; code?: string; message: string }) => [error.component, error.path].filter(Boolean).join(' ') + `: ${error.message}`);
   // A key shifts every argument after it, so the other errors of such a block mislead.
-||||||| bc50ba56aa
-    .filter((error) => !(error.component === 'Details' && error.path === '/children' && error.code === 'missing-required'))
-    .map((error) => [error.component, error.path].filter(Boolean).join(' ') + `: ${error.message}`);
-  // A key shifts every argument after it, so the other errors of such a block mislead.
-=======
-    .filter((error) => !(error.component === 'Details' && error.path === '/children' && error.code === 'missing-required'))
-    .map((error) => [error.component, error.path].filter(Boolean).join(' ') + `: ${error.message}`);
->>>>>>> upstream/main
   const namedError = complete ? namedArgumentError(source, result.meta) : null;
   if (complete) {
     if (result.meta.unresolved.length) errors.push(`Undefined names: ${result.meta.unresolved.join(', ')}`);

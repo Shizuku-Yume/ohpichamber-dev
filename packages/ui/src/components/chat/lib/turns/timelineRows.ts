@@ -11,54 +11,13 @@ type UngroupedEntry = Extract<TimelineEntry, { kind: 'ungrouped' }>;
 export type TextCut = { partId: string; offset: number };
 
 export type MessageSlice = {
-<<<<<<< HEAD
- from?: TextCut;
- to?: TextCut;
- /** Which of the message's rows this is, and how many it has. */
- index: number;
- count: number;
-||||||| bc50ba56aa
-    from?: TextCut;
-    to?: TextCut;
-    /** Which of the message's rows this is, and how many it has. */
-    index: number;
-    count: number;
-=======
     from?: TextCut;
     to?: TextCut;
     index: number;
     count: number;
->>>>>>> upstream/main
 };
 
 export type TimelineRow =
-<<<<<<< HEAD
- | { kind: 'ungrouped'; key: string; entry: UngroupedEntry }
- | ({ kind: 'turn-head'; key: string } & TurnRowFields)
- | ({ kind: 'turn-fold'; key: string } & TurnRowFields)
- | ({ kind: 'turn-pages'; key: string } & TurnRowFields)
- | ({
-  kind: 'turn-message';
-  key: string;
-  messageId: string;
-  slice: MessageSlice | null;
-  /** The turn's final answer under a fold (collapsed activity mode). */
-  final: boolean;
- } & TurnRowFields);
-||||||| bc50ba56aa
-    | { kind: 'ungrouped'; key: string; entry: UngroupedEntry }
-    | ({ kind: 'turn-head'; key: string } & TurnRowFields)
-    | ({ kind: 'turn-fold'; key: string } & TurnRowFields)
-    | ({ kind: 'turn-pages'; key: string } & TurnRowFields)
-    | ({
-        kind: 'turn-message';
-        key: string;
-        messageId: string;
-        slice: MessageSlice | null;
-        /** The turn's final answer under a fold (collapsed activity mode). */
-        final: boolean;
-    } & TurnRowFields);
-=======
     | { kind: 'ungrouped'; key: string; entry: UngroupedEntry }
     | ({ kind: 'turn-head'; key: string } & TurnRowFields)
     | ({ kind: 'turn-fold'; key: string } & TurnRowFields)
@@ -70,37 +29,12 @@ export type TimelineRow =
         slice: MessageSlice | null;
         final: boolean;
     } & TurnRowFields);
->>>>>>> upstream/main
 
 type TurnRowFields = {
-<<<<<<< HEAD
- entry: TurnEntry;
- /**
-  * The turn's work folds (collapsed activity mode): its rows draw the
-  * pages the fold hoists. Read from the entry the rows were built from, so
-  * the rows of a live turn agree on it while its record lags the stream.
-  */
- underFold: boolean;
- /** Under a fold, the answer it leaves outside, from the same record. */
- finalMessageId: string | undefined;
- gapBelow: boolean;
-||||||| bc50ba56aa
-    entry: TurnEntry;
-    /**
-     * The turn's work folds (collapsed activity mode): its rows draw the
-     * pages the fold hoists. Read from the entry the rows were built from, so
-     * the rows of a live turn agree on it while its record lags the stream.
-     */
-    underFold: boolean;
-    /** Under a fold, the answer it leaves outside, from the same record. */
-    finalMessageId: string | undefined;
-    gapBelow: boolean;
-=======
     entry: TurnEntry;
     underFold: boolean;
     finalMessageId: string | undefined;
     gapBelow: boolean;
->>>>>>> upstream/main
 };
 
 type TimelineRowsOptions = {
@@ -167,7 +101,6 @@ const turnRows = (entry: TurnEntry, options: TimelineRowsOptions): TimelineRow[]
   rows.push({ kind: 'turn-message', key: `step:${messageId}:${sliceKey(last)}`, ...fields, messageId, slice: { from: last, index: cuts.length, count: cuts.length + 1 }, final });
  };
 
-<<<<<<< HEAD
  if (underFold) {
   // The rows LiveTurnActivity drew inside one turn row, in the same order.
   const activityMessages = finalMessage ? turn.assistantMessages.filter((message) => message !== finalMessage) : turn.assistantMessages;
@@ -191,62 +124,10 @@ const turnRows = (entry: TurnEntry, options: TimelineRowsOptions): TimelineRow[]
  } else {
   turn.assistantMessages.forEach((message) => addMessage(message));
  }
-||||||| bc50ba56aa
-    if (underFold) {
-        // The rows LiveTurnActivity drew inside one turn row, in the same order.
-        const activityMessages = finalMessage ? turn.assistantMessages.filter((message) => message !== finalMessage) : turn.assistantMessages;
-        // Folded, the fold row itself draws what stays in view: a working
-        // turn's latest steps, the pages and the steps after them. Opened,
-        // every step is a row of its own.
-        rows.push({ kind: 'turn-fold', key: `fold:${turn.turnId}`, ...fields });
-        if (options.expandedTurns.get(turn.turnId) === true) {
-            const pages = finalMessage ? [] : getShownPages(turn.assistantMessages);
-            // A working turn draws what came after its last page below it.
-            const lastPageMessageId = pages[pages.length - 1]?.messageID;
-            const split = lastPageMessageId ? activityMessages.findIndex((message) => message.info.id === lastPageMessageId) + 1 : 0;
-            activityMessages.slice(0, split > 0 ? split : activityMessages.length).forEach((message) => addMessage(message));
-            if (pages.length > 0) rows.push({ kind: 'turn-pages', key: `pages:${turn.turnId}`, ...fields });
-            if (split > 0) activityMessages.slice(split).forEach((message) => addMessage(message));
-        }
-        if (finalMessage) addMessage(finalMessage, true);
-    } else {
-        turn.assistantMessages.forEach((message) => addMessage(message));
-    }
-=======
-    if (underFold) {
-        const activityMessages = finalMessage ? turn.assistantMessages.filter((message) => message !== finalMessage) : turn.assistantMessages;
-        rows.push({ kind: 'turn-fold', key: `fold:${turn.turnId}`, ...fields });
-        if (options.expandedTurns.get(turn.turnId) === true) {
-            const pages = finalMessage ? [] : getShownPages(turn.assistantMessages);
-            const lastPageMessageId = pages[pages.length - 1]?.messageID;
-            const split = lastPageMessageId ? activityMessages.findIndex((message) => message.info.id === lastPageMessageId) + 1 : 0;
-            activityMessages.slice(0, split > 0 ? split : activityMessages.length).forEach((message) => addMessage(message));
-            if (pages.length > 0) rows.push({ kind: 'turn-pages', key: `pages:${turn.turnId}`, ...fields });
-            if (split > 0) activityMessages.slice(split).forEach((message) => addMessage(message));
-        }
-        if (finalMessage) addMessage(finalMessage, true);
-    } else {
-        turn.assistantMessages.forEach((message) => addMessage(message));
-    }
->>>>>>> upstream/main
 
-<<<<<<< HEAD
- // The gap under an answer belongs to the turn's last row, from the moment
- // it is sent (see the scroll documentation, "Row identity").
- const last = rows[rows.length - 1];
- if (last.kind !== 'ungrouped' && !isHiddenUserMessage(entry.nextEntryFirstMessage)) rows[rows.length - 1] = { ...last, gapBelow: true };
- return rows;
-||||||| bc50ba56aa
-    // The gap under an answer belongs to the turn's last row, from the moment
-    // it is sent (see the scroll documentation, "Row identity").
     const last = rows[rows.length - 1];
     if (last.kind !== 'ungrouped' && !isHiddenUserMessage(entry.nextEntryFirstMessage)) rows[rows.length - 1] = { ...last, gapBelow: true };
     return rows;
-=======
-    const last = rows[rows.length - 1];
-    if (last.kind !== 'ungrouped' && !isHiddenUserMessage(entry.nextEntryFirstMessage)) rows[rows.length - 1] = { ...last, gapBelow: true };
-    return rows;
->>>>>>> upstream/main
 };
 
 const isSameSlice = (previous: MessageSlice | null, next: MessageSlice | null): boolean => (

@@ -134,20 +134,6 @@ export function parseSlashCommand(text: string): ParsedSlashCommand | null {
     };
 }
 
-<<<<<<< HEAD
-/**
- * Plan commands owned by the composer before attached context is consumed.
- * Action commands leave that context in the composer; prompt commands send it.
- * Unknown commands return null so native file-resource expansion remains authoritative.
- */
-||||||| bc50ba56aa
-/**
- * Plan commands owned by the composer before attached context is consumed.
- * Action commands leave that context in the composer; prompt commands send it.
- * Unknown commands return null so the OpenCode command router remains authoritative.
- */
-=======
->>>>>>> upstream/main
 export function planLocalSlashCommand(
     text: string,
     inputMode: 'normal' | 'shell' | undefined,

@@ -24,15 +24,7 @@ export interface MarkdownPresentation {
   svgFences: boolean;
   settledReply: { sessionId: string; messageId: string } | null;
   disableLinkSafety?: boolean;
-<<<<<<< HEAD
   /** Names the document whose tables keep the column widths the user sets; absent, columns have no grips. */
-||||||| bc50ba56aa
-  /** What active extensions claim in this chat message; null outside chat messages and in copies. */
-  guestLinks: readonly GuestLinkRule[] | null;
-  /** Names the document whose tables keep the column widths the user sets; absent, columns have no grips. */
-=======
-  guestLinks: readonly GuestLinkRule[] | null;
->>>>>>> upstream/main
   tableWidthScope?: string;
   theme: Theme;
   mermaidControls: MermaidControls;

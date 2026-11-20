@@ -197,21 +197,12 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                     doc: handlersRef.current.value,
                     extensions: [
                         history(),
-<<<<<<< HEAD
                         focusedHistory,
                         // `drawSelection()` must stay on every platform.
                         // `composerSelectionExtension()` changes only who
                         // paints the selection; removing `drawSelection()`
                         // makes CodeMirror enforce cursor association on the
                         // native selection, which iOS answers with severe lag.
-||||||| bc50ba56aa
-                        // `drawSelection()` must stay on every platform.
-                        // `composerSelectionExtension()` changes only who
-                        // paints the selection; removing `drawSelection()`
-                        // makes CodeMirror enforce cursor association on the
-                        // native selection, which iOS answers with severe lag.
-=======
->>>>>>> upstream/main
                         drawSelection(),
                         timerCaretBlink(),
                         composerSelectionExtension(),
@@ -506,17 +497,9 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                     data-chat-input={props.dataChatInput ?? 'true'}
                     onMouseDown={handleHostMouseDown}
                     className={cn(
-<<<<<<< HEAD
                         'w-full',
                         // The editor fills the host so its content box can cover
                         // the whole clickable area rather than just the text.
-||||||| bc50ba56aa
-                        'composer-editor w-full',
-                        // The editor fills the host so its content box can cover
-                        // the whole clickable area rather than just the text.
-=======
-                        'composer-editor w-full',
->>>>>>> upstream/main
                         '[&_.cm-editor]:h-full',
                         fillContainer && 'flex min-h-0 flex-1 flex-col',
                         className,

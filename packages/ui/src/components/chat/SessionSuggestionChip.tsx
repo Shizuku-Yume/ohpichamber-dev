@@ -13,24 +13,10 @@ interface SessionSuggestionChipProps {
   onApply: (text: string) => void;
 }
 
-<<<<<<< HEAD
 // A suggested follow-up rendered as the composer's own top row (inside the
 // box, and inside the mobile pill). Tapping it fills the composer (no
 // auto-send); the X patches the suggestion out of the session metadata so
 // it stays dismissed everywhere.
-||||||| bc50ba56aa
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
-// A suggested follow-up rendered as the composer's own top row (inside the
-// box, and inside the mobile pill). Tapping it fills the composer (no
-// auto-send); the X patches the suggestion out of the session metadata so
-// it stays dismissed everywhere.
-=======
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
->>>>>>> upstream/main
 export const SessionSuggestionChip: React.FC<SessionSuggestionChipProps> = React.memo(({ sessionId, directory, hidden, onApply }) => {
   const { suggestion } = useSessionAssistState(sessionId ?? '', directory);
   const { t } = useI18n();

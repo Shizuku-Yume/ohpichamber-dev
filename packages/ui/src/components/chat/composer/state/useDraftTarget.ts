@@ -1,34 +1,3 @@
-<<<<<<< HEAD
-/**
- * Choosing where a new session will run.
- *
- * The new-session draft targets a project and a directory within it — the
- * project root or one of its worktrees. Both are discovered lazily: whether a
- * project is even a git repository is unknown until asked, and its branch list
- * is served stale-while-revalidate so a cached list appears instantly and
- * refreshes behind it.
- *
- * The options are for display, not validation of the selected destination.
- * A restored or bootstrapping worktree can be absent from the list.
- */
-||||||| bc50ba56aa
-/**
- * Choosing where a new session will run.
- *
- * The new-session draft targets a project and a directory within it — the
- * project root or one of its worktrees. Both are discovered lazily: whether a
- * project is even a git repository is unknown until asked, and its branch list
- * is served stale-while-revalidate so a cached list appears instantly and
- * refreshes behind it.
- *
- * The awkward part this hook contains is that the draft can point at a
- * directory that does not exist yet — a worktree being created. Such a
- * directory must survive not appearing in the list, or the selector would snap
- * back to the project root mid-creation and the session would be started in
- * the wrong place.
- */
-=======
->>>>>>> upstream/main
 
 import React from 'react';
 
@@ -70,20 +39,6 @@ export interface DraftTargetProject {
     kind?: 'chat' | 'project';
 }
 
-<<<<<<< HEAD
-/**
- * A pinned directory (`preserveDirectoryOverride`) opts out of missing-directory
- * recovery until the target is ready; it never overrides the user's own pick.
- */
-||||||| bc50ba56aa
-/**
- * A pinned directory (`preserveDirectoryOverride`) stops the app from moving
- * the draft while the directory is unconfirmed; it never overrides the user's
- * own pick. The pin only clears by itself once the directory shows up as a
- * known branch, which a project without git never does.
- */
-=======
->>>>>>> upstream/main
 function releaseDraftDirectoryPin() {
     const store = useSessionUIStore.getState();
     if (store.newSessionDraft?.preserveDirectoryOverride) {
@@ -499,13 +454,6 @@ export function useDraftTarget(enabled: boolean) {
         if (!selectedDraftProject) {
             return;
         }
-<<<<<<< HEAD
-        // Re-picking the pending target must not remove its pin.
-||||||| bc50ba56aa
-        // Without its pin an unlisted directory leaves the list and the draft
-        // snaps to the project root, so re-picking it changes nothing.
-=======
->>>>>>> upstream/main
         if (draft?.preserveDirectoryOverride && normalizePath(directory) === selectedDraftDirectory) {
             return;
         }

@@ -8,24 +8,6 @@ import { StatusRow } from './StatusRow';
 export const StatusRowContainer: React.FC = React.memo(() => {
     const { activeModel, working } = useAssistantStatus();
     const providers = useConfigStore((state) => state.providers);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    const backgroundWork = useBackgroundSessionWork();
-
-    // The shortcut lives with the status that knows whether anything can go
-    // to the background; otherwise it yields the key.
-    useKeybind('background_session_work', () => {
-        if (!working.canBackground) return false;
-        backgroundWork();
-    });
-=======
-    const backgroundWork = useBackgroundSessionWork();
-
-    useKeybind('background_session_work', () => {
-        if (!working.canBackground) return false;
-        backgroundWork();
-    });
->>>>>>> upstream/main
 
     const modelDisplayName = React.useMemo(() => {
         if (!activeModel) {

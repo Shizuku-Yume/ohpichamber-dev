@@ -72,31 +72,6 @@ export const movedSchema = z.object({
   worktree: z.object({ name: text, branch: text, path: text }).optional().catch(undefined),
 });
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-export const memorySavedSchema = z.object({
-  memory: z.object({
-    title: text,
-    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
-    scope: z.enum(['global', 'project']).optional().catch(undefined),
-  }),
-  replaced: z.boolean().optional().catch(undefined),
-  // Stored, but held back from future sessions.
-  warning: text,
-});
-
-=======
-export const memorySavedSchema = z.object({
-  memory: z.object({
-    title: text,
-    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
-    scope: z.enum(['global', 'project']).optional().catch(undefined),
-  }),
-  replaced: z.boolean().optional().catch(undefined),
-  warning: text,
-});
-
->>>>>>> upstream/main
 export const knowledgeSavedSchema = z.object({
   todo: z.object({ text: text, completed: z.boolean().optional().catch(undefined) }).optional().catch(undefined),
   note: z.object({ body: text }).optional().catch(undefined),
@@ -151,33 +126,6 @@ export const modelsFoundSchema = z.object({
   next: z.number().nullable().optional().catch(undefined),
 });
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-export const memoriesListedSchema = z.object({
-  memories: z.array(z.object({
-    memoryId: z.string(),
-    title: text,
-    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
-    scope: z.enum(['global', 'project']).optional().catch(undefined),
-  })),
-  // A scope that failed to load: its entries are missing from the list.
-  globalUnavailable: z.boolean().optional().catch(undefined),
-  projectUnavailable: z.boolean().optional().catch(undefined),
-});
-
-=======
-export const memoriesListedSchema = z.object({
-  memories: z.array(z.object({
-    memoryId: z.string(),
-    title: text,
-    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
-    scope: z.enum(['global', 'project']).optional().catch(undefined),
-  })),
-  globalUnavailable: z.boolean().optional().catch(undefined),
-  projectUnavailable: z.boolean().optional().catch(undefined),
-});
-
->>>>>>> upstream/main
 export const knowledgeListedSchema = z.object({
   notes: z.array(z.object({ id: z.string(), body: text })).catch([]),
   todos: z.array(z.object({ id: z.string(), text: text, completed: z.boolean().optional().catch(undefined) })).catch([]),
@@ -414,141 +362,7 @@ export const hasOpenChamberView = (envelope: OpenChamberEnvelope): boolean => {
   const schema = VIEW_SCHEMAS.get(envelope.action);
   return schema ? schema.safeParse(envelope.data).success : false;
 };
-<<<<<<< HEAD
 /** The verb key of each OpenChamber tool action, for the row's subtitle once the action succeeded. */
-||||||| bc50ba56aa
-const secretRunSchema = z.object({
-  answer: z.union([
-    z.object({
-      status: z.literal('ran'),
-      outcome: z.enum(['exited', 'timeout', 'killed', 'not-started']).catch('killed'),
-      exitCode: z.number().int().nullable().catch(null),
-    }),
-    z.object({ status: z.literal('declined') }),
-    z.object({ answered: z.literal(false) }),
-  ]),
-  stdout: z.string().optional().catch(undefined),
-  stderr: z.string().optional().catch(undefined),
-  error: z.string().optional().catch(undefined),
-});
-
-type SecretRunVerbKey =
-  | 'chat.toolPart.openchamber.action.secretRun'
-  | 'chat.toolPart.openchamber.action.secretRunFailed'
-  | 'chat.toolPart.openchamber.action.secretRunTimedOut'
-  | 'chat.toolPart.openchamber.action.secretRunNotStarted'
-  | 'chat.toolPart.openchamber.action.secretRunStopped'
-  | 'chat.toolPart.openchamber.action.secretRunDeclined'
-  | 'chat.toolPart.openchamber.action.secretRunNotRun'
-  | 'chat.toolPart.openchamber.action.secretRequestSaved'
-  | 'chat.toolPart.openchamber.action.secretRequestDeclined'
-  | 'chat.toolPart.openchamber.action.secretRequestNotGiven';
-
-const secretRequestSchema = z.object({
-  answer: z.union([
-    z.object({ status: z.literal('saved'), file: z.string().optional().catch(undefined) }),
-    z.object({ status: z.literal('declined') }),
-    z.object({ answered: z.literal(false) }),
-  ]),
-});
-
-/**
- * How a finished secret tool call reads in its row. For `secret.run`: the
- * verb (with the exit code when it was not 0) and what the command printed as
- * the agent got it, stdout, stderr, then why it did not finish, values
- * already replaced by the server. For `secret.request`: the verb, and the file
- * a saved value went to. `null` for any other answer.
- */
-export const secretRowView = (
-  envelope: Pick<OpenChamberEnvelope, 'ok' | 'action'> & { data?: unknown } | null,
-): { key: SecretRunVerbKey; code?: number; output?: string; file?: string } | null => {
-  if (envelope?.ok !== true) return null;
-  if (envelope.action === 'secret.request') {
-    const request = secretRequestSchema.safeParse(envelope.data);
-    if (!request.success) return null;
-    const { answer } = request.data;
-    if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRequestNotGiven' };
-    if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRequestDeclined' };
-    return { key: 'chat.toolPart.openchamber.action.secretRequestSaved', file: answer.file };
-  }
-  if (envelope.action !== 'secret.run') return null;
-  const parsed = secretRunSchema.safeParse(envelope.data);
-  if (!parsed.success) return null;
-  const { answer, stdout = '', stderr = '', error = '' } = parsed.data;
-  const output = [stdout, stderr, error].map((part) => part.trimEnd()).filter(Boolean).join('\n');
-  if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRunNotRun', output };
-  if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRunDeclined', output };
-  if (answer.outcome === 'timeout') return { key: 'chat.toolPart.openchamber.action.secretRunTimedOut', output };
-  if (answer.outcome === 'not-started') return { key: 'chat.toolPart.openchamber.action.secretRunNotStarted', output };
-  if (answer.outcome === 'killed' || answer.exitCode === null) return { key: 'chat.toolPart.openchamber.action.secretRunStopped', output };
-  if (answer.exitCode !== 0) return { key: 'chat.toolPart.openchamber.action.secretRunFailed', code: answer.exitCode, output };
-  return { key: 'chat.toolPart.openchamber.action.secretRun', output };
-};
-
-/** The verb key of each OpenChamber tool action, for the row's subtitle once the action succeeded. */
-=======
-const secretRunSchema = z.object({
-  answer: z.union([
-    z.object({
-      status: z.literal('ran'),
-      outcome: z.enum(['exited', 'timeout', 'killed', 'not-started']).catch('killed'),
-      exitCode: z.number().int().nullable().catch(null),
-    }),
-    z.object({ status: z.literal('declined') }),
-    z.object({ answered: z.literal(false) }),
-  ]),
-  stdout: z.string().optional().catch(undefined),
-  stderr: z.string().optional().catch(undefined),
-  error: z.string().optional().catch(undefined),
-});
-
-type SecretRunVerbKey =
-  | 'chat.toolPart.openchamber.action.secretRun'
-  | 'chat.toolPart.openchamber.action.secretRunFailed'
-  | 'chat.toolPart.openchamber.action.secretRunTimedOut'
-  | 'chat.toolPart.openchamber.action.secretRunNotStarted'
-  | 'chat.toolPart.openchamber.action.secretRunStopped'
-  | 'chat.toolPart.openchamber.action.secretRunDeclined'
-  | 'chat.toolPart.openchamber.action.secretRunNotRun'
-  | 'chat.toolPart.openchamber.action.secretRequestSaved'
-  | 'chat.toolPart.openchamber.action.secretRequestDeclined'
-  | 'chat.toolPart.openchamber.action.secretRequestNotGiven';
-
-const secretRequestSchema = z.object({
-  answer: z.union([
-    z.object({ status: z.literal('saved'), file: z.string().optional().catch(undefined) }),
-    z.object({ status: z.literal('declined') }),
-    z.object({ answered: z.literal(false) }),
-  ]),
-});
-
-export const secretRowView = (
-  envelope: Pick<OpenChamberEnvelope, 'ok' | 'action'> & { data?: unknown } | null,
-): { key: SecretRunVerbKey; code?: number; output?: string; file?: string } | null => {
-  if (envelope?.ok !== true) return null;
-  if (envelope.action === 'secret.request') {
-    const request = secretRequestSchema.safeParse(envelope.data);
-    if (!request.success) return null;
-    const { answer } = request.data;
-    if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRequestNotGiven' };
-    if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRequestDeclined' };
-    return { key: 'chat.toolPart.openchamber.action.secretRequestSaved', file: answer.file };
-  }
-  if (envelope.action !== 'secret.run') return null;
-  const parsed = secretRunSchema.safeParse(envelope.data);
-  if (!parsed.success) return null;
-  const { answer, stdout = '', stderr = '', error = '' } = parsed.data;
-  const output = [stdout, stderr, error].map((part) => part.trimEnd()).filter(Boolean).join('\n');
-  if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRunNotRun', output };
-  if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRunDeclined', output };
-  if (answer.outcome === 'timeout') return { key: 'chat.toolPart.openchamber.action.secretRunTimedOut', output };
-  if (answer.outcome === 'not-started') return { key: 'chat.toolPart.openchamber.action.secretRunNotStarted', output };
-  if (answer.outcome === 'killed' || answer.exitCode === null) return { key: 'chat.toolPart.openchamber.action.secretRunStopped', output };
-  if (answer.exitCode !== 0) return { key: 'chat.toolPart.openchamber.action.secretRunFailed', code: answer.exitCode, output };
-  return { key: 'chat.toolPart.openchamber.action.secretRun', output };
-};
-
->>>>>>> upstream/main
 export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'projects.list': 'chat.toolPart.openchamber.action.projectsList',
   'models.list': 'chat.toolPart.openchamber.action.modelsList',
@@ -608,23 +422,7 @@ export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'workflow.save': 'chat.toolPart.openchamber.action.workflowSave',
   'workflow.list': 'chat.toolPart.openchamber.action.workflowList',
 } as const;
-<<<<<<< HEAD
 /** What the views read from a call's input, inside `parameters` or beside `action`, as the plugin reads it. */
-||||||| bc50ba56aa
-
-const VERB_KEYS = new Map(Object.entries(OPENCHAMBER_ACTION_VERB_KEYS));
-
-/** The verb key of an action, or `undefined` for one without a verb. */
-export const openChamberVerbKey = (action: string | undefined) => (action ? VERB_KEYS.get(action) : undefined);
-
-/** What the views read from a call's input, inside `parameters` or beside `action`, as the plugin reads it. */
-=======
-
-const VERB_KEYS = new Map(Object.entries(OPENCHAMBER_ACTION_VERB_KEYS));
-
-export const openChamberVerbKey = (action: string | undefined) => (action ? VERB_KEYS.get(action) : undefined);
-
->>>>>>> upstream/main
 const callFields = z.object({
   projectId: text,
   directory: text,

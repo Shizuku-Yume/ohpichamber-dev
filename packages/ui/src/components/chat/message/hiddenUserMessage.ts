@@ -15,16 +15,7 @@ export const isHiddenUserMessage = (
         return cached;
     }
 
-<<<<<<< HEAD
     const hidden = filterVisibleParts(entry.parts, { includeReasoning: true }).length === 0;
-||||||| bc50ba56aa
-    // Only whether anything is left counts here, not a chip's label.
-    const parts = normalizeUserDisplayParts(normalizeParts(entry.parts), readSourceControlProvider);
-    const hidden = filterVisibleParts(parts, { includeReasoning: true }).length === 0;
-=======
-    const parts = normalizeUserDisplayParts(normalizeParts(entry.parts), readSourceControlProvider);
-    const hidden = filterVisibleParts(parts, { includeReasoning: true }).length === 0;
->>>>>>> upstream/main
     hiddenByParts.set(entry.parts, hidden);
     return hidden;
 };

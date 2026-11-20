@@ -2,23 +2,12 @@ import React from 'react';
 import { useOnDemandComponent } from '@/hooks/useOnDemandComponent';
 import { importWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 
-<<<<<<< HEAD
 /**
  * A component loaded with the first block on screen: null until then or when
  * loading failed. Kept once loaded, so a block that remounts (virtualized
  * rows) draws at once.
  */
 function onDemand<Props extends object>(load: () => Promise<React.ComponentType<Props>>) {
-||||||| bc50ba56aa
-/**
- * A component loaded with the first block on screen: null until then or when
- * loading failed. Kept once loaded, so a block that remounts (virtualized
- * rows) draws at once.
- */
-export function onDemand<Props extends object>(load: () => Promise<React.ComponentType<Props>>) {
-=======
-export function onDemand<Props extends object>(load: () => Promise<React.ComponentType<Props>>) {
->>>>>>> upstream/main
   let loaded: React.ComponentType<Props> | null = null;
   const loadOnce = () => loaded ? Promise.resolve(loaded) : load().then((component) => {
     loaded = component;

@@ -8,22 +8,8 @@ import { SyncProvider } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
 
 import UserTextPart from './UserTextPart';
-<<<<<<< HEAD
 import type { Part } from '@openchamber/agent-contract';
 // Plain rendering keeps the lazy markdown module (and its shiki worker asset import) out of the test graph; the expand affordance is mode-independent.
-||||||| bc50ba56aa
-import type { Part } from '@/lib/opencode/model';
-import { CONTEXT_METADATA_KEY } from '@/lib/messages/contextParts';
-
-// Plain rendering keeps the lazy markdown module (and its shiki worker asset
-// import) out of the test graph; the expand affordance is mode-independent.
-=======
-import type { Part } from '@/lib/opencode/model';
-import { CONTEXT_METADATA_KEY } from '@/lib/messages/contextParts';
-
-// Plain rendering keeps the lazy markdown module out of the test graph; the
-// expand affordance is mode-independent.
->>>>>>> upstream/main
 useUIStore.setState({ userMessageRenderingMode: 'plain' });
 
 

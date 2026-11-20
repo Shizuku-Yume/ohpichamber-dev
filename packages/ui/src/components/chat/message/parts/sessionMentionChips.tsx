@@ -8,12 +8,6 @@ import { sessionMentionChip, type SessionMentionChip } from '@/lib/messages/sess
 import type { InlineTextNode } from './attachmentCitationChips';
 import { SessionMentionChipButton } from './SessionMentionChipButton';
 
-<<<<<<< HEAD
-/** A sent message's mentioned sessions and messages, by `sessionLinkKey`. */
-||||||| bc50ba56aa
-/** A sent message's mentioned sessions and messages, by `sessionLinkKey`, from the context parts it carries. */
-=======
->>>>>>> upstream/main
 export type SessionMentionChips = ReadonlyMap<string, SessionMentionChip>;
 
 const NO_CHIPS: SessionMentionChips = new Map();

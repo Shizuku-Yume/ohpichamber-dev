@@ -101,25 +101,6 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
 }) => {
     const { t } = useI18n();
     const messages = useSessionMessageRecords(currentSessionId, currentSessionDirectory);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    const messageLoader = useSessionMessageLoader();
-    const syncDirectory = useSyncDirectory();
-    const historyDirectory = currentSessionDirectory ?? syncDirectory;
-    // Keep the chat's background trim from removing prompts shown in the dialog.
-    React.useEffect(() => {
-        if (!historyDirectory) return;
-        return messageLoader.retainSessionHistory({ directory: historyDirectory, sessionID: currentSessionId }, 'browsing');
-    }, [currentSessionId, historyDirectory, messageLoader]);
-=======
-    const messageLoader = useSessionMessageLoader();
-    const syncDirectory = useSyncDirectory();
-    const historyDirectory = currentSessionDirectory ?? syncDirectory;
-    React.useEffect(() => {
-        if (!historyDirectory) return;
-        return messageLoader.retainSessionHistory({ directory: historyDirectory, sessionID: currentSessionId }, 'browsing');
-    }, [currentSessionId, historyDirectory, messageLoader]);
->>>>>>> upstream/main
     const revertToMessage = useSessionUIStore((state) => state.revertToMessage);
     const forkFromMessage = useSessionUIStore((state) => state.forkFromMessage);
     const { isMobile, isTablet } = useDeviceInfo();
@@ -131,14 +112,6 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
     const pendingLoadAnchorRef = React.useRef<{ messageId: string; top: number } | null>(null);
     const preservingLoadPositionRef = React.useRef(false);
 
-<<<<<<< HEAD
-    // Timeline actions are only valid for user messages.
-||||||| bc50ba56aa
-    // Timeline actions are only valid for user messages. Folding the injected
-    // context back on is what gives a quote-only prompt a title, and makes the
-    // quote itself searchable.
-=======
->>>>>>> upstream/main
     const userMessages = React.useMemo(() => {
         return messages
             .filter((message) => message.role === 'user')

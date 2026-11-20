@@ -7,13 +7,6 @@ export type TimelineEntry =
         message: ChatMessageEntry;
         previousMessage?: ChatMessageEntry;
         nextMessage?: ChatMessageEntry;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        /** The first row the transcript draws; it gets the session's top spacing. */
-        isFirstRow?: boolean;
-=======
-        isFirstRow?: boolean;
->>>>>>> upstream/main
     }
     | {
         kind: 'turn';
@@ -34,22 +27,6 @@ type HistoryEntriesInput = {
     trailingEntryFirstMessage: ChatMessageEntry | undefined;
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * The first message the transcript draws. Skipped roles render nothing, except
- * session notices, which render despite their role.
- */
-export const findFirstVisibleMessageId = (messages: readonly ChatMessageEntry[]): string | undefined => (
-    messages.find((message) => !isSkippedTimelineMessage(message.info) || readSessionNotice(message.info))?.info.id
-);
-
-=======
-export const findFirstVisibleMessageId = (messages: readonly ChatMessageEntry[]): string | undefined => (
-    messages.find((message) => !isSkippedTimelineMessage(message.info) || readSessionNotice(message.info))?.info.id
-);
-
->>>>>>> upstream/main
 const entryFirstMessage = (entry: TimelineEntry): ChatMessageEntry => (
     entry.kind === 'turn' ? entry.turn.userMessage : entry.message
 );
@@ -83,15 +60,8 @@ const orderHistoryEntries = ({
             ordered.push(turnEntry);
             return;
         }
-<<<<<<< HEAD
         if (!ungroupedMessageIds.has(message.messageId)) return;
         // Without a live turn the trailing entry renders the last message.
-||||||| bc50ba56aa
-        if (!ungroupedMessageIds.has(message.info.id)) return;
-        // Without a live turn the trailing entry renders the last message.
-=======
-        if (!ungroupedMessageIds.has(message.info.id)) return;
->>>>>>> upstream/main
         if (!hasStreamingTurn && index === messages.length - 1) return;
         ordered.push({
             kind: 'ungrouped',

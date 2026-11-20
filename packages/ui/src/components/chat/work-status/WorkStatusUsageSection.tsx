@@ -30,19 +30,11 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const currentProviderId = useConfigStore((state) => state.currentProviderId);
 
-<<<<<<< HEAD
   // Bootstrap once to discover providers. Confirmed absence renders no readout
   // and creates no ongoing refresh demand; credential changes invalidate it.
   // Demand exists while rows are shown, or while the first read has not
   // answered; a read that failed is not demand, so it is not retried forever.
   useQuotaAutoRefresh(visible && (groups.length > 0 || quotaPhase === 'unknown'));
-||||||| bc50ba56aa
-  // Bootstrap once to discover providers. Confirmed absence renders no readout
-  // and creates no ongoing refresh demand; credential changes invalidate it.
-  useQuotaAutoRefresh(visible && (groups.length > 0 || loadedRuntimeKey === null));
-=======
-  useQuotaAutoRefresh(visible && (groups.length > 0 || loadedRuntimeKey === null));
->>>>>>> upstream/main
 
   React.useEffect(() => {
     if (groups.length === 0) return;
