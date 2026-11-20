@@ -825,6 +825,7 @@ describe.runIf(canRunGit())('untracked diffs', () => {
 
  it('rejects truncated patches when the process output exceeds the buffer limit', async () => {
   const { tmpDir } = await createTempRepo();
+  runGit(tmpDir, ['config', 'core.autocrlf', 'false']);
   fs.writeFileSync(path.join(tmpDir, 'large.txt'), 'x'.repeat(21 * 1024 * 1024) + '\n');
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
   try {
@@ -1958,7 +1959,7 @@ describe('getWorktrees', () => {
   const unsubscribe = subscribeWorktreeTopologyChanges((event) => events.push(event));
   try {
    await expect(renameBranch(first, 'feature-one', 'feature-two'))
-    .rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining(second) });
+    .rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining(second.split(path.sep).join('/')) });
    await expect(renameBranch(first, 'feature-one', 'parked'))
     .rejects.toMatchObject({ statusCode: 409, message: 'A branch named parked already exists' });
    expect(events).toHaveLength(0);
@@ -6407,7 +6408,7 @@ describe.runIf(canRunGit())('commit comparisons', () => {
 
  it('keeps rename paths and original contents together, including whitespace in names', async () => {
   const { repository } = createRepositoryWithRemote();
-  const destination = ' new\nname.md';
+  const destination = process.platform === 'win32' ? ' new name.md' : ' new\nname.md';
   runGit(repository, ['mv', 'README.md', destination]);
   runGit(repository, ['commit', '-m', 'rename']);
   const hash = runGit(repository, ['rev-parse', 'HEAD']).trim();
@@ -6837,10 +6838,11 @@ describe.runIf(canRunGit())('getRangeDiff', () => {
     const { repository } = createRepositoryWithRemote();
     const outside = path.join(createTempDir(), 'outside.txt');
     fs.writeFileSync(outside, 'must not be in a diff\n');
-    fs.symlinkSync(outside, path.join(repository, 'link.txt'));
+    const link = path.join(repository, 'link.txt');
+    fs.symlinkSync(outside, link);
     const diff = await getRangeDiff(repository, { base: 'origin/react', head: 'next', includeWorkingTree: true });
     expect(diff).toContain('new file mode 120000');
-    expect(diff).toContain(outside);
+    expect(diff).toContain(fs.readlinkSync(link).split(path.sep).join('/'));
     expect(diff).not.toContain('must not be in a diff');
   });
 
