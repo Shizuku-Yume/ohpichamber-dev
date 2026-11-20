@@ -1400,6 +1400,127 @@ describe('speculative session preparation', () => {
     return { app, sessionService };
   };
 
+  const setupPreparedSession = async ({ waitForPrepare = true, onReopen = async () => {}, onRun = async () => {} } = {}) => {
+    const ws = await createTestWorkspace();
+    const deleted = [];
+    let runtime;
+    const routeFixture = async (pathname, init = {}) => {
+      if (pathname === '/internal/sessions') {
+        const body = JSON.parse(init.body);
+        runtime = runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId });
+        return Response.json(runtime);
+      }
+      if (pathname.endsWith('/reopen')) { await onReopen(); return Response.json(runtime); }
+      if (init.method === 'DELETE') {
+        deleted.push(runtime.sessionId);
+        return Response.json({ sessionId: runtime.sessionId, deletedSessionIds: [runtime.sessionId] });
+      }
+      if (pathname.endsWith('/runs')) {
+        await onRun();
+        const body = JSON.parse(init.body);
+        return Response.json({ run: { runId: body.runId, sessionId: runtime.sessionId, status: 'completed', origin: 'host', createdAt: 1, finishedAt: 2 } });
+      }
+      if (pathname.endsWith('/snapshot')) return Response.json(snapshotFixture([], [], runtime));
+      if (pathname.includes('?workspaceId=')) return Response.json({ items: [runtime], errors: [] });
+      throw new Error(`Unexpected request: ${pathname}`);
+    };
+    const fixture = setupApp(routeFixture, ws);
+    const preparation = fixture.sessionService.prepare(ws);
+    const prompt = { input: { text: 'Output integers 1 through 160', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const sessionId = waitForPrepare ? (await preparation).sessionId : null;
+    return { ...fixture, ws, deleted, sessionId, prompt, preparation, restart: () => setupApp(routeFixture, ws).sessionService };
+  };
+
+  it.each(['timeout', 'discard', 'close'])('preserves a prepared session prompted by ID through %s cleanup', async (cleanup) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fixture = await setupPreparedSession();
+    const { sessionService, sessionId, prompt, ws, deleted } = fixture;
+    try {
+      expect((await sessionService.list(ws.workspaceId)).items.map(item => item.sessionId)).toContain(sessionId);
+      await sessionService.send(sessionId, prompt);
+      if (cleanup === 'timeout') await vi.advanceTimersByTimeAsync(300_001);
+      if (cleanup === 'discard') await sessionService.discardPrepared(ws);
+      if (cleanup === 'close') await sessionService.close();
+      expect(deleted).toEqual([]);
+      expect(await prepState.agentScopeStore.getSession(sessionId)).not.toBeNull();
+      expect((await sessionService.open(sessionId)).session.sessionId).toBe(sessionId);
+      const restarted = fixture.restart();
+      try { expect((await restarted.open(sessionId)).session.sessionId).toBe(sessionId); }
+      finally { await restarted.close(); }
+    } finally {
+      await sessionService.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('preserves a prepared session opened by ID through shutdown cleanup', async () => {
+    const { sessionService, sessionId, deleted } = await setupPreparedSession();
+    try {
+      await sessionService.open(sessionId);
+      await sessionService.close();
+      expect(deleted).toEqual([]);
+      expect((await sessionService.open(sessionId)).session.sessionId).toBe(sessionId);
+    } finally { await sessionService.close(); }
+  });
+
+  it('cleans up an unused prepared session on close', async () => {
+    const { sessionService, sessionId, deleted } = await setupPreparedSession();
+    await sessionService.close();
+    expect(deleted).toEqual([sessionId]);
+    expect(await prepState.agentScopeStore.getSession(sessionId)).toBeNull();
+  });
+
+  it('does not delete a claimed session when discard is already waiting for preparation', async () => {
+    const { sessionService, ws, deleted, preparation } = await setupPreparedSession({ waitForPrepare: false });
+    try {
+      const discarding = sessionService.discardPrepared(ws);
+      const created = await sessionService.create({ projectId: ws.projectId, workspaceId: ws.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } });
+      const { sessionId } = await preparation;
+      await discarding;
+      expect(created.session.sessionId).toBe(sessionId);
+      expect(deleted).toEqual([]);
+      expect((await sessionService.open(sessionId)).session.sessionId).toBe(sessionId);
+    } finally { await sessionService.close(); }
+  });
+
+  it('refuses adoption when cleanup already owns deletion', async () => {
+    let release;
+    let entered;
+    const waiting = new Promise(resolve => { release = resolve; });
+    const reopening = new Promise(resolve => { entered = resolve; });
+    const { sessionService, sessionId, prompt, ws, deleted } = await setupPreparedSession({ onReopen: async () => { entered(); await waiting; } });
+    const discarding = sessionService.discardPrepared(ws);
+    try {
+      await reopening;
+      await expect(sessionService.send(sessionId, prompt)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT', statusCode: 409 });
+    } finally {
+      release();
+      await discarding;
+      await sessionService.close();
+    }
+    expect(deleted).toEqual([sessionId]);
+    await expect(sessionService.open(sessionId)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('cannot discard or close a preparation while its adopted prompt is in flight', async () => {
+    let release;
+    let entered;
+    const waiting = new Promise(resolve => { release = resolve; });
+    const running = new Promise(resolve => { entered = resolve; });
+    const { sessionService, sessionId, prompt, ws, deleted } = await setupPreparedSession({ onRun: async () => { entered(); await waiting; } });
+    const sending = sessionService.send(sessionId, prompt);
+    try {
+      await running;
+      await Promise.all([sessionService.discardPrepared(ws), sessionService.close()]);
+      expect(deleted).toEqual([]);
+    } finally {
+      release();
+      await sending;
+      await sessionService.close();
+    }
+    expect((await sessionService.open(sessionId)).session.sessionId).toBe(sessionId);
+  });
+
   it('enforces auth and validation parity on prepare and discard endpoints', async () => {
     const ws = await createTestWorkspace();
     const { app, sessionService } = setupApp(async () => Response.json({}), ws);
