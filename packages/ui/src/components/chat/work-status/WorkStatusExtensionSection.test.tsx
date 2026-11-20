@@ -362,8 +362,10 @@ test('a status frame keeps subscriptions and storage alive while project changes
 
     await act(async () => { send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resize', id: 'h-1', payload: { height: 96 } }); await tick(); });
     expect(box.style.height).toBe('96px');
-    await act(async () => { send({ channel: 'openchamber.sdk', v: 1, type: 'resize', id: 'h-mid', payload: { height: 400 } }); });
-    expect(box.style.height).toBe('400px');
+    const privatePort = iframePorts.get(frame);
+    if (!privatePort) throw new Error('Owner guest port is missing');
+    await act(async () => { privatePort.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'resize', id: 'h-mid', payload: { height: 400 } }); await tick(); });
+    expect(box.style.height).toBe('96px');
     await act(async () => { send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resize', id: 'h-2', payload: { height: 2000 } }); await tick(); });
     expect(box.style.height).toBe('480px');
     expect(messages.some((message) => message.type === 'result' && message.id === 'h-2' && message.ok)).toBe(true);

@@ -7,6 +7,13 @@ import type { GuestLinkClaim, GuestLinkRule } from '@/lib/guests/links';
 import type { InstalledGuest } from '@/lib/guests/types';
 
 const browser = new Window({ url: 'http://localhost/' });
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (input) => {
+  const url = new URL(input instanceof Request ? input.url : String(input), browser.location.href);
+  if (url.pathname === '/api/fs/home') return Response.json({ home: '/project' });
+  if (url.pathname === '/api/location') return Response.json({ directory: '/project' });
+  throw new Error(`Unexpected guest link request: ${url.pathname}`);
+};
 Object.assign(globalThis, { window: browser, document: browser.document, navigator: browser.navigator,
   localStorage: browser.localStorage, sessionStorage: browser.sessionStorage, HTMLElement: browser.HTMLElement,
   HTMLAnchorElement: browser.HTMLAnchorElement, Element: browser.Element, Node: browser.Node, Text: browser.Text,
@@ -68,7 +75,7 @@ beforeAll(async () => {
   document.body.append(host);
   root = createRoot(host);
 });
-afterAll(async () => { await act(() => root?.unmount()); browser.happyDOM.abort(); });
+afterAll(async () => { await act(() => root?.unmount()); await browser.happyDOM.abort(); globalThis.fetch = originalFetch; });
 beforeEach(() => { claims.length = 0; opened.length = 0; builtIn = false; });
 
 type Options = { guestLinks?: readonly GuestLinkRule[] | null; allowRawHtml?: boolean; purpose?: 'copy'; disableLinkSafety?: boolean };
@@ -106,6 +113,12 @@ test('a copy keeps the text as written', async () => {
   await render('See DEMO-2.', { purpose: 'copy' });
   expect(marks()).toEqual([]);
   expect(host.textContent).toContain('DEMO-2');
+});
+
+test('authored HTML cannot forge an extension identifier marker', async () => {
+  await render('<a data-oc-guest-link="tasks" href="https://other.example/">DEMO-2</a>', { allowRawHtml: true });
+  expect(marks()).toEqual([]);
+  expect(claims).toEqual([]);
 });
 
 test('a claimed link opens in the extension, also in the user\'s own message; built-in claims and modified clicks keep their way', async () => {

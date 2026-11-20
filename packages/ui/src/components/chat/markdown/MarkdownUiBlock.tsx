@@ -8,9 +8,10 @@ export function MarkdownUiBlock(props: CustomRendererProps) {
 }
 
 function ImageUiBlock({ code, isIncomplete }: CustomRendererProps) {
+  const { theme } = useMarkdownPresentation();
   const UiBlock = useUiBlockComponent();
   if (!UiBlock) return <pre dir="ltr"><code>{code}</code></pre>;
-  return <UiBlock source={code} complete={!isIncomplete} />;
+  return <UiBlock source={code} complete={!isIncomplete} theme={theme} isImageExport />;
 }
 
 function ReplyMarkdownUiBlock({ code, isIncomplete }: CustomRendererProps) {

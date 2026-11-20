@@ -26,8 +26,8 @@ void importWindow.happyDOM.close();
 const directory = '/repo';
 const sessionId = 'session-1';
 const column = { sessionId, directory };
-const session = (updated: number): Session => ({
-  sessionId: sessionDirectory === directory ? sessionId : `${sessionId}-${sessionDirectory.slice(1)}`, projectId: 'project', workspaceId, displayPath: 'repo', rootSessionId: sessionId,
+const session = (updated: number, sessionDirectory = directory): Session => ({
+  sessionId: sessionDirectory === directory ? sessionId : `${sessionId}-${sessionDirectory.slice(1)}`, projectId: 'project', workspaceId: 'workspace', displayPath: 'repo', rootSessionId: sessionId,
   createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });

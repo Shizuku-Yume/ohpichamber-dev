@@ -1,4 +1,5 @@
-import { useThemeSystem } from '@/contexts/useThemeSystem';
+import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
+import type { Theme } from '@/types/theme';
 import React from 'react';
 import { z } from 'zod';
 import { Icon } from '@/components/icon/Icon';
@@ -22,6 +23,7 @@ const useI18n = () => {
 import { KIT_SHARED_CSS, kitVariables, seriesColor } from '../lib/visualKit';
 import { cn } from '@/lib/utils';
 import { MarkdownContent } from '../MarkdownRenderer';
+import { useMarkdownPresentation } from '../markdown/MarkdownPresentationContext';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { axisTicks } from './axisTicks';
 import { ExtensionBlockFrame } from './ExtensionBlockFrame';
@@ -122,8 +124,16 @@ function useBlockProps<S extends z.ZodType>(schema: S, props: BlockValue): z.inf
 }
 
 function Markdown({ source, className }: { source?: string; className?: string }) {
- const directory = useEffectiveDirectory() ?? '';
+ const presentation = useMarkdownPresentation();
  if (!source) return null;
+ if (presentation.purpose) return <MarkdownContent content={source} mode="static" settled directory={presentation.directory}
+  className={className} purpose={presentation.purpose} theme={presentation.theme} enableFileReferences={false}
+  preparedHighlights={presentation.preparedHighlights} onExportCode={presentation.onExportCode} />;
+ return <ScopedMarkdown source={source} className={className} />;
+}
+
+function ScopedMarkdown({ source, className }: { source: string; className?: string }) {
+ const directory = useEffectiveDirectory() ?? '';
  return <MarkdownContent content={source} mode="static" settled directory={directory} className={className} />;
 }
 
@@ -1305,9 +1315,9 @@ function Node({ value }: { value: BlockValue }) {
  return <Renderer props={node.data.props} />;
 }
 
-function NotDrawn({ source, errors, partial = false }: { source: string; errors: string[]; partial?: boolean }) {
+function NotDrawn({ source, errors, partial = false, showSourceInitially = false }: { source: string; errors: string[]; partial?: boolean; showSourceInitially?: boolean }) {
  const { t } = useI18n();
- const [open, setOpen] = React.useState(false);
+ const [open, setOpen] = React.useState(showSourceInitially);
  const panelId = React.useId();
  // An agent's block outlives the extension that drew it; the parser's wording is for the agent.
  const shown = errors.map((error) => (/Unknown component "[A-Z]/.test(error) ? t('chat.uiBlocks.extensionBlock.unavailable') : error));
@@ -1361,19 +1371,24 @@ function addKitStyles() {
  document.head.append(style);
 }
 
-export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions }: {
+export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions, theme, isImageExport = false }: {
   source: string;
   complete: boolean;
   host?: UiBlockHost;
   actions?: React.ReactNode;
   onNotDrawn?: (errors: string[]) => void;
+  theme?: Theme;
+  isImageExport?: boolean;
 }) {
  const { t } = useI18n();
- const { currentTheme } = useThemeSystem();
+ const themeContext = useOptionalThemeSystem();
+ const currentTheme = theme ?? themeContext?.currentTheme;
+ if (!currentTheme) throw new Error('UiBlock requires a theme');
  // A broken page goes back to the agent, which draws it again, so only a
  // reply, which has no such second try, draws what it can.
  const salvage = host.kind === 'reply';
- const extensionBlocks = useExtensionBlocks();
+ const availableExtensions = useExtensionBlocks();
+ const extensionBlocks = isImageExport ? NO_EXTENSION_BLOCKS : availableExtensions;
  const parsed = React.useMemo(() => parseUiBlock(source, complete, salvage, extensionBlocks), [source, complete, salvage, extensionBlocks]);
  // The kit's variables (series colours, tones) land on the block's root before paint, and follow a theme switch.
  const blockRef = React.useRef<HTMLDivElement>(null);
@@ -1570,7 +1585,7 @@ export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions }
  // has no decision that would ever send them.
  const replyForm = host.kind === 'reply' && complete && decisions.length === 0 && fields.length > 0 && Boolean(host.submit || sent);
  const hasValue = Object.values(answerValues).some((value) => (Array.isArray(value) ? value.length > 0 : value.trim() !== ''));
- const fallback = <NotDrawn source={source} errors={notDrawnErrors ?? []} />;
+ const fallback = <NotDrawn source={source} errors={notDrawnErrors ?? []} showSourceInitially={isImageExport} />;
  // A form that ends with Tabs sends from their last tab, where Next stood on the
  // others. A frame's Send comes with the first letter of its note, and moving
  // the note there would take the field away mid-word, so a frame's form stays
@@ -1645,7 +1660,7 @@ export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions }
      ) : null}
     </div>
    ) : null}
-   {parsed.dropped.length > 0 ? <div className="mt-2"><NotDrawn source={source} errors={parsed.dropped} partial /></div> : null}
+   {parsed.dropped.length > 0 ? <div className="mt-2"><NotDrawn source={source} errors={parsed.dropped} partial showSourceInitially={isImageExport} /></div> : null}
   </div>
  );
 }

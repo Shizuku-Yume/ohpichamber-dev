@@ -1,3 +1,8 @@
+import { Document } from 'happy-dom';
+
+// happy-dom has no quirks layout or compatMode; math renderers need the standard mode.
+Object.defineProperty(Document.prototype, 'compatMode', { configurable: true, value: 'CSS1Compat' });
+
 // happy-dom implements Element.getAnimations(), so Base UI waits for open and
 // close animations through MutationObserver and animation frames, which most
 // suites do not install. Nothing animates in happy-dom; this flag is Base UI's

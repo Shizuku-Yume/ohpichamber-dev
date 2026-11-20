@@ -53,14 +53,14 @@ describe('completed-turn changed files', () => {
 
 describe('message render comparison', () => {
   test('re-renders when compaction model attribution arrives or changes', () => {
-    const before = { ...running, status: 'completed' as const };
-    const after = { ...before, model: { providerID: 'p', id: 'm' } };
-    const changed = { ...after, model: { providerID: 'other', id: 'm' } };
-    const changedID = { ...after, model: { providerID: 'p', id: 'other' } };
+    const before = { ...running };
+    const after = { ...before, providerId: 'p', modelId: 'm' };
+    const changed = { ...after, providerId: 'other', modelId: 'm' };
+    const changedID = { ...after, providerId: 'p', modelId: 'other' };
     expect(areRenderRelevantMessagesEqual({ info: before, parts: [] }, { info: after, parts: [] })).toBe(false);
     expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: changed, parts: [] })).toBe(false);
     expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: changedID, parts: [] })).toBe(false);
-    expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: { ...after, model: { ...after.model } }, parts: [] })).toBe(true);
+    expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: { ...after }, parts: [] })).toBe(true);
   });
 
   const running: Message = {

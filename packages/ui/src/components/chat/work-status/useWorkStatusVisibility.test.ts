@@ -57,9 +57,7 @@ const installMinimalDom = () => {
     activeElement: null,
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
-    querySelector: () => (sidebar
-      ? { getBoundingClientRect: () => ({ width: sidebar?.drawn ?? 0 }), style: { width: `${sidebar.set}px` } }
-      : null),
+    querySelector: () => null,
   };
   const container = {
     nodeType: 1,

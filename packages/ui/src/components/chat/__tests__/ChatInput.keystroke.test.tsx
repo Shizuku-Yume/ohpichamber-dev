@@ -420,7 +420,7 @@ test('worker catalog builtins appear without disk templates and context output i
 });
 
 /** Types `text` one key at a time, each key a transaction of its own, as the keyboard does. */
-const typeKeys = (view: CodeMirrorView, text: string) => {
+const typeKeys = (view: InstanceType<typeof EditorView>, text: string) => {
   for (const char of text) {
     const end = view.state.doc.length;
     view.dispatch({ changes: { from: end, insert: char }, selection: { anchor: end + 1 }, userEvent: 'input.type' });
@@ -432,19 +432,27 @@ test('Enter pressed right after the last key sends the whole text', async () => 
   const sendMessage = useSessionUIStore.getState().sendMessage;
   const config = useConfigStore.getState();
   useSessionUIStore.setState({ sendMessage: async (content: string) => { sent.push(content); } });
-  useConfigStore.setState({ currentProviderId: 'provider', currentModelId: 'model' });
-  const composer = await mountComposer('');
+  useConfigStore.setState({ currentProviderId: 'fixture', currentModelId: 'fixture-model' });
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
   try {
+    await act(async () => root.render(
+      <RuntimeAPIContext.Provider value={runtimeAPIs}><ThemeSystemProvider><I18nProvider><SyncProvider directory="/workspace"><ChatInput /></SyncProvider></I18nProvider></ThemeSystemProvider></RuntimeAPIContext.Provider>,
+    ));
+    const content = container.querySelector<HTMLElement>('.cm-content');
+    const view = content ? EditorView.findFromDOM(content) : null;
+    if (!view) throw new Error('Expected composer editor');
     // One synchronous turn: the keys and Enter all land before React renders.
     await act(async () => {
-      typeKeys(composer.view, 'hello');
-      composer.view.contentDOM.dispatchEvent(keyEvent('Enter'));
+      typeKeys(view, 'hello');
+      view.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }));
     });
-    await flushFrames();
     expect(sent).toEqual(['hello']);
-    expect(composer.view.state.doc.toString()).toBe('');
+    expect(view.state.doc.toString()).toBe('');
   } finally {
-    await unmountComposer(composer);
+    await act(async () => root.unmount());
+    container.remove();
     useSessionUIStore.setState({ sendMessage });
     useConfigStore.setState({ currentProviderId: config.currentProviderId, currentModelId: config.currentModelId });
   }

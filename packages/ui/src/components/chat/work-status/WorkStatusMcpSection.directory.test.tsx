@@ -1,84 +1,77 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { act } from 'react';
 import { toast } from 'sonner';
-import { opencodeClient } from '@/lib/opencode/client';
-import type { McpServerStatus } from '@/lib/opencode/model';
-import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
+import { useMcpStore, type McpServerRuntimeState } from '@/stores/useMcpStore';
 import { setupMcpDirectoryHarness } from '@/components/mcp/mcpDirectory.fixture';
 import { WorkStatusMcpSection } from './WorkStatusMcpSection';
 
-const servers = (connected: boolean): McpServerStatus[] => [{
-  name: 'fixture', status: connected ? { status: 'connected' } : { status: 'disabled' },
-}];
+const server = (enabled: boolean): McpServerRuntimeState => ({
+  configuration: { serverId: 'docs', label: 'Docs', enabled, scope: 'project', transport: { type: 'http', url: 'https://mcp.example.test' } },
+  catalogs: [],
+});
 
-describe('WorkStatusMcpSection', () => {
-  const { harness, renderNode, openChatDraft, prepareFixture } = setupMcpDirectoryHarness();
-  const initialExpanded = useUIStore.getState().workStatusExpandedSections;
+describe('native work-status MCP directory ownership', () => {
+  const { renderNode } = setupMcpDirectoryHarness();
+  const original = useMcpStore.getState();
+  const expanded = useUIStore.getState().workStatusExpandedSections;
+  const connect = mock(async (_name: string, _directory?: string | null) => {});
+  const disconnect = mock(async (_name: string, _directory?: string | null) => {});
+  const ensureFresh = mock(async (_options: { directory?: string | null; silent?: boolean; maxAgeMs: number }) => {});
+
   beforeEach(() => {
-    useUIStore.setState({ workStatusExpandedSections: { ...initialExpanded, mcp: true } });
+    connect.mockClear(); disconnect.mockClear(); ensureFresh.mockClear();
+    useUIStore.setState({ workStatusExpandedSections: { ...expanded, mcp: true } });
+    useMcpStore.setState({
+      byDirectory: { '/proj-a': { docs: server(true) }, '/proj-b': { docs: server(false) } },
+      phaseKeys: { '/proj-a': 'ready', '/proj-b': 'ready' },
+      connect, disconnect, ensureFresh,
+    });
   });
   afterEach(() => {
-    useUIStore.setState({ workStatusExpandedSections: initialExpanded });
+    useMcpStore.setState(original, true);
+    useUIStore.setState({ workStatusExpandedSections: expanded });
   });
 
-  test('a Chat draft reads and toggles only its prepared directory', async () => {
-    openChatDraft();
-    prepareFixture();
-    const connected = new Map<string | null | undefined, boolean>([['C:/proj-a', true]]);
-    harness.listServers = async (directory) => servers(connected.get(directory) ?? false);
-    const connect = spyOn(opencodeClient, 'connectMcpServer').mockImplementation(async (_name, directory) => {
-      connected.set(directory, true);
-    });
-    harness.extraSpies.push(connect);
-
-    const host = await renderNode(<WorkStatusMcpSection sessionId={null} directory={null} />);
-    const prepared = useSessionUIStore.getState().newSessionDraft.preparedChatDirectory;
-    expect(prepared?.startsWith('/chats/')).toBe(true);
-    expect(harness.listSpy.mock.calls).toEqual([[prepared]]);
+  test('enables only the directory displayed, not the globally selected project', async () => {
+    const host = await renderNode(<WorkStatusMcpSection directory="/proj-b" />);
+    expect(ensureFresh).toHaveBeenCalledWith({ directory: '/proj-b', silent: true, maxAgeMs: 60000 });
     const toggle = host.querySelector<HTMLElement>('[role="switch"]');
     expect(toggle?.getAttribute('aria-checked')).toBe('false');
     await act(async () => toggle?.click());
-    expect(connect.mock.calls[0]).toEqual(['fixture', prepared]);
-    expect(host.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('true');
-    expect(connected.get('C:/proj-a')).toBe(true);
+    expect(connect.mock.calls).toEqual([['docs', '/proj-b']]);
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain('Sign in');
   });
 
-  test('a failed Chat preparation never reads the previous Chat', async () => {
-    openChatDraft();
-    const create = prepareFixture();
-    create.mockRejectedValue(new Error('Cannot create Chat directory'));
-    harness.extraSpies.push(spyOn(toast, 'error').mockImplementation(() => 'toast'));
-    harness.listServers = async () => servers(true);
-    const host = await renderNode(<WorkStatusMcpSection sessionId={null} directory={null} />);
-    expect(harness.listSpy.mock.calls.length).toBe(0);
-    expect(host.querySelector('[role="switch"]')).toBeNull();
+  test('can disable a persisted server without fabricating an active catalog', async () => {
+    const host = await renderNode(<WorkStatusMcpSection directory="/proj-a" />);
+    expect(host.textContent).toContain('0/1');
+    const toggle = host.querySelector<HTMLElement>('[role="switch"]');
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    await act(async () => toggle?.click());
+    expect(disconnect.mock.calls).toEqual([['docs', '/proj-a']]);
   });
 
-  test('a pinned session reads its own directory while the main Chat is a draft', async () => {
-    openChatDraft();
-    const create = prepareFixture();
-    await renderNode(<WorkStatusMcpSection sessionId="pinned-chat" directory="/chats/pinned" />);
-    expect(create.mock.calls.length).toBe(0);
-    expect(harness.listSpy.mock.calls).toEqual([['/chats/pinned']]);
+  test('distinguishes an unread directory from a confirmed empty one', async () => {
+    useMcpStore.setState({ byDirectory: {}, phaseKeys: {} });
+    const host = await renderNode(<WorkStatusMcpSection directory="/unknown" />);
+    expect(host.querySelector('p')?.textContent).toBeTruthy();
+    await act(async () => useMcpStore.setState({ phaseKeys: { '/unknown': 'ready' } }));
+    expect(host.textContent).toBe('');
   });
 
-  test('a rejected toggle shows the error and leaves the switch usable', async () => {
-    harness.listServers = async () => servers(false);
-    const connect = spyOn(opencodeClient, 'connectMcpServer').mockRejectedValue(new Error('Server refused to start'));
+  test('surfaces an enable failure and releases the busy switch', async () => {
+    connect.mockRejectedValueOnce(new Error('Workspace unavailable'));
     const error = spyOn(toast, 'error').mockImplementation(() => 'toast');
-    harness.extraSpies.push(connect, error);
-
-    const host = await renderNode(<WorkStatusMcpSection sessionId="session" directory="/repo" />);
-    const toggle = () => host.querySelector<HTMLElement>('[role="switch"]');
-    await act(async () => toggle()?.click());
-
-    expect(connect.mock.calls.length).toBe(1);
-    expect(error.mock.calls[0]?.[0]).toBe('Server refused to start');
-    expect(toggle()?.getAttribute('aria-checked')).toBe('false');
-    expect(toggle()?.hasAttribute('disabled')).toBe(false);
-
-    await act(async () => toggle()?.click());
-    expect(connect.mock.calls.length).toBe(2);
+    try {
+      const host = await renderNode(<WorkStatusMcpSection directory="/proj-b" />);
+      const toggle = host.querySelector<HTMLButtonElement>('[role="switch"]');
+      await act(async () => toggle?.click());
+      expect(error).toHaveBeenCalledWith('Workspace unavailable');
+      expect(toggle?.getAttribute('aria-disabled')).not.toBe('true');
+    } finally {
+      error.mockRestore();
+    }
   });
 });

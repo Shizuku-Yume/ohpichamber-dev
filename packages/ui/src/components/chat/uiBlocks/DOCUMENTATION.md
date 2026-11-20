@@ -6,7 +6,7 @@ An assistant reply can carry fenced `openui-lang` blocks. This module owns the c
 
 ## Invariants
 
-- Only an assistant reply on screen draws blocks: `MarkdownRenderer` sets `uiBlocks` for the `assistant` variant, and copies and image exports keep the source. User messages, reasoning, tool output and documents show the fence as code.
+- Only an assistant reply on screen draws interactive blocks: `MarkdownRenderer` sets `uiBlocks` for the `assistant` variant. Copies keep the source; image exports draw built-in blocks with the captured Markdown theme and retain unavailable extension source. Export roots do not mount another theme service. User messages, reasoning, tool output and documents show the fence as code.
 - The catalog in `catalog.ts` is the one source for the parser, validation and the agent's signatures of the built-in components. An extension's component never takes a catalog name or one an earlier extension holds. After changing it, run `bun run --cwd packages/ui ui-blocks:generate`; `guidance.test.ts` fails while the server copy is stale.
 - A finished block that has any parser error, an undefined or unused name, state, a query or a mutation, or no `Stack` root draws nothing but its source and a short note. One exception: a reply's block with no fields, Buttons or expressions that is not cut short draws its sound parts and says what it lost, under the block. A block never shows with parts silently dropped.
 - While a block streams, a node keeps drawing its last props that parsed against its schema; a node that never parsed draws nothing.

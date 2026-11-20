@@ -109,10 +109,19 @@ describe('loadHistoryUntilMessage', () => {
         let calls = 0;
         let controller!: UseChatTimelineControllerResult;
         const { hasMessageRow } = options;
-        // SAFETY: the history search reads only `hasMessageRow` from the list.
         const messageListRef: React.RefObject<MessageListHandle | null> = {
             current: hasMessageRow
-                ? { hasMessageRow: (messageId: string) => hasMessageRow(messageId, messages) } as MessageListHandle
+                ? {
+                    hasMessageRow: (messageId: string) => hasMessageRow(messageId, messages),
+                    scrollToTurnId: () => false,
+                    scrollToMessageId: () => false,
+                    captureViewportAnchor: () => null,
+                    restoreViewportAnchor: () => false,
+                    alignViewportAnchor: () => 'missing',
+                    holdViewportAnchor: () => {},
+                    isHistoryVirtualized: () => false,
+                    scrollToBottom: () => {},
+                }
                 : null,
         };
         const Harness = () => {
@@ -157,12 +166,12 @@ describe('loadHistoryUntilMessage', () => {
         // A batch can end inside a turn: the reply is loaded, but the list
         // gives it a row only once the prompt that opens its turn is loaded.
         const reply: Message = {
-            messageId: 'msg_4', sessionID: 'session', role: 'assistant',
-            time: { created: 4, completed: 5 }, providerID: 'test', modelID: 'test', agent: 'build',
+            messageId: 'msg_4', sessionId: 'session', turnId: 'turn_msg_3', role: 'assistant',
+            createdAt: 4, parts: [], providerId: 'test', modelId: 'test',
         };
         const harness = renderHarness({
-            pages: [[{ info: reply, parts: [] }], [userMessage('msg_3', 3)]],
-            hasMessageRow: (messageId, messages) => messageId === 'msg_4' && messages.some((message) => message.info.id === 'msg_3'),
+            pages: [[reply], [userMessage('msg_3', 3)]],
+            hasMessageRow: (messageId, messages) => messageId === 'msg_4' && messages.some((message) => message.messageId === 'msg_3'),
         });
         try {
             await harness.ready();
@@ -274,7 +283,11 @@ describe('useChatTimelineController identity lifecycle', () => {
                 isHistoryVirtualized: () => false,
                 scrollToTurnId: () => false,
                 scrollToMessageId: () => false,
-            } as unknown as MessageListHandle,
+                hasMessageRow: () => false,
+                alignViewportAnchor: () => 'missing',
+                holdViewportAnchor: () => {},
+                scrollToBottom: () => {},
+            } satisfies MessageListHandle,
         };
         let controller!: UseChatTimelineControllerResult;
         let directory = 'A';

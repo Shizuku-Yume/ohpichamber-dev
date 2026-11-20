@@ -13,19 +13,20 @@ afterEach(() => {
     log.mockClear();
 });
 
-test.each([
+const cases: [string | undefined, boolean, string | undefined][] = [
     ['failure', false, 'failure'],
     [undefined, false, 'chat.chatInput.toast.messageSendFailed'],
     ['413 payload too large', true, 'chat.chatInput.toast.attachmentsTooLarge'],
     ['network error', true, 'chat.chatInput.toast.sendAttachmentsFailed'],
     ['network error', false, undefined],
     ['runtime changed', true, 'chat.chatInput.toast.messageSendFailed'],
-] as const)('restores native input after %s (attachments: %s)', (error, attached, expected) => {
-    const restore = mock();
+];
+test.each(cases)('restores native input after %s (attachments: %s)', (error, attached, expected) => {
+    const restore = mock((_files: AttachedFile[], _target: Parameters<typeof originalRestore>[1]) => {});
     useInputStore.setState({ restoreAttachedFiles: restore });
     const restoreConsumedDrafts = mock();
     const restoreComposerText = mock();
-    const notifyError = mock();
+    const notifyError = mock((_message: string) => {});
     const attachments: AttachedFile[] = attached ? [{ id: 'attachment', filename: 'photo.png', file: new File(['x'], 'photo.png'), dataUrl: 'data:image/png;base64,eA==', mimeType: 'image/png', size: 1, source: 'local' }] : [];
     handleComposerSendFailure(error, {
         allAttachments: attachments,

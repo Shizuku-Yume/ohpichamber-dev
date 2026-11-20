@@ -34,6 +34,9 @@ OpenCode access.
 - Search highlights leave Markdown unchanged and repaint remounted rows.
   Matches stay within text nodes, and lowercasing that changes string length
   cannot supply source offsets.
+- History navigation checks the list's renderable row index before stopping a
+  history search. A loaded reply without a renderable turn opener is not yet a
+  navigation target; folded and windowed rows remain revealable through the list.
 - Timeline actions apply only to user prompts. Injected context folds back onto
   its prompt so a quote-only prompt has a searchable title; background reports
   remain independent entries.

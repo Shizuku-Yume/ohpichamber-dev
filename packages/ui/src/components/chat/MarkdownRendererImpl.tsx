@@ -61,6 +61,8 @@ import { splitFrontmatter } from './markdown/frontmatter';
 import { FrontmatterProperties } from './markdown/FrontmatterProperties';
 import { isBareVideoUrl, markdownMediaCopySource, markdownMediaFilename } from './markdown/markdownVideo';
 import type { RepositoryLinkContext } from '@/lib/source-control/repositoryLinks';
+import { guestLinksVersion, useGuestLinkRules, type GuestLinkRule } from '@/lib/guests/links';
+import { remarkGuestLinks } from './markdown/remarkGuestLinks';
 
 export type MarkdownVariant = 'assistant' | 'tool' | 'reasoning';
 
@@ -279,6 +281,8 @@ export interface MarkdownContentProps {
   tableWidthScope?: string;
   windowed?: boolean;
   uiBlocks?: boolean;
+  svgFences?: boolean;
+  guestLinks?: readonly GuestLinkRule[] | null;
 }
 
 export function MarkdownContent({
@@ -309,6 +313,8 @@ export function MarkdownContent({
   tableWidthScope,
   windowed = false,
   uiBlocks = true,
+  svgFences = false,
+  guestLinks = null,
 }: MarkdownContentProps) {
   const themeSystem = useOptionalThemeSystem();
   const theme = exportTheme ?? themeSystem?.currentTheme ?? getDefaultTheme(
@@ -409,13 +415,15 @@ export function MarkdownContent({
     return createMarkdownCodePlugin({ purpose, prepared: preparedHighlights, resolvePaths });
   }, [purpose, preparedHighlights, fileReferences, directory, confirmFile]);
   const plugins = React.useMemo(() => ({ code, math: markdownMath, cjk: getMarkdownCjk(singleTilde), renderers }), [code, singleTilde]);
+  const activeGuestLinks = guestLinks && guestLinks.length > 0 && !purpose ? guestLinks : null;
   const processing = React.useMemo(() => {
     const base = getMarkdownProcessingOptions(allowRawHtml, singleTilde, variant === 'reasoning');
     const extra: Pluggable[] = [];
     if (activeEmojiShortcodes) extra.push([remarkEmojiShortcodes, activeEmojiShortcodes]);
+    if (activeGuestLinks) extra.push([remarkGuestLinks, activeGuestLinks]);
     if (extra.length === 0) return base;
     return { ...base, remarkPlugins: [...(base.remarkPlugins ?? []), ...extra] };
-  }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes]);
+  }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes, activeGuestLinks]);
   const presentation = React.useMemo(() => ({
     directory,
     fileReferences,
@@ -424,7 +432,8 @@ export function MarkdownContent({
     settled,
     purpose,
     uiBlocks: uiBlocks && purpose !== 'copy',
-    svgFences: false,
+    svgFences: svgFences && !purpose,
+    guestLinks: activeGuestLinks,
     settledReply: uiBlocks && !purpose && settled && sessionId && messageId ? { sessionId, messageId } : null,
     disableLinkSafety,
     tableWidthScope,
@@ -437,8 +446,8 @@ export function MarkdownContent({
     confirmFile,
     code,
   }), [
-    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, sessionId, messageId, disableLinkSafety, tableWidthScope, theme,
-    mermaidControls, allowMermaidWheelEvents, onShowPopup, onExportCode, confirmFile, code,
+    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, svgFences, activeGuestLinks, sessionId, messageId, disableLinkSafety, tableWidthScope, theme,
+    mermaidControls, allowMermaidWheelEvents, onShowPopup, onExportCode, preparedHighlights, confirmFile, code,
   ]);
 
   let body = (
@@ -465,6 +474,7 @@ export function MarkdownContent({
       data-oc-directory={directory}
       data-oc-runtime={runtimeKey}
       data-oc-file-references={fileReferences ? 'enabled' : 'disabled'}
+      data-oc-guest-links={activeGuestLinks ? guestLinksVersion(activeGuestLinks) : undefined}
       data-code-wrap={codeWrap ? 'true' : 'false'}
       data-table-wrap={tableWrap ? 'true' : 'false'}
       className="min-w-0 space-y-0"
@@ -533,6 +543,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   enableFileReferences = true,
 }: MarkdownRendererProps) {
   const directory = useEffectiveDirectory() ?? '';
+  const guestLinks = useGuestLinkRules();
   // Canonical parts carry no per-part completion time: the message's streaming
   // flag is the settled signal, and a part whose text already equals `content`
   // is the one this render settled for.
@@ -566,6 +577,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       enableFileReferences={enableFileReferences}
       loopbackPreview
       uiBlocks={variant === 'assistant'}
+      guestLinks={guestLinks}
     />
   );
 

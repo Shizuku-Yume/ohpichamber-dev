@@ -102,13 +102,13 @@ const mountToolPart = () => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const render = async (shown: ToolPartData) => {
+  const render = async (shown: ToolPartData, outcome: ToolResultPart = result) => {
     await act(async () => {
       root.render(
         <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
-              <ToolPart part={result} pairedCall={shown} isExpanded isMobile={false} onToggle={() => {}} />
+              <ToolPart part={outcome} pairedCall={shown} isExpanded isMobile={false} onToggle={() => {}} />
             </ThemeSystemContext.Provider>
           </I18nProvider>
         </SyncProvider>,
@@ -165,93 +165,25 @@ test('a declared tool rule sets the header, icon, and table body of a matching t
   }
 });
 
-// Code Mode hands every MCP call over as one `execute` part; the rule is
-// written for the name a direct call has (`tasks_list`), the script calls
-// `tasks.list`.
-const directRuleGuest: InstalledGuest = {
-  ...tasksGuest,
-  tools: [{ ...tasksGuest.tools![0], match: 'tasks_list' }],
-};
-
-const tasksOutput = { total: 2, items: [
-  { id: 'DEMO-1', title: 'Write docs', assignee: { name: 'Ada' } },
-  { id: 'DEMO-2', title: 'Ship it' },
-] };
-
-type ScriptCall = { tool: string; status: string; input?: { [key: string]: string } };
-
-const script = (calls: ScriptCall[], output: string, status: 'completed' | 'running' | 'failed' = 'completed'): ToolPartData => ({
-  id: 'prt_script', sessionID: 'ses_tasks', messageID: 'msg_tasks',
-  type: 'tool', tool: 'execute', callID: 'call_script',
-  state: status === 'running'
-    ? { status, input: { code: 'return await tools.tasks.list({ project: "DEMO" })' }, metadata: { toolCalls: calls }, time: { start: 1 } }
-    // OpenCode finishes a script that threw as `completed`, with `error: true` beside its calls.
-    : { status: 'completed', input: { code: 'return await tools.tasks.list({ project: "DEMO" })' }, output, metadata: status === 'failed' ? { toolCalls: calls, error: true } : { toolCalls: calls }, time: { start: 1, end: 2 } },
+test('a native tool is not relabelled from another tool\'s output shape', async () => {
+  const { container, render, dispose } = mountToolPart();
+  const call: ToolPartData = { ...part, partId: 'execute-call', toolCallId: 'execute', toolName: 'execute', input: { code: 'return await tools.tasks.list({ project: "DEMO" })' } };
+  try {
+    useGuestsStore.getState().replaceCatalog([tasksGuest], 'test');
+    await render(call, { ...result, toolCallId: call.toolCallId, toolName: call.toolName });
+    expect(container.textContent).not.toContain('Tasks for DEMO');
+    expect(container.querySelector('use[href="#oc-checkbox-circle"]')).toBeNull();
+  } finally {
+    await dispose();
+  }
 });
 
-const listCall: ScriptCall = { tool: 'tasks.list', status: 'completed', input: { project: 'DEMO' } };
-
-test('a Code Mode script that made one call shows as the row of that tool\'s rule', async () => {
+test('failed native results retain their error instead of a success table', async () => {
   const { container, render, dispose } = mountToolPart();
-  const ruleShows = () => container.textContent?.includes('Tasks for DEMO') === true;
-
   try {
-    useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
-    // Without a rule the script row stays: the namespace as the title, the script and its call list.
-    await render(script([listCall], JSON.stringify(tasksOutput, null, 2)));
-    expect(ruleShows()).toBe(false);
-    expect(container.querySelector('table')).toBeNull();
-    expect(container.textContent).toContain('tools.tasks.list');
-
-    await act(async () => {
-      useGuestsStore.getState().replaceCatalog([directRuleGuest], 'test');
-    });
-    expect(ruleShows()).toBe(true);
-    expect(container.textContent).toContain('2 open');
-    expect(container.querySelector('use[href="#oc-checkbox-circle"]')).not.toBeNull();
-    expect(tableRows(container)).toEqual([
-      ['DEMO-1', 'Write docs', 'Ada'],
-      ['DEMO-2', 'Ship it', ''],
-    ]);
-
-    // A running script can still make another call, so it keeps the script row until it has finished.
-    await render(script([listCall], '', 'running'));
-    expect(ruleShows()).toBe(false);
-    const row = container.querySelector('.group\\/tool');
-    expect(row).not.toBeNull();
-    await render(script([listCall], JSON.stringify(tasksOutput, null, 2)));
-    expect(ruleShows()).toBe(true);
-    expect(container.querySelector('.group\\/tool')).toBe(row);
-
-    // The script returned something other than the tool's answer: the row keeps its title and shows what came back.
-    await render(script([listCall], '2'));
-    expect(ruleShows()).toBe(true);
-    expect(container.textContent).not.toContain('2 open');
-    expect(container.querySelector('table')).toBeNull();
-    await render(script([listCall], `${JSON.stringify(tasksOutput, null, 2)}\n\nLogs:\nfetched`));
-    expect(ruleShows()).toBe(true);
-    expect(container.querySelector('table')).toBeNull();
-    expect(container.textContent).toContain('fetched');
-
-    // Several calls, a call without a rule, a failed call, and a script that failed after its call stay script rows.
-    await render(script([listCall, { ...listCall, input: { project: 'OTHER' } }], '[]'));
-    expect(ruleShows()).toBe(false);
-    await render(script([{ ...listCall, tool: 'tasks.remove' }], '{}'));
-    expect(ruleShows()).toBe(false);
-    await render(script([{ ...listCall, status: 'error' }], 'The backend is down.'));
-    expect(ruleShows()).toBe(false);
-    expect(container.textContent).toContain('tools.tasks.list');
-    await render(script([listCall], "TypeError: Cannot read properties of undefined (reading 'name')", 'failed'));
-    expect(ruleShows()).toBe(false);
-    expect(container.textContent).toContain('tools.tasks.list');
-
-    // Pausing the extension gives the script row back.
-    await render(script([listCall], JSON.stringify(tasksOutput, null, 2)));
-    expect(ruleShows()).toBe(true);
-    await act(async () => {
-      useGuestsStore.getState().replaceCatalog([{ ...directRuleGuest, enabled: false }], 'test');
-    });
-    expect(ruleShows()).toBe(false);
+    useGuestsStore.getState().replaceCatalog([tasksGuest], 'test');
+    await render({ ...part, status: 'failed' }, { ...result, output: undefined, isError: true, error: 'Backend unavailable' });
+    expect(container.textContent).toContain('Backend unavailable');
     expect(container.querySelector('table')).toBeNull();
   } finally {
     await dispose();
@@ -279,11 +211,10 @@ const issuesGuest = (toolLinkSettings?: Record<string, string>): InstalledGuest 
   ...(toolLinkSettings ? { toolLinkSettings } : {}),
 });
 
-const issuePart = (tool: string, output: string): ToolPartData => ({
-  id: 'prt_issue', sessionID: 'ses_tasks', messageID: 'msg_tasks',
-  type: 'tool', tool, callID: 'call_issue',
-  state: { status: 'completed', input: {}, output, metadata: {}, time: { start: 1, end: 2 } },
-});
+const issuePart = (tool: string, output: string): readonly [ToolPartData, ToolResultPart] => [
+  { type: 'tool_call', partId: 'prt_issue', toolCallId: 'call_issue', toolName: tool, status: 'completed', input: {} },
+  { type: 'tool_result', partId: 'result_issue', toolCallId: 'call_issue', toolName: tool, output, isError: false },
+];
 
 const issue = { key: 'DEMO-482', type: 'Bug', summary: 'Login fails after token refresh', status: 'In Progress', assignee: { name: 'Olena K.' }, priority: 'High' };
 
@@ -298,7 +229,7 @@ test('a declared card draws the output as a card, an array as a list, and anythi
       useGuestsStore.getState().replaceCatalog([issuesGuest({ site: 'acme.example' })], 'test');
     });
 
-    await render(issuePart('issues_get', JSON.stringify(issue)));
+    await render(...issuePart('issues_get', JSON.stringify(issue)));
     expect(container.textContent).toContain('DEMO-482 · Bug');
     expect(container.textContent).toContain('Login fails after token refresh');
     expect(Array.from(container.querySelectorAll('dt')).map((node) => node.textContent)).toEqual(['Assignee', 'Priority']);
@@ -327,7 +258,7 @@ test('a declared card draws the output as a card, an array as a list, and anythi
     expect(link()).toBeNull();
 
     // A missing path hides its part; a status without a mapping is neutral.
-    await render(issuePart('issues_get', JSON.stringify({ key: 'DEMO-470', summary: 'Billing export misses refunds', status: 'To Do' })));
+    await render(...issuePart('issues_get', JSON.stringify({ key: 'DEMO-470', summary: 'Billing export misses refunds', status: 'To Do' })));
     expect(container.querySelectorAll('dt')).toHaveLength(0);
     expect(badge('To Do')?.className).toContain('oc-tile-inset');
 
@@ -337,7 +268,7 @@ test('a declared card draws the output as a card, an array as a list, and anythi
     });
     const blocked = { key: 'DEMO-477', summary: 'Rate limiter drops webhook retries', status: 'Blocked', assignee: { name: 'Ada L.' }, priority: 'Low' };
     for (const output of [[issue, blocked], { total: 2, items: [issue, blocked] }]) {
-      await render(issuePart('issues_search', JSON.stringify(output)));
+      await render(...issuePart('issues_search', JSON.stringify(output)));
       const rows = Array.from(container.querySelectorAll('li'));
       expect(rows.map((row) => Array.from(row.children).map((cell) => cell.textContent))).toEqual([
         ['DEMO-482 · Bug', 'Login fails after token refresh', 'Olena K.', 'In Progress'],
@@ -350,17 +281,17 @@ test('a declared card draws the output as a card, an array as a list, and anythi
     }
 
     // An item without a title: its first field is the row's text, in the cell no width hides.
-    await render(issuePart('issues_search', JSON.stringify([{ assignee: { name: 'Ada L.' }, priority: 'Low' }, blocked])));
+    await render(...issuePart('issues_search', JSON.stringify([{ assignee: { name: 'Ada L.' }, priority: 'Low' }, blocked])));
     const cells = Array.from(container.querySelectorAll('li')).map((row) => Array.from(row.children));
     expect(cells.map((row) => row.map((cell) => cell.textContent))).toEqual([['Ada L.'], ['DEMO-477 ·', 'Rate limiter drops webhook retries', 'Ada L.', 'Blocked']]);
     expect(cells[0]?.[0]?.getAttribute('title')).toBe('Assignee: Ada L.');
     expect([cells[0]?.[0], cells[1]?.[2]].map((cell) => cell?.className.includes('hidden'))).toEqual([false, true]);
 
     // Nothing the card names is in the answer, or the answer is not JSON: the output shows as it would without the rule.
-    await render(issuePart('issues_get', JSON.stringify({ message: 'No such issue' })));
+    await render(...issuePart('issues_get', JSON.stringify({ message: 'No such issue' })));
     expect(container.querySelector('li, dl')).toBeNull();
     expect(container.textContent).toContain('No such issue');
-    await render(issuePart('issues_get', 'Issue DEMO-1 was not found.'));
+    await render(...issuePart('issues_get', 'Issue DEMO-1 was not found.'));
     expect(container.querySelector('li, dl')).toBeNull();
     expect(container.textContent).toContain('Issue DEMO-1 was not found.');
   } finally {

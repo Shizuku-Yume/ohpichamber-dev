@@ -1,6 +1,8 @@
 import { GUEST_ATTACH_URL_MAX, buildLinkUrl, type GuestLinkAction } from 'ohpichamber-sdk';
+import React from 'react';
 
 import { guestMay } from './capabilities.ts';
+import { useGuestsStore } from './store.ts';
 import type { InstalledGuest } from './types.ts';
 
 export type GuestLinkRule = {
@@ -16,7 +18,7 @@ export type GuestLinkRule = {
 };
 
 /** A click target: which extension, what it does, the identifier and the link it names. */
-type GuestLinkClaim = {
+export type GuestLinkClaim = {
   guestId: string;
   action: GuestLinkAction;
   identifier: string;
@@ -117,6 +119,14 @@ export const claimGuestUrl = (rules: readonly GuestLinkRule[], href: string): Gu
   return null;
 };
 
+type HandedOutRules = { key: string; rules: readonly GuestLinkRule[] };
+let current: HandedOutRules = { key: '[]', rules: [] };
+const stableRules = (rules: readonly GuestLinkRule[]): readonly GuestLinkRule[] => {
+  const key = JSON.stringify(rules);
+  if (key !== current.key) current = { key, rules };
+  return current.rules;
+};
+
 const versions = new WeakMap<readonly GuestLinkRule[], number>();
 let nextVersion = 1;
 export const guestLinksVersion = (rules: readonly GuestLinkRule[]): number => {
@@ -127,4 +137,9 @@ export const guestLinksVersion = (rules: readonly GuestLinkRule[]): number => {
     versions.set(rules, version);
   }
   return version;
+};
+
+export const useGuestLinkRules = (): readonly GuestLinkRule[] => {
+  const guests = useGuestsStore((state) => state.guests);
+  return React.useMemo(() => stableRules(guestLinkRulesOf(guests)), [guests]);
 };

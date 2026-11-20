@@ -334,6 +334,7 @@ describe('live Activity with the real message body', () => {
             openChanges: () => { changesOpened += 1; },
             openPlan: () => undefined,
             openSourceBoard: () => undefined,
+            openReceivedPage: () => undefined,
         };
         useUIStore.setState({ isMobile: true });
         await act(async () => root.render(<Harness record={record} changedFiles={[{ file: '/project/src/mobile.ts' }]} mobileActions={mobileActions} />));

@@ -7,6 +7,7 @@ import { clearChatDraft, readChatDraft, writeChatDraft, type ChatDraftIdentity }
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { useInputStore } from '@/sync/input-store';
 import { useComposerDraft } from '../useComposerDraft';
+import { createComposerText } from '../composerText';
 
 const source: ChatDraftIdentity = { runtimeKey: 'runtime-a', directory: '/repo', sessionId: 'source' };
 const fork: ChatDraftIdentity = { ...source, sessionId: 'fork' };
@@ -28,10 +29,12 @@ function renderComposer(persistEnabled: boolean) {
     const result = { text: '', mentions: new Set<string>(), restored };
 
     function Probe({ identity }: { identity: ChatDraftIdentity }) {
-        const { text, setMessage } = useProbeText('source draft @source.ts');
+        const [text] = React.useState(() => createComposerText('source draft @source.ts'));
+        const [, setRevision] = React.useState(0);
+        const setMessage = React.useCallback((next: string) => { text.set(next); setRevision((value) => value + 1); }, [text]);
         const confirmedMentionsRef = React.useRef(new Set(['source.ts']));
         useComposerDraft({
-            message, messageRef, setMessage, confirmedMentionsRef, identity, persistEnabled,
+            text, setMessage, confirmedMentionsRef, identity, persistEnabled,
             initialDraft: { text: '', identity: source },
             onDraftRestored: (reason) => { result.restored.push(reason); },
         });

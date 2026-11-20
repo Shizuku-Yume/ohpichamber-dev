@@ -157,6 +157,9 @@ test('quote reveal opens real folded Activity, including a source prepended from
     };
     try {
         await render();
+        expect(ref.current?.hasMessageRow('recent-source')).toBe(true);
+        expect(ref.current?.hasMessageRow('older-source')).toBe(false);
+        expect(ref.current?.hasMessageRow('unknown')).toBe(false);
         for (let index = 0; index < 5; index += 1) await flush();
         expect(host.querySelector('[data-message-id="recent-source"]')).toBeNull();
         await reveal('recent');
@@ -166,6 +169,7 @@ test('quote reveal opens real folded Activity, including a source prepended from
         expect(finishLoad).toBeDefined();
         messages = [...older, ...recent];
         await render();
+        expect(ref.current?.hasMessageRow('older-source')).toBe(true);
         for (let index = 0; index < 5; index += 1) await flush();
         expect(host.querySelector('[data-message-id="older-source"]')).toBeNull();
         await act(async () => finishLoad?.(true));

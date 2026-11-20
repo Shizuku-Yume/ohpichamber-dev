@@ -4,6 +4,21 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+UI checking is down to one diagnostic: the missing generated UI-block guidance
+module. Canonical session, message, tool-call/result and private Guest-port
+fixtures have replaced retired SDK shapes. Timeline/history navigation now checks
+the actual renderable message-row index; the timeline, navigation, quote,
+pinned-selection and render-comparison focused suites pass. Guest-link actions
+recheck the installed guest and granted capability, and generated identifier
+markers cannot be supplied by authored HTML. The four action-helper tests pass.
+SVG fences again use the guarded preview/failure path. Image exports receive the
+captured theme and render nested Markdown without an ambient session provider;
+extension frames are not executed during capture and their source stays visible.
+Image-export verification remains incomplete: the unavailable-extension case
+stalled after the source-notice change. Guest cards and composer draft/keystroke
+assertions still need reconciliation. Full gates, fork-parent comparison and
+visual verification remain outstanding.
+
 Native chat-directory cleanup now consumes complete Canonical inventories,
 scoped snapshots/updates and cascading deletion events instead of SDK records.
 Its 40 filesystem/lifecycle tests pass and changed-source lint passes. The

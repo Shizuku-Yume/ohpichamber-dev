@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
-import { useMarkdownPresentation } from './MarkdownPresentationContext';
+import { MarkdownSvgFailureContext, useMarkdownPresentation } from './MarkdownPresentationContext';
 import { activateMarkdownFile, useOpenMarkdownFile } from './markdownFileReferences';
 import type { MarkdownCodePlugin } from './streamdownCode';
 import { MarkdownDiff } from './MarkdownDiff';
@@ -36,6 +36,8 @@ const CodeLine = React.memo(function CodeLine({ tokens }: { tokens: HighlightTok
     </span>
   );
 });
+
+const activeSvg = /<script|\son[a-z]+\s*=/i;
 
 const MarkdownCodeBody = React.memo(function MarkdownCodeBody({ source, language, incomplete, plugin }: {
   source: string;
@@ -116,6 +118,7 @@ export function MarkdownCode({ children, className, node, ...props }: React.Comp
   const incomplete = useIsCodeFenceIncomplete();
   const openFile = useOpenMarkdownFile();
   const [copied, setCopied] = React.useState(false);
+  const [failedSvg, setFailedSvg] = React.useState<string | null>(null);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
@@ -128,11 +131,22 @@ export function MarkdownCode({ children, className, node, ...props }: React.Comp
   const code = node?.children.map((child) => child.type === 'text' ? child.value : '').join('') ?? '';
   const copySource = code.replace(/\n$/, '');
   const { purpose, onExportCode } = presentation;
+  const customRenderer = language === 'mermaid' || (language === 'openui-lang' && presentation.uiBlocks);
   React.useLayoutEffect(() => {
-    if (purpose && language !== 'mermaid' && language !== 'svg') onExportCode?.(code, language);
-  }, [purpose, onExportCode, code, language]);
+    if (purpose && !customRenderer) onExportCode?.(code, language);
+  }, [purpose, customRenderer, onExportCode, code, language]);
 
-  if (language === 'mermaid' || language === 'svg' || (language === 'openui-lang' && presentation.uiBlocks)) {
+  if (language === 'svg' && presentation.svgFences && !activeSvg.test(code) && failedSvg !== code) {
+    return (
+      <MarkdownSvgFailureContext.Provider value={() => setFailedSvg(code)}>
+        <defaultComponents.code {...props} node={node} className={className}>
+          {children}
+        </defaultComponents.code>
+      </MarkdownSvgFailureContext.Provider>
+    );
+  }
+
+  if (customRenderer) {
     return (
       <defaultComponents.code {...props} node={node} className={className}>
         {children}

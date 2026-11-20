@@ -197,7 +197,7 @@ test('on the phone a file link also opens the files drawer (#5486)', async () =>
   const open = spyOn(state, 'openContextFile');
   const { DedicatedMobileAppProvider } = await import('@/apps/mobileAppContext');
   let filesOpened = 0;
-  const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openPlan: () => undefined, openSourceBoard: () => undefined };
+  const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openPlan: () => undefined, openSourceBoard: () => undefined, openReceivedPage: () => undefined };
   try {
     const content = React.createElement(Renderer.MarkdownContent, { content: '[View README.md](README.md)', directory: '/project', enableFileReferences: true, settled: true });
     await act(() => root.render(React.createElement(I18nProvider, null, React.createElement(DedicatedMobileAppProvider, { actions, children: content }))));

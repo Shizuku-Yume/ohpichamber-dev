@@ -67,6 +67,7 @@ export function renderFileMarkdownPreview({ fileComments, fileDocument, fileEdit
                       frontmatter="properties"
                       enableFileReferences={false}
                       allowRawHtml
+                      svgFences
                       windowed
                       tableWidthScope={selectedFile.path}
                     />

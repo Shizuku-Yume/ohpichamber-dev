@@ -6,10 +6,13 @@ import { createRoot } from 'react-dom/client';
 import { ThemeSystemProvider } from '@/contexts/ThemeSystemContext';
 import { I18nProvider } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useMessageQueueStore } from '@/stores/messageQueueStore';
 
 import { MobilePillComposer } from './MobilePillComposer';
 
-const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: boolean; canAbort?: boolean; dictationEnabled?: boolean }) => {
+const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: boolean; canAbort?: boolean; dictationEnabled?: boolean; followUpBehavior?: 'queue' | 'steer' }) => {
+    const previousBehavior = useMessageQueueStore.getState().followUpBehavior;
+    useMessageQueueStore.setState({ followUpBehavior: options.followUpBehavior ?? 'queue' });
     const win = new Window({ url: 'http://localhost' });
     Object.defineProperty(win.navigator, 'mediaDevices', {
         value: { getUserMedia: () => Promise.resolve() },
@@ -65,7 +68,8 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
             // While a turn runs the pill's follow-up action goes through the
             // composer's primary action, which routes the draft to the queue
             // under the follow-up setting instead of sending it past the turn.
-            const queue = container.querySelector<HTMLButtonElement>('[aria-label="Queue message"]');
+            const label = options.followUpBehavior === 'steer' ? 'Send message' : 'Queue message';
+            const queue = container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
             expect(queue).not.toBeNull();
             await act(async () => { queue?.click(); });
             expect(primaryActions).toBe(1);
@@ -80,6 +84,7 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
         return container.innerHTML;
     } finally {
         await act(async () => root.unmount());
+        useMessageQueueStore.setState({ followUpBehavior: previousBehavior });
         for (const [key, descriptor] of previous) {
             if (descriptor) Object.defineProperty(globalThis, key, descriptor);
             else Reflect.deleteProperty(globalThis, key);

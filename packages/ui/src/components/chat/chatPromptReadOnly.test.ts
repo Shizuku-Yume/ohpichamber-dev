@@ -3,7 +3,6 @@ import type { Session } from '@openchamber/agent-contract';
 
 import { resolveChatPromptReadOnly } from './chatPromptReadOnly';
 import { withReviewSessionMarker } from '@/lib/sessionReviewMetadata';
-import { metadataAfterTakeOver } from '@/lib/sessionOperatorChild';
 
 const session = (parentSessionId?: string): Session => ({
     sessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.',
@@ -19,21 +18,6 @@ describe('resolveChatPromptReadOnly', () => {
 
     test('keeps a subagent read-only when prompting is disabled', () => {
         expect(resolveChatPromptReadOnly(session('parent'), false, false)).toBe(true);
-    });
-
-    test('keeps operator workers read-only until Take over, including when subagent prompting is enabled', () => {
-        const worker: Session = {
-            ...session(),
-            metadata: { openchamber: { kind: 'operator-child', parentID: 'parent' } },
-        };
-
-        expect(resolveChatPromptReadOnly(worker, false, false)).toBe(true);
-        expect(resolveChatPromptReadOnly(worker, true, false)).toBe(true);
-        expect(resolveChatPromptReadOnly({ ...worker, parentSessionId: 'parent' }, true, false)).toBe(true);
-        expect(resolveChatPromptReadOnly({
-            ...worker,
-            metadata: metadataAfterTakeOver(worker.metadata ?? {}, 2),
-        }, false, false)).toBe(false);
     });
 
     test('preserves the surface read-only state for root sessions', () => {

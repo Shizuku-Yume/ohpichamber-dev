@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Window } from 'happy-dom';
 import { Streamdown } from 'streamdown';
-import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath } from './streamdownPlugins';
+import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath, remarkLiteralText } from './streamdownPlugins';
 import { prepareUserMarkdownContent } from '../message/parts/userTextPartContent';
 
 const dom = new Window();

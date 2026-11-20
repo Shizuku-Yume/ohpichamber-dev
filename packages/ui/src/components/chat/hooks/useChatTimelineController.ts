@@ -661,7 +661,8 @@ export const useChatTimelineController = ({
         options: { maxBatches: number },
     ): Promise<boolean> => {
         const targetIdentity = timelineIdentityRef.current;
-        const isLoaded = () => messagesRef.current.some((message) => message.messageId === messageId);
+        const isLoaded = () => messageListRef.current?.hasMessageRow(messageId)
+            ?? messagesRef.current.some((message) => message.messageId === messageId);
         let batches = 0;
         // Another history load (the underfilled-viewport fill) can hold the
         // single loading slot; wait it out rather than give up.
@@ -680,7 +681,7 @@ export const useChatTimelineController = ({
             if (!grew) return timelineIdentityRef.current === targetIdentity && isLoaded();
         }
         return false;
-    }, [fetchOlderHistory, waitForNextRenderCommitOrTimeout]);
+    }, [fetchOlderHistory, messageListRef, waitForNextRenderCommitOrTimeout]);
 
     const handleHistoryScroll = React.useCallback(() => {
         // Mobile never loads history from scroll position: any prepend racing

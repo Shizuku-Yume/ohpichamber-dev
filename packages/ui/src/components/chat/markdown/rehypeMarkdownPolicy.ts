@@ -63,7 +63,7 @@ export function rehypeMarkdownPolicy() {
             || (key === 'metastring' && node.tagName === 'code')
             || ['id', 'ariaDescribedBy', 'ariaLabel', 'dataFootnoteRef', 'dataFootnoteBackref', 'dataFootnotes'].includes(key)
             || (key === 'dataOcAlert' && node.tagName === 'blockquote')
-            || (key === 'dataOcReference' && node.tagName === 'a')
+            || (['dataOcReference', 'dataOcGuestLink'].includes(key) && node.tagName === 'a')
           );
           if (!allowedAttributes.has(key) && !generated) delete node.properties[key];
         }

@@ -50,12 +50,6 @@ const { ChildStoreManager } = await import('@/sync/child-store');
 const { getSessionMaterializationStatus } = await import('@/sync/materialization');
 import type { State } from '@/sync/types';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const readSource = (...segments: string[]) => readFileSync(join(__dirname, '..', ...segments), 'utf-8');
-const sessionPlaceholderSource = readSource('column', 'sessionPlaceholder.tsx');
-const composerSlotSource = readSource('column', 'ComposerSlot.tsx');
-const syncContextSource = readSource('..', '..', 'sync', 'session-message-records.ts');
-
 const SESSION_ID = 'ses_subagent_2903';
 const DIRECTORY = '/repo';
 

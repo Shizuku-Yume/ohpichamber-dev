@@ -39,7 +39,12 @@ const fetchBoundary = spyOn(globalThis, 'fetch').mockImplementation(async (input
     if (new URL(url, browser.location.href).pathname === '/api/config/settings') return Response.json({});
     throw new Error(`Unexpected export request: ${url}`);
 });
-afterAll(() => { fetchBoundary.mockRestore(); return browser.happyDOM.abort(); });
+afterAll(async () => {
+    const { updateDesktopSettings } = await import('@/lib/persistence');
+    await updateDesktopSettings({});
+    fetchBoundary.mockRestore();
+    await browser.happyDOM.abort();
+});
 
 describe('message image export', () => {
     test('omits favicon and native controls without removing content or mutating the source', () => {
@@ -218,10 +223,9 @@ describe('turn image export', () => {
     });
 
     test('keeps the reply and block source when its renderer cannot load', async () => {
-        const { onDemand, useUiBlockComponent } = await import('../uiBlocks/useUiBlockComponent');
+        const { useUiBlockComponent } = await import('../uiBlocks/useUiBlockComponent');
         const failImport: typeof useUiBlockComponent.load = async () => { throw new TypeError('Failed to fetch dynamically imported module'); };
-        const unavailable = onDemand(failImport);
-        const load = spyOn(useUiBlockComponent, 'load').mockImplementation(unavailable.load);
+        const load = spyOn(useUiBlockComponent, 'load').mockImplementation(failImport);
         const reload = spyOn(browser.location, 'reload').mockImplementation(() => {});
         const program = 'root = Stack([status])\nstatus = Badge("Done")';
         try {
