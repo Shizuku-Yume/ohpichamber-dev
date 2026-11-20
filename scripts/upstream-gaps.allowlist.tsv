@@ -1,4 +1,5 @@
 class	item	citation	effect
+route-deps	createSecretRequests.files	OMP packages/web/server/lib/openchamber-control/secret-request.ts	The merged secret.run contract explicitly refuses secret.request file mode and uses memory-only leases, private card answers and a Host subprocess environment. Injecting the retired secret-file store would violate its no-secret-files boundary.
 runtime-constructor	createWorktreeInstanceDisposer	OMP packages/web/server/lib/openchamber-sessions/routes.ts	The upstream helper exclusively calls OpenCode debug.location.list/evict. Native session close, relocation and archive use supervised worker unload instead; constructing an OpenCode directory cache evictor would restore a retired engine authority.
 route-deps	registerOpenChamberSessionRoutes.worktreeBootstrapStore	OMP packages/web/server/lib/server-frame/feature-routes-runtime.ts	The late sessionWorktreeMoveBridge supplies bootstrapStore and waits for setup-ready before moving. Git registration fills the bridge after Canonical routes register; the eager route argument is not its owner.
 route-deps	registerOpenChamberSessionRoutes.hydrateWorktreeCheckout	OMP packages/web/server/lib/server-frame/feature-routes-runtime.ts	The late sessionWorktreeMoveBridge supplies networkOperations.hydrateBoundCheckout after Git registration. Session move tests cover late bridge availability and refusal before mutation.
@@ -70,8 +71,6 @@ route-registration	registerAgentToolRoutes	## 2026-10-27 - Host tools are essent
 route-registration	notificationEmitRoutes.registerPluginRoute	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Unauthenticated plugin notification route retired; only authenticated API route kept
 route-deps	registerOpenChamberRoutes.fetchFreeZenModels	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	GET /api/zen/models in openchamber-routes.js:545 throws TypeError: fetchFreeZenModels is not a function; no UI caller mounts this route
 route-deps	createOpenChamberControlService.secretFiles	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; agent secret tool was retired so secretFiles is unused in normal runtime
-unused-route-fn	createSecretFiles	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; secret files manager and hourly sweeper never created for retired secret tool
-unused-route-fn	createSecretRequests	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; secret request coordinator never created for retired secret tool
 unused-route-fn	createUnreadBaseline	## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities	Replaced by Host-persisted session unread watermarks in metadata (openchamber.workbench.lastIdleAt/viewedAt)
 unused-route-fn	createWorkNamer	## 2026-10-26 - OMP owns session titles	Replaced by OMP native session and worktree title generation
 unused-route-fn	createMergeFollowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	GitHub merge follow listener for PR watch; disposition depends on PR watch adoption
@@ -347,7 +346,6 @@ route-deps	createOpenChamberControlService.getOpenCodeAuthHeaders	## 2026-11-11 
 route-deps	createOpenChamberControlService.waitForOpenCodeReady	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.isOpenCodeDirectoryTrusted	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.isRenderToolEnabled	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired or superseded in OMP architecture
-route-deps	createOpenChamberControlService.isSecretToolEnabled	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.onPageWaitChange	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.workNaming	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.loadQuota	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
@@ -567,7 +565,6 @@ runtime-constructor	createMemoryProjectResolver	## 2026-11-13 - OMP owns image g
 runtime-constructor	createInsideSpaceTaskNaming	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces task naming, unreleased.
 runtime-constructor	createTurnStartReader	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode turn-start reader retired with OpenCode runtime.
 runtime-constructor	createHmrStateRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	HMR state runtime for OpenCode processes retired with OpenCode runtime.
-runtime-constructor	createGuestInstructions	OMP packages/web/server/lib/guests/instructions.ts	Upstream index.js constructor; fork host delegates guest instructions through guest runtime.
 runtime-constructor	createGuestAgentContext	OMP packages/web/server/lib/guests/agent-context.ts	Upstream index.js constructor; fork host delegates guest agent context through guest runtime.
 runtime-constructor	createExtensionSessionEvents	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Extension session events constructor passed OpenCode URL/auth headers; retired.
 runtime-constructor	createServiceLifetime	OMP packages/web/server/lib/guests/service-lifetime.ts	Upstream index.js constructor; fork delegates guest service lifetime.
