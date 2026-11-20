@@ -358,6 +358,48 @@ describe('openchamber events', () => {
     }
   });
 
+  test('extension waits hydrate and then follow the control stream', async () => {
+    const { subscribeExtensionWaitsSync } = await import('@/sync/extension-waits-sync');
+    const { resetExtensionWaitsForRuntimeSwitch, useExtensionWaitsStore } = await import('@/sync/extension-waits');
+    const { getRuntimeKey } = await import('./runtime-switch');
+    const sessionID = 'ses_wait';
+    const waiting = {
+      waitId: 'wait_one', sessionID, directory: '/repo', source: 'timer', extension: 'OpenChamber',
+      title: 'Timer', label: '1 min', args: { minutes: 1 }, startedAt: 100, status: 'waiting',
+    };
+    const fetched = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
+      return url.pathname === '/api/extension-waits'
+        ? Response.json({ revision: 1, waits: [waiting] })
+        : Response.json({}, { status: 404 });
+    });
+    const hydrated = Promise.withResolvers<void>();
+    const unsubscribeStore = useExtensionWaitsStore.subscribe((state) => {
+      if (state.bySession.has(sessionID)) hydrated.resolve();
+    });
+    const unsubscribeSync = subscribeExtensionWaitsSync(getRuntimeKey());
+    try {
+      await hydrated.promise;
+      expect(useExtensionWaitsStore.getState().bySession.get(sessionID)).toEqual([waiting]);
+      const source = MockEventSource.instances.at(-1);
+      source?.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:extension-waits.updated',
+        properties: { revision: 2, sessionID, waits: [{ ...waiting, status: 'waking' }] },
+      }) });
+      expect(useExtensionWaitsStore.getState().bySession.get(sessionID)).toEqual([{ ...waiting, status: 'waking' }]);
+      source?.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:extension-waits.updated',
+        properties: { revision: 3, sessionID, waits: [] },
+      }) });
+      expect(useExtensionWaitsStore.getState().bySession.has(sessionID)).toBe(false);
+    } finally {
+      unsubscribeStore();
+      unsubscribeSync();
+      resetExtensionWaitsForRuntimeSwitch();
+      fetched.mockRestore();
+    }
+  });
+
   test('an auto-review update event reaches subscribers with valid payload', async () => {
     const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
     const events: Array<{ type: string; properties?: unknown }> = [];

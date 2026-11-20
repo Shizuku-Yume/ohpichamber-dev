@@ -164,6 +164,7 @@ import { createExtensionNotificationChannels } from './lib/notifications/extensi
 import { NOTIFICATIONS_OUTBOUND_PATH } from 'ohpichamber-sdk';
 import { createAutoReviewRuntime } from './lib/auto-review/runtime.js';
 import { createPrWatchRuntime } from './lib/pr-watch/runtime.js';
+import { createExtensionWaitsRuntime } from './lib/extension-waits/runtime.js';
 import { createClientPushAccess } from './lib/notifications/client-push-access.js';
 import { proxyGuestServiceRequest } from './lib/guests/service.js';
 import { setHostCallbackRoute } from './lib/guests/host-callback.js';
@@ -977,6 +978,17 @@ prWatchRuntime = createPrWatchRuntime({
  insideSpace: Boolean(process.env.OPENCHAMBER_SPACE_IDLE_STOP_FILE),
 });
 prWatchRuntime.start(globalMessageStreamHub);
+const extensionWaitsRuntime = createExtensionWaitsRuntime({
+ sessionService: openChamberSessionService,
+ listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR) }),
+ proxyServiceRequest: proxyGuestServiceRequest,
+ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR),
+ dataDir: OPENCHAMBER_DATA_DIR,
+ broadcastUiEvent: broadcastOpenChamberUiEvent,
+ isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+ insideSpace: Boolean(process.env.OPENCHAMBER_SPACE_IDLE_STOP_FILE),
+});
+extensionWaitsRuntime.start(globalMessageStreamHub);
 // Jev model routing and the permission safety net. Every failure keeps the
 // user's own model or the auto-accept reply it was asked about.
 const routingRuntime = createRoutingRuntime({
@@ -1506,6 +1518,7 @@ const openChamberControlService = createOpenChamberControlService({
  }),
  dispatchResults: dispatchResultsRuntime,
  prWatch: prWatchRuntime,
+ extensionWaits: extensionWaitsRuntime,
  archiveStore: openChamberSessionService.archiveStore,
  workflowRuntime: workflowsModule.workflowRuntime,
 });
@@ -1546,6 +1559,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  contextObligatoryRuntime,
  autoReviewRuntime,
  prWatchRuntime,
+ extensionWaitsRuntime,
  messageQueueRuntime,
  dispatchResultsRuntime,
  messageSearchRuntime,
@@ -2147,6 +2161,7 @@ async function main(options = {}) {
   extensionNotificationChannels,
   autoReviewRuntime,
   prWatchRuntime,
+  extensionWaitsRuntime,
   persistResolvedSettings: (...args) => settingsRuntime.persistResolvedSettings(...args),
   environmentStore,
   environmentRuntime,

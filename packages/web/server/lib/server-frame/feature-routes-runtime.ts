@@ -51,6 +51,7 @@ import { createTrackerOAuth } from '../trackers/extension-oauth.js';
 import { registerNotificationChannelRoutes } from '../notifications/channel-routes.js';
 import { registerAutoReviewRoutes } from '../auto-review/runtime.js';
 import { registerPrWatchRoutes } from '../pr-watch/runtime.js';
+import { registerExtensionWaitsRoutes } from '../extension-waits/runtime.js';
 import { registerProviderLogoRoutes } from '../appearance/provider-logo-routes.js';
 import { createSshPassphraseStore } from '../git/ssh-passphrases.js';
 import { setHostCallbackRoute } from '../guests/host-callback.js';
@@ -283,6 +284,7 @@ export const createFeatureRoutesRuntime = () => {
 
     if (routeDependencies.autoReviewRuntime) registerAutoReviewRoutes(app, routeDependencies.autoReviewRuntime);
     if (routeDependencies.prWatchRuntime) registerPrWatchRoutes(app, routeDependencies.prWatchRuntime);
+    if (routeDependencies.extensionWaitsRuntime) registerExtensionWaitsRoutes(app, routeDependencies.extensionWaitsRuntime);
     registerProviderLogoRoutes(app, {
       fsPromises,
       path,
@@ -687,12 +689,14 @@ export const createFeatureRoutesRuntime = () => {
         { name: 'withdraw an extension Git host', listener: (event) => extensionSourceControlProviders.deactivated(event) },
         { name: 'withdraw an extension notification channel', listener: (event) => routeDependencies.extensionNotificationChannels?.deactivated(event) },
         { name: 'withdraw an extension tracker', listener: (event) => extensionTrackers.deactivated(event) },
+        { name: 'end an extension’s waits', listener: () => routeDependencies.extensionWaitsRuntime?.reconcile() },
       ]),
       onGuestActivated: async () => {
         await Promise.allSettled([
           extensionSourceControlProviders.reconcile(),
           routeDependencies.extensionNotificationChannels?.reconcile(),
           extensionTrackers.reconcile(),
+          routeDependencies.extensionWaitsRuntime?.reconcile(),
         ]);
       },
       onGuestsChanged: () => {

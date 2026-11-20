@@ -9,6 +9,7 @@ import { isCapacitorApp } from './platform';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-watch';
+import { extensionWaitsUpdatedEventSchema, type ExtensionWaitsUpdatedEvent } from '@/sync/extension-waits';
 import { autoReviewUpdatedEventSchema, type AutoReviewUpdatedEvent } from '@/stores/useAutoReviewStore';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
@@ -215,6 +216,7 @@ type OpenChamberEvent =
  | RoutingSafetySkippedEvent
  | MessageQueueUpdatedEvent
  | PrWatchUpdatedEvent
+ | ExtensionWaitsUpdatedEvent
  | AutoReviewUpdatedEvent
  | PermissionPolicyEvent
  /** The host follows this space's queue again; what changed in a gap is read from the space. */
@@ -527,6 +529,14 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
  }
  if (envelope.type === 'openchamber:pr-watch.updated') {
   const parsed = prWatchUpdatedEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener(parsed.data);
+  }
+  return;
+ }
+
+ if (envelope.type === 'openchamber:extension-waits.updated') {
+  const parsed = extensionWaitsUpdatedEventSchema.safeParse(envelope);
   if (parsed.success) {
    for (const listener of listeners) listener(parsed.data);
   }

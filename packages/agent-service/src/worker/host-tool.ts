@@ -58,7 +58,8 @@ export const HOST_TOOL_DESCRIPTIONS = {
   openchamber: 'Invoke retained OhPiChamber project/model, session, pull request watch, schedule or file.open actions in the captured workspace. '
     + 'Pass action parameters inside input, for example {"action":"pr.watch","input":{"url":"https://github.com/owner/repo/pull/123"}} or {"action":"session.list","input":{}}. '
     + 'pr.watch watches a pull or merge request at url (GitHub/GitLab) for check status, reviews/comments, conflicts, or merge, waking the session with a message on change; requires url, optional sessionId (defaults to calling session) and directory. '
-    + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it.',
+    + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it. '
+    + 'wait.list lists this session’s timer and extension waits and available sources. wait.start takes source and args from wait.list (e.g. "timer" and {"minutes":5}) and wakes this session when the wait fires. wait.stop takes optional waitId and stops that wait or all timer and extension waits without waking the session.',
   openchamber_knowledge: "The project's Notes, Todos and Plans, shown in OhPiChamber's Project knowledge panel and shared by its sessions. One action per call. "
     + 'knowledge.list returns everything unless planId or ready narrows it; read it before answering a question the project notes may hold. '
     + 'knowledge.save requires kind and body; with id it replaces, and an update may send only completed, planId or dependsOn. '

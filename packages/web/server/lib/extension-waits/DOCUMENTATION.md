@@ -73,16 +73,18 @@ request, and each wait request carries that same idle stop.
   envelope that names the extension and says the words are its own; `<` and
   `>` are removed from the summary, the label and the title, and the SDK caps
   the summary at `WAIT_SUMMARY_MAX`.
-- Delivery follows `../pr-watch`: never into a running turn, while running
-  subagents and workflow agents do not hold it (see pr-watch's decision), one wake at a time per session, the message id minted and
-  persisted before the first attempt, OpenCode's 409 counts as delivered, 404
-  ends the wait, eight failed attempts give up. A wake that comes due while an
+- Delivery uses the Host canonical session service: never into a running turn or
+  while the target session is awaiting approval or input. Other sessions,
+  including subagents and workflow agents, do not hold it. A persisted command
+  key deduplicates retries. Only a verified `RUN_ACTIVE` refusal permits a new
+  key; other conflicts do not count as delivered. A 404 ends the session's
+  waits, and eight failed attempts give up. A wake that comes due while an
   attempt is in flight, or while the session's turn runs, is kept and tried at
   that attempt's end or on the session's idle event. Attempts are spaced by
   `QUIET_MS` (500 ms) because idle events arrive in bursts around a turn
   boundary, and a wake just delivered must first show as a running turn. The
-  id is saved before the send because a second attempt would otherwise mint
-  another and OpenCode would admit the wake twice.
+  key (stored as `wake.messageID`) is saved before the send so a retry can reuse
+  the same admission rather than creating a duplicate turn.
 
 ## Persistence
 
@@ -116,13 +118,12 @@ after a restart every due wait is checked on the next tick.
 
 ## Message
 
-`POST /api/session/:id/synthetic` with `delivery: 'steer'`, `resume: true`,
-`description` `<title> (<label>): <first line of the summary>` (the chat shows
-it as a notice row), and `metadata` `{ source: 'openchamber-wait', waitId,
-extension, type, title, label, outcome }`, `extension` being `null` for a
-timer, which also carries `minutes` so the chat names it in the user's
-language. A timer's text is the host's own (`Timer (10 min) fired: 10 minutes
-passed.`), not quoted as an extension's words.
+The Host calls `sessionService.send` with synthetic prompt context and the
+session's current model options. The agent receives an `<openchamber-wait>`
+envelope with the wait id, source, outcome and summary. A timer's text is the
+Host's own (`Timer (10 min) fired: 10 minutes passed.`), not quoted as an
+extension's words. The canonical prompt contract does not carry OpenCode
+notice metadata.
 
 ## Routes and events
 
