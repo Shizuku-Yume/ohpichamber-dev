@@ -11,7 +11,7 @@ export type SessionRowOrderEntry = {
   descendantRange?: readonly [start: number, end: number];
 };
 
-export type SessionRowLifecycle = { time?: { archived?: number | null }; archived?: boolean };
+export type SessionRowLifecycle = { archivedAt?: number; archived?: boolean };
 
 export function mergeSessionRowLifecycle(entries: readonly SessionRowOrderEntry[], sessions: ReadonlyMap<string, SessionRowLifecycle>): ReadonlyMap<string, SessionRowLifecycle> {
   const lifecycle = new Map(sessions);

@@ -276,6 +276,7 @@ type UseSessionProjectCollectionResult = {
   childrenMap: Map<string, Session[]>;
   chatSessions: Session[];
   getDescendantIds: (sessionId: string, options: { includeArchived: boolean }) => string[];
+  getTimeOrderedSessions: () => readonly Session[];
   hasAuthoritativeGlobalSessions: boolean;
   nestedSessionIds: Set<string>;
   orderedSessions: Session[];

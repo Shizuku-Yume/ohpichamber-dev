@@ -123,7 +123,6 @@ export function renderFullscreenFileViewer({ artifacts, draft, editor, fileAsset
                     frontmatter="properties"
                     enableFileReferences={false}
                     allowRawHtml
-                    svgFences
                     windowed
                     tableWidthScope={selectedFile.path}
                   />

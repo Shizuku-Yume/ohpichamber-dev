@@ -1,4 +1,4 @@
-import type { Project as OpenCodeProject, Session } from '@openchamber/agent-contract';
+import type { Project, Session } from '@openchamber/agent-contract';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
 import { resolveSessionNestingParentId } from '@/lib/sessionWorkLineage';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
@@ -17,7 +17,7 @@ type SessionMenuPlacement = {
 type PlacementSources = {
   projects: readonly { id: string; path: string }[];
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
-  authoritativeProjects: readonly Pick<OpenCodeProject, 'id' | 'worktree'>[];
+  authoritativeProjects: readonly Project[];
   spaces: readonly SpaceMark[];
   isVSCode: boolean;
   activeSessions: readonly Session[];
@@ -35,9 +35,7 @@ export const resolveSessionMenuPlacement = (session: Session, sources: Placement
     archived ? [] : [session],
     projects,
     sources.availableWorktreesByProject,
-    sources.isVSCode,
     archived ? [session] : [],
-    sources.authoritativeProjects,
     sources.spaces,
   );
   const owner = ownership.bySessionId.get(session.sessionId);

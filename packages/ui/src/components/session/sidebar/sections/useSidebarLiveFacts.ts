@@ -52,7 +52,7 @@ export const useSidebarLiveFacts = (enabled: boolean): SidebarLiveFacts => {
    unreadIds: new Set(unread ? unread.split(',').filter((sessionId) => !openTurnIds.has(sessionId)) : []),
    failedIds: new Set(failed ? failed.split(',') : []),
   };
- }, [activeIds, blocking, enabled, extensionWaits, imageIds, outcomeKey, prWatches, shellIds, workflowIds]);
+ }, [activeIds, blocking, enabled, extensionWaits, outcomeKey, prWatches, shellIds, workflowIds]);
 };
 
 const localHourStart = (): number => {

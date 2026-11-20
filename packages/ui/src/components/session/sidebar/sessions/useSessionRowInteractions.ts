@@ -114,11 +114,11 @@ export function useSessionRowInteractions({
       && sessionDirectory
       && !getSyncSessionMaterializationStatus(session.sessionId, sessionDirectory).renderable
     ) {
-      void prefetchSessionMessages({ directory: sessionDirectory, sessionID: session.sessionId }).catch(() => undefined);
+      void prefetchSessionMessages({ directory: sessionDirectory, sessionId: session.sessionId }).catch(() => undefined);
     }
   };
   const hoverPrefetchTarget = !isActive && !selectionModeEnabled && sessionDirectory
-    ? { id: session.sessionId, directory: sessionDirectory }
+    ? session
     : null;
   const handleRowPointerEnter = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || !hoverPrefetchTarget) return;

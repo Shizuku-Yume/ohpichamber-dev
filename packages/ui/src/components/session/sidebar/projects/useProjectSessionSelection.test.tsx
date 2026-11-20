@@ -1,3 +1,4 @@
+import { canonicalSession } from '@/components/session/sidebar/test-utils/canonicalSession';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -12,11 +13,7 @@ const section = (id: string, ids: string[]): Props['projectSections'][number] =>
   groups: [{
     id, label: id, branch: null, description: null, isMain: true, worktree: null, directory: `/${id}`,
     sessions: ids.map((sessionId) => ({
-      session: {
-        id: sessionId, projectID: id, directory: `/${id}`, title: sessionId, cost: 0,
-        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-        time: { created: 1, updated: 1 },
-      },
+      session: canonicalSession(sessionId, `/${id}`, { projectId: id }),
       children: [], worktree: null,
     })),
   }],

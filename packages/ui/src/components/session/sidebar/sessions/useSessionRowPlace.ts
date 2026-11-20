@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -25,7 +26,7 @@ export function useSessionRowPlace({
   const runOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
   const isActive = isCurrentSession && !runOverviewOpen;
 
-  const sessionDirectory = normalizePath(session.directory ?? null) ?? normalizePath(groupDirectory ?? null);
+  const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session) ?? null) ?? normalizePath(groupDirectory ?? null);
   const sessionProjectId = ownerProjectId === undefined ? projectId : ownerProjectId;
   const projectRootDirectory = useProjectsStore((state) =>
     sessionProjectId ? state.projects.find((entry) => entry.id === sessionProjectId)?.path ?? null : null,

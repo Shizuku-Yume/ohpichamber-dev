@@ -7,7 +7,6 @@ import { useDeviceInfo } from '@/lib/device';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
-import { useGitPanelInSpace } from '@/lib/spaces/useGitPanelInSpace';
 
 type CommitAction = 'commit' | 'commitAndPush' | null;
 
@@ -55,7 +54,6 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
   const hasStagedFiles = stagedCount > 0;
   const canCommit = commitMessage.trim() && hasStagedFiles && commitAction === null && !hasPendingIndexMutation;
   const { isMobile, hasTouchInput } = useDeviceInfo();
-  const inSpace = useGitPanelInSpace();
   const [formFocused, setFormFocused] = React.useState(false);
   const commitBlockedHint = !hasStagedFiles
     ? t('contextTooltips.git.stageFilesFirst')
@@ -176,7 +174,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             </Button>
           </ButtonTooltip>
 
-          {inSpace ? null : isMobile ? (
+          {isMobile ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

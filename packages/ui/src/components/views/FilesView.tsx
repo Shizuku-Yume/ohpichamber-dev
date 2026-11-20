@@ -13,6 +13,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import { isBrowserClientRuntime } from '@/lib/desktop';
 import { type FilesViewProps } from './files/view/fileViewTypes';
+export type { FileTabCloseGuard } from './files/view/fileViewTypes';
 import { Dialogs } from './files/view/FileOperationDialogs';
 import { useFileThemes } from './files/view/useFileThemes';
 import { useFileScope } from './files/view/useFileScope';
@@ -88,7 +89,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const fileFreshness = useFileFreshness({ diagram, draft, fileDocument, fileSaving, scope, tabs, t, visible });
   const fileClosing = useFileClosing({
     canvasState, closeState, draft, fileDocument, fileOpening, fileSaving, layout, scope, tabs, isMobile, onCloseFile,
-    visible,
+    visible, fileTabCloseGuard, fileTabSelectionGuard,
   });
   const fileTreeRendering = useFileTreeRendering({
     externalActions, fileDirectory, fileOpening, operations, scope, tabs, uploads, alwaysShowActions, files,

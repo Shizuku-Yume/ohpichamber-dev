@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 
 const instances: FakeFileDiff[] = [];
 class FakeFileDiff {
-  constructor(public options: FileDiffOptions<DiffAnnotation>, readonly pool: WorkerPoolManager | undefined) {
+  constructor(public options: FileDiffOptions<DiffAnnotation, never>, readonly pool: WorkerPoolManager | undefined) {
     instances.push(this);
   }
   cleanUp = mock(() => {});
@@ -32,11 +32,11 @@ class FakeFileDiff {
   rerender = mock(() => {});
   setLineAnnotations = mock((_annotations: unknown) => {});
   setSelectedLines = mock((_selection: unknown) => {});
-  setOptions(options: FileDiffOptions<DiffAnnotation>) { this.options = options; }
+  setOptions(options: FileDiffOptions<DiffAnnotation, never>) { this.options = options; }
 }
 
 class FakeVirtualizedFileDiff extends FakeFileDiff {
-  constructor(options: FileDiffOptions<DiffAnnotation>, _virtualizer: Virtualizer, _metrics: unknown, pool: WorkerPoolManager | undefined) {
+  constructor(options: FileDiffOptions<DiffAnnotation, never>, _virtualizer: Virtualizer, _metrics: unknown, pool: WorkerPoolManager | undefined) {
     super(options, pool);
   }
   setMetrics = mock((_metrics: unknown) => {});
@@ -64,7 +64,7 @@ mock.module('./diffDom', () => ({
 }));
 
 const { useDiffInstance } = await import('./useDiffInstance');
-const options: FileDiffOptions<DiffAnnotation> = { themeType: 'light' };
+const options: FileDiffOptions<DiffAnnotation, never> = { themeType: 'light' };
 const readyPool = {} as WorkerPoolManager;
 type HarnessProps = { status: WorkerPoolStatus; pool?: WorkerPoolManager; original?: string; modified?: string };
 

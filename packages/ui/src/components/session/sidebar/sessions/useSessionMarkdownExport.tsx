@@ -35,7 +35,7 @@ export function useSessionMarkdownExport(): {
     let skipped = 0;
     for (const child of children) {
       try {
-        const childRecords = await loadExportRecords({ directory, sessionID: child.session.sessionId });
+        const childRecords = await loadExportRecords({ directory, sessionId: child.session.sessionId });
         if (!childRecords) throw new Error('Session runtime changed during export');
         const childTitle = child.session.title || t('sessions.sidebar.session.export.untitledSubagent');
         // SAFETY: OpenCode session payloads may carry the optional agent label used by exports.
@@ -68,7 +68,7 @@ export function useSessionMarkdownExport(): {
       return;
     }
 
-    const records = await loadExportRecords({ directory, sessionID: session.sessionId }).catch(() => null);
+    const records = await loadExportRecords({ directory, sessionId: session.sessionId }).catch(() => null);
     if (!records) {
       toast.error(t('sessions.sidebar.session.export.failedLoadHistory'));
       return;

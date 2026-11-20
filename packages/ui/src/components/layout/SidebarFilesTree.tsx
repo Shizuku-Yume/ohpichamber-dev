@@ -8,7 +8,6 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
 import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
-import { SpacePreparing } from '@/components/session/spaces/SpacePreparing';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitStatus, useGitStore } from '@/stores/useGitStore';
@@ -45,7 +44,6 @@ export const SidebarFilesTree: React.FC<{ visible?: boolean }> = ({ visible = tr
   const panelDirectory = useEffectiveDirectory() ?? '';
   const draftSpace = useDraftSpaceTarget();
   const directory = panelContentDirectory(draftSpace, panelDirectory) ?? '';
-  if (draftSpace?.kind === 'preparing') return <SpacePreparing />;
   return <SidebarFilesTreeContent key={JSON.stringify([runtimeKey, directory])} visible={visible} currentDirectory={directory} panelDirectory={panelDirectory} />;
 };
 

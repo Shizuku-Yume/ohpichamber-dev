@@ -139,6 +139,23 @@ export const markdownToPrintableHtml = (source: string, title: string): string =
 
 // ---- Spreadsheet
 
+export const printHtml = (html: string): void => {
+  const frame = document.createElement('iframe');
+  frame.sandbox.add('allow-modals', 'allow-same-origin');
+  frame.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+  frame.srcdoc = html;
+  frame.onload = () => {
+    frame.contentWindow?.addEventListener('afterprint', () => frame.remove(), { once: true });
+    try {
+      frame.contentWindow?.print();
+    } catch (error) {
+      frame.remove();
+      throw error;
+    }
+  };
+  document.body.append(frame);
+};
+
 export const rowsToXlsx = (sheetName: string, rows: string[][]): Promise<Uint8Array<ArrayBuffer>> => {
   const sheet = rows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((value, column) => {
     const reference = `${columnName(column)}${rowIndex + 1}`;

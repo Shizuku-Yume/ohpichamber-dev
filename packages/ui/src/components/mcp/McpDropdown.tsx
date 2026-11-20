@@ -27,12 +27,12 @@ const MCP_STATUS_MAX_AGE_MS = 60_000;
 
 const statusTooltip = (
   server: McpServerRuntimeState | undefined,
-  t: (key: 'mcpDropdown.status.unknown' | 'mcpDropdown.status.connected' | 'mcpDropdown.status.failed' | 'mcpDropdown.status.unknownError' | 'mcpDropdown.status.needsAuth', params?: { error?: string }) => string
+  t: ReturnType<typeof useI18n>['t']
 ): string => {
   const status = getMcpServerStatus(server);
-  if (status === 'ready') return t('mcpDropdown.status.connected');
-  if (status === 'unavailable') return t('mcpDropdown.status.failed', { error: getMcpServerError(server) || t('mcpDropdown.status.unknownError') });
-  return t('mcpDropdown.status.unknown');
+  if (status === 'ready') return t('settings.mcp.page.status.label.connected');
+  if (status === 'unavailable') return getMcpServerError(server) || t('settings.mcp.page.status.description.failedDefault');
+  return t('chat.workStatus.mcp.unknown');
 };
 
 const statusTone = (server: McpServerRuntimeState | undefined): 'default' | 'success' | 'warning' | 'error' => {
@@ -97,7 +97,7 @@ export const McpDropdownContent: React.FC<{
       <div className="border-b border-[var(--interactive-border)]">
         <div className="flex items-center justify-between gap-3 px-4 py-2.5">
           <div className="min-w-0 flex items-baseline gap-2">
-            <div className="typography-ui-header font-semibold text-foreground">{t('mcpDropdown.title')}</div>
+            <div className="typography-ui-header font-semibold text-foreground">{t('chat.workStatus.breakdown.mcp')}</div>
             {directory && (
               <div className="truncate typography-micro text-muted-foreground">
                 {directory.split('/').pop() || directory}
@@ -110,7 +110,7 @@ export const McpDropdownContent: React.FC<{
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               disabled={isSpinning || !directory}
               onClick={handleRefresh}
-              aria-label={t('mcpDropdown.actions.refreshAria')}
+              aria-label={t('settings.mcp.sidebar.actions.refreshStatusAria')}
             >
               <Icon name="refresh" className={cn('h-4 w-4', isSpinning && 'animate-spin')} />
             </button>
@@ -173,7 +173,7 @@ export const McpDropdownContent: React.FC<{
                       await disconnect(serverName, directory);
                     }
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : t('mcpDropdown.status.unknownError'));
+                    toast.error(error instanceof Error ? error.message : t('errorBoundary.state.unknownError'));
                   } finally {
                     setBusyName(null);
                   }
@@ -185,7 +185,7 @@ export const McpDropdownContent: React.FC<{
 
         {directory && sortedNames.length === 0 && (
           <div className="px-4 py-5 typography-ui-label text-muted-foreground text-center">
-            {phase === 'unknown' ? t('chat.workStatus.mcp.unknown') : t('mcpDropdown.empty.configureInConfig')}
+            {phase === 'unknown' ? t('chat.workStatus.mcp.unknown') : t('settings.mcp.grid.empty')}
           </div>
         )}
         </div>
@@ -327,7 +327,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
                     await disconnect(serverName, directory);
                   }
                 } catch (error) {
-                  toast.error(error instanceof Error ? error.message : t('mcpDropdown.status.unknownError'));
+                  toast.error(error instanceof Error ? error.message : t('errorBoundary.state.unknownError'));
                 } finally {
                   setBusyName(null);
                 }
@@ -339,7 +339,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
 
       {directory && sortedNames.length === 0 && (
         <div className="px-2 py-3 typography-ui-label text-muted-foreground text-center">
-          {phase === 'unknown' ? t('chat.workStatus.mcp.unknown') : t('mcpDropdown.empty.configureInConfig')}
+          {phase === 'unknown' ? t('chat.workStatus.mcp.unknown') : t('settings.mcp.grid.empty')}
         </div>
       )}
     </>
@@ -348,7 +348,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
   const triggerButton = (
     <button
       type="button"
-      aria-label={t('mcpDropdown.actions.openAria')}
+      aria-label={t('chat.workStatus.breakdown.mcp')}
       className={cn(headerIconButtonClass, 'relative')}
       onClick={isMobile ? () => setOpen(true) : undefined}
     >
@@ -363,7 +363,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
                 ? 'bg-status-success'
                 : 'bg-muted-foreground/40'
           )}
-          aria-label={t('mcpDropdown.statusAria')}
+          aria-label={t('settings.mcp.page.status.runtimeStatus')}
         />
       )}
     </button>
@@ -376,18 +376,18 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
         {triggerButton}
         <MobileOverlayPanel
           open={open}
-          title={t('mcpDropdown.title')}
+          title={t('chat.workStatus.breakdown.mcp')}
           onClose={() => setOpen(false)}
           renderHeader={(closeButton) => (
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
-              <h2 className="typography-ui-label font-semibold text-foreground">{t('mcpDropdown.title')}</h2>
+              <h2 className="typography-ui-label font-semibold text-foreground">{t('chat.workStatus.breakdown.mcp')}</h2>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover transition-colors"
                   disabled={isSpinning || !directory}
                   onClick={handleRefresh}
-                  aria-label={t('mcpDropdown.actions.refreshAria')}
+                  aria-label={t('settings.mcp.sidebar.actions.refreshStatusAria')}
                 >
                   <Icon name="refresh" className={cn('h-4 w-4', isSpinning && 'animate-spin')} />
                 </button>
@@ -421,7 +421,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent>
-          <p>{t('mcpDropdown.title')}</p>
+          <p>{t('chat.workStatus.breakdown.mcp')}</p>
         </TooltipContent>
       </Tooltip>
 

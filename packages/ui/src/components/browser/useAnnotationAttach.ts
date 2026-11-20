@@ -23,14 +23,19 @@ export const useAnnotationAttach = (directory: string, intro?: string) => {
     }
 
     let screenshot: string | undefined;
+    let screenshotAttached = false;
     if (result.screenshot) {
       try {
-        await addAttachedFile(result.screenshot, attachments, ([landed]) => { screenshot = landed?.filename; });
+        const existing = new Set(useInputStore.getState().getAttachedFiles(attachments).map((file) => file.id));
+        screenshotAttached = await addAttachedFile(result.screenshot, attachments);
+        if (screenshotAttached) {
+          const added = useInputStore.getState().getAttachedFiles(attachments).filter((file) => !existing.has(file.id));
+          if (added.length === 1) screenshot = added[0].filename;
+        }
       } catch {
         screenshot = undefined;
       }
     }
-    const screenshotAttached = screenshot !== undefined;
 
     addInlineCommentDraft(target, {
       source: 'preview-annotation',

@@ -128,16 +128,14 @@ describe('createSessionOwnershipIndex', () => {
 
   test('indexes an archived child from a deleted managed worktree when search passes it as a session', () => {
     const child = { ...ownershipSession('archived-child', {
-      projectID: 'opencode-app', directory: '/deleted/worktrees/feature',
-    }), parentID: 'parent', time: { created: 1, updated: 1, archived: 1 } };
+      projectId: 'configured-app', displayPath: '/deleted/worktrees/feature',
+    }), parentSessionId: 'parent', archivedAt: 1 };
 
     const ownership = createSessionOwnershipIndex(
       [child],
       [{ id: 'configured-app', normalizedPath: '/projects/app' }],
       new Map(),
-      false,
       [],
-      [{ id: 'opencode-app', worktree: '/projects/app' }],
     );
 
     expect(ownership.bySessionId.get('archived-child')?.projectId).toBe('configured-app');

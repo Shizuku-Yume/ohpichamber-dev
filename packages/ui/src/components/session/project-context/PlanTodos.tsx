@@ -26,7 +26,7 @@ export const PlanTodos: React.FC<{ projectRef: ProjectRef; planId: string }> = (
   const toggle = (id: string, completed: boolean) => {
     const next = withTodoCompleted(todos, id, completed);
     if (!next) return;
-    void saveTodos(projectRef, next, { kind: 'complete', id, completed }).then((saved) => {
+    void saveTodos(projectRef, next).then((saved) => {
       if (!saved) toast.error(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
     });
   };

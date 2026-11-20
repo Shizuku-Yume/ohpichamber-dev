@@ -34,8 +34,6 @@ const { RuntimeAPIProvider } = await import('@/contexts/RuntimeAPIProvider');
 const { createWebAPIs } = await import('../../../../web/src/api');
 const { CommandPalette } = await import('./CommandPalette');
 const { SyncProvider } = await import('@/sync/sync-context');
-const { OpenCode } = await import('@opencode/client');
-const { settleOpenCodeTrust } = await import('@/lib/opencodeTrust');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
@@ -47,7 +45,6 @@ const originalSessionUI = useSessionUIStore.getState();
 const originalGuests = useGuestsStore.getState();
 const originalInput = useInputStore.getState();
 const apis = createWebAPIs();
-const sdk = OpenCode.make({ baseUrl: 'http://palette.test', fetch: () => new Promise<Response>(() => undefined) });
 let root: ReturnType<typeof createRoot>;
 
 const tasks: InstalledGuest = {
@@ -64,7 +61,7 @@ const tasks: InstalledGuest = {
 };
 
 const render = async () => {
-  await act(async () => root.render(<RuntimeAPIProvider apis={apis}><I18nProvider><SyncProvider sdk={sdk} directory="/repo"><CommandPalette /></SyncProvider></I18nProvider></RuntimeAPIProvider>));
+  await act(async () => root.render(<RuntimeAPIProvider apis={apis}><I18nProvider><SyncProvider directory="/repo"><CommandPalette /></SyncProvider></I18nProvider></RuntimeAPIProvider>));
 };
 const search = async (query: string) => {
   const input = browser.document.querySelector('input');
@@ -91,7 +88,6 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await act(async () => root.unmount());
-  await settleOpenCodeTrust('skip');
   useUIStore.setState(originalUI, true);
   useProjectsStore.setState(originalProjects, true);
   useSessionUIStore.setState(originalSessionUI, true);
@@ -126,7 +122,7 @@ test('extension commands are found by search and wait in the composer for their 
   const item = [...browser.document.querySelectorAll('[cmdk-item]')].find((node) => node.textContent?.includes('/task'));
   if (!item) throw new Error('Extension command row missing');
   await act(async () => item.dispatchEvent(new browser.MouseEvent('click', { bubbles: true })));
-  expect(useInputStore.getState().consumePendingInputText()).toEqual({ text: 'task', mode: 'slash-command' });
+  expect(useInputStore.getState().consumePendingInputText()).toEqual({ text: '/task ', mode: 'replace' });
   expect(useUIStore.getState().isCommandPaletteOpen).toBe(false);
 });
 
@@ -139,7 +135,7 @@ test('picking a command over Settings or a page shows the chat it lands in', asy
   await act(async () => item.dispatchEvent(new browser.MouseEvent('click', { bubbles: true })));
   expect(useUIStore.getState().openGuestPageId).toBeNull();
   expect(useUIStore.getState().isSettingsDialogOpen).toBe(false);
-  expect(useInputStore.getState().pendingInputMode).toBe('slash-command');
+  expect(useInputStore.getState().pendingInputMode).toBe('replace');
 });
 
 test('only session actions show, and only while a session is open', async () => {

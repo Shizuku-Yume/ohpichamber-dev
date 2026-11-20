@@ -1,5 +1,8 @@
 import React from 'react';
-import { type FileNode, type FilesViewOptions } from './fileViewTypes';
+import { type FileNode, type FilesViewOptions, type FilesViewProps } from './fileViewTypes';
+import { guardFileTabSelection } from '../fileTabSelectionGuard';
+import { normalizeContextPanelDirectoryKey } from '@/stores/ui/contextTabs';
+import { toComparablePath } from './fileViewPaths';
 import { registerCloseTabTarget } from '@/lib/closeTabTarget';
 import { type useFileSaving, type useFileDraft } from './useFileSaving';
 import { type useFileOpening } from './useFileOpening';
@@ -18,7 +21,7 @@ export function useFileCloseState() {
   return { confirmDiscardOpen, setConfirmDiscardOpen, pendingSelectFileRef, pendingClosePathRef, skipDirtyOnceRef };
 }
 
-export function useFileClosing({ canvasState, closeState, draft, fileDocument, fileOpening, fileSaving, layout, scope, tabs, isMobile, onCloseFile, visible }: {
+export function useFileClosing({ canvasState, closeState, draft, fileDocument, fileOpening, fileSaving, layout, scope, tabs, isMobile, onCloseFile, visible, fileTabCloseGuard, fileTabSelectionGuard }: {
   canvasState: Pick<ReturnType<typeof useFileCanvasState>, 'setCanvasDirty' | 'setCanvasRemountNonce'>;
   closeState: Pick<ReturnType<typeof useFileCloseState>, 'pendingClosePathRef' | 'pendingSelectFileRef' | 'setConfirmDiscardOpen' | 'skipDirtyOnceRef'>;
   draft: Pick<ReturnType<typeof useFileDraft>, 'setDraftContent'>;
@@ -26,11 +29,13 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
   fileOpening: Pick<ReturnType<typeof useFileOpening>, 'getNextOpenFile' | 'handleSelectFile'>;
   fileSaving: Pick<ReturnType<typeof useFileSaving>, 'isDirty' | 'saveDraft'>;
   layout: Pick<ReturnType<typeof useFileLayout>, 'setShowMobilePageContent'>;
-  scope: Pick<ReturnType<typeof useFileScope>, 'root'>;
+  scope: Pick<ReturnType<typeof useFileScope>, 'root' | 'panelRoot'>;
   tabs: Pick<ReturnType<typeof useFileTabs>, 'openFiles' | 'removeOpenPath' | 'selectedFile' | 'setSelectedPath'>;
   isMobile: boolean;
   onCloseFile: FilesViewOptions['onCloseFile'];
   visible: boolean;
+  fileTabCloseGuard: FilesViewProps['fileTabCloseGuard'];
+  fileTabSelectionGuard: FilesViewProps['fileTabSelectionGuard'];
 }) {
   const { setCanvasDirty, setCanvasRemountNonce } = canvasState;
   const { pendingClosePathRef, pendingSelectFileRef, setConfirmDiscardOpen, skipDirtyOnceRef } = closeState;
@@ -39,8 +44,48 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
   const { getNextOpenFile, handleSelectFile } = fileOpening;
   const { isDirty, saveDraft } = fileSaving;
   const { setShowMobilePageContent } = layout;
-  const { root } = scope;
+  const { root, panelRoot } = scope;
   const { openFiles, removeOpenPath, selectedFile, setSelectedPath } = tabs;
+  const pendingAction = React.useRef<(() => void) | null>(null);
+  const confirmDraftAction = React.useCallback((action: () => void) => {
+    if (pendingAction.current) return;
+    pendingAction.current = action;
+    pendingSelectFileRef.current = null;
+    pendingClosePathRef.current = null;
+    setConfirmDiscardOpen(true);
+  }, [pendingClosePathRef, pendingSelectFileRef, setConfirmDiscardOpen]);
+  React.useLayoutEffect(() => {
+    pendingAction.current = null;
+    setConfirmDiscardOpen(false);
+  }, [panelRoot, selectedFile?.path, setConfirmDiscardOpen]);
+  React.useLayoutEffect(() => {
+    if (!fileTabSelectionGuard) return;
+    const guard: NonNullable<FilesViewProps['fileTabSelectionGuard']>['current'] = (directoryKey, targetPath, select) => guardFileTabSelection({
+      sameDirectory: directoryKey === normalizeContextPanelDirectoryKey(panelRoot),
+      currentPath: selectedFile ? toComparablePath(selectedFile.path) : null,
+      targetPath: targetPath ? toComparablePath(targetPath) : null,
+      isDirty,
+      confirm: confirmDraftAction,
+      select,
+    });
+    fileTabSelectionGuard.current = guard;
+    return () => {
+      if (fileTabSelectionGuard.current === guard) fileTabSelectionGuard.current = null;
+    };
+  }, [confirmDraftAction, fileTabSelectionGuard, isDirty, panelRoot, selectedFile]);
+  React.useLayoutEffect(() => {
+    if (!fileTabCloseGuard) return;
+    const guard: NonNullable<FilesViewProps['fileTabCloseGuard']>['current'] = (directoryKey, paths, close) => {
+      if (directoryKey === normalizeContextPanelDirectoryKey(panelRoot) && selectedFile && isDirty
+        && (paths === 'all' || paths.some((path) => toComparablePath(path) === toComparablePath(selectedFile.path)))) {
+        confirmDraftAction(close);
+      } else close();
+    };
+    fileTabCloseGuard.current = guard;
+    return () => {
+      if (fileTabCloseGuard.current === guard) fileTabCloseGuard.current = null;
+    };
+  }, [confirmDraftAction, fileTabCloseGuard, isDirty, panelRoot, selectedFile]);
 
   const closeOpenFile = React.useCallback((path: string, nextFile: FileNode | null) => {
     if (onCloseFile) {
@@ -88,6 +133,13 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
     setCanvasRemountNonce((nonce) => nonce + 1);
     setDraftContent(fileContent);
 
+    if (pendingAction.current) {
+      const action = pendingAction.current;
+      pendingAction.current = null;
+      action();
+      return;
+    }
+
     if (closePath) {
       closeOpenFile(closePath, nextFile);
       return;
@@ -116,6 +168,13 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
     skipDirtyOnceRef.current = true;
 
     setConfirmDiscardOpen(false);
+
+    if (pendingAction.current) {
+      const action = pendingAction.current;
+      pendingAction.current = null;
+      action();
+      return;
+    }
 
     if (closePath) {
       closeOpenFile(closePath, nextFile);

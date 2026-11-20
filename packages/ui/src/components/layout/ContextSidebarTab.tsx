@@ -1,6 +1,6 @@
 import React from 'react';
 import type { JsonValue, Message, Part } from '@openchamber/agent-contract';
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 
 import { Icon } from "@/components/icon/Icon";
 import { selectConfiguredModelPair, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
@@ -506,7 +506,7 @@ export const ContextPanelContent: React.FC = () => {
                             <TooltipContent sideOffset={6}>{isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}</TooltipContent>
                           </Tooltip>
                         </div>
-                        <WorkerHighlightedCode
+                        <HighlightedCode
                           language="json"
                           code={jsonValue}
                           style={{

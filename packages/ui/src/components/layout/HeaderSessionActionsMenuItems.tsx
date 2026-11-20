@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import React from 'react';
 import { toast } from '@/components/ui';
 import { SessionActionsMenuItems } from '@/components/session/sidebar/sessions/SessionActionsMenuItems';
@@ -64,16 +65,16 @@ export function HeaderSessionActionsMenuItems({
     spaces,
     isVSCode,
     activeSessions,
-    resolveLegacyScope: (entry) => normalizePath(worktreeMetadata.get(entry.sessionId)?.projectDirectory ?? entry.directory ?? null),
+    resolveLegacyScope: (entry) => normalizePath(worktreeMetadata.get(entry.sessionId)?.projectDirectory ?? resolveGlobalSessionDirectory(entry) ?? null),
     lookup: (id) => useGlobalSessionsStore.getState().entityById.get(id),
   }) : null), [activeSessions, authoritativeProjects, availableWorktreesByProject, isVSCode, projects, session, spaces, worktreeMetadata]);
 
   if (!session || !placement) return null;
 
   const archived = Boolean(session.archivedAt);
-  const directory = normalizePath(session.directory ?? null);
+  const directory = normalizePath(resolveGlobalSessionDirectory(session) ?? null);
   const canTrackWork = sessionWorkEnabled && placement.ownsWork && !archived && !session.parentSessionId
-    && !isChatDirectoryPath(session.directory);
+    && !isChatDirectoryPath(resolveGlobalSessionDirectory(session));
   const workSessionsInWork = canTrackWork ? collectNestedWorkInWork(session, activeSessions) : [];
 
   const restore = async () => {

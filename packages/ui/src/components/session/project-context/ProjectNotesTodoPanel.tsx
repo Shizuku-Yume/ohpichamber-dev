@@ -1,4 +1,3 @@
-import { fetchSessionKnowledgeSummary } from '@/lib/sessionKnowledgeApi';
 import React from 'react';
 
 import { toast } from '@/components/ui';
@@ -66,23 +65,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   );
   const saveTodos = useProjectContextStore((state) => state.saveTodos);
   const { pinnedNoteIds, pinnedPlanIds, togglePin: toggleSessionPin } = useSessionKnowledgePins();
-
-  React.useEffect(() => {
-    if (newSessionDraft.open) {
-      setSessionPins(newSessionDraft.projectContextPins ?? { notes: [], plans: [] });
-      return;
-    }
-    let cancelled = false;
-    void fetchSessionKnowledgeSummary(currentSessionDirectory, currentSessionId).then((summary) => {
-      if (!cancelled) {
-        setSessionPins({
-          notes: summary.notes.map((note) => note.id),
-          plans: summary.plans.map((plan) => plan.id),
-        });
-      }
-    });
-    return () => { cancelled = true; };
-  }, [currentSessionDirectory, currentSessionId, newSessionDraft.open, newSessionDraft.projectContextPins]);
 
   const isMobile = useUIStore((state) => state.isMobile);
   const [rootNode, setRootNode] = React.useState<HTMLDivElement | null>(null);
@@ -410,9 +392,9 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     <React.Suspense fallback={null}>
       <ContextPanelHeaderSlotProvider value={null}>
         <PlanView
+          key={`${planId}:${planViewGeneration}`}
           savedProjectPlan={{ projectRef, planId }}
           onNavigatedToChat={() => setOpenEntry(null)}
-          onClose={() => setOpenEntry(null)}
         />
       </ContextPanelHeaderSlotProvider>
     </React.Suspense>
@@ -469,6 +451,9 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
             // width instead of rows stretched edge to edge.
             <div className={cn(wide && 'mx-auto max-w-3xl')}>
               <TodosSection
+                projectPath={projectRef?.path ?? ''}
+                plans={contextEntry.plans}
+                onOpenPlan={openPlanFromTodo}
                 todos={todos}
                 query={query}
                 disabled={isLoading}

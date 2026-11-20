@@ -1,4 +1,5 @@
-import { reviewDraftCount } from '@/components/review/useChangeRequestReview';
+import { reviewDraftCount, useChangeRequestReview } from '@/components/review/useChangeRequestReview';
+import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import * as React from 'react';
 
 import { useMobileAppActions } from '@/apps/mobileAppContext';
@@ -112,6 +113,7 @@ export const SourceBoardActions: React.FC<{
     const { t } = useI18n();
     const { sourceControl, trackers } = useRuntimeAPIs();
     const confirmation = useConfirmDialog();
+    const { triggerFireworks } = useFireworksCelebration();
     const [busy, setBusy] = React.useState<'merge' | null>(null);
 
     const pull: RepositoryChangeRequestReference | null = item.source === 'repository' && item.reference.kind === 'pull' ? item.reference : null;
@@ -190,7 +192,7 @@ export const SourceBoardActions: React.FC<{
     const stackOnTop = onStartOnTop && openPull && descriptor.features.branchHeads && isStackable(openPull) ? () => onStartOnTop(openPull) : null;
     const stackOnTopLabel = t('stacks.actions.newOnTop');
 
-    const merge = async () => {
+    const merge = async (origin: HTMLElement) => {
         if (!openPull || !context || !mergeMethod || submitBlocked) return;
         const methodNote = t(MERGE_METHOD_KEYS[mergeMethod], { base: openPull.base });
         const stackNote = submits
@@ -274,7 +276,7 @@ export const SourceBoardActions: React.FC<{
                         variant="outline"
                         className={cn(mergeMethods.length > 1 && 'rounded-e-none')}
                         disabled={busy === 'merge' || submitBlocked}
-                        onClick={() => void merge()}
+                        onClick={(event) => void merge(event.currentTarget)}
                     >
                         <Icon name={busy === 'merge' ? 'loader-4' : 'git-merge'} className={busy === 'merge' ? 'size-3.5 animate-spin' : 'size-3.5'} />
                         {t(MERGE_METHOD_LABELS[mergeMethod])}
@@ -383,7 +385,7 @@ const LINK_CLASS = cn(
     REFERENCE_META_TEXT,
 );
 
-export const SourceBoardPullLinks: React.FC<{
+type PullLinkProps = {
     pull: RepositoryChangeRequestReference;
     project: SourceBoardProject;
     repository: string | null;
@@ -392,11 +394,11 @@ export const SourceBoardPullLinks: React.FC<{
     currentDirectory: string | undefined;
     onLeave?: () => void;
     revision?: string | null;
-}> = ({ pull, project, repository, context, projectOwnsDirectory, currentDirectory, onLeave, revision = null }) => {
-    const { t } = useI18n();
+};
+
+function useOpenPull({ pull, project, repository, context, projectOwnsDirectory, currentDirectory, onLeave, revision = null }: PullLinkProps) {
     const mobile = useMobileAppActions();
-    const diffServing = useChangeRequestDiffServing(context.provider);
-    const open = (surface: 'diff' | 'walkthrough') => {
+    return (surface: 'diff' | 'walkthrough') => {
         const source: PullRequestSource = {
             kind: 'pr', number: pull.number, sourceRepo: { owner: pull.sourceRepo.owner, repo: pull.sourceRepo.repo },
             ...(revision ? { revision } : {}),
@@ -427,6 +429,13 @@ export const SourceBoardPullLinks: React.FC<{
         useWalkthroughStore.getState().requestTarget(requestDirectory, { source, context });
         ui.openContextPanelTab(panelDirectory, { mode: 'walkthrough', targetDirectory });
     };
+}
+
+export const SourceBoardPullLinks: React.FC<PullLinkProps> = (props) => {
+    const { t } = useI18n();
+    const mobile = useMobileAppActions();
+    const open = useOpenPull(props);
+    const diffServing = useChangeRequestDiffServing(props.context.provider);
     if (diffServing === 'not-served') return null;
     return (
         <span className="inline-flex items-center gap-1">

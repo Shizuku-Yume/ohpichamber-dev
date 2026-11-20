@@ -54,11 +54,9 @@ beforeEach(async () => {
   setZoneBody('right', zone);
   root = createRoot(host);
   const { SyncProvider } = await import('@/sync/sync-context');
-  const { OpenCode } = await import('@opencode/client');
   const { createWebAPIs } = await import('../../../../../web/src/api/index');
   const web = createWebAPIs();
   const apis = { ...web, terminal: { ...web.terminal, listSessions: () => new Promise<never>(() => {}) } };
-  const sdk = OpenCode.make({ baseUrl: 'http://terminal.test', fetch: () => new Promise<Response>(() => {}) });
   const theme = getDefaultTheme(false);
   const themeContext: ThemeContextValue = {
     currentTheme: theme, availableThemes: [theme], customThemeIds: [], setTheme: () => {}, customThemesLoading: false,
@@ -70,7 +68,7 @@ beforeEach(async () => {
   await act(async () => root.render(React.createElement(I18nProvider, null,
     React.createElement(ThemeSystemContext.Provider, { value: themeContext },
       React.createElement(RuntimeAPIContext.Provider, { value: apis },
-        React.createElement(SyncProvider, { sdk, directory: '/repo', children: React.createElement(ContextSurfacePanes) }),
+        React.createElement(SyncProvider, { directory: '/repo', children: React.createElement(ContextSurfacePanes) }),
       ),
     ),
   )));

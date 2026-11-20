@@ -1,3 +1,4 @@
+import type { TurnSnapshotDiff } from '../turnSnapshotDiff';
 import React from 'react';
 import { useCommitComparison } from '@/hooks/useCommitComparison';
 import { usePullRequestComparison } from '@/hooks/usePullRequestComparison';
@@ -58,7 +59,7 @@ export function useDiffViewComparisons({
         settled: turnDiffSettled,
         error: turnDiffError,
         retry: retryTurnDiff,
-    } = useLastTurnDiff(currentSessionId, rootDirectory ?? undefined, { enabled: visible, live: activeDiffScope === 'turn' });
+    }: { diffs: TurnSnapshotDiff[]; count: number | null; loaded: boolean; settled: boolean; error: string | null; retry: () => void } = useLastTurnDiff(currentSessionId, rootDirectory ?? undefined, { enabled: visible, live: activeDiffScope === 'turn' });
 
     const lastTurnDiffData = React.useMemo(() => {
         const map = new Map<string, DiffData>();
@@ -89,12 +90,12 @@ export function useDiffViewComparisons({
 
     const currentBranch = status?.current ?? null;
     const requestedPr = usePullRequestSelectionStore((state) => (effectiveDirectory ? state.diffRequests.get(effectiveDirectory) : undefined));
-    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, binding.contexts[0] ?? null, visible && activeDiffScope === 'pr' && !isVSCodeRuntime(), requestedPr);
+    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, requestedPr?.context ?? binding.contexts[0] ?? null, visible && activeDiffScope === 'pr' && !isVSCodeRuntime(), requestedPr?.source);
     const pullRequestContext = prComparison.readContext;
     const selectedPr = prComparison.selectedSource;
     const prChangeRequestTerm = useChangeRequestTerm(prComparison.provider);
     React.useEffect(() => {
-        if (!effectiveDirectory || !requestedPr || !status || selectedPr !== requestedPr) return;
+        if (!effectiveDirectory || !requestedPr || !status || selectedPr !== requestedPr.source) return;
         usePullRequestSelectionStore.getState().settleDiffRequest(effectiveDirectory, requestedPr);
     }, [effectiveDirectory, requestedPr, selectedPr, status]);
     const commitComparison = useCommitComparison(effectiveDirectory ?? null, currentBranch, visible && activeDiffScope === 'commit' && !isVSCodeRuntime());

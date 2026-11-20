@@ -1,10 +1,10 @@
 import { expect, spyOn, test } from 'bun:test';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { OpenCode } from '@opencode/client';
+import { CanonicalClient } from '@/api/canonicalClient';
 import { Window } from 'happy-dom';
-import { hostMessageSchema } from 'ohpichamber-sdk/schemas';
-import type { GuestMessage, HostMessage } from 'ohpichamber-sdk';
+import { connectPluginPaneFixture } from './__tests__/pluginPaneFixture';
+import { HostRequestError, OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from 'ohpichamber-sdk';
 
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -13,15 +13,11 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useGuestsStore } from '@/lib/guests/store';
 import type { InstalledGuest } from '@/lib/guests/types';
 import { SyncProvider } from '@/sync/sync-context';
-import { opencodeClient } from '@/lib/opencode/client';
-import { applyBackgroundShellEvents, resetBackgroundShells } from '@/sync/background-shells';
-import { stopForegroundShell } from '@/components/chat/message/parts/foregroundShellStop';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useBackgroundShellsStore, resetBackgroundShells, type TrackedShell } from '@/sync/background-shells';
 import { PluginPane } from './PluginPane';
 
-// The command's chat row is stopping a command the turn waits for. An
-// extension that stops the same command meanwhile is refused, so only the
-// row's stop posts the note to the agent and removes the command.
-test('an extension cannot stop a command its chat row is already stopping', async () => {
+test('a guest stops canonical shell jobs by identity and receives missing-job and host errors', async () => {
   const dom = new Window({ url: 'http://guest.test', settings: { disableIframePageLoading: true } });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator,
@@ -39,15 +35,7 @@ test('an extension cannot stop a command its chat row is already stopping', asyn
     if (target.includes('/location')) return Response.json({ directory: '/visible', project: { id: 'project', directory: '/visible', canonical: '/visible' } });
     return Response.json({ data: [] });
   });
-  const sdk = OpenCode.make({ baseUrl: 'http://sync.test', fetch: async (request) => {
-    const path = new URL(request instanceof Request ? request.url : request.toString()).pathname;
-    if (path.endsWith('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
-    const body = path.endsWith('/location')
-      ? { directory: '/visible', project: { id: 'project', directory: '/visible', canonical: '/visible' } }
-      : path.endsWith('/session/active') ? {}
-      : { data: [] };
-    return Response.json(body);
-  } });
+  const client = new CanonicalClient();
   const theme = getDefaultTheme(false);
   const themeContext: ThemeContextValue = {
     currentTheme: theme, availableThemes: [theme], customThemeIds: [], setTheme: () => {}, customThemesLoading: false,
@@ -68,7 +56,7 @@ test('an extension cannot stop a command its chat row is already stopping', asyn
   const restores: Array<() => void> = [];
   const pane = (open: boolean, headless = false) => (
     <I18nProvider><ThemeSystemContext.Provider value={themeContext}>
-      <SyncProvider sdk={sdk} directory="/visible">{open ? <PluginPane mode="plugin:writer" surface="panel" headless={headless} /> : null}</SyncProvider>
+      <SyncProvider client={client} directory="/visible">{open ? <PluginPane mode="plugin:writer" surface="panel" headless={headless} /> : null}</SyncProvider>
     </ThemeSystemContext.Provider></I18nProvider>
   );
   // Mount the panel and attach a stand-in for the document inside its frame.
@@ -84,57 +72,29 @@ test('an extension cannot stop a command its chat row is already stopping', asyn
     Object.defineProperty(frame, 'contentWindow', { configurable: true, value: guestWindow });
     const frameWindow = frame.contentWindow;
     if (!frameWindow) throw new Error('Guest window is missing');
-    const received: HostMessage[] = [];
-    const post = spyOn(frameWindow, 'postMessage').mockImplementation((data) => { received.push(hostMessageSchema.parse(data)); });
-    restores.push(() => post.mockRestore());
-    const send = async (message: GuestMessage) => {
-      await act(async () => { window.dispatchEvent(new MessageEvent('message', { source: frameWindow, data: message })); });
-    };
-    await send({ channel: 'openchamber.sdk', v: 1, type: 'hello' });
-    return { received, send };
-  };
-  const settle = async () => {
-    for (let attempt = 0; attempt < 5; attempt++) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const connection = await connectPluginPaneFixture(frame);
+    restores.push(connection.close);
+    return connection;
   };
   resetBackgroundShells();
-  let finishBackground: (() => void) | undefined;
-  const background = spyOn(opencodeClient, 'backgroundSessionWork').mockImplementation(() => {
-    applyBackgroundShellEvents('/visible', [{
-      type: 'message.tool.transition',
-      properties: {
-        sessionID: 'ses_root', messageID: 'msg_1', partID: 'call_sh_waited',
-        transition: { kind: 'success', output: '', metadata: { status: 'running', shellID: 'sh_waited' }, executed: true, end: 2 },
-      },
-    }]);
-    return new Promise<void>((resolve) => { finishBackground = resolve; });
-  });
-  const stop = spyOn(opencodeClient, 'stopBackgroundShells').mockResolvedValue(undefined);
+  const job: TrackedShell = { jobId: 'sh_waited', sessionId: 'ses_root', epoch: 'epoch-1', workerGeneration: 'worker-1', workspaceId: 'workspace', projectId: 'project', command: 'bun run test', startedAt: 1, outputCursor: '0', status: 'running', directory: '/visible', background: true };
+  useBackgroundShellsStore.setState({ byId: new Map([[job.jobId, job]]), sessionIds: new Set([job.sessionId]) });
+  const stop = spyOn(canonicalClient, 'stopShell').mockResolvedValue(job);
   try {
     const panel = await openPanel();
-    applyBackgroundShellEvents('/visible', [{ type: 'shell.started', properties: { shell: {
-      id: 'sh_waited', sessionID: 'ses_root', command: 'bun run test', file: '/tmp/sh_waited.out', startedAt: 1,
-    } } }]);
-    const rowStop = stopForegroundShell({
-      sessionID: 'ses_root',
-      sessionDirectory: '/visible',
-      shell: { shellID: 'sh_waited', shellDirectory: '/visible', command: 'bun run test' },
-    });
+    const sendStop = (id: string, shellId: string) => panel.send({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'shell-stop', id, payload: { shellId } });
+    await sendStop('stop-1', job.jobId);
+    expect(panel.received.find((message) => message.type === 'result' && message.id === 'stop-1')).toMatchObject({ ok: true, payload: { stopped: true } });
+    expect(stop.mock.calls[0]?.slice(0, 2)).toEqual([job.sessionId, { job: { sessionId: job.sessionId, jobId: job.jobId, epoch: job.epoch, workerGeneration: job.workerGeneration } }]);
 
-    await panel.send({ channel: 'openchamber.sdk', v: 1, type: 'shell-stop', id: 'oc-1', payload: { shellId: 'sh_waited' } });
-    await settle();
-    expect(panel.received.find((message) => message.type === 'result' && message.id === 'oc-1')).toMatchObject({ ok: false, code: 'HOST_REJECTED' });
-    expect(stop).not.toHaveBeenCalled();
+    await sendStop('stop-missing', 'missing');
+    expect(panel.received.find((message) => message.type === 'result' && message.id === 'stop-missing')).toMatchObject({ ok: false, code: 'NOT_FOUND' });
+    expect(stop).toHaveBeenCalledTimes(1);
 
-    finishBackground?.();
-    await act(async () => { await rowStop; });
-    expect(stop.mock.calls).toEqual([[{
-      sessionID: 'ses_root',
-      sessionDirectory: '/visible',
-      shells: [{ shellID: 'sh_waited', shellDirectory: '/visible', command: 'bun run test' }],
-    }]]);
+    stop.mockRejectedValueOnce(new HostRequestError('HOST_REJECTED', 'The command could not be stopped.'));
+    await sendStop('stop-error', job.jobId);
+    expect(panel.received.find((message) => message.type === 'result' && message.id === 'stop-error')).toMatchObject({ ok: false, code: 'HOST_REJECTED' });
   } finally {
-    finishBackground?.();
-    background.mockRestore();
     stop.mockRestore();
     resetBackgroundShells();
     await act(async () => root.unmount());

@@ -600,16 +600,6 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     }
   };
 
-  // A group's search matches once the trees listed in a zone are taken out:
-  // those render in Pinned or In work, which counts them. Zero means nothing to show.
-  const groupSearchMatches = (group: SessionGroup): number => {
-    const searchData = args.groupSearchDataByGroup.get(group);
-    if (searchData?.hasMatch !== true) return 0;
-    const movedToZone = inZone.size > 0 ? searchData.filteredNodes.filter((node) => isMovedToZone(node.session.sessionId)) : [];
-    const sessionMatches = Math.max(0, searchData.matchedSessionCount - countSessionSearchMatches(movedToZone, args.normalizedQuery));
-    return sessionMatches + searchData.folderNameMatchCount + (searchData.groupMatches ? 1 : 0);
-  };
-
   const appendGroup = (
     group: SessionGroup,
     groupKey: string,

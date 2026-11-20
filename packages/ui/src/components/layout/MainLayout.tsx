@@ -98,6 +98,7 @@ export const MainLayout: React.FC = () => {
  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
  const SettingsWindow = useOnDemandComponent(isSettingsDialogOpen, loadSettingsWindow, () => setSettingsDialogOpen(false));
  const isRunOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
+ const isOverviewOpen = useUIStore((state) => state.isOverviewOpen);
  const isScheduledTasksPageOpen = useUIStore((state) => state.isScheduledTasksDialogOpen);
  const isArchivePageOpen = useUIStore((state) => state.isArchivePageOpen);
  const isIntegrationsCatalogOpen = useUIStore((state) => state.isIntegrationsCatalogOpen);

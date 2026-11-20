@@ -58,7 +58,7 @@ export function renderFileContent({ artifacts, diagram, draft, fileAssets, fileC
               <DiagramEditor
                 key={`${editorDocumentPath ?? selectedFile.path}:${drawioRemountNonce}`}
                 ref={diagramEditorRef}
-                xml={diagramEditorXml}
+                initialXml={diagramEditorXml}
                 onChange={handleDiagramChange}
               />
             </div>

@@ -31,7 +31,7 @@ describe('session row order authority', () => {
   });
 
   test('live session lifecycle overrides a content-result fallback and unknown IDs remain active', () => {
-    const registry = mergeSessionRowLifecycle([{ id: 'a', rowKey: 'a', scopeKey: null, archived: true }], new Map([['a', { time: {} }]]));
+    const registry = mergeSessionRowLifecycle([{ id: 'a', rowKey: 'a', scopeKey: null, archived: true }], new Map([['a', { archivedAt: undefined }]]));
     expect(deriveSessionRowSelectionArchived(new Set(['a']), registry)).toBe(false);
     expect(deriveSessionRowSelectionArchived(new Set(['unknown']), registry)).toBe(false);
   });

@@ -12,7 +12,6 @@ const domGlobals = {
   ShadowRoot: browser.ShadowRoot, MutationObserver: browser.MutationObserver, SVGElement: browser.SVGElement,
   ResizeObserver: browser.ResizeObserver, getComputedStyle: browser.getComputedStyle.bind(browser),
   requestAnimationFrame: browser.requestAnimationFrame.bind(browser), cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
-  Event: browser.Event, CustomEvent: browser.CustomEvent,
   IS_REACT_ACT_ENVIRONMENT: true,
 };
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -58,7 +57,8 @@ const originalSessions = useGlobalSessionsStore.getState();
 const originalSessionUI = useSessionUIStore.getState();
 let apis: ReturnType<typeof createWebAPIs>;
 let root: ReturnType<typeof createRoot>;
-const session = (id: string, directory: string, title: string): Session => ({
+const session = (id: string, directory: string, title: string, archivedAt?: number): Session => ({
+  ...(archivedAt === undefined ? {} : { archivedAt }),
   sessionId: id, projectId: id, workspaceId: directory, displayPath: directory, rootSessionId: id,
   title, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0',
   runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
@@ -68,7 +68,7 @@ beforeEach(() => {
   for (const [key, value] of Object.entries(domGlobals)) {
     Object.defineProperty(globalThis, key, { value, configurable: true });
   }
-  globalThis.fetch = mockFetch;
+  globalThis.fetch = fakeFetch;
   apis = createWebAPIs();
   resetSessionOrdering();
   const host = document.createElement('div');
@@ -88,7 +88,7 @@ beforeEach(() => {
 });
 
 const renderPalette = async () => {
-  await act(async () => root.render(<RuntimeAPIProvider apis={apis}><I18nProvider><SyncProvider sdk={sdk} directory="/allowed"><CommandPalette /></SyncProvider></I18nProvider></RuntimeAPIProvider>));
+  await act(async () => root.render(<RuntimeAPIProvider apis={apis}><I18nProvider><SyncProvider directory="/allowed"><CommandPalette /></SyncProvider></I18nProvider></RuntimeAPIProvider>));
   await act(async () => {
     await ensureHomeDirectoryResolved();
     await updateDesktopSettings({});
@@ -177,8 +177,8 @@ test('archived sessions matching by title form their own group after the active 
   await act(async () => useGlobalSessionsStore.setState({
     activeSessions: [session('active', '/allowed', 'Release notes draft')],
     archivedSessions: [
-      session('archived', '/allowed', 'Release notes archive'),
-      session('archived-declined', '/declined', 'Release notes elsewhere'),
+      session('archived', '/allowed', 'Release notes archive', 2),
+      session('archived-declined', '/declined', 'Release notes elsewhere', 2),
     ],
   }));
   expect(document.body.textContent).not.toContain('Release notes archive');
@@ -193,7 +193,7 @@ test('archived sessions matching by title form their own group after the active 
 
 test('opening an archived session selects it and leaves it archived', async () => {
   await renderPalette();
-  await act(async () => useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [session('archived', '/allowed', 'Shelved conversation')] }));
+  await act(async () => useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [session('archived', '/allowed', 'Shelved conversation', 2)] }));
   await editQuery('shelved');
   expect(groupHeadings()).toContain('Archived');
   await act(async () => item('session:archived')?.click());
@@ -293,7 +293,7 @@ test('message hits from archived sessions are listed, and a server without lifec
   await renderPalette();
   await act(async () => {
     useUIStore.setState({ messageSearchEnabled: true });
-    useGlobalSessionsStore.setState({ activeSessions: [session('active', '/allowed', 'Active title')], archivedSessions: [session('archived', '/allowed', 'Archive title')] });
+    useGlobalSessionsStore.setState({ activeSessions: [session('active', '/allowed', 'Active title')], archivedSessions: [session('archived', '/allowed', 'Archive title', 2)] });
   });
   await typeQuery('needle');
   expect(lastRequest().searchParams.get('lifecycle')).toBe('all');
@@ -435,8 +435,8 @@ test('among titles that hold the word, the most recently changed session lists f
   await renderPalette();
   await act(async () => useGlobalSessionsStore.setState({
     activeSessions: [
-      { ...session('old-exact', '/allowed', 'Agent'), time: { created: 1, updated: 10 } },
-      { ...session('new-inside', '/allowed', 'Review agent tool'), time: { created: 1, updated: 90 } },
+      { ...session('old-exact', '/allowed', 'Agent'), updatedAt: 10 },
+      { ...session('new-inside', '/allowed', 'Review agent tool'), updatedAt: 90 },
     ],
     archivedSessions: [],
   }));

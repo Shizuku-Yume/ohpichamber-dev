@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
-import { CanonicalClient } from '@/api/canonicalClient';
 import { toast } from '@/components/ui';
 import { I18nProvider } from '@/lib/i18n';
 import { SyncProvider } from '@/sync/sync-context';
@@ -24,7 +23,6 @@ describe('inline comment target', () => {
   let frameDescriptor: PropertyDescriptor | undefined;
   let controller: ReturnType<typeof useInlineCommentController<Range>>;
   const saveComment = (text: string, range?: Range) => controller.saveComment(text, range);
-  const client = new CanonicalClient();
 
   // The file's text for the tests where comments follow their code; null leaves the lines unknown.
   let fileLines: CommentLineSource | null = null;
@@ -67,7 +65,7 @@ describe('inline comment target', () => {
 
   const tree = () => (
     <I18nProvider>
-      <SyncProvider sdk={sdk} directory={directory}>
+      <SyncProvider directory={directory}>
         <Harness />
       </SyncProvider>
     </I18nProvider>

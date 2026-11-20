@@ -1,4 +1,4 @@
-type FileStatSnapshot = {
+export type FileStatSnapshot = {
   path: string;
   size: number;
   mtimeMs?: number;
