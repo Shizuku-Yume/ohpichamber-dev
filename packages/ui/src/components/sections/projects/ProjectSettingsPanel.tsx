@@ -24,21 +24,9 @@ import { useI18n } from '@/lib/i18n';
 type ProjectSettingsPanelProps = {
   project: ProjectEntry;
   onIdentitySave: (data: ProjectIdentitySaveData) => void | Promise<void>;
-<<<<<<< HEAD
   tab?: ProjectSettingsTab;
   onTabChange?: (tab: ProjectSettingsTab) => void;
   frame?: 'page' | 'dialog';
-||||||| bc50ba56aa
-  tab: ProjectSettingsTab;
-  onTabChange: (tab: ProjectSettingsTab) => void;
-  /** Settings frames the panel as a page with the save indicator; the edit dialog shows it bare. */
-  frame: 'page' | 'dialog';
-  /** Opens the project's worktrees page; absent where that page is not reachable. */
-=======
-  tab: ProjectSettingsTab;
-  onTabChange: (tab: ProjectSettingsTab) => void;
-  frame: 'page' | 'dialog';
->>>>>>> upstream/main
   onOpenWorktrees?: () => void;
   onCloseProject?: () => void;
   showWorktrees?: boolean;

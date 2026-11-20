@@ -19,25 +19,10 @@ interface SettingsPageLayoutProps {
   description?: React.ReactNode;
   headerEnd?: React.ReactNode;
   showSaveStatus?: boolean;
-<<<<<<< HEAD
   /**
    * Commit-on-blur for autosaving pages: fires for every focus leaving the
    * page content, so a text field does not need its own handler.
    */
-||||||| bc50ba56aa
-  /**
-   * A page opened from the settings sidebar, which already names it: the title
-   * stays for screen readers and focus, the description is not shown, and only
-   * the header's actions and save status stay on screen.
-   */
-  namedBySidebar?: boolean;
-  /**
-   * Commit-on-blur for autosaving pages: fires for every focus leaving the
-   * page content, so a text field does not need its own handler.
-   */
-=======
-  namedBySidebar?: boolean;
->>>>>>> upstream/main
   onBlurCapture?: React.FocusEventHandler;
   className?: string;
   outerClassName?: string;
@@ -79,54 +64,11 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
         )}
         onBlurCapture={onBlurCapture}
       >
-<<<<<<< HEAD
         {hasHeader && (
           // Wraps rather than squeezes. The action cluster never shrinks, so on
           // a narrow pane it used to starve the title until the name was a
           // single letter and an ellipsis; giving the title block a basis lets
           // the actions drop to their own line instead.
-||||||| bc50ba56aa
-        {namedBySidebar ? (
-          <>
-            {title != null ? <h1 data-settings-page-heading tabIndex={-1} className="sr-only">{title}</h1> : null}
-            {headerEnd != null ? (
-              <div className="mb-6 flex flex-wrap items-center justify-end gap-3">
-                {headerEnd}
-                {showSaveStatus && <SettingsSaveStatus />}
-              </div>
-            ) : showSaveStatus ? (
-              // Without actions the status floats in the corner, so it never pushes the page down.
-              <div className="pointer-events-none sticky top-0 z-10 flex h-0 justify-end">
-                <div className="pointer-events-auto rounded-md bg-background px-1">
-                  <SettingsSaveStatus />
-                </div>
-              </div>
-            ) : null}
-          </>
-        ) : hasHeader && (
-          // Wraps rather than squeezes. The action cluster never shrinks, so on
-          // a narrow pane it used to starve the title until the name was a
-          // single letter and an ellipsis; giving the title block a basis lets
-          // the actions drop to their own line instead.
-=======
-        {namedBySidebar ? (
-          <>
-            {title != null ? <h1 data-settings-page-heading tabIndex={-1} className="sr-only">{title}</h1> : null}
-            {headerEnd != null ? (
-              <div className="mb-6 flex flex-wrap items-center justify-end gap-3">
-                {headerEnd}
-                {showSaveStatus && <SettingsSaveStatus />}
-              </div>
-            ) : showSaveStatus ? (
-              <div className="pointer-events-none sticky top-0 z-10 flex h-0 justify-end">
-                <div className="pointer-events-auto rounded-md bg-background px-1">
-                  <SettingsSaveStatus />
-                </div>
-              </div>
-            ) : null}
-          </>
-        ) : hasHeader && (
->>>>>>> upstream/main
           <div className={cn(
             'flex flex-wrap items-start justify-between gap-x-4 gap-y-3',
             isMobile && description == null && headerEnd == null && !hasTitleChrome ? 'mb-0' : 'mb-2 pb-6',

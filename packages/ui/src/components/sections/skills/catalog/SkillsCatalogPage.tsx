@@ -194,14 +194,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     void loadCatalog();
   }, [loadCatalog]);
 
-<<<<<<< HEAD
-  // Load every source in the background so global search covers all of them.
-  // Navigating away aborts the request in flight; the store treats an abort as
-  // no result, never as a load failure on the page the user moved to.
-||||||| bc50ba56aa
-  // Load every source in the background so global search covers all of them.
-=======
->>>>>>> upstream/main
   React.useEffect(() => {
     const unloaded = sources.filter((src) => !loadedSourceIds[src.id]);
     if (unloaded.length === 0) {
@@ -718,18 +710,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
         </SettingsSection>
       </SettingsPageLayout>
 
-<<<<<<< HEAD
-      {/* Dialogs */}
-      <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
-      <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
-||||||| bc50ba56aa
-        {/* Dialogs */}
         <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
         <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
-=======
-        <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
-        <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
->>>>>>> upstream/main
 
       <Dialog open={uninstallItems.length > 0} onOpenChange={(open) => !open && !isUninstalling && setUninstallItems([])}>
         <DialogContent className="max-w-md">

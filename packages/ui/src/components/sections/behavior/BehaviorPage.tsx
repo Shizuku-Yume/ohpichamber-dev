@@ -104,7 +104,6 @@ export const BehaviorPage: React.FC = () => {
   const [responseStylePreset, setResponseStylePreset] = React.useState<ResponseStylePreset>('default');
   const [responseStyleCustomInstructions, setResponseStyleCustomInstructions] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(true);
-<<<<<<< HEAD
 
   // What is currently on disk. Every field is compared against this, so a save
   // writes only what actually changed and a refreshed value is never clobbered.
@@ -129,17 +128,6 @@ export const BehaviorPage: React.FC = () => {
     if (!response.ok) return null;
     return agentsMdResponseSchema.parse(await response.json());
   }, [settingsDirectory]);
-||||||| bc50ba56aa
-  // What is currently on disk. Every field is compared against this, so a save
-  // writes only what actually changed and a refreshed value is never clobbered.
-  const savedRef = React.useRef<BehaviorSettingsState | null>(null);
-  // AGENTS.md exactly as last read or written (null: no file). A save sends it
-  // so the server refuses to overwrite a file edited elsewhere in the meantime.
-  const agentsMdOnDiskRef = React.useRef<string | null>(null);
-=======
-  const savedRef = React.useRef<BehaviorSettingsState | null>(null);
-  const agentsMdOnDiskRef = React.useRef<string | null>(null);
->>>>>>> upstream/main
 
   React.useEffect(() => {
     const abort = new AbortController();
@@ -153,7 +141,6 @@ export const BehaviorPage: React.FC = () => {
         ]);
         if (abort.signal.aborted) return;
 
-<<<<<<< HEAD
         const next = {
           globalRules: globalFile?.content ?? '',
           projectRules: projectFile?.content ?? '',
@@ -162,67 +149,6 @@ export const BehaviorPage: React.FC = () => {
             ? settings.responseStylePreset
             : DEFAULT_RESPONSE_STYLE_PRESET,
           responseStyleCustomInstructions: settings?.responseStyleCustomInstructions ?? '',
-||||||| bc50ba56aa
-        let nextSettings: BehaviorSettingsState = DEFAULT_BEHAVIOR_SETTINGS;
-        let settingsGlobalBehaviorPrompt: string | undefined;
-        if (data) {
-          nextSettings = {
-            ...nextSettings,
-            responseStyleEnabled: data.responseStyleEnabled === true,
-            responseStylePreset: sanitizeResponseStylePreset(data.responseStylePreset),
-            responseStyleCustomInstructions: data.responseStyleCustomInstructions ?? '',
-          };
-          if (data.globalBehaviorPrompt !== undefined) {
-            settingsGlobalBehaviorPrompt = data.globalBehaviorPrompt;
-          }
-        }
-
-        // AGENTS.md is the source of truth OpenCode reads at runtime, so an
-        // existing file is authoritative even when it is empty. The persisted
-        // copy (globalBehaviorPrompt) is only a fallback for a missing file or
-        // a failed read.
-        let promptSource: BehaviorPromptSource = { kind: 'missing' };
-        if (agentsMdRes.ok) {
-          const agentsData = agentsMdResponseSchema.parse(await agentsMdRes.json());
-          if (abort.signal.aborted) return;
-          setAgentsMdPath(agentsData.path ?? 'AGENTS.md');
-          agentsMdOnDiskRef.current = agentsData.exists ? agentsData.content : null;
-          if (agentsData.exists) {
-            promptSource = { kind: 'file', content: agentsData.content };
-          }
-        }
-        nextSettings = {
-          ...nextSettings,
-          prompt: resolveBehaviorPrompt(promptSource, settingsGlobalBehaviorPrompt),
-=======
-        let nextSettings: BehaviorSettingsState = DEFAULT_BEHAVIOR_SETTINGS;
-        let settingsGlobalBehaviorPrompt: string | undefined;
-        if (data) {
-          nextSettings = {
-            ...nextSettings,
-            responseStyleEnabled: data.responseStyleEnabled === true,
-            responseStylePreset: sanitizeResponseStylePreset(data.responseStylePreset),
-            responseStyleCustomInstructions: data.responseStyleCustomInstructions ?? '',
-          };
-          if (data.globalBehaviorPrompt !== undefined) {
-            settingsGlobalBehaviorPrompt = data.globalBehaviorPrompt;
-          }
-        }
-
-        let promptSource: BehaviorPromptSource = { kind: 'missing' };
-        if (agentsMdRes.ok) {
-          const agentsData = agentsMdResponseSchema.parse(await agentsMdRes.json());
-          if (abort.signal.aborted) return;
-          setAgentsMdPath(agentsData.path ?? 'AGENTS.md');
-          agentsMdOnDiskRef.current = agentsData.exists ? agentsData.content : null;
-          if (agentsData.exists) {
-            promptSource = { kind: 'file', content: agentsData.content };
-          }
-        }
-        nextSettings = {
-          ...nextSettings,
-          prompt: resolveBehaviorPrompt(promptSource, settingsGlobalBehaviorPrompt),
->>>>>>> upstream/main
         };
         agentsMdOnDiskRef.current = {
           global: globalFile?.exists ? globalFile.content : null,
@@ -245,7 +171,6 @@ export const BehaviorPage: React.FC = () => {
     return () => abort.abort();
   }, [readRules]);
 
-<<<<<<< HEAD
   // AGENTS.md is often edited in another editor while this page stays open, so
   // coming back to the window re-reads both scopes. A draft with an edit of its
   // own is kept; the pending save then names the stale text and is refused.
@@ -253,16 +178,6 @@ export const BehaviorPage: React.FC = () => {
   globalRulesRef.current = globalRules;
   const projectRulesRef = React.useRef(projectRules);
   projectRulesRef.current = projectRules;
-||||||| bc50ba56aa
-  // AGENTS.md is often edited in another editor while this page stays open.
-  // Coming back to the window re-reads it; the editor follows only when it
-  // holds no edit of its own, and a pending edit is guarded by the save.
-  const promptRef = React.useRef(prompt);
-  promptRef.current = prompt;
-=======
-  const promptRef = React.useRef(prompt);
-  promptRef.current = prompt;
->>>>>>> upstream/main
   React.useEffect(() => {
     let abort: AbortController | null = null;
     const refresh = async () => {
@@ -336,7 +251,6 @@ export const BehaviorPage: React.FC = () => {
     const projectResult = await saveRules('project', projectRules, agentsMdOnDiskRef.current.project, saved.projectRules);
     if (projectResult && !projectResult.ok) return projectResult;
 
-<<<<<<< HEAD
     // `default` is an explicit choice with the same zero-injection result as an
     // unset preference; switching the feature off also resolves to no text.
     const instruction = responseStyleEnabled
@@ -352,46 +266,8 @@ export const BehaviorPage: React.FC = () => {
         responseStylePreset,
         responseStyleInstruction: instruction,
         responseStyleCustomInstructions,
-||||||| bc50ba56aa
-    // The prompt lives in AGENTS.md; the rest lives in OpenChamber settings.
-    const content = promptChanged ? normalizeAgentsMdContent(prompt) : saved.prompt;
-    if (promptChanged) {
-      const response = await runtimeFetch('/api/behavior/agents-md', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ content, expectedContent: agentsMdOnDiskRef.current }),
-=======
-    const content = promptChanged ? normalizeAgentsMdContent(prompt) : saved.prompt;
-    if (promptChanged) {
-      const response = await runtimeFetch('/api/behavior/agents-md', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ content, expectedContent: agentsMdOnDiskRef.current }),
->>>>>>> upstream/main
       });
-<<<<<<< HEAD
       if (!result.ok) return autosaveFailed(t('settings.behavior.page.toast.saveFailed'));
-||||||| bc50ba56aa
-      if (response.status === 409) {
-        return autosaveFailed(t('settings.behavior.page.toast.agentsMdChangedOnDisk'));
-      }
-      if (!response.ok) {
-        return autosaveFailed(await readApiError(response, t('settings.behavior.page.toast.saveFailed')));
-      }
-      agentsMdOnDiskRef.current = content;
-      // Normalize only the submitted draft. A newer edit must survive this
-      // response so the autosave follow-up can still write it.
-      setPrompt((current) => current === prompt ? content : current);
-=======
-      if (response.status === 409) {
-        return autosaveFailed(t('settings.behavior.page.toast.agentsMdChangedOnDisk'));
-      }
-      if (!response.ok) {
-        return autosaveFailed(await readApiError(response, t('settings.behavior.page.toast.saveFailed')));
-      }
-      agentsMdOnDiskRef.current = content;
-      setPrompt((current) => current === prompt ? content : current);
->>>>>>> upstream/main
     }
 
     const nextSaved = {

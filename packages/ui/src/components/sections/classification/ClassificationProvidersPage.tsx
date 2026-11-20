@@ -21,15 +21,8 @@ import { CustomEndpointFields } from './CustomEndpointFields';
 import { ClassifierTestButton } from './ClassifierTestButton';
 import { SettingsInlineLink } from './JevAccessNote';
 
-<<<<<<< HEAD
 // The docs keep the list of features Jev answers for, so this page never goes stale.
 const CLASSIFICATION_DOCS_URL = 'https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/docs/content/docs/classification-providers.mdx';
-||||||| bc50ba56aa
-// The docs keep the list of features Jev answers for, so this page never goes stale.
-const CLASSIFICATION_DOCS_URL = 'https://docs.openchamber.dev/classification-providers/';
-=======
-const CLASSIFICATION_DOCS_URL = 'https://docs.openchamber.dev/classification-providers/';
->>>>>>> upstream/main
 
 interface ClassificationProvidersPageProps {
   titleLeading: React.ReactNode;

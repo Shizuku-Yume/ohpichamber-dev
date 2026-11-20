@@ -81,15 +81,8 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       counter++;
     }
 
-<<<<<<< HEAD
     // Set draft and open the page for editing
     setCommandDraft({ name: newName, scope: 'agent' });
-||||||| bc50ba56aa
-    // Set draft and open the page for editing
-    setCommandDraft({ name: newName, scope: 'user' });
-=======
-    setCommandDraft({ name: newName, scope: 'user' });
->>>>>>> upstream/main
     setSelectedCommand(newName);
     onItemSelect?.();
 
@@ -170,53 +163,11 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-<<<<<<< HEAD
     const success = await updateCommand(renameDialogCommand.name, { name: sanitizedName }, settingsDirectory, renameDialogCommand.commandId);
-||||||| bc50ba56aa
-    // Create new command with new name and all existing config
-    const success = await createCommand({
-      name: sanitizedName,
-      description: renameDialogCommand.description,
-      template: renameDialogCommand.template,
-      agent: renameDialogCommand.agent,
-      model: renameDialogCommand.model,
-      subagent: renameDialogCommand.subagent,
-      scope: renameDialogCommand.scope,
-    }, settingsDirectory);
-=======
-    const success = await createCommand({
-      name: sanitizedName,
-      description: renameDialogCommand.description,
-      template: renameDialogCommand.template,
-      agent: renameDialogCommand.agent,
-      model: renameDialogCommand.model,
-      subagent: renameDialogCommand.subagent,
-      scope: renameDialogCommand.scope,
-    }, settingsDirectory);
->>>>>>> upstream/main
 
     if (success) {
-<<<<<<< HEAD
       toast.success(t('settings.common.status.saved'));
       setSelectedCommand(sanitizedName);
-||||||| bc50ba56aa
-      // Delete old command
-      const deleteSuccess = await deleteCommand(renameDialogCommand.name, settingsDirectory);
-      if (deleteSuccess) {
-        toast.success(`Command renamed to "${sanitizedName}"`);
-        setSelectedCommand(sanitizedName);
-      } else {
-        toast.error(t('settings.commands.sidebar.toast.removeOldAfterRenameFailed'));
-      }
-=======
-      const deleteSuccess = await deleteCommand(renameDialogCommand.name, settingsDirectory);
-      if (deleteSuccess) {
-        toast.success(`Command renamed to "${sanitizedName}"`);
-        setSelectedCommand(sanitizedName);
-      } else {
-        toast.error(t('settings.commands.sidebar.toast.removeOldAfterRenameFailed'));
-      }
->>>>>>> upstream/main
     } else {
       toast.error(t('settings.commands.sidebar.toast.renameFailed'));
     }

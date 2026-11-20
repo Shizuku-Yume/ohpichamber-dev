@@ -49,7 +49,6 @@ export const GitSettings: React.FC = () => {
  const ompStateRef = React.useRef<OmpSettingsState | null>(null);
  ompStateRef.current = ompState;
 
-<<<<<<< HEAD
  const viewOptions = React.useMemo(
   () => [
    { id: 'flat' as const, label: t('settings.openchamber.git.option.flatList') },
@@ -57,34 +56,6 @@ export const GitSettings: React.FC = () => {
   ],
   [t]
  );
-||||||| bc50ba56aa
-  // Load current settings
-  React.useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const data = await loadDesktopSettings();
-        if (data) {
-          if (data.gitmojiEnabled !== undefined) {
-            setSettingsGitmojiEnabled(data.gitmojiEnabled);
-          }
-          if (data.gitChangesViewMode !== undefined) {
-            setGitChangesViewMode(data.gitChangesViewMode);
-          }
-        }
-=======
-  React.useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const data = await loadDesktopSettings();
-        if (data) {
-          if (data.gitmojiEnabled !== undefined) {
-            setSettingsGitmojiEnabled(data.gitmojiEnabled);
-          }
-          if (data.gitChangesViewMode !== undefined) {
-            setGitChangesViewMode(data.gitChangesViewMode);
-          }
-        }
->>>>>>> upstream/main
 
  // Load current settings
  React.useEffect(() => {

@@ -68,14 +68,6 @@ export function ThemeImportButton() {
 
   return (
     <div className="flex items-center gap-2" data-settings-item="appearance.import-theme">
-<<<<<<< HEAD
-      <span className="hidden @xl:contents"><SettingsInfoHint>{t('settings.themeImport.catalogHint')}</SettingsInfoHint></span>
-      {/* Below the pane's @xl width the button keeps only its plus, so it fits beside the section title; the size variant then supplies its own square-ish padding. */}
-||||||| bc50ba56aa
-      <span className="hidden @xl:contents"><SettingsInfoHint>{t('settings.themeImport.catalogHint')}</SettingsInfoHint></span>
-      {/* Below the pane's @xl width the button keeps only its plus, so it fits beside the section title. */}
-=======
->>>>>>> upstream/main
       <Button
         variant="outline"
         size="sm"

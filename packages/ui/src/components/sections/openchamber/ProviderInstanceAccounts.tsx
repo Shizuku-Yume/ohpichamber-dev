@@ -390,17 +390,9 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
   }
 
   return (
-<<<<<<< HEAD
     // One group per instance: the address heads it, its accounts and actions
     // follow. Groups part with a line, never a filled box inside the card.
     <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'py-4 first:pt-0 last:pb-0')}>
-||||||| bc50ba56aa
-    // One group per instance: the address heads it, its accounts and actions
-    // follow. Groups part with a line, never a filled box inside the card.
-    <div className="space-y-3 py-4 first:pt-0 last:pb-0">
-=======
-    <div className="space-y-3 py-4 first:pt-0 last:pb-0">
->>>>>>> upstream/main
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="typography-ui-label truncate font-medium text-foreground" title={identity.instance}>

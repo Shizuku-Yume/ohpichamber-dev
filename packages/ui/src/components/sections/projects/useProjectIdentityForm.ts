@@ -182,17 +182,9 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
   );
 
   const handleDefaultModelChange = React.useCallback((providerId: string, modelId: string) => {
-<<<<<<< HEAD
     setDefaultModel(modelRefKey(providerId, modelId) || undefined);
     // Variants belong to a model. Carrying the old one over would pin a name
     // the new model may not have.
-||||||| bc50ba56aa
-    setDefaultModel(providerId && modelId ? `${providerId}/${modelId}` : undefined);
-    // Variants belong to a model. Carrying the old one over would pin a name
-    // the new model may not have.
-=======
-    setDefaultModel(providerId && modelId ? `${providerId}/${modelId}` : undefined);
->>>>>>> upstream/main
     setDefaultVariant(undefined);
   }, []);
 

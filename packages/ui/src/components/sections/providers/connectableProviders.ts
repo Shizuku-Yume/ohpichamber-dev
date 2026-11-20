@@ -13,23 +13,12 @@ interface PopularProvider {
   recommended: boolean;
 }
 
-<<<<<<< HEAD
 /**
  * Leads the connect page, in this order. Recommended providers come first; a
  * provider that is already configured drops out, because it connects from its
  * own page.
  */
 const POPULAR_PROVIDERS: readonly PopularProvider[] = [
-||||||| bc50ba56aa
-/**
- * Leads the connect page, in this order. Recommended providers come first; a
- * provider that is already listed (connected, or found in the environment)
- * drops out, because it connects from its own page.
- */
-export const POPULAR_PROVIDERS: readonly PopularProvider[] = [
-=======
-export const POPULAR_PROVIDERS: readonly PopularProvider[] = [
->>>>>>> upstream/main
   { id: 'openai', noteKey: 'settings.providers.connect.note.openai', recommended: true },
   { id: 'opencode-go', noteKey: 'settings.providers.connect.note.opencodeGo', recommended: true },
   { id: 'openrouter', noteKey: 'settings.providers.connect.note.openrouter', recommended: true },
@@ -51,24 +40,6 @@ const toConnectable = (provider: Provider): ConnectableProvider => ({
 const byName = (a: ConnectableProvider, b: ConnectableProvider) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
-<<<<<<< HEAD
-/**
- * What can still be connected: native providers the workspace reports without
- * a configured credential. Sorted by name so the compact rows stay scannable.
- * A provider working from an environment variable has a credential, so it
- * stays out of this list; `listProvidersAcceptingKey` covers it instead.
- */
-||||||| bc50ba56aa
-/**
- * What can still be connected. v2's provider list holds only what is
- * configured or connected right now, so the candidates are the integrations,
- * minus those with any connection, MCP OAuth registrations (`mcp_*`), web
- * search providers (their keys live in Settings → Web search; a plugin's are
- * marked on the integration, since OpenCode lists them for search only once
- * connected) and providers OpenCode already lists. Sorted by name.
- */
-=======
->>>>>>> upstream/main
 export const listConnectableProviders = (
   providers: readonly Provider[],
 ): ConnectableProvider[] => providers

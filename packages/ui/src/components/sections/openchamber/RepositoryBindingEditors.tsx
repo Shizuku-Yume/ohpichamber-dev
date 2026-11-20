@@ -216,32 +216,11 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
   React.useLayoutEffect(() => {
   }, [selected?.endpoint.fingerprint]);
 
-<<<<<<< HEAD
   // A submodule or LFS server is authenticated the same way a remote is, so it
   // is answered with an identity rather than with a transport and a credential
   // chosen apart from it. Identities kept from an earlier release name no
   // account and no transport, so they have nothing to grant an endpoint with
   // and are not offered here.
-||||||| bc50ba56aa
-  React.useEffect(() => {
-    if (!open) return;
-    void loadGitIdentityProfiles();
-    void loadGlobalGitIdentity();
-  }, [loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
-
-  // A submodule or LFS server is authenticated the same way a remote is, so it
-  // is answered with an identity rather than with a transport and a credential
-  // chosen apart from it. Identities kept from an earlier release name no
-  // account and no transport, so they have nothing to grant an endpoint with
-  // and are not offered here.
-=======
-  React.useEffect(() => {
-    if (!open) return;
-    void loadGitIdentityProfiles();
-    void loadGlobalGitIdentity();
-  }, [loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
-
->>>>>>> upstream/main
   const availableIdentities = React.useMemo(
     () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
       (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
