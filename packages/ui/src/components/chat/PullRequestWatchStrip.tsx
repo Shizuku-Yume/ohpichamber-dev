@@ -25,34 +25,6 @@ const STOP_BUTTON_CLASS = 'shrink-0 text-muted-foreground hover:bg-transparent h
 
 const WatchRow: React.FC<{ watch: PrWatch; urls: RepositoryUrlMatcher; onStop: (watch: PrWatch) => void }> = ({ watch, urls, onStop }) => {
   const { t } = useI18n();
-<<<<<<< HEAD
-  const urls = useRepositoryUrlMatcher();
-  const watch = usePrWatchStore(React.useCallback((state) => (sessionId ? state.bySession.get(sessionId) ?? null : null), [sessionId]));
-
-  if (!watch) return null;
-
-  const handleStop = () => {
-    void stopPrWatch(watch.sessionID).catch((error: unknown) => {
-      console.warn('[pr-watch] failed to stop watching', error);
-      toast.error(t('chat.prWatch.toast.stopFailed'));
-    });
-  };
-
-||||||| bc50ba56aa
-  const urls = useRepositoryUrlMatcher();
-  const watch = usePrWatchStore(React.useCallback((state) => (sessionId ? state.bySession.get(sessionId) ?? null : null), [sessionId]));
-
-  if (!watch) return null;
-
-  const handleStop = () => {
-    void stopPrWatch(watch.sessionID).catch((error) => {
-      console.warn('[pr-watch] failed to stop watching', error);
-      toast.error(t('chat.prWatch.toast.stopFailed'));
-    });
-  };
-
-=======
->>>>>>> upstream/main
   return (
     <div className="flex oc-composer-row min-w-0 items-center gap-2 ps-3 pe-1.5">
       <Icon name="git-pull-request" className="size-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
