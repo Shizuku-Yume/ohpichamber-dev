@@ -7,7 +7,7 @@ import { plainChromeUserAgent } from './browser-panel-security.mjs';
 import { enableMainProcessCompileCache } from './compile-cache.mjs';
 import { shouldIgnoreLoopbackConnectionLimit } from './startup-url-selection.mjs';
 import { configureDevDataDir } from './dev-data-dir.mjs';
-import { assignInjectedEnv } from '@openchamber/web/server/lib/injected-env.js';
+import { assignInjectedEnv } from 'ohpichamber/server/lib/injected-env.js';
 import {
   APP_USER_MODEL_ID,
   UI_PROTOCOL,
