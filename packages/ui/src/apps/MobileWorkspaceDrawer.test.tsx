@@ -140,6 +140,9 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
             onClose={() => undefined}
             onTabChange={() => undefined}
             pendingChangesDiff={null}
+          pendingChangesCommit={null}
+          onOpenReceivedPage={() => undefined}
+          registerPreviewBackHandler={() => undefined}
             onOpenPlan={() => undefined}
           />
         </I18nProvider>,
@@ -166,6 +169,9 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
           onClose={() => undefined}
           onTabChange={() => undefined}
           pendingChangesDiff={null}
+          pendingChangesCommit={null}
+          onOpenReceivedPage={() => undefined}
+          registerPreviewBackHandler={() => undefined}
           onOpenPlan={() => undefined}
           registerBackHandler={registerBackHandler}
           variant="panel"
@@ -185,7 +191,10 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
     const renderDrawer = async (tab: 'changes' | 'files' | 'notes', open = true) => act(async () => root.render(
       <I18nProvider>
         <MobileWorkspaceDrawer open={open} tab={tab} onClose={() => undefined}
-          onTabChange={() => undefined} pendingChangesDiff={null} onOpenPlan={() => undefined}
+          onTabChange={() => undefined} pendingChangesDiff={null}
+          pendingChangesCommit={null}
+          onOpenReceivedPage={() => undefined}
+          registerPreviewBackHandler={() => undefined} onOpenPlan={() => undefined}
           registerBackHandler={registerBackHandler} variant="panel" />
       </I18nProvider>,
     ));
@@ -224,6 +233,9 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
             onClose={onClose}
             onTabChange={() => undefined}
             pendingChangesDiff={null}
+          pendingChangesCommit={null}
+          onOpenReceivedPage={() => undefined}
+          registerPreviewBackHandler={() => undefined}
             onOpenPlan={() => undefined}
             variant="panel"
           />

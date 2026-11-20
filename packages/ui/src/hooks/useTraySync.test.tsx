@@ -49,7 +49,6 @@ describe('Dock badge with the macOS menu bar disabled', () => {
 
   beforeEach(() => {
     dom = new Window({ url: 'http://localhost/' });
-    jest.useFakeTimers();
     Object.assign(dom, {
       __OPENCHAMBER_PLATFORM__: 'darwin',
       __OPENCHAMBER_ELECTRON__: { runtime: 'electron', trayEnabled: false },

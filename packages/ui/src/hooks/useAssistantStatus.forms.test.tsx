@@ -3,13 +3,11 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import type { QuestionRequest as FormRequest, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
-type ToolPart = NativeToolCallPart | NativeToolResultPart;
+import { nativeQuestion } from '@/sync/session-message-loader-test-fixtures';
 import type { State } from '@/sync/types';
 
-// A running turn with an open form, either still holding the turn or deferred
-// past its tool call (#5391).
-let directoryState: Pick<State, 'form' | 'part'> = { form: {}, part: {} };
+let questions: ReturnType<typeof nativeQuestion>[] = [];
+const directoryState: Pick<State, 'snapshot' | 'session' | 'message'> = { snapshot: {}, session: [], message: {} };
 const NO_MESSAGES: never[] = [];
 const NO_SERVERS: never[] = [];
 
@@ -19,7 +17,9 @@ mock.module('@/components/chat/chatColumnSession', () => ({
 mock.module('@/sync/sync-context', () => ({
   useSession: () => undefined,
   useSessionMessages: () => NO_MESSAGES,
-  useSessionStatus: () => ({ type: 'busy' }),
+  useSessionStatus: () => 'running',
+  useSessionCompacting: () => null,
+  useSessionForms: () => questions,
   useSessionStatusSnapshotReady: () => true,
   useSessionMessagesSelector: () => false,
   useSessionPermissions: () => NO_MESSAGES,
@@ -35,27 +35,13 @@ mock.module('@/stores/useMcpConfigStore', () => ({
 }));
 
 const { useAssistantStatus } = await import('./useAssistantStatus');
-const recovery = await import('@/sync/recoverable-questions');
-
-const form: FormRequest = {
-  id: 'frm_later',
-  sessionID: 'ses_a',
-  title: 'Questions',
-  metadata: { kind: 'question', tool: { messageID: 'msg_ask', id: 'call_ask' } },
-  fields: [{ key: 'q0', type: 'string' }],
-};
-
-const toolPart = (state: ToolPart['state']): ToolPart => ({
-  id: 'call_ask', sessionID: 'ses_a', messageID: 'msg_ask', callID: 'call_ask', tool: 'deferred_question', type: 'tool', state,
-});
-
 let root: Root | null = null;
 let host: HTMLElement;
 const originals = new Map<string, PropertyDescriptor | undefined>();
 
 const Probe: React.FC = () => {
   const { working } = useAssistantStatus();
-  return <span data-id="working">{`${working.isWorking}:${working.canAbort}`}</span>;
+  return <span data-id="working">{String(working.isWorking)}</span>;
 };
 const working = () => host.querySelector('[data-id="working"]')?.textContent ?? null;
 const render = () => act(async () => root?.render(<Probe />));
@@ -67,7 +53,7 @@ beforeEach(() => {
     originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
-  recovery.resetRecoverableQuestions();
+  questions = [];
   host = document.createElement('div');
   root = createRoot(host);
 });
@@ -82,14 +68,13 @@ afterEach(() => {
   originals.clear();
 });
 
-test('a form whose tool call completed leaves the turn working with Stop available', async () => {
-  directoryState = { form: { ses_a: [form] }, part: { msg_ask: [toolPart({ status: 'completed', input: {}, output: '', time: { start: 1, end: 2 } })] } };
+test('a running session reports work until the Agent Service asks for input', async () => {
   await render();
-  expect(working()).toBe('true:true');
-});
-
-test('a form whose tool call is still running pauses the status for the answer', async () => {
-  directoryState = { form: { ses_a: [form] }, part: { msg_ask: [toolPart({ status: 'running', input: {}, time: { start: 1 } })] } };
+  expect(working()).toBe('true');
+  questions = [nativeQuestion('ses_a')];
   await render();
-  expect(working()).toBe('false:false');
+  expect(working()).toBe('false');
+  questions = [];
+  await render();
+  expect(working()).toBe('true');
 });

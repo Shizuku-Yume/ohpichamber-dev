@@ -4,7 +4,7 @@ import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { MobileSheetRow, MobileSheetSection } from '@/components/ui/MobileSheetList';
-import { OpenChamberLogo } from '@/components/ui/OhPiChamberLogo';
+import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';

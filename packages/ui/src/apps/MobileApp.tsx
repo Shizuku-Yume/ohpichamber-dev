@@ -1,11 +1,14 @@
 import { connectMobileWorkspaceOpener } from '@/lib/mobileWorkspaceTabs';
 import { PluginPane } from '@/components/layout/PluginPane';
+import { flushSync } from 'react-dom';
+import { useGuestPages } from '@/hooks/useGuestSurfaces';
+import type { MobileChangesCommitRequest } from './mobileChangesCommitRequest';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { GuestHosts } from '@/components/layout/GuestHosts';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
-import { OpenChamberLogo } from '@/components/ui/OhPiChamberLogo';
+import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
 import { LegacyDataNotice } from '@/components/onboarding/LegacyDataNotice';
 import { ChatView } from '@/components/views/ChatView';
@@ -144,9 +147,19 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
 
   const [settingsInitialMobileStage, setSettingsInitialMobileStage] = React.useState<'nav' | 'page-content'>('nav');
   // When set, the Changes surface opens directly into the per-file diff for this path.
-  const [pendingChangesDiff, setPendingChangesDiff] = React.useState<{ path: string; staged: boolean } | null>(null);
+  const [changesRequest, setChangesRequest] = React.useState<
+    { diff: { path: string; staged: boolean; scope?: 'turn' } } | { commit: MobileChangesCommitRequest } | null
+  >(null);
+  const pendingChangesDiff = changesRequest && 'diff' in changesRequest ? changesRequest.diff : null;
+  const pendingChangesCommit = changesRequest && 'commit' in changesRequest ? changesRequest.commit : null;
+  const openGuestPageId = useUIStore((state) => state.openGuestPageId);
+  const guestPages = useGuestPages();
+  const guestPage = guestPages.find((guest) => guest.id === openGuestPageId) ?? null;
+  const closeGuestPage = React.useCallback(() => useUIStore.getState().setOpenGuestPage(null), []);
+  React.useEffect(() => {
+    if (openGuestPageId && !guestPage) closeGuestPage();
+  }, [closeGuestPage, guestPage, openGuestPageId]);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
-  const wideChatLayoutEnabled = useUIStore((state) => state.wideChatLayoutEnabled);
   const showCapacitorOnlyFeatures = React.useMemo(() => isCapacitorMobileApp(), []);
 
   const closeSurface = React.useCallback(() => {
@@ -245,8 +258,8 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     });
   }), [closeSurface, isTabletLayout, openFilesSurface, t]);
 
-  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean } | null = null) => {
-    setPendingChangesDiff(diff);
+  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean; scope?: 'turn' } | null = null) => {
+    setChangesRequest(diff ? { diff } : null);
     setWorkspaceTab('changes');
     setWorkspaceOpen(true);
   }, []);
@@ -299,11 +312,12 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
 
   const mobileActions = React.useMemo<MobileAppActions>(
     () => ({
-      openChanges: ({ diffPath, staged } = {}) => {
-        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true } : null);
+      openChanges: ({ diffPath, staged, scope } = {}) => {
+        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, scope } : null);
       },
       openFiles: () => openFilesSurface(),
-      openPlan: (plan) => setOpenPlan(plan),
+      openPlan: setOpenPlan,
+      openReceivedPage: setOpenReceivedPage,
       openSettings: () => openSettingsSurface('nav'),
       openSourceBoard: () => openSurface('board'),
     }),
@@ -396,7 +410,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
       return true;
     }
     return false;
-  }, [activeSurface, closeGuestPage, closeSurface, closeWorkspace, guestPage, openPlan, openReceivedPage, sessionsSheetOpen, workspaceOpen, workspaceTab]);
+  }, [activeSurface, closeGuestPage, closeSurface, closeWorkspace, guestPage, openPlan, openReceivedPage, sessionsSheetOpen, workspaceOpen]);
 
   useNativeAndroidBackButton(handleNativeBack);
 
@@ -605,7 +619,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
             <ErrorBoundary>
               <PlanView
                 savedProjectPlan={{ projectRef: openPlan.projectRef, planId: openPlan.id }}
-                onClose={() => setOpenPlan(null)}
                 onNavigatedToChat={() => {
                   closeSurface();
                   closeWorkspace();
@@ -874,7 +887,7 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
       lastNativeResumeSyncEventAtRef.current = now;
       window.dispatchEvent(new Event('openchamber:system-resume'));
     }
-  }, [apis.sourceControl, apis.trackers, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshSourceControlProviders]);
+  }, [apis.sourceControl, apis.trackers, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshSourceControlProviders, setConnectionEpoch]);
 
   useNativeMobileChrome();
   useNativeMobileLifecycle(handleNativeResume);
@@ -946,7 +959,7 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
       setRuntimeEndpointEpoch((epoch) => epoch + 1);
       setConnectionEpoch((epoch) => epoch + 1);
     });
-  }, []);
+  }, [setConnectionEpoch]);
 
   React.useEffect(() => {
     if (!isNativeMobileApp || isConnected || getRuntimeApiBaseUrl()) {
@@ -1096,7 +1109,7 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     void refreshSourceControlProviders(apis.sourceControl);
     void refreshSourceControlAuth(apis.sourceControl, { force: true });
     void refreshTrackers(apis.trackers);
-  }, [apis.sourceControl, apis.trackers, isConnected, refreshSourceControlAuth, refreshSourceControlProviders]);
+  }, [apis.sourceControl, apis.trackers, isConnected, refreshSourceControlAuth, refreshSourceControlProviders, setConnectionEpoch]);
 
   // Discover all worktrees for every known project so the draft session's
   // worktree/branch dropdown can list every available branch — not only the

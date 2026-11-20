@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { refreshGlobalSessionsWhenShown, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS } from '@/hooks/useGlobalSessionsPolling';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useSessionMarkedUnread, useSessionUnread } from '@/sync/session-unread';
+import { useSessionUnread } from '@/sync/session-unread';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
@@ -30,10 +30,9 @@ const SwitcherRow: React.FC<{
 }> = ({ session, meta, active, onSelect }) => {
   const { t } = useI18n();
   const isUnread = useSessionUnread(session.sessionId);
-  const markedUnread = useSessionMarkedUnread(session.sessionId);
   const turnActivity = useSessionTurnActivity(session.sessionId);
   const isStreaming = turnActivity !== null;
-  const showUnreadDot = !isStreaming && isUnread && (!active || markedUnread);
+  const showUnreadDot = !isStreaming && isUnread;
   const hasActivityDuration = useHasSessionActivityDuration(session.sessionId, isStreaming);
   const showActivityDuration = (isStreaming || showUnreadDot) && hasActivityDuration;
   const timeLabel = formatSessionCompactDateLabel(session.updatedAt || session.createdAt);

@@ -1,3 +1,4 @@
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
@@ -78,7 +79,7 @@ export type SessionTreeInFolder = {
 export const groupSessionTreesByFolder = (sessions: readonly Session[]): SessionTreeInFolder[] => {
   const byFolder = new Map<string, Session[]>();
   for (const session of sessions) {
-    const folder = normalizePath(session.directory);
+    const folder = resolveGlobalSessionDirectory(session);
     if (!folder) continue;
     const members = byFolder.get(folder);
     if (members) members.push(session);
@@ -121,7 +122,7 @@ export async function moveSessionsThenRemoveWorktree(options: {
     if (activity === 'unknown') throw new WorktreeKeepStoppedError('unknown');
     if (activity === 'active') throw new WorktreeKeepStoppedError('busy');
   }
-  if (sessions.some((session) => !normalizePath(session.directory))) throw new Error('A session in the worktree has no folder');
+  if (sessions.some((session) => !resolveGlobalSessionDirectory(session))) throw new Error('A session in the worktree has no folder');
   const worktreePath = normalizePath(options.worktreePath) ?? options.worktreePath;
   const moves = await Promise.all(groupSessionTreesByFolder(sessions).map(async (tree) => ({
     ...tree,
@@ -133,7 +134,6 @@ export async function moveSessionsThenRemoveWorktree(options: {
     assertCurrent();
     await options.moveTree(move);
   }
-  // external: https://github.com/anomalyco/opencode/blob/v2.3.0/packages/core/src/session/move.ts OpenCode queues moves before applying them in the source folder's runner.
   const confirmed = moves.length === 0 || await options.confirmMoves(moves);
   assertCurrent();
   if (!confirmed) throw new WorktreeKeepStoppedError('unconfirmed');

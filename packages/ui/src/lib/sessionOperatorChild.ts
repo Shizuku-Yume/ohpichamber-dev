@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 import { parseMetadata } from '@/lib/metadataParse';
-import type { Session } from '@openchamber/agent-contract';
-import type { Metadata, PermissionRuleset } from '@/lib/opencode/model';
+import type { Session, SessionMetadata as Metadata } from '@openchamber/agent-contract';
 import { withSessionWorkState } from '@/lib/sessionWorkMetadata';
 
 const operatorChildLinkSchema = z.object({
@@ -13,7 +12,7 @@ const OPERATOR_CHILD_DENIED_TOOLS = new Set(['question', 'openchamber_secret']);
 
 const openchamberSchema = z.object({ openchamber: z.record(z.string(), z.json()) });
 
-export const operatorChildParentId = (metadata: Metadata | undefined): string | undefined => (
+export const operatorChildParentId = (metadata: unknown): string | undefined => (
   parseMetadata(operatorChildLinkSchema, metadata).data?.openchamber.parentID
 );
 
@@ -26,6 +25,6 @@ export const metadataAfterTakeOver = (metadata: Metadata, now: number): Metadata
   return withSessionWorkState({ ...metadata, openchamber: namespace }, 'open', now);
 };
 
-export const permissionsAfterTakeOver = (permissions: PermissionRuleset | undefined): PermissionRuleset => (
+export const permissionsAfterTakeOver = <Rule extends { action: string; resource: string; effect: string }>(permissions: readonly Rule[] | undefined): Rule[] => (
   (permissions ?? []).filter((rule) => !(OPERATOR_CHILD_DENIED_TOOLS.has(rule.action) && rule.resource === '*' && rule.effect === 'deny'))
 );

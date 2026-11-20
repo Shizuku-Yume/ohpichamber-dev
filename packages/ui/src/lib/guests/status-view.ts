@@ -4,6 +4,8 @@ import type { GuestRequest, GuestStatusView } from 'ohpichamber-sdk';
 import { guestStatusViewSchema } from 'ohpichamber-sdk/schemas';
 import { proxyGuestServiceRequest } from './service';
 
+type GuestStatusActionResult = { ok: true } | { ok: false; message: string | null };
+
 export type GuestStatusViewFailure = 'unreachable' | 'invalid';
 
 export type GuestStatusViewRead =

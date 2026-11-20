@@ -84,7 +84,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
-export const dict = {
+const part1 = {
   'quota.family.zen': 'מודלי Zen',
   'quota.value.requests': 'בקשות: {count}',
   'quota.value.spent': 'נוצלו {spent}',
@@ -610,9 +610,6 @@ export const dict = {
   "sessions.sidebar.header.displayMode.label": "מצב תצוגה",
   "sessions.sidebar.header.displayMode.default": "ברירת מחדל",
   "sessions.sidebar.header.displayMode.minimal": "מינימלי",
-  "sessions.sidebar.header.displayMode.showWork": "הצג את קטע בעבודה",
-  "sessions.sidebar.header.displayMode.showPinned": "הצג את קטע המוצמדות",
-  "sessions.sidebar.header.displayMode.detailedZoneRows": "שורות מפורטות",
   'sessions.sidebar.header.displayMode.worktreeNameByBranch': 'שם worktree לפי הענף',
   "sessions.sidebar.activity.pinnedTitle": "מוצמדות",
   "sessions.sidebar.header.displayMode.showArchived": "הצג הפעלות בארכיון",
@@ -643,9 +640,6 @@ export const dict = {
   "chat.chatInput.chooseProject": "בחר פרויקט",
   "sessions.sidebar.header.projectDisplay.label": "הצג פרויקטים",
   "sessions.sidebar.header.projectDisplay.all": "כל הפרויקטים",
-  "sessions.sidebar.header.listGrouping.label": "הפעלות",
-  "sessions.sidebar.header.listGrouping.project": "לפי פרויקט",
-  "sessions.sidebar.header.listGrouping.time": "לפי זמן",
   "sessions.sidebar.activity.projectsTitle": "פרויקטים",
   "sessions.sidebar.header.projectDisplay.single": "פרויקט אחד",
   "sessions.sidebar.project.selectAria": "בחר פרויקט, כרגע {project}",
@@ -2391,6 +2385,9 @@ export const dict = {
   "chat.timeline.actions.previousTurn": "התור הקודם",
   "chat.timeline.actions.latest": "האחרון",
   "chat.timeline.help.clickMessage": "לחיצה על הודעה גוללת אליה בשיחה",
+} as const;
+
+const part2 = {
   "chat.timeline.help.undoToPoint": "ביטול עד לנקודה זו (טקסט ההודעה יועבר לשדה הקלט)",
   "chat.timeline.help.createSessionFromHere": "יצירת הפעלה חדשה שמתחילה מכאן",
   "chat.statusRow.todo.status.inProgress": "בתהליך",
@@ -4691,6 +4688,9 @@ export const dict = {
   "settings.openchamber.about.title": "אודות OhPiChamber",
   "settings.openchamber.about.credit": "מבוסס על OhPiChamber",
   "settings.openchamber.about.creditLicense": "בשימוש תחת רישיון MIT. Copyright (c) 2025 Bohdan Triapitsyn.",
+} as const;
+
+const part3 = {
   "settings.openchamber.about.field.version": "גרסה",
   "settings.openchamber.about.field.openCodeVersion": "גרסת OpenCode",
   "settings.openchamber.about.field.appVersion": "גרסת האפליקציה",
@@ -6841,6 +6841,7 @@ export const dict = {
   "settings.extensions.add.placeholder": "/path/to/panel או https://github.com/org/panel.git",
   "settings.extensions.add.action": "הוסף",
   "settings.extensions.add.aria": "הוסף הרחבה מתיקייה, מ-ZIP או מ-URL",
+  "settings.extensions.browse.label": "עיון בהרחבות",
   "settings.extensions.add.browseFolder": "עיון בתיקייה",
   "settings.extensions.add.browseFolder.aria": "עיון בתיקייה",
   "settings.extensions.add.browseZip": "עיון בארכיון ZIP",
@@ -6991,6 +6992,9 @@ export const dict = {
   "settings.layout.sessions.retention.target": "חל על",
   "settings.layout.sessions.retention.target.unarchived": "הפעלות שלא הועברו לארכיון",
   "settings.layout.sessions.retention.target.archived": "הפעלות בארכיון",
+} as const;
+
+const part4 = {
   "settings.layout.tunnel.section.setup": "הגדרה",
   "settings.layout.tunnel.section.connection": "חיבור",
   "settings.layout.tunnel.section.lifetime": "תוקף הקישורים",
@@ -9308,6 +9312,19 @@ export const dict = {
   "gitIdentities.state.unknown": "זהויות Git טרם נטענו.",
   "settings.usage.state.unknown": "השימוש טרם נטען.",
   "settings.usage.state.error": "טעינת השימוש נכשלה.",
+  'mcpDropdown.title': 'שרתי MCP',
+  'mcpDropdown.actions.refreshAria': 'רענן',
+  'mcpDropdown.actions.openAria': 'שרתי MCP',
+  'mcpDropdown.statusAria': 'מצב MCP',
+  'mcpDropdown.status.unknown': 'לא ידוע',
+  'mcpDropdown.status.connected': 'מחובר',
+  'mcpDropdown.status.failed': 'נכשל: {error}',
+  'mcpDropdown.status.unknownError': 'שגיאה לא ידועה',
+  'mcpDropdown.status.needsAuth': 'נדרש אימות',
+  'mcpDropdown.empty.configureInConfig': 'אפשר להגדיר שרתי MCP בהגדרות.',
   "chat.workStatus.mcp.unknown": "שרתי MCP טרם נטענו.",
   ...effortI18n.he
 } as const;
+
+type MessageKey = keyof typeof part1 | keyof typeof part2 | keyof typeof part3 | keyof typeof part4;
+export const dict: Readonly<Record<MessageKey, string>> = { ...part1, ...part2, ...part3, ...part4 };

@@ -1,3 +1,4 @@
+import { commitRequestRepository, commitRequestShown, type MobileChangesCommitRequest } from './mobileChangesCommitRequest';
 import { isCompleteIdentity } from '@/lib/api/git-identity';
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
@@ -135,6 +136,8 @@ const isUnstagedStatusFile = (file: GitStatus['files'][number]): boolean => {
 
 const diffCacheKey = (path: string, staged: boolean): string => staged ? `${path}\u0000staged` : path;
 
+const handledCommitRequests = new WeakSet<MobileChangesCommitRequest>();
+
 type MobileChangesSurfaceProps = {
  /** When provided, the list header gets a close X that calls this. */
  onClose?: () => void;
@@ -142,7 +145,8 @@ type MobileChangesSurfaceProps = {
   * A new request object opens its working-tree diff, including repeated requests
   * for the same path. Reopening the drawer keeps the same object and navigation.
   */
- initialDiff?: { path: string; staged: boolean } | null;
+ initialDiff?: { path: string; staged: boolean; scope?: 'turn' } | null;
+ initialCommit?: MobileChangesCommitRequest | null;
  /** The workspace drawer keeps visited panes mounted while hidden. */
  visible?: boolean;
  registerBackHandler?: (handler: (() => boolean) | null) => void;
@@ -153,6 +157,13 @@ type MobileChangesSurfaceProps = {
 export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = (props) => {
  const rootDirectory = normalizePath(useEffectiveDirectory() ?? null) ?? '';
  const repository = useNestedGitDirectory(rootDirectory || null, { enabled: props.visible ?? true, recheckOnOpen: true });
+ React.useEffect(() => {
+  if (!props.initialCommit || handledCommitRequests.has(props.initialCommit)) return;
+  const target = commitRequestRepository(rootDirectory, props.initialCommit);
+  if (!target) return;
+  usePullRequestSelectionStore.getState().clearChangesRepository(rootDirectory);
+  useGitStore.getState().selectNestedRepo(rootDirectory, target);
+ }, [props.initialCommit, rootDirectory]);
  return <MobileChangesPane {...props} rootDirectory={rootDirectory} repository={repository} />;
 };
 
@@ -162,7 +173,7 @@ interface MobileChangesPaneProps extends MobileChangesSurfaceProps {
 }
 
 /** Repository-scoped navigation and actions, separate from session directory resolution. */
-export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirectory, repository, onClose, initialDiff, visible = true, onNavigatedToChat, registerBackHandler }) => {
+export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirectory, repository, onClose, initialDiff, initialCommit, visible = true, onNavigatedToChat, registerBackHandler }) => {
  const { t } = useI18n();
  const { git, sourceControl } = useRuntimeAPIs();
  // When the root is not itself a repository, changes come from the resolved
@@ -295,6 +306,12 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   changeMode('pr');
  }, [changeMode, requestedPr, visible]);
 
+ React.useEffect(() => {
+  if (!initialCommit || handledCommitRequests.has(initialCommit) || !commitRequestShown(currentDirectory, initialCommit)) return;
+  handledCommitRequests.add(initialCommit);
+  changeMode('commit');
+ }, [changeMode, currentDirectory, initialCommit]);
+
  // Allow the host (MobileApp) to push us into a specific diff when the surface
  // is reopened or when an external trigger (e.g. a changed-file tap in chat) requests
  // a different file mid-session.
@@ -302,7 +319,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   if (!initialDiff?.path) return;
   // A new external target is a working-tree diff, regardless of the last
   // comparison mode. Changing directories alone must not replay this target.
-  setNavigation({ ownerKey: ownerKeyRef.current, mode: 'working', route: { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } });
+  setNavigation({ ownerKey: ownerKeyRef.current, mode: initialDiff.scope === 'turn' ? 'turn' : 'working', route: { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } });
  }, [initialDiff]);
  const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
  const [commitAction, setCommitAction] = React.useState<CommitAction>(null);

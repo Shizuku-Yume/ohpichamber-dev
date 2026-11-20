@@ -11,7 +11,7 @@ const CYRILLIC_TO_LATIN = new Map(Object.entries({
   ч: 'ch', ш: 'sh', щ: 'shch', ь: '', ю: 'iu', я: 'ia', ё: 'e', ъ: '', ы: 'y', э: 'e',
 }));
 
-const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
+export const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
 
 /** The snippet that `#name` already triggers. */
 const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {

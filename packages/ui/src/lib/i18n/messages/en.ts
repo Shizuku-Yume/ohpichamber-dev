@@ -83,7 +83,7 @@ import { subagentHudI18n } from './subagent-hud.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
-export const dict = {
+const part1 = {
   'quota.family.zen': 'Zen Models',
   'quota.value.requests': 'Requests: {count}',
   'quota.value.spent': '{spent} spent',
@@ -2384,6 +2384,9 @@ export const dict = {
   "session.newWorktree.remoteBranches": "Remote branches",
   "session.newWorktree.branchName": "Branch name",
   "session.newWorktree.branchNamePlaceholder": "feature/my-awesome-feature",
+} as const;
+
+const part2 = {
   "session.newWorktree.actions.startFromRepository.pullRequest": "A {provider} issue or pull request",
   "session.newWorktree.actions.startFromRepository.mergeRequest": "A {provider} issue or merge request",
   "session.newWorktree.worktreeDirectory": "Folder name",
@@ -4684,6 +4687,9 @@ export const dict = {
   "settings.agents.page.field.clearTopPAria": "Clear top p override",
   "settings.agents.page.field.variant": "Thinking variant",
   "settings.agents.page.field.variantTooltip": "Controls the thinking/reasoning depth for this agent. Maps to provider-specific parameters (e.g. Anthropic variant, OpenAI reasoning effort).",
+} as const;
+
+const part3 = {
   "settings.agents.page.field.variantHint": "e.g. high, max, low",
   "settings.agents.page.field.variantPlaceholder": "default",
   "settings.agents.page.field.systemPromptPlaceholder": "You are an expert coding assistant...",
@@ -6680,6 +6686,7 @@ export const dict = {
   "settings.extensions.add.placeholder": "/path/to/panel or https://github.com/org/panel.git",
   "settings.extensions.add.action": "Add",
   "settings.extensions.add.aria": "Add extension from a folder, ZIP, or URL",
+  "settings.extensions.browse.label": "Browse extensions",
   "settings.extensions.add.browseFolder": "Browse folder",
   "settings.extensions.add.browseFolder.aria": "Browse folder",
   "settings.extensions.add.browseZip": "Browse ZIP archive",
@@ -6984,6 +6991,9 @@ export const dict = {
   "references.picker.actions.choose": "Choose",
   "references.picker.actions.back": "Back",
   "references.picker.actions.select": "Select",
+} as const;
+
+const part4 = {
   "references.picker.actions.unselect": "Unselect",
   "references.picker.row.selectAria": "Select {id}",
   "references.picker.footer.selected": "Selected: {count}",
@@ -9373,8 +9383,21 @@ export const dict = {
   "gitIdentities.state.unknown": "Git identities have not loaded yet.",
   "settings.usage.state.unknown": "Usage has not loaded yet.",
   "settings.usage.state.error": "Failed to load usage.",
+  'mcpDropdown.title': 'MCP Servers',
+  'mcpDropdown.actions.refreshAria': 'Refresh',
+  'mcpDropdown.actions.openAria': 'MCP servers',
+  'mcpDropdown.statusAria': 'MCP status',
+  'mcpDropdown.status.unknown': 'Unknown',
+  'mcpDropdown.status.connected': 'Connected',
+  'mcpDropdown.status.failed': 'Failed: {error}',
+  'mcpDropdown.status.unknownError': 'Unknown error',
+  'mcpDropdown.status.needsAuth': 'Needs authentication',
+  'mcpDropdown.empty.configureInConfig': 'Configure MCP servers in Settings.',
   "chat.workStatus.mcp.unknown": "MCP servers have not loaded yet.",
   ...effortI18n.en
 } as const;
+
+type MessageKey = keyof typeof part1 | keyof typeof part2 | keyof typeof part3 | keyof typeof part4;
+export const dict: Readonly<Record<MessageKey, string>> = { ...part1, ...part2, ...part3, ...part4 };
 
 export type I18nKey = keyof typeof dict;

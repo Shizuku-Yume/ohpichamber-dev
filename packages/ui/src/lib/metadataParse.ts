@@ -1,8 +1,5 @@
 import type { z } from 'zod';
 
-import type { JsonValue } from '@openchamber/agent-contract';
-import type { Metadata } from '@/lib/opencode/model';
-
 type MetadataParseResult<T> = { success: true; data: T } | { success: false; data?: undefined };
 
 const FAILED: MetadataParseResult<never> = { success: false };
@@ -10,14 +7,12 @@ const FAILED: MetadataParseResult<never> = { success: false };
 const resultsByValue = new WeakMap<object, Map<z.ZodType, MetadataParseResult<unknown>>>();
 const resultsForMissing = new WeakMap<z.ZodType, { undefined?: MetadataParseResult<unknown>; null?: MetadataParseResult<unknown> }>();
 
-type MetadataValue = Metadata | JsonValue | undefined;
-
-const parseOnce = <S extends z.ZodType>(schema: S, value: MetadataValue): MetadataParseResult<z.output<S>> => {
+const parseOnce = <S extends z.ZodType>(schema: S, value: unknown): MetadataParseResult<z.output<S>> => {
   const parsed = schema.safeParse(value);
   return parsed.success ? { success: true, data: parsed.data } : FAILED;
 };
 
-export const parseMetadata = <S extends z.ZodType>(schema: S, value: MetadataValue): MetadataParseResult<z.output<S>> => {
+export const parseMetadata = <S extends z.ZodType>(schema: S, value: unknown): MetadataParseResult<z.output<S>> => {
   if (value === undefined || value === null) {
     let missing = resultsForMissing.get(schema);
     if (!missing) {

@@ -47,6 +47,9 @@ import { useMobileRowSwipe, useMobileSidebarActions, useMobileSidebarRowsStore }
 import { MobileRowMenu } from './MobileRowMenu';
 import { MOBILE_ACTIVE_ROW_CLASS, MobileRowChevron, MobileSlotChevron, MobileTwoLineLayout } from './mobileRowParts';
 
+import { useSessionRowGuestMarks } from '@/components/session/sidebar/sessions/useRowGuestMarks';
+import { MobileGuestMarks } from './MobileGuestMarks';
+
 type SessionRowModel = Extract<SessionSidebarRow, { kind: 'session' }>;
 
 const collectDescendantIds = (node: SessionNode): string[] => node.children.flatMap((child) => [child.session.sessionId, ...collectDescendantIds(child)]);
@@ -114,7 +117,22 @@ export const MobileSessionRow: React.FC<{
     </span>
   ) : null);
   const inSpace = row.secondaryMeta?.inSpace === true;
-  const toggle = hasChildren && !row.forceExpanded
+  const projectRoot = useProjectsStore(React.useCallback(
+    (state) => (row.projectId ? state.projects.find((entry) => entry.id === row.projectId)?.path ?? null : null),
+    [row.projectId],
+  ));
+  const guestMarks = useSessionRowGuestMarks({
+    shown: true,
+    sessionId: session.sessionId,
+    directory: getSessionDirectory(session) ?? null,
+    projectId: row.projectId ?? null,
+    projectRoot,
+    worktree: node.worktree,
+    inProjectTree: row.renderContext === 'project' && !row.archived,
+    metaBranch: inSpace ? null : row.secondaryMeta?.branchLabel ?? null,
+  });
+  const marks = <MobileGuestMarks marks={guestMarks} onOpenRow={() => selectMobileSession(session, row.projectId, actions.close)} />;
+  const toggle = hasChildren
     ? () => toggleParent(sessionExpansionKey(row.renderContext, row.archived, session.sessionId))
     : undefined;
 
@@ -135,7 +153,7 @@ export const MobileSessionRow: React.FC<{
       t,
       session: { id: session.sessionId, title: session.title, directory },
       loadRecords: () => (directory
-        ? loadRecords({ directory, sessionID: session.sessionId }).catch(() => null)
+        ? loadRecords({ directory, sessionId: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),
       onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
     });

@@ -2,9 +2,12 @@ import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { nativeHostSession, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
 
 const directory = '/workspace/mini-chat-abort';
 const sessionId = 'ses_mini';
+const runId = 'mini-run';
+const controlPath = `/api/agent/v1/sessions/${sessionId}/control`;
 
 // The real Mini Chat app root, with its own provider placement: the
 // shortcuts read the session's activity through the sync runtime, so they
@@ -20,7 +23,12 @@ test('Mini Chat mounts its shortcuts under the sync provider, and double Escape 
     const path = new URL(request ? request.url : input.toString(), 'http://mini-chat.test').pathname;
     const method = request?.method ?? init?.method ?? 'GET';
     requests.push({ method, path });
-    if (method === 'POST' && path.endsWith(`/session/${sessionId}/interrupt`)) onInterrupt();
+    if (method === 'POST' && path === controlPath) {
+      const body = request ? await request.json() : JSON.parse(String(init?.body));
+      expect(body).toEqual({ type: 'abort', runId });
+      onInterrupt();
+      return Response.json({ run: { runId, sessionId, origin: 'host', status: 'aborted', createdAt: 1 } });
+    }
     if (path.endsWith('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
     return new Promise<Response>(() => undefined);
   };
@@ -48,8 +56,6 @@ test('Mini Chat mounts its shortcuts under the sync provider, and double Escape 
   const { ThemeProvider } = await import('@/components/providers/ThemeProvider');
   const { useSessionUIStore } = await import('@/sync/session-ui-store');
   const { getSyncChildStores } = await import('@/sync/sync-refs');
-  const { opencodeClient } = await import('@/lib/opencode/client');
-  opencodeClient.reconnectToRuntimeBaseUrl();
 
   const host = document.createElement('div');
   document.body.append(host);
@@ -74,9 +80,8 @@ test('Mini Chat mounts its shortcuts under the sync provider, and double Escape 
     // its bootstrap selects it.
     await act(async () => {
       getSyncChildStores().getChild(directory)?.setState({
-        session: [{ sessionId: sessionId, projectID: 'project', directory, title: 'Mini', cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 } }],
-        session_status: { [sessionId]: { type: 'busy' } },
-        sessionStatusReady: true,
+        session: [{ ...nativeHostSession(nativeSnapshot(sessionId)), title: 'Mini', archivedAt: undefined, runtimeStatus: 'running', activeRunId: runId }],
+        session_status: { [sessionId]: 'running' },
       });
     });
     const { useProjectsStore } = await import('@/stores/useProjectsStore');
@@ -96,7 +101,7 @@ test('Mini Chat mounts its shortcuts under the sync provider, and double Escape 
       await act(async () => { composer.dispatchEvent(event); await Promise.resolve(); });
       return event;
     };
-    const aborts = () => requests.filter((request) => request.method === 'POST' && request.path.includes(sessionId) && request.path.endsWith('/interrupt')).length;
+    const aborts = () => requests.filter((request) => request.method === 'POST' && request.path === controlPath).length;
 
     expect((await pressEscape()).defaultPrevented).toBe(true);
     expect(aborts()).toBe(0);

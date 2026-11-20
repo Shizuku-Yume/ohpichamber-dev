@@ -30,7 +30,7 @@ beforeAll(() => {
     writable: true,
   });
   // A client that last saw the build before these two controls existed.
-  const known = [...SETTINGS_ANCHOR_PAGES.keys()].filter((id) => id !== 'notifications.pullRequests' && id !== 'appearance.color-mode');
+  const known = [...SETTINGS_ANCHOR_PAGES.keys()].filter((id) => id !== 'notifications.push' && id !== 'appearance.light-theme');
   localStorage.setItem(STORAGE_KEY, JSON.stringify(known));
   resetNewSettingsBadgeCacheForTests();
 });
@@ -41,7 +41,7 @@ afterAll(() => {
 });
 
 const WEB: SettingsSearchAvailabilityContext = {
-  isVSCode: false, isWeb: true, isDesktop: false, isMobile: false,
+  isWeb: true, isDesktop: false, isMobile: false,
   isDesktopLocalOrigin: false, isMac: false, isWindows: false, isLinux: false,
   routingAvailable: false, enterpriseMode: false, jevBlockedByEnterprise: false,
 };
@@ -55,18 +55,17 @@ const render = (node: React.ReactNode, ctx: SettingsSearchAvailabilityContext | 
 describe('rows announce their own new control', () => {
   test('a new anchor carries the badge, a known one does not', () => {
     const noop = () => {};
-    expect(render(<SettingsCheckboxRow settingsItem="notifications.pullRequests" checked={false} onChange={noop} label="PR" />)).toContain('>new<');
-    expect(render(<SettingsSection title="Mode" settingsItem="appearance.color-mode">x</SettingsSection>)).toContain('>new<');
+    expect(render(<SettingsCheckboxRow settingsItem="notifications.push" checked={false} onChange={noop} label="Push" />)).toContain('>new<');
+    expect(render(<SettingsSection title="Mode" settingsItem="appearance.light-theme">x</SettingsSection>)).toContain('>new<');
     expect(render(<SettingsCheckboxRow settingsItem="appearance.language" checked={false} onChange={noop} label="L" />)).not.toContain('>new<');
     expect(render(<SettingsFieldRow label="K" settingsItem="appearance.file-editor-keymap">x</SettingsFieldRow>)).not.toContain('>new<');
     expect(render(<SettingsStackedField label="S">x</SettingsStackedField>)).not.toContain('>new<');
   });
 
   test('an opener announces only controls this device renders, and nothing shows outside Settings', () => {
-    const opener = <SettingsNewBadge items={['notifications.events', 'notifications.pullRequests']} />;
+    const opener = <SettingsNewBadge items={['notifications.events', 'notifications.push']} />;
     expect(render(opener)).toContain('>new<');
-    // VS Code has no pull-request notifications.
-    expect(render(opener, { ...WEB, isVSCode: true, isWeb: false })).not.toContain('>new<');
+    expect(render(opener, { ...WEB, isWeb: false, isDesktop: true })).not.toContain('>new<');
     expect(render(opener, null)).not.toContain('>new<');
   });
 });

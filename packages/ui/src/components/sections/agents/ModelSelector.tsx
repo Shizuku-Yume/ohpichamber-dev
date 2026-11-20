@@ -36,6 +36,7 @@ interface ModelSelectorProps {
     offerAuto?: boolean;
     triggerTooltip?: string;
     disabled?: boolean;
+    loading?: boolean;
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -53,6 +54,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     offerAuto = false,
     triggerTooltip,
     disabled = false,
+    loading = false,
 }) => {
     const { t } = useI18n();
     const autoReady = useRoutingStore(selectAutoReady);
@@ -61,9 +63,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         : null), [autoReady, offerAuto, t]);
     const isAutoSelected = isAutoModel(providerId, modelId);
     const readiness = useCatalogReadiness('models', directory);
-    const canOpen = isReady && !disabled;
     // A pending value is not ready: the trigger spins and cannot open until it arrives.
     const isReady = !loading && readiness.isReady;
+    const canOpen = isReady && !disabled;
     const isUnavailable = !loading && readiness.isUnavailable;
     const catalogProviders = useConfigStore((state) => directory === undefined
         ? state.providers : selectProvidersForDirectory(state, directory));

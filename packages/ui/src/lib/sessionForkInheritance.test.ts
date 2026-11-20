@@ -2,16 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import type { SessionMetadata } from '@openchamber/agent-contract';
 import { withoutSourceOwnedLinks } from './sessionForkInheritance';
 
-describe('a fork of an agent\'s worker session', () => {
-  test('is the user\'s own session: no link to the agent and the question tool back', async () => {
-    const fork = { ...forkWith({ openchamber: { kind: 'operator-child', parentID: 'ses_operator' } }), permissions: [{ action: 'question', resource: '*', effect: 'deny' as const }] };
-    const { deps, patches, permissions } = harness(fork);
-    await applyForkInheritance('ses_worker', fork, deps);
-    expect(permissions).toEqual([['ses_fork', []]]);
-    expect(patches).toEqual([{}]);
-  });
-});
-
 describe('withoutSourceOwnedLinks', () => {
   test('drops retired goal state and source review links from fork metadata', () => {
     const metadata: SessionMetadata = { openchamber: { goal: { id: 'goal_1' }, reviewSessionID: 'ses_review', kind: 'review' } };

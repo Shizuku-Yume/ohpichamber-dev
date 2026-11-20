@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-import type { Message } from '@openchamber/agent-contract';
-
-
 export type ShareAnswer = {
   callId: string;
   recipientId: string;
@@ -36,8 +33,8 @@ const jsonLine = <T extends z.ZodType>(schema: T) => z.string().transform((text,
 const summaryLineSchema = jsonLine(z.string().trim().min(1));
 const dataLineSchema = jsonLine(z.json());
 
-export function readShareAnswer(message: Message): ShareAnswer | undefined {
-  if (message.role !== 'synthetic') return undefined;
+export function readShareAnswer(message: { role: string; text?: string; metadata?: unknown }): ShareAnswer | undefined {
+  if (message.role !== 'synthetic' || typeof message.text !== 'string') return undefined;
   const parsed = metadataSchema.safeParse(message.metadata ?? {});
   if (!parsed.success) return undefined;
   const { callId, recipientId, label, title } = parsed.data;

@@ -1,4 +1,3 @@
-import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
@@ -78,7 +77,6 @@ type MobileFilesSurfaceProps = {
 };
 
 export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose, visible = true, registerBackHandler }) => {
-  const draftSpace = useDraftSpaceTarget();
   const root = normalizePathImpl(useEffectiveDirectory() ?? null) ?? '';
   return <MobileFilesSurfaceForRoot key={root} root={root} onClose={onClose} visible={visible} registerBackHandler={registerBackHandler} />;
 };
@@ -333,13 +331,13 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
         {normalizedQuery ? (
           <MobileSearchResults
             outcome={searchOutcome}
+            actions={fileActions}
             onOpenFile={openFile}
             onRetry={() => setSearchAttempt((attempt) => attempt + 1)}
           />
         ) : directoryError ? (
           <MobileFilesState message={directoryError} />
-        ) : query.trim() ? (
-          <MobileSearchResults root={root} results={visibleSearchResults} isSearching={isSearching} actions={fileActions} onOpenFile={openFile} />
+
         ) : (
           <div className="overflow-hidden rounded-2xl border border-border/70 bg-[var(--surface-elevated)]">
             {entries.length === 0 && !isLoadingDirectory ? (

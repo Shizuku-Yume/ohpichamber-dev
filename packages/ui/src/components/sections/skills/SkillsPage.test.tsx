@@ -118,9 +118,9 @@ test('skill refresh preserves newer editor text while a save is pending and swit
 });
 
 test('a skill list refresh keeps the name typed into a new skill', async () => {
-  const builtIn = { id: 'opencode', name: 'OpenCode', path: '<built-in>', scope: 'user', source: 'opencode' } satisfies import('@/stores/useSkillsStore').DiscoveredSkill;
+  const builtIn = { skillId: 'built-in', name: 'Built-in', content: 'built-in body', description: '', scope: 'agent', source: 'built-in', readOnly: true } satisfies DiscoveredSkill;
   useSkillsStore.setState({ selectedSkillName: 'new-skill', skills: [builtIn], skillsByDirectory: { __default__: [builtIn], '/test': [builtIn] },
-    skillDraft: { name: 'new-skill', scope: 'user', source: 'opencode', description: '', instructions: '' },
+    skillDraft: { name: 'new-skill', scope: 'agent', content: '' },
     getSkillByName: (name) => useSkillsStore.getState().skills.find((entry) => entry.name === name),
   });
   await act(async () => root.render(<I18nProvider><ThemeSystemContext.Provider value={themeContext}><SkillsPage /></ThemeSystemContext.Provider></I18nProvider>));
@@ -141,8 +141,8 @@ test('a skill list refresh keeps the name typed into a new skill', async () => {
   expect(nameInput().value).toBe('net-helper');
 
   // Another skill takes the editor; coming back shows the draft again, not that skill's text.
-  await act(async () => useSkillsStore.setState({ selectedSkillName: 'OpenCode',
-    getSkillDetail: async (name) => ({ name, sources: { md: { exists: true, path: null, dir: null, fields: [], supportingFiles: [], description: 'built-in text', instructions: 'built-in body' } } }),
+  await act(async () => useSkillsStore.setState({ selectedSkillName: 'built-in',
+    getSkillDetail: async () => ({ content: 'built-in body', supportingFiles: [] }),
   }));
   await act(async () => useSkillsStore.setState({ selectedSkillName: 'new-skill' }));
   expect(nameInput().value).toBe('new-skill');
@@ -151,19 +151,19 @@ test('a skill list refresh keeps the name typed into a new skill', async () => {
   expect(EditorView.findFromDOM(editorNode)?.state.doc.toString()).not.toContain('built-in');
 });
 
-test('a skill selected before the list is read stays selected until the list says it is gone', async () => {
-  const builtIn = { id: 'opencode', name: 'OpenCode', path: '<built-in>', scope: 'user', source: 'opencode' } satisfies import('@/stores/useSkillsStore').DiscoveredSkill;
+test('a skill selected before the list is read shows its editor only while it exists', async () => {
+  const builtIn = { skillId: 'built-in', name: 'Built-in', content: 'built-in body', description: '', scope: 'agent', source: 'built-in', readOnly: true } satisfies DiscoveredSkill;
   // Settings in a VS Code tab receives the selection before it has read any skills.
-  useSkillsStore.setState({ selectedSkillName: 'OpenCode', skillDraft: null, skills: [], skillsByDirectory: {},
+  useSkillsStore.setState({ selectedSkillName: 'built-in', skillDraft: null, skills: [], skillsByDirectory: {},
     getSkillByName: (name) => useSkillsStore.getState().skills.find((entry) => entry.name === name),
-    getSkillDetail: async (name) => ({ name, sources: { md: { exists: true, path: null, dir: null, fields: [], supportingFiles: [], description: name, instructions: 'text' } } }),
+    getSkillDetail: async () => ({ content: 'text', supportingFiles: [] }),
   });
   await act(async () => root.render(<I18nProvider><ThemeSystemContext.Provider value={themeContext}><SkillsPage /></ThemeSystemContext.Provider></I18nProvider>));
-  expect(useSkillsStore.getState().selectedSkillName).toBe('OpenCode');
+  expect(useSkillsStore.getState().selectedSkillName).toBe('built-in');
 
   await act(async () => useSkillsStore.setState({ skills: [builtIn], skillsByDirectory: { __default__: [builtIn], '/test': [builtIn] } }));
-  expect(useSkillsStore.getState().selectedSkillName).toBe('OpenCode');
+  expect(useSkillsStore.getState().selectedSkillName).toBe('built-in');
 
   await act(async () => useSkillsStore.setState({ skills: [], skillsByDirectory: { __default__: [], '/test': [] } }));
-  expect(useSkillsStore.getState().selectedSkillName).toBeNull();
+  expect(container.querySelector('.cm-editor')).toBeNull();
 });

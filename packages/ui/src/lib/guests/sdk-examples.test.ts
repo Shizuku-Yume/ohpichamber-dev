@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import * as sdk from 'ohpichamber-sdk';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
 import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT, OPENCHAMBER_SDK_API_VERSION } from 'ohpichamber-sdk';

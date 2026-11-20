@@ -67,12 +67,7 @@ export const getProviderCardStatus = (provider: Provider): ProviderCardStatus | 
 
 export const shouldAutoOpenAuthPanel = (input: {
   provider: Provider;
-  integrationsLoaded: boolean;
-  hasCredentials: boolean;
-  isEditableCustomProvider?: boolean;
+  userDismissed: boolean;
+  editingConfiguration: boolean;
 }): boolean =>
   requiresProviderAuth(input.provider) && !input.userDismissed && !input.editingConfiguration;
-
-export type CredentialConnection = Extract<ConnectionInfo, { type: 'credential' }>;
-
-export type SignInMethod = IntegrationOAuthMethod | IntegrationExternalMethod;

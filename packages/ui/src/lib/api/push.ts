@@ -25,6 +25,7 @@ export type NativePushStatus =
   | { available: false; reason: 'direct-config-missing'; relaySetting: string; disabledSetting: string };
 
 export interface PushAPI {
+  nativeStatus?(): Promise<NativePushStatus | null>;
   getVapidPublicKey(): Promise<{ publicKey: string } | null>;
   subscribe(payload: PushSubscribePayload): Promise<{ ok: true } | null>;
   unsubscribe(payload: PushUnsubscribePayload): Promise<{ ok: true } | null>;

@@ -1,9 +1,6 @@
 import React from 'react';
 import { BrowserPane } from '@/components/browser/BrowserPane';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
-import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
-import { SpacePreparing } from '@/components/session/spaces/SpacePreparing';
 import { previewFramesIsolated } from '@/lib/browser/mobileDevTunnel';
 import { useI18n } from '@/lib/i18n';
 
@@ -13,8 +10,7 @@ export const MobileBrowserSurface: React.FC<{
 }> = ({ visible, registerBackHandler }) => {
   const { t } = useI18n();
   const ownDirectory = useEffectiveDirectory();
-  const draftSpace = useDraftSpaceTarget();
-  const siteDirectory = panelContentDirectory(draftSpace, ownDirectory);
+  const siteDirectory = ownDirectory;
   const [isolated, setIsolated] = React.useState<boolean | null>(null);
   React.useEffect(() => {
     let cancelled = false;
@@ -31,7 +27,6 @@ export const MobileBrowserSurface: React.FC<{
       </div>
     );
   }
-  if (draftSpace?.kind === 'preparing') return <SpacePreparing />;
   return (
     <BrowserPane
       key={siteDirectory ?? ''}

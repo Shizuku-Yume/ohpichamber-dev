@@ -84,7 +84,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
-export const dict = {
+const part1 = {
   'quota.family.zen': 'Zen-modellen',
   'quota.value.requests': 'Verzoeken: {count}',
   'quota.value.spent': '{spent} besteed',
@@ -2385,6 +2385,9 @@ export const dict = {
   "session.newWorktree.remoteBranches": "Remote branches",
   "session.newWorktree.branchName": "Branchnaam",
   "session.newWorktree.branchNamePlaceholder": "feature/my-awesome-feature",
+} as const;
+
+const part2 = {
   "session.newWorktree.actions.startFromRepository.pullRequest": "Starten vanuit {provider}-issue/PR",
   "session.newWorktree.actions.startFromRepository.mergeRequest": "Een {provider}-issue of merge request",
   "session.newWorktree.worktreeDirectory": "Worktreemap",
@@ -4685,6 +4688,9 @@ export const dict = {
   "settings.agents.page.field.topPRange": "0.0 tot 1.0",
   "settings.agents.page.field.clearTopPAria": "Top-p-overschrijving wissen",
   "settings.agents.page.field.variant": "Standaard denken",
+} as const;
+
+const part3 = {
   "settings.agents.page.field.variantTooltip": "Bepaalt de denk- en redeneerdiepte van deze agent. Wordt vertaald naar providerspecifieke parameters (bv. Anthropic-variant, OpenAI reasoning effort).",
   "settings.agents.page.field.variantHint": "bv. high, max, low",
   "settings.agents.page.field.variantPlaceholder": "default",
@@ -6691,6 +6697,7 @@ export const dict = {
   "settings.extensions.add.placeholder": "/path/to/panel of https://github.com/org/panel.git",
   "settings.extensions.add.action": "Toevoegen",
   "settings.extensions.add.aria": "Extensie toevoegen uit een map, ZIP of URL",
+  "settings.extensions.browse.label": "Extensies bekijken",
   "settings.extensions.add.browseFolder": "Map kiezen",
   "settings.extensions.add.browseFolder.aria": "Map kiezen",
   "settings.extensions.add.browseZip": "ZIP-archief kiezen",
@@ -6985,6 +6992,9 @@ export const dict = {
   "references.picker.actions.choose": "Kiezen",
   "references.picker.actions.back": "Terug",
   "references.picker.actions.select": "Selecteren",
+} as const;
+
+const part4 = {
   "references.picker.actions.unselect": "Deselecteren",
   "references.picker.row.selectAria": "{id} selecteren",
   "references.picker.footer.selected": "Geselecteerd: {count}",
@@ -9335,6 +9345,19 @@ export const dict = {
   "gitIdentities.state.unknown": "Git-identiteiten zijn nog niet geladen.",
   "settings.usage.state.unknown": "Gebruik is nog niet geladen.",
   "settings.usage.state.error": "Kan gebruik niet laden.",
+  'mcpDropdown.title': 'MCP-servers',
+  'mcpDropdown.actions.refreshAria': 'Vernieuwen',
+  'mcpDropdown.actions.openAria': 'MCP-servers',
+  'mcpDropdown.statusAria': 'MCP-status',
+  'mcpDropdown.status.unknown': 'Onbekend',
+  'mcpDropdown.status.connected': 'Verbonden',
+  'mcpDropdown.status.failed': 'Mislukt: {error}',
+  'mcpDropdown.status.unknownError': 'Onbekende fout',
+  'mcpDropdown.status.needsAuth': 'Authenticatie vereist',
+  'mcpDropdown.empty.configureInConfig': 'Configureer MCP-servers in Instellingen.',
   "chat.workStatus.mcp.unknown": "MCP-servers zijn nog niet geladen.",
   ...effortI18n.nl
 } as const;
+
+type MessageKey = keyof typeof part1 | keyof typeof part2 | keyof typeof part3 | keyof typeof part4;
+export const dict: Readonly<Record<MessageKey, string>> = { ...part1, ...part2, ...part3, ...part4 };

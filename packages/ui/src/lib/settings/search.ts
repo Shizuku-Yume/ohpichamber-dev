@@ -9,7 +9,7 @@ import { ompLayoutSettingIds } from '@/components/sections/openchamber/ompSettin
 /** The search anchor of one shortcut's row: the id the Shortcuts page names it by. */
 export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
 
-interface SettingsSearchItem {
+export interface SettingsSearchItem {
   id: string;
   page: SettingsPageSlug;
   titleKey: I18nKey;
@@ -462,7 +462,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.terminalOpenOnProjectAction',
     descriptionKey: 'settings.openchamber.visual.field.terminalOpenOnProjectActionInfo',
     keywords: ['terminal', 'project action', 'run', 'open', 'panel', 'dev server'],
-    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isMobile,
   },
   {
     id: 'appearance.editor-font-size',
@@ -1265,7 +1265,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.projects.notesTodos.inRepository',
     descriptionKey: 'settings.projects.notesTodos.inRepositoryDescription',
     keywords: ['notes', 'todos', 'repository', 'git', 'sync', '.openchamber', 'notes-todos.json'],
-    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'projects.shared',
@@ -1869,12 +1868,3 @@ export const getAvailableSettingsAnchorPages = (ctx: SettingsSearchAvailabilityC
     return page && (!page.isAvailable || page.isAvailable(ctx)) && (!item.isAvailable || item.isAvailable(ctx));
   }).map((item) => [item.id, item.page] as const),
 );
-
-export type SettingsSearchItem = SettingsSearchTitle & {
-  id: string;
-  page: SettingsPageSlug;
-  descriptionKey?: I18nKey;
-  descriptionParams?: I18nParams;
-  keywords?: string[];
-  isAvailable?: (ctx: SettingsSearchAvailabilityContext) => boolean;
-};

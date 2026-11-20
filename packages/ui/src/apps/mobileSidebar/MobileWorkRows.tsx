@@ -1,4 +1,4 @@
-import { useSpacesStore } from '@/lib/spaces/spaces-store';
+import { isSpaceDirectory } from '@/lib/spaces/space-route';
 import React from 'react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { Icon } from '@/components/icon/Icon';
@@ -60,7 +60,7 @@ export const MobileWorktreeRow: React.FC<{
   const { revealed, renaming } = useMobileRowSwipe(row.key);
   const work = useWorktreeWork({ group: row.group, projectId: row.projectId, collapsed: row.collapsed, onNavigate: actions.close });
   const { worktree, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
-  const guestMarks = useWorkRowGuestMarks({ space: Boolean(space), projectId: project?.id ?? row.projectId ?? null, directory: work.directory, branch });
+  const guestMarks = useWorkRowGuestMarks({ space: isSpaceDirectory(work.directory), projectId: project?.id ?? row.projectId ?? null, directory: work.directory, branch });
   const marks = <MobileGuestMarks marks={guestMarks} onOpenRow={() => work.open()} />;
   const projectNamed = useZoneProjectNames();
   const mixedProject = useMixedRowProject(row.projectId, row.mixed && row.detailed);
@@ -194,15 +194,8 @@ export const MobileWorktreeRow: React.FC<{
   // The fork's worktree model offers no pin write (`useWorktreeWork` reports
   // `canPin` false), so the row has no pin action to swipe.
   const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
-  const pinWork = () => requestPinTo({ current: work.pinList, pin: (list) => { void work.setPin(true, list); }, unpin: () => { void work.setPin(false); } });
   const menu = (
     <>
-      {work.canMarkUnread ? (
-        <ContextMenuItem onClick={work.toggleRead}>
-          <Icon name={work.hasUnread ? 'chat-check' : 'checkbox-circle'} className="me-1 size-4" />
-          {work.hasUnread ? t('sessions.sidebar.session.menu.markRead') : t('sessions.sidebar.session.menu.markUnread')}
-        </ContextMenuItem>
-      ) : null}
       {work.workAction ? (
         <ContextMenuItem disabled={finishing || worktreeRemoving} onClick={work.toggleWork}>
           <Icon name={inWork ? 'check' : 'eye'} className="me-1 size-4" />
@@ -214,12 +207,6 @@ export const MobileWorktreeRow: React.FC<{
         <ContextMenuItem onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}>
           <Icon name="edit" className="me-1 size-4" />
           {t('sessions.sidebar.work.menu.rename')}
-        </ContextMenuItem>
-      ) : null}
-      {work.canPin ? (
-        <ContextMenuItem onClick={pinWork}>
-          <Icon name={work.pinned ? 'unpin' : 'pushpin'} className="me-1 size-4" />
-          {work.pinned ? t('sessions.sidebar.work.menu.unpin') : t('sessions.sidebar.work.menu.pin')}
         </ContextMenuItem>
       ) : null}
       {work.canArchive ? (
@@ -256,22 +243,6 @@ export const MobileWorktreeRow: React.FC<{
             label={t('sessions.sidebar.work.menu.rename')}
             revealed={revealed}
             onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}
-          />
-        ) : null}
-        {space ? (
-          <MobileSwipeAction
-            icon="more"
-            label={t('spaces.actions.menuAria', { label })}
-            revealed={revealed}
-            onClick={after(() => useSpacesStore.getState().openActionsSheet(space.id))}
-          />
-        ) : null}
-        {work.canPin ? (
-          <MobileSwipeAction
-            icon={work.pinned ? 'unpin' : 'pushpin'}
-            label={work.pinned ? t('sessions.sidebar.work.menu.unpin') : t('sessions.sidebar.work.menu.pin')}
-            revealed={revealed}
-            onClick={after(pinWork)}
           />
         ) : null}
         {work.canArchive ? (

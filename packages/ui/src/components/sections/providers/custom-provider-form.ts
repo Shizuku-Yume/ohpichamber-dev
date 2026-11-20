@@ -728,5 +728,3 @@ export function discoveryFilterCounts(rows: readonly DiscoveryRow[]): Record<Dis
   }
   return counts;
 }
-
-export type DiscoveredModel = z.infer<typeof discoveredModelSchema>;

@@ -180,7 +180,7 @@ const decide = async (record: UnconfirmedSend, server: UnconfirmedSendServer): P
   }
   if (record.textReturned) return { kind: 'drop', orphanChatDirectory };
   if (orphanChatDirectory || !record.left) return { kind: 'restore', target, orphanChatDirectory };
-  if (!record.sessionId || !record.messageId) return { kind: 'drop' };
+  if (!record.sessionId || !record.messageId) return { kind: 'unknown' };
   return await server.hasMessage(record.sessionId, record.messageId, target.directory)
     ? { kind: 'drop' }
     : { kind: 'restore', target };

@@ -16,14 +16,13 @@ const resolveLegacyScope = (session: Session): string => session.projectId;
 
 export function useMultiRunSessions(): MultiRunSessions {
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
-  const deferredUpdates = useDeferredGlobalUpdates();
   const liveSessions = useAllLiveSessions();
   return React.useMemo(() => {
     const sessionById = new Map<string, Session>();
     for (const session of activeSessions) sessionById.set(session.sessionId, session);
     for (const session of liveSessions) sessionById.set(session.sessionId, session);
     return { index: buildMultiRunIndex(sessionById.values(), resolveLegacyScope), sessionById };
-  }, [activeSessions, deferredUpdates, liveSessions]);
+  }, [activeSessions, liveSessions]);
 }
 
 const isActiveRoot = (session: Session): boolean => !session.archivedAt && !session.parentSessionId;
