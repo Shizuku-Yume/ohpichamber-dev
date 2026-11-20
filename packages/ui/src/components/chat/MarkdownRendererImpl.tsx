@@ -165,7 +165,6 @@ const renderers = [
   { language: 'mermaid', component: MarkdownMermaid },
   { language: 'svg', component: MarkdownSvg },
   { language: 'openui-lang', component: MarkdownUiBlock },
-  { language: 'svg', component: MarkdownSvg },
 ];
 const linkSafety = { enabled: false };
 const remend: StreamdownProps['remend'] = { linkMode: 'text-only', singleTilde: false };
@@ -425,7 +424,6 @@ export function MarkdownContent({
     settled,
     purpose,
     uiBlocks: uiBlocks && purpose !== 'copy',
-    svgFences: svgFences && !purpose,
     settledReply: uiBlocks && !purpose && settled && sessionId && messageId ? { sessionId, messageId } : null,
     disableLinkSafety,
     tableWidthScope,

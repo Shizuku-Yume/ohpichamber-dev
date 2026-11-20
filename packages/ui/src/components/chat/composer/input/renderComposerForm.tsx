@@ -35,7 +35,6 @@ import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAutocompleteState } from './useComposerAutocompleteState';
 import { ParallelComposerStrip } from '../../composer/parallel/ParallelComposerStrip';
 import { BtwPanel } from '../../btw/BtwPanel';
-import { ActiveEditorFileSuggestion } from '../../FileAttachment';
 import { withAttachmentChips } from '../../message/parts/attachmentCitationChips';
 import { cn } from '@/lib/utils';
 import { shouldPreserveDeferredEnterShift } from '../../composer/keyboardPolicy';
@@ -411,11 +410,6 @@ export function renderComposerForm({
                     <div className={cn("overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                         {parallel.isActive ? <ParallelComposerStrip parallel={parallel} project={parallelProjectRef} /> : null}
                         {composerTopRows}
-                        {isVSCode && !isBtwActive ? (
-                            <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
-                                <ActiveEditorFileSuggestion />
-                            </div>
-                        ) : null}
                         {contextRows ? <div className="relative z-10 px-1.5">{contextRows}</div> : null}
                         <div
                             ref={dictationHeightHostRef}

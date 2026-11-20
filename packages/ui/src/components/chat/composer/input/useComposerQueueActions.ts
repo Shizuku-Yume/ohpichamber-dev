@@ -14,7 +14,7 @@ import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import type { ComposerSendHandlers } from './composerSendHandlers';
-import type { QueuedContextPart } from '@/stores/messageQueueStore';
+import type { QueuedContextPart, QueuedMessage } from '@/stores/messageQueueStore';
 import type { SyntheticContextPart } from '@/sync/input-store';
 import type { ComposerReference } from '../../composer/composerReferences';
 import type { SessionReference } from '../../composer/sessionReferences';
@@ -57,7 +57,7 @@ type Dependencies = {
     sendHandlers: Pick<ComposerSendHandlers, 'handleQueueMessageRef' | 'handleSubmitRef'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'getCurrentInputSnapshot'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity' | 'currentDirectory' | 'attachedFiles'>;
-    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput'>;
+    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue'>;
     language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions' | 'loadCommands'>;
     selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
     mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'sanitizeAttachmentsForSend' | 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions' | 'prepareDocumentMentions'>;
@@ -81,7 +81,7 @@ export function useComposerQueueActions({
     const {
         currentSessionId, inputMode, sendHeldByMissingFolderRef, consumePendingSyntheticParts,
         projectActionsRef, clearAttachedFiles, chatDraftIdentity, currentDirectory, attachedFiles} = sessionScope;
-    const { messageQueueTarget, addToQueue, popQueuedToInput } = queueState;
+    const { messageQueueTarget, addToQueue } = queueState;
     const {
         guestCommands, readSessionMentionsBeforeSend, linkedReferences, availableSkills,
         referenceLinksIn, sessionMentionsIn, rememberSessionMentions, loadCommands} = language;
@@ -364,25 +364,18 @@ export function useComposerQueueActions({
         }
     }, [inlineDraftTarget, mailboxTarget, rememberSessionMentions, updateLinkedReferences]);
 
-    const handleQueuedMessageEdit = React.useCallback((messageId: string) => {
-        if (!messageQueueTarget) return;
-        void popQueuedToInput(messageQueueTarget, messageId).then((queued) => {
-            if (!queued) return;
-            if (queued.attachments && queued.attachments.length > 0) {
-                const currentAttachments = useInputStore.getState().attachedFiles;
-                useInputStore.getState().setAttachedFiles([...currentAttachments, ...queued.attachments]);
-            }
-            setMessage(withMissingCitations(queued.content, queued.attachments ?? []));
-            if (queued.goal) useSessionGoalArmStore.getState().setArmed(true, queued.goal.objective ?? null);
-            restoreQueuedContext(queued.context ?? []);
-            setTimeout(() => {
-                composerRef.current?.focus();
-            }, 0);
-        }).catch((error) => {
-            console.warn('[queue] failed to take queued message for editing:', error);
-            toast.error(t('chat.queuedMessage.toast.takeFailed'));
-        });
-    }, [messageQueueTarget, popQueuedToInput, restoreQueuedContext, t, setMessage, composerRef]);
+    const handleQueuedMessageEdit = React.useCallback((queued: QueuedMessage) => {
+        if (queued.attachments && queued.attachments.length > 0) {
+            const currentAttachments = useInputStore.getState().attachedFiles;
+            useInputStore.getState().setAttachedFiles([...currentAttachments, ...queued.attachments]);
+        }
+        setMessage(withMissingCitations(queued.content, queued.attachments ?? []));
+        if (queued.goal) useSessionGoalArmStore.getState().setArmed(true, queued.goal.objective ?? null);
+        restoreQueuedContext(queued.context ?? []);
+        setTimeout(() => {
+            composerRef.current?.focus();
+        }, 0);
+    }, [restoreQueuedContext, setMessage, composerRef]);
 
     const handleQueuedMessageSend = React.useCallback((messageId: string) => {
         void handleSubmitRef.current({ queuedOnly: true, queuedMessageId: messageId, delivery: 'steer' });

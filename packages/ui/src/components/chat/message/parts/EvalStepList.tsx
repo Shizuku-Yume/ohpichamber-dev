@@ -1,7 +1,7 @@
 import type { ToolPopupContent } from '../types';
 import React from 'react';
 
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import type { EvalStatusEvent } from '@/lib/toolPresentation';
@@ -220,7 +220,7 @@ export const EvalStepList: React.FC<EvalStepListProps> = ({
 
                         {isExpanded && preview ? (
                             <div className="pl-6 pr-2 py-1">
-                                <WorkerHighlightedCode
+                                <HighlightedCode
                                     language="text"
                                     code={preview}
                                     style={MINI_CODE_STYLE}
