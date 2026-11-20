@@ -85,6 +85,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 export const dict = {
+  "chat.fileAttachment.actions.attach": "Dateien anhängen",
+  "chat.fileAttachment.actions.attachAria": "Dateien an die Nachricht anhängen",
+  "chat.fileAttachment.actions.removeImage": "Bild entfernen",
+  "chat.fileAttachment.actions.removeNamed": "{name} entfernen",
+  "chat.fileAttachment.toast.attachFailed": "Die Datei konnte nicht angehängt werden. Versuche es erneut.",
   'quota.family.zen': 'Zen-Modelle',
   'quota.value.requests': 'Anfragen: {count}',
   'quota.value.spent': '{spent} ausgegeben',

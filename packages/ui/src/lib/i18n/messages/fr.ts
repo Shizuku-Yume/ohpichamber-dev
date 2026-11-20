@@ -85,6 +85,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 const part1 = {
+  "chat.fileAttachment.actions.attach": "Joindre des fichiers",
+  "chat.fileAttachment.actions.attachAria": "Joindre des fichiers au message",
+  "chat.fileAttachment.actions.removeImage": "Supprimer l’image",
+  "chat.fileAttachment.actions.removeNamed": "Supprimer {name}",
+  "chat.fileAttachment.toast.attachFailed": "Impossible de joindre le fichier. Réessayez.",
   'quota.family.zen': 'Modèles Zen',
   'quota.value.requests': 'Requêtes : {count}',
   'quota.value.spent': '{spent} dépensés',
@@ -9354,7 +9359,7 @@ const part4 = {
   'mcpDropdown.status.failed': 'Échec : {error}',
   'mcpDropdown.status.unknownError': 'Erreur inconnue',
   'mcpDropdown.status.needsAuth': 'Nécessite une authentification',
-  'mcpDropdown.empty.configureInConfig': 'Configurez les serveurs MCP dans la configuration OpenCode.',
+  'mcpDropdown.empty.configureInConfig': 'Configurez les serveurs MCP dans les paramètres.',
   "chat.workStatus.mcp.unknown": "Les serveurs MCP ne sont pas encore chargés.",
   ...effortI18n.fr
 } as const;

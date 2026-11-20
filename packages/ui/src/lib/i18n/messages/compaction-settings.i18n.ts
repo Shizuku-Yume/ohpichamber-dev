@@ -165,7 +165,7 @@ export const compactionSettingsI18n = {
   'settings.openchamber.defaults.compaction.keepDefault': '默认（{count}）',
   'settings.openchamber.defaults.compaction.tokens': '{count} Token',
   'settings.openchamber.defaults.compaction.background': '在后台压缩',
-  'settings.openchamber.defaults.compaction.backgroundInfo': '会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 token。'
+  'settings.openchamber.defaults.compaction.backgroundInfo': '会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 Token。'
 },
   'zh-TW': {
   'settings.openchamber.defaults.compaction.title': '壓縮',
@@ -180,7 +180,7 @@ export const compactionSettingsI18n = {
   'settings.openchamber.defaults.compaction.keepDefault': '預設（{count}）',
   'settings.openchamber.defaults.compaction.tokens': '{count} Token',
   'settings.openchamber.defaults.compaction.background': '在背景壓縮',
-  'settings.openchamber.defaults.compaction.backgroundInfo': '工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 token。'
+  'settings.openchamber.defaults.compaction.backgroundInfo': '工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 Token。'
 },
   tr: {
     'settings.openchamber.defaults.compaction.title': 'Sıkıştırma',

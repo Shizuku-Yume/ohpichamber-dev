@@ -1,6 +1,5 @@
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import React, { useState } from 'react';
-import { useSessionWorkflowRuns } from '@/lib/workflows/store';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
@@ -13,12 +12,15 @@ import type { IconName } from '@/components/icon/icons';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { useI18n } from '@/lib/i18n';
+import { formatCompactNumber } from '@/lib/numberFormat';
 import { useAllLiveSessions, useAllSessionStatuses, useDirectorySync } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
+import { SubagentActivityText } from './SubagentLive';
 import type { State } from '@/sync/types';
+import type { Subagent } from '@openchamber/agent-contract';
 
 type Props = {
  sessionId: string | null;
@@ -26,7 +28,6 @@ type Props = {
 };
 
 const SECTION_ID = 'subagents';
-import type { Subagent } from '@openchamber/agent-contract';
 
 const EMPTY_SUBAGENTS: Subagent[] = [];
 
@@ -47,16 +48,9 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
 
  const liveSessions = useAllLiveSessions();
  const statuses = useAllSessionStatuses();
- // A workflow's agents are child sessions too; the Workflows section lists
- // them under their run, so they stay out of this list.
- const workflowRuns = useSessionWorkflowRuns(sessionId);
- const workflowAgentIds = React.useMemo(
-  () => new Set(workflowRuns.flatMap((run) => run.agents.map((agent) => agent.sessionId))),
-  [workflowRuns],
- );
  const children = React.useMemo(
-  () => (sessionId ? liveSessions.filter((candidate) => candidate.parentSessionId === sessionId && !workflowAgentIds.has(candidate.sessionId)) : []),
-  [liveSessions, sessionId, workflowAgentIds],
+  () => (sessionId ? liveSessions.filter((candidate) => candidate.parentSessionId === sessionId) : []),
+  [liveSessions, sessionId],
  );
  const liveSubagents = useSubagentsStore(
   React.useCallback((state) => (sessionId && state.byParent[sessionId]) ? state.byParent[sessionId] : EMPTY_SUBAGENTS, [sessionId]),
@@ -100,7 +94,6 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
   }
  };
 
- // Canonical sessions do not carry legacy model/cost summaries; omit them.
  // One subscription covers every child: per-session hooks would multiply
  // store subscriptions by the number of subagents.
  const permissions = useDirectorySync(React.useCallback((state: State) => state.permission, []));
@@ -186,10 +179,10 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
   >
    <ScrollableOverlay outerClassName="max-h-60" className="space-y-1" disableHorizontal>
     {rows.map(({ child, blocked, asked, busy, failed, done }) => {
-     const label = child.title?.trim() || t('chat.workStatus.subagent.untitled');
      const live = liveSubagents.find(
       (s) => s.childSessionId === child.sessionId || s.subagentId === child.sessionId,
      );
+     const label = live?.role.trim() || child.title?.trim() || t('chat.workStatus.subagent.untitled');
      const subagentId = live?.subagentId ?? child.sessionId;
      let icon: IconName = 'time';
      let iconColor: string | undefined;
@@ -221,7 +214,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
           <Icon name={icon} className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />
          </span>
         )}
-        label={label}
+        label={busy ? <SubagentActivityText childId={child.sessionId} directory={directory} identity={label} alertsOnly /> : label}
         value={(
          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           {live?.activeTool && (
@@ -231,7 +224,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
           )}
           {live?.tokens !== undefined && live.tokens > 0 && (
            <span className="typography-micro text-muted-foreground tabular-nums">
-            {t('chat.subagentHud.tokens', { count: live.tokens })}
+            {t('chat.subagentHud.tokens', { count: formatCompactNumber(live.tokens) })}
            </span>
           )}
           {live?.cost !== undefined && live.cost > 0 && (

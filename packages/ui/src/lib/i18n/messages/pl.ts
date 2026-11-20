@@ -86,6 +86,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "chat.fileAttachment.actions.attach": "Dołącz pliki",
+  "chat.fileAttachment.actions.attachAria": "Dołącz pliki do wiadomości",
+  "chat.fileAttachment.actions.removeImage": "Usuń obraz",
+  "chat.fileAttachment.actions.removeNamed": "Usuń {name}",
+  "chat.fileAttachment.toast.attachFailed": "Nie udało się dołączyć pliku. Spróbuj ponownie.",
   'quota.family.zen': 'Modele Zen',
   'quota.value.requests': 'Żądania: {count}',
   'quota.value.spent': 'Wydano {spent}',

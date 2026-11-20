@@ -1,4 +1,4 @@
-/** Session notice rows in the chat (`@/lib/opencode/session-notices`) — merged into each locale's main dictionary. */
+/** Session notice rows in the chat — merged into each locale's main dictionary. */
 export const sessionNoticesI18n = {
   en: {
     'chat.sessionNotice.restart': 'Continuing after restart',

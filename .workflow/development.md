@@ -16,6 +16,27 @@ module is exempt. Zod's stale override and lock are aligned to the adopted
 checks, remaining UI/server diagnostics and complete suites are still pending;
 these focused results do not advance rebaseline or runtime acceptance.
 
+The Agent Service build emits declarations for the private Host authorization
+protocol; the web server checker consumes the built package rather than Bun
+implementation sources outside its boundary (7 boundary tests pass). Canonical
+work-status telemetry retains the upstream folded summary without SDK part
+timestamps (15 tests pass). Subagent rows use canonical role/token data and the
+extracted activity owner; 9 tests cover inactive-run rejection and the native
+Agent Hub. These projections apply equally to Web/PWA, Electron, hosted mobile
+and Capacitor. No new capability or Agent Contract was added. These surfaces
+remain visually unverified, and full merge acceptance is still pending.
+
+All 14 non-English dictionaries now translate the five attachment action/error
+keys; no English dictionary spread is used as a substitute for translation.
+The i18n suite passes 124 tests with 76,999 assertions, including corrected
+French MCP guidance, Chinese Token spelling and the unchanged Google Gemini
+brand name. The native catalog restoration fixture passes 1 test with 6
+assertions. Current full checks still fail: 4,597 server diagnostics, integrated
+UI fixture diagnostics, registry effect/consumer ownership, three DiffView
+binding cases, lint and all five root guard steps remain unresolved. These are
+not classified as pre-existing. Full suites and fork-parent comparisons remain
+pending.
+
 **2026-11-20 Upstream main merge in progress:** The real merge of upstream `1928155551` is still under repair on `devin/upstream-sync-1795118808`; historical green results below are not acceptance of this merge. Both `useUIStore` and `useConfigStore` now compose extracted owners. Config owners use canonical provider/model catalogs, native agent-catalog ownership and existing Host settings/voice services. Explicit reloads retire obsolete catalog reads without clearing published snapshots; joined agent reads can refresh only in the current runtime. Host permission-policy events are validated as Host envelopes, not routed through a retired SDK classifier. Focused config coverage passed 109 tests with 423 assertions; Host-event coverage passed 26 tests with 76 assertions, including empty/malformed policy events. The broader UI type-check remains red, retired imports remain, and root guards, full UI/web suites and fork-parent comparisons are unfinished. No runtime or visual certification is claimed.
 
 The owner port is shared by Web/PWA, Electron, hosted mobile and Capacitor mobile: each uses the Canonical Client for agent catalogs and the current Host's event/preferences services. No surface starts a runtime or discovers OpenCode configuration through these owners; mobile continues to use its remote Host.

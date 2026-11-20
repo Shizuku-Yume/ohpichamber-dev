@@ -86,6 +86,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "chat.fileAttachment.actions.attach": "파일 첨부",
+  "chat.fileAttachment.actions.attachAria": "메시지에 파일 첨부",
+  "chat.fileAttachment.actions.removeImage": "이미지 제거",
+  "chat.fileAttachment.actions.removeNamed": "{name} 제거",
+  "chat.fileAttachment.toast.attachFailed": "파일을 첨부하지 못했습니다. 다시 시도하세요.",
   'quota.family.zen': 'Zen 모델',
   'quota.value.requests': '요청: {count}',
   'quota.value.spent': '{spent} 사용',

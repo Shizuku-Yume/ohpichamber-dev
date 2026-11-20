@@ -85,6 +85,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 const part1 = {
+  "chat.fileAttachment.actions.attach": "Bestanden bijvoegen",
+  "chat.fileAttachment.actions.attachAria": "Bestanden aan het bericht toevoegen",
+  "chat.fileAttachment.actions.removeImage": "Afbeelding verwijderen",
+  "chat.fileAttachment.actions.removeNamed": "{name} verwijderen",
+  "chat.fileAttachment.toast.attachFailed": "Het bestand kon niet worden bijgevoegd. Probeer het opnieuw.",
   'quota.family.zen': 'Zen-modellen',
   'quota.value.requests': 'Verzoeken: {count}',
   'quota.value.spent': '{spent} besteed',

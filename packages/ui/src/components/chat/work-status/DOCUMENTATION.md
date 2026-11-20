@@ -12,6 +12,15 @@ own data fetching and reconciliation; the layout's right slot owns column width.
 
 ## Invariants
 
+- Turn telemetry reads canonical message usage and step timing. An authoritative
+  idle status permits aggregation even while folded, so the upstream compact
+  time/cost or throughput heading remains useful. Busy/waiting states retain
+  only the last committed result for the same runtime, directory and session;
+  invalidated status or a different scope cannot display it.
+- Subagent identities, token counts and costs come from canonical subagent
+  records, not legacy session summaries. Warning-only activity uses the shared
+  `SubagentLive` owner and authoritative active-run turn membership; an old
+  transcript cannot generate a silent-agent warning in a new run.
 - Subagent activity reads canonical inline parts only for nonterminal turns in
   the authoritative active run. Historical running calls never prove live work.
   Call and result identities pair before rendering; native retry notices supply

@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ApprovalRequest, QuestionRequest, Session } from '@openchamber/agent-contract';
+import { SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { useUIStore } from '@/stores/useUIStore';
 import { I18nProvider } from '@/lib/i18n';
 import { SyncProvider } from '@/sync/sync-context';
@@ -11,6 +12,7 @@ import { useSessionActivityTimingStore } from '@/sync/session-activity-timing';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import type { State } from '@/sync/types';
 import type { WorkStatusSubagentsSection as WorkStatusSubagentsSectionType } from './WorkStatusSubagentsSection';
 
@@ -81,6 +83,9 @@ describe('subagent status rows', () => {
       window: win, document: win.document, navigator: win.navigator,
       Node: win.Node, Element: win.Element, HTMLElement: win.HTMLElement,
       HTMLIFrameElement: win.HTMLIFrameElement, localStorage: win.localStorage,
+      HTMLInputElement: win.HTMLInputElement, HTMLButtonElement: win.HTMLButtonElement,
+      DocumentFragment: win.DocumentFragment, NodeFilter: win.NodeFilter, MutationObserver: win.MutationObserver,
+      Event: win.Event, CustomEvent: win.CustomEvent,
       getComputedStyle: win.getComputedStyle.bind(win), ResizeObserver: win.ResizeObserver,
       requestAnimationFrame: win.requestAnimationFrame.bind(win),
       cancelAnimationFrame: win.cancelAnimationFrame.bind(win), IS_REACT_ACT_ENVIRONMENT: true,
@@ -99,6 +104,7 @@ describe('subagent status rows', () => {
     useGlobalSessionStatusStore.setState({ observedById: new Map(), statusById: new Map() });
     useGlobalSessionsStore.getState().applySnapshot([], []);
     useProjectsStore.setState({ projects: [] });
+    useSubagentsStore.setState({ byParent: {} });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -125,7 +131,7 @@ describe('subagent status rows', () => {
     expect(container.textContent).toContain('1/1');
     await publish({ session_status: { child: 'idle' } });
     expect(icon()).toBe('#oc-checkbox-circle');
-    expect(rowContent().textContent).toBe('Child$0.250s');
+    expect(rowContent().textContent).toBe('Child');
     expect(row().getAttribute('aria-label')).toContain('Done');
   });
 
@@ -189,59 +195,64 @@ describe('subagent status rows', () => {
   });
 
   test('names who works without the call it makes, and who a finished one was', async () => {
-    // The agent is set when OpenCode creates the session.
-    const worker: Session = { ...child, sessionId: 'worker', title: 'Worker', agent: 'explore' };
+    const worker: Session = { ...child, sessionId: 'worker', title: 'Worker' };
+    await act(async () => useSubagentsStore.getState().setSubagents(parent.sessionId, [{
+      subagentId: 'worker-task', parentSessionId: parent.sessionId, childSessionId: worker.sessionId, role: 'explore', status: 'running',
+    }]));
     await publish({
       session: [parent, worker],
-      session_status: { worker: { type: 'busy' } },
-      message: { worker: [{ messageId: 's1', sessionID: 'worker', role: 'assistant', time: { created: Date.now() }, agent: 'explore', providerID: 'p', modelID: 'm' }] },
-      part: { s1: [{ id: 't1', sessionID: 'worker', messageID: 's1', type: 'tool', callID: 't1', tool: 'grep', state: { status: 'running', input: { pattern: 'evaluate' }, time: { start: Date.now() } } }] },
+      sessionStatusReady: true,
+      session_status: { worker: 'running' },
     });
     // The call changes too often to read in a row; the panel shows it.
     expect(rowContent().textContent).toContain('explore');
     expect(rowContent().textContent).not.toContain('Search Files');
     await publish({
-      session_status: { worker: { type: 'idle' } },
-      message: {
-        worker: [],
-        parent: [{
-          id: 'report',
-          sessionID: 'parent',
-          role: 'synthetic',
-          time: { created: 2 },
-          text: '<subagent sessionID="worker" state="completed">\n## Two ADRs are stale\n\nDetails\n</subagent>',
-          metadata: { source: 'subagent', childID: 'worker', state: 'completed' },
-        }],
-      },
+      session_status: { worker: 'idle' },
     });
     // The row keeps who ran it; the report lives in the tooltip and the panel.
-    expect(rowContent().textContent).toContain('explore0s');
+    expect(rowContent().textContent).toContain('explore');
     expect(rowContent().textContent).not.toContain('Two ADRs are stale');
   });
 
-  test('counts the tokens a subagent spent, without the cache it re-read every step', async () => {
-    const reader: Session = { ...child, sessionId: 'reader', title: 'Reader', cost: 0, tokens: { input: 112762, output: 3217, reasoning: 1947, cache: { read: 2165888, write: 0 } } };
-    await publish({ session: [parent, reader], sessionStatusReady: true, session_status: { reader: { type: 'idle' } } });
+  test('renders the canonical subagent token count without reconstructing session counters', async () => {
+    const reader: Session = { ...child, sessionId: 'reader', title: 'Reader' };
+    await act(async () => useSubagentsStore.getState().setSubagents(parent.sessionId, [{
+      subagentId: 'reader-task', parentSessionId: parent.sessionId, childSessionId: reader.sessionId, role: 'reader', status: 'completed', tokens: 117926,
+    }]));
+    await publish({ session: [parent, reader], sessionStatusReady: true, session_status: { reader: 'idle' } });
     expect(rowContent().textContent).toContain('117.9K');
     expect(rowContent().textContent).not.toContain('2.3M');
   });
 
   test('still says when a working subagent has gone silent', async () => {
-    const worker: Session = { ...child, sessionId: 'worker', title: 'Worker', agent: 'explore' };
+    const worker: Session = { ...child, sessionId: 'worker', title: 'Worker', runtimeStatus: 'running', activeRunId: 'run' };
+    const { metadata: _metadata, metadataRevision: _metadataRevision, archiveRevision: _archiveRevision, ...runtimeWorker } = worker;
+    const quietAt = Date.now() - 200_000;
+    const snapshot = SessionSnapshotSchema.parse({
+      session: runtimeWorker, cursor: 'epoch:0', activeRun: { runId: 'run', sessionId: worker.sessionId, origin: 'host', status: 'running', createdAt: quietAt },
+      branch: { branchId: 'branch', branchVersion: '1', leafMessageId: 's1' },
+      window: { firstTurnId: 'turn', lastTurnId: 'turn', firstMessageId: 's1', lastMessageId: 's1', hasEarlier: false },
+      turns: [{ turnId: 'turn', runId: 'run', sessionId: worker.sessionId, status: 'running', userMessageId: 'prompt', assistantMessageIds: ['s1'], startedAt: quietAt }],
+      messages: [{ messageId: 's1', sessionId: worker.sessionId, turnId: 'turn', role: 'assistant', createdAt: quietAt, parts: [] }],
+      approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
+    });
     await publish({
       session: [parent, worker],
-      session_status: { worker: { type: 'busy' } },
-      message: { worker: [{ messageId: 's1', sessionID: 'worker', role: 'assistant', time: { created: Date.now() - 200_000 }, agent: 'explore', providerID: 'p', modelID: 'm' }] },
-      part: { s1: [] },
+      sessionStatusReady: true,
+      session_status: { worker: 'running' },
+      message: { worker: snapshot.messages },
+      snapshot: { worker: snapshot },
     });
     expect(rowContent().textContent).toContain('Silent for');
+    await publish({ session: [parent, { ...worker, activeRunId: 'next-run' }] });
+    expect(rowContent().textContent).not.toContain('Silent for');
   });
 
-  test('opens the Subagents panel from its heading', async () => {
-    const button = container.querySelector<HTMLButtonElement>('button[aria-label="Open in the Subagents panel"]');
+  test('opens the canonical Agent Hub from its heading action', async () => {
+    const button = container.querySelector<HTMLButtonElement>('button[title="Subagents"]');
     if (!button) throw new Error('Expected the panel button');
     await act(async () => button.click());
-    const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
-    expect(tabs.some((tab) => tab.mode === 'subagents')).toBe(true);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   });
 });

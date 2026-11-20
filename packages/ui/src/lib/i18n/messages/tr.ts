@@ -85,6 +85,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 export const dict = {
+  "chat.fileAttachment.actions.attach": "Dosya ekle",
+  "chat.fileAttachment.actions.attachAria": "Mesaja dosya ekle",
+  "chat.fileAttachment.actions.removeImage": "Görseli kaldır",
+  "chat.fileAttachment.actions.removeNamed": "{name} öğesini kaldır",
+  "chat.fileAttachment.toast.attachFailed": "Dosya eklenemedi. Tekrar deneyin.",
   'quota.family.zen': 'Zen Modelleri',
   'quota.value.requests': 'İstekler: {count}',
   'quota.value.spent': '{spent} harcandı',

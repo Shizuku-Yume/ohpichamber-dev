@@ -26,12 +26,12 @@ const waitForLocaleLoadToSettle = async (locale: Locale) => {
 describe('i18n store', () => {
   beforeEach(resetStore);
 
-  test('falls back to English for a new key missing from a locale dictionary', async () => {
+  test('loads translated attachment actions and errors', async () => {
     try {
       useI18nStore.getState().setLocale('fr');
       await waitForLocaleLoadToSettle('fr');
-      expect(useI18nStore.getState().dictionary['chat.fileAttachment.actions.attach']).toBe('Attach files');
-      expect(useI18nStore.getState().dictionary['chat.fileAttachment.toast.attachFailed']).toBe('Could not attach the file. Try again.');
+      expect(useI18nStore.getState().dictionary['chat.fileAttachment.actions.attach']).toBe('Joindre des fichiers');
+      expect(useI18nStore.getState().dictionary['chat.fileAttachment.toast.attachFailed']).toBe('Impossible de joindre le fichier. Réessayez.');
     } finally {
       resetStore();
     }

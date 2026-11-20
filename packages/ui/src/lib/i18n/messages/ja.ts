@@ -86,6 +86,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "chat.fileAttachment.actions.attach": "ファイルを添付",
+  "chat.fileAttachment.actions.attachAria": "メッセージにファイルを添付",
+  "chat.fileAttachment.actions.removeImage": "画像を削除",
+  "chat.fileAttachment.actions.removeNamed": "{name} を削除",
+  "chat.fileAttachment.toast.attachFailed": "ファイルを添付できませんでした。もう一度お試しください。",
   'quota.family.zen': 'Zen モデル',
   'quota.value.requests': 'リクエスト数: {count}',
   'quota.value.spent': '{spent} 使用済み',

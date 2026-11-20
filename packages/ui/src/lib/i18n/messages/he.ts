@@ -85,6 +85,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 const part1 = {
+  "chat.fileAttachment.actions.attach": "צירוף קבצים",
+  "chat.fileAttachment.actions.attachAria": "צירוף קבצים להודעה",
+  "chat.fileAttachment.actions.removeImage": "הסרת תמונה",
+  "chat.fileAttachment.actions.removeNamed": "הסרת {name}",
+  "chat.fileAttachment.toast.attachFailed": "לא ניתן לצרף את הקובץ. נסו שוב.",
   'quota.family.zen': 'מודלי Zen',
   'quota.value.requests': 'בקשות: {count}',
   'quota.value.spent': 'נוצלו {spent}',

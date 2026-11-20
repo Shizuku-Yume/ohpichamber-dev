@@ -86,6 +86,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "chat.fileAttachment.actions.attach": "Прикріпити файли",
+  "chat.fileAttachment.actions.attachAria": "Прикріпити файли до повідомлення",
+  "chat.fileAttachment.actions.removeImage": "Видалити зображення",
+  "chat.fileAttachment.actions.removeNamed": "Видалити {name}",
+  "chat.fileAttachment.toast.attachFailed": "Не вдалося прикріпити файл. Спробуйте ще раз.",
   'quota.family.zen': 'Моделі Zen',
   'quota.value.requests': 'Запити: {count}',
   'quota.value.spent': 'Витрачено {spent}',

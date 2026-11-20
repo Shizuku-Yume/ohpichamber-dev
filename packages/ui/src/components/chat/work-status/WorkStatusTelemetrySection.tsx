@@ -3,7 +3,6 @@ import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDirectorySync, useSessionMessageRecords, useSyncDirectory, useSyncRuntime } from '@/sync/sync-context';
 import { normalizePath } from '@/lib/pathNormalization';
-import { useUIStore } from '@/stores/useUIStore';
 import {
   WorkStatusCollapsibleSection,
   WorkStatusRow,
@@ -40,9 +39,6 @@ const TelemetryRow: React.FC<{ label: string; description: string; value: React.
 
 export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directory }) => {
   const { t } = useI18n();
-  const expanded = useUIStore(
-    React.useCallback((state) => state.workStatusExpandedSections['telemetry'] ?? true, []),
-  );
   const { runtimeKey } = useSyncRuntime();
   const syncDirectory = useSyncDirectory();
   const scope = JSON.stringify([runtimeKey, normalizePath(directory ?? syncDirectory), sessionId]);
@@ -52,7 +48,7 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
       : 'unavailable', [sessionId]),
     directory ?? undefined,
   );
-  const eligibleForStats = Boolean(sessionId && expanded && status === 'idle');
+  const eligibleForStats = Boolean(sessionId && status === 'idle');
 
   const records = useSessionMessageRecords(
     sessionId ?? '',
@@ -80,9 +76,15 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
     }
   }, [scope, status, eligibleForStats, computed]);
   const stats = eligibleForStats ? computed : status !== 'unavailable' && retained?.scope === scope ? retained.stats : null;
-  const summary = stats && stats.responseTokensPerSecond !== null
-    ? formatThroughputRate(stats.responseTokensPerSecond)
-    : undefined;
+  const hasCost = stats !== null && stats.cost !== null && stats.cost > 0;
+  const figures = stats ? [
+    !hasCost && stats.responseTokensPerSecond !== null ? formatThroughputRate(stats.responseTokensPerSecond) : null,
+    stats.elapsedDurationMs !== null ? formatTelemetryDuration(stats.elapsedDurationMs) : null,
+    hasCost && stats.cost !== null ? `$${stats.cost.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}` : null,
+  ].filter((figure): figure is string => figure !== null).join(' · ') : '';
+  const summary = !eligibleForStats && stats
+    ? figures ? t('chat.workStatus.telemetry.previousTurnRate', { rate: figures }) : t('chat.workStatus.telemetry.previousTurn')
+    : figures || undefined;
 
   useReportWorkStatusPresence('telemetry', Boolean(sessionId));
 
@@ -94,7 +96,6 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
       title={t('chat.workStatus.section.telemetry')}
       icon="bar-chart-2"
       summary={summary}
-      defaultExpanded
     >
       {stats ? (
         <>

@@ -86,6 +86,11 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "chat.fileAttachment.actions.attach": "附加檔案",
+  "chat.fileAttachment.actions.attachAria": "將檔案附加到訊息",
+  "chat.fileAttachment.actions.removeImage": "移除圖片",
+  "chat.fileAttachment.actions.removeNamed": "移除 {name}",
+  "chat.fileAttachment.toast.attachFailed": "無法附加檔案。請再試一次。",
   'quota.family.zen': 'Zen 模型',
   'quota.value.requests': '請求數：{count}',
   'quota.value.spent': '已花費 {spent}',
