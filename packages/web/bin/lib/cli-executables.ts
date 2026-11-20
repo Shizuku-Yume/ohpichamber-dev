@@ -1,25 +1,54 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from 'fs';
+import path from 'path';
 
-const WINDOWS_EXTENSIONS = (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
-  .split(';')
-  .map((extension) => extension.trim().toLowerCase())
-  .filter(Boolean)
-  .map((extension) => extension.startsWith('.') ? extension : `.${extension}`);
+const WINDOWS_EXTENSIONS = process.platform === 'win32'
+  ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
+      .split(';')
+      .map((ext) => ext.trim().toLowerCase())
+      .filter(Boolean)
+      .map((ext) => (ext.startsWith('.') ? ext : `.${ext}`))
+  : [''];
 
-export function searchPathFor(command: string) {
-  const extensions = process.platform === 'win32' ? WINDOWS_EXTENSIONS : [''];
-  for (const directory of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
-    for (const extension of extensions) {
-      const candidate = path.join(directory, `${command}${extension}`);
-      try {
-        if (!fs.statSync(candidate).isFile()) continue;
-        if (process.platform !== 'win32') fs.accessSync(candidate, fs.constants.X_OK);
+function isExecutable(filePath: string) {
+  try {
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return false;
+    }
+    if (process.platform === 'win32') {
+      return true;
+    }
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveExplicitBinary(candidate: string | null | undefined) {
+  if (!candidate) {
+    return null;
+  }
+  if (candidate.includes(path.sep) || path.isAbsolute(candidate)) {
+    const resolved = path.isAbsolute(candidate) ? candidate : path.resolve(candidate);
+    return isExecutable(resolved) ? resolved : null;
+  }
+  return null;
+}
+
+function searchPathFor(command: string) {
+  const pathValue = process.env.PATH || '';
+  const segments = pathValue.split(path.delimiter).filter(Boolean);
+  for (const dir of segments) {
+    for (const ext of WINDOWS_EXTENSIONS) {
+      const fileName = process.platform === 'win32' ? `${command}${ext}` : command;
+      const candidate = path.join(dir, fileName);
+      if (isExecutable(candidate)) {
         return candidate;
-      } catch {
-        continue;
       }
     }
   }
   return null;
 }
+
+export { resolveExplicitBinary, searchPathFor };

@@ -5,6 +5,7 @@ import { withSourceControlFileLock } from '../source-control/file-lock.js';
 import { createContributorProvenanceStore } from './contributor-provenance-storage.js';
 import { createManagedSshCredentialStore } from './ssh-credential-storage.js';
 import { createGitIdentityStore } from './identity-storage.js';
+import type { PathOrFileDescriptor } from 'node:fs';
 import type { ProvenanceGitPaths } from './contributor-provenance-storage.js';
 import type { JsonValue } from '../shared/json-values.js';
 
@@ -24,13 +25,14 @@ const fsImpl = {
     });
   },
 };
-const readFileSync = new Proxy(fsSync.readFileSync, {
-  apply(target, _receiver, args: Parameters<typeof fsSync.readFileSync>) {
-    const result = target(...args);
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);
-    return result;
-  },
-});
+function readFileSync(path: PathOrFileDescriptor, options?: { encoding?: null | undefined; flag?: string | undefined } | null): NonSharedBuffer;
+function readFileSync(path: PathOrFileDescriptor, options: { encoding: BufferEncoding; flag?: string | undefined } | BufferEncoding): string;
+function readFileSync(...args: Parameters<typeof fsSync.readFileSync>): ReturnType<typeof fsSync.readFileSync>;
+function readFileSync(...args: Parameters<typeof fsSync.readFileSync>) {
+  const result = fsSync.readFileSync(...args);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);
+  return result;
+}
 const syncFsImpl = {
   ...fsSync,
   constants: fsSync.constants,

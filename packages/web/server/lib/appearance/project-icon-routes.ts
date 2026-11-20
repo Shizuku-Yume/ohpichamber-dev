@@ -443,13 +443,7 @@ export const registerProjectIconRoutes = (app: Application, dependencies: Projec
 
       const selected = filtered[0];
       if (!selected) {
-        // A project without a favicon is the ordinary case, not a failure: the
-        // caller keeps its symbol icon and says there was nothing to find.
-        return res.json({
-          project,
-          skipped: true,
-          reason: 'no-favicon-found',
-        });
+        return res.status(404).json({ error: 'No favicon found in project' });
       }
 
       const ext = path.extname(selected.path).slice(1).toLowerCase();
