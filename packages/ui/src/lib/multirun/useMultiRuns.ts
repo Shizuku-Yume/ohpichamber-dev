@@ -3,7 +3,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { readMultiRunIdentity } from './runs';
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { buildMultiRunIndex, readMultiRunIdentityWith, type MultiRunIndex, type MultiRunSummary } from './runs';
 
@@ -12,7 +12,11 @@ export type MultiRunSessions = {
   sessionById: ReadonlyMap<string, Session>;
 };
 
-const resolveLegacyScope = (session: Session): string => session.projectId;
+const resolveLegacyScope = (session: Session): string => (
+  useSessionUIStore.getState().worktreeMetadata.get(session.sessionId)?.projectDirectory
+    ?? resolveGlobalSessionDirectory(session)
+    ?? session.workspaceId
+);
 
 export function useMultiRunSessions(): MultiRunSessions {
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);

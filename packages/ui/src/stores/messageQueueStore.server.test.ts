@@ -242,6 +242,28 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
   })
 
+  test("snapshot counters from another session never block this session's newer queue", async () => {
+    const other = createMessageQueueTarget('other-queue', '/other', 'runtime-a')
+    if (!other) throw new Error('Missing queue target')
+    respond = () => json(snapshot([
+      queueState([serverItem('other-1', 'other')], '100', other.sessionId),
+      queueState([serverItem('q1', 'first')], '1'),
+    ], '100'))
+    await useMessageQueueStore.getState().hydrate()
+    applyMessageQueueUpdatedEvent(updated('2', queueState([serverItem('q2', 'second')], '2')), 'runtime-a')
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((item) => item.id)).toEqual(['q2'])
+  })
+
+  test("a partial snapshot preserves unreadable queues while applying complete siblings", async () => {
+    const other = createMessageQueueTarget('other-queue', '/other', 'runtime-a')
+    if (!other) throw new Error('Missing queue target')
+    applyMessageQueueUpdatedEvent(updated('8', queueState([serverItem('q1', 'keep')], '8')), 'runtime-a')
+    respond = () => json({ items: [queueState([serverItem('other-1', 'fresh')], '2', other.sessionId)], errors: [{ code: 'INTERNAL_ERROR' }] })
+    await useMessageQueueStore.getState().hydrate()
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((item) => item.content)).toEqual(['keep'])
+    expect(useMessageQueueStore.getState().queuedMessages[getMessageQueueKey(other)]?.map((item) => item.content)).toEqual(['fresh'])
+  })
+
   test("returning to a runtime migrates its unattempted legacy messages without repeating the first upload", async () => {
     activateRuntime("runtime-partial-migration")
     const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
@@ -582,7 +604,7 @@ describe("server-owned message queue", () => {
     useMessageQueueStore.getState().clearQueue(target)
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBe(undefined)
     await environment.settle()
-    expect(calls[1]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1", body: undefined })
+    expect(calls[1]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1/items/q2", body: { expectedRevision: "10", queueItemId: "q2" } })
   })
 
   test("reorderQueue sends the complete new order", async () => {
