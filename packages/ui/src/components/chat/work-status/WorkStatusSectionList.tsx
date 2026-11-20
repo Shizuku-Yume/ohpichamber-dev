@@ -7,7 +7,6 @@ import { WorkStatusTelemetrySection } from './WorkStatusTelemetrySection';
 import { WorkStatusSubagentsSection } from './WorkStatusSubagentsSection';
 import { WorkStatusWorkflowsSection } from './WorkStatusWorkflowsSection';
 import { WorkStatusTasksSection } from './WorkStatusTasksSection';
-import { useLoadSessionTodos } from './useLoadSessionTodos';
 import { WorkStatusMcpSection } from './WorkStatusMcpSection';
 import { WorkStatusPinnedSection } from './WorkStatusPinnedSection';
 import { WorkStatusContextSection } from './WorkStatusContextSection';
@@ -24,13 +23,12 @@ export const WorkStatusSectionList: React.FC<{
 }> = ({ sessionId, directory, repositoryEnabled, layout, visible = true }) => {
   const { extensionSections, sectionOrder, hiddenSections } = layout;
   const sectionVisible = (id: Parameters<typeof isWorkStatusSectionVisible>[1]) => isWorkStatusSectionVisible(hiddenSections, id);
-  useLoadSessionTodos(sessionId, directory);
 
   const secondarySections = {
     usage: <WorkStatusUsageSection visible={visible} />,
     telemetry: <WorkStatusTelemetrySection sessionId={sessionId} directory={directory} />,
     subagents: <WorkStatusSubagentsSection sessionId={sessionId} directory={directory} />,
-    tasks: <WorkStatusTasksSection sessionId={sessionId} />,
+    tasks: <WorkStatusTasksSection sessionId={sessionId} directory={directory} />,
     workflows: <WorkStatusWorkflowsSection sessionId={sessionId} directory={directory} />,
     mcp: <WorkStatusMcpSection directory={directory} />,
     pinned: <WorkStatusPinnedSection sessionId={sessionId} directory={directory} />,

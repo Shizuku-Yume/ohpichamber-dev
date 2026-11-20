@@ -4,6 +4,24 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+First-prompt Host capture now extracts the Git result's `root` before computing
+the project-context id. The fork caller had passed the whole `{ root }` record;
+the upstream TypeScript encoder no longer silently returns an empty id for that
+wrong input, so capture failed after session creation and before prompt dispatch.
+A live Git probe reproduces the exact `value.replace` error at the old call and
+resolves a valid id at the fixed call. Seven real-Git/resolver tests pass,
+including fresh-session prompt capture with no pins through Session Knowledge.
+The project mapping lives in the focused projects owner, not bootstrap.
+
+Work-status Tasks now reads the same scoped Canonical todo phases as the
+composer tray. The retired OpenCode-backed Host todo loader, cache and unused
+event subscriber are removed; no `/api/session-todos` request or replacement
+Host route remains. Blocked and abandoned tasks keep their Canonical meanings.
+Twelve todo/tray tests pass, covering all statuses, scoped selection and ordered
+empty updates without Host polling. UI type-check and changed-source lint pass;
+server type-check and lint pass. These are source/integration checks, not a
+browser smoke certification.
+
 The Web server declaration build now passes with an explicit public route-rule
 type for file-resource schemas and a named exported command-stream class.
 Schema instances and subprocess behavior are unchanged; 193 Docker-place and
@@ -13,7 +31,7 @@ Linux x64 AppImage packages successfully after Web assets, Agent runtime
 verification, main bundling and native rebuild. macOS packaging and runtime
 smoke verification remain unverified here.
 
-UI checking now passes with zero diagnostics (4,230 files); Agent Service
+UI checking now passes with zero diagnostics (4,227 files); Agent Service
 checking also passes. UI-block guidance is generated from the UI catalog into
 the native render-tool description, without importing the renderer into the
 worker or restoring session-prompt injection. Five guidance tests and eight
@@ -31,9 +49,10 @@ while unavailable-extension source and built-in content remain visible. Native
 guest-card rendering is restored (four tests), and static Steps retain upstream
 contrast rather than being treated as pending. Standalone block tests pass
 (22), as do extension-answer tests (13) with the real Native sync provider in
-their harness. Changed-source lint passes. Composer draft/keystroke assertions,
-registry and DiffView acceptance, full gates and fork-parent comparison remain
-outstanding. Visual verification has not been performed.
+their harness. Changed-source lint passes. Composer draft/keystroke assertions
+pass (five tests); reserved registry preferences are documented and the registry
+suite passes (30 tests). DiffView acceptance, full gates and fork-parent
+comparison remain outstanding. Visual verification has not been performed.
 
 Native chat-directory cleanup now consumes complete Canonical inventories,
 scoped snapshots/updates and cascading deletion events instead of SDK records.
@@ -69,7 +88,7 @@ technical debt; no API was added. The server TS-only guard now exempts exactly
 95 retained fork JavaScript paths, with 6/6 guard tests; no new neighboring JS
 module is exempt. Zod's stale override and lock are aligned to the adopted
 4.6.7 manifest/patch version; install exits 0 without a patch warning. Root
-checks, remaining UI/server diagnostics and complete suites are still pending;
+checks and complete suites are still pending;
 these focused results do not advance rebaseline or runtime acceptance.
 
 The Agent Service build emits declarations for the private Host authorization

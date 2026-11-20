@@ -253,7 +253,7 @@ which requests only providers enabled for this panel.
 | Goal | `useSessionGoal` | respects the Settings toggle |
 | MCP | `useMcpStore` | connect/disconnect reuses the dropdown's actions |
 | Pinned messages | `getContextObligatoryMessages` + `state.part` | see below |
-| Todos | live `state.todo[sessionId]`, persisted fallback | live channel wins |
+| Todos | Canonical `snapshot.todos` and ordered `session.updated` | scoped live state; no second cache |
 
 ### Turn stats
 
@@ -483,12 +483,18 @@ the panel.
 
 ## Tasks
 
+The section reads Canonical `snapshot.todos` phases through the shared sync
+selector, with explicit session/directory scope. It does not fetch the retired
+Host `/api/session-todos` endpoint or maintain a second checklist cache. Empty
+ordered updates clear the section. Snapshot recovery and errors use the normal
+Canonical sync lifecycle rather than independent todo polling.
+
 Icons and strike-through match the composer's todo dropdown, so one list does
 not read as two. Two deliberate differences:
 
 - **Completed items stay.** The dropdown is a queue to work through; this is a
   record of the session.
-- **Sorted by status** — in progress, then pending, then completed — and stable
+- **Sorted by status** — in progress, blocked, pending, completed, abandoned — and stable
   within each rank, since the agent's own ordering carries meaning.
 
 Rows truncate at this width, so each carries a delayed tooltip with the full
@@ -499,8 +505,9 @@ id. Collapsed, it keeps the heading and completion count, followed by only the
 first `in_progress` task in the agent's order. Without an active task, including
 pending-only and all-completed lists, it shows no preview row. Live updates
 replace the preview without expanding the section. An authoritative empty todo
-list clears the section rather than restoring old persisted tasks; persistence
-is used only while the scoped live list is missing.
+list clears the section rather than restoring old persisted tasks. Completed
+and abandoned rows remain visible as closed tasks; blocked rows retain their
+blocker as a tooltip.
 
 ## Collapsed Usage headline
 

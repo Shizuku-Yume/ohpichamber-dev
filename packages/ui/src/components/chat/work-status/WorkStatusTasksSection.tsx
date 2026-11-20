@@ -2,25 +2,29 @@ import React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { useSessionTodos, type SessionTodo } from '@/stores/useSessionTodosStore';
+import type { TodoItem } from '@openchamber/agent-contract';
+import { useSessionTodos } from '@/sync/sync-context';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { TODO_STATUS_ICON } from '../todoStatus';
+import { isClosedTodo } from '../todoProgress';
 import { WorkStatusCollapsibleSection, WorkStatusRow } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 
 type Props = {
   sessionId: string | null;
+  directory?: string | null;
 };
 
 const STATUS_RANK = {
   in_progress: 0,
-  pending: 1,
-  completed: 2,
-  cancelled: 3,
-} satisfies Record<SessionTodo['status'], number>;
+  blocked: 1,
+  pending: 2,
+  completed: 3,
+  abandoned: 4,
+} satisfies Record<TodoItem['status'], number>;
 
-const TaskRow: React.FC<{ todo: SessionTodo }> = ({ todo }) => {
-  const done = todo.status === 'completed';
+const TaskRow: React.FC<{ todo: TodoItem }> = ({ todo }) => {
+  const done = isClosedTodo(todo);
   const icon = TODO_STATUS_ICON[todo.status];
   return (
     <WorkStatusRow
@@ -31,25 +35,24 @@ const TaskRow: React.FC<{ todo: SessionTodo }> = ({ todo }) => {
       )}
       muted={done}
       label={<span className={done ? 'line-through' : undefined}>{todo.content}</span>}
-      tooltip={todo.content}
+      tooltip={todo.blocker ? `${todo.content}\n${todo.blocker}` : todo.content}
     />
   );
 };
 
-export const WorkStatusTasksSection: React.FC<Props> = ({ sessionId }) => {
+export const WorkStatusTasksSection: React.FC<Props> = ({ sessionId, directory }) => {
   const { t } = useI18n();
-  const todos = useSessionTodos(sessionId);
+  const phases = useSessionTodos(sessionId, directory ?? undefined);
 
-  const visibleTodos = React.useMemo(() => todos
+  const visibleTodos = React.useMemo(() => phases.flatMap((phase) => phase.tasks)
     .map((todo, index) => ({ todo, index }))
-    .filter(({ todo }) => todo.status !== 'cancelled')
     .sort((left, right) => (STATUS_RANK[left.todo.status] - STATUS_RANK[right.todo.status]) || left.index - right.index)
-    .map(({ todo }) => todo), [todos]);
+    .map(({ todo }) => todo), [phases]);
 
   useReportWorkStatusPresence('tasks', visibleTodos.length > 0);
   if (visibleTodos.length === 0) return null;
 
-  const doneCount = visibleTodos.filter((todo) => todo.status === 'completed').length;
+  const doneCount = visibleTodos.filter(isClosedTodo).length;
   const activeTodo = visibleTodos.find((todo) => todo.status === 'in_progress');
 
   return (

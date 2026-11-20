@@ -119,6 +119,12 @@ in `packages/ui/src/lib/sharedTrustConfirmation.ts`).
 
 ## Modules
 
+`project-context-id.ts` maps a session directory to its primary worktree's
+project-context id. Git resolution returns a `{ root }` record; only its path
+is passed to the project-id encoder. A failed Git lookup uses the session
+directory. Every Host prompt capture uses this mapping through Session Knowledge,
+including a new session with no pinned context.
+
 ### Why project registration uses the settings write queue
 
 A background session and another window can update settings together. Resolving

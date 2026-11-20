@@ -113,7 +113,7 @@ import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { worktreeSetupOf } from './lib/projects/worktree-setup.js';
 import { ensureChatsDir, migrateLegacyUserDirs } from './lib/data-dir-migration.js';
 import { createProjectContextRuntime } from './lib/project-context/runtime.js';
-import { createProjectIdFromPath } from './lib/projects/project-id.js';
+import { resolveProjectContextId } from './lib/projects/project-context-id.js';
 import { createSpacesHost } from './lib/spaces/host.js';
 import { createSpaceArchive } from './lib/spaces/space-archive.js';
 import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
@@ -1359,17 +1359,6 @@ const convertLegacyQueue = async () => {
  if (result.status === 'partial' || result.status === 'failed') {
   console.warn('[message-queue] legacy conversion incomplete:', result.status, result.storage ?? 'conversion_failed', result.errors.length);
  }
-};
-/**
- * Maps a session directory onto the project it belongs to.
- */
-const resolveProjectContextId = async (directory) => {
- if (!directory || typeof directory !== 'string') return null;
- const settings = await readSettingsFromDiskMigrated().catch(() => null);
- const projectPaths = sanitizeProjects(settings?.projects || []).map((project) => project.path);
- const primaryRoot = await resolvePrimaryWorktreeRoot(directory, projectPaths).catch(() => null);
- const root = primaryRoot || directory;
- return createProjectIdFromPath(root);
 };
 const scheduledTaskService = createScheduledTaskService({
  readSettingsFromDiskMigrated,
