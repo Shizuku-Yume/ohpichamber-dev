@@ -123,7 +123,7 @@ import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
 import { spacesHostEnabled } from './lib/spaces/release.js';
-import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, validateWorktreeDirectory, getWorktrees } from './lib/git/service.js';
+import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, validateWorktreeDirectory, getWorktrees, isWorktreeDirectoryPinned } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
 import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-storage.js';
@@ -1122,6 +1122,7 @@ const sessionWorkRuntime = createSessionWorkRuntime({
  readMetadata: (sessionID, directory) => sessionMetadataStore.get(sessionID, { directory }),
  updateMetadata: updateSessionMetadataWith,
  isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+ isWorktreePinned: isWorktreeDirectoryPinned,
  chatRoots: [path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR],
  lineage: sessionLineage,
 });

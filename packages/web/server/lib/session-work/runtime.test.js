@@ -21,7 +21,7 @@ const historyPage = (sessionId, pending = true) => {
 
 const makeRuntime = ({ ask, session = rootSession, sessionScope = { ...scope, sessionId: session.sessionId }, pending = true,
   classifierEndpoint = async (workspaceId) => { expect(workspaceId).toBe(scope.workspaceId); return endpoint; },
-  updateMetadata = async () => ({ changed: true, metadata: {} }) } = {}) => createSessionWorkRuntime({
+  updateMetadata = async () => ({ changed: true, metadata: {} }), isWorktreePinned = async () => false } = {}) => createSessionWorkRuntime({
     sessionService: {
       open: async () => ({ session }),
       history: async () => historyPage(session.sessionId, pending),
@@ -32,6 +32,7 @@ const makeRuntime = ({ ask, session = rootSession, sessionScope = { ...scope, se
     jev: { ask: ask || (async () => ({ answers: { change: { noul: 1 }, toward_change: { noul: 1 } } })) },
     readMetadata: async () => ({}),
     updateMetadata,
+    isWorktreePinned,
   });
 
 const userEvent = (sessionId = 'ses_1') => ({
@@ -40,6 +41,19 @@ const userEvent = (sessionId = 'ses_1') => ({
 });
 
 describe('session-work canonical consumer', () => {
+  it('does not classify or open work in a pinned worktree', async () => {
+    let asks = 0;
+    let writes = 0;
+    const runtime = makeRuntime({
+      isWorktreePinned: async (directory) => { expect(directory).toBe('/repo'); return true; },
+      ask: async () => { asks += 1; return { answers: { change: { noul: 1 } } }; },
+      updateMetadata: async () => { writes += 1; return { changed: true }; },
+    });
+    runtime.processCanonicalEvent(userEvent(), scope);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect({ asks, writes }).toEqual({ asks: 0, writes: 0 });
+    runtime.stop();
+  });
   it('opens work only from a canonical user message and a workspace-scoped positive classifier answer', async () => {
     const writes = [];
     const workspaces = [];

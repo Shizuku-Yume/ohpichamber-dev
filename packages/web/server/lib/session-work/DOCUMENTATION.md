@@ -2,6 +2,9 @@
 
 ## Purpose
 
+Eligibility reads current Git worktree pins through `isWorktreeDirectoryPinned`;
+pinned worktrees, managed chats and child sessions never trigger classification.
+
 Keeps the sessions the user is working in in one block at the top of the
 sidebar until they mark them done. Sending a message puts a session in work;
 the user alone closes it. While a session is in work, Jev says after a turn
