@@ -1,4 +1,5 @@
 import type { useI18n } from '@/lib/i18n';
+import type { useComposerFooterModes } from './useComposerFooterModes';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
@@ -61,6 +62,7 @@ import { MemoComposerDictation, MemoModelControls } from './memoComposerControls
 const NO_ATTACH_GUESTS: [] = [];
 
 type Dependencies = {
+    footerModes: ReturnType<typeof useComposerFooterModes>;
     historySearchState: Pick<ReturnType<typeof useComposerHistorySearchState>, 'setPromptHistorySearchForm' | 'promptHistorySearch'>;
     largePasteState: Pick<ReturnType<typeof useComposerLargePasteState>, 'largeTextPasteGesture' | 'largeTextPasteOffer'>;
     column: Pick<ReturnType<typeof useComposerColumn>, 'chatColumnSession' | 'columnPinned'>;
@@ -100,6 +102,7 @@ type Dependencies = {
 };
 
 export function renderComposerForm({
+    footerModes,
     historySearchState, largePasteState, column, autocompleteState, dropState, i18n, editorState,
     draftText, mobilePanels, sessionScope, sessionLifecycle, draftHistory, mobileActions, inlineContext,
     sendActions, expansion, preferences, draftTarget, controls, props, mobileShell: mobile, language,
@@ -325,7 +328,6 @@ export function renderComposerForm({
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
                         onFileSelect={handleFileSelect}
-                        onAgentSelect={handleAgentSelect}
                         onSessionSelect={isVSCode ? undefined : handleSessionSelect}
                         onExtensionMentionSelect={isVSCode || isBtwActive ? undefined : handleExtensionMentionSelect}
                         currentSessionId={currentSessionId}
@@ -459,6 +461,13 @@ export function renderComposerForm({
                         </div>
                     </div>
                     <ComposerFooter
+                        planRoleAvailable={footerModes.planRoleAvailable}
+                        goalModeEnabled={footerModes.goalModeEnabled}
+                        onDraftModeChange={footerModes.handleDraftModeChange}
+                        runActive={footerModes.runActive}
+                        isExpandedInput={footerModes.isExpandedInput}
+                        onToggleExpandedInput={footerModes.handleToggleExpandedInput}
+                        onQueueMessage={footerModes.handleQueueFromFooter}
                         isMobile={isMobile}
                         isVSCode={isVSCode}
                         escapeStops={abortShortcutReaches}

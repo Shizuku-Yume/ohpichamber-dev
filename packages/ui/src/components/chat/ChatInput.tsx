@@ -30,6 +30,7 @@ import { useComposerFileDrop } from './composer/input/useComposerFileDrop';
 import { useComposerFileIntake } from './composer/input/useComposerFileIntake';
 import { useComposerFilePicker } from './composer/input/useComposerFilePicker';
 import { useComposerFocus } from './composer/input/useComposerFocus';
+import { useComposerFooterModes } from './composer/input/useComposerFooterModes';
 import { useComposerGitStatus } from './composer/input/useComposerGitStatus';
 import { useComposerHistorySearchState } from './composer/input/useComposerHistorySearchState';
 import { useComposerInlineContext } from './composer/input/useComposerInlineContext';
@@ -131,6 +132,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         inlineContext, sendAvailability, sendHandlers: sending, sessionScope, sessionLifecycle,
         queueState, queueActions: sending, editorState, draftText,
     });
+    const footerModes = useComposerFooterModes({ sessionScope, expansion, queueActions: sending });
     const dictation = useComposerDictation({
         draftText, i18n, dictationState, editorState, draftHistory, sendHandlers: sending,
     });
@@ -190,6 +192,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     return (
         <>
             {renderComposerForm({
+                footerModes,
                 historySearchState, largePasteState, column, autocompleteState, dropState, i18n,
                 editorState, draftText, mobilePanels, sessionScope, sessionLifecycle, draftHistory,
                 mobileActions, inlineContext, sendActions, expansion, preferences, draftTarget,
