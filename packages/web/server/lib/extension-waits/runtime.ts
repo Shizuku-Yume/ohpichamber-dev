@@ -895,7 +895,7 @@ export function createExtensionWaitsRuntime({
   const start = (globalEventHub: WaitEventHub) => {
     eventHub = globalEventHub;
     unsubscribeEvent = globalEventHub.subscribeEvent(processCanonicalEvent);
-    unsubscribeStatus = globalEventHub.subscribeStatus((hubStatus) => {
+    unsubscribeStatus = globalEventHub.subscribeStatus((hubStatus: { type: string; sessionId: string }) => {
       if (hubStatus?.type !== 'connect') return;
       arm(hubStatus.sessionId);
     });

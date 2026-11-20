@@ -33,7 +33,9 @@ other.
 - `synthetic-delivery.js` posts a later or shared page's answer into the
   author's session as synthetic context through the canonical session
   service: a send keyed by the answer's message id when the session is idle, a
-  steer into its active run on `RUN_ACTIVE`. A message with `resume: false`
+  steer into its active run on `RUN_ACTIVE`. The steer has its own stable
+  command ID so it cannot reuse the send admission with a different action.
+  A message with `resume: false`
   (an archived session) is not posted, since a canonical send always starts a
   run; the answer still shows under the page.
 - `../agent-tool/runtime.js` is the managed-tool adapter. It wraps service

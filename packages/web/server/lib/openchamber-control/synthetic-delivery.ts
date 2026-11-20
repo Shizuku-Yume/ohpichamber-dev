@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 
 import { controlErrorFields } from './error.js';
 import type { PromptRequest } from '@openchamber/agent-contract';
@@ -23,7 +24,8 @@ export const createSyntheticDelivery = ({ sessionService }: SyntheticDeliveryOpt
       await sessionService.send(sessionId, request, message.id);
     } catch (error) {
       if (!runActiveRefusalSchema.safeParse(error).success) throw error;
-      await sessionService.steer(sessionId, { request });
+      const commandId = createHash('sha256').update(`synthetic-steer:${message.id}`).digest('hex');
+      await sessionService.steer(sessionId, { request }, commandId);
     }
   } catch (error) {
     const fields = controlErrorFields(error);

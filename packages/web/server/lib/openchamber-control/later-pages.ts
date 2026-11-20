@@ -255,7 +255,7 @@ export function createLaterPages({
   const answer = async (input: Parameters<typeof readPageAnswer>[0]) => {
     const { sessionId, callId, answer: given } = readPageAnswer(input);
     const key = keyOf(sessionId, callId);
-    const messageID = createMessageId(now());
+    const messageID = createMessageId();
     let changed;
     try {
       changed = await mutate(() => {
@@ -370,7 +370,7 @@ export function createLaterPages({
 
   const start = (globalEventHub: Pick<GlobalMessageStreamHub, 'subscribeEvent' | 'subscribeStatus'> | null | undefined) => {
     const unsubscribeEvent = globalEventHub?.subscribeEvent(processEvent);
-    const unsubscribeStatus = globalEventHub?.subscribeStatus((status) => {
+    const unsubscribeStatus = globalEventHub?.subscribeStatus((status: { type: string }) => {
       if (status?.type === 'connect') deliverPending();
     });
     void load().then(deliverPending).catch((error) => warn('[render.page] failed to load later pages:', controlErrorFields(error)?.message ?? error));

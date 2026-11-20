@@ -358,9 +358,9 @@ export const createChatDirectoryCleanupRuntime = <Owner>({ roots, sessionService
   };
   if (eventHub) {
     const unsubscribe = [
-      eventHub.subscribeSnapshot((snapshot, scope) => runtime.processSnapshot(snapshot, scope)),
-      eventHub.subscribeEvent((event, scope) => runtime.processPayload(event, scope)),
-      eventHub.subscribeStatus((status) => status.type === 'connect' ? runtime.onConnected() : runtime.onDisconnected()),
+      eventHub.subscribeSnapshot(runtime.processSnapshot),
+      eventHub.subscribeEvent(runtime.processPayload),
+      eventHub.subscribeStatus((status: { type: string }) => status.type === 'connect' ? runtime.onConnected() : runtime.onDisconnected()),
     ];
     const stop = runtime.stop;
     runtime.stop = () => {
