@@ -434,7 +434,7 @@ export const createOpenChamberControlService = (dependencies) => {
 
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
  const readTerminal = createTerminalReadAction({ readSettings: readSettingsFromDiskMigrated, getTerminalRuntime });
- const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, laterPages, sharePages });
+ const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, readSession: (sessionId) => sessionService.getMetadata(sessionId), laterPages, sharePages });
  const answerPage = async (input: PageAnswerInput) => {
   try {
    return pageAnswers.answer(input);

@@ -25,6 +25,10 @@ other.
   answer keyed by session and tool call id (`pageAnswers`). Every inner host
   action request for `openchamber_render` carries that `toolCallId`, so an
   answer reaches the call that showed the page.
+  Operator-child eligibility reads the Host metadata through the Canonical
+  session metadata service, not the SDK transcript or a second session store.
+  An unavailable metadata read fails the waiting action rather than treating
+  the child as a human-facing session.
   With `answerLater` the call returns at once and `later-pages.js` keeps the
   page, across restarts, in `render-later-pages.json`; `GET
   /api/openchamber/render/later` serves its snapshot and the answer route

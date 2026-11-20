@@ -51,6 +51,7 @@ const createHarness = (settings = {
       return { session: { sessionId: 'session-forked', projectId: 'project-1', workspaceId: 'workspace-1' } };
     },
     open: async (sessionId) => ({ session: { sessionId, runtimeStatus: 'idle' } }),
+    getMetadata: async (sessionId) => ({ sessionId, revision: '0', metadata: null }),
     history: async () => ({ turns: [], messages: [] }),
     list: async () => ({ items: [], errors: {} }),
   };
@@ -85,7 +86,7 @@ const createHarness = (settings = {
     },
     ...overrides,
   });
-  return { control, created, sent, forked, goalControls, callOrder, requests };
+  return { control, created, sent, forked, goalControls, callOrder, requests, sessionService };
 };
 
 describe('OhPiChamber control service canonical consumers', () => {
@@ -229,6 +230,27 @@ describe('OhPiChamber control service canonical consumers', () => {
 
     expect(created).toHaveLength(0);
     expect(sent).toHaveLength(0);
+  });
+
+  it('refuses to wait for human input in a Host-metadata operator child', async () => {
+    const { control, sessionService } = createHarness();
+    sessionService.getMetadata = async (sessionId) => ({ sessionId, revision: '1', metadata: { openchamber: { kind: 'operator-child', parentID: 'operator-root' } } });
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true }, toolCallId: 'child-call',
+    });
+    expect(result).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it('does not treat failed Host metadata reads as permission to wait for a human', async () => {
+    const { control, sessionService } = createHarness();
+    sessionService.getMetadata = async () => { throw new Error('/host/private/metadata.db is unreadable'); };
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true }, toolCallId: 'unavailable-call',
+    });
+    expect(result).toMatchObject({ ok: false, status: 503 });
+    expect(JSON.stringify(result)).not.toContain('/host/private');
   });
 
   it('serves render.page through the render feature policy and carries the call id to a waiting page', async () => {
