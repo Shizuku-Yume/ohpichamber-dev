@@ -1,4 +1,3 @@
-import { useSessionMessages } from '@/sync/sync-context';
 import React from 'react';
 import type { DiffViewProps, DiffScope, FileEntry } from './diffView/types';
 import { ChangeRequestReviewContext } from '@/components/review/useChangeRequestReview';
@@ -109,6 +108,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const pendingDiffStaged = useUIStore((state) => state.pendingDiffStaged);
     const pendingDiffScope = useUIStore((state) => state.pendingDiffScope);
     const setPendingDiffFile = useUIStore((state) => state.setPendingDiffFile);
+    const pendingTurnDiffFile = useUIStore((state) => state.pendingTurnDiffFile);
+    const setPendingTurnDiffFile = useUIStore((state) => state.setPendingTurnDiffFile);
     const diffLayoutPreference = useUIStore((state) => state.diffLayoutPreference);
     const diffFileLayout = useUIStore((state) => state.diffFileLayout);
     const setDiffLayoutForAllFiles = useUIStore((state) => state.setDiffLayoutForAllFiles);
@@ -121,7 +122,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const openContextFileAtLine = useUIStore((state) => state.openContextFileAtLine);
     const panelSessionId = useSessionUIStore((state) => state.currentSessionId);
     const currentSessionId = foreign ? null : panelSessionId;
-    const sessionMessages = useSessionMessages(activeDiffScope === 'turn' ? currentSessionId ?? '' : '', rootDirectory ?? undefined);
     const diffWrapLines = diffWrapLinesStore;
     const forcedStaged = activeDiffScope === 'staged' ? true : activeDiffScope === 'working' ? false : null;
     const activeDiffStaged = forcedStaged ?? displayFileStaged;

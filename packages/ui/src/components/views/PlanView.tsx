@@ -1,5 +1,6 @@
 import { usePlanActions } from '@/components/session/project-context/usePlanActions';
 import { useSessionKnowledgePins } from '@/components/session/project-context/useSessionKnowledgePins';
+import { KnowledgePinToggle } from '@/components/session/project-context/KnowledgeActions';
 import { toast } from '@/components/ui/toast';
 import { PlanTodos } from '@/components/session/project-context/PlanTodos';
 import React from 'react';
@@ -16,6 +17,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 
@@ -25,6 +30,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { codeHighlightExtension } from '@/lib/codemirror/codeHighlight';
 import { getCodeTokenTheme } from '@/lib/shiki/appThemeRegistry';
+import { registerOpenPlan } from '@/components/session/project-context/openPlanViews';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
@@ -166,6 +172,12 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   const activeRuntimeKey = React.useSyncExternalStore(subscribeActiveRuntimeKey, getRuntimeKey, getRuntimeKey);
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
+  const [copiedContent, setCopiedContent] = React.useState(false);
+  const copiedContentTimeoutRef = React.useRef<number | null>(null);
+  const [heldForMove, setHeldForMove] = React.useState(false);
+  React.useEffect(() => () => {
+    if (copiedContentTimeoutRef.current !== null) window.clearTimeout(copiedContentTimeoutRef.current);
+  }, []);
 
   const session = React.useMemo(() => {
     if (!currentSessionId) return null;
@@ -401,8 +413,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     if (useShiki && shikiLanguage) {
       extensions.push(codeHighlightExtension({
         language: shikiLanguage,
-        themeName: currentTheme.metadata.id,
-        theme: getCodeTokenTheme(currentTheme),
+        theme: getCodeTokenTheme(currentTheme).zed,
       }));
     }
     extensions.push(EditorView.lineWrapping);
@@ -483,6 +494,19 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       }
     });
   }, [saveQueue]);
+
+  React.useEffect(() => {
+    if (!savedPlanProjectRef || !savedPlanId) return;
+    return registerOpenPlan(resolveProjectContextId(savedPlanProjectRef), savedPlanId, {
+      setHeld: setHeldForMove,
+      flush: async () => {
+        scheduleSave();
+        const doc = docRef.current;
+        if (doc.key) await saveQueue.pendingFor(doc.key);
+        return doc.editRevision <= doc.savedRevision;
+      },
+    });
+  }, [savedPlanId, savedPlanProjectRef, saveQueue, scheduleSave]);
 
   React.useEffect(() => {
     // A plan view with no file or saved project plan has nothing to show.
@@ -854,36 +878,33 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
         </div>
         {hasDocument ? (
           <div className="flex items-center gap-1">
+            {planLink ? <>
+              <KnowledgePinToggle pinned={pinnedPlanIds.has(planLink.id)} onToggle={() => void togglePlanPin(planLink.id, !pinnedPlanIds.has(planLink.id))} />
+            </> : null}
             <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0"
-                      aria-label={t('planView.actions.improvePlanAria')}
-                      disabled={!content.trim() || isManagedChatPlan}
-                    >
-                      <Icon name="loop-right-ai" className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8}>{t('planView.actions.improve')}</TooltipContent>
-              </Tooltip>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" aria-label={t('rightSidebar.contextNotesTodo.actions.more')}>
+                  <Icon name="more" className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => setPendingPlanSend({ action: 'improve', target: 'session' })}
-                  disabled={isManagedChatPlan}
-                >
-                  {t('planView.actions.sendToNewSession')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setPendingPlanSend({ action: 'improve', target: 'worktree' })}
-                  disabled={!canCreateWorktree}
-                >
-                  {t('planView.actions.sendToNewWorktreeSession')}
-                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger disabled={!content.trim() || isManagedChatPlan}>
+                    {t('planView.actions.improve')}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem onClick={() => setPendingPlanSend({ action: 'improve', target: 'session' })} disabled={isManagedChatPlan}>
+                      {t('planView.actions.sendToNewSession')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setPendingPlanSend({ action: 'improve', target: 'worktree' })} disabled={!canCreateWorktree}>
+                      {t('planView.actions.sendToNewWorktreeSession')}
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                {planLink ? <>
+                  <DropdownMenuSeparator />
+                  {planActions.actionsFor(planLink).map((item) => <DropdownMenuItem key={item.id} onClick={item.onSelect} disabled={item.disabled || planActions.movingPlanId === planLink.id} className={item.destructive ? 'text-destructive' : undefined}>{item.label}</DropdownMenuItem>)}
+                </> : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
@@ -891,13 +912,14 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-5 w-5 p-0"
+                      className="h-6 gap-1 px-2"
                       aria-label={t('planView.actions.implementPlanAria')}
                       disabled={!content.trim() || isManagedChatPlan}
                     >
-                      <Icon name="code-ai" className="size-4" />
+                      <Icon name="code" className="size-3.5" />
+                      {t('planView.actions.implement')}
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
@@ -919,10 +941,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
               </DropdownMenuContent>
             </DropdownMenu>
             <PreviewToggleButton
-              currentMode={mdViewMode}
-              onToggle={() => saveMdViewMode(mdViewMode === 'preview' ? 'edit' : 'preview')}
+              currentMode={viewMode}
+              onToggle={() => saveMdViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
             />
-            {mdViewMode === 'preview' && showMessageTTSButtons && (
+            {viewMode === 'preview' && showMessageTTSButtons && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -998,7 +1020,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           ) : (
             <div className="relative h-full">
               <div className="h-full">
-                {mdViewMode === 'preview' ? (
+                {viewMode === 'preview' ? (
                   <div className="h-full overflow-auto p-3" ref={previewRef}>
                     {/* Same comment-on-selection as a markdown file preview. */}
                     <FilePreviewCommentMenu
@@ -1016,7 +1038,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
                         </div>
                       }
                     >
-                      <SimpleMarkdownRenderer content={content} className="typography-markdown-body" enableFileReferences={false} />
+                      <SimpleMarkdownRenderer content={previewContent} className="typography-markdown-body" enableFileReferences={false} />
                     </ErrorBoundary>
                   </div>
                 ) : (

@@ -14,7 +14,7 @@ export const toggleSessionRead = (
     markSessionRead(sessionId);
     return;
   }
-  void markSessionUnread(sessionId).then((saved) => {
+  void markSessionUnread(sessionId).then((saved: boolean) => {
     if (!saved) toast.error(t('sessions.sidebar.session.unread.markFailed'));
   });
 };

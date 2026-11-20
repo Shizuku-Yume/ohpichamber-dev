@@ -180,6 +180,10 @@ export const CommandPalette: React.FC = () => {
     [isCommandPaletteOpen],
   ));
   const pinnedSessionIds = EMPTY_PINNED_SESSION_IDS;
+  const archivedSessions = useGlobalSessionsStore(React.useCallback(
+    (state) => isCommandPaletteOpen ? state.archivedSessions : EMPTY_SESSIONS,
+    [isCommandPaletteOpen],
+  ));
   const sessionOrderRanks = useSessionOrderingStore(React.useCallback(
     (state) => isCommandPaletteOpen ? state.rankById : EMPTY_SESSION_ORDER_RANKS,
     [isCommandPaletteOpen],
@@ -595,7 +599,7 @@ export const CommandPalette: React.FC = () => {
             const ui = useUIStore.getState();
             ui.setSettingsDialogOpen(false);
             ui.closeMainSurfaces();
-            useInputStore.getState().setPendingInputText(entry.command.name, 'slash-command');
+            useInputStore.getState().setPendingInputText(`/${entry.command.name} `, 'replace');
           }),
         });
       }
@@ -635,7 +639,7 @@ export const CommandPalette: React.FC = () => {
   }, [settingsRuntimeCtx, run, setSettingsPage, setSettingsDialogOpen, t]);
 
   const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-  const archivedSessionIds = React.useMemo(() => new Set(archivedSessions.map((session) => session.id)), [archivedSessions]);
+  const archivedSessionIds = React.useMemo(() => new Set(archivedSessions.map((session) => session.sessionId)), [archivedSessions]);
   const activeSessionIds = React.useMemo(() => new Set(activeSessions.map((session) => session.sessionId)), [activeSessions]);
   const orderedActiveSessions = React.useMemo(
     () => orderVisibleRootSessions(activeSessions.filter((session) => (
@@ -645,7 +649,7 @@ export const CommandPalette: React.FC = () => {
   );
   const orderedArchivedSessions = React.useMemo(
     () => orderVisibleRootSessions(archivedSessions.filter((session) => (
-      isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session), projects, worktreesByProject)
+      isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session) ?? session.displayPath, projects, worktreesByProject)
     )), pinnedSessionIds, sessionOrderRanks),
     [archivedSessions, pinnedSessionIds, projects, sessionOrderRanks, worktreesByProject],
   );
@@ -688,7 +692,7 @@ export const CommandPalette: React.FC = () => {
   }, [projects, worktreesByProject]);
 
   const sessionMetadata = React.useCallback((session: Session, archived: boolean) => {
-    const directory = resolveGlobalSessionDirectory(session);
+    const directory = resolveGlobalSessionDirectory(session) ?? session.displayPath;
     return {
       sessionId: session.sessionId,
       title: session.title ?? '',
@@ -944,14 +948,6 @@ export const CommandPalette: React.FC = () => {
     [close, setCurrentSession],
   );
 
-  const handleOpenArchivedSession = React.useCallback(
-    (session: Session) => {
-      close();
-      void openSessionLink(session.sessionId, null);
-    },
-    [close],
-  );
-
   const handleOpenFile = React.useCallback(
     async (filePath: string) => {
       if (!currentRoot) return;
@@ -1193,34 +1189,14 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === 'sessions') {
                 return (
-                  <CommandGroup key="sessions" heading={t('commandPalette.group.sessions')}>
-                    {scoredSessions.map(({ item: session, ranges }) => {
-                      // Untitled sessions never match, so their ranges are empty.
-                      const title = session.title || t('commandPalette.session.untitled');
-                      const dir = resolveGlobalSessionDirectory(session);
-                      const branch = branchForSession(session.sessionId, dir);
-                      const projectLabel = projectLabelForDirectory(dir);
-                      return (
-                        <CommandItem
-                          key={session.sessionId}
-                          value={`session:${session.sessionId}`}
-                          onSelect={() => handleOpenSession(session)}
-                        >
-                          <Icon name="chat-ai-3" className="me-2 h-4 w-4" />
-                          <span dir="auto" className="min-w-0 flex-1 truncate oc-ui-start-align"><Matched text={title} ranges={ranges} /></span>
-                          {projectLabel ? (
-                            <span className="max-w-[180px] shrink-0 truncate text-muted-foreground typography-meta">{projectLabel}</span>
-                          ) : null}
-                          {branch ? (
-                            <span className="inline-flex max-w-[160px] shrink-0 items-center gap-1 text-muted-foreground typography-meta">
-                              <Icon name="git-branch" className="h-3 w-3" />
-                              <span className="truncate">{branch}</span>
-                            </span>
-                          ) : null}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
+                  <React.Fragment key="sessions">
+                    {scoredSessions.length > 0 ? <CommandGroup heading={t('commandPalette.group.sessions')}>
+                      {scoredSessions.map(({ item: session, ranges }) => renderSessionItem(session, ranges, handleOpenSession))}
+                    </CommandGroup> : null}
+                    {scoredArchivedSessions.length > 0 ? <CommandGroup heading={t('search.omni.result.archivedTag')}>
+                      {scoredArchivedSessions.map(({ item: session, ranges }) => renderSessionItem(session, ranges, handleOpenSession))}
+                    </CommandGroup> : null}
+                  </React.Fragment>
                 );
               }
               if (groupKey === 'files' && visibleFiles.length > 0) {

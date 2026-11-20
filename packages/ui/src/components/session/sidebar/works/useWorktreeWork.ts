@@ -247,7 +247,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
       }
     }
     if (!target) return;
-    void markSessionUnread(target).then((saved) => {
+    void markSessionUnread(target).then((saved: boolean) => {
       if (!saved) toast.error(t('sessions.sidebar.session.unread.markFailed'));
     });
   };

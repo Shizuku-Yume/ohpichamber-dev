@@ -37,8 +37,8 @@ export const usePlanActions = (
           toast.error(t('rightSidebar.contextNotesTodo.toast.movePlanFailed'), { description: t('rightSidebar.contextNotesTodo.toast.movePlanUnsaved') });
           return;
         }
-        const movedId = await movePlan(projectRef, plan.id, plan.source === 'shared' ? 'unshare' : 'share');
-        if (movedId) {
+        const movedId: unknown = await movePlan(projectRef, plan.id, plan.source === 'shared' ? 'unshare' : 'share');
+        if (typeof movedId === 'string') {
           onMoved?.(projectId, plan.id, movedId);
         } else {
           const detail = useProjectContextStore.getState().getEntry(projectRef).error;

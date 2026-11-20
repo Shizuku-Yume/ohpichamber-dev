@@ -133,8 +133,6 @@ const HOST_RADIUS_FALLBACK = '0.5625rem';
 const HOST_FONT_FALLBACK = 'system-ui, sans-serif';
 const HOST_MONO_FALLBACK = 'ui-monospace, monospace';
 
-const popoverOpensAsSheet = (): boolean => isMobileSurfaceRuntime();
-
 const NOT_GRANTED_MESSAGE = 'The user has not allowed this capability for the extension.';
 
 const withOwnProviderId = (message: GuestMessage, guestId: string): GuestMessage => {
@@ -233,9 +231,10 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  const takePendingItem = useGuestItemStore((state) => state.takePendingItem);
  const [railItem, setRailItem] = React.useState<GuestItem | null>(null);
  React.useEffect(() => {
-  if (headless || itemProp !== undefined || !pendingItem) return;
-  setRailItem(takePendingItem(guestId));
- }, [guestId, headless, itemProp, pendingItem, takePendingItem]);
+  if (surface !== 'panel' || headless || itemProp !== undefined || !pendingItem) return;
+  const taken = takePendingItem(guestId);
+  if (taken) setRailItem(taken);
+ }, [guestId, headless, itemProp, pendingItem, surface, takePendingItem]);
  const item = headless ? null : itemProp !== undefined ? itemProp : railItem;
  // The user opened this guest's panel: whatever it counted is seen.
  const clearBadge = useGuestBadgeStore((state) => state.clearBadge);
@@ -698,6 +697,8 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    const requestDocument = frameDocumentRef.current;
 
    const bridgeEffects: Parameters<typeof answerGuestMessage>[1] & { answerBlock?: (text: string) => Promise<void> } = {
+    microphoneOpen: async () => { throw new HostRequestError('UNSUPPORTED', 'This frame does not advertise microphone capture.'); },
+    microphoneClose: () => {},
     workspaceRead: (query) => { requireSessions(); return readGuestWorkspace(query, guestIdRef.current); },
     workspaceSubscribe: ({ subscriptionId, query }) => {
      requireSessions();

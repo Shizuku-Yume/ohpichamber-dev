@@ -11,6 +11,8 @@ interface SettingsWindowProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const KEYBOARD_DRAG_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', ' ', 'Enter'];
+
 export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChange }) => {
   const { t } = useI18n();
   const descriptionId = React.useId();

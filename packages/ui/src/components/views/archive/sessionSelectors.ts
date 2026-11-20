@@ -14,7 +14,7 @@ const active = restorable();
 const parentTitles = memoizeSessionListProjection(
   (sessions: Session[], entities: ReadonlyMap<string, Session>) => sessions.flatMap((session) => {
     const parent = session.parentSessionId ? entities.get(session.parentSessionId) : undefined;
-    return parent ? [parent.sessionId, parent.title] : [];
+    return parent ? [parent.sessionId, parent.title ?? ''] : [];
   }),
 );
 

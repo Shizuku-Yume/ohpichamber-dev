@@ -1,8 +1,5 @@
 import type { RepositoryReferenceFilter } from '@/lib/api/types';
 import { useRepositoryAcrossReferenceList } from '@/components/references/referenceSources';
-import type { IssueLiveSummary } from '@/lib/api/types';
-import type { TrackerLiveSummary } from '@/lib/trackers/types';
-import { trackerIssueLook } from '@/lib/trackers/stateLook';
 import { useRepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
 import { useBranchTrackedPulls } from '@/stores/useGitHubPrStatusStore';
 import type { TrackedItem } from '@/lib/trackedItems/model';
@@ -11,7 +8,6 @@ import { repositoryThread } from '@/lib/trackedItems/fromLinks';
 import { getLinkedSidebarIssues } from '@/lib/linkedIssues';
 import { workItem } from '@/lib/trackedItems/fromLinks';
 import { useTrackedItems } from '@/lib/trackedItems/interest';
-import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import React from 'react';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import type { Session } from '@openchamber/agent-contract';
@@ -138,7 +134,7 @@ export function useOverviewReviewRequests(): OverviewReviewRequests {
       return [{ url: item.url, title: item.title, number: item.number, repo: item.sourceRepo.repo, directory: item.directory }];
     });
   }, [list.items]);
-  return { items: [], hasMore: false };
+  return { items, hasMore: list.hasMore };
 }
 
 function useProjectWorktrees(projects: readonly ProjectEntry[]): ReadonlyMap<string, readonly WorktreeMetadata[]> {
@@ -180,18 +176,6 @@ function useProjectWorktrees(projects: readonly ProjectEntry[]): ReadonlyMap<str
 const rootOf = (sessionId: string, entityById: ReadonlyMap<string, Session>): string => (
   entityById.get(sessionId)?.rootSessionId ?? sessionId
 );
-
-const issueStateOf = (state: IssueLiveSummary | null): OverviewIssueState => {
-  if (!state) return null;
-  if (state.state === 'open') return 'open';
-  return state.state === 'completed' ? 'completed' : 'dropped';
-};
-
-const trackerStateOf = (state: TrackerLiveSummary | null): OverviewIssueState => {
-  if (!state) return null;
-  const look = trackerIssueLook(state.state.category);
-  return look === 'not_planned' ? 'dropped' : look;
-};
 
 export function useOverviewData(): OverviewData {
   const sessions = useGlobalSessionsStore((state) => state.activeSessions);
@@ -374,8 +358,6 @@ export function useOverviewData(): OverviewData {
     return rows;
   }, [gitOf, isWorktreeInUse, now, sessionsIn, workEnabled, worktrees]);
 
-  const spaceMarks = useSpacesStore((state) => state.spaces);
-  const spacesJourney = useSpacesStore((state) => state.journey);
   const projectOf = React.useCallback((session: Session) => {
     const directory = resolveGlobalSessionDirectory(session) ?? session.displayPath;
     const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory);
