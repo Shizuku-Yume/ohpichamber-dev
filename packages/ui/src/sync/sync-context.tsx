@@ -31,6 +31,8 @@ import { subscribeSessionAdmission } from "./session-admission";
 import { subscribeControlStreamSync } from "./control-stream-sync";
 import { subscribeSessionMetadataSync } from "./session-metadata-sync";
 import { subscribePrWatchSync } from "./pr-watch-sync";
+import { subscribeExtensionWaitsSync } from "./extension-waits-sync";
+import { resetExtensionWaitsForRuntimeSwitch } from "./extension-waits";
 import { subscribeAutoReviewSync } from "./auto-review-sync";
 
 import { getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
@@ -406,12 +408,14 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     // client hears a run's progress here, never on its own engine stream.
     const unsubscribeControlStream = subscribeControlStreamSync(props.runtimeKey ?? getRuntimeKey());
     const unsubscribePrWatchEvents = subscribePrWatchSync(props.runtimeKey ?? getRuntimeKey());
+    const unsubscribeExtensionWaitEvents = subscribeExtensionWaitsSync(props.runtimeKey ?? getRuntimeKey());
     const unsubscribeAutoReviewEvents = subscribeAutoReviewSync(props.runtimeKey ?? getRuntimeKey());
     const stopBeforeSwitch = subscribeRuntimeEndpointWillChange((detail) => {
       if (detail.runtimeKey === props.runtimeKey) return
       currentRef.current = false
       pipeline.cleanup()
       useGlobalSyncStore.getState().actions.reset()
+      resetExtensionWaitsForRuntimeSwitch()
       activeTarget = null
       externallyViewedSessions.clear()
     })
@@ -469,6 +473,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     return () => {
       currentRef.current = false
       stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents(); unsubscribeMetadataEvents(); unsubscribeSessionAdmission(); unsubscribeControlStream(); unsubscribePrWatchEvents(); unsubscribeAutoReviewEvents();
+      unsubscribeExtensionWaitEvents()
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)
