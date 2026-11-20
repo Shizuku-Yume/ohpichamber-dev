@@ -912,11 +912,11 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
                   'active:opacity-80',
                   'transition-opacity duration-150'
                 )}
-                title={t('chat.textSelection.title.askOpenChamber')}
+                title={t('chat.textSelection.title.askOhPiChamber')}
                 type="button"
               >
                 <Icon name="chat-ai-3" className="h-5 w-5 flex-shrink-0" />
-                <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.askOpenChamber')}</span>
+                <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.askOhPiChamber')}</span>
               </button>
             ) : null}
 
@@ -1007,7 +1007,7 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
           {currentSessionId ? (
             <>
               <div className="mx-0.5 h-5 w-px shrink-0 bg-[var(--interactive-border)]" />
-              <HoverTooltip label={t('chat.textSelection.title.askOpenChamber')}>
+              <HoverTooltip label={t('chat.textSelection.title.askOhPiChamber')}>
                 <button
                   onClick={handleAskOpenChamber}
                   className={cn(
@@ -1019,7 +1019,7 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
                   )}
                   type="button"
                 >
-                  {t('chat.textSelection.actions.askOpenChamber')}
+                  {t('chat.textSelection.actions.askOhPiChamber')}
                 </button>
               </HoverTooltip>
             </>

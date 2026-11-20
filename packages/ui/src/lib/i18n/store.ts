@@ -23,7 +23,7 @@ export function resetI18nDictionaryCacheForTests(): void {
 }
 
 /** One dictionary module; every locale file exports its strings as `dict`. */
-type I18nModule = { readonly dict: I18nDictionary };
+type I18nModule = { readonly dict: Partial<I18nDictionary> };
 
 // A total map rather than a switch, so the module contract is checked at each
 // import instead of asserted after a union of import results.
@@ -57,7 +57,7 @@ async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
   const noticeDict = (timelineNoticesI18n as Record<string, Record<string, string>>)[locale] ?? timelineNoticesI18n.en;
 
   /* SAFETY: The merged dictionary follows the I18nDictionary contract. */
-  const fullDict = { ...mod.dict, ...subagentDict, ...noticeDict };
+  const fullDict = { ...enDict, ...mod.dict, ...subagentDict, ...noticeDict };
   dictionaries.set(locale, fullDict);
   return fullDict;
 }

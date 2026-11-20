@@ -22,7 +22,7 @@ export function renderElectronMiniChatApp(apis: RuntimeAPIs) {
   preloadMarkdownRenderer();
   const { mode, sessionId, directory } = readMiniChatConfig();
   if (mode === 'session' && sessionId && directory) {
-    prefetchSessionBeforeMount({ sessionID: sessionId, directory });
+    prefetchSessionBeforeMount({ sessionId, directory });
   }
 
   const rootElement = document.getElementById('root');

@@ -18,6 +18,30 @@ const answerNativeStatus = (body: Record<string, unknown>) => {
   ));
 };
 
+describe('web push delivery privacy', () => {
+  for (const localOnly of [true, false]) {
+    it(`reports the Host's localOnly=${localOnly} policy`, async () => {
+      fetchMock.mockResolvedValue(Response.json({ localOnly }));
+      await expect(createWebPushAPI().getDeliveryStatus()).resolves.toEqual({ localOnly });
+      expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/push/delivery');
+    });
+  }
+
+  for (const body of [{}, null, { localOnly: 'false' }]) {
+    it(`rejects an incomplete policy: ${JSON.stringify(body)}`, async () => {
+      fetchMock.mockResolvedValue(Response.json(body));
+      await expect(createWebPushAPI().getDeliveryStatus()).resolves.toBeNull();
+    });
+  }
+
+  it('does not turn a failed policy read into remote-delivery permission', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 503 }));
+    await expect(createWebPushAPI().getDeliveryStatus()).resolves.toBeNull();
+    fetchMock.mockRejectedValue(new Error('offline'));
+    await expect(createWebPushAPI().getDeliveryStatus()).resolves.toBeNull();
+  });
+});
+
 describe('web push: the server\'s native push status', () => {
   it('reports a configured relay as available', async () => {
     answerNativeStatus({ available: true, reason: null, relaySetting: 'OPENCHAMBER_PUSH_RELAY_URL' });

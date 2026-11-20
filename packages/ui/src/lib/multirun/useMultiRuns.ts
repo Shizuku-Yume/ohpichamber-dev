@@ -53,16 +53,21 @@ export function useMultiRunTitle(runKey: string | null): string | null {
 }
 
 export function useMultiRunMemberIds(sessionId: string | null): readonly string[] {
-  const joined = useGlobalSessionsStore(React.useCallback((state) => {
-    if (!sessionId) return '';
-    const own = state.activeSessions.find((session) => session.sessionId === sessionId);
-    const key = own && isActiveRoot(own) ? readMultiRunIdentity(own, resolveLegacyScope(own))?.key : undefined;
-    if (!key) return '';
-    const ids = state.activeSessions
-      .filter((session) => isActiveRoot(session) && readMultiRunIdentity(session, resolveLegacyScope(session))?.key === key)
-      .map((session) => session.sessionId);
-    return ids.length >= 2 ? ids.join('\n') : '';
-  }, [sessionId]));
+  const selectJoined = React.useMemo(() => {
+    const project = memoizeSessionListProjection((sessions: Session[], targetId: string) => {
+      const own = sessions.find((session) => session.sessionId === targetId);
+      const key = own && isActiveRoot(own) ? readMultiRunIdentity(own, resolveLegacyScope(own))?.key : undefined;
+      if (!key) return '';
+      const ids = sessions
+        .filter((session) => isActiveRoot(session) && readMultiRunIdentity(session, resolveLegacyScope(session))?.key === key)
+        .map((session) => session.sessionId);
+      return ids.length >= 2 ? ids.join('\n') : '';
+    });
+    return (state: ReturnType<typeof useGlobalSessionsStore.getState>) => sessionId
+      ? project(state.activeSessions, sessionId, useSessionUIStore.getState().worktreeMetadata)
+      : '';
+  }, [sessionId]);
+  const joined = useGlobalSessionsStore(selectJoined);
   return React.useMemo(() => (joined ? joined.split('\n') : []), [joined]);
 }
 

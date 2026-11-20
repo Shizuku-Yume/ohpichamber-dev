@@ -322,6 +322,14 @@
       "scope": "profile",
       "perSurface": true
     },
+    "sidebarKeepPinnedInPlace": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarSessionBatchSize": {
+      "scope": "profile",
+      "perSurface": true
+    },
     "sidebarProjectSortOrder": {
       "scope": "profile"
     },
@@ -399,10 +407,6 @@
       "perSurface": true
     },
     "promptNavigatorEnabled": {
-      "scope": "profile",
-      "perSurface": true
-    },
-    "wideChatLayoutEnabled": {
       "scope": "profile",
       "perSurface": true
     },
@@ -920,97 +924,6 @@
       "surfaces": [
         "desktop"
       ]
-    },
-    "securityScopedBookmarks": {
-      "scope": "instance",
-      "surfaces": [
-        "desktop"
-      ]
-    },
-    "managedRemoteTunnelSelectedPresetId": {
-      "scope": "instance"
-    },
-    "sidebarViewMode": {
-      "scope": "profile",
-      "perSurface": true
-    },
-    "sidebarKeepPinnedInPlace": {
-      "scope": "profile",
-      "perSurface": true
-    },
-    "sidebarSessionBatchSize": {
-      "scope": "profile"
-    },
-    "sidebarWorktreeNameByBranch": {
-      "scope": "profile"
-    },
-    "workStatusSectionOrderExplicit": {
-      "scope": "profile"
-    },
-    "chatWidth": {
-      "scope": "profile",
-      "perSurface": true
-    },
-    "fileEditorWrapLines": {
-      "scope": "profile"
-    },
-    "agentBrowserSharesLogins": {
-      "scope": "profile",
-      "surfaces": [
-        "desktop"
-      ]
-    },
-    "terminalOpenOnProjectAction": {
-      "scope": "profile",
-      "surfaces": [
-        "web",
-        "desktop"
-      ]
-    },
-    "savePastedImagesAsFiles": {
-      "scope": "profile"
-    },
-    "cornerRadius": {
-      "scope": "profile",
-      "perSurface": true
-    },
-    "collapsedModelProviders": {
-      "scope": "profile"
-    },
-    "recentAgents": {
-      "scope": "profile"
-    },
-    "recentEfforts": {
-      "scope": "profile"
-    },
-    "usageCollapsedFamilies": {
-      "scope": "profile"
-    },
-    "usageModelGroups": {
-      "scope": "profile"
-    },
-    "sidebarSection": {
-      "scope": "device",
-      "local": true
-    },
-    "isSessionCreateDialogOpen": {
-      "scope": "device",
-      "local": true
-    },
-    "messageLimit": {
-      "scope": "device",
-      "local": true
-    },
-    "mobileKeepScreenAwake": {
-      "scope": "device",
-      "local": true
-    },
-    "questionsInChat": {
-      "scope": "device",
-      "local": true
-    },
-    "accountSwitchProviders": {
-      "scope": "profile"
     }
   }
 }

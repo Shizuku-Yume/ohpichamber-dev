@@ -11,6 +11,8 @@ import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { useMultiRunMemberIds } from '@/lib/multirun/useMultiRuns';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
+import { registerWorkspaceDirectory } from './globalSessions';
+import { nativeHostSession, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
 
 const browser = new Window({ url: 'http://localhost' });
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -34,14 +36,18 @@ const initialWorktrees = useSessionUIStore.getState().worktreeMetadata;
 let root: Root;
 let renders = 0;
 let entriesRead = 0;
+const workspaceFor = (directory: string) => {
+  const id = `workspace-${directory}`;
+  registerWorkspaceDirectory(id, directory);
+  return id;
+};
 const session = (id: string, extra: Partial<Session> = {}): Session => ({
-  sessionId: id, projectID: 'project', directory: '/repo', title: id,
-  cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 }, ...extra,
+  ...nativeHostSession(nativeSnapshot(id)), workspaceId: workspaceFor('/repo'),
+  title: id, createdAt: 1, updatedAt: 1, archivedAt: undefined, ...extra,
 });
 const archive = (id: string, extra: Partial<Session> = {}) =>
-  session(id, { time: { created: 1, updated: 1, archived: 2 }, ...extra });
-const lane = (id: string) => session(id, { metadata: withMultiRunMembership({}, {
+  session(id, { archivedAt: 2, ...extra });
+const lane = (id: string) => session(id, { metadata: withMultiRunMembership({ metadata: {} }, {
   version: 1, sessionID: id, group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' },
   groupSlug: 'fix-auth', role: 'run', providerID: 'test', modelID: 'test',
 }) });
@@ -136,9 +142,9 @@ test('archive projections preserve restorable lists and parent titles without vi
   expect(selectArchiveParentTitles(useGlobalSessionsStore.getState())).toBe(before?.[2]);
   // Hidden descendants do not change any of the three narrow outputs.
   const count = renders;
-  await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...hidden, cost: 9 }));
+  await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...hidden, headSequence: "9" }));
   expect(renders).toBe(count);
-  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('other-0', { cost: 9 })));
+  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('other-0', { headSequence: "9" })));
   expect(renders).toBe(count + 1);
   await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...parent, title: 'Renamed parent' }));
   expect(selected?.[2]).toContain('Renamed parent');
@@ -162,7 +168,7 @@ test('multi-run membership keeps list order and its reference through deferred a
   await deferred();
   expect(ids).toBe(before);
   const count = renders;
-  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('other-0', { cost: 9 })));
+  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('other-0', { headSequence: "9" })));
   expect(ids).toBe(before);
   expect(renders).toBe(count);
   await act(async () => useGlobalSessionsStore.getState().upsertSession(archive('lane-2', { metadata: lane('lane-2').metadata })));
@@ -175,8 +181,8 @@ test('multi-run membership keeps list order and its reference through deferred a
   expect(ids).toEqual([]);
   await act(async () => {
     useGlobalSessionsStore.getState().applySnapshot([
-      session('legacy-a', { title: 'bench/test/model-a', directory: '/repo' }),
-      session('legacy-b', { title: 'bench/test/model-b', directory: '/other' }),
+      session('legacy-a', { title: 'bench/test/model-a', workspaceId: workspaceFor('/repo') }),
+      session('legacy-b', { title: 'bench/test/model-b', workspaceId: workspaceFor('/other') }),
     ], []);
     root.render(<Probe id="legacy-a" />);
   });
@@ -192,7 +198,7 @@ test('multi-run membership keeps list order and its reference through deferred a
 });
 
 test('mobile chat presence caches unchanged lists and invalidates when roots become known or chats change', async () => {
-  useGlobalSessionsStore.getState().applySnapshot([...unrelated(), session('chat', { directory: '/real/chats/day/chat' })], []);
+  useGlobalSessionsStore.getState().applySnapshot([...unrelated(), session('chat', { workspaceId: workspaceFor('/real/chats/day/chat') })], []);
   observeLists();
   // Root discovery changes classification even while the session array stays identical.
   expect(selectHasChats(useGlobalSessionsStore.getState())).toBe(false);
@@ -211,8 +217,8 @@ test('mobile chat presence caches unchanged lists and invalidates when roots bec
   await act(async () => useGlobalSessionsStore.getState().upsertSession(session('other-0', { title: 'Renamed' })));
   expect(hasChats).toBe(true);
   expect(renders).toBe(count);
-  await act(async () => useGlobalSessionsStore.getState().upsertSession(archive('chat', { directory: '/real/chats/day/chat' })));
+  await act(async () => useGlobalSessionsStore.getState().upsertSession(archive('chat', { workspaceId: workspaceFor('/real/chats/day/chat') })));
   expect(hasChats).toBe(false);
-  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('legacy-chat', { directory: '/home/test/.config/openchamber/chats/day/chat' })));
+  await act(async () => useGlobalSessionsStore.getState().upsertSession(session('legacy-chat', { workspaceId: workspaceFor('/home/test/.config/ohpichamber/chats/day/chat') })));
   expect(hasChats).toBe(true);
 });

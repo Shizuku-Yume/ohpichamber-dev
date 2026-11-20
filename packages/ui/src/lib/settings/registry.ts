@@ -28,7 +28,7 @@ import { LOCALES } from '@/lib/i18n/runtime';
 import { useI18nStore } from '@/lib/i18n/store';
 import { isInputHistoryLimit, isInputHistoryScope, type InputHistoryScope } from '@/lib/inputHistoryScope';
 import { normalizeMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
-import { hiddenSidebarSectionsSchema, sidebarPinListsSchema, sidebarSectionsSchema } from '@/lib/sidebarSections';
+import { hiddenSidebarSectionsSchema, sidebarPinListsSchema, sidebarSectionsSchema, SIDEBAR_SESSION_BATCH_MIN, SIDEBAR_SESSION_BATCH_MAX } from '@/lib/sidebarSections';
 import { isResponseStylePreset, type ResponseStylePreset } from '@/lib/responseStyle';
 import { isTerminalShell } from '@/lib/terminalShell';
 import { sanitizeWorkStatusHiddenSections, sanitizeWorkStatusSectionOrder } from '@/components/chat/work-status/sections';
@@ -400,6 +400,8 @@ export const SETTINGS_REGISTRY = {
  sidebarListSessionGrouping: field({ scope: 'profile', effect: ['store'], perSurface: true, parse: parseOneOf(['project', 'time']), ui: sessionDisplayField('listSessionGrouping') }),
  sidebarGrouping: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseOneOf(['project', 'time']), ui: sessionDisplayField('sidebarGrouping') }),
  sidebarKeepWorkInPlace: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('keepWorkInPlace') }),
+ sidebarKeepPinnedInPlace: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('keepPinnedInPlace') }),
+ sidebarSessionBatchSize: field<number | null>({ scope: 'profile', effect: ['ui'], perSurface: true, parse: (value) => value === null ? null : parseIntegerInRange(SIDEBAR_SESSION_BATCH_MIN, SIDEBAR_SESSION_BATCH_MAX)(value), ui: sessionDisplayField('sessionBatchSize') }),
  sidebarProjectSortOrder: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseOneOf(['manual', 'a-z', 'z-a', 'date-added', 'recent']), ui: sessionDisplayField('projectSortOrder') }),
  sidebarShowChatsSection: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('showChatsSection') }),
  sidebarShowWorkSection: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('showWorkSection') }),

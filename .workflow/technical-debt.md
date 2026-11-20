@@ -60,16 +60,6 @@ An entry leaves this file in one of two ways:
 - **Solution:** define and implement a Canonical per-turn diff contract before restoring the surface.
 - **Cost:** contract/service provenance and UI normal, empty, unsupported and failure tests.
 
-## ChatContainer still owns the pre-ChatViewport timeline
-
-- **Where:** `packages/ui/src/components/chat/ChatContainer.tsx` and upstream `ChatViewport`/timeline owners.
-- **Added:** 2026-11-20
-- **Priority:** worth-doing
-- **Problem:** the full ChatContainer-to-upstream ChatViewport/timeline cutover is deferred.
-- **Impact:** the retained container does not yet share upstream's extracted viewport/timeline ownership.
-- **Solution:** port Canonical/Host behavior into the upstream owners, then retain the thin controller without parallel state owners.
-- **Cost:** streaming, scroll anchoring, pagination, runtime-switch and visual regression verification.
-
 
 ## Chat transcript still renders through ChatContainer instead of upstream ChatViewport
 

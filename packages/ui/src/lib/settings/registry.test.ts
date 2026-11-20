@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import {
   resolveWorkStatusSectionOrder,
@@ -25,6 +26,27 @@ import {
 } from './registry';
 
 describe('settings registry', () => {
+  test('round-trips sidebar batching and pin placement through the profile owner', () => {
+    const previous = useSessionDisplayStore.getState();
+    try {
+      for (const size of [null, 3, 12, 50]) {
+        const parsed = parseSettingsDocument({ sidebarSessionBatchSize: size, sidebarKeepPinnedInPlace: false });
+        expect(parsed).toEqual({ sidebarSessionBatchSize: size, sidebarKeepPinnedInPlace: false });
+        if (!parsed) throw new Error('Expected valid settings');
+        applySettingsToStores(parsed);
+        expect(useSessionDisplayStore.getState().sessionBatchSize).toBe(size);
+        expect(useSessionDisplayStore.getState().keepPinnedInPlace).toBe(false);
+      }
+      for (const [size, bounded] of [[2, 3], [51, 50], [3.5, 4]]) {
+        expect(parseSettingsDocument({ sidebarSessionBatchSize: size })).toEqual({ sidebarSessionBatchSize: bounded });
+      }
+      expect(parseSettingsDocument({ sidebarSessionBatchSize: '12' })).toEqual({});
+      expect(parseSettingsDocument({ sidebarKeepPinnedInPlace: 'false' })).toEqual({});
+    } finally {
+      useSessionDisplayStore.setState(previous, true);
+    }
+  });
+
   test('round-trips custom selection approval text and clearing it without resetting omitted preferences', async () => {
     const options = useUIStore.persist.getOptions();
     const original = useUIStore.getState();

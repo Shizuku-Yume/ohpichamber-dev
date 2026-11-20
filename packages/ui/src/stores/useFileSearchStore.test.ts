@@ -22,11 +22,16 @@ const createDeferred = <T>(): Deferred<T> => {
 
 const environment = directoryEnvironment();
 environment.respond(async (url) => {
-  if (url.pathname !== '/api/fs/find') throw new Error(`Unexpected request: ${url}`);
+  if (url.pathname !== '/api/fs/search') throw new Error(`Unexpected request: ${url}`);
   const request = createDeferred<Array<{ path: string }>>();
   searchRequests.push(request);
   const files = await request.promise;
-  return Response.json({ data: files.map((file) => ({ path: file.path.replace(/^\/project\//, '') })) });
+  const directory = url.searchParams.get('directory') ?? '';
+  return Response.json(files.map((file) => ({
+    name: file.path.split('/').at(-1),
+    path: file.path.startsWith('/') ? file.path : `${directory}/${file.path}`,
+    relativePath: file.path.replace(`${directory}/`, ''),
+  })));
 });
 
 const { hostFilesystem } = await import('@/lib/host-filesystem');
@@ -61,6 +66,7 @@ describe('useFileSearchStore', () => {
       includeHidden: true,
       respectGitignore: false,
     });
+    await environment.settle();
     searchRequests[0].resolve([]);
     await searchPromise;
   });
@@ -74,6 +80,7 @@ describe('useFileSearchStore', () => {
       includeHidden: false,
       respectGitignore: true,
     });
+    await environment.settle();
     searchRequests[0].resolve([]);
     await searchPromise;
   });

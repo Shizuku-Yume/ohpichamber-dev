@@ -23,6 +23,11 @@ const fetchJson = async <T>(input: string | URL | Request, init?: RequestInit): 
 };
 
 export const createWebPushAPI = (): PushAPI => ({
+  async getDeliveryStatus() {
+    const status = await fetchJson<{ localOnly?: unknown }>('/api/push/delivery');
+    return typeof status?.localOnly === 'boolean' ? { localOnly: status.localOnly } : null;
+  },
+
   async getVapidPublicKey() {
     return fetchJson<{ publicKey: string }>('/api/push/vapid-public-key');
   },
