@@ -126,6 +126,20 @@ test('spread variable names are not dependency names but explicit keys remain au
   assert.match(runGuardrail(fixture).output, /\[route-deps\] createAutoReviewRuntime.enabled/);
 });
 
+test('indirect dependency bags require owner review without claiming their keys are missing', () => {
+  const fixture = makeFixture(baseFiles());
+  fixture.fork('packages/web/server/index.js', `const options = { enabled: true };\n${INDEX.replace('{ enabled: true }', 'options')}`);
+  const indirect = runGuardrail(fixture);
+  assert.equal(indirect.status, 1);
+  assert.match(indirect.output, /\[route-deps-indirect\] createAutoReviewRuntime/);
+  assert.doesNotMatch(indirect.output, /\[route-deps\] createAutoReviewRuntime.enabled/);
+  fixture.fork('scripts/upstream-gaps.allowlist.tsv', `${ALLOWLIST_HEADER}route-deps-indirect\tcreateAutoReviewRuntime\tOMP packages/web/server/lib/auto-review/runtime.js\tThe reviewed owner receives options through a variable.\n`);
+  assert.equal(runGuardrail(fixture).status, 0);
+  fixture.fork('packages/web/server/index.js', INDEX.replace('{ enabled: true }', '{}'));
+  const empty = runGuardrail(fixture);
+  assert.match(empty.output, /\[route-deps\] createAutoReviewRuntime.enabled/);
+});
+
 test('same-named factory dependencies are compared within their source owner', () => {
   const files = baseFiles();
   files['packages/web/server/lib/a.js'] = `createClient({ baseUrl: '/legacy' });\n`;

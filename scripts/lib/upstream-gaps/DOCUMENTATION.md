@@ -15,6 +15,10 @@ properties, not spread-variable names, whose contents cannot be inferred.
 A same-file reference outside an export's declaration counts as a caller.
 Dependency keys are compared within the same logical source owner (`.ts` and
 `.js` are equivalent), not pooled across unrelated factories with the same name.
+An indirect options argument does not prove that its properties are absent.
+Such calls remain failing `route-deps-indirect` findings requiring an explicit
+owner review, rather than a separate false missing-property claim for every key.
+Literal empty objects and removed arguments still report named omissions.
 
 The route audit follows source imports from the server entry, including `.js`
 specifiers whose source owner is TypeScript. A reachable route module must still

@@ -1,4 +1,5 @@
 class	item	citation	effect
+route-deps-indirect	createSessionWorktreeMover	OMP packages/web/server/lib/openchamber-sessions/worktree-move-bridge.js	The Host injects all Git operations through worktreeMove getters populated by Git registration; the session service captures them on first use and supplies startDirectory and moveSession per move. routes.test.js verifies late registration, unavailable bridges, scope refusal and rollback; mover tests cover stash/setup retries.
 runtime-constructor	createUpdateCommand	## 2026-11-16 - Cut the fork off from upstream-hosted services	The removed CLI updater targets upstream OpenCode packages; fork desktop updates use its own GitHub Releases.
 route-deps	registerOpenChamberRoutes.cliEntry	## 2026-11-16 - Cut the fork off from upstream-hosted services	The Host does not spawn the retired upstream CLI updater.
 runtime-constructor	createEmptyMemory	## 2026-11-13 - OMP owns image generation and agent memory	The removed Host memory store is not an additional backend beside OMP memory.backend.

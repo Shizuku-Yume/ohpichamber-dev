@@ -400,9 +400,15 @@ function dependencyDiffs(upstream, fork) {
       const uKeys = new Set(uList.flatMap((call) => call.objKeys.flatMap((object) => object.keys)));
       const fKeys = new Set(fList.flatMap((call) => call.objKeys.flatMap((object) => object.keys)));
       const missingInFork = [...uKeys].filter((key) => !fKeys.has(key));
+      const unresolvedKeys = missingInFork.filter((key) => {
+        const indices = new Set(uList.flatMap((call) => call.objKeys
+          .filter((object) => object.keys.includes(key)).map((object) => object.argIndex)));
+        return fList.some((call) => [...indices].some((index) => call.argsList[index]
+          && extractObjectKeys(call.argsList[index]) === null));
+      });
       const extraInFork = [...fKeys].filter((key) => !uKeys.has(key));
       if (missingInFork.length || extraInFork.length) {
-        diffs.push({ name, upstream: uList.map((call) => `${call.file}:${call.line}`), fork: fList.map((call) => `${call.file}:${call.line}`), missingInFork, extraInFork });
+        diffs.push({ name, upstream: uList.map((call) => `${call.file}:${call.line}`), fork: fList.map((call) => `${call.file}:${call.line}`), missingInFork: missingInFork.filter((key) => !unresolvedKeys.includes(key)), unresolvedKeys, extraInFork });
       }
     }
   }

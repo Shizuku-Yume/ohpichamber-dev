@@ -127,6 +127,13 @@ for (const item of serverOut.createCalls.depDiffs) {
 }
 
 // Runtime constructors called upstream and by no fork production file (a deleted create*Runtime call)
+for (const item of [...serverOut.registerCalls.depDiffs, ...serverOut.createCalls.depDiffs]) {
+  if (item.unresolvedKeys.length > 0) {
+    detectedGaps.push({ class: 'route-deps-indirect', item: item.name, detail: `indirect dependency bag at ${item.fork.join(', ')}; review ${item.unresolvedKeys.join(', ')}` });
+  }
+}
+
+// Runtime constructors called upstream and by no fork production file (a deleted create*Runtime call)
 for (const item of serverOut.createCalls.onlyUpstream) {
   detectedGaps.push({ class: 'runtime-constructor', item: item.name, detail: `upstream ${item.upstream.join(', ')}; no fork call` });
 }
