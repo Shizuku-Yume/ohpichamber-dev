@@ -29,6 +29,7 @@ import { isSuccessfulCheckpointEntry } from '@oh-my-pi/pi-coding-agent/session/c
 import { RewindTool } from '@oh-my-pi/pi-coding-agent/tools/checkpoint';
 import { WorkerSession } from './session.ts';
 import { WorkerModeController } from './mode.ts';
+import { cfgSuggestionGenerator } from './suggestion.ts';
 import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import { HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
 import { credentialReference } from './catalog-models.ts';
@@ -648,6 +649,7 @@ test('RPC goal continues three turns and retains completed mode', async () => {
   }
  });
  try {
+  cfgSuggestionGenerator.override(harness.worker.session.settings, 'off');
   await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Finish the native proof' });
   await waitForGoal(harness.worker, () => harness.requests.length >= 3 && harness.worker.mode().kind === 'goal' && harness.worker.mode().status === 'complete');
   expect(harness.events.filter(input => input.event.type === 'run.started' && input.event.origin === 'goal')).toHaveLength(3);
