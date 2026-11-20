@@ -222,6 +222,10 @@ mock.module('@/lib/worktrees/worktreeStatus', () => ({
   resolveProjectRoot: (directory: string) => Promise.resolve(directory),
 }));
 
+mock.module('@/stores/useDirectoryStore', () => ({
+  useDirectoryStore: { getState: () => ({ currentDirectory: null, setDirectory: () => {} }) },
+}));
+
 mock.module('@/stores/useGlobalSessionsStore', () => ({
   refreshGlobalSessionsForDirectories: (directories: string[]) => {
     refreshCalls.push(directories);
