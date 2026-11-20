@@ -27,6 +27,15 @@ export const readWork = (metadata) => metadataSchema.safeParse(metadata).data?.o
 
 const patchOf = (work) => ({ openchamber: { work } });
 
+export const isPinnedMetadata = (metadata) => Boolean(metadata?.isPinned || metadata?.openchamber?.pinned);
+
+export const userStatePatch = (metadata, { state, now }) => {
+  if (readWork(metadata)?.state === state || (state === 'open' && isPinnedMetadata(metadata))) return null;
+  return patchOf(state === 'open'
+    ? { state: 'open', openedAt: now, openedBy: 'user', doneAt: null, suggestDoneAt: null }
+    : { state: 'done', doneAt: now, suggestDoneAt: null });
+};
+
 /** Jev saw a request that starts work, sent at `requestAt`. */
 export const openByJevPatch = (metadata, { requestAt, now }) => {
   const work = readWork(metadata);

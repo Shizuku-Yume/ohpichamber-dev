@@ -207,6 +207,10 @@ const registry: QuotaProviderRegistry = {
 
 const pendingFetches = new Map();
 
+export const listUsagePageProviders = () => Object.entries(registry)
+  .filter(([id]) => id !== copilot.providerIdAddon)
+  .map(([providerId, provider]) => ({ providerId, providerName: provider.providerName }));
+
 
 /**
  * Provider selections are supplied by the Host's selected workspace catalog.

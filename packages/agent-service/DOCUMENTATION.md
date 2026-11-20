@@ -1,5 +1,14 @@
 # MCP backend integration
 
+## Native Host usage tool
+
+`openchamber_usage` exposes only `usage.read`. It is disabled by default, follows
+`agentUsageToolEnabled` on initial worker setup and settings updates, and is
+checked again at the Host dispatch boundary. Results use the existing versioned
+usage card envelope, without account labels or credentials. `openchamber` also
+admits `session.track` and `session.markDone`; Canonical session eligibility,
+Host metadata and archive/worktree pin owners enforce their work-state policy.
+
 ## Projection validation
 
 Unstamped session update/status projections reuse Canonical payload schemas,

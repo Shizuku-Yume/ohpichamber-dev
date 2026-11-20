@@ -51,6 +51,7 @@ const REQUEST_CHARS = 1_500;
 /** Head and tail of the turn's answer: what was changed sits early, the outcome late. */
 const ANSWER_EDGE_CHARS = 500;
 const SEEN_MESSAGES_LIMIT = 500;
+const BACKGROUND_SHELL_WAIT_MS = 30 * 60_000;
 
 const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
 
@@ -71,6 +72,7 @@ export function createSessionWorkRuntime({
   chatRoots = [],
   /** `../session-lineage.js`: known subsessions are skipped without reading them. */
   lineage = null,
+  activityProbe = null,
   now = Date.now,
 }) {
   if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function') {
@@ -202,13 +204,24 @@ export function createSessionWorkRuntime({
    * was not asked about them (no Jev, a failure, an ineligible session): the
    * caller then behaves as it always did.
    */
+  const waitsOnBackground = async (sessionId, turnStartedAt) => {
+    if (!activityProbe) return null;
+    const jobs = await activityProbe.fetchRunningBackgroundJobs(sessionId);
+    if (jobs?.some((job) => job.kind !== 'shell' || (job.startedAt >= turnStartedAt && now() - job.startedAt < BACKGROUND_SHELL_WAIT_MS))) return true;
+    const statuses = await activityProbe.fetchActiveSessionStatuses(sessionId);
+    const children = statuses ? await activityProbe.hasWorkingChildren(sessionId, statuses) : null;
+    if (children === true) return true;
+    return Array.isArray(jobs) && children === false ? false : null;
+  };
+
   const evaluateTurnEnd = async ({ sessionId, directory, assist }) => {
     if (stopped || lineage?.isChild(sessionId) === true) return null;
     const settings = getSettings();
-    if (!settings.enabled && !settings.reviewOffer && !assist?.recap) return null;
+    if (!settings.enabled && !settings.reviewOffer && !assist?.recap && !assist?.suggestion) return null;
     // Never capture 0: an evicted session also reads 0.
     if (!turnGenerations.has(sessionId)) advanceTurn(sessionId);
     const generation = turnGeneration(sessionId);
+    let background = null;
     try {
       const scope = await resolveSessionScope(sessionId);
       if (!scope) return null;
@@ -222,17 +235,19 @@ export function createSessionWorkRuntime({
         wrapUp: settings.enabled && work?.state === 'open',
         reviewReady: settings.reviewOffer,
         recap: Boolean(assist?.recap),
+        nextStep: Boolean(assist?.suggestion),
       };
       const context = await loadAssistContext({ readPage: readPages(sessionId), signal: new AbortController().signal });
       if (!context) return null;
       const turn = context.turns.at(-1);
+      background = ask.wrapUp || ask.nextStep ? await waitsOnBackground(sessionId, turn.user.created ?? 0) : null;
       const request = buildTurnEndRequest({
         history: turnsToHistory(context.turns.slice(0, -1)),
         request: excerptHead(turn.user.text, REQUEST_CHARS),
         answer: excerptHeadTail(turn.assistant.text, ANSWER_EDGE_CHARS, ANSWER_EDGE_CHARS),
         ask,
       });
-      if (!request) return null;
+      if (!request) return background === true && ask.nextStep ? { recap: true, suggestion: false } : null;
       const { answers } = await jev.ask(request, endpoint);
       if (stopped) return null;
       if (ask.open && decideOpen(answers)) {
@@ -240,7 +255,7 @@ export function createSessionWorkRuntime({
         await updateMetadata(sessionId, (metadata) => openByJevPatch(metadata, { requestAt, now: now() }), { directory: scope.cwd });
       }
       // Looks done wins over a review offer from the same turn.
-      const suggest = ask.wrapUp && decideWrapUp(answers)
+      const suggest = ask.wrapUp && background !== true && decideWrapUp(answers)
         ? suggestDonePatch
         : ask.reviewReady && decideReviewReady(answers) ? offerReviewPatch : null;
       if (suggest) {
@@ -253,10 +268,11 @@ export function createSessionWorkRuntime({
         );
         if (changed) markSuggested(sessionId, scope.cwd);
       }
-      return ask.recap || ask.nextStep ? decideAssist(answers) : null;
+      const gate = ask.recap || ask.nextStep ? decideAssist(answers) : null;
+      return background === true ? { ...gate, suggestion: false } : gate;
     } catch (error) {
       console.warn('[session-work] turn-end check failed:', errorMessage(error));
-      return null;
+      return background === true && assist?.suggestion ? { recap: true, suggestion: false } : null;
     }
   };
 

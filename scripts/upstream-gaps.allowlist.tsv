@@ -336,8 +336,6 @@ route-deps	createNotificationTriggerRuntime.getOpenCodeAuthHeaders	## 2026-11-11
 route-deps	createNotificationTriggerRuntime.readSessionMetadata	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createNotificationTriggerRuntime.spaceFetchFor	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces dependency, unreleased.
 route-deps	createOpenChamberControlService.chatsScope	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-route-deps	createOpenChamberControlService.chatRoots	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-route-deps	createOpenChamberControlService.updateSessionMetadata	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.readPendingRequests	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.isPermissionAutoAnswered	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.sanitizeProjects	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
@@ -348,7 +346,6 @@ route-deps	createOpenChamberControlService.isOpenCodeDirectoryTrusted	## 2026-11
 route-deps	createOpenChamberControlService.isRenderToolEnabled	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.onPageWaitChange	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.workNaming	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-route-deps	createOpenChamberControlService.loadQuota	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createDeltaCoalescer	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createGuestAgentContext	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createServiceLifetime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture

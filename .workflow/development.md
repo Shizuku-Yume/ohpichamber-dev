@@ -4,6 +4,20 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
+`no-favicon-found` discovery response: non-OK responses otherwise become an error
+toast. The three remaining runtime gaps now use Host/OMP owners: opt-in
+`openchamber_usage` reads selected native quota credentials; track/done use
+Canonical root eligibility, Host metadata/archive state and worktree pins; the
+turn-end activity probe reads Canonical shell snapshots and live subagents.
+Focused Web coverage passes 588 tests in 51 files, Agent Service Host tool/policy
+coverage passes 38 tests in 5 files, Agent Service build and server lint pass,
+and the gap audit reports zero unallowlisted gaps after removing three obsolete
+allowlist rows for the restored dependencies. Activity read failures
+remain unknown; non-shell native async work without a Canonical job/subagent
+surface is not observed. No visual or live-provider verification is claimed.
+Accepted unrelated UI type/declaration failures remain untouched.
+
 PR #68 integration merges `origin/devin/upstream-sync-1795118808` at `a7aee9947`
 without replacing either feature set. The only conflict was this progress
 record; both the secret/Guest evidence and upstream test-repair entry remain.

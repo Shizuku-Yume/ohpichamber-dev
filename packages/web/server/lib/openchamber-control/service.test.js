@@ -93,6 +93,66 @@ const createHarness = (settings = {
 };
 
 describe('OhPiChamber control service canonical consumers', () => {
+  it('dispatches scoped usage.read only through its own Host tool and current setting', async () => {
+    const scopes = [];
+    const quota = { listUsagePageProviders: () => [], listConfiguredQuotaProviders: async () => [], fetchQuotaForProvider: async () => ({}) };
+    const { control } = createHarness({ agentUsageToolEnabled: true }, { loadQuota: async (scope) => { scopes.push(scope); return quota; } });
+    const scope = { ...scopeForWorkspace, rootSessionId: 'session-1' };
+    const request = { toolName: 'openchamber_usage', sessionId: 'session-1', action: 'usage.read', input: {} };
+    expect(await control.invokeHostAction(scope, request)).toEqual({ ok: true, value: { providers: [], notConfigured: [] } });
+    expect(scopes).toEqual([{ rootSessionId: 'session-1', ...scopeForWorkspace }]);
+    expect(await control.invokeHostAction(scope, { ...request, toolName: 'notify' })).toMatchObject({ ok: false, status: 400 });
+    const disabled = createHarness({ agentUsageToolEnabled: false }, { loadQuota: async () => { throw new Error('Must not load quota'); } });
+    await expect(disabled.control.execute('usage.read', {}, undefined, { contextSessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 403 });
+    await expect(createHarness().control.execute('usage.read', {}, undefined, { contextSessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it('tracks and marks done using Canonical eligibility and queued Host metadata patches', async () => {
+    const patches = [];
+    const { control, sessionService } = createHarness({}, { now: () => 100,
+      updateSessionMetadata: async (id, decide, options) => { patches.push({ id, patch: decide({}), options }); return { changed: true }; },
+    });
+    sessionService.open = async () => ({ session: { sessionId: 'session-1', rootSessionId: 'session-1', title: 'Work' } });
+    expect(await control.execute('session.track', {}, undefined, { contextSessionId: 'session-1' })).toMatchObject({ sessionId: 'session-1', inWork: true, changed: true });
+    expect(await control.execute('session.markDone', { sessionId: 'session-1' })).toMatchObject({ sessionId: 'session-1', inWork: false });
+    expect(patches).toEqual([
+      { id: 'session-1', options: { directory: '/repo/app' }, patch: { openchamber: { work: { state: 'open', openedAt: 100, openedBy: 'user', doneAt: null, suggestDoneAt: null } } } },
+      { id: 'session-1', options: { directory: '/repo/app' }, patch: { openchamber: { work: { state: 'done', doneAt: 100, suggestDoneAt: null } } } },
+    ]);
+  });
+
+  it.each([
+    ['pinned worktree', {}, { isWorktreePinned: async () => true }, 409],
+    ['pinned session', { isPinned: true }, {}, 409],
+    ['Host pin stamp', { openchamber: { pinned: { at: 1 } } }, {}, 409],
+    ['review', { openchamber: { kind: 'review' } }, {}, 400],
+    ['btw', { openchamber: { kind: 'btw' } }, {}, 400],
+    ['scheduled', { openchamber: { kind: 'scheduled' } }, {}, 400],
+    ['archived', {}, { archiveStore: { archivedAt: async () => 5 } }, 409],
+    ['managed chat', {}, { chatRoots: ['/repo'] }, 400],
+  ])('refuses tracking a %s but allows marking it done', async (_label, metadata, overrides, statusCode) => {
+    let writes = 0;
+    const { control, sessionService } = createHarness({}, { ...overrides, updateSessionMetadata: async () => { writes += 1; return { changed: true }; } });
+    sessionService.open = async () => ({ session: { sessionId: 'session-1', rootSessionId: 'session-1' } });
+    sessionService.getMetadata = async () => ({ metadata });
+    await expect(control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode });
+    expect(writes).toBe(0);
+    await expect(control.execute('session.markDone', { sessionId: 'session-1' })).resolves.toMatchObject({ inWork: false });
+    expect(writes).toBe(1);
+  });
+
+  it('refuses missing, child, out-of-scope and unreadable sessions before any work write', async () => {
+    const { control, sessionService } = createHarness({}, { updateSessionMetadata: async () => { throw new Error('Unexpected write'); } });
+    await expect(control.execute('session.track')).rejects.toMatchObject({ statusCode: 400 });
+    sessionService.open = async () => ({ session: { sessionId: 'session-1', rootSessionId: 'parent' } });
+    await expect(control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(control.execute('session.track', { sessionId: 'session-1', workspaceId: 'workspace-2' })).rejects.toMatchObject({ statusCode: 403 });
+    sessionService.getMetadata = async () => { throw new Error('Metadata unreadable'); };
+    await expect(control.execute('session.track', { sessionId: 'session-1' })).rejects.toThrow('Metadata unreadable');
+    const disabled = createHarness({ sessionWorkEnabled: false }, { updateSessionMetadata: async () => ({ changed: true }) });
+    await expect(disabled.control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 409 });
+    await expect(createHarness().control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 503 });
+  });
   it('refuses public secret authority and runs only the scoped worker call with private card answers', async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'secret-control-'));
     const scope = { rootSessionId: 'session-1', ...scopeForWorkspace, cwd: directory };

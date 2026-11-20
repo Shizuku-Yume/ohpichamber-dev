@@ -10,6 +10,7 @@ export type HostToolName =
   | 'web'
   | 'openchamber_knowledge'
   | 'notify'
+  | 'openchamber_usage'
   | 'openchamber_render'
   | 'openchamber_secret'
   | 'openchamber_workflow';
@@ -19,6 +20,7 @@ export const HOST_TOOL_NAMES: readonly HostToolName[] = [
   'web',
   'openchamber_knowledge',
   'notify',
+  'openchamber_usage',
   'openchamber_render',
   'openchamber_secret',
   'openchamber_workflow',
@@ -29,6 +31,7 @@ const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Ob
   web: true,
   openchamber_knowledge: true,
   notify: false,
+  openchamber_usage: false,
   openchamber_render: true,
   openchamber_secret: true,
   openchamber_workflow: true,
@@ -50,6 +53,7 @@ export function normalizeHostToolEnablement(input?: HostToolEnablementInput) {
   if (record.agentWebToolEnabled !== undefined) result.web = record.agentWebToolEnabled;
   if (record.agentKnowledgeToolEnabled !== undefined) result.openchamber_knowledge = record.agentKnowledgeToolEnabled;
   if (record.agentNotifyToolEnabled !== undefined) result.notify = record.agentNotifyToolEnabled;
+  if (record.agentUsageToolEnabled !== undefined) result.openchamber_usage = record.agentUsageToolEnabled;
   if (record.agentRenderToolEnabled !== undefined) result.openchamber_render = record.agentRenderToolEnabled;
   if (record.agentSecretToolEnabled !== undefined) result.openchamber_secret = record.agentSecretToolEnabled;
   if (record.agentWorkflowToolEnabled !== undefined) result.openchamber_workflow = record.agentWorkflowToolEnabled;
@@ -63,6 +67,7 @@ export const HOST_TOOL_DESCRIPTIONS = {
     + 'Pass action parameters inside input, for example {"action":"pr.watch","input":{"url":"https://github.com/owner/repo/pull/123"}} or {"action":"session.list","input":{}}. '
     + 'pr.watch watches a pull or merge request at url (GitHub/GitLab) for check status, reviews/comments, conflicts, or merge, waking the session with a message on change; requires url, optional sessionId (defaults to calling session) and directory. '
     + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it. '
+    + 'session.track puts a root project session In work; session.markDone removes it. Both accept sessionId, defaulting to this session. Pinned sessions and worktrees cannot be tracked. '
     + 'wait.list lists this session’s timer and extension waits and available sources. wait.start takes source and args from wait.list (e.g. "timer" and {"minutes":5}) and wakes this session when the wait fires. wait.stop takes optional waitId and stops that wait or all timer and extension waits without waking the session.',
   openchamber_knowledge: "The project's Notes, Todos and Plans, shown in OhPiChamber's Project knowledge panel and shared by its sessions. One action per call. "
     + 'knowledge.list returns everything unless planId or ready narrows it; read it before answering a question the project notes may hold. '
@@ -72,6 +77,7 @@ export const HOST_TOOL_DESCRIPTIONS = {
     + 'knowledge.show opens a plan for the user. knowledge.delete requires kind and id.',
   web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
   notify: 'Invoke notify.send for an authorized OhPiChamber notification.',
+  openchamber_usage: 'Invoke usage.read to read provider usage limits in this workspace. Optional providerId selects one provider; otherwise returns every configured provider. Account details and credentials are never returned.',
   openchamber_secret: 'Run one approved command with secrets supplied privately by the user. secret.run requires program, args (optional), reason, and inputs: [{env,label,placeholder?}]. Values enter only the child environment, never tool arguments; stdout and stderr are redacted. Remembered values last ten minutes in memory; secret.forget clears this session. secret.request file mode is disabled because secrets must not be saved to disk.',
   openchamber_render: 'Show a page in the chat: one complete HTML document or one openui-lang program, with a title, in the same call. '
     + 'With awaitAnswer the page waits for the user\'s answer and returns their summary and data; without it the page is only shown. '
@@ -87,7 +93,7 @@ export const HOST_TOOL_DESCRIPTIONS = {
  * caller reads.
  */
 function envelopeFor(toolName: HostActionRequest['toolName'], action: string, value: JsonValue): JsonObject | null {
-  if (toolName === 'openchamber_render' || toolName === 'openchamber_secret') {
+  if (toolName === 'openchamber_render' || toolName === 'openchamber_secret' || toolName === 'openchamber_usage') {
     const data = JsonObjectSchema.safeParse(value);
     if (!data.success) return null;
     const answer = JsonObjectSchema.safeParse(data.data.answer);

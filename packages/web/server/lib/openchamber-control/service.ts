@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { asNonEmptyString, isBoolean } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
@@ -9,6 +10,7 @@ import {
  OPENCHAMBER_KNOWLEDGE_ACTIONS,
  OPENCHAMBER_NOTIFY_ACTIONS,
  OPENCHAMBER_RENDER_ACTIONS,
+ OPENCHAMBER_USAGE_ACTIONS,
  OPENCHAMBER_SECRET_ACTIONS,
  OPENCHAMBER_WORKFLOW_ACTIONS,
 } from './actions.js';
@@ -18,6 +20,8 @@ import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploa
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
 import { createSecretRequests } from './secret-request.js';
 import { createTerminalReadAction } from './terminal-read.js';
+import { createUsageReadAction } from './usage-read.js';
+import { isPinnedMetadata, userStatePatch } from '../session-work/state.js';
 import { redactGitText } from '../git/redaction.js';
 import type { PageAnswerInput } from './render-page.js';
 import { formatModelRef, modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
@@ -33,6 +37,7 @@ const TOOL_ACTIONS = new Map([
  ['openchamber_knowledge', new Set(OPENCHAMBER_KNOWLEDGE_ACTIONS)],
  ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
  ['openchamber_render', new Set(OPENCHAMBER_RENDER_ACTIONS)],
+ ['openchamber_usage', new Set(OPENCHAMBER_USAGE_ACTIONS)],
  ['openchamber_secret', new Set(OPENCHAMBER_SECRET_ACTIONS)],
  ['openchamber_workflow', new Set(OPENCHAMBER_WORKFLOW_ACTIONS)],
 ]);
@@ -261,6 +266,10 @@ export const createOpenChamberControlService = (dependencies) => {
   browserControl = null,
   browserUploads = null,
   getTerminalRuntime = null,
+  loadQuota = null,
+  updateSessionMetadata = null,
+  isWorktreePinned = async () => false,
+  chatRoots = [],
   fileOpen = null,
   notifyUser = null,
   // Notes, todos and plans behind the `openchamber_knowledge` tool.
@@ -435,6 +444,31 @@ export const createOpenChamberControlService = (dependencies) => {
    throw new OpenChamberControlError('Session is outside the requested scope', 403);
   }
   return actual;
+ };
+
+ const setWorkState = async (input, contextDirectory, contextSessionId, state) => {
+  if (!updateSessionMetadata) throw new OpenChamberControlError('Changing In work is not available on this server', 503);
+  const settings = await readSettingsFromDiskMigrated();
+  if (settings?.sessionWorkEnabled === false) throw new OpenChamberControlError('In work is turned off in Settings', 409);
+  const sessionId = asNonEmptyString(input.sessionId) || asNonEmptyString(contextSessionId);
+  if (!sessionId) throw new OpenChamberControlError('sessionId is required', 400);
+  const scope = await resolveReadScope(input, contextDirectory, contextSessionId, sessionId);
+  const { session } = await sessionService.open(sessionId);
+  const { metadata } = await sessionService.getMetadata(sessionId);
+  if (state === 'open') {
+   const directory = path.resolve(scope.cwd);
+   const isChat = chatRoots.some((root) => directory === path.resolve(root) || directory.startsWith(`${path.resolve(root)}${path.sep}`));
+   if (session?.sessionId !== sessionId || session.rootSessionId !== sessionId || isChat
+    || ['review', 'btw', 'scheduled'].includes(metadata?.openchamber?.kind)) {
+    throw new OpenChamberControlError('Only root project sessions can be In work', 400);
+   }
+   if (await archivedAt(sessionId)) throw new OpenChamberControlError('Archived sessions cannot be In work', 409);
+   if (isPinnedMetadata(metadata) || await isWorktreePinned(scope.cwd)) {
+    throw new OpenChamberControlError('Pinned sessions and worktrees cannot be In work', 409);
+   }
+  }
+  const { changed } = await updateSessionMetadata(sessionId, (current) => userStatePatch(current, { state, now: now() }), { directory: scope.cwd });
+  return { sessionId, directory: scope.cwd, title: asNonEmptyString(session?.title), inWork: state === 'open', changed };
  };
 
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
@@ -998,6 +1032,14 @@ export const createOpenChamberControlService = (dependencies) => {
      sessionId: asNonEmptyString(options.contextSessionId),
      directory: asNonEmptyString(contextDirectory),
     });
+   }
+   if (action === 'usage.read') {
+    if (!loadQuota) throw new OpenChamberControlError('Usage is not available on this server', 503);
+    const scope = await resolveWorkspaceFor(input, options.contextSessionId, contextDirectory);
+    return createUsageReadAction({ readSettings: readSettingsFromDiskMigrated, loadQuota: () => loadQuota(scope) })(input, { signal: options.signal });
+   }
+   if (action === 'session.track' || action === 'session.markDone') {
+    return setWorkState(input, contextDirectory, options.contextSessionId, action === 'session.track' ? 'open' : 'done');
    }
    if (action === 'render.page') {
     return await renderPage(input, {

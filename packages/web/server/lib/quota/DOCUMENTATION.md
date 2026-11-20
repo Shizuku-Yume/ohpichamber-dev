@@ -17,6 +17,13 @@ Node server entrypoints apply `../network-defaults.js` before serving requests, 
 
 ## Credential architecture and resolution flow
 
+`selected-usage.ts` supplies the control service's `usage.read` loader using the
+same catalog selectors and private resolver as the HTTP quota routes. Its scope
+is the Host-resolved calling workspace and agent directory. A missing selected
+record is unconfigured; catalog, scope and resolution failures stay failures.
+`listUsagePageProviders` exposes the built-in Usage page cards, excluding the
+Copilot add-on card. Extension usage reads remain on their separate quota routes.
+
 Live quota fetches resolve provider credentials dynamically from the selected workspace context. The web server never reads legacy OpenCode `auth.json` or `opencode.json` files, and the obsolete `../opencode/auth.js` and `resolveConfigApiKey` utilities are removed.
 
 1. **Request context:**

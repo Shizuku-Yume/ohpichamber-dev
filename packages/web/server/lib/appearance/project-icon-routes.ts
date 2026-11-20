@@ -443,7 +443,11 @@ export const registerProjectIconRoutes = (app: Application, dependencies: Projec
 
       const selected = filtered[0];
       if (!selected) {
-        return res.status(404).json({ error: 'No favicon found in project' });
+        return res.json({
+          project,
+          skipped: true,
+          reason: 'no-favicon-found',
+        });
       }
 
       const ext = path.extname(selected.path).slice(1).toLowerCase();

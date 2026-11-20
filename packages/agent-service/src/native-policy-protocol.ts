@@ -74,10 +74,11 @@ export const NativeOperationDescriptorSchema = z.strictObject({
 });
 export type NativeOperationDescriptor = z.infer<typeof NativeOperationDescriptorSchema>;
 const HostToolActions = {
-  openchamber: ['projects.list', 'models.list', 'session.list', 'session.create', 'session.send', 'session.fork', 'session.status', 'session.messages', 'session.link', 'pr.watch', 'pr.unwatch', 'wait.list', 'wait.start', 'wait.stop', 'schedule.list', 'schedule.create', 'schedule.update', 'schedule.run', 'schedule.delete', 'schedule.toggle', 'file.open'],
+  openchamber: ['projects.list', 'models.list', 'session.list', 'session.track', 'session.markDone', 'session.create', 'session.send', 'session.fork', 'session.status', 'session.messages', 'session.link', 'pr.watch', 'pr.unwatch', 'wait.list', 'wait.start', 'wait.stop', 'schedule.list', 'schedule.create', 'schedule.update', 'schedule.run', 'schedule.delete', 'schedule.toggle', 'file.open'],
   web: ['browser.open', 'browser.snapshot', 'browser.click', 'browser.type', 'browser.scroll', 'browser.back', 'browser.forward', 'browser.inspect', 'browser.capture', 'browser.resize'],
   openchamber_knowledge: ['knowledge.list', 'knowledge.save', 'knowledge.delete', 'knowledge.show'],
   notify: ['notify.send'],
+  openchamber_usage: ['usage.read'],
   openchamber_render: ['render.page'],
   openchamber_secret: ['secret.run', 'secret.forget', 'secret.request'],
   openchamber_workflow: ['workflow.check', 'workflow.run', 'workflow.status', 'workflow.result', 'workflow.stop', 'workflow.resume', 'workflow.save', 'workflow.list', 'workflow.answer'],
@@ -87,6 +88,7 @@ export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   z.strictObject({ toolName: z.literal('web'), action: z.enum(HostToolActions.web), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('openchamber_knowledge'), action: z.enum(HostToolActions.openchamber_knowledge), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('notify'), action: z.enum(HostToolActions.notify), input: JsonObjectSchema, sessionId: EntityIdSchema }),
+  z.strictObject({ toolName: z.literal('openchamber_usage'), action: z.enum(HostToolActions.openchamber_usage), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   // A page that waits for the user's answer is resolved by its own call, so
   // the call's identity travels with the request.
   z.strictObject({ toolName: z.literal('openchamber_render'), action: z.enum(HostToolActions.openchamber_render), input: JsonObjectSchema, sessionId: EntityIdSchema, toolCallId: EntityIdSchema.optional() }),
