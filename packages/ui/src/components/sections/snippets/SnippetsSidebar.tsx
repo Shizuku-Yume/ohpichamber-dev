@@ -22,16 +22,7 @@ export const SnippetsSidebar: React.FC<SnippetsSidebarProps> = ({ onItemSelect }
   const [confirmDeleteSnippet, setConfirmDeleteSnippet] = React.useState<Snippet | null>(null);
   const [openMenuName, setOpenMenuName] = React.useState<string | null>(null);
   const [rightClickMenuName, setRightClickMenuName] = React.useState<string | null>(null);
-<<<<<<< HEAD
   const { selectedSnippetName, snippets, setSelectedSnippet, setSnippetDraft, deleteSnippet, loadSnippets } = useSnippetsStore(useShallow((s) => ({
-||||||| bc50ba56aa
-  // A switch that would drop unsaved edits waits here for the user's answer.
-  const [pendingSwitch, setPendingSwitch] = React.useState<(() => void) | null>(null);
-  const { selectedSnippetName, snippets, hasUnsavedChanges, setSelectedSnippet, setSnippetDraft, deleteSnippet, loadSnippets } = useSnippetsStore(useShallow((s) => ({
-=======
-  const [pendingSwitch, setPendingSwitch] = React.useState<(() => void) | null>(null);
-  const { selectedSnippetName, snippets, hasUnsavedChanges, setSelectedSnippet, setSnippetDraft, deleteSnippet, loadSnippets } = useSnippetsStore(useShallow((s) => ({
->>>>>>> upstream/main
     selectedSnippetName: s.selectedSnippetName,
     snippets: s.snippets,
     setSelectedSnippet: s.setSelectedSnippet,
@@ -81,7 +72,6 @@ export const SnippetsSidebar: React.FC<SnippetsSidebarProps> = ({ onItemSelect }
         </div>
       </div>
 
-<<<<<<< HEAD
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2">
         {sortedSnippets.map((snippet) => (
           <ContextMenu key={snippet.templateId} open={rightClickMenuName === snippet.templateId} onOpenChange={(open) => setRightClickMenuName(open ? snippet.templateId : null)}>
@@ -116,86 +106,6 @@ export const SnippetsSidebar: React.FC<SnippetsSidebarProps> = ({ onItemSelect }
               </ContextMenuItem>
             </ContextMenuContent>}
           </ContextMenu>
-||||||| bc50ba56aa
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-3 px-3 py-2">
-        {groups.map((group) => (
-          <div key={group.scope} className="space-y-1">
-            {/* A lone group keeps its label too: it says where its snippets live. */}
-            <div className="oc-group-label px-1.5 pt-1 typography-micro">
-              {group.scope === 'project' ? t('settings.common.scope.project') : t('settings.common.scope.global')}
-            </div>
-            {group.snippets.map((snippet) => (
-              <ContextMenu key={`${snippet.source}:${snippet.filePath}`} open={rightClickMenuName === snippet.name} onOpenChange={(open) => setRightClickMenuName(open ? snippet.name : null)}>
-                <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', selectedSnippetName === snippet.name ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={(event) => { event.preventDefault(); setRightClickMenuName(snippet.name); }} />}>
-                <button onClick={() => handleSelect(snippet.name)} className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <span className="typography-ui-label font-normal truncate text-foreground">#{snippet.name}</span>
-                  <div className="typography-micro text-muted-foreground truncate leading-tight">
-                    {snippet.description || snippet.content.replace(/\s+/g, ' ').substring(0, 80)}
-                  </div>
-                </button>
-                <DropdownMenu open={openMenuName === snippet.name} onOpenChange={(open) => { if (open) setRightClickMenuName(null); setOpenMenuName(open ? snippet.name : null); }}>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 px-0 flex-shrink-0 -me-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 pointer-fine:hidden" aria-label={t('settings.snippets.sidebar.actions.more', { name: snippet.name })}>
-                      <Icon name="more" className="h-3.5 w-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-fit min-w-20">
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setConfirmDeleteSnippet(snippet); }} className="text-destructive focus:text-destructive">
-                      <Icon name="delete-bin" className="h-4 w-4 me-px" />
-                      {t('settings.common.actions.delete')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-fit min-w-20">
-                  <ContextMenuItem onClick={(e) => { e.stopPropagation(); setConfirmDeleteSnippet(snippet); }} className="text-destructive focus:text-destructive">
-                    <Icon name="delete-bin" className="h-4 w-4 me-px" />
-                    {t('settings.common.actions.delete')}
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
-          </div>
-=======
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-3 px-3 py-2">
-        {groups.map((group) => (
-          <div key={group.scope} className="space-y-1">
-            <div className="oc-group-label px-1.5 pt-1 typography-micro">
-              {group.scope === 'project' ? t('settings.common.scope.project') : t('settings.common.scope.global')}
-            </div>
-            {group.snippets.map((snippet) => (
-              <ContextMenu key={`${snippet.source}:${snippet.filePath}`} open={rightClickMenuName === snippet.name} onOpenChange={(open) => setRightClickMenuName(open ? snippet.name : null)}>
-                <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', selectedSnippetName === snippet.name ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={(event) => { event.preventDefault(); setRightClickMenuName(snippet.name); }} />}>
-                <button onClick={() => handleSelect(snippet.name)} className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <span className="typography-ui-label font-normal truncate text-foreground">#{snippet.name}</span>
-                  <div className="typography-micro text-muted-foreground truncate leading-tight">
-                    {snippet.description || snippet.content.replace(/\s+/g, ' ').substring(0, 80)}
-                  </div>
-                </button>
-                <DropdownMenu open={openMenuName === snippet.name} onOpenChange={(open) => { if (open) setRightClickMenuName(null); setOpenMenuName(open ? snippet.name : null); }}>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 px-0 flex-shrink-0 -me-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 pointer-fine:hidden" aria-label={t('settings.snippets.sidebar.actions.more', { name: snippet.name })}>
-                      <Icon name="more" className="h-3.5 w-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-fit min-w-20">
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setConfirmDeleteSnippet(snippet); }} className="text-destructive focus:text-destructive">
-                      <Icon name="delete-bin" className="h-4 w-4 me-px" />
-                      {t('settings.common.actions.delete')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-fit min-w-20">
-                  <ContextMenuItem onClick={(e) => { e.stopPropagation(); setConfirmDeleteSnippet(snippet); }} className="text-destructive focus:text-destructive">
-                    <Icon name="delete-bin" className="h-4 w-4 me-px" />
-                    {t('settings.common.actions.delete')}
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
-          </div>
->>>>>>> upstream/main
         ))}
       </ScrollableOverlay>
 

@@ -146,7 +146,6 @@ const MarketplaceDetailsSection: React.FC<{ entry: MarketplaceEntry | undefined 
     ['mcpServers', details.mcpServers], ['lspServers', details.lspServers], ['dapAdapters', details.dapAdapters],
   ] as const).filter(([, value]) => capabilityCount(value) > 0);
 
-<<<<<<< HEAD
   return (
     <SettingsSection title={t('settings.plugins.details.title')}>
       {details.author ? (
@@ -217,54 +216,6 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
   const baseline = React.useRef(JSON.stringify(plugin.globalSettings, null, 2));
   const [text, setText] = React.useState(baseline.current);
   const [secrets, setSecrets] = React.useState(() => new Map<string, string>());
-||||||| bc50ba56aa
-  const projectDirectory = useProjectsStore((state) => state.getActiveProject()?.path);
-  const configDirectory = projectDirectory?.trim() || getPluginsConfigDirectory();
-  const loadedDirectory = usePluginsStore((state) => state.loadedDirectory);
-  const loadedRuntimeKey = usePluginsStore((state) => state.loadedRuntimeKey);
-  const catalogIsCurrent = loadedDirectory === configDirectory && loadedRuntimeKey === getRuntimeKey();
-  const selectedId = usePluginsStore((s) => s.selectedId);
-  const entries = usePluginsStore((s) => s.entries);
-  const files = usePluginsStore((s) => s.files);
-  const draft = usePluginsStore((s) => s.draft);
-  const setDraft = usePluginsStore((s) => s.setDraft);
-  const updateEntry = usePluginsStore((s) => s.updateEntry);
-  const updateFile = usePluginsStore((s) => s.updateFile);
-  const readFile = usePluginsStore((s) => s.readFile);
-  const setSelected = usePluginsStore((s) => s.setSelected);
-  const deleteEntry = usePluginsStore((s) => s.deleteEntry);
-  const deleteFile = usePluginsStore((s) => s.deleteFile);
-  const [isAddOpen, setIsAddOpen] = React.useState(false);
-  const [deleteTarget, setDeleteTarget] = React.useState<PluginDeleteTarget | null>(null);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  // The switch that writes these policies lives in the grid, so this reads the
-  // same revision the grid and config events bump; otherwise the page keeps an
-  // old deny after the plugin is on again.
-  const policyRevision = usePluginsStore((state) => state.policyRevision);
-  const policy = useIntegrationPolicyState(configDirectory, policyRevision);
-=======
-  const projectDirectory = useProjectsStore((state) => state.getActiveProject()?.path);
-  const configDirectory = projectDirectory?.trim() || getPluginsConfigDirectory();
-  const loadedDirectory = usePluginsStore((state) => state.loadedDirectory);
-  const loadedRuntimeKey = usePluginsStore((state) => state.loadedRuntimeKey);
-  const catalogIsCurrent = loadedDirectory === configDirectory && loadedRuntimeKey === getRuntimeKey();
-  const selectedId = usePluginsStore((s) => s.selectedId);
-  const entries = usePluginsStore((s) => s.entries);
-  const files = usePluginsStore((s) => s.files);
-  const draft = usePluginsStore((s) => s.draft);
-  const setDraft = usePluginsStore((s) => s.setDraft);
-  const updateEntry = usePluginsStore((s) => s.updateEntry);
-  const updateFile = usePluginsStore((s) => s.updateFile);
-  const readFile = usePluginsStore((s) => s.readFile);
-  const setSelected = usePluginsStore((s) => s.setSelected);
-  const deleteEntry = usePluginsStore((s) => s.deleteEntry);
-  const deleteFile = usePluginsStore((s) => s.deleteFile);
-  const [isAddOpen, setIsAddOpen] = React.useState(false);
-  const [deleteTarget, setDeleteTarget] = React.useState<PluginDeleteTarget | null>(null);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  const policyRevision = usePluginsStore((state) => state.policyRevision);
-  const policy = useIntegrationPolicyState(configDirectory, policyRevision);
->>>>>>> upstream/main
 
   React.useEffect(() => {
     const next = JSON.stringify(plugin.globalSettings, null, 2);
@@ -273,7 +224,6 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
     baseline.current = next;
   }, [plugin.globalSettings]);
 
-<<<<<<< HEAD
   const parsed = parseSettings(text);
   const secretKeys = parsed.success
     ? plugin.settingDefinitions.filter(setting => setting.secret && Object.hasOwn(parsed.data, setting.key)).map(setting => setting.key)
@@ -281,17 +231,6 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
   const invalid = !parsed.success || secretKeys.length > 0;
   const secretDefinitions = plugin.settingDefinitions.filter(setting => setting.secret);
   const hasOverrides = plugin.settingDefinitions.some(setting => setting.overridden);
-||||||| bc50ba56aa
-  // The page opens on the plugin grid; leaving it drops the selection so the
-  // next visit starts there again.
-  React.useEffect(() => () => {
-    usePluginsStore.getState().setSelected(null);
-  }, []);
-=======
-  React.useEffect(() => () => {
-    usePluginsStore.getState().setSelected(null);
-  }, []);
->>>>>>> upstream/main
 
   const save = async (): Promise<AutosaveResult> => {
     if (!parsed.success) return autosaveFailed(t('settings.plugins.page.field.options.invalidJson'));
@@ -572,7 +511,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     setDeleteTarget(target);
   };
 
-<<<<<<< HEAD
   /**
    * Extension switches live in native settings, so a refused revision has to
    * surface as an operation error instead of quietly re-reading a new one.
@@ -634,134 +572,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
       return result;
     });
     setUpgradingAll(false);
-||||||| bc50ba56aa
-    hydratedDraft.current = null;
-    setDraft(null);
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedEntry, selectedFile, readFile, setDraft, catalogIsCurrent, configDirectory, fileKey]);
-
-  // One routine for both shapes the page edits: a registry entry (spec +
-  // options) and a plugin file (its contents). Text fields commit on blur, so
-  // this runs with whatever the draft holds at that moment.
-  const save = React.useCallback(async (): Promise<AutosaveResult> => {
-    if (!draft || !catalogIsCurrent || getPluginsConfigDirectory() !== configDirectory) return AUTOSAVE_UNCHANGED;
-
-    if (selectedEntry && draft.mode === 'entry') {
-      const spec = draft.spec.trim();
-      const unchanged = spec === selectedEntry.spec
-        && optionsEqual(draft.optionsJson, stringifyOptions(selectedEntry.options));
-      if (unchanged) return AUTOSAVE_UNCHANGED;
-      if (!spec) return autosaveFailed(t('settings.plugins.validation.specRequired'));
-      const options = parseOptionsJson(draft.optionsJson);
-      if (!options.ok) return autosaveFailed(t('settings.plugins.page.field.options.invalidJson'));
-
-      const result = await updateEntry(selectedEntry.id, { spec, options: options.value });
-      if (result.invalidSpec) return autosaveFailed(t('settings.plugins.validation.specUnloadable'));
-      if (!result.ok) {
-        return autosaveFailed(result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      if (result.reloadFailed) {
-        return autosaveFailed(result.warning || result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      return AUTOSAVE_SAVED;
-    }
-
-    if (selectedFile && draft.mode === 'file') {
-      const originalContent = originalFileContentById.current.get(fileKey) ?? '';
-      if (draft.content === originalContent) return AUTOSAVE_UNCHANGED;
-
-      const result = await updateFile(selectedFile.id, { content: draft.content });
-      if (!result.ok) {
-        return autosaveFailed(result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      originalFileContentById.current.set(fileKey, draft.content);
-      if (result.reloadFailed) {
-        return autosaveFailed(result.warning || result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      return AUTOSAVE_SAVED;
-    }
-
-    return AUTOSAVE_UNCHANGED;
-  }, [draft, selectedEntry, selectedFile, t, updateEntry, updateFile, catalogIsCurrent, configDirectory, fileKey]);
-
-  const autosave = useAutosave(save);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-    const result = deleteTarget.kind === 'entry' ? await deleteEntry(deleteTarget.id) : await deleteFile(deleteTarget.id);
-    if (result.ok) {
-      toast.success(result.message || t('settings.plugins.sidebar.toast.deleted', { name: deleteTarget.label }));
-    } else {
-      toast.error(t('settings.plugins.sidebar.toast.deleteFailed'));
-    }
-    setDeleteTarget(null);
-    setIsDeleting(false);
-=======
-    hydratedDraft.current = null;
-    setDraft(null);
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedEntry, selectedFile, readFile, setDraft, catalogIsCurrent, configDirectory, fileKey]);
-
-  const save = React.useCallback(async (): Promise<AutosaveResult> => {
-    if (!draft || !catalogIsCurrent || getPluginsConfigDirectory() !== configDirectory) return AUTOSAVE_UNCHANGED;
-
-    if (selectedEntry && draft.mode === 'entry') {
-      const spec = draft.spec.trim();
-      const unchanged = spec === selectedEntry.spec
-        && optionsEqual(draft.optionsJson, stringifyOptions(selectedEntry.options));
-      if (unchanged) return AUTOSAVE_UNCHANGED;
-      if (!spec) return autosaveFailed(t('settings.plugins.validation.specRequired'));
-      const options = parseOptionsJson(draft.optionsJson);
-      if (!options.ok) return autosaveFailed(t('settings.plugins.page.field.options.invalidJson'));
-
-      const result = await updateEntry(selectedEntry.id, { spec, options: options.value });
-      if (result.invalidSpec) return autosaveFailed(t('settings.plugins.validation.specUnloadable'));
-      if (!result.ok) {
-        return autosaveFailed(result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      if (result.reloadFailed) {
-        return autosaveFailed(result.warning || result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      return AUTOSAVE_SAVED;
-    }
-
-    if (selectedFile && draft.mode === 'file') {
-      const originalContent = originalFileContentById.current.get(fileKey) ?? '';
-      if (draft.content === originalContent) return AUTOSAVE_UNCHANGED;
-
-      const result = await updateFile(selectedFile.id, { content: draft.content });
-      if (!result.ok) {
-        return autosaveFailed(result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      originalFileContentById.current.set(fileKey, draft.content);
-      if (result.reloadFailed) {
-        return autosaveFailed(result.warning || result.message || t('settings.plugins.toast.reloadFailed'));
-      }
-      return AUTOSAVE_SAVED;
-    }
-
-    return AUTOSAVE_UNCHANGED;
-  }, [draft, selectedEntry, selectedFile, t, updateEntry, updateFile, catalogIsCurrent, configDirectory, fileKey]);
-
-  const autosave = useAutosave(save);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-    const result = deleteTarget.kind === 'entry' ? await deleteEntry(deleteTarget.id) : await deleteFile(deleteTarget.id);
-    if (result.ok) {
-      toast.success(result.message || t('settings.plugins.sidebar.toast.deleted', { name: deleteTarget.label }));
-    } else {
-      toast.error(t('settings.plugins.sidebar.toast.deleteFailed'));
-    }
-    setDeleteTarget(null);
-    setIsDeleting(false);
->>>>>>> upstream/main
   };
 
   const dialogs = (
@@ -866,36 +676,14 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     </Button>
   );
 
-<<<<<<< HEAD
   if (plugin) {
     const details = [plugin.description, ...(plugin.enabledFeatures ?? [])].filter(Boolean).join(' · ');
     const update = updateFor(catalog.availableUpdates, plugin);
     const marketplaceTarget = plugin.target.kind === 'marketplace' ? plugin.target : undefined;
     const marketplaceEntry = marketplaceTarget === undefined ? undefined
       : catalog.marketplace.find(entry => entry.name === marketplaceTarget.name && entry.marketplace === marketplaceTarget.marketplace);
-||||||| bc50ba56aa
-  if (selectedEntry && draft && draft.mode === 'entry') {
-    const optionsResult = parseOptionsJson(draft.optionsJson);
-    const optionsValid = optionsResult.ok;
-    // A row switched off here stays silent: the list already carries that
-    // state on its switch. Only a rule the user wrote themselves needs a
-    // sentence, because nothing on this page can flip it.
-    const blockedByConfig = selectedEntry.policyResource
-      ? policy.status === 'ready' && selectedEntry.switchState !== 'off' && policy.isBlockedByRule(selectedEntry.policyResource)
-      : false;
-
-=======
-  if (selectedEntry && draft && draft.mode === 'entry') {
-    const optionsResult = parseOptionsJson(draft.optionsJson);
-    const optionsValid = optionsResult.ok;
-    const blockedByConfig = selectedEntry.policyResource
-      ? policy.status === 'ready' && selectedEntry.switchState !== 'off' && policy.isBlockedByRule(selectedEntry.policyResource)
-      : false;
-
->>>>>>> upstream/main
     return (
       <>
-<<<<<<< HEAD
         <SettingsPageLayout
           title={plugin.name}
           titleLeading={backButton}
@@ -908,51 +696,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               <p className="typography-meta text-[var(--status-info)]">
                 {t('settings.plugins.update.badge', { from: update.from, to: update.to })}
               </p>
-||||||| bc50ba56aa
-      <SettingsPageLayout
-        title={t('settings.plugins.page.header.entry')}
-        titleLeading={backButton}
-        headerEnd={deleteButton}
-        titleAccessory={(
-          <ScopeBadge
-            scope={selectedEntry.scope}
-            label={
-              selectedEntry.scope === 'project'
-                ? t('settings.plugins.sidebar.group.projectEntries')
-                : t('settings.plugins.sidebar.group.userEntries')
-            }
-          />
-        )}
-        onBlurCapture={autosave.onBlurCapture}
-      >
-        <SettingsSection divider={false}>
-          <div className="flex flex-col gap-3">
-            <PluginStatusBanner target={selectedEntryTarget} name={selectedEntry.spec} />
-            {blockedByConfig ? (
-              <p className="typography-meta text-muted-foreground">{t('settings.plugins.switch.blockedByConfig')}</p>
-=======
-      <SettingsPageLayout
-        title={t('settings.plugins.page.header.entry')}
-        titleLeading={backButton}
-        headerEnd={deleteButton}
-        titleAccessory={(
-          <ScopeBadge
-            scope={selectedEntry.scope}
-            label={
-              selectedEntry.scope === 'project'
-                ? t('settings.plugins.sidebar.group.projectEntries')
-                : t('settings.plugins.sidebar.group.userEntries')
-            }
-          />
-        )}
-        onBlurCapture={autosave.onBlurCapture}
-      >
-        <SettingsSection>
-          <div className="flex flex-col gap-3">
-            <PluginStatusBanner target={selectedEntryTarget} name={selectedEntry.spec} />
-            {blockedByConfig ? (
-              <p className="typography-meta text-muted-foreground">{t('settings.plugins.switch.blockedByConfig')}</p>
->>>>>>> upstream/main
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -1019,45 +762,8 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               <ScopeChip scope="workspace" />
               <SettingsCardChip>{extension.extensionId}</SettingsCardChip>
             </span>
-<<<<<<< HEAD
           )}
-||||||| bc50ba56aa
-          </>
-        )}
-        onBlurCapture={autosave.onBlurCapture}
-      >
-        <SettingsSection divider={false}>
-          <div className="flex flex-col gap-3">
-            <PluginStatusBanner target={selectedFileTarget} name={selectedFile.fileName} />
-            {blockedByConfig ? (
-              <p className="typography-meta text-muted-foreground">{t('settings.plugins.switch.blockedByConfig')}</p>
-            ) : null}
-          </div>
-        </SettingsSection>
-
-        <SettingsSection
-          title={t('settings.plugins.page.field.content')}
-          settingsItem="plugins.content"
-=======
-          </>
-        )}
-        onBlurCapture={autosave.onBlurCapture}
-      >
-        <SettingsSection>
-          <div className="flex flex-col gap-3">
-            <PluginStatusBanner target={selectedFileTarget} name={selectedFile.fileName} />
-            {blockedByConfig ? (
-              <p className="typography-meta text-muted-foreground">{t('settings.plugins.switch.blockedByConfig')}</p>
-            ) : null}
-          </div>
-        </SettingsSection>
-
-        <SettingsSection
-          title={t('settings.plugins.page.field.content')}
-          settingsItem="plugins.content"
->>>>>>> upstream/main
         >
-<<<<<<< HEAD
           <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
           </SettingsSection>
@@ -1078,49 +784,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           </SettingsSection>
         </SettingsPageLayout>
         {dialogs}
-||||||| bc50ba56aa
-          <Textarea
-            value={draft.content}
-            onChange={(e) =>
-              setDraft({ ...draft, content: e.target.value })
-            }
-            onKeyDown={(event) => {
-              // The file editor is long enough that leaving the field to save
-              // is a chore; the usual shortcut writes it where you are.
-              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                autosave.requestSave();
-              }
-            }}
-            rows={16}
-            className="font-mono typography-meta min-h-[320px]"
-            spellCheck={false}
-            disabled={isLoadingFile}
-          />
-        </SettingsSection>
-      </SettingsPageLayout>
-      {dialogs}
-=======
-          <Textarea
-            value={draft.content}
-            onChange={(e) =>
-              setDraft({ ...draft, content: e.target.value })
-            }
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                autosave.requestSave();
-              }
-            }}
-            rows={16}
-            className="font-mono typography-meta min-h-[320px]"
-            spellCheck={false}
-            disabled={isLoadingFile}
-          />
-        </SettingsSection>
-      </SettingsPageLayout>
-      {dialogs}
->>>>>>> upstream/main
       </>
     );
   }

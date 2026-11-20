@@ -1,36 +1,18 @@
 import React from 'react';
-<<<<<<< HEAD
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { formatModelRef } from '@openchamber/agent-contract';
 import type { JsonValue, OmpSettingsChange, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-||||||| bc50ba56aa
-import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-=======
-import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
->>>>>>> upstream/main
 import {
   SettingsSection,
   SettingsFieldRow,
   SettingsCheckboxRow,
-<<<<<<< HEAD
   SettingsInset,
   SettingsChipGroup,
   SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
-||||||| bc50ba56aa
-  SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_HELPER_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-=======
-  SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_HELPER_CLASS,
->>>>>>> upstream/main
 } from '@/components/sections/shared/SettingsSection';
 import { NumberInput } from '@/components/ui/number-input';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
@@ -40,44 +22,13 @@ import { changedRoles, formatRoleSelector, modelForSelector, parseRolesRecord, r
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { SessionWarmingField } from './SessionWarmingField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
-<<<<<<< HEAD
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-||||||| bc50ba56aa
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
-import { useConfigStore } from '@/stores/useConfigStore';
-=======
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
-import { selectIsModelMissingFromCatalog, useConfigStore } from '@/stores/useConfigStore';
->>>>>>> upstream/main
 import { useUIStore } from '@/stores/useUIStore';
-<<<<<<< HEAD
 import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { refreshDirectoryCatalogs } from '@/sync/sync-refs';
-||||||| bc50ba56aa
-import { useSelectionStore } from '@/sync/selection-store';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useI18n } from '@/lib/i18n';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { isAutoModel } from '@/lib/routing/autoModel';
-import { useCallableModelProviders } from '@/hooks/useCallableModelProviders';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
-=======
-import { useSelectionStore } from '@/sync/selection-store';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useI18n } from '@/lib/i18n';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { isAutoModel } from '@/lib/routing/autoModel';
-import { useCallableModelProviders } from '@/hooks/useCallableModelProviders';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
-import { ModelVariantSelect } from './ModelVariantSelect';
->>>>>>> upstream/main
 
 
 type SessionModeValue = 'main' | 'plan' | 'vibe' | 'goal';
@@ -89,124 +40,12 @@ const SESSION_MODE_OPTIONS: readonly { value: SessionModeValue; labelKey: I18nKe
   { value: 'goal', labelKey: 'chat.chatInput.mode.goal' },
 ] as const;
 
-<<<<<<< HEAD
 
 
-||||||| bc50ba56aa
-const DEFAULT_VARIANT_VALUE = '__default__';
-
-/**
- * The thinking level beside a model picker, shown only when that model has
- * levels. A saved level also keeps it on screen while the catalog loads, so
- * the choice never looks lost.
- */
-const ModelVariantSelect: React.FC<{
-  variants: string[];
-  value: string | undefined;
-  onChange: (variant: string | undefined) => void;
-  ariaLabel: string;
-}> = ({ variants, value, onChange, ariaLabel }) => {
-  const { t } = useI18n();
-  if (variants.length === 0 && !value) return null;
-  const label = (variant: string) => (variant === DEFAULT_VARIANT_VALUE
-    ? t('settings.openchamber.defaults.option.default')
-    : variant.charAt(0).toUpperCase() + variant.slice(1));
-  return (
-    <Select
-      value={value ?? DEFAULT_VARIANT_VALUE}
-      onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? undefined : next || undefined)}
-      disabled={variants.length === 0}
-    >
-      <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
-        <SelectValue placeholder={t('settings.openchamber.defaults.field.thinkingPlaceholder')}>
-          {label(value ?? DEFAULT_VARIANT_VALUE)}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={DEFAULT_VARIANT_VALUE}>{label(DEFAULT_VARIANT_VALUE)}</SelectItem>
-        {variants.map((variant) => (
-          <SelectItem key={variant} value={variant}>{label(variant)}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-};
-
-=======
->>>>>>> upstream/main
 export const DefaultsSettings: React.FC = () => {
   const { t } = useI18n();
-<<<<<<< HEAD
   const directory = useSettingsDirectory();
-||||||| bc50ba56aa
-  const setProvider = useConfigStore((state) => state.setProvider);
-  const setModel = useConfigStore((state) => state.setModel);
-  const setAgent = useConfigStore((state) => state.setAgent);
-  const setCurrentVariant = useConfigStore((state) => state.setCurrentVariant);
-  const setCurrentVariantOverride = useConfigStore((state) => state.setCurrentVariantOverride);
-  const setSettingsDefaultModel = useConfigStore((state) => state.setSettingsDefaultModel);
-  const setSettingsDefaultVariant = useConfigStore((state) => state.setSettingsDefaultVariant);
-  const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
-  // A default describes new sessions. Applying it to the open chat is a
-  // convenience, not the point, so it stops where the chat carries a choice the
-  // user made for it — the same pair of signals ModelControls restores from
-  // (`shouldPreserveManualModelOverride`).
-  const selectionIsManual = useConfigStore((state) => state.selectionSource === 'manual');
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
-  const getSessionAgentSelection = useSelectionStore((state) => state.getSessionAgentSelection);
-  const agentIsPicked = useConfigStore((state) => state.agentSelectionSource === 'manual');
-  // An agent picked for this chat brings the model its config pins, and a pin
-  // outranks the global default the same way it does in `setAgent`.
-  const pickedAgentPinsModel = useConfigStore((state) => {
-    if (state.agentSelectionSource !== 'manual') return false;
-    const agent = state.agents.find((candidate) => candidate.name === state.currentAgentName);
-    return Boolean(agent?.model?.providerID && agent.model.id);
-  });
-  const chatHasOwnModel = Boolean(
-    pickedAgentPinsModel
-    || (selectionIsManual && currentSessionId && getSessionModelSelection(currentSessionId)),
-  );
-  const chatHasOwnAgent = Boolean(
-    agentIsPicked && currentSessionId && getSessionAgentSelection(currentSessionId),
-  );
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-  const requestSettingsJump = useUIStore((state) => state.requestSettingsJump);
-  const providers = useConfigStore((state) => state.providers);
-  const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
-=======
-  const setProvider = useConfigStore((state) => state.setProvider);
-  const setModel = useConfigStore((state) => state.setModel);
-  const setAgent = useConfigStore((state) => state.setAgent);
-  const setCurrentVariant = useConfigStore((state) => state.setCurrentVariant);
-  const setCurrentVariantOverride = useConfigStore((state) => state.setCurrentVariantOverride);
-  const setSettingsDefaultModel = useConfigStore((state) => state.setSettingsDefaultModel);
-  const setSettingsDefaultVariant = useConfigStore((state) => state.setSettingsDefaultVariant);
-  const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
-  const selectionIsManual = useConfigStore((state) => state.selectionSource === 'manual');
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
-  const getSessionAgentSelection = useSelectionStore((state) => state.getSessionAgentSelection);
-  const agentIsPicked = useConfigStore((state) => state.agentSelectionSource === 'manual');
-  const pickedAgentPinsModel = useConfigStore((state) => {
-    if (state.agentSelectionSource !== 'manual') return false;
-    const agent = state.agents.find((candidate) => candidate.name === state.currentAgentName);
-    return Boolean(agent?.model?.providerID && agent.model.id);
-  });
-  const chatHasOwnModel = Boolean(
-    pickedAgentPinsModel
-    || (selectionIsManual && currentSessionId && getSessionModelSelection(currentSessionId)),
-  );
-  const chatHasOwnAgent = Boolean(
-    agentIsPicked && currentSessionId && getSessionAgentSelection(currentSessionId),
-  );
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-  const requestSettingsJump = useUIStore((state) => state.requestSettingsJump);
-  const providers = useConfigStore((state) => state.providers);
-  const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
->>>>>>> upstream/main
 
-<<<<<<< HEAD
   const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const defaultSessionMode = useUIStore((state) => state.defaultSessionMode);
@@ -219,47 +58,10 @@ export const DefaultsSettings: React.FC = () => {
   // here duplicated the slowest request the Settings page made.
   const models = useSettingsModels(directory);
   const [isSavingOmp, setIsSavingOmp] = React.useState(false);
-||||||| bc50ba56aa
-  const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
-  const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
-  const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
-  const [smallModelUseDefault, setSmallModelUseDefault] = React.useState(true);
-  const [smallModelOverride, setSmallModelOverride] = React.useState<string | undefined>();
-  const [smallModelVariant, setSmallModelVariant] = React.useState<string | undefined>();
-  // Fail closed: never offer providers whose credentials were not verified.
-  const smallModelProviders = useCallableModelProviders() ?? [];
-  const [walkthroughModelOverride, setWalkthroughModelOverride] = React.useState<string | undefined>();
-  const [walkthroughModelVariant, setWalkthroughModelVariant] = React.useState<string | undefined>();
-  const [fallbackModel, setFallbackModel] = React.useState<string | undefined>();
-  const [fallbackVariant, setFallbackVariant] = React.useState<string | undefined>();
-  const [isLoading, setIsLoading] = React.useState(true);
-=======
-  const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
-  const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
-  const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
-  const [smallModelUseDefault, setSmallModelUseDefault] = React.useState(true);
-  const [smallModelOverride, setSmallModelOverride] = React.useState<string | undefined>();
-  const [smallModelVariant, setSmallModelVariant] = React.useState<string | undefined>();
-  const smallModelProviders = useCallableModelProviders() ?? [];
-  const [walkthroughModelOverride, setWalkthroughModelOverride] = React.useState<string | undefined>();
-  const [walkthroughModelVariant, setWalkthroughModelVariant] = React.useState<string | undefined>();
-  const [fallbackModel, setFallbackModel] = React.useState<string | undefined>();
-  const [fallbackVariant, setFallbackVariant] = React.useState<string | undefined>();
-  const [isLoading, setIsLoading] = React.useState(true);
->>>>>>> upstream/main
 
-<<<<<<< HEAD
 
   const ompStateRef = React.useRef<OmpSettingsState | null>(null);
   ompStateRef.current = ompState;
-||||||| bc50ba56aa
-  const parsedModel = React.useMemo(() => getDisplayModel(defaultModel), [defaultModel]);
-=======
-  const parsedModel = React.useMemo(() => getDisplayModel(defaultModel), [defaultModel]);
-  const defaultModelMissing = useConfigStore((state) => (
-    selectIsModelMissingFromCatalog(state, undefined, parsedModel.providerId, parsedModel.modelId)
-  ));
->>>>>>> upstream/main
 
   React.useEffect(() => {
     if (!directory) {
@@ -310,7 +112,6 @@ export const DefaultsSettings: React.FC = () => {
     [roleSelectors.default, models],
   );
 
-<<<<<<< HEAD
   const matchedModel = React.useMemo(
     () => modelForSelector(models, selectedModelId),
     [models, selectedModelId],
@@ -364,20 +165,6 @@ export const DefaultsSettings: React.FC = () => {
             });
           } else {
             throw error;
-||||||| bc50ba56aa
-        if (providerId && modelId) {
-          const provider = providers.find((p) => p.id === providerId);
-          // Auto is not a provider OpenCode lists; the picker only offers it while the server can honour it.
-          if (provider || isAutoModel(providerId, modelId)) {
-            setProvider(providerId);
-            setModel(modelId);
-=======
-        if (providerId && modelId) {
-          const provider = providers.find((p) => p.id === providerId);
-          if (provider || isAutoModel(providerId, modelId)) {
-            setProvider(providerId);
-            setModel(modelId);
->>>>>>> upstream/main
           }
         }
         setOmpState(next);
@@ -435,7 +222,6 @@ export const DefaultsSettings: React.FC = () => {
     [rolesMap, updateRolesOnServer],
   );
 
-<<<<<<< HEAD
   /** The walkthrough resolves its model through the native `slow` role. */
   const setWalkthroughModel = React.useCallback(
     (selector: string) => setRole('slow', selector || ''),
@@ -494,20 +280,6 @@ export const DefaultsSettings: React.FC = () => {
         delete nextChains.default;
       }
       setIsSavingOmp(true);
-||||||| bc50ba56aa
-  const handleSmallModelOverrideChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setSmallModelOverride(newValue);
-      // The effort belongs to the model it was picked for.
-      setSmallModelVariant(undefined);
-=======
-  const handleSmallModelOverrideChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setSmallModelOverride(newValue);
-      setSmallModelVariant(undefined);
->>>>>>> upstream/main
       try {
         const next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
           expectedRevision: revision,
@@ -595,7 +367,6 @@ export const DefaultsSettings: React.FC = () => {
     [],
   );
 
-<<<<<<< HEAD
   const getSectionRows = React.useCallback(
     (section: string) => {
       if (!ompState) return [];
@@ -606,208 +377,12 @@ export const DefaultsSettings: React.FC = () => {
           // above is the control that writes it.
           && s.id !== 'retry.fallbackChains',
       );
-||||||| bc50ba56aa
-  const handleWalkthroughModelOverrideChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setWalkthroughModelOverride(newValue);
-      // The thinking level belongs to the model it was picked for.
-      setWalkthroughModelVariant(undefined);
-      try {
-        // Clearing the picker is how the user goes back to the small model, so
-        // an empty value is a real choice rather than a no-op.
-        await updateDesktopSettings({ walkthroughModelOverride: newValue ?? '', walkthroughModelVariant: '' });
-      } catch (error) {
-        console.warn('Failed to save walkthrough model override:', error);
-      }
-=======
-  const handleWalkthroughModelOverrideChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setWalkthroughModelOverride(newValue);
-      setWalkthroughModelVariant(undefined);
-      try {
-        await updateDesktopSettings({ walkthroughModelOverride: newValue ?? '', walkthroughModelVariant: '' });
-      } catch (error) {
-        console.warn('Failed to save walkthrough model override:', error);
-      }
->>>>>>> upstream/main
     },
     [ompState],
   );
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  const handleWalkthroughModelVariantChange = React.useCallback(
-    async (variant: string | undefined) => {
-      setWalkthroughModelVariant(variant);
-      try {
-        await updateDesktopSettings({ walkthroughModelVariant: variant ?? '' });
-      } catch (error) {
-        console.warn('Failed to save walkthrough model variant:', error);
-      }
-    },
-    []
-  );
-
-  // Read by the server when a provider's usage limit stops a session; nothing
-  // in the client changes until then.
-  const handleFallbackModelChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setFallbackModel(newValue);
-      // Thinking levels belong to a model; another model starts from its default.
-      setFallbackVariant(undefined);
-      try {
-        await updateDesktopSettings({ fallbackModel: newValue ?? '', fallbackVariant: '' });
-      } catch (error) {
-        console.warn('Failed to save fallback model:', error);
-      }
-    },
-    []
-  );
-
-  const handleFallbackVariantChange = React.useCallback(
-    async (variant: string | undefined) => {
-      setFallbackVariant(variant);
-      try {
-        await updateDesktopSettings({ fallbackVariant: variant ?? '' });
-      } catch (error) {
-        console.warn('Failed to save fallback thinking:', error);
-      }
-    },
-    []
-  );
-
-  // The walkthrough cannot work at all without schema-shaped output, so models
-  // the catalog says cannot do it are hidden rather than offered and then
-  // refused. A missing capability is not a "no": roughly half the catalog omits
-  // the field, and those models usually work.
-  const isStructuredOutputCapable = React.useCallback(
-    (providerId: string, modelId: string) =>
-      modelsMetadata.get(`${providerId}/${modelId}`)?.structured_output !== false,
-    [modelsMetadata]
-  );
-
-  const parsedSmallModel = React.useMemo(() => getDisplayModel(smallModelOverride), [smallModelOverride]);
-  const parsedWalkthroughModel = React.useMemo(
-    () => getDisplayModel(walkthroughModelOverride),
-    [walkthroughModelOverride]
-  );
-  const parsedFallbackModel = React.useMemo(() => getDisplayModel(fallbackModel), [fallbackModel]);
-  const variantsOf = React.useCallback((providerId: string, modelId: string) => {
-    if (!providerId || !modelId) return [];
-    const provider = providers.find((p) => p.id === providerId);
-    const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelId) as
-      | { variants?: ModelVariantSource }
-      | undefined;
-    return listModelVariantIds(model?.variants);
-  }, [providers]);
-  const availableVariants = React.useMemo(
-    () => variantsOf(parsedModel.providerId, parsedModel.modelId),
-    [parsedModel.modelId, parsedModel.providerId, variantsOf]
-  );
-  const fallbackVariants = React.useMemo(
-    () => variantsOf(parsedFallbackModel.providerId, parsedFallbackModel.modelId),
-    [parsedFallbackModel.modelId, parsedFallbackModel.providerId, variantsOf]
-  );
-  const smallModelVariants = React.useMemo(
-    () => variantsOf(parsedSmallModel.providerId, parsedSmallModel.modelId),
-    [parsedSmallModel.modelId, parsedSmallModel.providerId, variantsOf]
-  );
-  const walkthroughModelVariants = React.useMemo(
-    () => variantsOf(parsedWalkthroughModel.providerId, parsedWalkthroughModel.modelId),
-    [parsedWalkthroughModel.modelId, parsedWalkthroughModel.providerId, variantsOf]
-  );
-
-  if (isLoading) {
-    return null;
-  }
-
-=======
-  const handleWalkthroughModelVariantChange = React.useCallback(
-    async (variant: string | undefined) => {
-      setWalkthroughModelVariant(variant);
-      try {
-        await updateDesktopSettings({ walkthroughModelVariant: variant ?? '' });
-      } catch (error) {
-        console.warn('Failed to save walkthrough model variant:', error);
-      }
-    },
-    []
-  );
-
-  const handleFallbackModelChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setFallbackModel(newValue);
-      setFallbackVariant(undefined);
-      try {
-        await updateDesktopSettings({ fallbackModel: newValue ?? '', fallbackVariant: '' });
-      } catch (error) {
-        console.warn('Failed to save fallback model:', error);
-      }
-    },
-    []
-  );
-
-  const handleFallbackVariantChange = React.useCallback(
-    async (variant: string | undefined) => {
-      setFallbackVariant(variant);
-      try {
-        await updateDesktopSettings({ fallbackVariant: variant ?? '' });
-      } catch (error) {
-        console.warn('Failed to save fallback thinking:', error);
-      }
-    },
-    []
-  );
-
-  const isStructuredOutputCapable = React.useCallback(
-    (providerId: string, modelId: string) =>
-      modelsMetadata.get(`${providerId}/${modelId}`)?.structured_output !== false,
-    [modelsMetadata]
-  );
-
-  const parsedSmallModel = React.useMemo(() => getDisplayModel(smallModelOverride), [smallModelOverride]);
-  const parsedWalkthroughModel = React.useMemo(
-    () => getDisplayModel(walkthroughModelOverride),
-    [walkthroughModelOverride]
-  );
-  const parsedFallbackModel = React.useMemo(() => getDisplayModel(fallbackModel), [fallbackModel]);
-  const variantsOf = React.useCallback((providerId: string, modelId: string) => {
-    if (!providerId || !modelId) return [];
-    const provider = providers.find((p) => p.id === providerId);
-    const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelId) as
-      | { variants?: ModelVariantSource }
-      | undefined;
-    return listModelVariantIds(model?.variants);
-  }, [providers]);
-  const availableVariants = React.useMemo(
-    () => variantsOf(parsedModel.providerId, parsedModel.modelId),
-    [parsedModel.modelId, parsedModel.providerId, variantsOf]
-  );
-  const fallbackVariants = React.useMemo(
-    () => variantsOf(parsedFallbackModel.providerId, parsedFallbackModel.modelId),
-    [parsedFallbackModel.modelId, parsedFallbackModel.providerId, variantsOf]
-  );
-  const smallModelVariants = React.useMemo(
-    () => variantsOf(parsedSmallModel.providerId, parsedSmallModel.modelId),
-    [parsedSmallModel.modelId, parsedSmallModel.providerId, variantsOf]
-  );
-  const walkthroughModelVariants = React.useMemo(
-    () => variantsOf(parsedWalkthroughModel.providerId, parsedWalkthroughModel.modelId),
-    [parsedWalkthroughModel.modelId, parsedWalkthroughModel.providerId, variantsOf]
-  );
-
-  if (isLoading) {
-    return null;
-  }
-
->>>>>>> upstream/main
   return (
     <>
-<<<<<<< HEAD
       {/* The section anchor is the model-roles record itself: the three editors
           below all write `modelRoles`, and the OMP settings table names
           `omp.modelRoles` as that record's owner. Stamping the record here is
@@ -830,22 +405,7 @@ export const DefaultsSettings: React.FC = () => {
             models={models}
             directory={directory ?? undefined}
             globalLevel={configuredThinkingLevel || undefined}
-||||||| bc50ba56aa
-      <SettingsSection
-        title={t('settings.openchamber.defaults.newSessionsTitle')}
-        divider={false}
-      >
-        <div>
-          <SettingsFieldRow
-=======
-      <SettingsSection
-        title={t('settings.openchamber.defaults.newSessionsTitle')}
-      >
-        <div>
-          <SettingsFieldRow
->>>>>>> upstream/main
             settingsItem="sessions.default-model"
-<<<<<<< HEAD
             disabled={isSavingOmp || !ompState}
             loading={!ompState && !ompStateFailed}
             label={t('settings.openchamber.defaults.field.defaultModel')}
@@ -855,14 +415,6 @@ export const DefaultsSettings: React.FC = () => {
             settingsItem="sessions.default-thinking"
             label={t('settings.openchamber.defaults.field.defaultThinking')}
             info={t('settings.omp.modelRoles.thinkingDefaultInfo')}
-||||||| bc50ba56aa
-            label={t('settings.openchamber.defaults.field.model')}
-=======
-            label={t('settings.openchamber.defaults.field.model')}
-            description={defaultModelMissing
-              ? <span className="text-[var(--status-warning)]">{t('settings.openchamber.defaults.field.modelUnavailable')}</span>
-              : undefined}
->>>>>>> upstream/main
           >
             {matchedModel ? (
               <ModelEffortPicker
@@ -906,134 +458,6 @@ export const DefaultsSettings: React.FC = () => {
             </Select>
           </SettingsFieldRow>
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-          {isVSCode ? null : <PermissionDefaultModeField agentName={defaultAgent} />}
-        </div>
-      </SettingsSection>
-
-      {/* Models the app runs on its own: summaries, titles, the changes walkthrough. */}
-      <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName="space-y-2">
-        <SettingsCheckboxRow
-          settingsItem="sessions.small-model"
-          checked={smallModelUseDefault}
-          onChange={(checked) => {
-            void handleSmallModelUseDefaultChange(checked);
-          }}
-          label={t('settings.openchamber.defaults.smallModel.useDefault')}
-          ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
-          info={t('settings.openchamber.defaults.smallModel.description')}
-        />
-        <div>
-          {!smallModelUseDefault ? (
-            <>
-              <SettingsFieldRow label={t('settings.openchamber.defaults.smallModel.title')}>
-                <ModelSelector
-                  providerId={parsedSmallModel.providerId}
-                  modelId={parsedSmallModel.modelId}
-                  onChange={handleSmallModelOverrideChange}
-                  allowedProviderIds={smallModelProviders}
-                  className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-                />
-                <ModelVariantSelect
-                  variants={smallModelVariants}
-                  value={smallModelVariant}
-                  onChange={handleSmallModelVariantChange}
-                  ariaLabel={t('settings.openchamber.defaults.smallModel.thinking')}
-                />
-              </SettingsFieldRow>
-            </>
-          ) : null}
-          <SettingsFieldRow
-            settingsItem="sessions.walkthrough-model"
-            label={t('settings.openchamber.defaults.walkthroughModel.title')}
-            info={t('settings.openchamber.defaults.walkthroughModel.description')}
-          >
-            <ModelSelector
-              providerId={parsedWalkthroughModel.providerId}
-              modelId={parsedWalkthroughModel.modelId}
-              onChange={handleWalkthroughModelOverrideChange}
-              allowedProviderIds={smallModelProviders}
-              isModelAllowed={isStructuredOutputCapable}
-              placeholder={t('settings.openchamber.defaults.walkthroughModel.usesSmallModel')}
-              className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-            />
-            <ModelVariantSelect
-              variants={walkthroughModelVariants}
-              value={walkthroughModelVariant}
-              onChange={handleWalkthroughModelVariantChange}
-              ariaLabel={t('settings.openchamber.defaults.smallModel.thinking')}
-            />
-          </SettingsFieldRow>
-        </div>
-      </SettingsSection>
-
-      {/* The managed OpenCode plugin does both switches; VS Code runs its own OpenCode without it. */}
-      {isVSCode ? null : (
-        <SettingsSection title={t('settings.openchamber.defaults.usageLimitsTitle')} contentClassName="space-y-1">
-=======
-          {isVSCode ? null : <PermissionDefaultModeField agentName={defaultAgent} />}
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName="space-y-2">
-        <SettingsCheckboxRow
-          settingsItem="sessions.small-model"
-          checked={smallModelUseDefault}
-          onChange={(checked) => {
-            void handleSmallModelUseDefaultChange(checked);
-          }}
-          label={t('settings.openchamber.defaults.smallModel.useDefault')}
-          ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
-          info={t('settings.openchamber.defaults.smallModel.description')}
-        />
-        <div>
-          {!smallModelUseDefault ? (
-            <>
-              <SettingsFieldRow label={t('settings.openchamber.defaults.smallModel.title')}>
-                <ModelSelector
-                  providerId={parsedSmallModel.providerId}
-                  modelId={parsedSmallModel.modelId}
-                  onChange={handleSmallModelOverrideChange}
-                  allowedProviderIds={smallModelProviders}
-                  className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-                />
-                <ModelVariantSelect
-                  variants={smallModelVariants}
-                  value={smallModelVariant}
-                  onChange={handleSmallModelVariantChange}
-                  ariaLabel={t('settings.openchamber.defaults.smallModel.thinking')}
-                />
-              </SettingsFieldRow>
-            </>
-          ) : null}
-          <SettingsFieldRow
-            settingsItem="sessions.walkthrough-model"
-            label={t('settings.openchamber.defaults.walkthroughModel.title')}
-            info={t('settings.openchamber.defaults.walkthroughModel.description')}
-          >
-            <ModelSelector
-              providerId={parsedWalkthroughModel.providerId}
-              modelId={parsedWalkthroughModel.modelId}
-              onChange={handleWalkthroughModelOverrideChange}
-              allowedProviderIds={smallModelProviders}
-              isModelAllowed={isStructuredOutputCapable}
-              placeholder={t('settings.openchamber.defaults.walkthroughModel.usesSmallModel')}
-              className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-            />
-            <ModelVariantSelect
-              variants={walkthroughModelVariants}
-              value={walkthroughModelVariant}
-              onChange={handleWalkthroughModelVariantChange}
-              ariaLabel={t('settings.openchamber.defaults.smallModel.thinking')}
-            />
-          </SettingsFieldRow>
-        </div>
-      </SettingsSection>
-
-      {isVSCode ? null : (
-        <SettingsSection title={t('settings.openchamber.defaults.usageLimitsTitle')} contentClassName="space-y-1">
->>>>>>> upstream/main
           <SettingsFieldRow
             settingsItem="sessions.fallback-model"
             label={t('settings.openchamber.defaults.field.fallbackModel')}
@@ -1041,48 +465,8 @@ export const DefaultsSettings: React.FC = () => {
           >
             {fallbackSelect()}
           </SettingsFieldRow>
-<<<<<<< HEAD
         </div>
-||||||| bc50ba56aa
-          {/* Account switching comes first and lives on each provider's page; without this line nobody finds it from here. */}
-          <p className={SETTINGS_HELPER_CLASS}>
-            {t('settings.openchamber.defaults.usageLimits.accountSwitching')}
-            {' '}
-            <SettingsInlineLink onClick={() => requestSettingsJump('providers')}>
-              {t('settings.openchamber.defaults.usageLimits.openProviders')}
-            </SettingsInlineLink>
-          </p>
-        </SettingsSection>
-      )}
-
-      <SettingsSection title={t('settings.openchamber.defaults.promptCacheTitle')}>
-        {/* VS Code has no OpenChamber server to warm chosen sessions: OpenCode's switch for all of them only. */}
-        {isVSCode ? <SessionWarmingCheckbox /> : <SessionWarmingModeField />}
-=======
-          <p className={SETTINGS_HELPER_CLASS}>
-            {t('settings.openchamber.defaults.usageLimits.accountSwitching')}
-            {' '}
-            <SettingsInlineLink onClick={() => requestSettingsJump('providers')}>
-              {t('settings.openchamber.defaults.usageLimits.openProviders')}
-            </SettingsInlineLink>
-          </p>
-        </SettingsSection>
-      )}
-    </>
-  );
-};
-
-export const SessionContextSettings: React.FC = () => {
-  const { t } = useI18n();
-  const isVSCode = isVSCodeRuntime();
-  return (
-    <>
-      <CompactionSettings />
-      <SettingsSection title={t('settings.openchamber.defaults.promptCacheTitle')}>
-        {isVSCode ? <SessionWarmingCheckbox /> : <SessionWarmingModeField />}
->>>>>>> upstream/main
       </SettingsSection>
-<<<<<<< HEAD
 
       {/* Models the app runs on its own: summaries, titles, the walkthrough. */}
       <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
@@ -1395,11 +779,6 @@ export const SessionContextSettings: React.FC = () => {
           />
         </SettingsInset>
       </SettingsSection>
-||||||| bc50ba56aa
-
-      <CompactionSettings />
-=======
->>>>>>> upstream/main
     </>
   );
 };

@@ -27,17 +27,9 @@ const FLOW_BUDGET_MS = 5 * 60_000;
 const ELAPSED_TICK_MS = 1_000;
 
 interface McpOAuthSignInProps {
-<<<<<<< HEAD
   serverId: string;
-||||||| bc50ba56aa
-  serverName: string;
-  /** The Location whose config declares the server; its integration lives there. */
-=======
-  serverName: string;
->>>>>>> upstream/main
   directory: string | null;
   onConnected: () => void | Promise<void>;
-<<<<<<< HEAD
   /**
    * The install that just saved this server starts its one sign-in method on
    * its own, so saving and signing in are one action.
@@ -45,30 +37,8 @@ interface McpOAuthSignInProps {
   autoStart?: boolean;
   /** The owner clears its `autoStart` flag here, so a later visit stays manual. */
   onAutoStartConsumed?: () => void;
-||||||| bc50ba56aa
-  /** Start the sign-in as soon as the integration shows up. */
-  autoStart?: boolean;
-  /** The start button's text; "Connect" when absent. */
-  connectLabel?: string;
-  /** Off when the caller starts the sign-in from its own button (with `autoStart`). */
-  showStartButton?: boolean;
-  /**
-   * Told while a sign-in runs. Starting one from another machine writes the
-   * server's redirect, and OpenCode reports the server `pending` while it
-   * reconnects, so a caller that mounts this only for `needs_auth` must keep
-   * it mounted until the sign-in ends: unmounting cancels the attempt.
-   */
-  onActiveChange?: (active: boolean) => void;
-=======
-  autoStart?: boolean;
-  connectLabel?: string;
-  showStartButton?: boolean;
-  onActiveChange?: (active: boolean) => void;
-  onUnavailable?: () => void;
->>>>>>> upstream/main
 }
 
-<<<<<<< HEAD
 type OAuthErrorTone = 'error' | 'neutral' | 'info';
 type OAuthError = { text: string; tone: OAuthErrorTone };
 /** What an unmount must cancel: the flow and the revisions that own it. */
@@ -405,43 +375,8 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
       toast.error(problemMessage(error, t('settings.mcp.page.toast.authorizationUrlCopyFailed')));
     }
   };
-||||||| bc50ba56aa
-/**
- * The OAuth sign-in for a remote MCP server. OpenCode registers such a server
- * as an integration with one `oauth` method, so the sign-in is the same
- * connect / status / complete flow the Providers page runs; only the lookup
- * (by server name, in the server's Location) is MCP-specific. Renders nothing
- * while the integration is unknown.
- */
-export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({
-  serverName,
-  directory,
-  onConnected,
-  autoStart,
-  connectLabel,
-  showStartButton,
-  onActiveChange,
-}) => {
-  const integration = useMcpOAuthIntegration(serverName, directory);
-  if (!integration) return null;
-=======
-export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({
-  serverName,
-  directory,
-  onConnected,
-  autoStart,
-  connectLabel,
-  showStartButton,
-  onActiveChange,
-  onUnavailable,
-}) => {
-  const integration = useMcpOAuthIntegration(serverName, directory, true, onUnavailable);
-  if (!integration) return null;
-  const methods = getMcpOAuthMethods(integration);
->>>>>>> upstream/main
 
   return (
-<<<<<<< HEAD
     <div className={SETTINGS_SPACE_ROW_CLASS}>
       {error ? (
         <p
@@ -585,30 +520,5 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({
         </>
       ) : null}
     </div>
-||||||| bc50ba56aa
-    <ProviderOAuthMethods
-      key={integration.id}
-      integrationId={integration.id}
-      methods={getMcpOAuthMethods(integration)}
-      directory={directory}
-      onConnected={onConnected}
-      autoStart={autoStart}
-      connectLabel={connectLabel}
-      showStartButton={showStartButton}
-      onActiveChange={onActiveChange}
-    />
-=======
-    <ProviderOAuthMethods
-      key={integration.id}
-      integrationId={integration.id}
-      methods={methods}
-      directory={directory}
-      onConnected={onConnected}
-      autoStart={autoStart}
-      connectLabel={connectLabel}
-      showStartButton={(showStartButton ?? true) || methods.length > 1}
-      onActiveChange={onActiveChange}
-    />
->>>>>>> upstream/main
   );
 };

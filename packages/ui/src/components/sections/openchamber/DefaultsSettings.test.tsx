@@ -92,7 +92,6 @@ const mockOmpSettings = {
 // surface as a failed row, not as a control that says "loading" forever.
 let failOmpSettings = false;
 
-<<<<<<< HEAD
 mock.module('@/api/canonicalClient', () => ({
   CanonicalApiError: class extends Error { },
   canonicalClient: {
@@ -105,88 +104,6 @@ mock.module('@/api/canonicalClient', () => ({
     updateOmpSettings: async () => mockOmpSettings,
     readCacheWarming: async () => ({ mode: 'off' }),
     updateCacheWarming: async () => ({ mode: 'off' }),
-||||||| bc50ba56aa
-const settingsState = {
-  showDeletionDialog: false,
-  setShowDeletionDialog: () => undefined,
-};
-
-const selectionState = {
-  getSessionModelSelection: () => undefined,
-  getSessionAgentSelection: () => undefined,
-};
-
-const sessionState = { currentSessionId: null } satisfies { currentSessionId: string | null };
-let savedSettings: DesktopSettings | null = null;
-const updateCalls: Array<Partial<DesktopSettings>> = [];
-
-mock.module('@/stores/useConfigStore', () => ({
-  useConfigStore: <T,>(selector: (state: ConfigState) => T): T => selector(configState),
-}));
-mock.module('@/stores/useUIStore', () => ({
-  useUIStore: <T,>(selector: (state: typeof settingsState) => T): T => selector(settingsState),
-}));
-mock.module('@/sync/selection-store', () => ({
-  useSelectionStore: <T,>(selector: (state: typeof selectionState) => T): T => selector(selectionState),
-}));
-mock.module('@/sync/session-ui-store', () => ({
-  useSessionUIStore: <T,>(selector: (state: typeof sessionState) => T): T => selector(sessionState),
-}));
-mock.module('@/stores/useDirectoryStore', () => ({
-  useDirectoryStore: <T,>(selector: (state: { currentDirectory: string }) => T): T =>
-    selector({ currentDirectory: '/test/project' }),
-}));
-const runtimeFetchCalls: string[] = [];
-const runtimeFetchModule = await import('@/lib/runtime-fetch');
-mock.module('@/lib/runtime-fetch', () => ({
-  ...runtimeFetchModule,
-  runtimeFetch: async (url: string) => {
-    runtimeFetchCalls.push(url);
-    return new Response(JSON.stringify({ authenticatedProviders: [] }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-=======
-const settingsState = {
-  showDeletionDialog: false,
-  setShowDeletionDialog: () => undefined,
-};
-
-const selectionState = {
-  getSessionModelSelection: () => undefined,
-  getSessionAgentSelection: () => undefined,
-};
-
-const sessionState = { currentSessionId: null } satisfies { currentSessionId: string | null };
-let savedSettings: DesktopSettings | null = null;
-const updateCalls: Array<Partial<DesktopSettings>> = [];
-
-mock.module('@/stores/useConfigStore', () => ({
-  useConfigStore: <T,>(selector: (state: ConfigState) => T): T => selector(configState),
-  selectIsModelMissingFromCatalog: () => false,
-}));
-mock.module('@/stores/useUIStore', () => ({
-  useUIStore: <T,>(selector: (state: typeof settingsState) => T): T => selector(settingsState),
-}));
-mock.module('@/sync/selection-store', () => ({
-  useSelectionStore: <T,>(selector: (state: typeof selectionState) => T): T => selector(selectionState),
-}));
-mock.module('@/sync/session-ui-store', () => ({
-  useSessionUIStore: <T,>(selector: (state: typeof sessionState) => T): T => selector(sessionState),
-}));
-mock.module('@/stores/useDirectoryStore', () => ({
-  useDirectoryStore: <T,>(selector: (state: { currentDirectory: string }) => T): T =>
-    selector({ currentDirectory: '/test/project' }),
-}));
-const runtimeFetchCalls: string[] = [];
-const runtimeFetchModule = await import('@/lib/runtime-fetch');
-mock.module('@/lib/runtime-fetch', () => ({
-  ...runtimeFetchModule,
-  runtimeFetch: async (url: string) => {
-    runtimeFetchCalls.push(url);
-    return new Response(JSON.stringify({ authenticatedProviders: [] }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
->>>>>>> upstream/main
   },
 }));
 

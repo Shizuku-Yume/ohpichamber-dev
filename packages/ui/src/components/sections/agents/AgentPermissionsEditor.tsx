@@ -12,138 +12,18 @@ import {
   SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import {
-<<<<<<< HEAD
   categorizeTool,
   TOOL_PERMISSION_GROUPS,
   getToolOneLineDescription,
   toolPresentation,
 } from '@/lib/toolPresentation';
 import type { ToolPermissionGroupKey } from '@/lib/toolPresentation/groups';
-||||||| bc50ba56aa
-  AUTOSAVE_SAVED,
-  AUTOSAVE_UNCHANGED,
-  autosaveFailed,
-  type AutosaveResult,
-} from '@/components/sections/shared/SettingsAutosave';
-import {
-  BUILTIN_ACTIONS,
-  EFFECTS,
-  OPENCHAMBER_ACTIONS,
-  cloneModel,
-  effectiveEffect,
-  emptyModel,
-  modelsEqual,
-  parseRules,
-  serializeRules,
-  type KeyState,
-  type PermissionModel,
-} from './agentPermissionModel';
-
-/**
- * Tool permissions for one agent.
- *
- * One row per tool: the tool's name, an arrow with what OpenCode will actually
- * do for it right now, and inherit / allow / ask / deny. "Inherit" means the
- * agent says nothing about the tool, so OpenCode's defaults and the global
- * config decide (that is what the arrow shows). A row expands to resource
- * patterns for that tool (`git push *` → deny).
- *
- * Under the hood v2 keeps an ordered rule list where the last match wins;
- * `agentPermissionModel.ts` translates this view to and from that list and
- * applies edits to the stored list in place, so what the user did not touch
- * keeps deciding exactly as before. Saving PATCHes only
- * `{ permissions }`. There is no Save button: a chip writes straight away, a
- * pattern writes when it loses focus. The write is its own request but the
- * page owns the autosave: `AgentsPage` registers this section's save routine
- * through `registerSave` and runs it as part of its own.
- */
-
-const formatKeyLabel = (key: string): string =>
-  key
-    .split(/[_-]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-/** Tools whose rules commonly need resource patterns; others can still add them. */
-const PATTERN_HINT_ACTIONS: ReadonlySet<string> = new Set([
-  'shell',
-  'edit',
-  'read',
-  'glob',
-  'grep',
-  'patch',
-  'webfetch',
-  'skill',
-  'subagent',
-  'external_directory',
-]);
-
-const EMPTY_KEY: KeyState = { effect: null, patterns: [] };
-=======
-  AUTOSAVE_SAVED,
-  AUTOSAVE_UNCHANGED,
-  autosaveFailed,
-  type AutosaveResult,
-} from '@/components/sections/shared/SettingsAutosave';
-import {
-  BUILTIN_ACTIONS,
-  EFFECTS,
-  OPENCHAMBER_ACTIONS,
-  cloneModel,
-  effectiveEffect,
-  emptyModel,
-  modelsEqual,
-  parseRules,
-  serializeRules,
-  type KeyState,
-  type PermissionModel,
-} from './agentPermissionModel';
-
-
-const formatKeyLabel = (key: string): string =>
-  key
-    .split(/[_-]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-const PATTERN_HINT_ACTIONS: ReadonlySet<string> = new Set([
-  'shell',
-  'edit',
-  'read',
-  'glob',
-  'grep',
-  'patch',
-  'webfetch',
-  'skill',
-  'subagent',
-  'external_directory',
-]);
-
-const EMPTY_KEY: KeyState = { effect: null, patterns: [] };
->>>>>>> upstream/main
 
 interface AgentPermissionsEditorProps {
-<<<<<<< HEAD
   allowedTools: string[] | null;
   toolsCatalog: ToolCatalogEntry[];
   onChange: (allowedTools: string[] | null) => void;
   disabled?: boolean;
-||||||| bc50ba56aa
-  agent: AgentWithExtras;
-  /**
-   * Hand the page this section's save routine. It is called on mount and
-   * whenever the routine changes, and with `null` on unmount.
-   */
-  registerSave: (save: (() => Promise<AutosaveResult>) | null) => void;
-  /** The page's autosave request; this section never runs its own. */
-  requestSave: () => void;
-=======
-  agent: AgentWithExtras;
-  registerSave: (save: (() => Promise<AutosaveResult>) | null) => void;
-  requestSave: () => void;
->>>>>>> upstream/main
 }
 
 type ToolPermissionMode = 'inherit' | 'all' | 'none' | 'custom';
@@ -276,21 +156,10 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
 
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
 
-<<<<<<< HEAD
   const toggleGroupExpand = (groupKey: string) => {
     setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
-||||||| bc50ba56aa
-  const agentName = agent.name;
-  // Settings browses whichever project its own selector points at; the app
-  // stays where it is.
-  const settingsDirectory = useSettingsDirectory();
-=======
-  const agentName = agent.name;
-  const settingsDirectory = useSettingsDirectory();
->>>>>>> upstream/main
 
-<<<<<<< HEAD
   const tools = React.useMemo(() => {
     const list: ToolCatalogEntry[] = [...toolsCatalog];
     const catalogNames = new Set(toolsCatalog.map((tool) => tool.name));
@@ -306,53 +175,6 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
             availability: false,
           });
         }
-||||||| bc50ba56aa
-  // MCP servers from the config (not only the connected ones): a permission on
-  // a server is worth setting even while it is disabled or failing. Each server
-  // gets one row keyed `<server>_*`, which OpenCode matches against every tool
-  // the server exposes (`<server>_<tool>`).
-  const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
-  const mcpServers = useMcpConfigStore((state) => selectMcpServersForDirectory(state, settingsDirectory));
-  const mcpStatus = useMcpStore(
-    React.useCallback((state) => state.getStatusForDirectory(settingsDirectory), [settingsDirectory]),
-  );
-  React.useEffect(() => {
-    void loadMcpConfigs({ directory: settingsDirectory });
-  }, [loadMcpConfigs, settingsDirectory]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setLoadFailed(false);
-    void (async () => {
-      const envelope = await fetchAgentPermissions(agentName, settingsDirectory);
-      if (cancelled) return;
-      if (!envelope) {
-        setLoadFailed(true);
-        setIsLoading(false);
-        return;
-=======
-  const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
-  const mcpServers = useMcpConfigStore((state) => selectMcpServersForDirectory(state, settingsDirectory));
-  const mcpStatus = useMcpStore(
-    React.useCallback((state) => state.getStatusForDirectory(settingsDirectory), [settingsDirectory]),
-  );
-  React.useEffect(() => {
-    void loadMcpConfigs({ directory: settingsDirectory });
-  }, [loadMcpConfigs, settingsDirectory]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setLoadFailed(false);
-    void (async () => {
-      const envelope = await fetchAgentPermissions(agentName, settingsDirectory);
-      if (cancelled) return;
-      if (!envelope) {
-        setLoadFailed(true);
-        setIsLoading(false);
-        return;
->>>>>>> upstream/main
       }
     }
     return list;
@@ -379,7 +201,6 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
     return groups;
   }, [tools]);
 
-<<<<<<< HEAD
   const quickActionValue: ToolPermissionMode = React.useMemo(() => {
     if (allowedTools === null) return 'inherit';
     if (allowedTools.length === 0) return 'none';
@@ -390,39 +211,6 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
       allowedTools.every((name) => availableNames.includes(name))
     ) {
       return 'all';
-||||||| bc50ba56aa
-  React.useEffect(() => {
-    registerSave(save);
-    return () => registerSave(null);
-  }, [registerSave, save]);
-
-  // --- Rows: built-in and OpenChamber tools, then one row per MCP server, then
-  // whatever else the agent already names (custom keys, single MCP tools). ---
-  const mcpKeys = React.useMemo(
-    () => mcpServers.map((server) => ({ key: `${server.name}_*`, server: server.name })),
-    [mcpServers],
-  );
-  const toolKeys = React.useMemo(() => {
-    const keys: string[] = [...BUILTIN_ACTIONS, ...OPENCHAMBER_ACTIONS];
-    const mcp = new Set(mcpKeys.map((entry) => entry.key));
-    for (const key of Object.keys(model.keys)) {
-      if (!keys.includes(key) && !mcp.has(key)) keys.push(key);
-=======
-  React.useEffect(() => {
-    registerSave(save);
-    return () => registerSave(null);
-  }, [registerSave, save]);
-
-  const mcpKeys = React.useMemo(
-    () => mcpServers.map((server) => ({ key: `${server.name}_*`, server: server.name })),
-    [mcpServers],
-  );
-  const toolKeys = React.useMemo(() => {
-    const keys: string[] = [...BUILTIN_ACTIONS, ...OPENCHAMBER_ACTIONS];
-    const mcp = new Set(mcpKeys.map((entry) => entry.key));
-    for (const key of Object.keys(model.keys)) {
-      if (!keys.includes(key) && !mcp.has(key)) keys.push(key);
->>>>>>> upstream/main
     }
     return 'custom';
   }, [allowedTools, availableTools]);
@@ -438,30 +226,9 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
     }
   };
 
-<<<<<<< HEAD
   const isToolChecked = (tool: ToolCatalogEntry): boolean => {
     if (allowedTools === null) return Boolean(tool.availability);
     return allowedTools.includes(tool.name);
-||||||| bc50ba56aa
-  const effectiveFor = React.useCallback(
-    (key: string): PermissionEffect => effectiveEffect(key, { global: globalRules, agentGlobal: model.global }),
-    [globalRules, model.global],
-  );
-
-  // --- Mutators. Chips save at once; patterns save on blur through the page. ---
-  const setGlobal = (effect: PermissionEffect | null) => {
-    setModel((current) => ({ ...current, global: effect }));
-    requestSave();
-=======
-  const effectiveFor = React.useCallback(
-    (key: string): PermissionEffect => effectiveEffect(key, { global: globalRules, agentGlobal: model.global }),
-    [globalRules, model.global],
-  );
-
-  const setGlobal = (effect: PermissionEffect | null) => {
-    setModel((current) => ({ ...current, global: effect }));
-    requestSave();
->>>>>>> upstream/main
   };
 
   const toggleTool = (toolName: string, checked: boolean) => {
@@ -500,7 +267,6 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
       });
 
   return (
-<<<<<<< HEAD
     <div data-settings-tools-editor className={SETTINGS_SPACE_ROW_CLASS}>
       <SettingsFieldRow
         label={t('settings.agents.page.toolPermissions.mode.label')}
@@ -530,57 +296,12 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
           aria-label={t('settings.agents.page.field.allowedTools')}
         />
       </SettingsFieldRow>
-||||||| bc50ba56aa
-    <SettingsSection
-      title={t('settings.agents.page.section.toolPermissions')}
-      settingsItem="agents.permissions"
-      info={t('settings.agents.page.permissionsEditor.sectionInfo')}
-      contentClassName="space-y-4"
-    >
-      {/* The agent's own fallback for every tool (its `*` rule). */}
-      <div className="flex flex-col gap-2 pb-2 @xl:flex-row @xl:items-center @xl:justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className={SETTINGS_FIELD_LABEL_CLASS}>
-            {t('settings.agents.page.permissionsEditor.defaultLabel')}
-          </span>
-          <SettingsInfoHint>{t('settings.agents.page.permissionsEditor.defaultInfo')}</SettingsInfoHint>
-          {model.global === null && (
-            <span className="typography-micro text-muted-foreground">
-              {t('settings.agents.page.permissionsEditor.effectiveHint', { action: effectLabel(effectiveFor('*')) })}
-            </span>
-          )}
-        </div>
-        {renderEffectChips(model.global, setGlobal, t('settings.agents.page.permissionsEditor.defaultAria'), defaultChipLabel)}
-      </div>
-=======
-    <SettingsSection
-      title={t('settings.agents.page.section.toolPermissions')}
-      settingsItem="agents.permissions"
-      info={t('settings.agents.page.permissionsEditor.sectionInfo')}
-      contentClassName="space-y-4"
-    >
-      <div className="flex flex-col gap-2 pb-2 @xl:flex-row @xl:items-center @xl:justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className={SETTINGS_FIELD_LABEL_CLASS}>
-            {t('settings.agents.page.permissionsEditor.defaultLabel')}
-          </span>
-          <SettingsInfoHint>{t('settings.agents.page.permissionsEditor.defaultInfo')}</SettingsInfoHint>
-          {model.global === null && (
-            <span className="typography-micro text-muted-foreground">
-              {t('settings.agents.page.permissionsEditor.effectiveHint', { action: effectLabel(effectiveFor('*')) })}
-            </span>
-          )}
-        </div>
-        {renderEffectChips(model.global, setGlobal, t('settings.agents.page.permissionsEditor.defaultAria'), defaultChipLabel)}
-      </div>
->>>>>>> upstream/main
 
       <div>
         {TOOL_PERMISSION_GROUPS.map((groupKey) => {
           const groupToolList = groupedTools[groupKey];
           if (groupToolList.length === 0) return null;
 
-<<<<<<< HEAD
           const expanded = Boolean(expandedGroups[groupKey]);
           const selectedCount = groupToolList.filter((tool) => isToolChecked(tool)).length;
           const availableGroupTools = groupToolList.filter((tool) => Boolean(tool.availability));
@@ -659,62 +380,6 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
             </SettingsDisclosure>
           );
         })}
-||||||| bc50ba56aa
-      {mcpKeys.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 border-t border-edge-muted pt-3 pb-1">
-            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.agents.page.permissionsEditor.mcpTitle')}</span>
-            <SettingsInfoHint>{t('settings.agents.page.permissionsEditor.mcpInfo')}</SettingsInfoHint>
-          </div>
-          {mcpKeys.map((entry) => renderRow(entry.key, entry.server, mcpStatusLabel(entry.server)))}
-        </div>
-      )}
-      {/* A tool the list does not know yet (an MCP or plugin tool). */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-edge-muted pt-3">
-        <Input
-          value={customKeyDraft}
-          onChange={(event) => setCustomKeyDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              addCustomKey();
-            }
-          }}
-          placeholder={t('settings.agents.page.permissionsEditor.customKeyPlaceholder')}
-          className="h-8 w-full max-w-[16rem] font-mono text-xs"
-        />
-        <Button variant="outline" size="xs" className="!font-normal" onClick={addCustomKey} disabled={!customKeyDraft.trim()}>
-          <Icon name="add" className="me-1 h-3.5 w-3.5" />
-          {t('settings.agents.page.permissionsEditor.actions.addKey')}
-        </Button>
-=======
-      {mcpKeys.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 border-t border-edge-muted pt-3 pb-1">
-            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.agents.page.permissionsEditor.mcpTitle')}</span>
-            <SettingsInfoHint>{t('settings.agents.page.permissionsEditor.mcpInfo')}</SettingsInfoHint>
-          </div>
-          {mcpKeys.map((entry) => renderRow(entry.key, entry.server, mcpStatusLabel(entry.server)))}
-        </div>
-      )}
-      <div className="flex flex-wrap items-center gap-2 border-t border-edge-muted pt-3">
-        <Input
-          value={customKeyDraft}
-          onChange={(event) => setCustomKeyDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              addCustomKey();
-            }
-          }}
-          placeholder={t('settings.agents.page.permissionsEditor.customKeyPlaceholder')}
-          className="h-8 w-full max-w-[16rem] font-mono text-xs"
-        />
-        <Button variant="outline" size="xs" className="!font-normal" onClick={addCustomKey} disabled={!customKeyDraft.trim()}>
-          <Icon name="add" className="me-1 h-3.5 w-3.5" />
-          {t('settings.agents.page.permissionsEditor.actions.addKey')}
-        </Button>
->>>>>>> upstream/main
       </div>
     </div>
   );

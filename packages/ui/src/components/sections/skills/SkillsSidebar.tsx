@@ -75,41 +75,11 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     deleteSkill: state.deleteSkill,
     renameSkill: state.renameSkill,
   })));
-<<<<<<< HEAD
   const directory = useSettingsDirectory();
   const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
   const fileCatalog = useSkillsStore(state => state.filesByDirectory[directory ?? '__default__']);
   const selectedAuthoredSkill = useSkillsStore(state => state.selectedAuthoredSkill);
   const applyFailed = useSkillsStore(state => state.lastMutationDirectory === directory && (state.lastMutationResult?.apply?.status === 'partial' || state.lastMutationResult?.apply?.status === 'failed'));
-||||||| bc50ba56aa
-
-  // Settings browses whichever project its own selector points at; the app
-  // stays where it is.
-  const settingsDirectory = useSettingsDirectory();
-  const skills = useSkillsStore((state) => selectSkillsForDirectory(state, settingsDirectory));
-  const policies = useSkillsStore((state) => selectSkillPoliciesForDirectory(state, settingsDirectory));
-  // Why agents cannot use a skill: its switch is off, or a rule the switch
-  // cannot change (a wildcard) blocks it.
-  const offReason = (skill: DiscoveredSkill): SkillOffReason => {
-    if (!policies) return null;
-    const state = getSkillSwitchState(policies, skill.id);
-    if (state.enabled) return null;
-    return state.switchable ? 'switch' : 'policy';
-  };
-  const loadSkills = useSkillsStore((state) => state.loadSkills);
-=======
-
-  const settingsDirectory = useSettingsDirectory();
-  const skills = useSkillsStore((state) => selectSkillsForDirectory(state, settingsDirectory));
-  const policies = useSkillsStore((state) => selectSkillPoliciesForDirectory(state, settingsDirectory));
-  const offReason = (skill: DiscoveredSkill): SkillOffReason => {
-    if (!policies) return null;
-    const state = getSkillSwitchState(policies, skill.id);
-    if (state.enabled) return null;
-    return state.switchable ? 'switch' : 'policy';
-  };
-  const loadSkills = useSkillsStore((state) => state.loadSkills);
->>>>>>> upstream/main
 
   React.useEffect(() => {
     void loadSkills(directory);
@@ -141,138 +111,28 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       }) satisfies AuthoredSettingsSkillEntry),
   ];
 
-<<<<<<< HEAD
   const uniqueDraftName = (base: string): string => {
     let candidate = base;
     let count = 1;
     while (entries.some(entry => entry.name === candidate)) {
       candidate = `${base}-${count++}`;
-||||||| bc50ba56aa
-  const handleCreateNew = () => {
-    // Generate unique name
-    const baseName = 'new-skill';
-    let newName = baseName;
-    let counter = 1;
-    while (skills.some((s) => s.name === newName)) {
-      newName = `${baseName}-${counter}`;
-      counter++;
-=======
-  const handleCreateNew = () => {
-    const baseName = 'new-skill';
-    let newName = baseName;
-    let counter = 1;
-    while (skills.some((s) => s.name === newName)) {
-      newName = `${baseName}-${counter}`;
-      counter++;
->>>>>>> upstream/main
     }
     return candidate;
   };
 
-<<<<<<< HEAD
   const create = () => {
     const name = uniqueDraftName('new-skill');
     setSkillDraft({ name, scope: 'agent', content: `---\nname: ${name}\ndescription: ""\n---\n\n` });
     setSelectedSkill(name);
-||||||| bc50ba56aa
-    // Set draft and open the page for editing
-    setSkillDraft({ name: newName, scope: 'user', source: 'opencode', description: '' });
-    setSelectedSkill(newName);
-=======
-    setSkillDraft({ name: newName, scope: 'user', source: 'opencode', description: '' });
-    setSelectedSkill(newName);
->>>>>>> upstream/main
     onItemSelect?.();
   };
 
-<<<<<<< HEAD
   const duplicate = async (entry: SettingsSkillListEntry) => {
     const detail = await getSkillDetail(entry.reference, directory);
-||||||| bc50ba56aa
-  const handleDeleteSkill = async (skill: DiscoveredSkill) => {
-    if (isBuiltInSkill(skill)) return;
-    setDeleteDialogSkill(skill);
-  };
-
-  const handleConfirmDeleteSkill = async () => {
-    if (!deleteDialogSkill) {
-      return;
-    }
-    if (isBuiltInSkill(deleteDialogSkill)) {
-      setDeleteDialogSkill(null);
-      return;
-    }
-
-    setIsDeletePending(true);
-    const success = await deleteSkill(deleteDialogSkill.name, settingsDirectory);
-    if (success) {
-      toast.success(t('settings.skills.sidebar.toast.skillDeleted', { name: deleteDialogSkill.name }));
-      setDeleteDialogSkill(null);
-    } else {
-      toast.error(t('settings.skills.sidebar.toast.deleteSkillFailed'));
-    }
-    setIsDeletePending(false);
-  };
-
-  const handleDuplicateSkill = async (skill: DiscoveredSkill) => {
-    if (isBuiltInSkill(skill)) return;
-
-    const baseName = skill.name;
-    let copyNumber = 1;
-    let newName = `${baseName}-copy`;
-
-    while (skills.some((s) => s.name === newName)) {
-      copyNumber++;
-      newName = `${baseName}-copy-${copyNumber}`;
-    }
-
-    // Get full skill detail to copy
-    const detail = await getSkillDetail(skill.name, settingsDirectory);
-=======
-  const handleDeleteSkill = async (skill: DiscoveredSkill) => {
-    if (isBuiltInSkill(skill)) return;
-    setDeleteDialogSkill(skill);
-  };
-
-  const handleConfirmDeleteSkill = async () => {
-    if (!deleteDialogSkill) {
-      return;
-    }
-    if (isBuiltInSkill(deleteDialogSkill)) {
-      setDeleteDialogSkill(null);
-      return;
-    }
-
-    setIsDeletePending(true);
-    const success = await deleteSkill(deleteDialogSkill.name, settingsDirectory);
-    if (success) {
-      toast.success(t('settings.skills.sidebar.toast.skillDeleted', { name: deleteDialogSkill.name }));
-      setDeleteDialogSkill(null);
-    } else {
-      toast.error(t('settings.skills.sidebar.toast.deleteSkillFailed'));
-    }
-    setIsDeletePending(false);
-  };
-
-  const handleDuplicateSkill = async (skill: DiscoveredSkill) => {
-    if (isBuiltInSkill(skill)) return;
-
-    const baseName = skill.name;
-    let copyNumber = 1;
-    let newName = `${baseName}-copy`;
-
-    while (skills.some((s) => s.name === newName)) {
-      copyNumber++;
-      newName = `${baseName}-copy-${copyNumber}`;
-    }
-
-    const detail = await getSkillDetail(skill.name, settingsDirectory);
->>>>>>> upstream/main
     if (!detail) {
       toast.error(t('settings.skills.sidebar.toast.duplicateLoadFailed'));
       return;
     }
-<<<<<<< HEAD
     const pendingFiles: PendingFile[] = [];
     for (const file of detail.supportingFiles) {
       const content = await useSkillsStore.getState().readSupportingFile(entry.reference, file.path, directory);
@@ -281,56 +141,6 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
         return;
       }
       pendingFiles.push({ path: file.path, content });
-||||||| bc50ba56aa
-
-    // Set draft with prefilled values from source skill
-      setSkillDraft({
-        name: newName,
-        scope: skill.scope || 'user',
-        source: skill.source || 'opencode',
-        description: detail.sources.md.fields.includes('description') ? '' : '', // Will be populated from page
-        instructions: '',
-      });
-    setSelectedSkill(newName);
-
-  };
-
-  const handleOpenRenameDialog = (skill: DiscoveredSkill) => {
-    if (!isRenamableSkill(skill)) return;
-    setRenameNewName(skill.name);
-    setRenameDialogSkill(skill);
-  };
-
-  const handleRenameSkill = async () => {
-    if (!renameDialogSkill) return;
-    if (!isRenamableSkill(renameDialogSkill)) {
-      setRenameDialogSkill(null);
-      return;
-=======
-
-      setSkillDraft({
-        name: newName,
-        scope: skill.scope || 'user',
-        source: skill.source || 'opencode',
-        description: detail.sources.md.fields.includes('description') ? '' : '',
-        instructions: '',
-      });
-    setSelectedSkill(newName);
-
-  };
-
-  const handleOpenRenameDialog = (skill: DiscoveredSkill) => {
-    if (!isRenamableSkill(skill)) return;
-    setRenameNewName(skill.name);
-    setRenameDialogSkill(skill);
-  };
-
-  const handleRenameSkill = async () => {
-    if (!renameDialogSkill) return;
-    if (!isRenamableSkill(renameDialogSkill)) {
-      setRenameDialogSkill(null);
-      return;
->>>>>>> upstream/main
     }
     const name = uniqueDraftName(`${entry.name}-copy`);
     setSkillDraft({
@@ -370,20 +180,11 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       toast.error(t('settings.skills.page.toast.skillExists'));
       return;
     }
-<<<<<<< HEAD
     if (!FileResourcePathSchema.safeParse(nextName).success) {
       toast.error(t('settings.skills.page.toast.invalidSkillName'));
       return;
     }
     const success = await renameSkill(renameDialogSkill.reference, nextName, directory);
-||||||| bc50ba56aa
-
-    // Rename in place on disk so SKILL.md body and supporting files are preserved.
-    const success = await renameSkill(renameDialogSkill.name, sanitizedName, settingsDirectory);
-=======
-
-    const success = await renameSkill(renameDialogSkill.name, sanitizedName, settingsDirectory);
->>>>>>> upstream/main
     if (success) {
       toast.success(t('settings.skills.sidebar.toast.skillRenamed', { name: nextName }));
     } else {
@@ -392,7 +193,6 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     setRenameDialogSkill(null);
   };
 
-<<<<<<< HEAD
   const confirmDelete = async () => {
     if (!deleteDialogSkill) return;
     setIsDeletePending(true);
@@ -400,33 +200,6 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       if (await deleteSkill(deleteDialogSkill.reference, directory)) {
         toast.success(t('settings.skills.sidebar.toast.skillDeleted', { name: deleteDialogSkill.name }));
         setDeleteDialogSkill(null);
-||||||| bc50ba56aa
-  // Separate project and user skills
-  const shownSkills = skills.filter((skill) => matchesRankQuery([skill.name, skill.description], query));
-  const projectSkills = shownSkills.filter((s) => s.scope === 'project');
-  const userSkills = shownSkills.filter((s) => s.scope === 'user');
-
-  // Helper: group a list of skills by their domain folder
-  function groupSkillsByFolder(list: DiscoveredSkill[]) {
-    const groups: Record<string, DiscoveredSkill[]> = {};
-    const ungrouped: DiscoveredSkill[] = [];
-    for (const skill of list) {
-      if (skill.group) {
-        if (!groups[skill.group]) groups[skill.group] = [];
-        groups[skill.group].push(skill);
-=======
-  const shownSkills = skills.filter((skill) => matchesRankQuery([skill.name, skill.description], query));
-  const projectSkills = shownSkills.filter((s) => s.scope === 'project');
-  const userSkills = shownSkills.filter((s) => s.scope === 'user');
-
-  function groupSkillsByFolder(list: DiscoveredSkill[]) {
-    const groups: Record<string, DiscoveredSkill[]> = {};
-    const ungrouped: DiscoveredSkill[] = [];
-    for (const skill of list) {
-      if (skill.group) {
-        if (!groups[skill.group]) groups[skill.group] = [];
-        groups[skill.group].push(skill);
->>>>>>> upstream/main
       } else {
         toast.error(t('settings.skills.sidebar.toast.deleteSkillFailed'));
       }
@@ -552,14 +325,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
         </DialogContent>
       </Dialog>
 
-<<<<<<< HEAD
       <Dialog open={renameDialogSkill !== null} onOpenChange={open => { if (!open) setRenameDialogSkill(null); }}>
-||||||| bc50ba56aa
-      {/* Rename Dialog */}
-      <Dialog open={renameDialogSkill !== null} onOpenChange={(open) => !open && setRenameDialogSkill(null)}>
-=======
-      <Dialog open={renameDialogSkill !== null} onOpenChange={(open) => !open && setRenameDialogSkill(null)}>
->>>>>>> upstream/main
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('settings.skills.sidebar.renameDialog.title')}</DialogTitle>
@@ -596,16 +362,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
 };
 
 interface SkillListItemProps {
-<<<<<<< HEAD
   entry: SettingsSkillListEntry;
-||||||| bc50ba56aa
-  skill: DiscoveredSkill;
-  /** Why agents cannot use this skill, or null when they can. */
-  off: SkillOffReason;
-=======
-  skill: DiscoveredSkill;
-  off: SkillOffReason;
->>>>>>> upstream/main
   isSelected: boolean;
   onSelect: () => void;
   onRename: () => void;

@@ -59,7 +59,6 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.session-goal-budget', 'assistance'],
 ]);
 
-<<<<<<< HEAD
 /** The tab each OMP chat section's rows are drawn in. */
 const OMP_SECTION_TABS: Readonly<Record<string, ChatSettingsTab>> = {
   composer: 'composer',
@@ -81,11 +80,3 @@ export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | nu
   }
   return null;
 };
-||||||| bc50ba56aa
-export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | null => SEARCH_TARGET_TABS.get(id) ?? null;
-=======
-export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | null => SEARCH_TARGET_TABS.get(id) ?? null;
-
-export const chatSettingsTabAnchors = (tab: ChatSettingsTab): string[] =>
-  [...SEARCH_TARGET_TABS].filter(([, owner]) => owner === tab).map(([id]) => id);
->>>>>>> upstream/main

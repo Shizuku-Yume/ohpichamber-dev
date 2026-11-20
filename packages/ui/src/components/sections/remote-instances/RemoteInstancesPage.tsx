@@ -86,15 +86,8 @@ import { useDurationTickerNow, useWaitingBlink } from '@/hooks/useDurationTicker
 import { Spinner } from '@/components/ui/spinner';
 import { useSshConfirmation } from './useSshConfirmation';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-<<<<<<< HEAD
 import { problemMessage } from '@/lib/problemMessage';
 
-||||||| bc50ba56aa
-
-=======
-import { SettingsInlineLink } from '@/components/sections/classification/JevAccessNote';
-import { fetchBypassingRuntimeBridge } from '@/lib/runtime-fetch';
->>>>>>> upstream/main
 const randomPort = (): number => {
   return Math.floor(20000 + Math.random() * 30000);
 };
@@ -137,9 +130,9 @@ const phaseLabelKey = (phase?: string): I18nKey => {
     case 'remote_probe':
       return 'settings.remoteInstances.page.phase.probingRemote';
     case 'installing':
-      return 'settings.remoteInstances.page.phase.installingOpenChamber';
+      return 'settings.remoteInstances.page.phase.installingOhPiChamber';
     case 'updating':
-      return 'settings.remoteInstances.page.phase.updatingOpenChamber';
+      return 'settings.remoteInstances.page.phase.updatingOhPiChamber';
     case 'server_detecting':
       return 'settings.remoteInstances.page.phase.detectingServer';
     case 'server_starting':
@@ -1603,128 +1596,12 @@ export const RemoteInstancesPage: React.FC = () => {
                           {t('settings.remoteInstances.clientAuth.actions.revoke')}
                         </Button>
                       </div>
-<<<<<<< HEAD
                     );
                   })}
                 </>
               )}
             </div>
             {remoteClientError ? <p dir="auto" className="typography-meta text-[var(--status-error)]">{remoteClientError}</p> : null}
-||||||| bc50ba56aa
-                    ))}
-                    {remoteClients.map((client) => {
-                      const isLocalDesktopClient = client.clientKind === 'desktop-local';
-                      // Live presence: the server refreshes lastUsedAt on every
-                      // authenticated request (writes throttled to 60s), so a
-                      // device with activity in the last 90s is connected NOW.
-                      // The list polls every 5s, keeping this fresh.
-                      const lastUsedMs = client.lastUsedAt ? Date.parse(client.lastUsedAt) : Number.NaN;
-                      const isOnline = !client.revokedAt
-                        && (isLocalDesktopClient || (Number.isFinite(lastUsedMs) && Date.now() - lastUsedMs < 90_000));
-                      const statusText = client.revokedAt
-                        ? t('settings.remoteInstances.clientAuth.state.revoked')
-                        : isOnline
-                          ? (client.lastTransport === 'relay' && !isLocalDesktopClient
-                            ? t('settings.remoteInstances.clientAuth.state.connectedRelay')
-                            : t('settings.remoteInstances.clientAuth.state.connectedDirect'))
-                          : Number.isFinite(lastUsedMs)
-                            ? t('settings.remoteInstances.clientAuth.lastUsed', {
-                                date: formatDateTimeForPreference(lastUsedMs, timeFormatPreference, {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                }),
-                              })
-                            : t('settings.remoteInstances.clientAuth.neverUsed');
-                      return (
-                        <div key={client.id} className="flex items-center justify-between gap-3 py-1.5">
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span className={cn(
-                                'size-1.5 shrink-0 rounded-full',
-                                client.revokedAt ? 'bg-muted-foreground/20' : isOnline ? 'bg-[var(--status-success)]' : 'bg-muted-foreground/30',
-                              )} />
-                              <p className="typography-ui-label text-foreground truncate">{client.label}</p>
-                              {devicePlatformLabel(client.devicePlatform) ? (
-                                <span className="typography-micro text-muted-foreground oc-tile-inset px-1 rounded shrink-0 leading-none pb-px">
-                                  {devicePlatformLabel(client.devicePlatform)}
-                                </span>
-                              ) : null}
-                              {isLocalDesktopClient ? (
-                                <span className="typography-micro text-muted-foreground oc-tile-inset px-1 rounded flex-shrink-0 leading-none pb-px">
-                                  {t('settings.remoteInstances.clientAuth.state.thisDevice')}
-                                </span>
-                              ) : null}
-                              <span className={cn('typography-micro truncate', isOnline && !client.revokedAt ? 'text-[var(--status-success)]' : 'text-muted-foreground')}>{statusText}</span>
-                            </div>
-                          </div>
-                          <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void revokeRemoteClient(client)} disabled={Boolean(client.revokedAt)}>
-                            {t('settings.remoteInstances.clientAuth.actions.revoke')}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
-              {remoteClientError ? <p dir="auto" className="typography-meta text-[var(--status-error)]">{remoteClientError}</p> : null}
-=======
-                    ))}
-                    {remoteClients.map((client) => {
-                      const isLocalDesktopClient = client.clientKind === 'desktop-local';
-                      const lastUsedMs = client.lastUsedAt ? Date.parse(client.lastUsedAt) : Number.NaN;
-                      const isOnline = !client.revokedAt
-                        && (isLocalDesktopClient || (Number.isFinite(lastUsedMs) && Date.now() - lastUsedMs < 90_000));
-                      const statusText = client.revokedAt
-                        ? t('settings.remoteInstances.clientAuth.state.revoked')
-                        : isOnline
-                          ? (client.lastTransport === 'relay' && !isLocalDesktopClient
-                            ? t('settings.remoteInstances.clientAuth.state.connectedRelay')
-                            : t('settings.remoteInstances.clientAuth.state.connectedDirect'))
-                          : Number.isFinite(lastUsedMs)
-                            ? t('settings.remoteInstances.clientAuth.lastUsed', {
-                                date: formatDateTimeForPreference(lastUsedMs, timeFormatPreference, {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                }),
-                              })
-                            : t('settings.remoteInstances.clientAuth.neverUsed');
-                      return (
-                        <div key={client.id} className="flex items-center justify-between gap-3 py-1.5">
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span className={cn(
-                                'size-1.5 shrink-0 rounded-full',
-                                client.revokedAt ? 'bg-muted-foreground/20' : isOnline ? 'bg-[var(--status-success)]' : 'bg-muted-foreground/30',
-                              )} />
-                              <p className="typography-ui-label text-foreground truncate">{client.label}</p>
-                              {devicePlatformLabel(client.devicePlatform) ? (
-                                <span className="typography-micro text-muted-foreground oc-tile-inset px-1 rounded shrink-0 leading-none pb-px">
-                                  {devicePlatformLabel(client.devicePlatform)}
-                                </span>
-                              ) : null}
-                              {isLocalDesktopClient ? (
-                                <span className="typography-micro text-muted-foreground oc-tile-inset px-1 rounded flex-shrink-0 leading-none pb-px">
-                                  {t('settings.remoteInstances.clientAuth.state.thisDevice')}
-                                </span>
-                              ) : null}
-                              <span className={cn('typography-micro truncate', isOnline && !client.revokedAt ? 'text-[var(--status-success)]' : 'text-muted-foreground')}>{statusText}</span>
-                            </div>
-                          </div>
-                          <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void revokeRemoteClient(client)} disabled={Boolean(client.revokedAt)}>
-                            {t('settings.remoteInstances.clientAuth.actions.revoke')}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
-              {remoteClientError ? <p dir="auto" className="typography-meta text-[var(--status-error)]">{remoteClientError}</p> : null}
->>>>>>> upstream/main
           </SettingsSection>
         ) : null}
 
@@ -1788,7 +1665,6 @@ export const RemoteInstancesPage: React.FC = () => {
                             : ''}
                         </span>
                       </div>
-<<<<<<< HEAD
                       <p className={cn('typography-micro text-muted-foreground truncate', host.apiUrl && 'font-mono')}>
                         {isRelayOnlyHost(host) ? t('mobile.connect.relay.badge') : redactSensitiveUrl(host.apiUrl || host.url)}
                       </p>
@@ -1809,38 +1685,6 @@ export const RemoteInstancesPage: React.FC = () => {
                         {t('settings.common.actions.delete')}
                       </Button>
                     </div>
-||||||| bc50ba56aa
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void setDefaultDirectHost(host.id)} disabled={directSaving || directDefaultHostId === host.id} aria-label={t('desktopHostSwitcher.actions.setAsDefaultAria')}>
-                          {directDefaultHostId === host.id ? <Icon name="star-fill" className="h-3.5 w-3.5" /> : <Icon name="star" className="h-3.5 w-3.5" />}
-                        </Button>
-                        {/* Relay-only hosts edit just their name; their transport comes
-                            from a fresh pairing link. Multi-transport hosts keep their
-                            relay leg through the edit (object spread preserves it). */}
-                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => beginEditDirectHost(host)} disabled={directSaving}>
-                          <Icon name="pencil" className="h-3.5 w-3.5" />
-                          {t('desktopHostSwitcher.actions.edit')}
-                        </Button>
-                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void handleRemoveDirectHost(host.id)} disabled={directSaving}>
-                          <Icon name="delete-bin" className="h-3.5 w-3.5" />
-                          {t('settings.common.actions.delete')}
-                        </Button>
-                      </div>
-=======
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void setDefaultDirectHost(host.id)} disabled={directSaving || directDefaultHostId === host.id} aria-label={t('desktopHostSwitcher.actions.setAsDefaultAria')}>
-                          {directDefaultHostId === host.id ? <Icon name="star-fill" className="h-3.5 w-3.5" /> : <Icon name="star" className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => beginEditDirectHost(host)} disabled={directSaving}>
-                          <Icon name="pencil" className="h-3.5 w-3.5" />
-                          {t('desktopHostSwitcher.actions.edit')}
-                        </Button>
-                        <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void handleRemoveDirectHost(host.id)} disabled={directSaving}>
-                          <Icon name="delete-bin" className="h-3.5 w-3.5" />
-                          {t('settings.common.actions.delete')}
-                        </Button>
-                      </div>
->>>>>>> upstream/main
                   </div>
                 </div>
               );
@@ -2005,7 +1849,6 @@ export const RemoteInstancesPage: React.FC = () => {
                       );
                     })}
                   </div>
-<<<<<<< HEAD
                   {addDeviceTransport === 'lan' && transportOptions?.relayAvailable ? (
                     <label className="flex w-fit cursor-pointer items-center gap-2 pt-1">
                       <Checkbox checked={addDeviceFallback} onChange={setAddDeviceFallback} ariaLabel={t('settings.remoteInstances.clientAuth.addDevice.fallback.relay')} />
@@ -2018,27 +1861,6 @@ export const RemoteInstancesPage: React.FC = () => {
                       <span className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal')}</span>
                     </label>
                   ) : null}
-||||||| bc50ba56aa
-                  {addDeviceTransport === 'lan' ? (
-                    <label className="flex w-fit cursor-pointer items-center gap-2 pt-1">
-                      <Checkbox checked={addDeviceFallback} onChange={setAddDeviceFallback} ariaLabel={t('settings.remoteInstances.clientAuth.addDevice.fallback.relay')} />
-                      <span className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.addDevice.fallback.relay')}</span>
-                    </label>
-                  ) : null}
-                  {addDeviceTransport === 'relay' && transportOptions?.lanUrl ? (
-                    <label className="flex w-fit cursor-pointer items-center gap-2 pt-1">
-                      <Checkbox checked={addDeviceFallback} onChange={setAddDeviceFallback} ariaLabel={t('settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal')} />
-                      <span className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.addDevice.fallback.preferLocal')}</span>
-                    </label>
-                  ) : null}
-=======
-                  <AddDeviceFallbackOption
-                    transport={addDeviceTransport}
-                    hasLanUrl={Boolean(transportOptions?.lanUrl)}
-                    checked={addDeviceFallback}
-                    onChange={setAddDeviceFallback}
-                  />
->>>>>>> upstream/main
                 </div>
                 {remoteClientError ? <p dir="auto" className="typography-meta text-[var(--status-error)]">{remoteClientError}</p> : null}
                 <div className="flex justify-end gap-2">
@@ -2281,27 +2103,12 @@ export const RemoteInstancesPage: React.FC = () => {
           </div>
         </div>
 
-<<<<<<< HEAD
         <SettingsSection
           title={t('settings.remoteInstances.page.section.actions')}
           info={t('settings.remoteInstances.page.section.actionsDescription')}
           divider={false}
           contentClassName={SETTINGS_SPACE_ROW_CLASS}
         >
-||||||| bc50ba56aa
-      <SettingsSection
-        title={t('settings.remoteInstances.page.section.actions')}
-        info={t('settings.remoteInstances.page.section.actionsDescription')}
-        divider={false}
-        contentClassName="space-y-3"
-      >
-=======
-      <SettingsSection
-        title={t('settings.remoteInstances.page.section.actions')}
-        info={t('settings.remoteInstances.page.section.actionsDescription')}
-        contentClassName="space-y-3"
-      >
->>>>>>> upstream/main
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"

@@ -14,51 +14,9 @@ import type {
 import type { Root } from 'react-dom/client';
 import { fetchSpy, installTestDomGlobals, testBrowser } from './testDom';
 
-<<<<<<< HEAD
 // React DOM detects event support (including change events) when it is
 // imported, so the happy-dom globals must already exist. Static imports of
 // createRoot would load react-dom before this module's body runs.
-||||||| bc50ba56aa
-const browser = new Window({ url: 'http://localhost/' });
-Object.assign(globalThis, {
-  window: browser, document: browser.document, navigator: browser.navigator,
-  localStorage: browser.localStorage, sessionStorage: browser.sessionStorage,
-  Event: browser.Event, FocusEvent: browser.FocusEvent,
-  Node: browser.Node, Element: browser.Element, HTMLElement: browser.HTMLElement,
-  MutationObserver: browser.MutationObserver, ResizeObserver: browser.ResizeObserver,
-  getComputedStyle: browser.getComputedStyle.bind(browser),
-  requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
-  cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
-  IS_REACT_ACT_ENVIRONMENT: true,
-});
-const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-  const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
-  if (url.pathname === '/api/fs/home') return Response.json({ home: '/test' });
-  if (url.pathname === '/api/location') return Response.json({ data: { directory: '/test' } });
-  if (url.pathname === '/api/session') return Response.json({ data: [], cursor: {} });
-  throw new Error(`Unexpected request: ${url.pathname}`);
-});
-=======
-const browser = new Window({ url: 'http://localhost/' });
-Object.assign(globalThis, {
-  window: browser, document: browser.document, CustomEvent: browser.CustomEvent, navigator: browser.navigator,
-  localStorage: browser.localStorage, sessionStorage: browser.sessionStorage,
-  Event: browser.Event, FocusEvent: browser.FocusEvent,
-  Node: browser.Node, Element: browser.Element, HTMLElement: browser.HTMLElement,
-  MutationObserver: browser.MutationObserver, ResizeObserver: browser.ResizeObserver,
-  getComputedStyle: browser.getComputedStyle.bind(browser),
-  requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
-  cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
-  IS_REACT_ACT_ENVIRONMENT: true,
-});
-const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-  const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
-  if (url.pathname === '/api/fs/home') return Response.json({ home: '/test' });
-  if (url.pathname === '/api/location') return Response.json({ data: { directory: '/test' } });
-  if (url.pathname === '/api/session') return Response.json({ data: [], cursor: {} });
-  throw new Error(`Unexpected request: ${url.pathname}`);
-});
->>>>>>> upstream/main
 const { act } = await import('react');
 installTestDomGlobals();
 mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/repo' }));

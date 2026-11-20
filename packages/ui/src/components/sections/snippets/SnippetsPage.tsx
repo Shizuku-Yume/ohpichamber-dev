@@ -17,81 +17,7 @@ import {
   SETTINGS_WIDTH_SELECT_CLASS,
   SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-<<<<<<< HEAD
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
-||||||| bc50ba56aa
-import { SnippetAliasesField } from './SnippetAliasesField';
-import type { Snippet } from '@/types/snippet';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-
-interface SnippetForm {
-  name: string;
-  scope: SnippetScope;
-  description: string;
-  aliases: string[];
-  content: string;
-}
-
-const sameForm = (a: SnippetForm, b: SnippetForm): boolean => (
-  a.name === b.name
-  && a.scope === b.scope
-  && a.description === b.description
-  && a.content === b.content
-  && a.aliases.join('\n') === b.aliases.join('\n')
-);
-
-// Each draft is its own editor, also when a discarded one is followed by a
-// new draft under the same free name.
-const draftKeys = new WeakMap<SnippetDraft, number>();
-let lastDraftKey = 0;
-const draftKey = (draft: SnippetDraft): number => {
-  let key = draftKeys.get(draft);
-  if (key === undefined) {
-    lastDraftKey += 1;
-    key = lastDraftKey;
-    draftKeys.set(draft, key);
-  }
-  return key;
-};
-
-type ContentMode = 'edit' | 'preview';
-type PreviewState = { status: 'loading' } | { status: 'ready'; text: string } | { status: 'failed' };
-=======
-import { SnippetAliasesField } from './SnippetAliasesField';
-import type { Snippet } from '@/types/snippet';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-
-interface SnippetForm {
-  name: string;
-  scope: SnippetScope;
-  description: string;
-  aliases: string[];
-  content: string;
-}
-
-const sameForm = (a: SnippetForm, b: SnippetForm): boolean => (
-  a.name === b.name
-  && a.scope === b.scope
-  && a.description === b.description
-  && a.content === b.content
-  && a.aliases.join('\n') === b.aliases.join('\n')
-);
-
-const draftKeys = new WeakMap<SnippetDraft, number>();
-let lastDraftKey = 0;
-const draftKey = (draft: SnippetDraft): number => {
-  let key = draftKeys.get(draft);
-  if (key === undefined) {
-    lastDraftKey += 1;
-    key = lastDraftKey;
-    draftKeys.set(draft, key);
-  }
-  return key;
-};
-
-type ContentMode = 'edit' | 'preview';
-type PreviewState = { status: 'loading' } | { status: 'ready'; text: string } | { status: 'failed' };
->>>>>>> upstream/main
 
 export const SnippetsPage: React.FC = () => {
   const { t } = useI18n();
@@ -110,158 +36,13 @@ export const SnippetsPage: React.FC = () => {
       : null,
     [selectedSnippetName, snippets],
   );
-<<<<<<< HEAD
   const isNew = Boolean(snippetDraft && snippetDraft.name === selectedSnippetName && !selectedSnippet);
   const [draftName, setDraftName] = React.useState('');
   const [draftScope, setDraftScope] = React.useState<SnippetScope>('agent');
   const [description, setDescription] = React.useState('');
   const [content, setContent] = React.useState('');
-||||||| bc50ba56aa
-  const draft = snippetDraft && snippetDraft.name === selectedSnippetName && !selectedSnippet ? snippetDraft : null;
-
-  if (!selectedSnippetName || (!selectedSnippet && !draft)) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <Icon name="file-text" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-ui-label">{t('settings.snippets.page.empty.title')}</p>
-          <p className="typography-meta mt-1 opacity-75">{t('settings.snippets.page.empty.description')}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // The form starts over only when another snippet or draft opens; a list
-  // reload for the same file keeps the edits in progress.
-  const initial: SnippetForm = selectedSnippet
-    ? {
-      name: selectedSnippet.name,
-      scope: selectedSnippet.source,
-      description: selectedSnippet.description ?? '',
-      aliases: selectedSnippet.aliases,
-      content: selectedSnippet.content,
-    }
-    : {
-      name: draft?.name ?? '',
-      scope: draft?.scope ?? 'global',
-      description: draft?.description ?? '',
-      aliases: draft?.aliases ?? [],
-      content: draft?.content ?? '',
-    };
-  return (
-    <SnippetEditor
-      key={selectedSnippet ? selectedSnippet.filePath : `draft:${draft ? draftKey(draft) : ''}`}
-      snippet={selectedSnippet}
-      draft={draft}
-      initial={initial}
-    />
-  );
-};
-
-const SnippetEditor: React.FC<{ snippet: Snippet | null; draft: SnippetDraft | null; initial: SnippetForm }> = ({ snippet, draft, initial: initialForm }) => {
-  const { t } = useI18n();
-  const {
-    snippets,
-    setSnippetDraft,
-    setSelectedSnippet,
-    setHasUnsavedChanges,
-    updateSnippet,
-    createSnippet,
-    previewSnippet,
-  } = useSnippetsStore(useShallow((s) => ({
-    snippets: s.snippets,
-    setSnippetDraft: s.setSnippetDraft,
-    setSelectedSnippet: s.setSelectedSnippet,
-    setHasUnsavedChanges: s.setHasUnsavedChanges,
-    updateSnippet: s.updateSnippet,
-    createSnippet: s.createSnippet,
-    previewSnippet: s.previewSnippet,
-  })));
-  const isNew = snippet === null;
-
-  const [initial, setInitial] = React.useState(initialForm);
-  const [form, setForm] = React.useState(initialForm);
-=======
-  const draft = snippetDraft && snippetDraft.name === selectedSnippetName && !selectedSnippet ? snippetDraft : null;
-
-  if (!selectedSnippetName || (!selectedSnippet && !draft)) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <Icon name="file-text" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-ui-label">{t('settings.snippets.page.empty.title')}</p>
-          <p className="typography-meta mt-1 opacity-75">{t('settings.snippets.page.empty.description')}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const initial: SnippetForm = selectedSnippet
-    ? {
-      name: selectedSnippet.name,
-      scope: selectedSnippet.source,
-      description: selectedSnippet.description ?? '',
-      aliases: selectedSnippet.aliases,
-      content: selectedSnippet.content,
-    }
-    : {
-      name: draft?.name ?? '',
-      scope: draft?.scope ?? 'global',
-      description: draft?.description ?? '',
-      aliases: draft?.aliases ?? [],
-      content: draft?.content ?? '',
-    };
-  return (
-    <SnippetEditor
-      key={selectedSnippet ? selectedSnippet.filePath : `draft:${draft ? draftKey(draft) : ''}`}
-      snippet={selectedSnippet}
-      draft={draft}
-      initial={initial}
-    />
-  );
-};
-
-const SnippetEditor: React.FC<{ snippet: Snippet | null; draft: SnippetDraft | null; initial: SnippetForm }> = ({ snippet, draft, initial: initialForm }) => {
-  const { t } = useI18n();
-  const {
-    snippets,
-    setSnippetDraft,
-    setSelectedSnippet,
-    setHasUnsavedChanges,
-    updateSnippet,
-    createSnippet,
-    previewSnippet,
-  } = useSnippetsStore(useShallow((s) => ({
-    snippets: s.snippets,
-    setSnippetDraft: s.setSnippetDraft,
-    setSelectedSnippet: s.setSelectedSnippet,
-    setHasUnsavedChanges: s.setHasUnsavedChanges,
-    updateSnippet: s.updateSnippet,
-    createSnippet: s.createSnippet,
-    previewSnippet: s.previewSnippet,
-  })));
-  const isNew = snippet === null;
-
-  const [initial, setInitial] = React.useState(initialForm);
-  const [form, setForm] = React.useState(initialForm);
->>>>>>> upstream/main
   const [isSaving, setIsSaving] = React.useState(false);
-<<<<<<< HEAD
   const initialStateRef = React.useRef<{ draftName: string; draftScope: SnippetScope; description: string; content: string } | null>(null);
-||||||| bc50ba56aa
-  const [contentMode, setContentMode] = React.useState<ContentMode>('edit');
-  const [preview, setPreview] = React.useState<PreviewState>({ status: 'loading' });
-
-  const isChanged = !sameForm(form, initial);
-  // A new draft saves as it is; only real edits ask before being dropped.
-  const canSave = !isSaving && (isNew || isChanged);
-=======
-  const [contentMode, setContentMode] = React.useState<ContentMode>('edit');
-  const [preview, setPreview] = React.useState<PreviewState>({ status: 'loading' });
-
-  const isChanged = !sameForm(form, initial);
-  const canSave = !isSaving && (isNew || isChanged);
->>>>>>> upstream/main
 
   React.useEffect(() => {
     if (isNew && snippetDraft) {
@@ -320,25 +101,7 @@ const SnippetEditor: React.FC<{ snippet: Snippet | null; draft: SnippetDraft | n
         return;
       }
       toast.success(t('settings.snippets.page.toast.saved'));
-<<<<<<< HEAD
       if (isNew) setSnippetDraft(null);
-||||||| bc50ba56aa
-      // The saved fields are the new baseline; a rename or a move reopens the
-      // snippet under its new file (the store moves the selection).
-      setInitial(form);
-      // A new snippet opens once saved, unless the user went on to another
-      // one while the save was in flight.
-      if (isNew && useSnippetsStore.getState().snippetDraft === draft) {
-        setSnippetDraft(null);
-        setSelectedSnippet(name);
-      }
-=======
-      setInitial(form);
-      if (isNew && useSnippetsStore.getState().snippetDraft === draft) {
-        setSnippetDraft(null);
-        setSelectedSnippet(name);
-      }
->>>>>>> upstream/main
     } finally {
       setIsSaving(false);
     }
@@ -366,19 +129,9 @@ const SnippetEditor: React.FC<{ snippet: Snippet | null; draft: SnippetDraft | n
       description={selectedSnippet?.source}
       showSaveStatus={false}
     >
-<<<<<<< HEAD
       <SettingsSection divider={false}>
         {isNew ? (
           <SettingsFieldRow label="/">
-||||||| bc50ba56aa
-      <SettingsSection divider={false} contentClassName="space-y-4">
-        <SettingsStackedField label={t('snippets.field.name')}>
-          <div className="flex w-full max-w-sm min-w-0 items-center gap-2">
-=======
-      <SettingsSection contentClassName="space-y-4">
-        <SettingsStackedField label={t('snippets.field.name')}>
-          <div className="flex w-full max-w-sm min-w-0 items-center gap-2">
->>>>>>> upstream/main
             <Input
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}

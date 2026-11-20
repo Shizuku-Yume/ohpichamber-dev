@@ -1,14 +1,6 @@
 import React from 'react';
-<<<<<<< HEAD
 import type { ProviderAccounts as Accounts, ProviderAccountMutationRequest } from '@openchamber/agent-contract';
 import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
-||||||| bc50ba56aa
-import type { ConnectionInfo } from '@opencode/client';
-import { SETTINGS_ICON_BUTTON_CLASS } from '@/components/sections/shared/SettingsSection';
-=======
-import type { IntegrationConnection as ConnectionInfo } from '@/lib/opencode/model';
-import { SETTINGS_ICON_BUTTON_CLASS } from '@/components/sections/shared/SettingsSection';
->>>>>>> upstream/main
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,47 +15,11 @@ import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface ProviderAccountsProps {
-<<<<<<< HEAD
   roster: Accounts;
   /** Credential with an account write in flight; every account action waits for it. */
-||||||| bc50ba56aa
-  /** Stored credentials first, then environment variables the server can see. */
-  connections: readonly ConnectionInfo[];
-  /** The one credential requests go through, when a stored credential is in use. */
-  activeId: string | null;
-  /**
-   * Credentials stored under an integration the provider does not use right now
-   * (OpenCode Go keys while the Console sign-in serves Go). Removable, never switchable.
-   */
-  unusedIds: ReadonlySet<string>;
-  /** Credential id with a write in flight; every account action waits for it. */
-=======
-  connections: readonly ConnectionInfo[];
-  activeId: string | null;
-  unusedIds: ReadonlySet<string>;
->>>>>>> upstream/main
   busyId: string | null;
-<<<<<<< HEAD
   onMutate: (request: ProviderAccountMutationRequest) => void;
   disabled?: boolean;
-||||||| bc50ba56aa
-  /**
-   * Judged over all of the provider's accounts, which may be split across
-   * several lists: whether an idle account offers Use, and whether the active
-   * one carries its Active mark.
-   */
-  canSwitch: boolean;
-  showActive: boolean;
-  onActivate: (account: CredentialConnection) => void;
-  onRename: (account: CredentialConnection, label: string) => void;
-  onRemove: (account: CredentialConnection) => void;
-=======
-  canSwitch: boolean;
-  showActive: boolean;
-  onActivate: (account: CredentialConnection) => void;
-  onRename: (account: CredentialConnection, label: string) => void;
-  onRemove: (account: CredentialConnection) => void;
->>>>>>> upstream/main
 }
 
 const AccountTile: React.FC<{ icon: IconName }> = ({ icon }) => (
@@ -72,63 +28,6 @@ const AccountTile: React.FC<{ icon: IconName }> = ({ icon }) => (
   </span>
 );
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * The line under an account: what OpenCode reported when the connection needs
- * a new sign-in, otherwise how the account connects.
- */
-const AccountSubtitle: React.FC<{ connection: ConnectionInfo; fallback: string }> = ({ connection, fallback }) => (
-  connectionNeedsAuth(connection) && connection.status ? (
-    <div className="typography-micro text-[var(--status-warning)] break-words">{connection.status.message}</div>
-  ) : (
-    <div className="typography-micro text-muted-foreground">{fallback}</div>
-  )
-);
-
-/** Opens the page OpenCode named for signing in again (an SSO login, for one). */
-const SignInAgainButton: React.FC<{ connection: ConnectionInfo; account: string }> = ({ connection, account }) => {
-  const { t } = useI18n();
-  const url = connectionNeedsAuth(connection) ? connection.status?.url : undefined;
-  if (!url) return null;
-  return (
-    <Button
-      variant="outline"
-      size="xs"
-      onClick={() => { void openExternalUrl(url); }}
-      aria-label={t('settings.providers.accounts.signInAria', { account })}
-    >
-      {t('settings.providers.accounts.signIn')}
-    </Button>
-  );
-};
-
-=======
-const AccountSubtitle: React.FC<{ connection: ConnectionInfo; fallback: string }> = ({ connection, fallback }) => (
-  connectionNeedsAuth(connection) && connection.status ? (
-    <div className="typography-micro text-[var(--status-warning)] break-words">{connection.status.message}</div>
-  ) : (
-    <div className="typography-micro text-muted-foreground">{fallback}</div>
-  )
-);
-
-const SignInAgainButton: React.FC<{ connection: ConnectionInfo; account: string }> = ({ connection, account }) => {
-  const { t } = useI18n();
-  const url = connectionNeedsAuth(connection) ? connection.status?.url : undefined;
-  if (!url) return null;
-  return (
-    <Button
-      variant="outline"
-      size="xs"
-      onClick={() => { void openExternalUrl(url); }}
-      aria-label={t('settings.providers.accounts.signInAria', { account })}
-    >
-      {t('settings.providers.accounts.signIn')}
-    </Button>
-  );
-};
-
->>>>>>> upstream/main
 const RenameField: React.FC<{
   initial: string;
   onSave: (label: string) => void;
@@ -177,12 +76,6 @@ const RenameField: React.FC<{
   );
 };
 
-<<<<<<< HEAD
-/** Stored native credentials for one provider, one row per account. */
-||||||| bc50ba56aa
-/** Stored accounts and environment connections for one provider. */
-=======
->>>>>>> upstream/main
 export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   roster,
   busyId,
@@ -202,28 +95,11 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
       {roster.accounts.map((account, index) => {
         const active = account.active;
         const busy = busyId !== null;
-<<<<<<< HEAD
         const methodLabel = account.method === 'oauth'
           ? t('settings.providers.accounts.method.oauth')
           : t('settings.providers.accounts.method.key');
         const name = account.label || account.email || account.accountId || `${methodLabel} ${index + 1}`;
         const methodIcon: IconName = account.method === 'oauth' ? 'user-3' : 'key';
-||||||| bc50ba56aa
-        const methodLabel = connection.method === 'oauth'
-          ? (unused ? t('settings.providers.accounts.method.oauthUnused') : t('settings.providers.accounts.method.oauth'))
-          : connection.method === 'external'
-            ? (unused ? t('settings.providers.accounts.method.externalUnused') : t('settings.providers.accounts.method.external'))
-            : (unused ? t('settings.providers.accounts.method.keyUnused') : t('settings.providers.accounts.method.key'));
-        // An external credential (a cloud CLI login or profile) lives outside OpenCode's store.
-        const methodIcon = connection.method === 'oauth' ? 'user-3' : connection.method === 'external' ? 'terminal-box' : 'key';
-=======
-        const methodLabel = connection.method === 'oauth'
-          ? (unused ? t('settings.providers.accounts.method.oauthUnused') : t('settings.providers.accounts.method.oauth'))
-          : connection.method === 'external'
-            ? (unused ? t('settings.providers.accounts.method.externalUnused') : t('settings.providers.accounts.method.external'))
-            : (unused ? t('settings.providers.accounts.method.keyUnused') : t('settings.providers.accounts.method.key'));
-        const methodIcon = connection.method === 'oauth' ? 'user-3' : connection.method === 'external' ? 'terminal-box' : 'key';
->>>>>>> upstream/main
 
         return (
           <div key={account.credentialRef} className={cn('flex min-w-0 items-center gap-3 py-2.5', account.disabled && 'opacity-60')}>
