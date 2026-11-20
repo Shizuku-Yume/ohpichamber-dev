@@ -62,6 +62,12 @@ consumes the one-shot receipt through the existing Host Bash authorizer before
 calling the private Host action channel. The Host alone collects values; no
 submitted secret enters the worker, SDK transcript or canonical tool result.
 `secret.request` refuses file mode and `secret.forget` clears Host memory leases.
+The shared private-protocol `hostActionTimeoutMs` policy exempts only `secret.run`
+from the generic two-minute IPC deadline in both supervisor and Node Host.
+Secret entry waits for the user or cancellation; the Host command runner owns
+the requested execution timeout (at most five minutes). Abort, worker/service
+disconnect and shutdown still cancel the pending action. Other actions retain
+their two-minute deadline; authorization requests retain five seconds.
 
 ## OMP TUI timeline notices and compaction projection
 

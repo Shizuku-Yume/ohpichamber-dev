@@ -11,6 +11,20 @@ Parser and card suites pass 15 tests; full UI lint exits 0 (unchanged-file hook
 warnings), and UI type-check passes 4,234 files across two projects. Evidence:
 `/home/ubuntu/secret-review-checks/`. Visual verification remains unclaimed.
 
+The same review exposed a two-minute IPC deadline covering both secret entry
+and command execution despite the Host's five-minute command budget. Both IPC
+ends now share a private-protocol deadline policy: only `secret.run` waits for
+completion or cancellation without a transport timer. Host execution retains
+its bounded command timeout; abort, disconnect and shutdown still cancel the
+action. Other actions retain two minutes and authorization retains five
+seconds. Supervisor/tool suites pass 16 tests; four focused Host/control suites
+pass 57 tests, including three minutes of real secret collection followed by
+five minutes of simulated execution, cancellation and unchanged ordinary-action
+deadlines. Contract/service/SDK builds, server/service lint and both type checks
+pass. Evidence: `/home/ubuntu/secret-review-checks/`. The long-duration tests use
+fake clocks and the Host integration injects the command runner; this is not a
+real-provider or elapsed-eight-minute runtime claim.
+
 Secret-tool Step A restores v2.7.3 memory-only command execution behind the
 authenticated worker Host action and exact-command Canonical Bash receipt.
 Public control cannot authorize it; file-mode requests refuse. Secret answers
