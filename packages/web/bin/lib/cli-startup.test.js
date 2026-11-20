@@ -38,7 +38,7 @@ describe('buildSystemdUserService', () => {
     expect(unit).toMatch(/^SuccessExitStatus=143$/m);
   });
 
-  it('starts a pnpm 11+ global install through the link that survives updates', () => {
+  it.skipIf(process.platform === 'win32')('starts a pnpm 11+ global install through the link that survives updates', () => {
     const pnpmHome = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-pnpm-'));
     const globalDir = join(pnpmHome, 'global', 'v11');
     const packageEntry = join('node_modules', 'ohpichamber', 'bin', 'cli.js');
