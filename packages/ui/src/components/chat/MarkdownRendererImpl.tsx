@@ -424,6 +424,7 @@ export function MarkdownContent({
     settled,
     purpose,
     uiBlocks: uiBlocks && purpose !== 'copy',
+    svgFences: false,
     settledReply: uiBlocks && !purpose && settled && sessionId && messageId ? { sessionId, messageId } : null,
     disableLinkSafety,
     tableWidthScope,
