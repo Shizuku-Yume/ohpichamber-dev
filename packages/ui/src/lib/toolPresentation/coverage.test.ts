@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { overrides } from '../../../../../package.json';
 import { KNOWN_TOOL_NAMES, OMP_TOOL_NAMES, toolPresentation } from './index';
 
 const known = (name: string): boolean => (KNOWN_TOOL_NAMES as readonly string[]).includes(name);
@@ -14,24 +13,12 @@ const known = (name: string): boolean => (KNOWN_TOOL_NAMES as readonly string[])
  * read OMP's own name lists out of the pinned tarball, so an OMP upgrade that
  * adds a tool fails here instead of silently degrading the chat.
  */
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = new URL('../../../../../', import.meta.url);
 
-const repoRoot = (): string => {
-    let current = TEST_DIR;
-    for (let depth = 0; depth < 12; depth += 1) {
-        if (existsSync(path.join(current, 'vendor', 'omp'))) return current;
-        const parent = path.dirname(current);
-        if (parent === current) break;
-        current = parent;
-    }
-    throw new Error(`No vendor/omp above ${TEST_DIR}`);
-};
-
-const tarball = (name: string): string => {
-    const vendor = path.join(repoRoot(), 'vendor', 'omp');
-    const version = spawnSync('find', [vendor, '-name', `${name}-*.tgz`], { encoding: 'utf8' }).stdout.trim().split('\n')[0];
-    if (!version) throw new Error(`No ${name} tarball under ${vendor}`);
-    return version;
+const tarball = (name: '@oh-my-pi/pi-coding-agent' | '@oh-my-pi/pi-tui'): string => {
+    const pin = overrides[name];
+    if (!pin.startsWith('file:vendor/omp/')) throw new Error(`No vendored tarball pin for ${name}`);
+    return fileURLToPath(new URL(pin.slice('file:'.length), REPO_ROOT));
 };
 
 const readMember = (archive: string, member: string): string => {
@@ -57,8 +44,8 @@ const rendererNames = (source: string): string[] => {
 };
 
 const ompNames = (): { builtin: string[]; hidden: string[]; renderers: string[] } => {
-    const codingAgent = readMember(tarball('oh-my-pi-pi-coding-agent'), 'package/src/tools/builtin-names.ts');
-    const tui = readMember(tarball('oh-my-pi-pi-tui'), 'package/src/tools/index.ts');
+    const codingAgent = readMember(tarball('@oh-my-pi/pi-coding-agent'), 'package/src/tools/builtin-names.ts');
+    const tui = readMember(tarball('@oh-my-pi/pi-tui'), 'package/src/tools/index.ts');
     return {
         builtin: nameList(codingAgent, 'BUILTIN_TOOL_NAMES'),
         hidden: nameList(codingAgent, 'HIDDEN_TOOL_NAMES'),

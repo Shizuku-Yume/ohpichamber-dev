@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -59,14 +59,15 @@ function walk(directory: string, files: string[] = []): string[] {
  */
 function collectClaims(): Claim[] {
   const claims: Claim[] = [];
-  for (const file of walk(SECTIONS_ROOT)) {
-    const source = readFileSync(file, 'utf8');
-    const page = relative(SECTIONS_ROOT, file).split('/')[0];
+  for (const fullPath of walk(SECTIONS_ROOT)) {
+    const source = readFileSync(fullPath, 'utf8');
+    const file = relative(SECTIONS_ROOT, fullPath).split(sep).join('/');
+    const page = file.split('/')[0];
     for (const match of source.matchAll(/settingsItem=(?:"([^"]*)"|`([^`]*)`)/g)) {
       const literal = match[1];
       const template = match[2];
       if (literal !== undefined) {
-        claims.push({ id: literal, page, file: relative(SECTIONS_ROOT, file) });
+        claims.push({ id: literal, page, file });
         continue;
       }
       // `a.${x}.b` covers `a.<x>.b`; the trailing static part still separates
@@ -74,7 +75,7 @@ function collectClaims(): Claim[] {
       const prefixHead = template.split('${')[0];
       const prefixTail = template.includes('}') ? template.slice(template.lastIndexOf('}') + 1) : '';
       if (prefixHead.length === 0 || prefixTail.length > 0) continue;
-      claims.push({ id: prefixHead, page, file: relative(SECTIONS_ROOT, file), namespace: true });
+      claims.push({ id: prefixHead, page, file, namespace: true });
     }
   }
   return claims;
