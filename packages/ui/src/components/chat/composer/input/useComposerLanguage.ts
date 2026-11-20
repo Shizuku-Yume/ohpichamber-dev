@@ -5,7 +5,6 @@ import type { useComposerPreferences } from './useComposerPreferences';
 import type { useComposerLargePasteScope } from './useComposerLargePasteScope';
 import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDraftText } from './useComposerDraftText';
-import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import React from 'react';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';

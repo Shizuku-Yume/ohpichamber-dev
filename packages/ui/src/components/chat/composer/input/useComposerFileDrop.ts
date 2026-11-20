@@ -1,7 +1,4 @@
-import type { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
-import type { useComposerSelection } from './useComposerSelection';
-import type { useComposerMentionPaths } from './useComposerMentionPaths';
 import type { useComposerFileIntake } from './useComposerFileIntake';
 import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerEditorActions } from './useComposerEditorActions';
