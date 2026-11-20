@@ -1975,9 +1975,11 @@ export function registerGitRoutes(app: Application, {
       });
       res.json({ success: Boolean(result) });
     } catch (error) {
-      console.error('Failed to remove worktree:', error);
-      const code = errorFields(error)?.code === 'WORKTREE_UNREGISTERED' ? 'WORKTREE_UNREGISTERED' : worktreeTeardownCodeOf(error);
-      res.status(500).json({ error: messageOf(error) || 'Failed to remove worktree', code });
+      const status = statusOf(error);
+      const errorCode = errorFields(error)?.code;
+      if (status === undefined || status >= 500) console.error('Failed to remove worktree:', error);
+      const code = status !== undefined || errorCode === 'WORKTREE_UNREGISTERED' ? errorCode : worktreeTeardownCodeOf(error);
+      res.status(status ?? 500).json({ error: messageOf(error) || 'Failed to remove worktree', code });
     }
   }));
 

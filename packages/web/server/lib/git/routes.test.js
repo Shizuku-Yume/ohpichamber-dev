@@ -957,6 +957,16 @@ describe('git worktree teardown routes', () => {
     }
   });
 
+  it.each(['RUN_ACTIVE', 'COMMAND_IN_FLIGHT'])('preserves a worktree lease refusal (%s)', async (code) => {
+    gitLibraries.removeWorktree.mockRejectedValue(Object.assign(new Error('The worktree lease was refused'), { status: 409, code }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore });
+    const response = createMockResponse();
+    await getRoute('DELETE', '/api/git/worktrees')({ query: { directory: '/repo' }, body: { directory: '/repo/wt' } }, response);
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({ error: 'The worktree lease was refused', code });
+  });
+
   it('reports when Git unregistered the worktree but folder cleanup failed', async () => {
     gitLibraries.removeWorktree.mockRejectedValue(Object.assign(new Error('Folder is still in use'), { code: 'WORKTREE_UNREGISTERED' }));
     const { app, getRoute } = createRouteRegistry();
