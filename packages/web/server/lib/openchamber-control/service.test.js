@@ -303,6 +303,32 @@ describe('OhPiChamber control service canonical consumers', () => {
     expect(JSON.stringify(result)).not.toContain('/host/private');
   });
 
+  it('does not wait on a page when a user message is already queued', async () => {
+    const hasUnreadChat = vi.fn(async () => true);
+    const onPageWaitChange = vi.fn();
+    const { control } = createHarness(undefined, { hasUnreadChat, onPageWaitChange });
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', toolCallId: 'queued-page',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true },
+    });
+    expect(result).toMatchObject({ ok: true, value: { answer: { answered: false, reason: 'chat-sent-earlier' } } });
+    expect(hasUnreadChat).toHaveBeenCalledWith('session-1');
+    expect(onPageWaitChange).not.toHaveBeenCalled();
+  });
+
+  it('does not wait on a page after an unavailable queued-message read', async () => {
+    const onPageWaitChange = vi.fn();
+    const { control } = createHarness(undefined, {
+      hasUnreadChat: async () => { throw new Error('queue unavailable'); }, onPageWaitChange,
+    });
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', toolCallId: 'unavailable-queue-page',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true },
+    });
+    expect(result).toMatchObject({ ok: false });
+    expect(onPageWaitChange).not.toHaveBeenCalled();
+  });
+
   it('serves render.page through the render feature policy and carries the call id to a waiting page', async () => {
     const waits = [];
     const { control } = createHarness(undefined, {
