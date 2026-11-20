@@ -22,8 +22,6 @@ import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { useI18n } from '@/lib/i18n';
 import { isSessionPinned } from '@/lib/sessionPins';
 import { isDoneSuggested } from '@/lib/sessionWorkMetadata';
-import { isOperatorChildSession } from '@/lib/sessionOperatorChild';
-import { takeOverSession } from '@/sync/session-take-over';
 import { getSessionGoal } from '@/lib/sessionGoalMetadata';
 import { collectSessionWorkInWork } from '@/components/session/sidebar/works/sidebarWorks';
 import { cn } from '@/lib/utils';
@@ -274,12 +272,6 @@ export const MobileSessionRow: React.FC<{
         <ContextMenuItem onClick={work.onToggle}>
           <Icon name={work.inWork ? 'check' : 'eye'} className="me-1 size-4" />
           {work.inWork ? t('sessions.sidebar.session.work.markDone') : t('sessions.sidebar.session.work.track')}
-        </ContextMenuItem>
-      ) : null}
-      {isOperatorChildSession(session) ? (
-        <ContextMenuItem onClick={() => { void takeOverSession(session.sessionId, directory || null).catch(() => toast.error(t('sessions.sidebar.session.takeOver.failed'))); }}>
-          <Icon name="user" className="me-1 size-4" />
-          {t('sessions.sidebar.session.menu.takeOver')}
         </ContextMenuItem>
       ) : null}
       <ContextMenuItem onClick={() => { void runMobileSubtreeAction('archive', session, t); }}>

@@ -4,7 +4,6 @@ import type { useI18n } from '@/lib/i18n';
 import type { Session } from '@openchamber/agent-contract';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
 import { setSessionWorkState } from '@/sync/session-actions';
-import { settleRunningOperatorChildren } from '@/sync/operator-children-done';
 import { normalizePath } from '../utils';
 
 export const toggleSessionWork = async (
@@ -18,7 +17,6 @@ export const toggleSessionWork = async (
       await setSessionWorkState(sessionId, directory, 'open');
       return;
     }
-    if (!await settleRunningOperatorChildren(inWork.map((entry) => entry.sessionId))) return;
     for (const entry of inWork) {
       await setSessionWorkState(entry.sessionId, normalizePath(resolveGlobalSessionDirectory(entry) ?? null) ?? directory, 'done');
     }

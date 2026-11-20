@@ -6,7 +6,7 @@ import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDraftText } from './useComposerDraftText';
 import React from 'react';
 import { useBtwStore } from '@/stores/useBtwStore';
-import { useIsPageWaiting } from '@/sync/global-blocking-requests';
+import { useSessionStatus } from '@/sync/sync-context';
 import { selectComposerQueue } from '../../composer/submit/buildOutgoingMessage';
 
 type Dependencies = {
@@ -38,11 +38,11 @@ export function useComposerSendAvailability({
 
     const pendingFirstSend = null as { sessionCreated: boolean } | null;
 
-    const canSend = (hasContent || hasQueuedMessages) && !(isBtwActive && preparingBtwSend) && !pendingFirstSend;
+    const canSend = hasContent && !(isBtwActive && preparingBtwSend) && !pendingFirstSend;
 
     const canAbort = sessionPhase !== 'idle' && !pendingFirstSend;
 
-    const isPageWaiting = useIsPageWaiting(currentSessionId);
+    const isAwaitingInput = useSessionStatus(currentSessionId ?? '') === 'awaiting_input';
 
     const getCurrentInputSnapshot = React.useCallback(() => {
         const currentMessage = composerRef.current?.getValue() ?? composerText.get();
@@ -55,6 +55,6 @@ export function useComposerSendAvailability({
 
     return {
         getCurrentInputSnapshot, pendingFirstSend,
-        composerQueuedMessages, hasQueuedMessages, isPageWaiting, hasContent, canAbort, canSend,
+        composerQueuedMessages, hasQueuedMessages, isAwaitingInput, hasContent, canAbort, canSend,
     };
 }

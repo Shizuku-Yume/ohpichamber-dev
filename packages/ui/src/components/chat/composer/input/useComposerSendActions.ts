@@ -12,7 +12,7 @@ import type { ResolvedStarter } from '../../useDraftStarters';
 
 type Dependencies = {
     inlineContext: Pick<ReturnType<typeof useComposerInlineContext>, 'isMobileCommentOpen'>;
-    sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'getCurrentInputSnapshot' | 'isPageWaiting'>;
+    sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'getCurrentInputSnapshot' | 'isAwaitingInput'>;
     sendHandlers: Pick<ComposerSendHandlers, 'handleSubmitRef'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'isBtwActive' | 'inputMode' | 'currentSessionId'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'currentSessionPhase' | 'autoReviewRunning'>;
@@ -27,7 +27,7 @@ export function useComposerSendActions({
     queueActions, editorState, draftText,
 }: Dependencies) {
     const { isMobileCommentOpen } = inlineContext;
-    const { pendingFirstSend, getCurrentInputSnapshot, isPageWaiting } = sendAvailability;
+    const { pendingFirstSend, getCurrentInputSnapshot, isAwaitingInput } = sendAvailability;
     const { handleSubmitRef } = sendHandlers;
     const { isBtwActive, inputMode, currentSessionId } = sessionScope;
     const { currentSessionPhase, autoReviewRunning } = sessionLifecycle;
@@ -40,7 +40,7 @@ export function useComposerSendActions({
         if (isMobileCommentOpen()) return;
         if (pendingFirstSend) return;
         const inputSnapshot = getCurrentInputSnapshot();
-        const canQueue = !isBtwActive && !isPageWaiting && inputMode === 'normal' && inputSnapshot.hasContent && currentSessionId && (currentSessionPhase !== 'idle' || autoReviewRunning);
+        const canQueue = !isBtwActive && !isAwaitingInput && inputMode === 'normal' && inputSnapshot.hasContent && currentSessionId && (currentSessionPhase !== 'idle' || autoReviewRunning);
         if (followUpBehavior === 'queue' && canQueue) {
             void handleQueueMessage();
         } else if (followUpBehavior === 'steer' && canQueue) {
@@ -48,7 +48,7 @@ export function useComposerSendActions({
         } else {
             void handleSubmitRef.current();
         }
-    }, [inputMode, getCurrentInputSnapshot, currentSessionId, currentSessionPhase, autoReviewRunning, followUpBehavior, handleQueueMessage, isBtwActive, isPageWaiting, isMobileCommentOpen, pendingFirstSend, handleSubmitRef]);
+    }, [inputMode, getCurrentInputSnapshot, currentSessionId, currentSessionPhase, autoReviewRunning, followUpBehavior, handleQueueMessage, isBtwActive, isAwaitingInput, isMobileCommentOpen, pendingFirstSend, handleSubmitRef]);
 
     const submitPresetPrompt = React.useCallback((text: string, type: 'command' | 'skill') => {
         const draft = (composerRef.current?.getValue() ?? composerText.get()).trim();

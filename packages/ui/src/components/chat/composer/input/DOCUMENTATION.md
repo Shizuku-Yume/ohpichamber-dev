@@ -13,6 +13,9 @@ preferences are inputs to these owners.
 
 ## Invariants
 
+- Follow-up actions read canonical `awaiting_input` status rather than legacy
+  page-wait tags. A queue entry alone never enables Send; the composer needs its
+  own content. Host-owned entries cannot contribute attachments or send options.
 - Hooks run unconditionally in the same composer instance. Effects retain their
   ordering, including draft restoration before pending text is consumed.
 - The text store, editor view, refs and stable handlers keep the original

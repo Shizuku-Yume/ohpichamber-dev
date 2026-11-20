@@ -43,7 +43,7 @@
     "pack:standalone": "node ./scripts/pack-standalone.mjs",
     "stage:runtime": "node ./scripts/prepare-agent-runtime.mjs",
     "build:server": "bun ../../scripts/build-builtin-extensions.mjs && node scripts/build-server.mjs",
-    "type-check:server": "node scripts/check-server-types.mjs",
+    "type-check:server": "bun run --cwd ../agent-service build && node scripts/check-server-types.mjs",
     "lint:server": "node scripts/check-server-types.mjs --lint",
     "smoke:server-build": "node scripts/smoke-server-build.mjs"
   },

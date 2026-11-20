@@ -250,13 +250,13 @@ describe('settings registry', () => {
 
   test('section order: a saved order applies as stored and a dragged order stays', () => {
     const original = useUIStore.getState();
-    const saved = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
+    const saved = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources', 'tasks'];
     try {
       applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: saved }) ?? {});
       // The fork's store has one sanitized order and no explicit marker.
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(saved);
 
-      const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'];
+      const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'tasks'];
       useUIStore.getState().setWorkStatusSectionOrder(dragged);
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(dragged);
 
@@ -265,7 +265,7 @@ describe('settings registry', () => {
         .toEqual(resolveWorkStatusSectionOrder(['session', 'repository'], []));
       // An order the user never arranged follows the default's Context sources move.
       expect(sanitizeWorkStatusSectionOrder(['session', 'repository', 'usage', 'subagents', 'mcp', 'pinned', 'contextSources'], false))
-        .toEqual(['session', 'repository', 'usage', 'contextSources', 'subagents', 'mcp', 'pinned', 'telemetry', 'workflows']);
+        .toEqual(['session', 'repository', 'usage', 'contextSources', 'subagents', 'tasks', 'mcp', 'pinned', 'telemetry', 'workflows']);
     } finally {
       useUIStore.setState(original, true);
     }
@@ -492,10 +492,11 @@ describe('settings registry effects', () => {
     'packages/ui/src/lib/persistence.test.ts',
     'packages/ui/src/lib/appearanceAutoSave.ts',
     'packages/ui/src/lib/modelPrefsAutoSave.ts',
-    'packages/web/server/lib/host/settings-helpers.js',
-    'packages/web/server/lib/host/settings-helpers.test.js',
-    'packages/web/server/lib/host/settings-runtime.js',
-    'packages/web/server/lib/host/settings-files.js',
+    'packages/ui/src/stores/ui/initialState.ts',
+    'packages/web/server/lib/settings/settings-helpers.ts',
+    'packages/web/server/lib/settings/settings-runtime.ts',
+    'packages/web/server/lib/settings/settings-files.ts',
+    'packages/web/server/lib/settings/settings-normalization-runtime.ts',
   ]);
 
   const SOURCE_ROOTS = [

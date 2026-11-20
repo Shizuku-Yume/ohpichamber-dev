@@ -34,7 +34,7 @@ type Dependencies = {
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'queuedMessages' | 'followUpBehavior'>;
     queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEditById' | 'handleQueueMessage'>;
     draftHistory: Pick<ReturnType<typeof useComposerDraftHistory>, 'messageHistory' | 'applyHistoryValue'>;
-    sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'isPageWaiting' | 'getCurrentInputSnapshot'>;
+    sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'pendingFirstSend' | 'isAwaitingInput' | 'getCurrentInputSnapshot'>;
     submission: Pick<ReturnType<typeof useComposerSubmission>, 'handleSubmit'>;
 };
 
@@ -61,7 +61,7 @@ export function createComposerKeyHandler({
     const { queuedMessages, followUpBehavior } = queueState;
     const { handleQueuedMessageEditById, handleQueueMessage } = queueActions;
     const { messageHistory, applyHistoryValue } = draftHistory;
-    const { pendingFirstSend, isPageWaiting, getCurrentInputSnapshot } = sendAvailability;
+    const { pendingFirstSend, isAwaitingInput, getCurrentInputSnapshot } = sendAvailability;
     const { handleSubmit } = submission;
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -235,7 +235,7 @@ export function createComposerKeyHandler({
             if (pendingFirstSend) return;
 
 
-            const canQueue = !isBtwActive && !isPageWaiting && inputMode === 'normal' && getCurrentInputSnapshot().hasContent && currentSessionId && (currentSessionPhase !== 'idle' || autoReviewRunning);
+            const canQueue = !isBtwActive && !isAwaitingInput && inputMode === 'normal' && getCurrentInputSnapshot().hasContent && currentSessionId && (currentSessionPhase !== 'idle' || autoReviewRunning);
 
             if (followUpBehavior === 'queue') {
                 if (isCtrlEnter || !canQueue) {

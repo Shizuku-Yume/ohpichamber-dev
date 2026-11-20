@@ -6,7 +6,6 @@ import { readWorktreeUse, sessionsInWorktree } from '@/components/overview/overv
 import { archiveWorktreeWork } from '@/lib/worktrees/worktreeArchive';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { setSessionWorkState } from '@/sync/session-actions';
-import { settleRunningOperatorChildren } from '@/sync/operator-children-done';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
@@ -68,8 +67,6 @@ export const markSessionsDone = async (
   write: typeof setSessionWorkState = setSessionWorkState,
 ): Promise<{ doneIds: string[]; failedIds: string[] } | null> => {
   const isCurrentRuntime = captureRuntimeInstance();
-  const settled = settleRunningOperatorChildren(sessions.map((session) => session.sessionId));
-  if (settled !== true && !await settled) return { doneIds: [], failedIds: [] };
   const outcomes = await mapWithConcurrency([...sessions], MARK_DONE_CONCURRENCY, async (session) => {
     if (!isCurrentRuntime()) return 'stale';
     try {
@@ -107,7 +104,6 @@ export async function finishWorktreeWork(input: {
   title?: string;
   alreadyDone?: ReadonlySet<string>;
 }): Promise<FinishWorktreeWorkOutcome> {
-  if (!await settleRunningOperatorChildren(sessionsToMarkDone(input.sessions, input.alreadyDone).map((session) => session.sessionId))) return { kind: 'cancelled' };
   const failed = await markOverviewSessionsDone(sessionsToMarkDone(input.sessions, input.alreadyDone));
   if (failed.length > 0) {
     return { kind: 'failed', error: new Error(`Could not mark ${failed.length} session(s) done`), doneFailed: failed.length };
@@ -133,7 +129,6 @@ export async function finishSpaceWork(input: {
   projectId: string;
   alreadyDone?: ReadonlySet<string>;
 }): Promise<Extract<FinishWorktreeWorkOutcome, { kind: 'done' | 'failed' | 'cancelled' }>> {
-  if (!await settleRunningOperatorChildren(sessionsToMarkDone(input.sessions, input.alreadyDone).map((session) => session.sessionId))) return { kind: 'cancelled' };
   const failed = await markOverviewSessionsDone(sessionsToMarkDone(input.sessions, input.alreadyDone));
   if (failed.length > 0) {
     return { kind: 'failed', error: new Error(`Could not mark ${failed.length} session(s) done`), doneFailed: failed.length };

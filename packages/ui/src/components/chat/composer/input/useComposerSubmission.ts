@@ -451,12 +451,9 @@ export function useComposerSubmission({
         if (delivery && sendMessageOptions) sendMessageOptions.delivery = delivery;
         if (reasoningEffortToSend) sendMessageOptions = { ...(sendMessageOptions ?? {}), reasoningEffort: reasoningEffortToSend };
 
-        // Queued messages resolved their mentions when they were queued; only
-        // the composer's own text can still name a document.
         if (!queuedOnly && inputSnapshot.hasContent && !(await readSessionMentionsBeforeSend(inputSnapshot.message))) return;
         const reservedFilenames = new Set([
             ...attachedFiles.map((attachment) => attachment.filename),
-            ...queuedProjection.flatMap((queued) => queued.attachments?.map((attachment) => attachment.filename) ?? []),
         ]);
         const documentMentions = await prepareDocumentMentions(
             !isBtwActive && !queuedOnly && inputSnapshot.hasContent ? [inputSnapshot.message] : [],
