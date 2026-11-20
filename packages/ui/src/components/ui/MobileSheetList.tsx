@@ -4,15 +4,8 @@ import type { IconName } from '@/components/icon/icons';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
-<<<<<<< HEAD
 /** Caption of a group of rows: in the phone's sheets and the desktop agent and effort menus. */
 const PICKER_SECTION_HEADER_CLASS = 'typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 px-2 py-1.5';
-||||||| bc50ba56aa
-/** Caption of a group of rows: in the phone's sheets and the desktop agent and effort menus. */
-export const PICKER_SECTION_HEADER_CLASS = 'typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 px-2 py-1.5';
-=======
-export const PICKER_SECTION_HEADER_CLASS = 'typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 px-2 py-1.5';
->>>>>>> upstream/main
 
 export const PICKER_SEARCH_INPUT_CLASS = 'h-7 rounded-none bg-transparent ps-8 pe-0 typography-meta ring-0 hover:[&:not(:focus)]:bg-transparent hover:[&:not(:focus)]:[background-image:none] focus:ring-0 focus-visible:ring-0';
 

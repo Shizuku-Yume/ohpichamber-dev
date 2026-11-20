@@ -9,7 +9,6 @@ import { listModelVariantIds } from '@/lib/modelVariants';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { levelLabel } from '@/components/sections/shared/modelRoleSelectors';
 
-<<<<<<< HEAD
 /**
  * Thinking effort (model variant) picker for one model; renders nothing for
  * models without variants. `inline` sits inside a model chip, `trigger` stands
@@ -18,20 +17,6 @@ import { levelLabel } from '@/components/sections/shared/modelRoleSelectors';
 export function ModelEffortMenu({ providerId, modelId, variant, onChange, appearance = 'inline', disabled = false, tooltip }: {
   providerId: string;
   modelId: string;
-||||||| bc50ba56aa
-/**
- * Thinking effort (model variant) picker for one model; renders nothing for
- * models without variants. `inline` sits inside a model chip, `trigger` stands
- * next to a model picker button.
- */
-export function ModelEffortMenu({ providerID, modelID, variant, onChange, appearance = 'inline', disabled = false, tooltip }: {
-  providerID: string;
-  modelID: string;
-=======
-export function ModelEffortMenu({ providerID, modelID, variant, onChange, appearance = 'inline', disabled = false, tooltip }: {
-  providerID: string;
-  modelID: string;
->>>>>>> upstream/main
   variant: string | undefined;
   onChange: (variant: string | undefined) => void;
   appearance?: 'inline' | 'trigger';

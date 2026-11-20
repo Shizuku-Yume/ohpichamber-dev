@@ -94,13 +94,8 @@ type Props = {
   sessionKey: string;
   chunks: TerminalChunk[];
   onInput: (data: string) => void;
-<<<<<<< HEAD
   onReply: (data: string) => void;
   /** Fitted size: the emulator has this size, so the PTY should follow. */
-||||||| bc50ba56aa
-  /** Fitted size: the emulator has this size, so the PTY should follow. */
-=======
->>>>>>> upstream/main
   onResize: (cols: number, rows: number) => void;
   onProvisionalSize?: (cols: number, rows: number) => void;
   theme: TerminalTheme;
@@ -307,22 +302,8 @@ const TerminalViewport = React.forwardRef<TerminalController, Props>(({
     if (!surface) return;
     const { reset, replay, pending } = selectTerminalChunkReplay(chunks, lastChunkRef.current);
     if (replay) {
-<<<<<<< HEAD
       const history = composeTerminalReplay(pending);
       surface.resetAndWrite(history.data, history.sizes);
-||||||| bc50ba56aa
-      // Snapshot history is laid out for the PTY size recorded on its chunk;
-      // the surface replays it at that size and reflows to the fitted grid.
-      const [snapshot, ...live] = pending;
-      surface.resetAndWrite(snapshot ? (snapshot.replayData ?? snapshot.data) : '', snapshot?.size);
-      const liveData = live.map((chunk) => chunk.replayData ?? chunk.data).join('');
-      if (liveData) surface.write(liveData);
-=======
-      const [snapshot, ...live] = pending;
-      surface.resetAndWrite(snapshot ? (snapshot.replayData ?? snapshot.data) : '', snapshot?.size);
-      const liveData = live.map((chunk) => chunk.replayData ?? chunk.data).join('');
-      if (liveData) surface.write(liveData);
->>>>>>> upstream/main
     } else if (reset) {
       surface.resetAndWrite('');
     } else if (pending.length > 0) {

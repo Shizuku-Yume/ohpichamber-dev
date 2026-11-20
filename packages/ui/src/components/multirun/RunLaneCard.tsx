@@ -24,15 +24,8 @@ const formatDuration = (milliseconds: number): string => {
   return `${seconds}s`;
 };
 
-<<<<<<< HEAD
 /** Elapsed time since creation, live while the member runs. */
 function LaneDuration({ session, busy, finishedAt }: { session: Session; busy: boolean; finishedAt: number | null }): React.ReactNode {
-||||||| bc50ba56aa
-/** Time the member has worked: from creation to its last idle, live while it runs. */
-function LaneDuration({ session, busy }: { session: Session; busy: boolean }): React.ReactNode {
-=======
-function LaneDuration({ session, busy }: { session: Session; busy: boolean }): React.ReactNode {
->>>>>>> upstream/main
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
     if (!busy) return;

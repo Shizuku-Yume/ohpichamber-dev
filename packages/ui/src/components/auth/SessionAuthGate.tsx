@@ -9,7 +9,7 @@ import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/pers
 import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
 import { ensureHomeDirectoryResolved, useDirectoryStore } from '@/stores/useDirectoryStore';
 import { DesktopHostSwitcherInline } from '@/components/desktop/DesktopHostSwitcher';
-import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
+import { OpenChamberLogo } from '@/components/ui/OhPiChamberLogo';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
@@ -338,7 +338,6 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   const [trustDevice, setTrustDevice] = React.useState<boolean>(() => readStoredTrustDevice());
   const [activePasskeyAction, setActivePasskeyAction] = React.useState<'auth' | 'register' | null>(null);
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
-<<<<<<< HEAD
   const hasResyncedRef = React.useRef(false);
   const hasBootstrapResyncedRef = React.useRef(false);
   // Whether the home directory was resolved after authentication. Until then
@@ -346,19 +345,6 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   // password-protected server the page-load attempt could only fall back to
   // "/", and the app would start working there.
   const [homeChecked, setHomeChecked] = React.useState(false);
-||||||| bc50ba56aa
-  const hasResyncedRef = React.useRef(skipAuth);
-  const hasBootstrapResyncedRef = React.useRef(skipAuth);
-  // Whether the home directory was resolved after authentication. Until then
-  // the app stays unmounted when the home is unknown: on a first visit to a
-  // password-protected server the page-load attempt could only fall back to
-  // "/", and the app would start working there.
-  const [homeChecked, setHomeChecked] = React.useState(skipAuth);
-=======
-  const hasResyncedRef = React.useRef(skipAuth);
-  const hasBootstrapResyncedRef = React.useRef(skipAuth);
-  const [homeChecked, setHomeChecked] = React.useState(skipAuth);
->>>>>>> upstream/main
 
   React.useEffect(() => {
     if (typeof window === 'undefined') {

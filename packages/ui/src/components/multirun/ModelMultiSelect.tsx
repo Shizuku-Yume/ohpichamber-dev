@@ -17,27 +17,8 @@ import type { MultiRunModelSelection } from '@/types/multirun';
 
 const CHIP_HEIGHT_CLASS = 'h-7';
 
-<<<<<<< HEAD
 /** UI-only type with instanceId for React keys and duplicate tracking */
 export type ModelSelectionWithId = MultiRunModelSelection & { instanceId: string };
-||||||| bc50ba56aa
-/** UI-only type with instanceId for React keys and duplicate tracking */
-export interface ModelSelectionWithId {
-  providerID: string;
-  modelID: string;
-  displayName?: string;
-  variant?: string;
-  instanceId: string;
-}
-=======
-export interface ModelSelectionWithId {
-  providerID: string;
-  modelID: string;
-  displayName?: string;
-  variant?: string;
-  instanceId: string;
-}
->>>>>>> upstream/main
 
 // oxlint-disable-next-line react/only-export-components -- Utility is tightly coupled with ModelMultiSelect
 export const generateInstanceId = (): string => {

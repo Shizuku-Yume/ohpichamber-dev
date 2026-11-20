@@ -31,15 +31,6 @@ export function useTextareaInlinePicker(
 ): React.ReactNode {
   const [field, setField] = React.useState<HTMLTextAreaElement | null>(null);
 
-<<<<<<< HEAD
-  // The element behind the ref can mount conditionally or remount between
-  // renders; observe assignments to `.current` so we follow it without a
-  // dependency-less effect.
-||||||| bc50ba56aa
-  // The element behind the ref can change between renders (a field that
-  // remounts); follow it.
-=======
->>>>>>> upstream/main
   React.useEffect(() => {
     setField((current) => (current === fieldRef.current ? current : fieldRef.current));
     const descriptor = Object.getOwnPropertyDescriptor(fieldRef, 'current');

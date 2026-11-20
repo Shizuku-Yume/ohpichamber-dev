@@ -48,7 +48,6 @@ export function useConfirmDialog() {
     return response.promise;
   }, []);
 
-<<<<<<< HEAD
   const confirm = React.useCallback((next: ConfirmRequest): Promise<boolean> => (
     requestConfirmation(next).then((result) => result.confirmed)
   ), [requestConfirmation]);
@@ -56,24 +55,6 @@ export function useConfirmDialog() {
   const confirmWithCheckbox = React.useCallback((next: ConfirmRequest & { checkbox: ConfirmCheckbox }): Promise<ConfirmResponse> => (
     requestConfirmation(next)
   ), [requestConfirmation]);
-||||||| bc50ba56aa
-  const confirm = React.useCallback((next: ConfirmRequest): Promise<boolean> => {
-    // A second question while one is open answers the first with "no" first.
-    pending.current?.(false);
-    return new Promise((resolve) => {
-      pending.current = resolve;
-      setRequest(next);
-    });
-  }, []);
-=======
-  const confirm = React.useCallback((next: ConfirmRequest): Promise<boolean> => {
-    pending.current?.(false);
-    return new Promise((resolve) => {
-      pending.current = resolve;
-      setRequest(next);
-    });
-  }, []);
->>>>>>> upstream/main
 
   const dialog = (
     <Dialog open={request !== null} onOpenChange={(open) => { if (!open) settle(false); }}>

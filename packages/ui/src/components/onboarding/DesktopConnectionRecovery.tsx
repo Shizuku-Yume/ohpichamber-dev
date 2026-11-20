@@ -11,25 +11,6 @@ import {
 
 export type { RecoveryVariant } from './desktopRecoveryConfig';
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/** Updating an incompatible remote host from the recovery screen. */
-export type ServerUpdateState =
-  | { kind: 'idle' }
-  | { kind: 'updating' }
-  | { kind: 'refused'; error: string | null }
-  | { kind: 'auth' }
-  | { kind: 'timeout' };
-
-=======
-export type ServerUpdateState =
-  | { kind: 'idle' }
-  | { kind: 'updating' }
-  | { kind: 'refused'; error: string | null }
-  | { kind: 'auth' }
-  | { kind: 'timeout' };
-
->>>>>>> upstream/main
 export type DesktopConnectionRecoveryProps = {
   variant: RecoveryVariant;
   hostLabel?: string;
@@ -40,60 +21,7 @@ export type DesktopConnectionRecoveryProps = {
   isRetrying?: boolean;
 };
 
-<<<<<<< HEAD
 /** Maps iconKey from config to actual icon component */
-||||||| bc50ba56aa
-const MANUAL_SERVER_UPDATE_COMMAND = 'openchamber update';
-
-function ServerUpdateFailure({ state }: { state: ServerUpdateState }) {
-  const { t } = useI18n();
-  if (state.kind === 'idle' || state.kind === 'updating') return null;
-  const message = state.kind === 'refused'
-    ? t('onboarding.desktopRecovery.remoteIncompatible.updateRefused')
-    : state.kind === 'auth'
-      ? t('onboarding.desktopRecovery.remoteIncompatible.updateAuth')
-      : t('onboarding.desktopRecovery.remoteIncompatible.updateTimeout');
-  return (
-    <div className="space-y-2">
-      <p className="typography-meta text-[var(--status-error)]">{message}</p>
-      {state.kind === 'refused' && state.error && (
-        <p className="typography-meta text-muted-foreground">{state.error}</p>
-      )}
-      <p className="typography-meta text-muted-foreground">{t('onboarding.desktopRecovery.remoteIncompatible.manualUpdate')}</p>
-      <code className="block select-text rounded-md border border-border bg-background/50 px-3 py-2 font-mono text-sm text-foreground">
-        {MANUAL_SERVER_UPDATE_COMMAND}
-      </code>
-    </div>
-  );
-}
-
-/** Maps iconKey from config to actual icon component */
-=======
-const MANUAL_SERVER_UPDATE_COMMAND = 'openchamber update';
-
-function ServerUpdateFailure({ state }: { state: ServerUpdateState }) {
-  const { t } = useI18n();
-  if (state.kind === 'idle' || state.kind === 'updating') return null;
-  const message = state.kind === 'refused'
-    ? t('onboarding.desktopRecovery.remoteIncompatible.updateRefused')
-    : state.kind === 'auth'
-      ? t('onboarding.desktopRecovery.remoteIncompatible.updateAuth')
-      : t('onboarding.desktopRecovery.remoteIncompatible.updateTimeout');
-  return (
-    <div className="space-y-2">
-      <p className="typography-meta text-[var(--status-error)]">{message}</p>
-      {state.kind === 'refused' && state.error && (
-        <p className="typography-meta text-muted-foreground">{state.error}</p>
-      )}
-      <p className="typography-meta text-muted-foreground">{t('onboarding.desktopRecovery.remoteIncompatible.manualUpdate')}</p>
-      <code className="block select-text rounded-md border border-border bg-background/50 px-3 py-2 font-mono text-sm text-foreground">
-        {MANUAL_SERVER_UPDATE_COMMAND}
-      </code>
-    </div>
-  );
-}
-
->>>>>>> upstream/main
 function getRecoveryIcon(iconKey: 'local' | 'remote'): React.ReactNode {
   switch (iconKey) {
     case 'local':

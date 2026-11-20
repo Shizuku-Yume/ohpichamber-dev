@@ -42,18 +42,3 @@ export function useAttachReferences(
         };
     }, [deps, onAttach, t]);
 }
-<<<<<<< HEAD
-||||||| bc50ba56aa
-
-/** Reads the item a pasted link names, through `directory`'s project (`resolveReferenceLink`). */
-export function useReadReferenceLink(directory: string | null): (target: ReferenceLinkTarget) => Promise<ComposerReference> {
-    const deps = useReferenceResolveDeps(directory);
-    return React.useCallback((target) => resolveReferenceLink(target, deps), [deps]);
-}
-=======
-
-export function useReadReferenceLink(directory: string | null): (target: ReferenceLinkTarget) => Promise<ComposerReference> {
-    const deps = useReferenceResolveDeps(directory);
-    return React.useCallback((target) => resolveReferenceLink(target, deps), [deps]);
-}
->>>>>>> upstream/main

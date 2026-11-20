@@ -26,15 +26,7 @@ export const InlineDictationButton: React.FC<InlineDictationButtonProps> = ({
 }) => {
   const { t } = useI18n();
   const dictationEnabled = useConfigStore((state) => state.dictationEnabled);
-<<<<<<< HEAD
   const [supported] = React.useState(isDictationCaptureSupported);
-||||||| bc50ba56aa
-  // The dictation server lives in the OpenChamber web server; the VS Code
-  // bridge has none.
-  const [supported] = React.useState(() => !isVSCodeRuntime() && isDictationCaptureSupported());
-=======
-  const [supported] = React.useState(() => !isVSCodeRuntime() && isDictationCaptureSupported());
->>>>>>> upstream/main
 
   const onTranscriptRef = React.useRef(onTranscript);
   React.useEffect(() => {

@@ -52,22 +52,6 @@ export function parseReleaseNotesMarkdown(content: string): ReleaseNotesContent 
   return filled.length > 0 ? { title, intro: intro.length > 0 ? intro.join('\n\n') : null, groups: filled } : null;
 }
 
-<<<<<<< HEAD
-/**
- * The releases of `version`, newest first: what an update from `since`
- * brings, or `version` alone, read by the Host from the changelog bundled with
- * the app. Null when the notes could not be read; an empty list when the
- * changelog has none for it.
- */
-||||||| bc50ba56aa
-/**
- * The releases of `version`, newest first: what an update from `since`
- * brings, or `version` alone. Null when the server could not read the notes
- * (offline, GitHub down, a server without the route); an empty list when the
- * changelog has none for it.
- */
-=======
->>>>>>> upstream/main
 export async function fetchReleaseNotes(version: string, since: string | null, signal?: AbortSignal): Promise<ReleaseNotesRelease[] | null> {
   try {
     const response = await runtimeFetch('/api/openchamber/release-notes', {
