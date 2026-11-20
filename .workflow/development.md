@@ -4,6 +4,15 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+DiffView's extracted comparison hooks now retain the fork parent's repository
+and binding authority checks: non-repositories make no binding request, and a
+board handoff cannot replay an obsolete account/revision after a rebind. The
+three failing PR-diff cases pass without changing their tests. DiffView and
+binding suites pass 26 tests; UI type-check and focused lint pass. Full root
+lint also exits 0. The root check's type step passes (4,538 files, five projects),
+but drift, error-cause, CSS and upstream-gaps remain failing; full suite/baseline
+acceptance is not complete. DiffView rendering was not visually rechecked.
+
 The initial-draft selection failure is reproduced on Linux with a scratch Git
 project reached through a symlink. Host settings canonicalize its path, but Add
 project returned the original entry to the dialog, which opened a draft against

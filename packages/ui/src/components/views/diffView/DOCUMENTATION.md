@@ -12,6 +12,10 @@ remain in their existing neighbouring modules.
 
 ## Invariants
 
+- Repository bindings are read only after Git confirms the effective directory
+  is a repository. A board's comparison handoff retains its selected context
+  only while it matches the current ready binding; rebinds discard the old
+  context and cannot replay its source through another account.
 - Hunk mutations require live working-tree or index data. Turn snapshots and
   comparison ranges never authorize stage or discard actions.
 - A live diff's refresh revision includes changes that preserve its status row's

@@ -74,12 +74,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
         unreadable,
     } = useNestedGitDirectory(rootDirectory ?? null, { enabled: visible, recheckOnOpen: true });
     const effectiveDirectory = nestedGitDirectory ?? rootDirectory;
-    const binding = useRepositoryBinding(effectiveDirectory, sourceControl);
+    const isGitRepo = useIsGitRepo(effectiveDirectory ?? null);
+    const binding = useRepositoryBinding(effectiveDirectory, sourceControl, isGitRepo === true);
     const openContextSurface = useUIStore((state) => state.openContextSurface);
     const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const requestWalkthroughTarget = useWalkthroughStore((state) => state.requestTarget);
     const { screenWidth, isMobile } = useDeviceInfo();
-    const isGitRepo = useIsGitRepo(effectiveDirectory ?? null);
     const status = useGitStatus(effectiveDirectory ?? null);
     const isLoadingStatus = useGitLoadingStatus(effectiveDirectory ?? null);
     const setActiveDirectory = useGitStore((state) => state.setActiveDirectory);

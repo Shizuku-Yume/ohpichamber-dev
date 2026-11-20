@@ -16,6 +16,7 @@ import { useComparisonReview } from '@/components/review/useChangeRequestReview'
 import { useChangeRequestTerm } from '@/lib/source-control/providers/registry';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionStore';
+import { hasSameSourceControlReadContext } from '@/lib/source-control/identity';
 import { parseDiffFromFile } from '@pierre/diffs';
 import { diffCommentOriginFromSource } from '@/lib/diffCommentOrigin';
 import type { FileEntry, DiffData, DiffScope, ComparisonDiffResult, DiffViewProps } from './types';
@@ -61,14 +62,23 @@ export function useDiffViewComparisons({
 
     const currentBranch = status?.current ?? null;
     const requestedPr = usePullRequestSelectionStore((state) => (effectiveDirectory ? state.diffRequests.get(effectiveDirectory) : undefined));
-    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, requestedPr?.context ?? binding.contexts[0] ?? null, visible && activeDiffScope === 'pr' && !isVSCodeRuntime(), requestedPr?.source);
+    const requestedContext = usePullRequestSelectionStore((state) => (effectiveDirectory ? state.diffContexts.get(effectiveDirectory) : undefined));
+    const activeRequestedContext = binding.status === 'ready' && requestedContext
+        && binding.contexts.some((context) => hasSameSourceControlReadContext(context, requestedContext))
+        ? requestedContext : undefined;
+    React.useEffect(() => {
+        if (effectiveDirectory && requestedContext && binding.status === 'ready' && !activeRequestedContext) {
+            usePullRequestSelectionStore.getState().clearDiffContext(effectiveDirectory, requestedContext);
+        }
+    }, [activeRequestedContext, binding.status, effectiveDirectory, requestedContext]);
+    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, activeRequestedContext ?? (binding.status === 'ready' ? binding.contexts[0] : null) ?? null, visible && activeDiffScope === 'pr' && !isVSCodeRuntime(), activeRequestedContext && requestedPr && hasSameSourceControlReadContext(activeRequestedContext, requestedPr.context) ? requestedPr.source : undefined);
     const pullRequestContext = prComparison.readContext;
     const selectedPr = prComparison.selectedSource;
     const prChangeRequestTerm = useChangeRequestTerm(prComparison.provider);
     React.useEffect(() => {
-        if (!effectiveDirectory || !requestedPr || !status || selectedPr !== requestedPr.source) return;
+        if (!effectiveDirectory || !requestedPr || !activeRequestedContext || !status || selectedPr !== requestedPr.source) return;
         usePullRequestSelectionStore.getState().settleDiffRequest(effectiveDirectory, requestedPr);
-    }, [effectiveDirectory, requestedPr, selectedPr, status]);
+    }, [activeRequestedContext, effectiveDirectory, requestedPr, selectedPr, status]);
     const commitComparison = useCommitComparison(effectiveDirectory ?? null, currentBranch, visible && activeDiffScope === 'commit' && !isVSCodeRuntime());
     const selectedCommitHash = commitComparison.selectedCommit?.hash ?? null;
     React.useEffect(() => {
