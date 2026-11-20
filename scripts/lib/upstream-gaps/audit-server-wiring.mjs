@@ -202,7 +202,7 @@ function lineOf(src, idx) {
 function extractCalls(src, fileLabel) {
   if (!src) return [];
   const results = [];
-  const re = /(?:^|[^.\w$])((?:[A-Za-z_$][\w$]*\.)?(?:register[A-Z]\w*|create[A-Z]\w*))\s*(?:<[^\n()]*>)?\s*\(/gm;
+  const re = /(?:^|[^.\w$])((?:[A-Za-z_$][\w$]*\.)?(?:register[A-Z]\w*|create[A-Z]\w*))\s*(?:<[^\n()]*>)?\s*(?:\?\.)?\s*\(/gm;
   let m;
   while ((m = re.exec(src)) !== null) {
     const fnName = m[1];

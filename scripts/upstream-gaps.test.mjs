@@ -126,6 +126,16 @@ test('spread variable names are not dependency names but explicit keys remain au
   assert.match(runGuardrail(fixture).output, /\[route-deps\] createAutoReviewRuntime.enabled/);
 });
 
+test('optional factory calls count as construction and still expose missing dependencies', () => {
+  const fixture = makeFixture(baseFiles());
+  fixture.fork('packages/web/server/index.js', INDEX.replace('createAutoReviewRuntime({ enabled: true })', 'createAutoReviewRuntime?.({ enabled: true })'));
+  assert.equal(runGuardrail(fixture).status, 0);
+  fixture.fork('packages/web/server/index.js', INDEX.replace('createAutoReviewRuntime({ enabled: true })', 'createAutoReviewRuntime?.({})'));
+  const missing = runGuardrail(fixture);
+  assert.match(missing.output, /\[route-deps\] createAutoReviewRuntime.enabled/);
+  assert.doesNotMatch(missing.output, /\[runtime-constructor\] createAutoReviewRuntime/);
+});
+
 test('indirect dependency bags require owner review without claiming their keys are missing', () => {
   const fixture = makeFixture(baseFiles());
   fixture.fork('packages/web/server/index.js', `const options = { enabled: true };\n${INDEX.replace('{ enabled: true }', 'options')}`);

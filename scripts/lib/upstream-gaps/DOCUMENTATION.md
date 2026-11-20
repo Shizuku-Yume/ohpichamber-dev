@@ -12,7 +12,7 @@ trees and generated output are not production coverage. Imports alone never
 count as using a constructor or mounting routes.
 Callback transaction helpers and typed Map/Set mutators named `register*` are
 not Express mounts. Actual app/router registrations remain independently audited.
-Typed constructor calls count too. Dependency comparison tracks named object
+Typed and optional (`createRuntime?.(...)`) constructor calls count too. Dependency comparison tracks named object
 properties, not spread-variable names, whose contents cannot be inferred.
 A same-file reference outside an export's declaration counts as a caller.
 Dependency keys are compared within the same logical source owner (`.ts` and
