@@ -4,6 +4,7 @@ import { isEnterpriseMode } from '../enterprise-mode.js';
 import { redactGitText } from '../git/redaction.js';
 import { genericNotificationTitle, truncateNotificationText } from './message.js';
 import { pullRequestNotificationTitle } from './pull-request-locales.js';
+import { createPushTagTracker } from './push-tags-store.js';
 import {
   defaultNotificationTemplates,
   notificationTexts,
@@ -32,7 +33,7 @@ export const createNotificationTriggerRuntime = (deps) => {
   let getIsSessionAutoAccepting = deps.getIsSessionAutoAccepting;
   let stopped = false;
   const autoAcceptingSessions = new Set();
-  const pendingPushTags = new Set();
+  const pushTags = createPushTagTracker({ store: deps.openPushTagsStore, now });
   const pending = new Map();
   const notified = new Set();
   const lastTerminalAt = new Map();
@@ -68,7 +69,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     const enterprise = isEnterpriseMode();
     const web = enterprise ? { ...payload, title: generic, body: '', data: { url: payload.data.url, sessionId: payload.data.sessionId, type } } : payload;
     const visible = isAnyInteractiveClientVisible?.() === true;
-    if (!visible) pendingPushTags.add(payload.tag);
+    const badge = visible ? undefined : await pushTags.add(payload.tag, apnsTag ?? payload.tag, payload.data.sessionId ?? null);
     const knownSessionName = typeof payload.data.sessionName === 'string' ? payload.data.sessionName.trim() : '';
     // A phone with a push key opens the sealed text on the device; the relay
     // and the push service see only the generic title. Enterprise mode keeps
@@ -79,7 +80,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     await Promise.all([
       Promise.resolve().then(() => sendPushToAllUiSessions?.(web, { requireNoSse: true })).catch(() => console.warn('Web push delivery failed')),
       visible ? Promise.resolve() : Promise.resolve().then(() => sendApnsToAllUiSessions?.({
-        title: generic, body: enterprise ? '' : (knownSessionName || 'Session'), sealed, badge: pendingPushTags.size,
+        title: generic, body: enterprise ? '' : (knownSessionName || 'Session'), sealed, badge,
         tag: apnsTag ?? payload.tag, data: { sessionId: payload.data.sessionId },
       }, { requireNoSse: true })).catch(() => console.warn('Native push delivery failed')),
     ]);
@@ -261,7 +262,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     const claim = shareClaims.get(sessionId);
     if (!claim) return;
     shareClaims.delete(sessionId);
-    pendingPushTags.delete(`share-${sessionId}`);
+    await pushTags.remove(`share-${sessionId}`);
     await deps.clearApnsNotifications?.({ tags: [claim.tag] });
   };
   const pruneShareBatch = (keep) => {
@@ -335,13 +336,17 @@ export const createNotificationTriggerRuntime = (deps) => {
     notifyShareAnswer,
     async clearSessionPushNotifications(sessionId) {
       pruneShareBatch((answer) => answer.sessionId !== sessionId);
-      await clearShareClaim(sessionId);
+      const claim = shareClaims.get(sessionId);
+      shareClaims.delete(sessionId);
+      const cleared = await pushTags.clearSession(sessionId);
+      if (claim && !cleared.tags.includes(claim.tag)) cleared.tags.push(claim.tag);
+      if (cleared.tags.length > 0) await deps.clearApnsNotifications?.(cleared);
     },
     processCanonicalEvent,
     setAutoAcceptSession(sessionId, enabled) { if (enabled) autoAcceptingSessions.add(sessionId); else autoAcceptingSessions.delete(sessionId); },
     setGetIsWindowFocused(resolver) { getIsWindowFocused = resolver; },
     setGetIsSessionAutoAccepting(resolver) { getIsSessionAutoAccepting = resolver; },
-    clearPendingPushBadge() { pendingPushTags.clear(); },
+    clearPendingPushBadge() { return pushTags.clearAll(); },
     async sendGoalSettlePush({ sessionId, directory, status, title, body }) {
       const scope = await resolveSessionScope(sessionId).catch(() => ({ cwd: directory }));
       let sessionName = "";

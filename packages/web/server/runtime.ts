@@ -94,6 +94,7 @@ import { createStartupPipelineRuntime } from './lib/server-frame/startup-pipelin
 import { registerNotificationRoutes } from './lib/notifications/routes.js';
 import { createNotificationEmitterRuntime } from './lib/notifications/emitter-runtime.js';
 import { createNotificationTriggerRuntime } from './lib/notifications/runtime.js';
+import { createPushTagsStore } from './lib/notifications/push-tags-store.js';
 import { createPushRuntime } from './lib/notifications/push-runtime.js';
 import { createApnsRuntime } from './lib/notifications/apns-runtime.js';
 import { createNotificationTemplateRuntime } from './lib/notifications/template-runtime.js';
@@ -920,6 +921,7 @@ const extensionNotificationChannels = createExtensionNotificationChannels({
 let autoReviewRuntime = null;
 let prWatchRuntime = null;
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
+ openPushTagsStore: createPushTagsStore(path.join(OPENCHAMBER_DATA_DIR, 'push-tags.json')),
  clearApnsNotifications: apnsRuntime.clearApnsNotifications,
  isAnyUiVisible,
  readSettingsFromDisk,
