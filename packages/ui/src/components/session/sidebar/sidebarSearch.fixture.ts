@@ -1,4 +1,4 @@
-import type { Session } from '@openchamber/agent-contract';
+import { canonicalSession } from '@/components/session/sidebar/test-utils/canonicalSession';
 import type { ConversationResult } from '@/hooks/useConversationSearch';
 import type { SessionSidebarRowModelArgs } from './sessionSidebarRowModel';
 import type { ProjectSection } from './projects/sessionProjectRender';
@@ -8,8 +8,7 @@ export function searchFixture(count = 2): SessionSidebarRowModelArgs {
     project: { id, normalizedPath: `/repo/${id}`, label: id },
     groups: [{ id: 'main', label: 'main', branch: null, description: null, isMain: true, worktree: null, directory: `/repo/${id}`, folderScopeKey: `/repo/${id}`,
       sessions: Array.from({ length: Math.floor(count / 2) }, (_, index) => ({
-        // SAFETY: projection reads only identity, location, title and lifecycle.
-        session: { id: `${id}-${index}`, title: `Needle conversation ${index}`, directory: `/repo/${id}`, time: { created: 1, updated: 1 } } as Session,
+        session: canonicalSession(`${id}-${index}`, `/repo/${id}`, { projectId: id, title: `Needle conversation ${index}` }),
         children: [], worktree: null,
       })),
     }],

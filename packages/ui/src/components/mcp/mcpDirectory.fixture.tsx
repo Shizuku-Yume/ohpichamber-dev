@@ -3,41 +3,23 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { I18nProvider } from '@/lib/i18n';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
-import { useMcpStore } from '@/stores/useMcpStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 type LoadMcpConfigs = (options?: { force?: boolean; directory?: string | null }) => Promise<boolean>;
-type ListSpy = ReturnType<typeof spyOn<typeof opencodeClient, 'listMcpServers'>>;
 
 type McpDirectoryHarness = {
   root: Root | null;
-  /** The spy on the MCP status read; set in `beforeEach`. */
-  readonly listSpy: ListSpy;
-  listServers: typeof opencodeClient.listMcpServers;
   extraSpies: Array<{ mockRestore: () => void }>;
   configRequests: Array<Parameters<LoadMcpConfigs>[0]>;
 };
 
-/**
- * Shared DOM and store setup for the MCP directory tests. Reading MCP status
- * boots the directory's whole stdio server fleet as an OpenCode side effect,
- * so the tests spy on the status read itself and assert which directory it
- * reaches.
- */
 export const setupMcpDirectoryHarness = () => {
-  const noServers: typeof opencodeClient.listMcpServers = async () => [];
-  let listSpy: ListSpy | null = null;
   const harness: McpDirectoryHarness = {
     root: null,
-    get listSpy() {
-      if (!listSpy) throw new Error('listSpy is set in beforeEach');
-      return listSpy;
-    },
-    listServers: noServers,
     extraSpies: [],
     configRequests: [],
   };
@@ -80,18 +62,9 @@ export const setupMcpDirectoryHarness = () => {
       currentSessionDirectory: null,
       newSessionDraft: { ...initialSessionState.newSessionDraft, open: false },
     });
-    useMcpStore.setState({
-      byDirectory: {},
-      diagnosticsByDirectory: {},
-      loadingKeys: {},
-      lastErrorKeys: {},
-      refreshedAtKeys: {},
-    });
     harness.configRequests.length = 0;
     originalLoadMcpConfigs = useMcpConfigStore.getState().loadMcpConfigs;
     useMcpConfigStore.setState({ loadMcpConfigs });
-    harness.listServers = noServers;
-    listSpy = spyOn(opencodeClient, 'listMcpServers').mockImplementation((directory) => harness.listServers(directory));
   });
 
   afterEach(async () => {
@@ -100,8 +73,6 @@ export const setupMcpDirectoryHarness = () => {
       harness.root = null;
       await act(async () => mounted.unmount());
     }
-    listSpy?.mockRestore();
-    listSpy = null;
     useMcpConfigStore.setState({ loadMcpConfigs: originalLoadMcpConfigs });
     for (const spy of harness.extraSpies.splice(0)) spy.mockRestore();
     useSessionUIStore.setState(initialSessionState);
@@ -143,8 +114,8 @@ export const setupMcpDirectoryHarness = () => {
   };
 
   const prepareFixture = () => {
-    const homeSpy = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/test', chatsRoot: '/chats' });
-    const createSpy = spyOn(opencodeClient, 'createDirectory').mockImplementation(async (path) => ({ success: true, path }));
+    const homeSpy = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/test', chatsRoot: '/chats' });
+    const createSpy = spyOn(hostFilesystem, 'createDirectory').mockImplementation(async (path) => ({ success: true, path }));
     harness.extraSpies.push(homeSpy, createSpy);
     return createSpy;
   };

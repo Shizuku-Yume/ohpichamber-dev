@@ -5,10 +5,33 @@ import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 const browser = new Window({ url: 'http://localhost' });
+let messageSearchRequests: URL[] = [];
+let messageSearchResponse: ((url: URL) => object) | null = null;
+let expandedRequests: URL[] = [];
+let expandedResponse: ((url: URL) => Response | Promise<Response>) | null = null;
+let spaceArchives: Array<{ spaceId: string; name: string; workspaceId: string }> = [];
+const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+  const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+  if (url.pathname === '/api/openchamber/message-search/sessions') {
+    messageSearchRequests.push(url);
+    const response = messageSearchResponse ? await messageSearchResponse(url) : contentPage([]);
+    return response instanceof Response ? response : Response.json(response);
+  }
+  if (url.pathname === '/api/openchamber/message-search') {
+    expandedRequests.push(url);
+    return expandedResponse ? expandedResponse(url) : Response.json({ status: 'ok', hits: [], next: null, index: searchIndex });
+  }
+  if (url.pathname === '/api/config/settings') return Response.json({ projects: useProjectsStore.getState().projects });
+  if (url.pathname.endsWith('/fs/home')) return Response.json({ home: '/home/test' });
+  if (url.pathname === '/api/openchamber/spaces/archives') return Response.json({ archives: spaceArchives });
+  if (url.pathname.endsWith('/archives')) return Response.json({ archives: [] });
+  return Response.json({ data: [], cursor: {} });
+});
+const resultIds = () => [...document.querySelectorAll('[data-conversation-result]')].map((row) => row.getAttribute('data-conversation-result'));
 let root: Root;
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
 // React DOM detects input-event support when imported, so install the DOM first.
-for (const [key, value] of Object.entries({ window: browser, document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent, navigator: browser.navigator, localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) {
+for (const [key, value] of Object.entries({ window: browser, document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent, navigator: browser.navigator, localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement, Node: browser.Node, getComputedStyle: browser.getComputedStyle.bind(browser), DocumentFragment: browser.DocumentFragment, ShadowRoot: browser.ShadowRoot, MutationObserver: browser.MutationObserver, ResizeObserver: browser.ResizeObserver, requestAnimationFrame: browser.requestAnimationFrame.bind(browser), cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser), IS_REACT_ACT_ENVIRONMENT: true })) {
   descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
   Object.defineProperty(globalThis, key, { value, configurable: true });
 }
@@ -17,8 +40,9 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
-registeredSettings = () => ({ projects: useProjectsStore.getState().projects });
-const { useGlobalSyncStore } = await import('@/sync/global-sync-store');
+const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
+const initialProjects = useProjectsStore.getState();
+const initialDirectory = useDirectoryStore.getState();
 const { ArchiveSessionsView, ArchiveView } = await import('./ArchiveView');
 const navigation = await import('@/lib/router/openSessionFromRoute');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
@@ -26,14 +50,25 @@ const initialSessionUI = useSessionUIStore.getState();
 const testRestorers: Array<() => void> = [];
 const initialUI = useUIStore.getState();
 const initialSessions = useGlobalSessionsStore.getState();
+const inDirectory = (entry: Session, directory: string, workspaceId = `workspace:${directory}`): Session => {
+  registerWorkspaceDirectory(workspaceId, directory);
+  return { ...entry, workspaceId, displayPath: directory };
+};
 const session = (sessionId: string, title: string, archivedAt?: number): Session => ({
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: 'workspace', rootSessionId: sessionId,
   createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  ...(archivedAt === undefined ? {} : { archivedAt }),
+  ...(archivedAt ? { archivedAt } : {}),
   title: title, metadata: {}, metadataRevision: '1', archiveRevision: archivedAt === undefined ? '0' : '1',
 });
 
 beforeEach(() => {
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/workspace' }] });
+  useDirectoryStore.setState({ homeDirectory: '/home/test' });
+  messageSearchRequests = [];
+  messageSearchResponse = null;
+  expandedRequests = [];
+  expandedResponse = null;
+  spaceArchives = [];
   const host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
@@ -47,10 +82,13 @@ afterEach(async () => {
   useSessionUIStore.setState(initialSessionUI);
   useUIStore.setState(initialUI);
   useGlobalSessionsStore.setState(initialSessions);
+  useProjectsStore.setState(initialProjects);
+  useDirectoryStore.setState(initialDirectory);
   document.body.replaceChildren();
 });
 
 afterAll(async () => {
+  fetchSpy.mockRestore();
   await browser.happyDOM.close();
   for (const [key, descriptor] of descriptors) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -202,7 +240,7 @@ test('a subsession archived while its parent stays active is listed under the pa
   expect(commits).toBe(before);
   await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...boss, title: 'Renamed boss' }));
   expect(list.textContent).toContain('Renamed boss');
-  await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...boss, time: { ...boss.time, archived: 6 } }));
+  await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...boss, archivedAt: 6 }));
   expect(document.querySelector('[aria-label="Restore Fix capture"]')).toBeNull();
 });
 test('renders discovery error banner with retry button on partial discovery error, while listing healthy archived sessions', async () => {
@@ -279,7 +317,7 @@ const contentHit = (id: string) => ({
 });
 const searchIndex = { backfill: { state: 'done', total: 0, done: 0 }, sessions: 2, messages: 4, lifecycleComplete: true };
 const contentPage = (ids: string[], next: string | null = null) => ({
-  status: 'ok', hits: ids.map(contentHit), next, totals: { sessions: 2, byDirectory: { '/workspace': 2 } }, index: searchIndex,
+  status: 'ok', hits: ids.map(contentHit), next, totals: { sessions: ids.length, byDirectory: { '/workspace': ids.length } }, index: searchIndex,
 });
 const expandedHit = (id: string) => ({
   id, sessionId: 'ses_content', sessionTitle: 'Ordinary title', directory: '/workspace',
@@ -445,7 +483,8 @@ test('search metadata retains a standalone child parent title and an unmatched q
 test('archive search renders project context, fallback folders, and ordered extras without dot separators', async () => {
   const advance = searchClock();
   const spaceDirectory = '/data/spaces/archive/a1b2c3d4e5f6';
-  spaceArchives = [{ spaceId: 'a1b2c3d4e5f6', name: 'Fix login', directory: spaceDirectory }];
+  registerWorkspaceDirectory('space-workspace', spaceDirectory);
+  spaceArchives = [{ spaceId: 'a1b2c3d4e5f6', name: 'Fix login', workspaceId: 'space-workspace' }];
   await renderSearch();
   await act(async () => {
     useSessionUIStore.setState({ availableWorktreesByProject: new Map([
@@ -457,9 +496,9 @@ test('archive search renders project context, fallback folders, and ordered extr
     useGlobalSessionsStore.getState().applySnapshot(
       [session('ses_parent', 'Parent title', 0)],
       [
-        { ...session('ses_branch', 'Branch result'), directory: '/worktrees/feature' },
-        { ...session('ses_gone', 'Gone result'), directory: '/gone/worktree' },
-        { ...session('ses_space', 'Space result'), directory: spaceDirectory },
+        inDirectory(session('ses_branch', 'Branch result'), '/worktrees/feature'),
+        inDirectory(session('ses_gone', 'Gone result'), '/gone/worktree'),
+        inDirectory(session('ses_space', 'Space result'), spaceDirectory, 'space-workspace'),
         { ...session('ses_child', 'Child result'), parentSessionId: 'ses_parent' },
       ],
       'ready',
@@ -496,7 +535,7 @@ test('an archived chat in the chats root shows no project or folder, only its da
   await renderSearch();
   await act(async () => useGlobalSessionsStore.getState().applySnapshot(
     [],
-    [{ ...session('ses_chat', 'Chat result'), directory: '/home/test/.config/ohpichamber/chats/ses_chat' }],
+    [inDirectory({ ...session('ses_chat', 'Chat result'), projectId: 'openchamber:chats' }, '/home/test/.config/ohpichamber/chats/ses_chat')],
     'ready',
   ));
   await typeSearch('chat result');
@@ -517,7 +556,7 @@ test('the Search in menu narrows a search to titles, and a cleared search starts
     ]) });
     useGlobalSessionsStore.setState({ archivedSessions: [
       session('ses_content', 'Ordinary title'),
-      { ...session('ses_task', 'Ordinary current'), directory: '/worktrees/task' },
+      inDirectory(session('ses_task', 'Ordinary current'), '/worktrees/task'),
       session('ses_named', 'Quasar notes'),
     ] });
   });

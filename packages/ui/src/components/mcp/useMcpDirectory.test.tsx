@@ -63,7 +63,9 @@ describe('useMcpDirectory', () => {
     await act(async () => { finish({ success: true, path: oldPath }); });
     expect(useSessionUIStore.getState().newSessionDraft.preparedChatDirectory).toBe(currentPath);
     expect(readDirectory(host)).toBe(currentPath);
-    expect(cleanup.mock.calls.length).toBe(1);
+    const removals = cleanup.mock.calls.filter(([input]) => String(input).endsWith('/api/fs/delete'));
+    expect(removals).toHaveLength(1);
+    expect(removals[0]?.[1]?.body).toBe(JSON.stringify({ path: oldPath }));
   });
 
   test('a pinned session keeps its own directory while the main Chat is a draft', async () => {

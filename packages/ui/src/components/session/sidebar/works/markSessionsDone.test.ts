@@ -1,11 +1,11 @@
+import { canonicalSession } from '@/components/session/sidebar/test-utils/canonicalSession';
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { takeSessionActionFailure } from '@/sync/session-action-failures';
 import { markSessionsDone } from './workActions';
 
-// SAFETY: markSessionsDone reads only the id and directory.
-const session = (id: string): Session => ({ id, directory: '/repo', time: { created: 1, updated: 1 } } as Session);
+const session = (id: string): Session => canonicalSession(id);
 
 type Write = NonNullable<Parameters<typeof markSessionsDone>[1]>;
 

@@ -1,3 +1,4 @@
+import { canonicalSession } from '@/components/session/sidebar/test-utils/canonicalSession';
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -100,12 +101,7 @@ const onBranch = (current: string): DirectoryGitState => ({
 const noop = () => undefined;
 const rowProps = (overrides: Partial<SessionNodeItemProps> = {}, directory = '/project-a'): SessionNodeItemProps => ({
   node: {
-    session: {
-      sessionId: 'ses_row', projectID: 'project-a', title: 'Add the login form',
-      directory, cost: 0,
-      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-      time: { created: 1, updated: 1 },
-    },
+    session: canonicalSession('ses_row', directory, { title: 'Add the login form' }),
     children: [], worktree: null,
   },
   ownsWork: false, projectId: 'project-a', renderContext: 'project',

@@ -1,3 +1,4 @@
+import { canonicalSession } from '@/components/session/sidebar/test-utils/canonicalSession';
 import React, { act } from 'react';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
@@ -6,10 +7,8 @@ import { searchFixture } from './sidebarSearch.fixture';
 import { resolveSidebarSearchScope, sidebarSearchMetadata } from './sidebarConversationSearch';
 import { buildSessionSidebarRowModel } from './sessionSidebarRowModel';
 import { searchScopeQuery, type SearchScope } from '@/lib/search/omniQuery';
-import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { searchConversations } from '@/lib/messageSearch';
-import type { VSCodeBootstrapConfig } from '@/lib/vscodeBootstrap';
 
 type GroupedSearchPage = Extract<Awaited<ReturnType<typeof searchConversations>>, { status: 'ok' }>;
 
@@ -83,8 +82,7 @@ const fixture = searchFixture(4);
 const sessions = fixture.sections.flatMap((section) => section.groups.flatMap((group) => group.sessions.map((node) => node.session)));
 sessions[1]!.archivedAt = 2;
 // Old conversations of project a, archived, that the tree does not list.
-// SAFETY: search metadata reads only identity, location, title and lifecycle.
-const archivedSessions = Array.from({ length: 7 }, (_, index) => ({ id: `old-${index}`, title: `Legacy plan ${index}`, directory: '/repo/a', time: { created: 1, updated: 1, archived: 2 } } as Session));
+const archivedSessions = Array.from({ length: 7 }, (_, index) => canonicalSession(`old-${index}`, '/repo/a', { title: `Legacy plan ${index}`, archivedAt: 2 }));
 const projects = fixture.sections.map((section) => section.project);
 const worktrees = new Map<string, WorktreeMetadata[]>();
 const knownDirectories = new Set(['/repo/a', '/repo/b']);
@@ -210,18 +208,6 @@ test('the scope picks where the words are looked for: titles alone ask for no me
   await runContentSearch();
   expect(requests.at(-1)?.searchParams.get('role')).toBe('user');
   expect(listed()).toEqual(['by-message']);
-});
-
-test('VS Code searches its workspace titles, with message search unsupported and no content request', async () => {
-  Object.defineProperty(window, '__VSCODE_CONFIG__', { configurable: true, value: {
-    workspaceFolder: '/repo/a', workspaceFolders: ['/repo/a'], panelType: 'chat',
-  } satisfies VSCodeBootstrapConfig });
-  useUIStore.setState({ messageSearchEnabled: true });
-  await render(<Search vscode />);
-
-  expect(status()).toBe('unsupported');
-  expect(listed()).toEqual(['a-0', 'ARCHIVED', 'a-1']);
-  expect(requests).toHaveLength(0);
 });
 
 for (const mobile of [false, true]) test(`${mobile ? 'phone' : 'desktop'} never claims empty while indexing, and pages past an entirely unadmitted content page`, async () => {

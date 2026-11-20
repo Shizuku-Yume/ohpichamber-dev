@@ -200,7 +200,7 @@ test('offers no restore for an archived subsession, which comes back only with i
   useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentSessionId: 'parent' });
   await act(async () => root.render(
     <I18nProvider>
-      <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />
+      <HeaderSessionArchiveMenuItem sessionId="target" Item={slots.Item} onArchive={() => { archiveRequests += 1; }} />
     </I18nProvider>,
   ));
   expect(document.querySelector('button')).toBeNull();

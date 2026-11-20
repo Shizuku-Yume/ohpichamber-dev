@@ -33,10 +33,8 @@ test('mobile drawer keeps its terminal Escape exception', async () => {
   try {
     const { MobileWorkspaceDrawer } = await import('@/apps/MobileWorkspaceDrawer');
     const { SyncProvider } = await import('@/sync/sync-context');
-    const { OpenCode } = await import('@opencode/client');
     const { createWebAPIs } = await import('../../../../../web/src/api/index');
     const apis = createWebAPIs();
-    const sdk = OpenCode.make({ baseUrl: 'http://drawer.test', fetch: () => new Promise<Response>(() => {}) });
     const theme = getDefaultTheme(false);
     const themeContext: ThemeContextValue = {
       currentTheme: theme, availableThemes: [theme], customThemeIds: [], setTheme: () => {}, customThemesLoading: false,
@@ -48,7 +46,7 @@ test('mobile drawer keeps its terminal Escape exception', async () => {
       await act(async () => root.render(React.createElement(I18nProvider, null,
         React.createElement(ThemeSystemContext.Provider, { value: themeContext },
           React.createElement(RuntimeAPIContext.Provider, { value: apis },
-            React.createElement(SyncProvider, { sdk, directory: '', children:
+            React.createElement(SyncProvider, { directory: '', children:
               React.createElement(MobileWorkspaceDrawer, {
                 open: true, tab, onClose: () => { closes += 1; }, onTabChange: empty,
                 registerPreviewBackHandler: empty, pendingChangesDiff: null, pendingChangesCommit: null,

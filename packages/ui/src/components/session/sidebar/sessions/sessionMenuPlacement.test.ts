@@ -1,17 +1,13 @@
+import { canonicalSession } from '@/components/session/sidebar/test-utils/canonicalSession';
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { collectNestedWorkInWork, resolveSessionMenuPlacement } from './sessionMenuPlacement';
 
-const session = (id: string, directory: string, extra: Partial<Session> = {}): Session => ({
-  sessionId: id, title: id, directory, projectID: 'opencode-project', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-  ...extra,
-});
+const session = (id: string, directory: string, extra: Partial<Session> = {}): Session => canonicalSession(id, directory, extra);
 
-const inWork = { openchamber: { work: { state: 'open' } } };
-const review = (originalSessionID: string, work = false) => ({
+const inWork: NonNullable<Session['metadata']> = { openchamber: { work: { state: 'open' } } };
+const review = (originalSessionID: string, work = false): NonNullable<Session['metadata']> => ({
   openchamber: { kind: 'review', originalSessionID, ...(work ? { work: { state: 'open' } } : {}) },
 });
 
@@ -24,7 +20,7 @@ const placementOf = (target: Session, sessions: Session[] = [target]) => resolve
   spaces: [],
   isVSCode: false,
   activeSessions: sessions,
-  resolveLegacyScope: (entry) => entry.directory ?? null,
+  resolveLegacyScope: (entry) => entry.displayPath,
   lookup: (id) => sessions.find((entry) => entry.sessionId === id),
 });
 
@@ -72,7 +68,7 @@ describe('collectNestedWorkInWork', () => {
   test('Done reaches the nested reviews in work, not subagents', () => {
     const root = session('root', '/repo', { metadata: inWork });
     const nestedReview = session('review', '/repo', { metadata: review('root', true) });
-    const subagent = session('sub', '/repo', { parentID: 'root', metadata: inWork });
+    const subagent = session('sub', '/repo', { parentSessionId: 'root', metadata: inWork });
     const other = session('other', '/repo', { metadata: inWork });
     expect(collectNestedWorkInWork(root, [root, nestedReview, subagent, other]).map((entry) => entry.sessionId).sort())
       .toEqual(['review', 'root']);

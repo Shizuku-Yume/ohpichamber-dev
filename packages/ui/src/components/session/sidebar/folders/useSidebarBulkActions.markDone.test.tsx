@@ -1,3 +1,4 @@
+import { canonicalSession } from '@/components/session/sidebar/test-utils/canonicalSession';
 import { describe, expect, spyOn, test } from 'bun:test';
 import { act } from 'react';
 import { flushSync } from 'react-dom';
@@ -13,19 +14,16 @@ import type { SessionGroup } from '../types';
 import type { FinishWorktreeWorkOutcome } from '../works/workActions';
 import { selectSessionsToMarkDone, useSidebarBulkActions } from './useSidebarBulkActions';
 
-const open = { openchamber: { work: { state: 'open', openedAt: 1, openedBy: 'user' } } };
-const done = { openchamber: { work: { state: 'done', doneAt: 2 } } };
-// SAFETY: the bulk actions read only the id, parent, archive time and work metadata.
-const session = (id: string, overrides: Partial<Session> = {}): Session => ({
-  id, directory: '/repo', time: { created: 1, updated: 1 }, metadata: open, ...overrides,
-} as Session);
+const open: NonNullable<Session['metadata']> = { openchamber: { work: { state: 'open', openedAt: 1, openedBy: 'user' } } };
+const done: NonNullable<Session['metadata']> = { openchamber: { work: { state: 'done', doneAt: 2 } } };
+const session = (id: string, overrides: Partial<Session> = {}): Session => canonicalSession(id, '/repo', { metadata: open, ...overrides });
 
 const sessions = new Map([
   ['root', session('root')],
   ['btw', session('btw')],
   ['subagent', session('subagent', { parentSessionId: 'root' })],
   ['finished', session('finished', { metadata: done })],
-  ['archived', session('archived', { time: { created: 1, updated: 1, archived: 3 } })],
+  ['archived', session('archived', { archivedAt: 3 })],
   ['other', session('other')],
 ]);
 

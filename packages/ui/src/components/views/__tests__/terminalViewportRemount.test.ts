@@ -47,7 +47,7 @@ let fontResult: Promise<void>;
 let restoreFontLoad = () => {};
 const render = (chunks: TerminalChunk[], fontSize = 14, nextTheme = theme) => act(async () => {
     root.render(React.createElement(I18nProvider, null, React.createElement(TerminalViewport, {
-        sessionKey: 'tab', chunks, onInput: () => {}, onResize: () => {},
+        sessionKey: 'tab', chunks, onInput: () => {}, onReply: () => {}, onResize: () => {},
         theme: nextTheme, monoFont: 'system-mono', fontFamily: 'monospace', fontSize,
         createSurface, autoFocus: false,
     })));
@@ -106,7 +106,7 @@ describe('terminal viewport remount guard', () => {
         Object.defineProperty(browser.HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 578 });
         try {
             await act(async () => root.render(React.createElement(I18nProvider, null, React.createElement(TerminalViewport, {
-                sessionKey: 'tab', chunks: [], onInput: () => {}, onResize: () => {},
+                sessionKey: 'tab', chunks: [], onInput: () => {}, onReply: () => {}, onResize: () => {},
                 onProvisionalSize: (cols, rows) => reported.push([cols, rows]),
                 theme, monoFont: 'system-mono', fontFamily: 'monospace', fontSize: 14,
                 createSurface, autoFocus: false,
