@@ -1903,3 +1903,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Also retained:** the locale direction and dictionary contract, translated attachment regression, and standards-mode DOM setup used by math renderer tests.
 - **Instead of:** treating partial reads as proof of non-delivery, restoring retired state, or dropping behavior or regression coverage to match the upstream blob.
 - **Revisit when:** upstream supports equivalent scopes and state invariants or the corresponding fork feature is retired.
+
+## 2026-11-21 - Skip the POSIX shell quoting round-trip on Windows
+
+- **Decided:** keep the `process.platform === 'win32'` skip on the CLI shell quoting test's `/bin/sh` round-trip.
+- **Instead of:** restoring the upstream test, which runs `/bin/sh` on every host.
+- **Because:** Windows hosts have no `/bin/sh`, so the upstream test fails there without exercising `shellQuote`; macOS and Linux still run the round-trip.
+- **Mine:** yes (requested drift classification)
+- **Revisit when:** upstream gates the test itself or the CLI quoting gains a Windows-native round-trip test.
