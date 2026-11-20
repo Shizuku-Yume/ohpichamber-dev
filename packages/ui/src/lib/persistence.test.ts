@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { Window } from 'happy-dom';
 
 import type { RuntimeAPIs, SettingsPayload } from '@/lib/api/types';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -301,6 +302,32 @@ describe('updateDesktopSettings', () => {
       expect(states).toEqual(['saving', 'idle']);
     } finally {
       unsubscribe();
+    }
+  });
+
+  test('dispatches settings events using the target window’s event constructor', async () => {
+    const previousWindow = window;
+    const dom = new Window({ url: 'http://localhost' });
+    const states: string[] = [];
+    const synced: SettingsSyncedDetail[] = [];
+    dom.addEventListener('openchamber:settings-save-state', (event) => {
+      if (event instanceof dom.CustomEvent) states.push(event.detail as string);
+    });
+    dom.addEventListener('openchamber:settings-synced', (event) => {
+      if (event instanceof dom.CustomEvent) synced.push(event.detail as SettingsSyncedDetail);
+    });
+    Object.defineProperty(globalThis, 'window', { value: dom });
+    registerSettingsSave(async (changes) => changes as SettingsPayload);
+    try {
+      expect(await updateDesktopSettings({ themeVariant: 'light' })).toEqual({
+        ok: true,
+        settings: { themeVariant: 'light' },
+      });
+      expect(states).toEqual(['saving', 'saved']);
+      expect(synced).toEqual([{ settings: { themeVariant: 'light' }, bootstrap: false, adoptTheme: false }]);
+    } finally {
+      Object.defineProperty(globalThis, 'window', { value: previousWindow });
+      await dom.happyDOM.close();
     }
   });
 

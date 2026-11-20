@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { canonicalSession } from './test-utils/canonicalSession';
 import { ACTIVE_SEARCH_INITIAL, buildSessionSidebarRowModel, type SessionSidebarRow } from './sessionSidebarRowModel';
 import { searchFixture, searchResult } from './sidebarSearch.fixture';
 import { resolveSidebarSearchScope, sidebarSearchMetadata } from './sidebarConversationSearch';
@@ -158,7 +159,7 @@ test('an unregistered folder shows its name, and a chat or a result with no fold
   input.homeDirectory = '/Users/me';
   input.contentSearchResults = [
     searchResult('unowned', { metadata: null, directory: '/unknown' }),
-    searchResult('chat', { metadata: null, directory: '/Users/me/.config/openchamber/chats/2026-01/chat' }),
+    searchResult('chat', { metadata: null, directory: '/Users/me/.config/ohpichamber/chats/2026-01/chat' }),
     searchResult('no-folder', { metadata: null, directory: null }),
   ];
   const none = { project: null, folderLabel: null, branchLabel: null, worktreeFolder: null, spaceLabel: null };
@@ -265,9 +266,9 @@ test('active matches past the first batch wait behind Show more, apart from the 
 test('what a session started is not a conversation to find', () => {
   const metadata = sidebarSearchMetadata({
     sessions: [
-      { id: 'root', title: 'Parent', directory: '/repo/a', time: { created: 1, updated: 2 } },
-      { id: 'child', title: 'verify AGENTS.md', directory: '/repo/a', parentID: 'root', time: { created: 1, updated: 2 } },
-    ] as never,
+      canonicalSession('root', '/repo/a', { title: 'Parent', updatedAt: 2 }),
+      canonicalSession('child', '/repo/a', { title: 'verify AGENTS.md', parentSessionId: 'root', rootSessionId: 'root', updatedAt: 2 }),
+    ],
     isAdmitted: () => true, owners: new Map(), projects: [], worktrees: new Map(),
   });
   expect(metadata.map((item) => [item.sessionId, item.updatedAt])).toEqual([['root', 2]]);

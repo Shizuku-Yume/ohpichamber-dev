@@ -190,7 +190,7 @@ const dispatchSettingsSynced = (settings: DesktopSettings, bootstrap: boolean, a
   if (typeof window === 'undefined') {
     return;
   }
-  window.dispatchEvent(new CustomEvent<SettingsSyncedDetail>('openchamber:settings-synced', {
+  window.dispatchEvent(new (window.CustomEvent ?? CustomEvent)<SettingsSyncedDetail>('openchamber:settings-synced', {
     detail: { settings, bootstrap, adoptTheme },
   }));
 };
@@ -232,7 +232,7 @@ const dispatchSettingsSaveState = (state: 'saving' | 'saved' | 'error'): void =>
   if (typeof window === 'undefined') {
     return;
   }
-  window.dispatchEvent(new CustomEvent<'saving' | 'saved' | 'error'>('openchamber:settings-save-state', { detail: state }));
+  window.dispatchEvent(new (window.CustomEvent ?? CustomEvent)<'saving' | 'saved' | 'error'>('openchamber:settings-save-state', { detail: state }));
 };
 
 type PersistApi = {

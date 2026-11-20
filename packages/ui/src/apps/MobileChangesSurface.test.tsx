@@ -9,7 +9,11 @@ import { closeTopmostBackLayer, registerBackLayer } from '@/lib/mobileBackLayers
 // These cases cover the repository panes, not the transcript: the turn scope's
 // sync read is answered empty rather than standing up a provider for it.
 const actualSyncContext = await import('@/sync/sync-context');
-mock.module('@/sync/sync-context', () => ({ ...actualSyncContext, useSessionMessages: () => [] }));
+mock.module('@/sync/sync-context', () => ({
+  ...actualSyncContext,
+  useSessionMessages: () => [],
+  useSessionDirectory: () => undefined,
+}));
 
 // Pull requests are read through the checkout's bound GitHub context, so the
 // repository here is bound to an account the auth store knows as valid.
