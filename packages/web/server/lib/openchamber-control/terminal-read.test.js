@@ -84,9 +84,15 @@ describe('terminal.read', () => {
 
   it('names terminal.list in the error for an unknown terminal', async () => {
     const { action } = setup({
-      runtime: { listTerminals: vi.fn(), readTerminal: vi.fn(() => null) },
+      runtime: { listTerminals: vi.fn(() => []), readTerminal: vi.fn(() => null) },
     });
     await expect(action('terminal.read', { sessionId: 'gone' }, '/repo'))
       .rejects.toMatchObject({ statusCode: 404, message: expect.stringContaining('terminal.list') });
+  });
+
+  it('does not read a terminal outside the captured folder even when its id is known', async () => {
+    const { action, runtime } = setup({ runtime: { listTerminals: vi.fn(() => []), readTerminal: vi.fn(() => terminal) } });
+    await expect(action('terminal.read', { sessionId: 'term-1' }, '/other')).rejects.toMatchObject({ statusCode: 404 });
+    expect(runtime.readTerminal).not.toHaveBeenCalled();
   });
 });

@@ -8,6 +8,8 @@
  * visible in a shared schema.
  */
 const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
+  { action: 'terminal.list', title: 'List terminal panels', description: 'List terminal panels in the captured workspace; requires the user to enable terminal reading in Settings' },
+  { action: 'terminal.read', title: 'Read terminal panel output', description: 'Read output from a terminal sessionId listed in this workspace; optional maxBytes; requires terminal reading enabled in Settings' },
   { action: 'projects.list', title: 'List configured projects', description: 'List configured projects; no parameters' },
   { action: 'models.search', title: 'Search models', description: 'The model catalog, favorites and recent models first; optional query, provider, all, limit, offset' },
   { action: 'models.list', title: 'Show model preferences', description: 'Show default, favorite, and recent model preferences; no parameters' },

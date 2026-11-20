@@ -15,6 +15,8 @@ import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
 import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploads.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
+import { createTerminalReadAction } from './terminal-read.js';
+import { redactGitText } from '../git/redaction.js';
 import { formatModelRef, modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
@@ -254,6 +256,7 @@ export const createOpenChamberControlService = (dependencies) => {
   scheduledTaskService,
   browserControl = null,
   browserUploads = null,
+  getTerminalRuntime = null,
   fileOpen = null,
   notifyUser = null,
   // Notes, todos and plans behind the `openchamber_knowledge` tool.
@@ -428,6 +431,7 @@ export const createOpenChamberControlService = (dependencies) => {
 
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
  const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers });
+ const readTerminal = createTerminalReadAction({ readSettings: readSettingsFromDiskMigrated, getTerminalRuntime });
 
  // 2 for a favorite, 1 for a recent model, absent for the rest.
  const PREFERENCE_BY_RANK = { 2: 'favorite', 1: 'recent' };
@@ -934,6 +938,18 @@ export const createOpenChamberControlService = (dependencies) => {
    }
    if (OPENCHAMBER_KNOWLEDGE_ACTIONS.includes(action)) {
     return await knowledgeActions.execute(action, input, contextDirectory, options.contextSessionId);
+   }
+   if (action === 'terminal.list' || action === 'terminal.read') {
+    const scope = await resolveReadScope(input, contextDirectory, options.contextSessionId, options.contextSessionId);
+    const result = await readTerminal(action, { ...input, directory: scope.cwd }, scope.cwd);
+    const present = ({ cwd: _cwd, ...terminal }) => ({
+     ...terminal,
+     directory: scope.displayPath ?? '.',
+     ...(typeof terminal.text === 'string' ? {
+      text: redactGitText(terminal.text, { secrets: [scope.cwd, scope.agentDirectory], maxChars: terminal.text.length }),
+     } : {}),
+    });
+    return 'terminals' in result ? { terminals: result.terminals.map(present) } : present(result);
    }
    if (action.startsWith('browser.')) {
     if (!browserControl) {

@@ -89,6 +89,34 @@ const createHarness = (settings = {
 };
 
 describe('OhPiChamber control service canonical consumers', () => {
+  it('reads opted-in terminal output only within the captured workspace and hides Host directory fields', async () => {
+    const runtime = {
+      listTerminals: vi.fn(() => [{ sessionId: 'terminal-1', cwd: scopeForWorkspace.cwd, status: 'running' }]),
+      readTerminal: vi.fn(() => ({ sessionId: 'terminal-1', cwd: scopeForWorkspace.cwd, text: `output in ${scopeForWorkspace.cwd}`, status: 'running' })),
+    };
+    const { control } = createHarness({ agentTerminalToolEnabled: true }, { getTerminalRuntime: () => runtime });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const invoke = (action, input = {}) => control.invokeHostAction(scope, { sessionId: 'session-1', toolName: 'openchamber', action, input });
+    const listed = await invoke('terminal.list');
+    expect(listed).toMatchObject({ ok: true, value: { terminals: [{ sessionId: 'terminal-1', directory: '.' }] } });
+    const read = await invoke('terminal.read', { sessionId: 'terminal-1' });
+    expect(read.ok).toBe(true);
+    expect(JSON.stringify(read)).not.toContain(scopeForWorkspace.cwd);
+    expect(read.value.cwd).toBeUndefined();
+    await expect(invoke('terminal.list', { workspaceId: 'workspace-2' })).resolves.toMatchObject({ ok: false, status: 403 });
+    runtime.listTerminals.mockReturnValue([]);
+    runtime.readTerminal.mockClear();
+    await expect(invoke('terminal.read', { sessionId: 'foreign' })).resolves.toMatchObject({ ok: false, status: 404 });
+    expect(runtime.readTerminal).not.toHaveBeenCalled();
+    await expect(invoke('terminal.list')).resolves.toMatchObject({ ok: true, value: { terminals: [] } });
+  });
+
+  it('keeps terminal reads off by default and reports an unavailable panel explicitly', async () => {
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const call = { sessionId: 'session-1', toolName: 'openchamber', action: 'terminal.list' };
+    await expect(createHarness().control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 403 });
+    await expect(createHarness({ agentTerminalToolEnabled: true }).control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 503 });
+  });
   it('reads complete and most-recent messages through the canonical paginated journal across workspaces', async () => {
     const sessionId = 'session-other';
     const turns = Array.from({ length: 205 }, (_, index) => ({

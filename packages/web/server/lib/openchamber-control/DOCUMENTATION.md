@@ -33,6 +33,12 @@ other.
 
 ## Invariants
 
+- `terminal.list` and `terminal.read` use the Host terminal owner on all four
+  retained client surfaces. They require the explicit, default-off terminal
+  reading preference. Agent calls cannot select another workspace, and a read
+  checks membership in that folder before accessing output. Results omit Host
+  cwd fields and redact captured Host paths. Missing panels fail with 503.
+
 - Session status and messages come from the Canonical session service. The
   Host control read views expose status or text-only history, not SDK records.
   `contracts.ts` owns these CLI and Guest read shapes, cancellation options and

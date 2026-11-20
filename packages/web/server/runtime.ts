@@ -1495,6 +1495,7 @@ const openChamberControlService = createOpenChamberControlService({
  scheduledTaskService,
  browserControl: browserControlRouter,
  browserUploads,
+ getTerminalRuntime: () => terminalRuntime,
  fileOpen: fileOpenRequester,
  // The tool is off by default; a plugin generated before it was switched off
  // must not keep paging the user.
