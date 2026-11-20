@@ -183,77 +183,12 @@ export const saveProjectTodos = async (
   return parseContext(await response.json());
 };
 
-<<<<<<< HEAD
-/** One todo at a time. */
-||||||| bc50ba56aa
-/** One todo at a time; see `writeProjectTodo`. */
-=======
->>>>>>> upstream/main
 export type ProjectTodoChange =
   | { kind: 'create'; id: string; text: string }
   | { kind: 'complete'; id: string; completed: boolean }
   | { kind: 'edit'; id: string; text: string }
   | { kind: 'delete'; id: string };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * Write one todo. The server applies the change to its current list, so a
- * todo an agent added since this client last read survives it. Answers with
- * the whole committed list, or null when the todo is already gone.
- */
-export const writeProjectTodo = async (
-  project: ProjectRef,
-  change: ProjectTodoChange,
-): Promise<ProjectContextData | null> => {
-  const base = `${basePath(requireProjectId(project))}/todos`;
-  const json = (method: 'POST' | 'PATCH', body: { id: string; text: string } | { completed: boolean }): RequestInit => ({
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const [url, init] = change.kind === 'create'
-    ? [base, json('POST', { id: change.id, text: change.text })]
-    : change.kind === 'complete'
-      ? [`${base}/${encodeURIComponent(change.id)}`, json('PATCH', { completed: change.completed })]
-      : [`${base}/${encodeURIComponent(change.id)}`, { method: 'DELETE' }];
-  const response = await runtimeFetch(url, init);
-  if (response.status === 404 && change.kind !== 'create') {
-    return null;
-  }
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Failed to save project todos'));
-  }
-  return parseContext(await response.json());
-};
-=======
-export const writeProjectTodo = async (
-  project: ProjectRef,
-  change: ProjectTodoChange,
-): Promise<ProjectContextData | null> => {
-  const base = `${basePath(requireProjectId(project))}/todos`;
-  const json = (method: 'POST' | 'PATCH', body: { id: string; text: string } | { text: string } | { completed: boolean }): RequestInit => ({
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const [url, init] = change.kind === 'create'
-    ? [base, json('POST', { id: change.id, text: change.text })]
-    : change.kind === 'complete'
-      ? [`${base}/${encodeURIComponent(change.id)}`, json('PATCH', { completed: change.completed })]
-      : change.kind === 'edit'
-        ? [`${base}/${encodeURIComponent(change.id)}`, json('PATCH', { text: change.text })]
-        : [`${base}/${encodeURIComponent(change.id)}`, { method: 'DELETE' }];
-  const response = await runtimeFetch(url, init);
-  if (response.status === 404 && change.kind !== 'create') {
-    return null;
-  }
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Failed to save project todos'));
-  }
-  return parseContext(await response.json());
-};
->>>>>>> upstream/main
 
 export const createProjectNote = async (
   project: ProjectRef,
@@ -447,57 +382,5 @@ const readPlanWithContext = async (
   return { plan: toPlanLink(payload.plan), context: parseContext(payload.context) };
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * Record the session a plan was just sent to. Resolves `null` when the plan is
- * gone.
- */
-export const linkProjectPlanSession = async (
-  project: ProjectRef,
-  planId: string,
-  sessionId: string,
-): Promise<{ plan: ProjectPlanLink; context: ProjectContextData } | null> => {
-  const response = await runtimeFetch(
-    `${basePath(requireProjectId(project))}/plans/${encodeURIComponent(planId)}/session`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
-    },
-  );
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Failed to link plan to session'));
-  }
-  return readPlanWithContext(response, 'Malformed plan session response');
-};
-
-=======
-export const linkProjectPlanSession = async (
-  project: ProjectRef,
-  planId: string,
-  sessionId: string,
-): Promise<{ plan: ProjectPlanLink; context: ProjectContextData } | null> => {
-  const response = await runtimeFetch(
-    `${basePath(requireProjectId(project))}/plans/${encodeURIComponent(planId)}/session`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
-    },
-  );
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Failed to link plan to session'));
-  }
-  return readPlanWithContext(response, 'Malformed plan session response');
-};
-
->>>>>>> upstream/main
 export const shareProjectPlan = (project: ProjectRef, planId: string) => movePlan(project, planId, 'share');
 export const unshareProjectPlan = (project: ProjectRef, planId: string) => movePlan(project, planId, 'unshare');

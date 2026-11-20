@@ -1,12 +1,5 @@
 import { z } from 'zod';
-<<<<<<< HEAD
 import type { Session, SessionMetadata as Metadata } from '@openchamber/agent-contract';
-||||||| bc50ba56aa
-import type { Metadata, Session } from '@/lib/opencode/model';
-=======
-import { parseMetadata } from '@/lib/metadataParse';
-import type { Metadata, Session } from '@/lib/opencode/model';
->>>>>>> upstream/main
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
 
@@ -38,43 +31,19 @@ const cachedPinnedSessionKey = (runtimeKey: string, directory: string, sessionId
 };
 
 export const isSessionPinned = (ids: ReadonlySet<string>, directory: string | null | undefined, sessionId: string): boolean => {
-<<<<<<< HEAD
- if (!directory) return false;
- const key = getPinnedSessionKey(getRuntimeKey(), directory, sessionId);
- return key ? ids.has(key) : false;
-||||||| bc50ba56aa
-  if (!directory) return false;
-  const key = getPinnedSessionKey(getRuntimeKey(), directory, sessionId);
-  return key ? ids.has(key) : false;
-=======
   if (!directory || ids.size === 0) return false;
   const key = cachedPinnedSessionKey(getRuntimeKey(), directory, sessionId);
   return key ? ids.has(key) : false;
->>>>>>> upstream/main
 };
 
-<<<<<<< HEAD
 const directPinSchema = z.object({ isPinned: z.boolean().optional() });
-||||||| bc50ba56aa
-// `list`: the user's pin list the pin is filed in (Pin to); absent for Pinned.
-const pinnedSchema = z.object({ openchamber: z.object({ pinned: z.object({ at: z.number(), list: z.string().min(1).optional() }) }) });
-=======
-const pinnedSchema = z.object({ openchamber: z.object({ pinned: z.object({ at: z.number(), list: z.string().min(1).optional() }) }) });
->>>>>>> upstream/main
 
 export const isSessionPinnedInMetadata = (session: Session | null | undefined): boolean => (
-<<<<<<< HEAD
  directPinSchema.safeParse(session).data?.isPinned === true
  || Boolean(session?.metadata?.isPinned)
  || Boolean(session?.metadata?.openchamber?.pinned)
-||||||| bc50ba56aa
-  pinnedSchema.safeParse(session?.metadata).success
-=======
-  parseMetadata(pinnedSchema, session?.metadata).success
->>>>>>> upstream/main
 );
 
-<<<<<<< HEAD
 /** The metadata after the user pinned (`at` = when) or unpinned the session. */
 export function withSessionPinned(metadata: Metadata, pinned: boolean, now: number): Metadata {
  const isPinned = Boolean(metadata.isPinned || metadata.openchamber?.pinned);
@@ -98,59 +67,4 @@ export function withSessionPinned(metadata: Metadata, pinned: boolean, now: numb
  };
  delete next.isPinned;
  return next;
-||||||| bc50ba56aa
-/** The pin list a pinned session is filed in, `DEFAULT_PIN_LIST` for Pinned, or null when not pinned. */
-export const getSessionPinList = (session: Session | null | undefined): string | null => {
-  const parsed = pinnedSchema.safeParse(session?.metadata);
-  if (!parsed.success) return null;
-  return parsed.data.openchamber.pinned.list ?? DEFAULT_PIN_LIST;
-};
-
-const openchamberSchema = z.object({ openchamber: z.record(z.string(), z.json()) });
-
-/**
- * The metadata after the user pinned (`at` = when) or unpinned the session.
- * `list` files the pin in one of the user's pin lists; null is Pinned. Moving
- * a pin to another list keeps the time it was first pinned.
- */
-export function withSessionPinned(metadata: Metadata, pin: boolean, now: number, list: string | null = null): Metadata {
-  const namespace = openchamberSchema.safeParse(metadata).data?.openchamber ?? {};
-  const current = pinnedSchema.safeParse(metadata).data?.openchamber.pinned;
-  if (!pin) {
-    if (!current) return metadata;
-    const rest = { ...namespace };
-    delete rest.pinned;
-    return { ...metadata, openchamber: rest };
-  }
-  const nextList = list && list !== DEFAULT_PIN_LIST ? list : undefined;
-  if (current && current.list === nextList) return metadata;
-  const at = current?.at ?? now;
-  if (!nextList) return { ...metadata, openchamber: { ...namespace, pinned: { at } } };
-  return { ...metadata, openchamber: { ...namespace, pinned: { at, list: nextList } } };
-=======
-export const isPinnedMetadata = (metadata: Metadata): boolean => pinnedSchema.safeParse(metadata).success;
-
-export const getSessionPinList = (session: Session | null | undefined): string | null => {
-  const parsed = parseMetadata(pinnedSchema, session?.metadata);
-  if (!parsed.success) return null;
-  return parsed.data.openchamber.pinned.list ?? DEFAULT_PIN_LIST;
-};
-
-const openchamberSchema = z.object({ openchamber: z.record(z.string(), z.json()) });
-
-export function withSessionPinned(metadata: Metadata, pin: boolean, now: number, list: string | null = null): Metadata {
-  const namespace = openchamberSchema.safeParse(metadata).data?.openchamber ?? {};
-  const current = pinnedSchema.safeParse(metadata).data?.openchamber.pinned;
-  if (!pin) {
-    if (!current) return metadata;
-    const rest = { ...namespace };
-    delete rest.pinned;
-    return { ...metadata, openchamber: rest };
-  }
-  const nextList = list && list !== DEFAULT_PIN_LIST ? list : undefined;
-  if (current && current.list === nextList) return metadata;
-  const at = current?.at ?? now;
-  if (!nextList) return { ...metadata, openchamber: { ...namespace, pinned: { at } } };
-  return { ...metadata, openchamber: { ...namespace, pinned: { at, list: nextList } } };
->>>>>>> upstream/main
 }

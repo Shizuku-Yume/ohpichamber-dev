@@ -10,14 +10,8 @@ import {
   type ModelSelection,
 } from '@openchamber/agent-contract';
 import { toast } from 'sonner';
-<<<<<<< HEAD
 import { canonicalClient } from '@/api/canonicalClient';
-||||||| bc50ba56aa
-=======
-import { z } from 'zod';
->>>>>>> upstream/main
 import { formatMessage, useI18nStore } from '@/lib/i18n';
-<<<<<<< HEAD
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { getDirectoryState, getSyncSessionDirectory } from '@/sync/sync-refs';
 import { selectModelsForDirectory, useConfigStore } from '@/stores/useConfigStore';
@@ -36,39 +30,8 @@ export type SmallModelRequest = Pick<CompletionRequest, 'prompt'> & Partial<Pick
    */
   reasoning?: boolean;
   signal?: AbortSignal;
-||||||| bc50ba56aa
-import { runtimeFetch, type RuntimeFetchOptions } from '@/lib/runtime-fetch';
-
-const SMALL_MODEL_TOAST_ID = 'small-model-unavailable';
-
-const notifySmallModelUnavailable = (): void => {
-  const dictionary = useI18nStore.getState().dictionary;
-  toast.error(formatMessage(dictionary, 'smallModel.toast.unavailable.title'), {
-    id: SMALL_MODEL_TOAST_ID,
-    description: formatMessage(dictionary, 'smallModel.toast.unavailable.description'),
-  });
-=======
-import { openCodeTrustRefusalDirectory } from '@/lib/opencodeTrust';
-import { runtimeFetch, type RuntimeFetchOptions } from '@/lib/runtime-fetch';
-import { useUIStore } from '@/stores/useUIStore';
-
-const SMALL_MODEL_TOAST_ID = 'small-model-unavailable';
-const SMALL_MODEL_TRUST_TOAST_ID = 'small-model-trust-required';
-
-const notifySmallModelUnavailable = (): void => {
-  const dictionary = useI18nStore.getState().dictionary;
-  toast.error(formatMessage(dictionary, 'smallModel.toast.unavailable.title'), {
-    id: SMALL_MODEL_TOAST_ID,
-    description: formatMessage(dictionary, 'smallModel.toast.unavailable.description'),
-    action: {
-      label: formatMessage(dictionary, 'smallModel.toast.unavailable.action'),
-      onClick: () => useUIStore.getState().openSettingsAt('sessions', 'sessions.small-model'),
-    },
-  });
->>>>>>> upstream/main
 };
 
-<<<<<<< HEAD
 const families = ['luna', 'flash-lite', 'flash', 'haiku'];
 const usable = (model: Model): boolean => model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text');
 
@@ -90,45 +53,7 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
   let changed = false;
   const unsubscribe = subscribeRuntimeEndpointWillChange(() => { changed = true; });
   const check = () => { if (changed || getRuntimeKey() !== runtimeKey) throw new DOMException('Runtime changed', 'AbortError'); };
-||||||| bc50ba56aa
-/**
- * One request to OpenChamber's background model. Any failure that is not in
- * `silentStatuses` raises the shared "Small Model unavailable" toast; callers
- * with a graceful fallback (a note kept verbatim, a reply spoken in full)
- * silence the 404 that means "no model to run on". Callers that show their own
- * error toast use `notifyOnError: false` to avoid duplicate notifications.
- */
-export async function requestSmallModel(
-  init: RuntimeFetchOptions,
-  options: { silentStatuses?: number[]; notifyOnError?: boolean } = {},
-): Promise<Response> {
-=======
-const refusalMessageSchema = z.object({ error: z.string().trim().min(1) });
-
-const notifyFolderTrustRequired = async (response: Response, directory: string): Promise<void> => {
-  const parsed = refusalMessageSchema.safeParse(await response.clone().json().catch(() => null));
-  const message = parsed.success
-    ? parsed.data.error
-    : formatMessage(useI18nStore.getState().dictionary, 'chat.trustPaused.text', { name: directory });
-  toast.error(message, { id: SMALL_MODEL_TRUST_TOAST_ID });
-};
-
-const notifyFailedResponse = async (response: Response): Promise<void> => {
-  const trustDirectory = await openCodeTrustRefusalDirectory(response);
-  if (trustDirectory) {
-    await notifyFolderTrustRequired(response, trustDirectory);
-    return;
-  }
-  notifySmallModelUnavailable();
-};
-
-export async function requestSmallModel(
-  init: RuntimeFetchOptions,
-  options: { silentStatuses?: number[]; notifyOnError?: boolean } = {},
-): Promise<Response> {
->>>>>>> upstream/main
   try {
-<<<<<<< HEAD
     const directory = input.directory?.trim() || (input.sessionId ? getSyncSessionDirectory(input.sessionId) : getDirectoryState()?.path.directory);
     if (!directory && !input.workspaceId) throw new Error('No workspace directory for background generation');
     const workspace = input.workspaceId ? { workspaceId: input.workspaceId } : await canonicalClient.resolveWorkspace(directory!);
@@ -152,15 +77,6 @@ export async function requestSmallModel(
       check();
       if (catalog !== null) models = catalog.models;
       if (settings !== null) ompSettings = settings;
-||||||| bc50ba56aa
-    const response = await runtimeFetch('/api/small-model/generate', init);
-    if (options.notifyOnError !== false && !response.ok && !options.silentStatuses?.includes(response.status)) {
-      notifySmallModelUnavailable();
-=======
-    const response = await runtimeFetch('/api/small-model/generate', init);
-    if (options.notifyOnError !== false && !response.ok && !options.silentStatuses?.includes(response.status)) {
-      await notifyFailedResponse(response);
->>>>>>> upstream/main
     }
     // The catalog entry travels with the selection: a reasoning-enabled request
     // must ask only for an effort the model actually advertises.

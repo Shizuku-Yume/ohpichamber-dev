@@ -1,14 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import { getSessionWork, isDoneSuggested, isReviewSuggested, isSessionInWork, withSessionWorkState } from './sessionWorkMetadata';
-||||||| bc50ba56aa
-import type { Metadata, Session } from '@/lib/opencode/model';
-import { getSessionWork, isDoneSuggested, isReviewSuggested, isSessionInWork, withSessionWorkState } from './sessionWorkMetadata';
-=======
-import type { Metadata, Session } from '@/lib/opencode/model';
-import { getSessionWork, isDoneSuggested, isReviewSuggested, isSessionInWork, withSessionWorkClosed, withSessionWorkState } from './sessionWorkMetadata';
->>>>>>> upstream/main
 
 const session = (metadata: SessionMetadata, updatedAt = 100): Session => ({
   sessionId: 'ses_1', projectId: 'prj', workspaceId: 'ws', displayPath: 'repo', rootSessionId: 'ses_1',
