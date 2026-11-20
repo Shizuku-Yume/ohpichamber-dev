@@ -132,3 +132,13 @@ claim that the carried-over bodies have been type-verified.
 - **Impact:** readers configuring enterprise mode are told update checks run when the fork has removed that check.
 - **Solution:** update or remove that bullet in `packages/docs/content/docs/security.mdx` and its localized translations.
 - **Cost:** small docs-only edit across the security MDX files.
+
+## Composer model label temporarily shows the previous model during a new-session run
+
+- **Where:** shared composer model presentation during new-session streaming.
+- **Added:** 2026-11-20
+- **Priority:** minor
+- **Problem:** while a devin-swe-2 reply streams in a new session, the composer label shows the previously selected gemini-3.5-flash-lite model and reverts after completion.
+- **Impact:** display-only; the run uses devin-swe-2. No routing or response-loss regression is established by this report.
+- **Solution:** identify the stale presentation owner and derive the streaming label from the authoritative session/run selection, preserving ordinary draft selection outside a run. Cover promotion, streaming, completion and interruption ordering.
+- **Cost:** focused composer state investigation and regression coverage; the source cause is not yet verified.

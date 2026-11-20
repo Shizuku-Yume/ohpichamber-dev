@@ -1855,3 +1855,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** Without the runtime identities, the listener cannot distinguish a switch from an event for the active runtime.
 - **Mine:** yes (records the existing fork fixture).
 - **Revisit when:** Upstream's fixture uses the same runtime-change event contract.
+
+## 2026-11-20 - Require full retained-platform acceptance before merging the upstream sync
+
+- **Decided:** do not merge the sync until full acceptance on Web/PWA, Android, iOS, Windows and macOS. The owner and designated testers now own testing; this implementation handoff stops all test/build runs and records the existing evidence and open failures.
+- **Instead of:** treating local checks, Linux packaging, or the earlier Web/macOS blocking-smoke fixes as complete merge acceptance.
+- **Because:** the owner expanded the merge bar to every retained platform and explicitly transferred testing ownership.
+- **Mine:** no; owner instruction.
+- **Scope:** acceptance and verification ownership only. Canonical `/api/agent/v1`, OMP 19, the Host/Agent Service boundary and Guest MessagePort v2 remain unchanged.

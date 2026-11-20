@@ -5,9 +5,15 @@ Read this record before implementation, together with the [agent guide](../AGENT
 ## Current state
 
 The macOS tester confirmed first-send for `/tmp` aliases, `/private/tmp`, Gemini
-and devin-swe-2; all reported smoke bugs are closed. The full comparison found
-remaining integration regressions outside those smoke paths. Main's 1,274 UI
-files pass, while this branch's first aggregate reports 58 failing UI files.
+and devin-swe-2; the reported blocking Web/macOS smoke bugs are closed. A known
+display-only composer model-label issue remains recorded in technical debt.
+Merge now requires full acceptance on Web/PWA, Android, iOS, Windows and macOS;
+local checks and the earlier smoke results do not establish that acceptance.
+The owner transferred testing and requested all test/build runs stop on
+2026-11-20. No further testing is owned by this implementation handoff.
+The comparison found remaining integration regressions outside the smoke paths.
+Main's 1,274 UI files pass; the latest branch run passes 1,363/1,405 UI files,
+with 42 failing files. That run was stopped during Agent Service testing.
 One verified cause is mixed URI branding: builders emit `ohpichamber://` but
 adopted parsers still recognize `openchamber://`. Session/pairing readers now
 use the fork scheme, and generic external-link handling blocks self links so
@@ -53,6 +59,57 @@ This failure is not dismissed as pre-existing. The UI changes are visually
 unverified. PR #60 also has all four actual CI jobs pending, while its Devin
 Review passed. PR #61's failed Review exposes no job ID, reviews or review
 comments through the PR API, so no actionable review text is available there.
+
+### Gate evidence at testing handoff (2026-11-20)
+
+The following results were captured for code head
+`b5afbb93df5cc78ec25510b8555cc380c76144b3` before the owner stopped testing.
+They are source/gate evidence, not platform acceptance. The `type-check` script
+is an alias for the complete root check; its nonzero exit includes drift/gaps.
+
+```text
+✓ No type errors in 4,539 files across 5 projects [3.18s]
+[error-cause] 0 baseline site(s) unchanged, every denial names its reason
+[css-classes] 2296 class tokens resolve to a rule, a utility or a marker
+[check] 3/5 steps passed
+[check] failed: upstream-drift (exit 1), upstream-gaps (exit 1)
+NATIVE_BROWSER_LINT_EXIT=0
+```
+
+Drift reports 260 ledger contradictions. Upstream-gaps reports 776 findings:
+562 allowlisted, 214 unallowlisted, 113 stale rows and 12 invalid owner citations.
+These failures are not waived. The completed main baseline passes six of seven
+suites; its three failing scripts files report `PIDFD_UNAVAILABLE`. The latest
+branch full run completed these sections before being stopped:
+
+| Suite | Recorded result |
+| --- | --- |
+| Scripts | 38/48 files pass; 10 fail, including retired verify-runner imports |
+| SDK | 35/36 files pass; shipped example bundles do not match current source |
+| UI | 1,363/1,405 files pass; 42 fail |
+| Agent Contract | 274 tests pass, zero fail |
+| Agent Service | Interrupted by owner instruction; no final verdict |
+| Electron / Web | Not reached in this run |
+
+The final focused plan/router run records six passing tests but exits 1 with
+two unhandled `updateDesktopSettings is not a function` errors at
+`useDirectoryStore.ts:161`. The initialization dependency is not resolved;
+no production-home workaround was retained. The earlier Node-entry file passes
+21 tests and the five browser-fixture files pass 23 tests.
+
+The last PR #61 snapshot has failed Devin Review with no job ID and four pending
+actual jobs. All three commit pages, reviews and review-comment streams were
+read; both review streams contain zero events. The one issue comment is a
+monitoring-bot control, not a review request. PR #60 has the same four actual
+jobs pending but its Review passes; the Review failure is not established as
+pre-existing. No runner policy was changed.
+
+Capacitor build/type-check and additional Windows checks were requested just
+before testing ownership transferred. No new such runs were started. Full
+Android/iOS/Windows/macOS acceptance remains with the owner and testers.
+Check waived for this documentation-only handoff: owner instruction to stop
+all test/gate runs, 2026-11-20. Existing logs are summarized here rather than
+committing machine-local scratch files or treating interrupted runs as passes.
 
 The error-cause and CSS guards pass after five retained UI error paths preserve
 their caught cause with `problemMessage`, file-artifact notices use the existing
