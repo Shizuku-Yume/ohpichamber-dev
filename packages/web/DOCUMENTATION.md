@@ -6,12 +6,16 @@ This package owns the browser build, Vite plugins, development launchers and web
 
 ## Invariants
 
-- `type-check:server` checks all converted server and CLI implementations under
-  the separate no-emit strict configuration. JavaScript dependencies supply
-  inferred shapes without being checked. A paired handwritten declaration
-  must be removed when its implementation becomes TypeScript.
-- `lint:server` enforces TypeScript and OpenChamber rules on every converted
-  implementation without accepting the JavaScript backlog. Conversion workers
+- `type-check:server` strictly checks new and upstream-owned server/CLI modules.
+  `scripts/fork-owned-server-untyped.json` records the explicit carried-over fork
+  JavaScript bodies renamed to TypeScript, with their original paths. Those
+  files supply generated declarations through a separate no-check project;
+  they do not become strictly converted just because their extension changed.
+  Generated projects and declarations stay under `build/server-check`.
+  Imported JavaScript remains unchecked, as in the fork's prior coverage.
+  Paired handwritten declarations are still rejected for TypeScript modules.
+- `lint:server` enforces TypeScript and OpenChamber rules on the same checked
+  modules without claiming coverage for the retained fork backlog. Conversion workers
   follow [the server conversion brief](server/DOCUMENTATION.md#converting-a-folder-to-typescript).
 
 - `build:server` emits JavaScript, declarations and inline-source maps into

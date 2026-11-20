@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertServerProgramBoundary } from './server-program-boundary.mjs';
 import { FORK_OWNED_JAVASCRIPT } from './fork-owned-server-javascript.mjs';
+import { forkServerTypeScript, writeServerCheckProjects } from './server-check-scope.mjs';
 
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -67,9 +68,10 @@ export function checkServerTypes(root = webRoot, lint = process.argv.includes('-
     return 1;
   }
   if (lint) {
-    if (!files.length) return 0;
+    const checked = files.filter((file) => !forkServerTypeScript.has(file));
+    if (!checked.length) return 0;
     for (const config of ['oxlint.config.ts', 'oxlint.anti-slop.config.ts']) {
-      for (const batch of batchByCommandLength(files.map((file) => path.relative(root, file)))) {
+      for (const batch of batchByCommandLength(checked.map((file) => path.relative(root, file)))) {
         const result = spawnSync('bunx', ['oxlint', '-c', path.resolve(webRoot, '../..', config), '--report-unused-disable-directives', ...batch], { cwd: root, stdio: 'inherit' });
         if (result.status !== 0) return result.status ?? 1;
       }
@@ -84,7 +86,12 @@ export function checkServerTypes(root = webRoot, lint = process.argv.includes('-
   }
   const require = createRequire(import.meta.url);
   const compiler = path.join(path.dirname(require.resolve('typescript/package.json')), 'bin', 'tsc');
-  return spawnSync(process.execPath, [compiler, '-p', path.join(root, 'tsconfig.server-check.json')], { cwd: root, stdio: 'inherit' }).status ?? 1;
+  const projects = writeServerCheckProjects(root, files);
+  if (projects.legacyProject) {
+    const built = spawnSync(process.execPath, [compiler, '-b', projects.legacyProject], { cwd: root, stdio: 'inherit' });
+    if (built.status !== 0) return built.status ?? 1;
+  }
+  return spawnSync(process.execPath, [compiler, '-p', projects.strictProject], { cwd: root, stdio: 'inherit' }).status ?? 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
