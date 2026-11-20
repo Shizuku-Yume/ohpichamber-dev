@@ -57,10 +57,10 @@
     "productName": "OhPiChamber",
     "asarUnpack": [
       "node_modules/7zip-bin/win/**/*",
-      "node_modules/ohpichamber/server/built-in-extensions/**/*",
-      "node_modules/ohpichamber/server/lib/git/credential-helper.js",
-      "node_modules/ohpichamber/server/lib/git/ssh-wrapper.js",
-      "node_modules/ohpichamber/server/lib/git/repository-credential-helper.js"
+      "node_modules/ohpichamber/build/server/built-in-extensions/**/*",
+      "node_modules/ohpichamber/build/server/lib/git/credential-helper.js",
+      "node_modules/ohpichamber/build/server/lib/git/ssh-wrapper.js",
+      "node_modules/ohpichamber/build/server/lib/git/repository-credential-helper.js"
     ],
     "files": [
       "dist-bundle/entry.mjs",
@@ -68,6 +68,7 @@
       "dist-bundle/early-startup.mjs",
       "preload.mjs",
       "browser-panel-preload.cjs",
+      "node_modules/ohpichamber/build/**/*",
       "!**/node_modules/**/*.{ts,mts,cts,tsx,map}",
       "!**/node_modules/**/!(LICENSE*|LICENCE*|license*|licence*|License*).md",
       "!**/node_modules/bun-pty{,/**}",

@@ -18,7 +18,8 @@
       "openchamber-source": "./server/*",
       "default": "./build/server/*"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./scripts/standalone-loader.mjs": "./scripts/standalone-loader.mjs"
   },
   "publishConfig": {
     "access": "public"

@@ -6,7 +6,7 @@ import { register } from 'node:module';
 let configuredRuntimeRoot = null;
 let configuredSdkRoot = null;
 
-const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const webRoot = path.dirname(fileURLToPath(import.meta.resolve('ohpichamber/package.json')));
 
 export async function initialize(data) {
   configuredRuntimeRoot = data?.runtimeRoot ?? configuredRuntimeRoot;

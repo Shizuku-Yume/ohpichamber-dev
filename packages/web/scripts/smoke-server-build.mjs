@@ -15,8 +15,9 @@ const listener = net.createServer();
 await new Promise((resolve, reject) => listener.once('error', reject).listen(0, 'localhost', resolve));
 const port = listener.address().port;
 await new Promise((resolve) => listener.close(resolve));
-const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(OPENCHAMBER_|OPENCODE_|XDG_|GIT_|NODE_OPTIONS$)/.test(name)));
-for (const folder of ['home', 'config', 'data', 'cache', 'state', 'openchamber']) fs.mkdirSync(path.join(root, folder));
+const env = Object.fromEntries(['PATH', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'SystemRoot', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP']
+  .filter((name) => process.env[name] !== undefined).map((name) => [name, process.env[name]]));
+for (const folder of ['home', 'config', 'data', 'cache', 'state', 'openchamber', 'desktop', 'agent']) fs.mkdirSync(path.join(root, folder));
 Object.assign(env, {
   HOME: path.join(root, 'home'),
   XDG_CONFIG_HOME: path.join(root, 'config'),
@@ -24,11 +25,10 @@ Object.assign(env, {
   XDG_CACHE_HOME: path.join(root, 'cache'),
   XDG_STATE_HOME: path.join(root, 'state'),
   OPENCHAMBER_DATA_DIR: path.join(root, 'openchamber'),
+  OPENCHAMBER_DESKTOP_USER_DATA_DIR: path.join(root, 'desktop'),
+  PI_CONFIG_DIR: path.join(root, 'agent'),
   OPENCHAMBER_RELAY_HOST: 'off',
-  OPENCODE_HOST: 'http://localhost:9',
-  OPENCODE_SKIP_START: 'true',
 });
-if (sourceCli || builtCli) Object.assign(env, { BUN_BINARY: path.join(root, 'bun-not-installed'), OPENCODE_BINARY: process.execPath });
 const log = fs.openSync(path.join(root, 'server.log'), 'w');
 const args = sourceCli
   ? [path.join(webRoot, 'bin/cli.js'), 'serve', '--foreground', '--api-only']
@@ -58,19 +58,26 @@ try {
     await delay(100);
   }
   if (!ready) throw new Error(`Built Node entry did not answer:\n${fs.readFileSync(path.join(root, 'server.log'), 'utf8')}`);
-  for (const route of [...(sourceCli ? [] : ['/']), '/api/diagnostics/local-files', '/api/diagnostics/opencode-load']) {
+  console.log(`${label} /health: 200; port=${port}; pid=${child.pid}`);
+  let agentReady = false;
+  while (Date.now() < deadline && child.exitCode === null) {
+    const response = await fetch(`http://localhost:${port}/api/agent/v1/ready`, { signal: AbortSignal.timeout(2_000) }).catch(() => null);
+    const state = response?.ok ? await response.json() : null;
+    if (state?.ready === true && state.engine === 'omp') { agentReady = true; break; }
+    await delay(100);
+  }
+  if (!agentReady) throw new Error(`Built Node entry did not start the native Agent Service:\n${fs.readFileSync(path.join(root, 'server.log'), 'utf8')}`);
+  for (const route of [...(sourceCli ? [] : ['/']), '/api/agent/v1/ready']) {
     const response = await fetch(`http://localhost:${port}${route}`, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) throw new Error(`${route}: HTTP ${response.status}`);
     if (route === '/') {
       if (!(await response.text()).toLowerCase().includes('<!doctype html')) throw new Error('UI response is not HTML');
     } else {
       const result = await response.json();
-      if (route.endsWith('local-files') && (!Array.isArray(result.events) || !Array.isArray(result.coverage))) throw new Error('Invalid diagnostic snapshot');
-      if (route.endsWith('opencode-load') && (result.locations !== null || result.processes !== null)) throw new Error('Unavailable OpenCode must remain unknown');
+      if (result.ready !== true || result.engine !== 'omp') throw new Error('Native Agent Service is not ready');
     }
     console.log(`${label} ${route}: 200`);
   }
-  console.log(`${label} /health: 200; port=${port}; pid=${child.pid}`);
 } finally {
   child.kill('SIGTERM');
   const abort = new AbortController();

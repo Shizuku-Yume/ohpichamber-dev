@@ -8,6 +8,13 @@ import { configurePackageBuild } from './package.mjs';
 const electronRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(fs.readFileSync(path.join(electronRoot, 'package.json'), 'utf8'));
 
+test('packaging retains the compiled fork Host and unpacks its executable helpers', () => {
+  assert.ok(packageJson.build.files.includes('node_modules/ohpichamber/build/**/*'));
+  for (const file of ['credential-helper.js', 'ssh-wrapper.js', 'repository-credential-helper.js']) {
+    assert.ok(packageJson.build.asarUnpack.includes(`node_modules/ohpichamber/build/server/lib/git/${file}`));
+  }
+});
+
 test('direct electron-builder configuration defaults to unsigned and avoids signing blockers', () => {
   const { build } = packageJson;
   assert.equal(

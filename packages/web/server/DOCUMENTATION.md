@@ -14,6 +14,19 @@ it imports.
 - Installed server and CLI code runs from `build/server` and `build/bin`.
   Sibling assets retain their relative locations. The server enables Node source
   maps so emitted stack traces identify the original source and line.
+  Retained JavaScript/MJS modules and hand-written declarations that TypeScript
+  does not emit are copied alongside the output. A declaration sibling can hide
+  a JavaScript implementation from the compiler's import graph; the runtime
+  must still ship. Copying never replaces compiler output or its source maps.
+  Tests, fixtures and live-test support stay excluded. Electron builds this
+  same backend through Web's build and loads its `ohpichamber` package exports.
+  The post-build closure check requires every production server/bin module,
+  including Host modules imported externally by Electron, rather than only the
+  compiler's reachable subset. Missing or escaping module outputs fail the
+  build before a package can be produced.
+  The exported standalone loader resolves its owning manifest through the
+  package's self-reference, keeping Agent resources relative to the package
+  rather than the emitted `build/scripts` directory.
 - Source CLI commands resolve their sibling server directly, so checkout
   development does not depend on generated output or the package's published
   entry fields.

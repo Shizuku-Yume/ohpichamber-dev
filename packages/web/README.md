@@ -47,6 +47,10 @@ To build from a checkout, run `bun install` and `bun run build:web` at the repo
 root. `bun run start:web` runs the source CLI with Bun; `bun run dev`,
 `dev:server`, `dev:server:watch` and tests use sources without a server build.
 `bun run build:server` builds only the backend and its runtime assets.
+The build includes retained JavaScript/MJS runtime modules even when a typed
+declaration keeps them out of TypeScript's emit graph. After building, run
+`node scripts/smoke-server-build.mjs --built-cli` from this package to exercise
+the production CLI, HTTP listener and native Agent Service with isolated data.
 
 ## Usage
 

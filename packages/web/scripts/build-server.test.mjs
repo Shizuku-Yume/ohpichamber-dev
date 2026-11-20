@@ -22,8 +22,17 @@ test('emits server and CLI with declarations, inline source maps and runtime sib
       'server/built-in-extensions/registry.json',
       'server/lib/trackers/tracker-contract.d.ts',
       'server/lib/source-control/provider-contract.d.ts',
+      'server/lib/host/agent-service-supervisor.js',
+      'server/lib/host/agent-service-supervisor.d.ts',
     ]) {
       expect((await fs.stat(path.join(output, file))).isFile(), file).toBe(true);
+    }
+    for (const directory of ['server', 'bin']) {
+      const source = fileURLToPath(new URL(`../${directory}/`, import.meta.url));
+      for (const file of await fs.readdir(source, { recursive: true })) {
+        if (!/\.(?:js|mjs|cjs)$/.test(file) || /\.(?:test|spec|test-support|fixture)\.|-live-support\.|(?:^|[\\/])test-support[\\/]/.test(file)) continue;
+        expect((await fs.stat(path.join(output, directory, file))).isFile(), `${directory}/${file}`).toBe(true);
+      }
     }
     const files = await fs.readdir(output, { recursive: true });
     if (process.platform !== 'win32') {
@@ -31,6 +40,8 @@ test('emits server and CLI with declarations, inline source maps and runtime sib
     }
     expect(files.filter((file) => /\.(?:test|spec|test-support|fixture)\./.test(file))).toEqual([]);
     expect(files.some((file) => file.includes('test-support'))).toBe(false);
+    expect(files.some((file) => /-live-support\./.test(file))).toBe(false);
+    expect(await fs.readFile(path.join(output, 'server/index.js'), 'utf8')).toContain('//# sourceMappingURL=index.js.map');
     const map = JSON.parse(await fs.readFile(path.join(output, 'server/index.js.map'), 'utf8'));
     expect(map.sourcesContent).toHaveLength(map.sources.length);
     expect(map.sourcesContent[0].length).toBeGreaterThan(0);
@@ -43,6 +54,7 @@ test('emits server and CLI with declarations, inline source maps and runtime sib
     );
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
       await import(${JSON.stringify(pathToFileURL(path.join(output, 'server/index.js')).href)});
+      await import(${JSON.stringify(pathToFileURL(path.join(output, 'server/lib/host/agent-runtime.js')).href)});
       const {getWebPackagePaths} = await import(${JSON.stringify(pathToFileURL(path.join(output, 'server/lib/web-package-paths.js')).href)});
       try { getWebPackagePaths(new URL(${JSON.stringify(pathToFileURL(path.join(directory, 'missing', 'file.js')).href)})); }
       catch (error) { console.log(error.stack); process.exit(0); }

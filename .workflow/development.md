@@ -4,6 +4,30 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The production Host build now includes every retained server/bin JavaScript and
+MJS module, not just files reached by TypeScript's emit graph. Hand-written
+declaration siblings had hidden their JavaScript implementations from emit;
+the resulting CLI and desktop imports failed before startup. Runtime copies
+never overwrite compiler output or its maps. The post-build inventory validates
+all 712 production module outputs, including Host externals used by Electron.
+Six build/closure tests pass. The built Node CLI reaches `/health`, serves the
+UI and reaches native `/api/agent/v1/ready` (all HTTP 200) with isolated data;
+the native probe waits for service startup rather than treating an initial 503
+as a settled failure. The full Web build passes. Electron explicitly includes
+the renamed package's `build` tree and unpacks the compiled Git helper paths;
+its archive content guard now requires compiled login-shell, supervisor,
+runtime and unpacked built-in registry modules. The standalone loader keeps
+its public export and resolves the owning manifest from either emitted or
+source layout, so bundled Agent resources remain package-relative. Electron's
+packaged built-in override uses that same compiled layout. Build/loader tests
+pass (7), Host runtime resolution tests pass (8), and packaging/content tests
+pass (28). The Linux AppImage builds; its extracted archive contains both
+reported missing Host modules. An isolated Xvfb launch with the bundled runtime
+reaches the mounted application document and native readiness (HTTP 200,
+`ready: true`, `engine: omp`). Headless runtime checks do not certify appearance
+or macOS launch. Evidence: `/home/ubuntu/sync-notes/appimage-headless-ready-result.log`
+and `/home/ubuntu/sync-notes/production-host-main-appimage-final.log`.
+
 First-prompt Host capture now extracts the Git result's `root` before computing
 the project-context id. The fork caller had passed the whole `{ root }` record;
 the upstream TypeScript encoder no longer silently returns an empty id for that

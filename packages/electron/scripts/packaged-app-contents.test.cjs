@@ -7,15 +7,20 @@ const { readAsarFiles, findPackagedAppContentProblems } = require('./packaged-ap
 
 const web = 'node_modules/ohpichamber';
 const helpers = [
-  `${web}/server/lib/git/credential-helper.js`,
-  `${web}/server/lib/git/ssh-wrapper.js`,
-  `${web}/server/lib/git/repository-credential-helper.js`,
+  `${web}/build/server/lib/git/credential-helper.js`,
+  `${web}/build/server/lib/git/ssh-wrapper.js`,
+  `${web}/build/server/lib/git/repository-credential-helper.js`,
+  `${web}/build/server/built-in-extensions/registry.json`,
 ];
 
 const completeApp = () => [
   ...['dist-bundle/entry.mjs', 'dist-bundle/main.mjs', 'dist-bundle/early-startup.mjs', 'preload.mjs', 'browser-panel-preload.cjs', 'package.json'],
   `${web}/package.json`,
-  `${web}/server/index.js`,
+  `${web}/build/server/index.js`,
+  `${web}/build/server/lib/host/login-shell-env.js`,
+  `${web}/build/server/lib/host/agent-service-supervisor.js`,
+  `${web}/build/server/lib/host/agent-runtime.js`,
+  `${web}/build/scripts/standalone-loader.mjs`,
   `${web}/scripts/standalone-loader.mjs`,
   `${web}/resources/standalone-sdk/dist/index.js`,
   `${web}/resources/changelog/index.json`,
@@ -99,10 +104,10 @@ test('files copied from outside the allowlist are rejected', () => {
 
 test('a missing server entry or a packed git helper is reported', () => {
   const files = completeApp()
-    .filter((file) => file.path !== `${web}/server/index.js`)
+    .filter((file) => file.path !== `${web}/build/server/index.js`)
     .map((file) => (file.path === helpers[0] ? { ...file, unpacked: false } : file));
   assert.deepEqual(findPackagedAppContentProblems(files), [
-    `${web}/server/index.js is missing`,
+    `${web}/build/server/index.js is missing`,
     `${helpers[0]} must be unpacked from the asar`,
   ]);
 });
