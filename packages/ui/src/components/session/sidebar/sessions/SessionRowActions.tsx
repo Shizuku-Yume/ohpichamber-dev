@@ -98,7 +98,7 @@ export function SessionRowActions({
   const handleOpenInEditorClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    void runtimeApis?.vscode?.executeCommand('openchamber.openSessionInEditor', session.id, sessionTitle);
+    void runtimeApis?.vscode?.executeCommand('openchamber.openSessionInEditor', session.sessionId, sessionTitle);
   };
 
   const handleWorkToggleClick = (event: React.MouseEvent<HTMLButtonElement>) => {

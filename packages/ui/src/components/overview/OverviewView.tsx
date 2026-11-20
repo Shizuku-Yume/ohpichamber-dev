@@ -357,7 +357,7 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
   };
 
   const markDone = (sessions: Session[]) => run(sessions.map((session) => session.sessionId), async () => {
-    if (!await settleRunningOperatorChildren(sessions.map((session) => session.id))) return;
+    if (!await settleRunningOperatorChildren(sessions.map((session) => session.sessionId))) return;
     const failed = await markOverviewSessionsDone(sessions);
     for (const session of failed) toast.error(t('overview.toast.doneFailed', { title: titleOf(session) }));
   });

@@ -159,9 +159,9 @@ describe('projectSidebarActiveSessions', () => {
       knownDirectories: new Set(['/workspace/known']),
       isVSCode: false,
     };
-    expect(projectSidebarActiveSessions(input).map((entry) => entry.id)).toEqual(['parent', 'worker', 'grandchild']);
+    expect(projectSidebarActiveSessions(input).map((entry) => entry.sessionId)).toEqual(['parent', 'worker', 'grandchild']);
     expect(buildSidebarSessionProjection({ ...input, pinnedSessionIds: new Set(), sessionOrderRanks: new Map() })
-      .childrenMap.get('parent')?.map((entry) => entry.id)).toEqual(['worker']);
+      .childrenMap.get('parent')?.map((entry) => entry.sessionId)).toEqual(['worker']);
   });
 
   test('hides archived sessions in unregistered directories too', () => {
@@ -237,9 +237,9 @@ describe('projectSidebarCollection', () => {
     const chat = session('chat', '/home/.config/openchamber/chats/2026-08-24/session-chat');
     const worker = { ...session('worker', '/removed/worktree'), parentID: 'chat' };
     const input = { globalActiveSessions: [chat, worker], liveSessions: [], knownDirectories: new Set(['/workspace/a']), isVSCode: false };
-    expect(projectSidebarCollection(input).map((entry) => entry.id)).toEqual(['worker']);
+    expect(projectSidebarCollection(input).map((entry) => entry.sessionId)).toEqual(['worker']);
     expect(buildSidebarSessionProjection({ ...input, pinnedSessionIds: new Set(), sessionOrderRanks: new Map() })
-      .childrenMap.get('chat')?.map((entry) => entry.id)).toEqual(['worker']);
+      .childrenMap.get('chat')?.map((entry) => entry.sessionId)).toEqual(['worker']);
   });
 
   test('keeps managed Chats out of the VS Code sidebar', () => {

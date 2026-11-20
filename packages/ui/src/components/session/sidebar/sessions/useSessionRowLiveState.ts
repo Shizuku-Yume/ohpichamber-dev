@@ -26,13 +26,13 @@ export function useSessionRowLiveState({
 }: SessionRowLiveStateInput) {
   const session = node.session;
   const isZombie = useViewportStore(
-    React.useCallback((state) => Boolean(state.sessionMemoryState.get(viewportSessionKey(session.id))?.isZombie), [session.id]),
+    React.useCallback((state) => Boolean(state.sessionMemoryState.get(viewportSessionKey(session.sessionId))?.isZombie), [session.sessionId]),
   );
-  const turnActivity = useSessionTurnActivity(session.id);
+  const turnActivity = useSessionTurnActivity(session.sessionId);
   const isStreaming = turnActivity !== null;
-  const hasActivityDuration = useHasSessionTurnDuration(session.id, isStreaming);
-  const isMovingToWorktree = useIsSessionWorktreeMovePending(session.id);
-  const isAiRenaming = useIsSessionAiRenamePending(session.id, sessionDirectory);
+  const hasActivityDuration = useHasSessionTurnDuration(session.sessionId, isStreaming);
+  const isMovingToWorktree = useIsSessionWorktreeMovePending(session.sessionId);
+  const isAiRenaming = useIsSessionAiRenamePending(session.sessionId, sessionDirectory);
   const isSessionActionPending = isMovingToWorktree || isAiRenaming;
   const blockingBadgeSessionScopes = React.useMemo(
     () => timelineBadgeSessionScopes ?? selectBlockingBadgeSessionScopes(node, isExpanded, sessionDirectory),
@@ -42,8 +42,8 @@ export function useSessionRowLiveState({
     hasPermission: hasPendingPermission,
     hasForm: hasPendingForm,
   } = useSessionBlockingRequests(blockingBadgeSessionScopes);
-  const needsAttention = useSessionUnread(session.id);
-  const markedUnread = useSessionMarkedUnread(session.id);
+  const needsAttention = useSessionUnread(session.sessionId);
+  const markedUnread = useSessionMarkedUnread(session.sessionId);
   const showUnreadStatus = !isSessionActionPending && !isStreaming && needsAttention && (!isActive || markedUnread);
   const showStatusMarker = isStreaming || showUnreadStatus;
   const showActivityDuration = (isStreaming || showUnreadStatus) && hasActivityDuration;

@@ -209,7 +209,7 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
           // mode refuses credential writes, so the way in stays hidden.
           const offerKey = !locked && keyProviders.has(provider.providerId);
           const name = provider.name || provider.providerId;
-          const billingKey = BILLING_KEY_BY_PROVIDER.get(provider.id);
+          const billingKey = BILLING_KEY_BY_PROVIDER.get(provider.providerId);
           return (
             <SettingsCard
               key={provider.providerId}

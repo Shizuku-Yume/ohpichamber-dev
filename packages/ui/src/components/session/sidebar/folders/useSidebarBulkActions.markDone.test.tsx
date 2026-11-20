@@ -23,7 +23,7 @@ const session = (id: string, overrides: Partial<Session> = {}): Session => ({
 const sessions = new Map([
   ['root', session('root')],
   ['btw', session('btw')],
-  ['subagent', session('subagent', { parentID: 'root' })],
+  ['subagent', session('subagent', { parentSessionId: 'root' })],
   ['finished', session('finished', { metadata: done })],
   ['archived', session('archived', { time: { created: 1, updated: 1, archived: 3 } })],
   ['other', session('other')],
@@ -31,7 +31,7 @@ const sessions = new Map([
 
 describe('selectSessionsToMarkDone', () => {
   test('takes selected root sessions in work, past subagents, finished, archived and unknown ones', () => {
-    expect(selectSessionsToMarkDone(['root', 'btw', 'subagent', 'finished', 'archived', 'gone'], sessions).map((entry) => entry.id))
+    expect(selectSessionsToMarkDone(['root', 'btw', 'subagent', 'finished', 'archived', 'gone'], sessions).map((entry) => entry.sessionId))
       .toEqual(['root', 'btw']);
   });
 });
@@ -101,7 +101,7 @@ describe('bulk Mark done', () => {
     const calls: string[][] = [];
     select(['root', 'btw', 'subagent', 'other']);
     const view = await render(async (targets) => {
-      calls.push(targets.map((entry) => entry.id));
+      calls.push(targets.map((entry) => entry.sessionId));
       return { doneIds: ['root', 'btw'], failedIds: ['other'] };
     });
     try {

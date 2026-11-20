@@ -48,7 +48,7 @@ export function useSessionRowInteractions({
 
   const selectionModeEnabled = useSessionMultiSelectStore((state) => state.enabled);
   const isRowSelected = useSessionMultiSelectStore(
-    React.useCallback((state) => state.selectedIds.has(session.id), [session.id]),
+    React.useCallback((state) => state.selectedIds.has(session.sessionId), [session.sessionId]),
   );
   const toggleRowSelected = useSessionMultiSelectStore((state) => state.toggleSelected);
   const setRowRange = useSessionMultiSelectStore((state) => state.setRange);
@@ -56,7 +56,7 @@ export function useSessionRowInteractions({
 
   const handleOpenInSidePanel = () => {
     if (!sessionDirectory) return;
-    openSessionInSidePanel(session.id, sessionDirectory, sessionTitle);
+    openSessionInSidePanel(session.sessionId, sessionDirectory, sessionTitle);
   };
 
   const handleRowSelect = (event?: React.MouseEvent<HTMLElement>) => {
@@ -74,11 +74,11 @@ export function useSessionRowInteractions({
           ? useSessionMultiSelectStore.getState().anchorRowKey
           : useSessionMultiSelectStore.getState().anchorId;
         const descendantsById = new Map<string, string[]>();
-        descendantsById.set(session.id, collectNodeDescendantIds(node));
+        descendantsById.set(session.sessionId, collectNodeDescendantIds(node));
         setRowRange(currentAnchor, sessionRowKey, entries, sessionRowOrderRegistry?.getDescendantIds() ?? [], selectionScopeKey, descendantsById);
         return;
       }
-      toggleRowSelected(session.id, selectionScopeKey, collectNodeDescendantIds(node), sessionRowKey);
+      toggleRowSelected(session.sessionId, selectionScopeKey, collectNodeDescendantIds(node), sessionRowKey);
       return;
     }
     if (event?.shiftKey && !isVSCode && sessionDirectory) {
@@ -86,11 +86,11 @@ export function useSessionRowInteractions({
       return;
     }
     if (event?.altKey) {
-      toggleSessionRead(session.id, needsAttention, t);
+      toggleSessionRead(session.sessionId, needsAttention, t);
       return;
     }
     if (event?.currentTarget) holdSessionRowPosition(event.currentTarget);
-    handleSessionSelect(session.id, sessionDirectory);
+    handleSessionSelect(session.sessionId, sessionDirectory);
   };
 
   const handleRowBackgroundClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -112,13 +112,13 @@ export function useSessionRowInteractions({
       && !selectionModeEnabled
       && !prefetchOnPressDisabled
       && sessionDirectory
-      && !getSyncSessionMaterializationStatus(session.id, sessionDirectory).renderable
+      && !getSyncSessionMaterializationStatus(session.sessionId, sessionDirectory).renderable
     ) {
-      void prefetchSessionMessages({ directory: sessionDirectory, sessionID: session.id }).catch(() => undefined);
+      void prefetchSessionMessages({ directory: sessionDirectory, sessionID: session.sessionId }).catch(() => undefined);
     }
   };
   const hoverPrefetchTarget = !isActive && !selectionModeEnabled && sessionDirectory
-    ? { id: session.id, directory: sessionDirectory }
+    ? { id: session.sessionId, directory: sessionDirectory }
     : null;
   const handleRowPointerEnter = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || !hoverPrefetchTarget) return;

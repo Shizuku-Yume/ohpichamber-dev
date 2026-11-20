@@ -180,7 +180,8 @@ const actualReferenceSources = await import('@/components/references/referenceSo
 // reach a PR, so no binding is read.
 mock.module('@/components/references/referenceSources', () => ({
   ...actualReferenceSources,
-  useGitHubReadContext: () => null,
+  useRepositoryReadContext: () => null,
+  useRepositorySourceStatus: () => 'ready',
   useRepositoryReferenceProvider: () => 'github',
 }));
 mock.module('@/components/references/ReferencePickerDialog', () => ({
@@ -328,7 +329,8 @@ describe('NewWorktreeDialog behavior', () => {
       });
     }
   }
-  test('opens on "PR or issue" with the item it was given already chosen', async () => {
+  for (const discussion of [false, true]) {
+  test(`opens on "PR or issue" with its initial ${discussion ? 'discussion' : 'issue'} already chosen`, async () => {
     const dom = installDom();
     const root = createRoot(dom.container);
     try {
@@ -341,7 +343,13 @@ describe('NewWorktreeDialog behavior', () => {
               source: 'repository',
               includeDiff: false,
               reference: {
-                kind: 'issue',
+                ...(discussion ? {
+                  kind: 'discussion' as const,
+                  answered: null,
+                  upvotes: 0,
+                  locked: false,
+                  category: { name: 'General', emoji: null, answerable: true },
+                } : { kind: 'issue' as const }),
                 number: 7,
                 title: 'Started from the board',
                 url: 'https://github.com/acme/project/issues/7',
@@ -361,13 +369,14 @@ describe('NewWorktreeDialog behavior', () => {
         </I18nProvider>,
       ));
       const branchInput = dom.container.querySelector<HTMLInputElement>('input[placeholder="feature/my-awesome-feature"]');
-      expect(branchInput?.value).toBe('issue-7-draft-name');
+      expect(branchInput?.value).toBe(`${discussion ? 'discussion' : 'issue'}-7-draft-name`);
       expect(dom.container.textContent).toContain('Started from the board');
     } finally {
       await act(async () => root.unmount());
       dom.restore();
     }
   });
+  }
 
   test('preserves selected issue values when available worktree names change', async () => {
     const dom = installDom();

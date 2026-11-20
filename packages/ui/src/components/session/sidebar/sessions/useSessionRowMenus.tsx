@@ -82,7 +82,7 @@ export function useSessionRowMenus({
   const pendingRenameRef = React.useRef<{ id: string; title: string } | null>(null);
   const pendingFolderCreateRef = React.useRef(false);
   const sessionExport = useSessionMarkdownExport();
-  const currentWorktreeMetadata = node.worktree ?? useSessionUIStore.getState().getWorktreeMetadata(session.id) ?? null;
+  const currentWorktreeMetadata = node.worktree ?? useSessionUIStore.getState().getWorktreeMetadata(session.sessionId) ?? null;
   const [moveDialogOpen, setMoveDialogOpen] = React.useState(false);
   const {
     isMenuOpen,
@@ -131,7 +131,7 @@ export function useSessionRowMenus({
       } : null}
       touch={mobileVariant}
       onRename={() => {
-        pendingRenameRef.current = { id: session.id, title: sessionTitle };
+        pendingRenameRef.current = { id: session.sessionId, title: sessionTitle };
       }}
       onExport={() => sessionExport.requestExport(session, sessionDirectory, node)}
       onMoveSession={() => setMoveDialogOpen(true)}
@@ -171,7 +171,7 @@ export function useSessionRowMenus({
   const dialogs = (
     <>
       {moveDialogOpen && sessionDirectory ? (
-        <MoveSessionDialog open onOpenChange={setMoveDialogOpen} sessionId={session.id} sourceDirectory={sessionDirectory} />
+        <MoveSessionDialog open onOpenChange={setMoveDialogOpen} sessionId={session.sessionId} sourceDirectory={sessionDirectory} />
       ) : null}
       {sessionExport.dialog}
     </>

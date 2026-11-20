@@ -430,8 +430,8 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   };
   const push = (row: SessionSidebarRow): void => {
     if (row.kind === 'session') {
-      const repeat = shownSessionIds.has(row.node.session.id);
-      shownSessionIds.add(row.node.session.id);
+      const repeat = shownSessionIds.has(row.node.session.sessionId);
+      shownSessionIds.add(row.node.session.sessionId);
       if (repeat) {
         rows.push(Object.freeze({ ...row, repeat: true }));
         return;
@@ -449,7 +449,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     for (const node of nodes) {
       const range = indexed.subtreeRangeByNode.get(node);
       selectionEntries.push(Object.freeze({
-        id: node.session.id,
+        id: node.session.sessionId,
         rowKey: null,
         scopeKey,
         archived,
@@ -748,7 +748,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
       if (ownerKey) folderDropTargets.push(Object.freeze({ rowKey: folderKey, scopeKey: entry.scopeKey, folderId: entry.folder.id, ownerKey, enabled: dropEnabled }));
       if (folderCollapsed) {
         if (placement.zoneScopeKey) {
-          const folded = selectFolderRootNodes([...new Set(deleteSessions.map((session) => session.id))], indexed.byId);
+          const folded = selectFolderRootNodes([...new Set(deleteSessions.map((session) => session.sessionId))], indexed.byId);
           appendFoldedSelection(folded, indexed, selectionPoolOffset, placement.zoneScopeKey, group.isArchivedBucket === true);
         }
         return;
@@ -946,7 +946,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     let cut = entries.length;
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index];
-      const runKey = entry.kind === 'session' ? runIndex.runKeyBySessionId.get(entry.item.node.session.id) : undefined;
+      const runKey = entry.kind === 'session' ? runIndex.runKeyBySessionId.get(entry.item.node.session.sessionId) : undefined;
       if (runKey !== undefined && runKey === lastRunKey) continue;
       lastRunKey = runKey;
       if (slots === requested) {
@@ -991,7 +991,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     if (!more && !fewer) return;
     const hiddenNodes = hidden.flatMap((entry) => (
       entry.kind === 'session' ? [entry.item.node]
-        : entry.kind === 'group' ? entry.group.sessions.filter((node) => !isMovedToZone(node.session.id))
+        : entry.kind === 'group' ? entry.group.sessions.filter((node) => !isMovedToZone(node.session.sessionId))
           : []
     ));
     if (zoneScopeKey && hiddenNodes.length > 0) {

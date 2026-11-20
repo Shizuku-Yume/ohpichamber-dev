@@ -16,10 +16,10 @@ const collectOperatorChildren = (rootId: string, sessions: readonly Session[]): 
   while (queue.length > 0) {
     const parentId = queue.shift();
     for (const session of sessions) {
-      if (session.parentID !== parentId || seen.has(session.id) || !isOperatorChildSession(session)) continue;
-      seen.add(session.id);
+      if (session.parentSessionId !== parentId || seen.has(session.sessionId) || !isOperatorChildSession(session)) continue;
+      seen.add(session.sessionId);
       found.push(session);
-      queue.push(session.id);
+      queue.push(session.sessionId);
     }
   }
   return found;
@@ -28,7 +28,7 @@ const collectOperatorChildren = (rootId: string, sessions: readonly Session[]): 
 const useOperatorChildren = (sessionId: string): Session[] => {
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   return React.useMemo(() => {
-    if (isOperatorChildSession(activeSessions.find((session) => session.id === sessionId))) return NO_SESSIONS;
+    if (isOperatorChildSession(activeSessions.find((session) => session.sessionId === sessionId))) return NO_SESSIONS;
     const children = collectOperatorChildren(sessionId, activeSessions);
     return children.length > 0 ? children : NO_SESSIONS;
   }, [activeSessions, sessionId]);
@@ -36,16 +36,16 @@ const useOperatorChildren = (sessionId: string): Session[] => {
 
 const ChildApprovals: React.FC<{ child: Session }> = ({ child }) => {
   const { t } = useI18n();
-  const pending = useSessionWorkflowRuns(child.id).filter((run) => run.state === 'awaiting-approval');
+  const pending = useSessionWorkflowRuns(child.sessionId).filter((run) => run.state === 'awaiting-approval');
   if (pending.length === 0) return null;
   return (
     <>
       {pending.map((run) => (
-        <div key={run.id} data-operator-child-workflow={child.id}>
+        <div key={run.id} data-operator-child-workflow={child.sessionId}>
           <div dir="auto" className="truncate typography-meta text-muted-foreground">
             {t('chat.workflow.proposedBy', { title: child.title || t('sessions.sidebar.session.untitled') })}
           </div>
-          <WorkflowRunCard sessionId={child.id} runId={run.id} />
+          <WorkflowRunCard sessionId={child.sessionId} runId={run.id} />
         </div>
       ))}
     </>
@@ -57,7 +57,7 @@ export const OperatorChildWorkflowApprovals: React.FC<{ sessionId: string }> = (
   if (children.length === 0) return null;
   return (
     <div className="chat-message-column">
-      {children.map((child) => <ChildApprovals key={child.id} child={child} />)}
+      {children.map((child) => <ChildApprovals key={child.sessionId} child={child} />)}
     </div>
   );
 };

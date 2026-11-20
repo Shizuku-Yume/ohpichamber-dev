@@ -46,12 +46,12 @@ export function sidebarSearchMetadata(input: {
   const projects = new Map(input.projects.map((project) => [project.id, project]));
   return input.sessions.flatMap((session) => {
     const directory = normalizePath(session.directory);
-    const archived = Boolean(session.time?.archived);
-    if (session.parentID || seen.has(session.id) || !input.isAdmitted(directory)) return [];
-    seen.add(session.id);
-    const owner = input.owners.get(session.id);
+    const archived = Boolean(session.archivedAt);
+    if (session.parentSessionId || seen.has(session.sessionId) || !input.isAdmitted(directory)) return [];
+    seen.add(session.sessionId);
+    const owner = input.owners.get(session.sessionId);
     const project = owner ? projects.get(owner.projectId) : undefined;
     const worktree = owner ? input.worktrees.get(project?.normalizedPath ?? owner.projectRoot)?.find((worktree) => normalizePath(worktree.path) === owner.scopeDirectory) : undefined;
-    return [{ sessionId: session.id, title: session.title ?? '', directory, archived, updatedAt: session.time?.updated, projectLabel: project?.label ?? project?.normalizedPath.split('/').pop() ?? null, worktreeLabel: worktree?.branch ?? worktree?.name ?? null }];
+    return [{ sessionId: session.sessionId, title: session.title ?? '', directory, archived, updatedAt: session.updatedAt, projectLabel: project?.label ?? project?.normalizedPath.split('/').pop() ?? null, worktreeLabel: worktree?.branch ?? worktree?.name ?? null }];
   });
 }

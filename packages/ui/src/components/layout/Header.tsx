@@ -915,11 +915,11 @@ export const Header: React.FC = () => {
           sessionId={session.sessionId}
           open={open}
           slots={components}
-          onRename={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.id; }}
+          onRename={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.sessionId; }}
           onExport={exportSession}
           onMoveSession={requestSessionMove}
           onArchive={() => void runHeaderRetentionAction('archive', session.sessionId)}
-          onDelete={() => setPendingDeleteSessionId(session.id)}
+          onDelete={() => setPendingDeleteSessionId(session.sessionId)}
         />
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}>
           <Item className="text-destructive focus:text-destructive" onClick={() => setPendingDeleteSessionId(session.sessionId)}>

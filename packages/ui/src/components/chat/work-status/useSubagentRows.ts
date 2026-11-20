@@ -47,7 +47,7 @@ const sessionTokenTotal = (child: Session): number => {
   return tokens.input + tokens.output + tokens.reasoning + (tokens.cache?.write ?? 0);
 };
 
-export const subagentElapsedMs = (child: Session): number => Math.max(0, (child.time.idle ?? child.time.updated) - child.time.created);
+export const subagentElapsedMs = (child: Session): number => Math.max(0, (child.time.idle ?? child.updatedAt) - child.createdAt);
 
 export const subagentRowLook = (row: SubagentRow): SubagentRowLook => {
   if (row.blocked) return { icon: 'alert', color: 'var(--status-warning)', labelKey: 'chat.workStatus.subagent.needsPermission' };
@@ -71,7 +71,7 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
   const sessions = useSessionsWithListedChildren(sessionId);
   const children = React.useMemo(
     () => (sessionId ? sessions.filter((candidate) => (
-      candidate.parentID === sessionId && !workflowAgentIds.has(candidate.id) && !isWorkflowAgentSession(candidate)
+      candidate.parentSessionId === sessionId && !workflowAgentIds.has(candidate.sessionId) && !isWorkflowAgentSession(candidate)
     )) : []),
     [sessions, sessionId, workflowAgentIds],
   );
@@ -90,16 +90,16 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
   );
   const observedChildren = useGlobalSessionStatusStore(React.useCallback((state) => children
     .flatMap((child) => {
-      if (state.statusById.has(child.id)) return [`${child.id}\tbusy`];
-      const observed = state.observedById.get(child.id);
-      return observed ? [`${child.id}\t${observed.outcome === 'failed' ? 'failed' : 'settled'}`] : [];
+      if (state.statusById.has(child.sessionId)) return [`${child.sessionId}\tbusy`];
+      const observed = state.observedById.get(child.sessionId);
+      return observed ? [`${child.sessionId}\t${observed.outcome === 'failed' ? 'failed' : 'settled'}`] : [];
     })
     .join('\n'), [children]));
   const indexedRequests = useGlobalBlockingRequestsStore(React.useCallback((state) => children
     .flatMap((child) => {
-      const pending = state.bySession.get(child.id);
+      const pending = state.bySession.get(child.sessionId);
       if (!pending) return [];
-      return [`${child.id}\t${pending.permissions.length > 0 ? 'p' : ''}${pending.forms.length > 0 ? 'f' : ''}`];
+      return [`${child.sessionId}\t${pending.permissions.length > 0 ? 'p' : ''}${pending.forms.length > 0 ? 'f' : ''}`];
     })
     .join('\n'), [children]));
 
@@ -120,13 +120,13 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
     const panelDirectory = normalizePath(directory);
     const panelSpaceId = spaceIdOfDirectory(panelDirectory);
     const rows = children.map((child) => {
-      const blocked = (permissions[child.id]?.length ?? 0) > 0 || Boolean(requestsById.get(child.id)?.includes('p'));
-      const asked = (forms[child.id]?.length ?? 0) > 0 || Boolean(requestsById.get(child.id)?.includes('f'));
-      const status = statuses[child.id]?.type;
-      const observed = observedById.get(child.id);
+      const blocked = (permissions[child.sessionId]?.length ?? 0) > 0 || Boolean(requestsById.get(child.sessionId)?.includes('p'));
+      const asked = (forms[child.sessionId]?.length ?? 0) > 0 || Boolean(requestsById.get(child.sessionId)?.includes('f'));
+      const status = statuses[child.sessionId]?.type;
+      const observed = observedById.get(child.sessionId);
       const busy = status === 'busy' || status === 'retry' || (!status && observed === 'busy');
       const failed = !busy && observed === 'failed';
-      const snapshotCovers = statusReady === true && !statusInvalidated?.[child.id]
+      const snapshotCovers = statusReady === true && !statusInvalidated?.[child.sessionId]
         && panelDirectory !== null && spaceIdOfDirectory(normalizePath(child.directory)) === panelSpaceId;
       const done = !failed && !busy && (status === 'idle' || (!status && (snapshotCovers || observed === 'settled')));
       const finished = !blocked && !asked && (done || failed);
@@ -135,7 +135,7 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
         providers.find((provider) => provider.id === child.model?.providerID),
         child.model?.id,
       );
-      const run = reports.get(child.id) ?? null;
+      const run = reports.get(child.sessionId) ?? null;
       const row: SubagentRow = {
         child,
         blocked,
@@ -146,7 +146,7 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
         finished,
         detached: !isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(child), projects, worktrees),
         identity: [child.agent, modelName].filter(Boolean).join(' · '),
-        cost: perChildCost.get(child.id) ?? 0,
+        cost: perChildCost.get(child.sessionId) ?? 0,
         tokens: sessionTokenTotal(child),
         run,
         reportLine: run ? reportFirstLine(run.output) : null,
@@ -154,7 +154,7 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
       return { row, rank };
     });
     rows.sort((left, right) => (left.rank - right.rank)
-      || ((right.row.child.time?.created ?? 0) - (left.row.child.time?.created ?? 0)));
+      || ((right.row.child.createdAt ?? 0) - (left.row.child.createdAt ?? 0)));
     return rows.map(({ row }) => row);
   }, [children, directory, forms, indexedRequests, observedChildren, perChildCost, reports, permissions, projects, providers, statusInvalidated, statusReady, statuses, worktrees]);
 };

@@ -234,7 +234,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     for (const id of workSessionIds) {
       const record = records.get(id);
       if (!canSessionBeUnread(record)) continue;
-      const rank: [number, number] = record.time.idle !== undefined ? [1, record.time.idle] : [0, record.time.updated];
+      const rank: [number, number] = record.time.idle !== undefined ? [1, record.time.idle] : [0, record.updatedAt];
       if (rank[0] > targetRank[0] || (rank[0] === targetRank[0] && rank[1] > targetRank[1])) {
         target = id;
         targetRank = rank;

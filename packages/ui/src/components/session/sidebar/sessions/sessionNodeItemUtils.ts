@@ -351,7 +351,7 @@ export const collectNodeDescendantIds = (root: SessionNode): string[] => {
   const out: string[] = [];
   const walk = (n: SessionNode) => {
     n.children.forEach((child) => {
-      out.push(child.session.id);
+      out.push(child.session.sessionId);
       walk(child);
     });
   };

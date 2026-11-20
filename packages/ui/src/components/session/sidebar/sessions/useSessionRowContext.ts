@@ -56,7 +56,7 @@ export function useSessionRowContext({
   const moreRefCount = Math.max(0, refLines.length - 1);
   const guestMarks = useSessionRowGuestMarks({
     shown: !isVSCode,
-    sessionId: session.id,
+    sessionId: session.sessionId,
     directory: sessionDirectory,
     projectId: sessionProjectId ?? null,
     projectRoot: projectRootDirectory,

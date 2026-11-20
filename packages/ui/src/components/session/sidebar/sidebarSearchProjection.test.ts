@@ -227,7 +227,7 @@ test('VS Code with no workspace directory has no search, never a search of every
 test('search metadata lists admitted conversations once, active and archived', () => {
   const fixture = searchFixture(4);
   const sessions = fixture.sections.flatMap((section) => section.groups.flatMap((group) => group.sessions.map((node) => node.session)));
-  sessions[1]!.time.archived = 2;
+  sessions[1]!.archivedAt = 2;
 
   const metadata = sidebarSearchMetadata({
     sessions: [...sessions, sessions[0]!], isAdmitted: (directory) => directory === '/repo/a', owners: fixture.sessionOwnerById,

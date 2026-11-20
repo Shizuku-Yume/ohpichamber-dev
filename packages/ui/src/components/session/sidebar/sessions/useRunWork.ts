@@ -57,7 +57,7 @@ export function useRunWork(run: MultiRunSummary, laneNodes: readonly SessionNode
     setBusy(true);
     try {
       if (inWork) {
-        if (!await settleRunningOperatorChildren(inWorkSessions.map((session) => session.id))) return;
+        if (!await settleRunningOperatorChildren(inWorkSessions.map((session) => session.sessionId))) return;
         for (const session of inWorkSessions) {
           await setSessionWorkState(session.sessionId, normalizePath(resolveGlobalSessionDirectory(session) ?? null), 'done');
         }

@@ -31,14 +31,14 @@ export function useSessionRowWork({
   const { t } = useI18n();
   const session = node.session;
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
-  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !node.session.parentID && !isChatDirectoryPath(node.session.directory)
-    && !isSessionPinned(pinnedSessionIds, normalizePath(node.session.directory ?? null) ?? normalizePath(groupDirectory ?? null), node.session.id);
+  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !node.session.parentSessionId && !isChatDirectoryPath(node.session.directory)
+    && !isSessionPinned(pinnedSessionIds, normalizePath(node.session.directory ?? null) ?? normalizePath(groupDirectory ?? null), node.session.sessionId);
   const workSessionsInWork = React.useMemo(
     () => (canTrackWork ? collectSessionWorkInWork(node) : []),
     [canTrackWork, node],
   );
   const isInWork = workSessionsInWork.length > 0;
   const showDoneHint = isInWork && !isStreaming && isDoneSuggested(session);
-  const toggleWork = () => { void toggleSessionWork(session.id, sessionDirectory, workSessionsInWork, t); };
+  const toggleWork = () => { void toggleSessionWork(session.sessionId, sessionDirectory, workSessionsInWork, t); };
   return { canTrackWork, isInWork, showDoneHint, toggleWork };
 }

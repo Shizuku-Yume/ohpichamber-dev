@@ -18,7 +18,7 @@ export function searchFixture(count = 2): SessionSidebarRowModelArgs {
     mode: 'search', sections, authoritativeSections: sections, chatGroup: null, foldersMap: {},
     collapsedProjects: new Set(), collapsedGroups: new Set(), collapsedFolders: new Set(), collapsedActivities: new Set(),
     expandedParents: new Set(), visibleCountByContainer: new Map(), pinnedSessionIds: new Set(), sessionOrderIndex: new Map(), groupStatusByKey: new Map(), folderAuthorityByOwner: new Map(),
-    sessionOwnerById: new Map(sections.flatMap((section) => section.groups.flatMap((group) => group.sessions.map(({ session }) => [session.id, { projectId: section.project.id, projectRoot: section.project.normalizedPath, scopeDirectory: group.directory!, kind: 'project' as const }] as const)))),
+    sessionOwnerById: new Map(sections.flatMap((section) => section.groups.flatMap((group) => group.sessions.map(({ session }) => [session.sessionId, { projectId: section.project.id, projectRoot: section.project.normalizedPath, scopeDirectory: group.directory!, kind: 'project' as const }] as const)))),
     activeProjectId: 'a', singleProjectMode: false, singleProjectId: null, showOnlyMainWorkspace: false, hideDirectoryControls: false,
   };
 }

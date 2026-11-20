@@ -197,7 +197,7 @@ test('a subsession archived while its parent stays active is listed under the pa
   expect(document.querySelector('[aria-label="Restore Old child"]')).toBeNull();
   const before = commits;
   await act(async () => {
-    for (let i = 0; i < 100; i++) useGlobalSessionsStore.getState().noteDeferredSessionUpdate(boss.id);
+    for (let i = 0; i < 100; i++) useGlobalSessionsStore.getState().noteDeferredSessionUpdate(boss.sessionId);
   });
   expect(commits).toBe(before);
   await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...boss, title: 'Renamed boss' }));
@@ -428,7 +428,7 @@ test('search metadata retains a standalone child parent title and an unmatched q
   await renderSearch();
   await act(async () => useGlobalSessionsStore.getState().applySnapshot(
     [session('ses_parent', 'Parent caption', 0)],
-    [{ ...session('ses_child', 'Child needle'), parentID: 'ses_parent' }], 'ready',
+    [{ ...session('ses_child', 'Child needle'), parentSessionId: 'ses_parent' }], 'ready',
   ));
   await typeSearch('needle');
   await advance(250);
@@ -460,7 +460,7 @@ test('archive search renders project context, fallback folders, and ordered extr
         { ...session('ses_branch', 'Branch result'), directory: '/worktrees/feature' },
         { ...session('ses_gone', 'Gone result'), directory: '/gone/worktree' },
         { ...session('ses_space', 'Space result'), directory: spaceDirectory },
-        { ...session('ses_child', 'Child result'), parentID: 'ses_parent' },
+        { ...session('ses_child', 'Child result'), parentSessionId: 'ses_parent' },
       ],
       'ready',
     );

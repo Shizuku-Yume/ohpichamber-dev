@@ -808,7 +808,7 @@ describe('buildSessionSidebarRowModel', () => {
       expect(scopeOf('pinned')).toBe('activity:pinned');
       expect(scopeOf('other')).toBeNull();
       // Folder ownership stays the session's own.
-      expect(model.rows.find((row) => row.kind === 'session' && row.node.session.id === 'wt-1')).toMatchObject({ ownerKey: getWorkFolderOwnerKey('/wt') });
+      expect(model.rows.find((row) => row.kind === 'session' && row.node.session.sessionId === 'wt-1')).toMatchObject({ ownerKey: getWorkFolderOwnerKey('/wt') });
 
       const all = deriveSessionRowBulkSelectAll(model.selectionEntries, model.selectionDescendantIds, 'activity:work');
       expect([...(all?.ids ?? [])].sort()).toEqual(['btw', 'lane-1', 'lane-2', 'working', 'wt-1']);
@@ -833,7 +833,7 @@ describe('buildSessionSidebarRowModel', () => {
       input.collapsedGroups = new Set(['project-a:worktree:/wt']);
 
       const model = buildSessionSidebarRowModel(input);
-      const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.id] : []));
+      const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.sessionId] : []));
 
       // Folded: neither the run's lanes nor the worktree's sessions get rows.
       expect(sessionRows.filter((id) => ['lane-1', 'lane-2', 'wt-1', 'wt-1-child'].includes(id))).toEqual([]);
@@ -857,7 +857,7 @@ describe('buildSessionSidebarRowModel', () => {
       input.collapsedFolders = new Set(['kept']);
 
       const model = buildSessionSidebarRowModel(input);
-      const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.id] : []));
+      const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.sessionId] : []));
       expect(sessionRows.filter((id) => id.startsWith('wt-')).length).toBeLessThan(11);
       expect(sessionRows).not.toContain('wt-11');
       const all = deriveSessionRowBulkSelectAll(model.selectionEntries, model.selectionDescendantIds, 'activity:work');

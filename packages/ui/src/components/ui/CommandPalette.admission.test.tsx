@@ -198,7 +198,7 @@ test('opening an archived session selects it and leaves it archived', async () =
   expect(groupHeadings()).toContain('Archived');
   await act(async () => item('session:archived')?.click());
   expect(useSessionUIStore.getState().currentSessionId).toBe('archived');
-  expect(useGlobalSessionsStore.getState().archivedSessions.map((entry) => entry.id)).toEqual(['archived']);
+  expect(useGlobalSessionsStore.getState().archivedSessions.map((entry) => entry.sessionId)).toEqual(['archived']);
   expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
 });
 

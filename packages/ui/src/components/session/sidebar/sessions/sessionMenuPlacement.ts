@@ -26,7 +26,7 @@ type PlacementSources = {
 };
 
 export const resolveSessionMenuPlacement = (session: Session, sources: PlacementSources): SessionMenuPlacement => {
-  const archived = Boolean(session.time?.archived);
+  const archived = Boolean(session.archivedAt);
   const projects = sources.projects.flatMap((project) => {
     const normalizedPath = normalizePath(project.path);
     return normalizedPath ? [{ id: project.id, normalizedPath }] : [];
@@ -40,9 +40,9 @@ export const resolveSessionMenuPlacement = (session: Session, sources: Placement
     sources.authoritativeProjects,
     sources.spaces,
   );
-  const owner = ownership.bySessionId.get(session.id);
+  const owner = ownership.bySessionId.get(session.sessionId);
   const isRunLane = buildMultiRunIndex(sources.activeSessions, sources.resolveLegacyScope)
-    .runKeyBySessionId.has(session.id);
+    .runKeyBySessionId.has(session.sessionId);
   return {
     projectId: owner?.projectId ?? null,
     folderOwnerKey: resolveSessionFolderOwnerKey(session, owner, isRunLane),
@@ -53,10 +53,10 @@ export const resolveSessionMenuPlacement = (session: Session, sources: Placement
 };
 
 export const collectNestedWorkInWork = (root: Session, sessions: readonly Session[]): Session[] => {
-  const byId = new Map(sessions.map((session) => [session.id, session]));
+  const byId = new Map(sessions.map((session) => [session.sessionId, session]));
   const nestedByParentId = new Map<string, Session[]>();
   for (const session of sessions) {
-    if (session.parentID || session.time?.archived) continue;
+    if (session.parentSessionId || session.archivedAt) continue;
     const parentId = resolveSessionNestingParentId(session, (id) => byId.get(id));
     if (!parentId) continue;
     const siblings = nestedByParentId.get(parentId);
@@ -68,10 +68,10 @@ export const collectNestedWorkInWork = (root: Session, sessions: readonly Sessio
   const stack: Session[] = [root];
   while (stack.length > 0) {
     const current = stack.pop();
-    if (!current || seen.has(current.id)) continue;
-    seen.add(current.id);
+    if (!current || seen.has(current.sessionId)) continue;
+    seen.add(current.sessionId);
     if (isSessionInWork(current)) inWork.push(current);
-    stack.push(...(nestedByParentId.get(current.id) ?? []));
+    stack.push(...(nestedByParentId.get(current.sessionId) ?? []));
   }
   return inWork;
 };

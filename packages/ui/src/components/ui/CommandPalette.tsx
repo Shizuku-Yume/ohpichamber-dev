@@ -636,7 +636,7 @@ export const CommandPalette: React.FC = () => {
 
   const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const archivedSessionIds = React.useMemo(() => new Set(archivedSessions.map((session) => session.id)), [archivedSessions]);
-  const activeSessionIds = React.useMemo(() => new Set(activeSessions.map((session) => session.id)), [activeSessions]);
+  const activeSessionIds = React.useMemo(() => new Set(activeSessions.map((session) => session.sessionId)), [activeSessions]);
   const orderedActiveSessions = React.useMemo(
     () => orderVisibleRootSessions(activeSessions.filter((session) => (
       isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session) ?? session.displayPath, projects, worktreesByProject)
@@ -690,13 +690,13 @@ export const CommandPalette: React.FC = () => {
   const sessionMetadata = React.useCallback((session: Session, archived: boolean) => {
     const directory = resolveGlobalSessionDirectory(session);
     return {
-      sessionId: session.id,
+      sessionId: session.sessionId,
       title: session.title ?? '',
       projectLabel: projectLabelForDirectory(directory),
-      worktreeLabel: branchForSession(session.id, directory) ?? registeredWorktreeText(directory),
+      worktreeLabel: branchForSession(session.sessionId, directory) ?? registeredWorktreeText(directory),
       directory,
       archived,
-      updatedAt: (archived ? session.time?.archived : undefined) ?? session.time?.updated,
+      updatedAt: (archived ? session.archivedAt : undefined) ?? session.updatedAt,
     };
   }, [projectLabelForDirectory, branchForSession, registeredWorktreeText]);
   const activeSessionMetadata = React.useMemo(
@@ -708,7 +708,7 @@ export const CommandPalette: React.FC = () => {
     [orderedArchivedSessions, sessionMetadata],
   );
   const sessionsById = React.useMemo(
-    () => new Map([...orderedActiveSessions, ...orderedArchivedSessions].map((session) => [session.id, session])),
+    () => new Map([...orderedActiveSessions, ...orderedArchivedSessions].map((session) => [session.sessionId, session])),
     [orderedActiveSessions, orderedArchivedSessions],
   );
 
@@ -947,7 +947,7 @@ export const CommandPalette: React.FC = () => {
   const handleOpenArchivedSession = React.useCallback(
     (session: Session) => {
       close();
-      void openSessionLink(session.id, null);
+      void openSessionLink(session.sessionId, null);
     },
     [close],
   );
@@ -1030,10 +1030,10 @@ export const CommandPalette: React.FC = () => {
   const renderSessionItem = (session: Session, ranges: ReadonlyArray<MatchRange>, onSelect: (session: Session) => void) => {
     const title = session.title || t('commandPalette.session.untitled');
     const dir = resolveGlobalSessionDirectory(session);
-    const branch = branchForSession(session.id, dir);
+    const branch = branchForSession(session.sessionId, dir);
     const projectLabel = projectLabelForDirectory(dir);
     return (
-      <CommandItem key={session.id} value={`session:${session.id}`} onSelect={() => onSelect(session)}>
+      <CommandItem key={session.sessionId} value={`session:${session.sessionId}`} onSelect={() => onSelect(session)}>
         <Icon name="chat-ai-3" className="me-2 h-4 w-4" />
         <span dir="auto" className="min-w-0 flex-1 truncate oc-ui-start-align"><Matched text={title} ranges={ranges} /></span>
         {projectLabel ? (

@@ -37,7 +37,7 @@ export const collectSubagentReports = (messages: readonly Message[] | undefined,
       const run = syntheticRun(message);
       if (run) byChild.set(run.childSessionID, run);
     } else if (message.role === 'assistant') {
-      const parts = partsByMessage[message.id];
+      const parts = partsByMessage[message.messageId];
       if (parts) for (const run of runsInParts(parts)) byChild.set(run.childSessionID, run);
     }
   }

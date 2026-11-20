@@ -11,10 +11,10 @@ export function useClosePinnedWork(sessions: readonly Session[]): void {
   React.useEffect(() => {
     const runtimeKey = getRuntimeKey();
     for (const session of sessions) {
-      const key = JSON.stringify([runtimeKey, session.id, getSessionWork(session)?.openedAt ?? null]);
+      const key = JSON.stringify([runtimeKey, session.sessionId, getSessionWork(session)?.openedAt ?? null]);
       if (attempted.has(key)) continue;
       attempted.add(key);
-      void setSessionWorkState(session.id, resolveGlobalSessionDirectory(session) ?? session.directory, 'done')
+      void setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session) ?? session.directory, 'done')
         .catch((error) => console.warn('[session-work] could not close the work of a pinned session', error));
     }
   }, [sessions]);

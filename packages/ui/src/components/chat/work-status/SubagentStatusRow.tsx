@@ -21,7 +21,7 @@ const RowDetail: React.FC<{ row: SubagentRow; directory: string | null; showActi
   if (row.busy && !row.blocked && !row.asked) {
     return (
       <span dir="auto" className="oc-ui-start-align block truncate">
-        <SubagentActivityText childId={row.child.id} directory={row.child.directory || directory} identity={row.identity} alertsOnly={!showActivity} />
+        <SubagentActivityText childId={row.child.sessionId} directory={row.child.directory || directory} identity={row.identity} alertsOnly={!showActivity} />
       </span>
     );
   }
@@ -74,7 +74,7 @@ export const SubagentStatusRow: React.FC<{
             <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.needsPermission')}</WorkStatusValue>
           ) : asked ? (
             <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.askedQuestion')}</WorkStatusValue>
-          ) : busy ? <RunningDuration sessionId={child.id} /> : null}
+          ) : busy ? <RunningDuration sessionId={child.sessionId} /> : null}
           {busy || blocked || asked ? <SubagentContextValue child={child} directory={directory} /> : null}
           {row.tokens > 0 ? <span dir="ltr" className="text-[0.6875rem] leading-4 text-muted-foreground">{formatTelemetryTokens(row.tokens)}</span> : null}
           {row.cost > 0 ? <span dir="ltr" className="text-[0.6875rem] leading-4 text-muted-foreground">{formatCost(row.cost)}</span> : null}

@@ -4,7 +4,7 @@ import { resolveAdmittedLineageDirectory } from './session-admission-rule';
 
 const session = (id: string, directory: string, parentID?: string): Session => ({
   sessionId: id,
-  parentID,
+  parentSessionId: parentID,
   projectID: 'project',
   directory,
   title: id,

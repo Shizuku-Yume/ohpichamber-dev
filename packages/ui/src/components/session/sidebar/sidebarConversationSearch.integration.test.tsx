@@ -81,7 +81,7 @@ afterEach(async () => {
 
 const fixture = searchFixture(4);
 const sessions = fixture.sections.flatMap((section) => section.groups.flatMap((group) => group.sessions.map((node) => node.session)));
-sessions[1]!.time.archived = 2;
+sessions[1]!.archivedAt = 2;
 // Old conversations of project a, archived, that the tree does not list.
 // SAFETY: search metadata reads only identity, location, title and lifecycle.
 const archivedSessions = Array.from({ length: 7 }, (_, index) => ({ id: `old-${index}`, title: `Legacy plan ${index}`, directory: '/repo/a', time: { created: 1, updated: 1, archived: 2 } } as Session));

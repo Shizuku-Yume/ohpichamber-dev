@@ -71,11 +71,11 @@ export function useSessionsWithListedChildren(sessionId: string | null): Session
   }));
   return React.useMemo(() => {
     if (listedChildren.length === 0) return liveSessions;
-    const listedById = new Map(listedChildren.map((child) => [child.id, child]));
+    const listedById = new Map(listedChildren.map((child) => [child.sessionId, child]));
     const merged = liveSessions.map((session) => {
-      const listed = listedById.get(session.id);
+      const listed = listedById.get(session.sessionId);
       if (!listed) return session;
-      listedById.delete(session.id);
+      listedById.delete(session.sessionId);
       return session.model || !listed.model ? session : { ...session, agent: session.agent ?? listed.agent, model: listed.model };
     });
     return [...merged, ...listedById.values()];

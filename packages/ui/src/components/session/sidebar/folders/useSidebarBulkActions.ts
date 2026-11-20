@@ -68,7 +68,7 @@ export const selectSessionsToMarkDone = (
   const sessions: Session[] = [];
   for (const id of selectedIds) {
     const session = sessionsById.get(id);
-    if (session && !session.parentID && !session.time?.archived && isSessionInWork(session)) sessions.push(session);
+    if (session && !session.parentSessionId && !session.archivedAt && isSessionInWork(session)) sessions.push(session);
   }
   return sessions;
 };

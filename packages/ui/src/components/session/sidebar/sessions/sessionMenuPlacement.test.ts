@@ -4,7 +4,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { collectNestedWorkInWork, resolveSessionMenuPlacement } from './sessionMenuPlacement';
 
 const session = (id: string, directory: string, extra: Partial<Session> = {}): Session => ({
-  id, title: id, directory, projectID: 'opencode-project', cost: 0,
+  sessionId: id, title: id, directory, projectID: 'opencode-project', cost: 0,
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   time: { created: 1, updated: 1 },
   ...extra,
@@ -25,7 +25,7 @@ const placementOf = (target: Session, sessions: Session[] = [target]) => resolve
   isVSCode: false,
   activeSessions: sessions,
   resolveLegacyScope: (entry) => entry.directory ?? null,
-  lookup: (id) => sessions.find((entry) => entry.id === id),
+  lookup: (id) => sessions.find((entry) => entry.sessionId === id),
 });
 
 const RUN_ID = '0b6c2a52-6f5e-4c1b-9d55-3a7f0d1c9e01';
@@ -74,13 +74,13 @@ describe('collectNestedWorkInWork', () => {
     const nestedReview = session('review', '/repo', { metadata: review('root', true) });
     const subagent = session('sub', '/repo', { parentID: 'root', metadata: inWork });
     const other = session('other', '/repo', { metadata: inWork });
-    expect(collectNestedWorkInWork(root, [root, nestedReview, subagent, other]).map((entry) => entry.id).sort())
+    expect(collectNestedWorkInWork(root, [root, nestedReview, subagent, other]).map((entry) => entry.sessionId).sort())
       .toEqual(['review', 'root']);
   });
 
   test('a root that is not in work is in work through its nested review', () => {
     const root = session('root', '/repo');
     const nestedReview = session('review', '/repo', { metadata: review('root', true) });
-    expect(collectNestedWorkInWork(root, [root, nestedReview]).map((entry) => entry.id)).toEqual(['review']);
+    expect(collectNestedWorkInWork(root, [root, nestedReview]).map((entry) => entry.sessionId)).toEqual(['review']);
   });
 });

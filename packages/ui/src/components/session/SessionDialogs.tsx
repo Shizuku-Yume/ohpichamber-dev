@@ -427,7 +427,7 @@ export const SessionDialogs: React.FC = () => {
             try {
                 if (keepSessionsInProject) {
                     const readSessions = () => readSessionsInWorktree(childStores, worktree.path);
-                    const keptIds = readSessions().map((session) => session.id);
+                    const keptIds = readSessions().map((session) => session.sessionId);
                     const kept = await moveWorktreeSessionsThenRemove({
                         worktreePath: worktree.path,
                         projectDirectory: getProjectRefForWorktree(worktree).path,

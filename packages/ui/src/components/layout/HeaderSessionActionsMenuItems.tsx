@@ -64,20 +64,20 @@ export function HeaderSessionActionsMenuItems({
     spaces,
     isVSCode,
     activeSessions,
-    resolveLegacyScope: (entry) => normalizePath(worktreeMetadata.get(entry.id)?.projectDirectory ?? entry.directory ?? null),
+    resolveLegacyScope: (entry) => normalizePath(worktreeMetadata.get(entry.sessionId)?.projectDirectory ?? entry.directory ?? null),
     lookup: (id) => useGlobalSessionsStore.getState().entityById.get(id),
   }) : null), [activeSessions, authoritativeProjects, availableWorktreesByProject, isVSCode, projects, session, spaces, worktreeMetadata]);
 
   if (!session || !placement) return null;
 
-  const archived = Boolean(session.time?.archived);
+  const archived = Boolean(session.archivedAt);
   const directory = normalizePath(session.directory ?? null);
-  const canTrackWork = sessionWorkEnabled && placement.ownsWork && !archived && !session.parentID
+  const canTrackWork = sessionWorkEnabled && placement.ownsWork && !archived && !session.parentSessionId
     && !isChatDirectoryPath(session.directory);
   const workSessionsInWork = canTrackWork ? collectNestedWorkInWork(session, activeSessions) : [];
 
   const restore = async () => {
-    const success = await unarchiveSession(session.id);
+    const success = await unarchiveSession(session.sessionId);
     if (success) toast.success(t('sessions.sidebar.session.restore.success'));
     else toast.error(t('sessions.sidebar.session.restore.error'));
   };
@@ -92,16 +92,16 @@ export function HeaderSessionActionsMenuItems({
       pinned={isSessionPinnedInMetadata(session)}
       work={canTrackWork ? {
         inWork: workSessionsInWork.length > 0,
-        toggle: () => { void toggleSessionWork(session.id, directory, workSessionsInWork, t); },
+        toggle: () => { void toggleSessionWork(session.sessionId, directory, workSessionsInWork, t); },
       } : null}
       projectId={placement.projectId}
-      currentWorktree={useSessionUIStore.getState().getWorktreeMetadata(session.id) ?? null}
+      currentWorktree={useSessionUIStore.getState().getWorktreeMetadata(session.sessionId) ?? null}
       descendants={[]}
       startWorktreeLoad={startWorktreeLoad}
       folders={placement.folderOwnerKey ? { ownerKey: placement.folderOwnerKey, projectId: placement.projectId } : null}
       onRename={onRename}
       onExport={() => onExport(session, directory)}
-      onMoveSession={() => { if (directory) onMoveSession(session.id, directory); }}
+      onMoveSession={() => { if (directory) onMoveSession(session.sessionId, directory); }}
       onArchive={onArchive}
       onRestore={archived && restorable ? () => { void restore(); } : null}
       onDelete={onDelete}

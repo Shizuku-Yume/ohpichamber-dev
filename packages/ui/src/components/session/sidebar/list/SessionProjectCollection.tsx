@@ -229,7 +229,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     directories: searchScope.directories,
   });
   const conversationResults = React.useMemo(() => {
-    const childIds = new Set(allSearchSessions.flatMap((session) => (session.parentID ? [session.id] : [])));
+    const childIds = new Set(allSearchSessions.flatMap((session) => (session.parentSessionId ? [session.sessionId] : [])));
     return childIds.size === 0 ? conversationSearch.results : conversationSearch.results.filter((result) => !childIds.has(result.sessionId));
   }, [allSearchSessions, conversationSearch.results]);
   const searchTotalCount = conversationSearch.totalCount;
@@ -245,7 +245,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     : null, [allSearchSessions, authoritativeProjects, searchActive, spaceList, topology.availableWorktreesByProject, topology.isVSCode, topology.projects]);
   const searchResultSessions = React.useMemo(() => {
     if (!searchActive) return [];
-    const sessionsById = new Map(allSearchSessions.map((session) => [session.id, session]));
+    const sessionsById = new Map(allSearchSessions.map((session) => [session.sessionId, session]));
     return conversationResults.flatMap((result) => sessionsById.get(result.sessionId) ?? []);
   }, [allSearchSessions, conversationResults, searchActive]);
   const searchLocationById = React.useMemo(() => searchOwnership
@@ -547,15 +547,15 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const isPinnedWork = React.useCallback((ref: SidebarWorkRef): boolean => {
     if (ref.kind === 'group') return ref.group.worktree?.pinnedAt !== undefined;
     const root = collection.sessionById.get(ref.rootSessionId);
-    return Boolean(root && isSessionPinned(collection.pinnedSessionIds, root.directory, root.id));
+    return Boolean(root && isSessionPinned(collection.pinnedSessionIds, root.directory, root.sessionId));
   }, [collection.pinnedSessionIds, collection.sessionById]);
   const pinnedSessionsInWork = React.useMemo(() => {
     if (!sessionWorkEnabled) return NO_SESSIONS;
     const sessions = collection.orderedSessions.filter((session) => {
-      if (session.parentID || session.time?.archived || !isSessionInWork(session)) return false;
-      if (isSessionPinned(collection.pinnedSessionIds, session.directory, session.id)) return true;
-      const root = sessionRootIndex.get(session.id);
-      const ref = workIndex.bySessionId.get(session.id) ?? (root ? workIndex.bySessionId.get(root) : undefined);
+      if (session.parentSessionId || session.archivedAt || !isSessionInWork(session)) return false;
+      if (isSessionPinned(collection.pinnedSessionIds, session.directory, session.sessionId)) return true;
+      const root = sessionRootIndex.get(session.sessionId);
+      const ref = workIndex.bySessionId.get(session.sessionId) ?? (root ? workIndex.bySessionId.get(root) : undefined);
       return ref !== undefined && isPinnedWork(ref);
     });
     return sessions.length > 0 ? sessions : NO_SESSIONS;

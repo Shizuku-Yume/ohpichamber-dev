@@ -26,7 +26,7 @@ const getMenuSessionIdFromKey = (props: SessionNodeItemProps): string | null => 
   if (props.rowKey && (
     props.openSidebarMenuKey === `session-menu:${props.rowKey}`
     || props.openSidebarMenuKey === `session-context:${props.rowKey}`
-  )) return props.node.session.id;
+  )) return props.node.session.sessionId;
   const bucketTag = props.archivedBucket ? 'archived' : 'active';
   const prefix = `${props.renderContext ?? 'project'}:${bucketTag}:`;
   return props.openSidebarMenuKey.startsWith(prefix)
@@ -44,7 +44,7 @@ const subtreeContainsSession = (
   precomputed: Set<string>,
 ): boolean => {
   if (!sessionId) return false;
-  if (precomputed.has(props.node.session.id)) return true;
+  if (precomputed.has(props.node.session.sessionId)) return true;
   return nodeContainsSessionId(props.node, sessionId);
 };
 
@@ -55,7 +55,7 @@ const hasSetMembershipChangeInNode = (
   nextSet: Set<string>,
   getKey: (node: SessionNode) => string,
 ): boolean => {
-  if (prevNode.session.id !== nextNode.session.id) return true;
+  if (prevNode.session.sessionId !== nextNode.session.sessionId) return true;
   const key = getKey(prevNode);
   if (prevSet.has(key) !== nextSet.has(key)) return true;
   if (prevNode.children.length !== nextNode.children.length) return true;
@@ -75,31 +75,31 @@ const hasExpansionMembershipChange = (prev: SessionNodeItemProps, next: SessionN
     next.node,
     prev.expandedParents,
     next.expandedParents,
-    (node) => `${prev.renderContext ?? 'project'}:${prevBucketTag}:${node.session.id}`,
+    (node) => `${prev.renderContext ?? 'project'}:${prevBucketTag}:${node.session.sessionId}`,
   ) || hasSetMembershipChangeInNode(
     prev.node,
     next.node,
     prev.expandedParents,
     next.expandedParents,
-    (node) => `${next.renderContext ?? 'project'}:${nextBucketTag}:${node.session.id}`,
+    (node) => `${next.renderContext ?? 'project'}:${nextBucketTag}:${node.session.sessionId}`,
   );
 };
 
 const areSessionRenderSemanticsEqual = (prev: Session, next: Session): boolean => (
-  prev.id === next.id
+  prev.sessionId === next.sessionId
   && prev.title === next.title
   && prev.directory === next.directory
-  && prev.parentID === next.parentID
-  && prev.time?.created === next.time?.created
-  && prev.time?.updated === next.time?.updated
-  && prev.time?.archived === next.time?.archived
+  && prev.parentSessionId === next.parentSessionId
+  && prev.createdAt === next.createdAt
+  && prev.updatedAt === next.updatedAt
+  && prev.archivedAt === next.archivedAt
   && prev.time?.idle === next.time?.idle
   && prev.metadata === next.metadata
   && sameMultiRunIdentity(prev, next)
 );
 
 const sessionNodeItemPropsChange = (prev: SessionNodeItemProps, next: SessionNodeItemProps): string | null => {
-  if (prev.node.session.id !== next.node.session.id) return 'node';
+  if (prev.node.session.sessionId !== next.node.session.sessionId) return 'node';
   if (!areSessionRenderSemanticsEqual(prev.node.session, next.node.session)) return 'node';
   if (!areNodeWorktreeRenderSemanticsEqual(prev.node, next.node)) return 'node';
   if (prev.depth !== next.depth) return 'depth';

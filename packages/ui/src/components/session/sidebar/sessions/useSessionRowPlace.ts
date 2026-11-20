@@ -21,7 +21,7 @@ export function useSessionRowPlace({
   selectionScopeKey: explicitSelectionScopeKey,
   folderOwnerKey,
 }: SessionRowPlaceInput) {
-  const isCurrentSession = useSessionUIStore((state) => state.currentSessionId === session.id);
+  const isCurrentSession = useSessionUIStore((state) => state.currentSessionId === session.sessionId);
   const runOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
   const isActive = isCurrentSession && !runOverviewOpen;
 

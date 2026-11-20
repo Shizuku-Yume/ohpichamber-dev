@@ -111,35 +111,35 @@ export function SessionActionsMenuItems({
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const isElectron = React.useMemo(() => canUseElectronDesktopIPC(), []);
   const sessionTitle = session.title || t('sessions.sidebar.session.untitled');
-  const isSubtaskSession = Boolean(session.parentID);
-  const isCurrentSession = useSessionUIStore((state) => state.currentSessionId === session.id);
+  const isSubtaskSession = Boolean(session.parentSessionId);
+  const isCurrentSession = useSessionUIStore((state) => state.currentSessionId === session.sessionId);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const renameShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('rename_current_session', shortcutOverrides), '');
   const archiveShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('archive_current_session', shortcutOverrides), '');
-  const isStreaming = useSessionTurnActivity(session.id) !== null;
-  const isMovingToWorktree = useIsSessionWorktreeMovePending(session.id);
-  const inLiveRun = useMultiRunMemberIds(session.id).length > 0;
+  const isStreaming = useSessionTurnActivity(session.sessionId) !== null;
+  const isMovingToWorktree = useIsSessionWorktreeMovePending(session.sessionId);
+  const inLiveRun = useMultiRunMemberIds(session.sessionId).length > 0;
   const multiRunKey = React.useMemo(() => (inLiveRun ? getMultiRunIdentity(session)?.key ?? null : null), [inLiveRun, session]);
 
   const perSessionWarming = useSessionWarmingStore((state) => state.enabled);
-  const isWarmed = useSessionWarmUntil(session.id) !== undefined;
+  const isWarmed = useSessionWarmUntil(session.sessionId) !== undefined;
   const canKeepWarm = perSessionWarming && !archived && !isSubtaskSession
     && Boolean(directory) && !isSpaceDirectory(directory);
   const toggleSessionWarm = async () => {
     if (!directory) return;
     try {
-      await useSessionWarmingStore.getState().setSessionWarm(session.id, directory, !isWarmed);
+      await useSessionWarmingStore.getState().setSessionWarm(session.sessionId, directory, !isWarmed);
     } catch {
       toast.error(t('sessions.warming.toggleFailed'));
     }
   };
 
   const takeOver = () => {
-    void takeOverSession(session.id, directory).catch(() => toast.error(t('sessions.sidebar.session.takeOver.failed')));
+    void takeOverSession(session.sessionId, directory).catch(() => toast.error(t('sessions.sidebar.session.takeOver.failed')));
   };
 
   const copySessionId = () => {
-    void copyTextToClipboard(session.id)
+    void copyTextToClipboard(session.sessionId)
       .then((result) => {
         toast[result.ok ? 'success' : 'error'](t(result.ok
           ? 'sessions.sidebar.session.copyId.success'
@@ -155,9 +155,9 @@ export function SessionActionsMenuItems({
     void runGuestSessionAction({
       entry,
       t,
-      session: { id: session.id, title: session.title, directory },
+      session: { id: session.sessionId, title: session.title, directory },
       loadRecords: () => (directory
-        ? loadExportRecords({ directory, sessionID: session.id }).catch(() => null)
+        ? loadExportRecords({ directory, sessionID: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),
       onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
     });
@@ -166,7 +166,7 @@ export function SessionActionsMenuItems({
   const openMiniChatWindow = () => {
     if (!directory) return;
     void invokeDesktop('desktop_open_session_mini_chat_window', {
-      sessionId: session.id,
+      sessionId: session.sessionId,
       directory,
       ...getMiniChatRuntimeArgs(),
     }).catch((error) => {
@@ -213,7 +213,7 @@ export function SessionActionsMenuItems({
       <SubTrigger
         disabled={isWorktreeMenuDisabled}
         className="w-full [&>svg]:me-1"
-        data-session-worktree-submenu-trigger={session.id}
+        data-session-worktree-submenu-trigger={session.sessionId}
       >
         <Icon name="folder-shared" className="me-1 h-4 w-4" />
         {t('sessions.sidebar.session.menu.moveTo')}
@@ -257,7 +257,7 @@ export function SessionActionsMenuItems({
         {worktreeMenuHint
           ? <SessionMenuItemHint hint={worktreeMenuHint}>{worktreeSubTrigger}</SessionMenuItemHint>
           : worktreeSubTrigger}
-        <SubContent className="min-w-[220px]" data-session-worktree-submenu={session.id}>
+        <SubContent className="min-w-[220px]" data-session-worktree-submenu={session.sessionId}>
           {canMoveToProject ? <>
             <SessionMenuItemHint hint={t('sessions.moveSession.hint')}>
               <Item onClick={onMoveSession} className="[&>svg]:me-1">
@@ -343,14 +343,14 @@ export function SessionActionsMenuItems({
     const allEntries = scopes.flatMap((scope) =>
       getFoldersForScope(scope).map((folder) => ({ scope, folder })));
     const currentEntry = allEntries.find(({ scope, folder }) =>
-      getSessionFolderId(scope, session.id) === folder.id) ?? null;
+      getSessionFolderId(scope, session.sessionId) === folder.id) ?? null;
     const folderEntries = allEntries.filter((entry) => offeredScopes.includes(entry.scope) || entry === currentEntry);
     const defaultScope = offeredScopes[0] ?? sessionDirectory;
     const fileInNewFolder = (folderId: string): void => {
       for (const scope of scopes) {
-        if (scope !== defaultScope) removeSessionFromFolder(scope, session.id);
+        if (scope !== defaultScope) removeSessionFromFolder(scope, session.sessionId);
       }
-      addSessionToFolder(defaultScope, folderId, session.id);
+      addSessionToFolder(defaultScope, folderId, session.sessionId);
     };
     if (workScope && folderEntries.length === 0) return null;
     return (
@@ -368,13 +368,13 @@ export function SessionActionsMenuItems({
                 return (
                   <Item key={folder.id} onClick={() => {
                     if (isCurrent) {
-                      removeSessionFromFolder(scope, session.id);
+                      removeSessionFromFolder(scope, session.sessionId);
                       return;
                     }
                     for (const candidateScope of scopes) {
-                      if (candidateScope !== scope) removeSessionFromFolder(candidateScope, session.id);
+                      if (candidateScope !== scope) removeSessionFromFolder(candidateScope, session.sessionId);
                     }
-                    addSessionToFolder(scope, folder.id, session.id);
+                    addSessionToFolder(scope, folder.id, session.sessionId);
                   }}>
                     <span dir="auto" className="oc-ui-start-align flex-1 truncate">{folder.name}</span>
                     {isCurrent ? <Icon name="check" className="ms-2 h-3.5 w-3.5 text-primary flex-shrink-0" /> : null}
@@ -400,7 +400,7 @@ export function SessionActionsMenuItems({
               </Item>
             </> : null}
             {currentEntry ? (
-              <Item onClick={() => { removeSessionFromFolder(currentEntry.scope, session.id); }} className="text-destructive focus:text-destructive">
+              <Item onClick={() => { removeSessionFromFolder(currentEntry.scope, session.sessionId); }} className="text-destructive focus:text-destructive">
                 <Icon name="close" className="me-1 h-4 w-4" />
                 {t('sessions.sidebar.folders.removeFromFolder')}
               </Item>
@@ -423,7 +423,7 @@ export function SessionActionsMenuItems({
       targetLabel: t('sessions.sidebar.session.menu.openInSidePanelTarget'),
       hint: t('sessions.sidebar.session.menuHint.openInSidePanel'),
       disabled: !directory,
-      run: () => { if (directory) openSessionInSidePanel(session.id, directory, sessionTitle); },
+      run: () => { if (directory) openSessionInSidePanel(session.sessionId, directory, sessionTitle); },
     } : null,
     isElectron ? {
       key: 'mini-chat',
@@ -484,7 +484,7 @@ export function SessionActionsMenuItems({
           {isCurrentSession && renameShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{renameShortcut}</span> : null}
         </Item>
       </SessionMenuItemHint>
-      <SessionAiRenameMenuItem sessionID={session.id} directory={directory} open={open} Item={Item} />
+      <SessionAiRenameMenuItem sessionID={session.sessionId} directory={directory} open={open} Item={Item} />
       <Separator />
 
       {work ? (
@@ -497,7 +497,7 @@ export function SessionActionsMenuItems({
       ) : null}
       {!archived && isOperatorChildSession(session) ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.takeOver')}>
-          <Item onClick={takeOver} className="[&>svg]:me-1" data-session-take-over={session.id}>
+          <Item onClick={takeOver} className="[&>svg]:me-1" data-session-take-over={session.sessionId}>
             <Icon name="user" className="me-1 h-4 w-4" />
             {t('sessions.sidebar.session.menu.takeOver')}
           </Item>
@@ -510,17 +510,17 @@ export function SessionActionsMenuItems({
         itemClassName="[&>svg]:me-1"
         onPin={(list) => {
           if (!directory) return;
-          setSessionPinList({ directory, sessionId: session.id }, true, list)
+          setSessionPinList({ directory, sessionId: session.sessionId }, true, list)
             .catch(() => toast.error(t('sessions.sidebar.session.pin.pinFailed')));
         }}
         onUnpin={() => {
           if (!directory) return;
-          setSessionPinList({ directory, sessionId: session.id }, false, null)
+          setSessionPinList({ directory, sessionId: session.sessionId }, false, null)
             .catch(() => toast.error(t('sessions.sidebar.session.pin.unpinFailed')));
         }}
       />
       {directory && !archived && folders ? renderFolderMenu(folders, directory) : null}
-      <SessionReadMenuItem sessionId={session.id} Item={Item} className="[&>svg]:me-1" iconClassName="me-1 h-4 w-4" showShortcut={!touch} />
+      <SessionReadMenuItem sessionId={session.sessionId} Item={Item} className="[&>svg]:me-1" iconClassName="me-1 h-4 w-4" showShortcut={!touch} />
       {canKeepWarm ? (
         <SessionMenuItemHint hint={isWarmed ? t('sessions.sidebar.session.menuHint.stopWarm') : t('sessions.sidebar.session.menuHint.keepWarm')}>
           <Item onClick={() => { void toggleSessionWarm(); }} className="[&>svg]:me-1">

@@ -190,11 +190,11 @@ describe('subagent status rows', () => {
 
   test('names who works without the call it makes, and who a finished one was', async () => {
     // The agent is set when OpenCode creates the session.
-    const worker: Session = { ...child, id: 'worker', title: 'Worker', agent: 'explore' };
+    const worker: Session = { ...child, sessionId: 'worker', title: 'Worker', agent: 'explore' };
     await publish({
       session: [parent, worker],
       session_status: { worker: { type: 'busy' } },
-      message: { worker: [{ id: 's1', sessionID: 'worker', role: 'assistant', time: { created: Date.now() }, agent: 'explore', providerID: 'p', modelID: 'm' }] },
+      message: { worker: [{ messageId: 's1', sessionID: 'worker', role: 'assistant', time: { created: Date.now() }, agent: 'explore', providerID: 'p', modelID: 'm' }] },
       part: { s1: [{ id: 't1', sessionID: 'worker', messageID: 's1', type: 'tool', callID: 't1', tool: 'grep', state: { status: 'running', input: { pattern: 'evaluate' }, time: { start: Date.now() } } }] },
     });
     // The call changes too often to read in a row; the panel shows it.
@@ -220,18 +220,18 @@ describe('subagent status rows', () => {
   });
 
   test('counts the tokens a subagent spent, without the cache it re-read every step', async () => {
-    const reader: Session = { ...child, id: 'reader', title: 'Reader', cost: 0, tokens: { input: 112762, output: 3217, reasoning: 1947, cache: { read: 2165888, write: 0 } } };
+    const reader: Session = { ...child, sessionId: 'reader', title: 'Reader', cost: 0, tokens: { input: 112762, output: 3217, reasoning: 1947, cache: { read: 2165888, write: 0 } } };
     await publish({ session: [parent, reader], sessionStatusReady: true, session_status: { reader: { type: 'idle' } } });
     expect(rowContent().textContent).toContain('117.9K');
     expect(rowContent().textContent).not.toContain('2.3M');
   });
 
   test('still says when a working subagent has gone silent', async () => {
-    const worker: Session = { ...child, id: 'worker', title: 'Worker', agent: 'explore' };
+    const worker: Session = { ...child, sessionId: 'worker', title: 'Worker', agent: 'explore' };
     await publish({
       session: [parent, worker],
       session_status: { worker: { type: 'busy' } },
-      message: { worker: [{ id: 's1', sessionID: 'worker', role: 'assistant', time: { created: Date.now() - 200_000 }, agent: 'explore', providerID: 'p', modelID: 'm' }] },
+      message: { worker: [{ messageId: 's1', sessionID: 'worker', role: 'assistant', time: { created: Date.now() - 200_000 }, agent: 'explore', providerID: 'p', modelID: 'm' }] },
       part: { s1: [] },
     });
     expect(rowContent().textContent).toContain('Silent for');

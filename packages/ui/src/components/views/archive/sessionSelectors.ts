@@ -13,8 +13,8 @@ const archived = restorable();
 const active = restorable();
 const parentTitles = memoizeSessionListProjection(
   (sessions: Session[], entities: ReadonlyMap<string, Session>) => sessions.flatMap((session) => {
-    const parent = session.parentID ? entities.get(session.parentID) : undefined;
-    return parent ? [parent.id, parent.title] : [];
+    const parent = session.parentSessionId ? entities.get(session.parentSessionId) : undefined;
+    return parent ? [parent.sessionId, parent.title] : [];
   }),
 );
 

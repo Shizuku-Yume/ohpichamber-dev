@@ -68,21 +68,21 @@ export const markSessionsDone = async (
   write: typeof setSessionWorkState = setSessionWorkState,
 ): Promise<{ doneIds: string[]; failedIds: string[] } | null> => {
   const isCurrentRuntime = captureRuntimeInstance();
-  const settled = settleRunningOperatorChildren(sessions.map((session) => session.id));
+  const settled = settleRunningOperatorChildren(sessions.map((session) => session.sessionId));
   if (settled !== true && !await settled) return { doneIds: [], failedIds: [] };
   const outcomes = await mapWithConcurrency([...sessions], MARK_DONE_CONCURRENCY, async (session) => {
     if (!isCurrentRuntime()) return 'stale';
     try {
-      const updated = await write(session.id, resolveGlobalSessionDirectory(session) ?? session.directory, 'done');
+      const updated = await write(session.sessionId, resolveGlobalSessionDirectory(session) ?? session.directory, 'done');
       return updated ? 'done' : 'stale';
     } catch (error) {
-      recordSessionActionFailure(session.id, error instanceof Error ? error : new Error(String(error)));
+      recordSessionActionFailure(session.sessionId, error instanceof Error ? error : new Error(String(error)));
       return 'failed';
     }
   });
   if (!isCurrentRuntime() || outcomes.includes('stale')) return null;
-  const doneIds = sessions.flatMap((session, index) => (outcomes[index] === 'done' ? [session.id] : []));
-  const failedIds = sessions.flatMap((session, index) => (outcomes[index] === 'failed' ? [session.id] : []));
+  const doneIds = sessions.flatMap((session, index) => (outcomes[index] === 'done' ? [session.sessionId] : []));
+  const failedIds = sessions.flatMap((session, index) => (outcomes[index] === 'failed' ? [session.sessionId] : []));
   leaveFinishedSessions(doneIds);
   return { doneIds, failedIds };
 };
@@ -96,7 +96,7 @@ export type FinishWorktreeWorkOutcome =
   | { kind: 'cancelled' };
 
 const sessionsToMarkDone = (sessions: readonly Session[], alreadyDone?: ReadonlySet<string>): Session[] => (
-  sessions.filter((session) => isSessionInWork(session) && !alreadyDone?.has(session.id))
+  sessions.filter((session) => isSessionInWork(session) && !alreadyDone?.has(session.sessionId))
 );
 
 export async function finishWorktreeWork(input: {
@@ -107,7 +107,7 @@ export async function finishWorktreeWork(input: {
   title?: string;
   alreadyDone?: ReadonlySet<string>;
 }): Promise<FinishWorktreeWorkOutcome> {
-  if (!await settleRunningOperatorChildren(sessionsToMarkDone(input.sessions, input.alreadyDone).map((session) => session.id))) return { kind: 'cancelled' };
+  if (!await settleRunningOperatorChildren(sessionsToMarkDone(input.sessions, input.alreadyDone).map((session) => session.sessionId))) return { kind: 'cancelled' };
   const failed = await markOverviewSessionsDone(sessionsToMarkDone(input.sessions, input.alreadyDone));
   if (failed.length > 0) {
     return { kind: 'failed', error: new Error(`Could not mark ${failed.length} session(s) done`), doneFailed: failed.length };
@@ -133,7 +133,7 @@ export async function finishSpaceWork(input: {
   projectId: string;
   alreadyDone?: ReadonlySet<string>;
 }): Promise<Extract<FinishWorktreeWorkOutcome, { kind: 'done' | 'failed' | 'cancelled' }>> {
-  if (!await settleRunningOperatorChildren(sessionsToMarkDone(input.sessions, input.alreadyDone).map((session) => session.id))) return { kind: 'cancelled' };
+  if (!await settleRunningOperatorChildren(sessionsToMarkDone(input.sessions, input.alreadyDone).map((session) => session.sessionId))) return { kind: 'cancelled' };
   const failed = await markOverviewSessionsDone(sessionsToMarkDone(input.sessions, input.alreadyDone));
   if (failed.length > 0) {
     return { kind: 'failed', error: new Error(`Could not mark ${failed.length} session(s) done`), doneFailed: failed.length };
@@ -151,8 +151,8 @@ export const selectFinishedWorks = (works: readonly SessionRowOrderWork[], doneI
   return works.filter((work) => {
     const directory = normalizePath(work.group.directory ?? null);
     if (!directory || seen.has(directory) || work.group.worktree?.pinnedAt !== undefined) return false;
-    const marked = collectWorkSessions(work.group.sessions).filter((session) => !session.parentID && !session.time?.archived && isSessionInWork(session));
-    if (marked.length === 0 || !marked.every((session) => doneIds.has(session.id))) return false;
+    const marked = collectWorkSessions(work.group.sessions).filter((session) => !session.parentSessionId && !session.archivedAt && isSessionInWork(session));
+    if (marked.length === 0 || !marked.every((session) => doneIds.has(session.sessionId))) return false;
     seen.add(directory);
     return true;
   });

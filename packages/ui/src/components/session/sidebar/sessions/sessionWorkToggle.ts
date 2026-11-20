@@ -17,11 +17,11 @@ export const toggleSessionWork = async (
       await setSessionWorkState(sessionId, directory, 'open');
       return;
     }
-    if (!await settleRunningOperatorChildren(inWork.map((entry) => entry.id))) return;
+    if (!await settleRunningOperatorChildren(inWork.map((entry) => entry.sessionId))) return;
     for (const entry of inWork) {
-      await setSessionWorkState(entry.id, normalizePath(entry.directory ?? null) ?? directory, 'done');
+      await setSessionWorkState(entry.sessionId, normalizePath(entry.directory ?? null) ?? directory, 'done');
     }
-    leaveFinishedSessions(inWork.map((entry) => entry.id));
+    leaveFinishedSessions(inWork.map((entry) => entry.sessionId));
   } catch {
     toast.error(t('sessions.sidebar.session.work.updateFailed'));
   }

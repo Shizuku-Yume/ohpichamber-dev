@@ -30,7 +30,7 @@ export const WorkStatusWarmingToggle: React.FC<{ sessionId: string | null; direc
   const session = useSession(sessionId ?? '', directory ?? undefined);
   const [open, setOpen] = React.useState(false);
 
-  if (!enabled || !sessionId || !directory || isSpaceDirectory(directory) || session?.parentID) return null;
+  if (!enabled || !sessionId || !directory || isSpaceDirectory(directory) || session?.parentSessionId) return null;
   const warmed = warmUntil !== undefined;
 
   const toggle = () => {

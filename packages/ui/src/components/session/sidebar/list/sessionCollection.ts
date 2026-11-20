@@ -70,16 +70,16 @@ const keepKnownSessionsWithDescendants = (
   isKnown: (session: Session) => boolean,
   anchors: readonly Session[],
 ): Session[] => {
-  const sessionById = new Map([...anchors, ...sessions].map((session) => [session.id, session]));
+  const sessionById = new Map([...anchors, ...sessions].map((session) => [session.sessionId, session]));
   const nestingParentOf = nestingParentResolver(sessionById);
-  const kept = new Map<string, boolean>(anchors.map((anchor) => [anchor.id, true]));
+  const kept = new Map<string, boolean>(anchors.map((anchor) => [anchor.sessionId, true]));
   const keeps = (session: Session): boolean => {
-    const cached = kept.get(session.id);
+    const cached = kept.get(session.sessionId);
     if (cached !== undefined) return cached;
-    kept.set(session.id, false);
+    kept.set(session.sessionId, false);
     const parent = isKnown(session) ? null : sessionById.get(nestingParentOf(session) ?? '');
     const result = parent === null || Boolean(parent && keeps(parent));
-    kept.set(session.id, result);
+    kept.set(session.sessionId, result);
     return result;
   };
   return sessions.filter(keeps);

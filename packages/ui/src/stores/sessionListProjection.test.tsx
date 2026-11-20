@@ -122,7 +122,7 @@ test('archive projections preserve restorable lists and parent titles without vi
   await act(async () => root.render(<Probe />));
   const state = useGlobalSessionsStore.getState();
   expect(selected?.[0].map((entry) => entry.sessionId)).toEqual(
-    state.archivedSessions.filter((entry) => !entry.parentSessionId || (state.entityById.has(entry.parentSessionId) && !state.entityById.get(entry.parentID)?.archivedAt)).map((entry) => entry.sessionId),
+    state.archivedSessions.filter((entry) => !entry.parentSessionId || (state.entityById.has(entry.parentSessionId) && !state.entityById.get(entry.parentSessionId)?.archivedAt)).map((entry) => entry.sessionId),
   );
   expect(selected?.[1]).toEqual([...state.activeSessions]);
   expect(selected?.[2]).toEqual(state.archivedSessions.flatMap((entry) => {

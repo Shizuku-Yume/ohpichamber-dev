@@ -101,7 +101,7 @@ const noop = () => undefined;
 const rowProps = (overrides: Partial<SessionNodeItemProps> = {}, directory = '/project-a'): SessionNodeItemProps => ({
   node: {
     session: {
-      id: 'ses_row', projectID: 'project-a', title: 'Add the login form',
+      sessionId: 'ses_row', projectID: 'project-a', title: 'Add the login form',
       directory, cost: 0,
       tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
       time: { created: 1, updated: 1 },
