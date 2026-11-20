@@ -87,20 +87,9 @@ describe('issue #3036 stale persisted models', () => {
         ),
       )));
 
-<<<<<<< HEAD
     const applyIndex = candidateLoop.indexOf('const result = tryApplyModelSelection');
     const acceptedIndex = candidateLoop.indexOf("if (result === 'applied')");
     const setAgentIndex = candidateLoop.indexOf('setAgent(agent.agentId, { keepModel: true })');
-||||||| bc50ba56aa
-    const applyIndex = candidateLoop.indexOf('const result = tryApplyModelSelection');
-    const acceptedIndex = candidateLoop.indexOf("if (result === 'applied')");
-    const setAgentIndex = candidateLoop.indexOf('setAgent(agent.name)');
-=======
-      expect(useConfigStore.getState().currentAgentName).toBe('build');
-      expect(useConfigStore.getState().currentModelId).toBe(currentModel.id);
-      expect(useSelectionStore.getState().getSessionAgentSelection(sessionId)).toBeNull();
-      expect(host.querySelector('.model-controls__agent-label')?.textContent).toBe('build');
->>>>>>> upstream/main
 
       await act(async () => {
         useConfigStore.setState({ providers: [{ ...provider, models: [currentModel, restoredModel] }] });

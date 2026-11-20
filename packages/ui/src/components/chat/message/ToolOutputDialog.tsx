@@ -1,19 +1,7 @@
 import React from 'react';
-<<<<<<< HEAD
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { PatchDiff } from '@pierre/diffs/react';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
-||||||| bc50ba56aa
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
-=======
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
-import { PdfArtifact } from '@/components/views/files/previews/PdfArtifact';
-import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';
-import { HighlightedCode } from '@/components/code/HighlightedCode';
->>>>>>> upstream/main
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
@@ -32,30 +20,10 @@ import { Icon } from "@/components/icon/Icon";
 import { getToolIcon } from './parts/toolPresentation';
 import { useGuestToolPresentation } from '@/lib/guests/tool-presentation';
 import { useI18n, type I18nKey, type I18nParams } from '@/lib/i18n';
-<<<<<<< HEAD
 import { runtimeFetch } from '@/lib/runtime-fetch';
-||||||| bc50ba56aa
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { toast } from '@/components/ui';
-import { saveFile } from './parts/saveFile';
-=======
-import { fetchBypassingRuntimeBridge, runtimeFetch } from '@/lib/runtime-fetch';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { toast } from '@/components/ui';
-import { saveFile } from './parts/saveFile';
->>>>>>> upstream/main
 import { MermaidLoadFailure, getMermaidDataUrlSourcePromise, isCurrentMermaidLoadRequest, isMermaidLoadFailure, nextMermaidLoadRequestId } from './toolOutputDialogMermaid';
-<<<<<<< HEAD
 import { MediaArtifact } from '@/components/views/files/previews/MediaArtifact';
 import { formatFileSize } from '@/lib/fileSize';
-||||||| bc50ba56aa
-import { PIERRE_DIFF_TINT_CSS } from '@/lib/shiki/pierreDiffTint';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-=======
-import { PIERRE_DIFF_TINT_CSS, PIERRE_SEPARATOR_CSS } from '@/lib/shiki/pierreDiffTint';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
->>>>>>> upstream/main
 
 interface ToolOutputDialogProps {
     popup: ToolPopupContent;
@@ -80,25 +48,12 @@ type PierreThemeConfig = {
 };
 
 const TOOL_DIFF_UNSAFE_CSS = `
-<<<<<<< HEAD
   [data-diff-header],
   [data-diff] {
     [data-separator] {
       height: 24px !important;
     }
   }
-||||||| bc50ba56aa
-  ${PIERRE_DIFF_TINT_CSS}
-  [data-diff-header],
-  [data-diff] {
-    [data-separator] {
-      height: 24px !important;
-    }
-  }
-=======
-  ${PIERRE_DIFF_TINT_CSS}
-  ${PIERRE_SEPARATOR_CSS}
->>>>>>> upstream/main
 `;
 
 const TOOL_DIFF_METRICS = {
@@ -130,20 +85,10 @@ const usePierreThemeConfig = (): PierreThemeConfig => {
         [availableThemes, darkThemeId, fallbackDarkTheme],
     );
 
-<<<<<<< HEAD
     React.useEffect(() => {
         ensurePierreThemeRegistered(lightTheme);
         ensurePierreThemeRegistered(darkTheme);
     }, [darkTheme, lightTheme]);
-||||||| bc50ba56aa
-    // Registered during render, as in the tool diff preview: an edited theme
-    // gets a new name, and the dialog must not render with one not yet known.
-    const lightThemeName = ensurePierreThemeRegistered(lightTheme);
-    const darkThemeName = ensurePierreThemeRegistered(darkTheme);
-=======
-    const lightThemeName = ensurePierreThemeRegistered(lightTheme);
-    const darkThemeName = ensurePierreThemeRegistered(darkTheme);
->>>>>>> upstream/main
 
     const currentVariant = themeSystem?.currentTheme.metadata.variant ?? 'light';
 
@@ -294,7 +239,6 @@ const usePreviewViewport = (open: boolean) => {
 
 type PreviewMediaKind = 'image' | 'pdf' | 'audio' | 'video';
 
-<<<<<<< HEAD
 /**
  * Attachments forward their native MIME type. Browsers can render PDFs inline
  * and play audio/video with their own controls; anything else keeps the image
@@ -314,27 +258,6 @@ const getPreviewMediaKind = (mimeType: string | undefined, filename: string | un
     if (extension === 'mp4' || extension === 'webm' || extension === 'mov' || extension === 'm4v'
         || extension === 'ogv' || extension === 'mkv') return 'video';
     return 'image';
-||||||| bc50ba56aa
-/**
- * How the viewer reads an image's bytes to save it: the loader its owner
- * gave, else an inline `data:` or object URL. Any other URL is the runtime's
- * or a remote site's, which the viewer does not fetch itself; such an image
- * offers no download. VS Code's webview cannot download at all.
- */
-const imageLoader = (image: GalleryItem | undefined): (() => Promise<Blob>) | null => {
-    if (!image || isVSCodeRuntime()) return null;
-    if (image.load) return image.load;
-    const { url } = image;
-    if (/^(?:data|blob):/i.test(url)) return () => fetch(url).then((response) => response.blob());
-    return null;
-=======
-const imageLoader = (image: GalleryItem | undefined): (() => Promise<Blob>) | null => {
-    if (!image || isVSCodeRuntime()) return null;
-    if (image.load) return image.load;
-    const { url } = image;
-    if (/^(?:data|blob):/i.test(url)) return () => fetchBypassingRuntimeBridge(url).then((response) => response.blob());
-    return null;
->>>>>>> upstream/main
 };
 
 interface PreviewGalleryItem {
@@ -344,26 +267,7 @@ interface PreviewGalleryItem {
     size?: number;
 }
 
-<<<<<<< HEAD
 const MediaPreviewDialog: React.FC<{
-||||||| bc50ba56aa
-/** The saved file's name: the image's own, given the extension of its format when it has none. */
-const savedImageName = (filename: string | undefined, blob: Blob): string => {
-    const name = filename?.split(/[\\/]/).pop()?.trim() || 'image';
-    if (/\.[A-Za-z0-9]{2,5}$/.test(name)) return name;
-    return `${name}.${EXTENSION_BY_IMAGE_MIME.get(blob.type) ?? 'png'}`;
-};
-
-const ImagePreviewDialog: React.FC<{
-=======
-const savedImageName = (filename: string | undefined, blob: Blob): string => {
-    const name = filename?.split(/[\\/]/).pop()?.trim() || 'image';
-    if (/\.[A-Za-z0-9]{2,5}$/.test(name)) return name;
-    return `${name}.${EXTENSION_BY_IMAGE_MIME.get(blob.type) ?? 'png'}`;
-};
-
-const ImagePreviewDialog: React.FC<{
->>>>>>> upstream/main
     popup: ToolPopupContent;
     onOpenChange: (open: boolean) => void;
     isMobile: boolean;
@@ -443,18 +347,7 @@ const ImagePreviewDialog: React.FC<{
                 return;
             }
 
-<<<<<<< HEAD
             if (event.key === 'ArrowLeft' && hasMultipleImages) {
-||||||| bc50ba56aa
-            // "Previous" sits at the start of the row: on the right in RTL.
-            const previousKey = direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
-            const nextKey = direction === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
-            if (event.key === previousKey && hasMultipleImages) {
-=======
-            const previousKey = direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
-            const nextKey = direction === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
-            if (event.key === previousKey && hasMultipleImages) {
->>>>>>> upstream/main
                 event.preventDefault();
                 showPrevious();
                 return;
@@ -472,25 +365,12 @@ const ImagePreviewDialog: React.FC<{
         };
     }, [hasMultipleImages, onOpenChange, popup.open, showNext, showPrevious]);
 
-<<<<<<< HEAD
     // The measured size belongs to one URL. Resetting it in an effect on URL
     // change raced the load event of an already-cached image, which left the
     // viewer stuck at its maximum box with wide dead margins around the image.
     const currentMediaUrl = currentMedia?.url;
     const currentNaturalSize = mediaNaturalSize && mediaNaturalSize.url === currentMediaUrl
         ? mediaNaturalSize
-||||||| bc50ba56aa
-    // The measured size belongs to one URL. Resetting it in an effect on URL
-    // change raced the load event of an already-cached image, which left the
-    // viewer stuck at its maximum box with wide dead margins around the image.
-    const currentImageUrl = currentImage?.url;
-    const currentNaturalSize = imageNaturalSize && imageNaturalSize.url === currentImageUrl
-        ? imageNaturalSize
-=======
-    const currentImageUrl = currentImage?.url;
-    const currentNaturalSize = imageNaturalSize && imageNaturalSize.url === currentImageUrl
-        ? imageNaturalSize
->>>>>>> upstream/main
         : null;
 
     const imageDisplaySize = React.useMemo(() => {
@@ -912,14 +792,7 @@ const MermaidPreviewDialog: React.FC<{
         });
 
         if (mermaidPreviewRef.current) {
-<<<<<<< HEAD
             observer.observe(mermaidPreviewRef.current, { childList: true, subtree: true, attributes: true });
-||||||| bc50ba56aa
-            // A new SVG needs sizing; pointer-driven viewBox changes do not.
-            observer.observe(mermaidPreviewRef.current, { childList: true, subtree: true });
-=======
-            observer.observe(mermaidPreviewRef.current, { childList: true, subtree: true });
->>>>>>> upstream/main
         }
 
         return () => {
@@ -977,25 +850,10 @@ const MermaidPreviewDialog: React.FC<{
                     style={{ width: `${dialogSize.width}px` }}
                     onMouseDown={(event) => event.stopPropagation()}
                 >
-<<<<<<< HEAD
                     <div className="flex items-center justify-end">
                         <button
                             type="button"
                             className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground/80 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-||||||| bc50ba56aa
-                    {/* The diagram puts its zoom controls in this row, beside close. */}
-                    <div className="flex items-center justify-end gap-0.5">
-                        <div ref={setToolbarSlot} className="flex items-center gap-0.5" />
-                        <ToolbarTooltipButton
-                            label={t('chat.toolOutputDialog.mermaid.closeAria')}
-                            icon="close"
-=======
-                    <div className="flex items-center justify-end gap-0.5">
-                        <div ref={setToolbarSlot} className="flex items-center gap-0.5" />
-                        <ToolbarTooltipButton
-                            label={t('chat.toolOutputDialog.mermaid.closeAria')}
-                            icon="close"
->>>>>>> upstream/main
                             onClick={() => onOpenChange(false)}
                             aria-label={t('chat.toolOutputDialog.mermaid.closeAria')}
                         >
@@ -1174,153 +1032,12 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         )}
                     </div>
                 </div>
-<<<<<<< HEAD
                 <div className="flex-1 min-h-0 rounded-xl border border-border/30 bg-muted/10 overflow-hidden">
                     <div className="tool-output-surface h-full max-h-[75vh] overflow-y-auto px-3 pr-4">
                         {hasPopupInput ? (
                             <div className="border-b border-border/20 p-4">
                                 <div className="mb-2 typography-ui-label font-medium text-muted-foreground">
                                     {t('chat.toolOutputDialog.arguments')}
-||||||| bc50ba56aa
-                <div className="flex-1 min-h-0 rounded-xl oc-tile overflow-hidden">
-                    <ScrollableOverlay outerClassName="h-full max-h-[75vh]" className="tool-output-surface px-3 pe-4" disableHorizontal>
-                        {popup.metadata?.input && typeof popup.metadata.input === 'object' &&
-                            Object.keys(popup.metadata.input).length > 0 &&
-                            popup.metadata?.tool !== 'patch' ? (() => {
-                                const meta = popup.metadata!;
-                                const metaTool = typeof meta.tool === 'string' ? meta.tool : undefined;
-                                const input = meta.input as Record<string, unknown>;
-
-                                const getInputValue = (key: string): string | null => {
-                                  const val = input[key];
-                                  return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
-                                };
-                                // v2 file tools report `path`.
-                                const writeTarget = getInputValue('path') || getInputValue('filePath') || getInputValue('file_path') || '';
-                                return (
-                                <div className="border-b border-edge-muted p-4 -mx-3">
-                                    <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
-                                        {isShellTool(metaTool)
-                                            ? 'Command:'
-                                            : isSubagentTool(metaTool)
-                                                ? 'Subagent Details:'
-                                                : 'Input:'}
-                                    </div>
-                                    {isShellTool(metaTool) && getInputValue('command') ? (
-                                        <div className="tool-input-surface oc-tile rounded-xl mx-3">
-                                            <WorkerHighlightedCode
-                                                language="bash"
-                                                code={getInputValue('command')!}
-                                                style={toolDisplayStyles.getPopupStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        </div>
-                                    ) : isSubagentTool(metaTool) && getInputValue('prompt') ? (
-                                        <div
-                                            className="tool-input-surface oc-tile rounded-xl font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {getInputValue('description') ? `Task: ${getInputValue('description')}\n` : ''}
-                                            {getInputValue('agent') ? `Agent: ${getInputValue('agent')}\n` : ''}
-                                            {`Instructions:\n${getInputValue('prompt')}`}
-                                        </div>
-                                    ) : isWriteTool(metaTool) && getInputValue('content') ? (
-                                        <div className="tool-input-surface oc-tile rounded-xl mx-3">
-                                            <PierreFile
-                                                file={{
-                                                    name: writeTarget || 'new-file',
-                                                    contents: getInputValue('content')!,
-                                                    lang: toDiffsLanguage(getLanguageFromExtension(writeTarget)),
-                                                }}
-                                                options={{
-                                                    disableFileHeader: true,
-                                                    overflow: 'wrap',
-                                                    theme: pierreThemeConfig.theme,
-                                                    themeType: pierreThemeConfig.themeType,
-                                                    preferredHighlighter: DIFFS_HIGHLIGHTER,
-                                                }}
-                                                className="block w-full"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div
-                                            className="tool-input-surface oc-tile rounded-xl font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {formatInputForDisplay(input, meta.tool as string)}
-                                        </div>
-                                    )}
-=======
-                <div className="flex-1 min-h-0 rounded-xl oc-tile overflow-hidden">
-                    <ScrollableOverlay outerClassName="h-full max-h-[75vh]" className="tool-output-surface px-3 pe-4" disableHorizontal>
-                        {popup.metadata?.input && typeof popup.metadata.input === 'object' &&
-                            Object.keys(popup.metadata.input).length > 0 &&
-                            popup.metadata?.tool !== 'patch' ? (() => {
-                                const meta = popup.metadata!;
-                                const metaTool = typeof meta.tool === 'string' ? meta.tool : undefined;
-                                const input = meta.input as Record<string, unknown>;
-
-                                const getInputValue = (key: string): string | null => {
-                                  const val = input[key];
-                                  return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
-                                };
-                                const writeTarget = getInputValue('path') || getInputValue('filePath') || getInputValue('file_path') || '';
-                                return (
-                                <div className="border-b border-edge-muted p-4 -mx-3">
-                                    <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
-                                        {isShellTool(metaTool)
-                                            ? 'Command:'
-                                            : isSubagentTool(metaTool)
-                                                ? 'Subagent Details:'
-                                                : 'Input:'}
-                                    </div>
-                                    {isShellTool(metaTool) && getInputValue('command') ? (
-                                        <div className="tool-input-surface oc-tile rounded-xl mx-3">
-                                            <HighlightedCode
-                                                language="bash"
-                                                code={getInputValue('command')!}
-                                                style={toolDisplayStyles.getPopupStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        </div>
-                                    ) : isSubagentTool(metaTool) && getInputValue('prompt') ? (
-                                        <div
-                                            className="tool-input-surface oc-tile rounded-xl font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {getInputValue('description') ? `Task: ${getInputValue('description')}\n` : ''}
-                                            {getInputValue('agent') ? `Agent: ${getInputValue('agent')}\n` : ''}
-                                            {`Instructions:\n${getInputValue('prompt')}`}
-                                        </div>
-                                    ) : isWriteTool(metaTool) && getInputValue('content') ? (
-                                        <div className="tool-input-surface oc-tile rounded-xl mx-3">
-                                            <PierreFile
-                                                file={{
-                                                    name: writeTarget || 'new-file',
-                                                    contents: getInputValue('content')!,
-                                                    lang: toDiffsLanguage(getLanguageFromExtension(writeTarget)),
-                                                }}
-                                                options={{
-                                                    disableFileHeader: true,
-                                                    overflow: 'wrap',
-                                                    theme: pierreThemeConfig.theme,
-                                                    themeType: pierreThemeConfig.themeType,
-                                                    preferredHighlighter: DIFFS_HIGHLIGHTER,
-                                                }}
-                                                className="block w-full"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div
-                                            className="tool-input-surface oc-tile rounded-xl font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {formatInputForDisplay(input, meta.tool as string)}
-                                        </div>
-                                    )}
->>>>>>> upstream/main
                                 </div>
                                 <div className="tool-input-surface bg-transparent rounded-xl border border-border/20">
                                     <WorkerHighlightedCode
@@ -1390,55 +1107,12 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     return <SimpleMarkdownRenderer content={popup.content} variant="tool" />;
                                 }
 
-<<<<<<< HEAD
                                 if (popupToolName && isWebSearchTool(popupToolName)) {
                                     return renderWebSearchOutput(popup.toolResult?.output, { unstyled: true });
-||||||| bc50ba56aa
-                                if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web') {
-                                    return (
-                                        renderWebSearchOutput(popup.content) || (
-                                            <WorkerHighlightedCode
-                                                language="text"
-                                                code={popup.content}
-                                                style={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        )
-                                    );
                                 }
 
-                                if (tool === 'read') {
-                                    return <DialogReadContent popup={popup} pierreThemeConfig={pierreThemeConfig} />;
-=======
-                                if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web') {
-                                    return (
-                                        renderWebSearchOutput(popup.content) || (
-                                            <HighlightedCode
-                                                language="text"
-                                                code={popup.content}
-                                                style={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        )
-                                    );
-                                }
-
-                                if (tool === 'read') {
-                                    return <DialogReadContent popup={popup} pierreThemeConfig={pierreThemeConfig} />;
->>>>>>> upstream/main
-                                }
-
-<<<<<<< HEAD
                                 // JSON tree viewer for generic JSON outputs
                                 const jsonResult = tryParseJsonOutput(popup.content);
-||||||| bc50ba56aa
-                                // JSON tree viewer for generic JSON outputs
-                                const jsonResult = popup.content ? tryParseJsonOutput(popup.content) : { data: null, isJson: false };
-=======
-                                const jsonResult = popup.content ? tryParseJsonOutput(popup.content) : { data: null, isJson: false };
->>>>>>> upstream/main
                                 if (jsonResult.isJson) {
                                     return (
                                         <JsonTreeView

@@ -13,25 +13,7 @@ const source: ChatDraftIdentity = { runtimeKey: 'runtime-a', directory: '/repo',
 const fork: ChatDraftIdentity = { ...source, sessionId: 'fork' };
 const replayFile = { url: 'data:text/plain;base64,aGVsbG8=', mimeType: 'text/plain', filename: 'replay.txt' };
 
-<<<<<<< HEAD
 function renderComposer(persistEnabled: boolean) {
-||||||| bc50ba56aa
-function renderComposer() {
-=======
-
-/** The composer's text the way ChatInput holds it: outside state, with a render per write. */
-function useProbeText(initial: string) {
-    const [text] = React.useState(() => createComposerText(initial));
-    const [, setRevision] = React.useState(0);
-    const setMessage = React.useCallback((next: string) => {
-        text.set(next);
-        setRevision((revision) => revision + 1);
-    }, [text]);
-    return { text, setMessage };
-}
-
-function renderComposer() {
->>>>>>> upstream/main
     const dom = installHookTestDom();
     const originalRaf = globalThis.requestAnimationFrame;
     const originalCancelRaf = globalThis.cancelAnimationFrame;
@@ -50,13 +32,7 @@ function renderComposer() {
         const { text, setMessage } = useProbeText('source draft @source.ts');
         const confirmedMentionsRef = React.useRef(new Set(['source.ts']));
         useComposerDraft({
-<<<<<<< HEAD
             message, messageRef, setMessage, confirmedMentionsRef, identity, persistEnabled,
-||||||| bc50ba56aa
-            message, messageRef, setMessage, confirmedMentionsRef, identity,
-=======
-            text, setMessage, confirmedMentionsRef, identity,
->>>>>>> upstream/main
             initialDraft: { text: '', identity: source },
             onDraftRestored: (reason) => { result.restored.push(reason); },
         });
@@ -121,13 +97,7 @@ describe('fork composer restoration', () => {
                 composer.render(source);
                 expect(composer.result.text).toBe('source draft @source.ts');
                 expect(useInputStore.getState().attachedFiles).toBe(sourceFiles);
-<<<<<<< HEAD
                 expect(readChatDraft(fork).text).toBe(persistEnabled ? 'replay prompt' : '');
-||||||| bc50ba56aa
-                expect(readChatDraft(fork).text).toBe('replay prompt');
-=======
-                expect(readChatDraft(fork).text).toBe('replay prompt [replay.txt]');
->>>>>>> upstream/main
             } finally {
                 composer.teardown();
             }
@@ -173,16 +143,8 @@ describe('fork composer restoration', () => {
         }
     });
 
-<<<<<<< HEAD
     test('restores file-only and empty prompts without keeping destination text or files', () => {
         const composer = renderComposer(true);
-||||||| bc50ba56aa
-    test('restores file-only and empty prompts without keeping destination text or files', () => {
-        const composer = renderComposer();
-=======
-    test('restores file-only and empty prompts without keeping destination text or files, a file as its chip', () => {
-        const composer = renderComposer();
->>>>>>> upstream/main
         try {
             writeChatDraft(fork, 'stale destination text', []);
             act(() => {

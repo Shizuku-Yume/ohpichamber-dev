@@ -3,24 +3,8 @@ import { getReasoningEffortLevels, resolveThinkingLevel } from '@/lib/modelThink
 import React from 'react';
 import { useChatColumnActions } from './chatColumnSession';
 import { MobileModelButton } from './MobileModelButton';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { useAgentMissingFromCatalog } from './agentAvailability';
-import type { EditPermissionMode } from '@/stores/types/sessionTypes';
-=======
-import { useAgentMissingFromCatalog, useModelMissingFromCatalog } from './agentAvailability';
-import type { EditPermissionMode } from '@/stores/types/sessionTypes';
->>>>>>> upstream/main
 import type { ModelMetadata } from '@/types';
-<<<<<<< HEAD
 import type { Message, Model } from '@openchamber/agent-contract';
-||||||| bc50ba56aa
-import type { Agent, Message, PermissionRuleset, Session } from '@/lib/opencode/model';
-import type { PermissionEffect } from '@opencode/client';
-=======
-import type { Agent, Message, PermissionRuleset, Session } from '@/lib/opencode/model';
-import type { PermissionEffect } from '@/lib/opencode/model';
->>>>>>> upstream/main
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -68,19 +52,8 @@ import {
     findLatestUserModelChoice,
     shouldPreserveManualModelOverride,
 } from '@/lib/messages/userModelChoice';
-<<<<<<< HEAD
 import type { ComposerModelSelection } from './pinnedComposerSelection';
 import { ROOT_SELECTION_AGENT } from '@/sync/selection-store';
-||||||| bc50ba56aa
-import type { BtwSelection } from '@/stores/useBtwStore';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
-import { effortMemoryKey, rememberEffort, resolveEffortChoice, resolveEffortForModelSelection } from '@/lib/modelEfforts';
-=======
-import type { BtwSelection } from '@/stores/useBtwStore';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
-import { effortMemoryKey, rememberEffort, resolveEffortChoice, resolveEffortForModelSelection } from '@/lib/modelEfforts';
-import { restingAgentColor } from '@/lib/agentColors';
->>>>>>> upstream/main
 
 type IconComponent = IconName;
 
@@ -94,210 +67,6 @@ const selectLatestReplyModelChoice = (messages: Message[]) => findLatestUserMode
 const MAX_INLINE_MOBILE_VARIANT_OPTIONS = 6;
 
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const buildModelRefKey = (providerID: string, modelID: string) => `${providerID}:${modelID}`;
-
-const selectSessionRecordAgent = (session: Session | undefined): string | undefined => session?.agent?.trim() || undefined;
-const selectLatestReplyModelChoice = (messages: Message[], state: State) => findLatestUserModelChoice(
-    messages,
-    (messageId) => state.part[messageId],
-);
-
-/** A section caption in the composer's pickers, the same as the model picker's. */
-
-const AgentDescriptionTooltip: React.FC<{
-    description?: string;
-    children: React.ReactElement;
-}> = ({ description, children }) => {
-    if (!description) {
-        return children;
-    }
-
-    return (
-        <Tooltip delayDuration={450}>
-            <TooltipTrigger asChild>{children}</TooltipTrigger>
-            <TooltipContent
-                side="right"
-                sideOffset={8}
-                className="max-w-xs text-start transition-none data-[starting-style]:opacity-100 data-[starting-style]:scale-100 data-[ending-style]:opacity-100 data-[ending-style]:scale-100"
-            >
-                <span className="typography-meta text-muted-foreground">{description}</span>
-            </TooltipContent>
-        </Tooltip>
-    );
-};
-
-/**
- * Star on an agent row. Starred agents are what Tab cycles through; the press
- * is kept from the row so starring never picks the agent.
- */
-const AgentFavoriteToggle: React.FC<{
-    favorite: boolean;
-    onToggle: () => void;
-    className?: string;
-}> = ({ favorite, onToggle, className }) => {
-    const { t } = useI18n();
-    const label = favorite ? t('chat.modelControls.removeFromFavorites') : t('chat.modelControls.agentFavoriteAdd');
-    const keepFromRow = (event: React.SyntheticEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-    };
-    return (
-        <button
-            type="button"
-            aria-pressed={favorite}
-            aria-label={label}
-            title={label}
-            onPointerDown={keepFromRow}
-            onPointerUp={keepFromRow}
-            onMouseUp={keepFromRow}
-            onClick={(event) => {
-                keepFromRow(event);
-                onToggle();
-            }}
-            className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded hover:text-primary/80',
-                favorite ? 'text-primary' : 'text-muted-foreground',
-                className,
-            )}
-        >
-            <Icon name={favorite ? 'star-fill' : 'star'} className="h-3.5 w-3.5" />
-        </button>
-    );
-};
-
-/**
- * Sampling knobs an agent sets.
- *
- * v2 folded them into the provider request body, which is free-form JSON, so
- * each one is read back with an explicit check rather than trusted.
- */
-const agentSampling = (agent: Agent, key: 'temperature' | 'topP'): number | undefined => {
-    const value = agent.request?.body?.[key];
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-};
-
-const agentTemperature = (agent: Agent): number | undefined => agentSampling(agent, 'temperature');
-const agentTopP = (agent: Agent): number | undefined => agentSampling(agent, 'topP');
-
-/**
- * The effect a ruleset gives an action, most specific rule last.
- *
- * v2 rules are `{ action, resource, effect }`: `action` is the capability
- * ("edit", "shell"), `resource` the pattern it applies to. A wildcard rule for
- * the action wins over the catch-all `*` rule.
- */
-const resolveWildcardPermissionEffect = (rules: PermissionRuleset, action: string): PermissionEffect | undefined => {
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.action === action && rule.resource === '*') {
-            return rule.effect;
-        }
-    }
-
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.action === '*' && rule.resource === '*') {
-            return rule.effect;
-        }
-    }
-
-    return undefined;
-};
-=======
-const buildModelRefKey = (providerID: string, modelID: string) => `${providerID}:${modelID}`;
-
-const selectSessionRecordAgent = (session: Session | undefined): string | undefined => session?.agent?.trim() || undefined;
-const selectLatestReplyModelChoice = (messages: Message[], state: State) => findLatestUserModelChoice(
-    messages,
-    (messageId) => state.part[messageId],
-);
-
-
-const AgentDescriptionTooltip: React.FC<{
-    description?: string;
-    children: React.ReactElement;
-}> = ({ description, children }) => {
-    if (!description) {
-        return children;
-    }
-
-    return (
-        <Tooltip delayDuration={450}>
-            <TooltipTrigger asChild>{children}</TooltipTrigger>
-            <TooltipContent
-                side="right"
-                sideOffset={8}
-                className="max-w-xs text-start transition-none data-[starting-style]:opacity-100 data-[starting-style]:scale-100 data-[ending-style]:opacity-100 data-[ending-style]:scale-100"
-            >
-                <span className="typography-meta text-muted-foreground">{description}</span>
-            </TooltipContent>
-        </Tooltip>
-    );
-};
-
-const AgentFavoriteToggle: React.FC<{
-    favorite: boolean;
-    onToggle: () => void;
-    className?: string;
-}> = ({ favorite, onToggle, className }) => {
-    const { t } = useI18n();
-    const label = favorite ? t('chat.modelControls.removeFromFavorites') : t('chat.modelControls.agentFavoriteAdd');
-    const keepFromRow = (event: React.SyntheticEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-    };
-    return (
-        <button
-            type="button"
-            aria-pressed={favorite}
-            aria-label={label}
-            title={label}
-            onPointerDown={keepFromRow}
-            onPointerUp={keepFromRow}
-            onMouseUp={keepFromRow}
-            onClick={(event) => {
-                keepFromRow(event);
-                onToggle();
-            }}
-            className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded hover:text-primary/80',
-                favorite ? 'text-primary' : 'text-muted-foreground',
-                className,
-            )}
-        >
-            <Icon name={favorite ? 'star-fill' : 'star'} className="h-3.5 w-3.5" />
-        </button>
-    );
-};
-
-const agentSampling = (agent: Agent, key: 'temperature' | 'topP'): number | undefined => {
-    const value = agent.request?.body?.[key];
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-};
-
-const agentTemperature = (agent: Agent): number | undefined => agentSampling(agent, 'temperature');
-const agentTopP = (agent: Agent): number | undefined => agentSampling(agent, 'topP');
-
-const resolveWildcardPermissionEffect = (rules: PermissionRuleset, action: string): PermissionEffect | undefined => {
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.action === action && rule.resource === '*') {
-            return rule.effect;
-        }
-    }
-
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.action === '*' && rule.resource === '*') {
-            return rule.effect;
-        }
-    }
-
-    return undefined;
-};
->>>>>>> upstream/main
 
 interface CapabilityDefinition {
     key: 'tool_call' | 'reasoning';
@@ -463,21 +232,7 @@ type ModelControlsProps = {
     mobilePanel?: MobileControlsPanel;
     onMobilePanelChange?: (panel: MobileControlsPanel) => void;
     onRunInParallel?: () => void;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    /** Shows the agent picker alone, for a composer whose models are chosen elsewhere. Desktop only. */
-    agentOnly?: boolean;
-    /**
-     * Picker effort changes become the model's remembered level. Off for a
-     * BTW fork, whose own effort must not change the main chat's default.
-     */
-    rememberVariantPicks?: boolean;
-=======
-    agentOnly?: boolean;
-    rememberVariantPicks?: boolean;
->>>>>>> upstream/main
 } & (
-<<<<<<< HEAD
         | { selection?: never; sessionId?: never; agentSelectable?: never }
         | {
             selection: ComposerModelSelection;
@@ -486,40 +241,6 @@ type ModelControlsProps = {
             agentSelectable?: boolean;
         }
     );
-||||||| bc50ba56aa
-    | { selection?: never; sessionId?: never; modelSelectorOpen?: never; onModelSelectorOpenChange?: never }
-    | {
-        selection: BtwSelection;
-        /** The session an agent pick is saved for: a chat pinned in the side panel, or a BTW fork. */
-        sessionId: string | null;
-        /**
-         * The model picker's open state, owned by a composer that answers the
-         * model and effort shortcuts for this selection (BTW). The tooltips
-         * then name those shortcuts.
-         */
-        modelSelectorOpen?: boolean;
-        onModelSelectorOpenChange?: (open: boolean) => void;
-    }
-);
-
-/** Beside "Loading" the shared spinner; beside "Unavailable", an error, a still warning. */
-const ReadinessMark: React.FC<{ unavailable: boolean; className: string }> = ({ unavailable, className }) => (
-    unavailable ? <Icon name="error-warning" className={className} /> : <Spinner className={className} />
-);
-=======
-    | { selection?: never; sessionId?: never; modelSelectorOpen?: never; onModelSelectorOpenChange?: never }
-    | {
-        selection: BtwSelection;
-        sessionId: string | null;
-        modelSelectorOpen?: boolean;
-        onModelSelectorOpenChange?: (open: boolean) => void;
-    }
-);
-
-const ReadinessMark: React.FC<{ unavailable: boolean; className: string }> = ({ unavailable, className }) => (
-    unavailable ? <Icon name="error-warning" className={className} /> : <Spinner className={className} />
-);
->>>>>>> upstream/main
 
 export const ModelControls: React.FC<ModelControlsProps> = ({
     className,
@@ -532,7 +253,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 }) => {
     const { t } = useI18n();
     const { focusInput: focusColumnInput } = useChatColumnActions();
-<<<<<<< HEAD
     const currentSessionId = useSessionUIStore((s) => selection ? null : s.currentSessionId);
     const getDirectoryForSession = useSessionUIStore((s) => s.getDirectoryForSession);
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -541,20 +261,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         ?? currentDirectory;
     const { isReady, isUnavailable } = useCatalogReadiness('models', currentSessionDirectory);
     const { isReady: canSelectAgent } = useCatalogReadiness('agents', currentSessionDirectory);
-||||||| bc50ba56aa
-    // A controlled picker (a chat pinned in the side panel, a BTW fork) lists
-    // the catalog of its own session's folder, which can be another one than
-    // the main chat's active folder. The main chat keeps the active catalog.
-    const columnDirectory = useChatSessionSelection().directory;
-    const catalogDirectory = selection ? columnDirectory ?? undefined : undefined;
-    const { isReady, isUnavailable } = useOpenCodeReadiness('models', catalogDirectory);
-    const { isReady: canSelectAgent } = useOpenCodeReadiness('agents', catalogDirectory);
-=======
-    const columnDirectory = useChatSessionSelection().directory;
-    const catalogDirectory = selection ? columnDirectory ?? undefined : undefined;
-    const { isReady, isUnavailable } = useOpenCodeReadiness('models', catalogDirectory);
-    const { isReady: canSelectAgent } = useOpenCodeReadiness('agents', catalogDirectory);
->>>>>>> upstream/main
     const readinessLabel = isUnavailable ? t('common.unavailable') : t('common.loading');
     const providers = useConfigStore((state) => state.providers);
     const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentSessionDirectory));
@@ -586,17 +292,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const setAgent = useConfigStore((state) => state.setAgent);
     const getCurrentProvider = useConfigStore((state) => state.getCurrentProvider);
     const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    const getCurrentAgent = useConfigStore((state) => state.getCurrentAgent);
-    // Use visible agents (excludes hidden internal agents)
-    const agents = React.useMemo(() => filterVisibleAgents(catalogAgents), [catalogAgents]);
-    const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
-=======
-    const getCurrentAgent = useConfigStore((state) => state.getCurrentAgent);
-    const agents = React.useMemo(() => filterVisibleAgents(catalogAgents), [catalogAgents]);
-    const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
->>>>>>> upstream/main
     const tracedReadyRef = React.useRef(false);
 
     React.useEffect(() => {
@@ -611,16 +306,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         });
     }, [agents.length, currentAgentName, currentModelId, currentProviderId, isReady, providers.length, selection]);
 
-<<<<<<< HEAD
     // Controlled selections never restore from the main session or its history.
-||||||| bc50ba56aa
-    // Controlled selections never restore from the main session or its history.
-    const currentSessionId = useSessionUIStore((s) => selection ? null : s.currentSessionId);
-    const getDirectoryForSession = useSessionUIStore((s) => s.getDirectoryForSession);
-=======
-    const currentSessionId = useSessionUIStore((s) => selection ? null : s.currentSessionId);
-    const getDirectoryForSession = useSessionUIStore((s) => s.getDirectoryForSession);
->>>>>>> upstream/main
     const sync = useSync();
 
     const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
@@ -652,32 +338,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const stickySessionAgentName = currentSessionId ? stickySessionAgentRef.current : null;
 
-<<<<<<< HEAD
-    // The session's saved profile takes precedence over the main draft selection.
-||||||| bc50ba56aa
-    // Prefer per-session selection over global config to avoid flicker during server-driven mode switches.
-=======
->>>>>>> upstream/main
     const uiAgentName = currentSessionId
         ? (sessionSavedAgentName || stickySessionAgentName || currentAgentName)
         : currentAgentName;
-<<<<<<< HEAD
     const effortAgentKey = uiAgentName ?? ROOT_SELECTION_AGENT;
     const savedReasoningEffort = currentSessionId
         ? getAgentModelReasoningEffortForSession(currentSessionId, effortAgentKey, currentProviderId, currentModelId)
-||||||| bc50ba56aa
-    // Display only, like `knownCurrentModel`: while this directory's agents
-    // are still arriving, show the chosen (or default) agent as another
-    // catalog knows it instead of "Select agent".
-    // The send would stop with an error, so the picker says so beforehand.
-    const agentUnavailable = useAgentMissingFromCatalog(uiAgentName);
-    const agentUnavailableText = agentUnavailable && uiAgentName
-        ? t('chat.modelControls.agentUnavailable', { agent: uiAgentName })
-=======
-    const agentUnavailable = useAgentMissingFromCatalog(uiAgentName);
-    const agentUnavailableText = agentUnavailable && uiAgentName
-        ? t('chat.modelControls.agentUnavailable', { agent: uiAgentName })
->>>>>>> upstream/main
         : undefined;
     const currentCatalogModel = providers
         .find((provider) => provider.providerId === currentProviderId)?.models
@@ -729,23 +395,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
     ), [cycleAgentShortcutOverride]);
 
-<<<<<<< HEAD
     // Separate state for agent selector to avoid conflict with model selector
     const { favoriteModelsList, recentModelsList } = useModelLists();
     // Auto routing: the server resolves `openchamber/auto` into a real model per
     // send. Offered only while the server says it can honour it, in the main
     // composer and in controlled selections (BTW) alike.
-||||||| bc50ba56aa
-    // Separate state for agent selector to avoid conflict with model selector
-    const [isAgentSelectorOpen, setIsAgentSelectorOpen] = React.useState(false);
-    const { favoriteModelsList, recentModelsList } = useModelLists(catalogDirectory);
-    // Auto routing: the server resolves `openchamber/auto` into a real model per
-    // send. Offered only while the server says it can honour it, in the main
-    // composer and in controlled selections (BTW) alike.
-=======
-    const [isAgentSelectorOpen, setIsAgentSelectorOpen] = React.useState(false);
-    const { favoriteModelsList, recentModelsList } = useModelLists(catalogDirectory);
->>>>>>> upstream/main
     const autoReady = useRoutingStore(selectAutoReady);
     const autoEntry = React.useMemo<ModelPickerEntry | null>(() => (autoReady
         ? { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID, model: { modelId: AUTO_MODEL_ID, provider: AUTO_PROVIDER_ID, name: t('chat.modelControls.autoModel'), modalities: ['text'], contextWindow: 1, maxOutputTokens: 1, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null } }
@@ -757,13 +411,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const uiIsMobile = useUIStore((state) => state.isMobile);
     const isMobile = deviceIsMobile || uiIsMobile;
     const isDesktop = React.useMemo(() => isDesktopShell(), []);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    const isVSCodeRuntime = useIsVSCodeRuntime();
-    // Only use mobile panels on actual mobile devices, VSCode uses desktop dropdowns
-=======
-    const isVSCodeRuntime = useIsVSCodeRuntime();
->>>>>>> upstream/main
     const isCompact = isMobile;
     const [localMobilePanel, setLocalMobilePanel] = React.useState<MobileControlsPanel>(null);
     const usingExternalMobilePanel = mobilePanel !== undefined && typeof onMobilePanelChange === 'function';
@@ -776,7 +423,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const closeMobilePanel = React.useCallback(() => setActiveMobilePanel(null), [setActiveMobilePanel]);
     const closeMobileTooltip = React.useCallback(() => setMobileTooltipOpen(null), []);
     const longPressTimerRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
-<<<<<<< HEAD
     const [expandedMobileProviders, setExpandedMobileProviders] = React.useState<Set<string>>(() => {
         const initial = new Set<string>();
         if (currentProviderId) {
@@ -785,39 +431,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return initial;
     });
     // Use global state for model selector (allows Ctrl+M shortcut)
-||||||| bc50ba56aa
-    // Use global state for model selector (allows Ctrl+M shortcut)
-=======
->>>>>>> upstream/main
     const agentMenuOpen = isModelSelectorOpen;
-<<<<<<< HEAD
     const setAgentMenuOpen = selection ? setLocalModelSelectorOpen : setModelSelectorOpen;
-||||||| bc50ba56aa
-    // The model and agent menus open upward from the composer, and downward
-    // only when the composer sits too close to the top to fit them.
-    const modelTriggerRef = React.useRef<HTMLDivElement>(null);
-    const agentTriggerRef = React.useRef<HTMLDivElement>(null);
-    const agentListRef = React.useRef<HTMLDivElement>(null);
-    const modelMenuSide = usePopupSideOnOpen(agentMenuOpen, modelTriggerRef, 'top');
-    const agentMenuSide = usePopupSideOnOpen(isAgentSelectorOpen, agentTriggerRef, 'top');
-    // A picker that now names a longer or shorter choice eases into its new width.
-    const variantTriggerRef = React.useRef<HTMLDivElement>(null);
-    useWidthMorph(modelTriggerRef);
-    useWidthMorph(agentTriggerRef);
-    useWidthMorph(variantTriggerRef);
-    const setAgentMenuOpen = selection ? onModelSelectorOpenChange ?? setLocalModelSelectorOpen : setModelSelectorOpen;
-=======
-    const modelTriggerRef = React.useRef<HTMLDivElement>(null);
-    const agentTriggerRef = React.useRef<HTMLDivElement>(null);
-    const agentListRef = React.useRef<HTMLDivElement>(null);
-    const modelMenuSide = usePopupSideOnOpen(agentMenuOpen, modelTriggerRef, 'top');
-    const agentMenuSide = usePopupSideOnOpen(isAgentSelectorOpen, agentTriggerRef, 'top');
-    const variantTriggerRef = React.useRef<HTMLDivElement>(null);
-    useWidthMorph(modelTriggerRef);
-    useWidthMorph(agentTriggerRef);
-    useWidthMorph(variantTriggerRef);
-    const setAgentMenuOpen = selection ? onModelSelectorOpenChange ?? setLocalModelSelectorOpen : setModelSelectorOpen;
->>>>>>> upstream/main
     const openAddProviderSettings = React.useCallback(() => {
         requestProviderConnect(true);
         setSettingsPage('providers');
@@ -874,27 +489,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
     }, [focusColumnInput, isModelSelectorOpen, isCompact]);
 
-<<<<<<< HEAD
     // Handle agent selector close behavior
-||||||| bc50ba56aa
-    // Handle agent selector close behavior
-    const [agentSearchQuery, setAgentSearchQuery] = React.useState('');
-    React.useEffect(() => {
-        if (isAgentSelectorOpen) return;
-        // Every picker drops its query, so the next open lists every agent.
-        setAgentSearchQuery('');
-        // The focus return is the main composer's: a controlled picker's own
-        // column owns where the caret goes.
-        if (!selection && !isCompact) requestAnimationFrame(focusColumnInput);
-    }, [focusColumnInput, isAgentSelectorOpen, isCompact, selection]);
-=======
-    const [agentSearchQuery, setAgentSearchQuery] = React.useState('');
-    React.useEffect(() => {
-        if (isAgentSelectorOpen) return;
-        setAgentSearchQuery('');
-        if (!selection && !isCompact) requestAnimationFrame(focusColumnInput);
-    }, [focusColumnInput, isAgentSelectorOpen, isCompact, selection]);
->>>>>>> upstream/main
 
 
 
@@ -902,13 +497,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const controlIconSize = isMobile ? 'size-5' : 'size-4';
     const providerLogoSize = isMobile ? 'size-[21px]' : 'size-[17px]';
     const controlTextSize = isCompact ? 'typography-micro' : 'typography-meta';
-<<<<<<< HEAD
     const inlineGapClass = isMobile ? 'gap-x-1' : 'gap-x-3';
-||||||| bc50ba56aa
-    const inlineGapClass = sizeVariant === 'mobile' ? 'gap-x-1' : sizeVariant === 'vscode' ? 'gap-x-2' : 'gap-x-3';
-=======
-    const inlineGapClass = sizeVariant === 'mobile' ? 'gap-x-1' : sizeVariant === 'vscode' ? 'gap-x-2' : 'gap-x-4';
->>>>>>> upstream/main
 
     const currentProvider = selection ? providers.find((provider) => provider.providerId === currentProviderId) : getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
@@ -938,17 +527,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const currentModelForMetadata = currentModelId
         ? models.find((model: ProviderModel) => model.modelId === currentModelId)
         : undefined;
-<<<<<<< HEAD
-    // Display only: a directory still starting can expose part of its catalog
-    // for a second or two, so a known model name stays on screen. Selection
-    // and validation keep reading the active catalog.
-||||||| bc50ba56aa
-    // Display only: a directory OpenCode is still starting lists part of its
-    // catalog for a second or two, so the name and efforts another catalog
-    // knows for this model stay on screen. Everything that decides or
-    // validates the selection keeps reading the active catalog.
-=======
->>>>>>> upstream/main
     const knownCurrentModel = useConfigStore((state) => (
         currentModelForMetadata ? undefined : selectKnownCatalogModel(state, currentProviderId, currentModelId)
     ));
@@ -985,50 +563,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         [currentMetadata, localizeMetaLabel],
     );
 
-<<<<<<< HEAD
     const hasEfforts = effortOptions.length > 0;
     const routeOptions = currentCatalogModel?.variants ?? [];
     const hasVariants = routeOptions.length > 0;
-||||||| bc50ba56aa
-    // Compute from current model each render to avoid stale variants
-    // in draft/session transitions.
-    // `getCurrentModelVariants()` builds a new array each call. The effort
-    // effect below depends on this list, and a fresh identity on every store
-    // tick (a form event, a status ping) re-ran it and briefly re-applied the
-    // inherited effort over the user's pick — the picker flickered. Keyed on
-    // the content so identity only changes when the variants do.
-    const rawAvailableVariants = selection
-        ? listModelVariantIds(currentProvider?.models.find((model) => model.id === currentModelId)?.variants)
-        : getCurrentModelVariants();
-    const availableVariantsKey = rawAvailableVariants.join('\u0000');
-    const availableVariants = React.useMemo(
-        () => (availableVariantsKey ? availableVariantsKey.split('\u0000') : []),
-        [availableVariantsKey],
-    );
-    const displayVariants = React.useMemo(
-        () => (availableVariants.length > 0 || !knownCurrentModel
-            ? availableVariants
-            : listModelVariantIds(knownCurrentModel.variants)),
-        [availableVariants, knownCurrentModel],
-    );
-    const hasVariants = displayVariants.length > 0;
-=======
-    const rawAvailableVariants = selection
-        ? listModelVariantIds(currentProvider?.models.find((model) => model.id === currentModelId)?.variants)
-        : getCurrentModelVariants();
-    const availableVariantsKey = rawAvailableVariants.join('\u0000');
-    const availableVariants = React.useMemo(
-        () => (availableVariantsKey ? availableVariantsKey.split('\u0000') : []),
-        [availableVariantsKey],
-    );
-    const displayVariants = React.useMemo(
-        () => (availableVariants.length > 0 || !knownCurrentModel
-            ? availableVariants
-            : listModelVariantIds(knownCurrentModel.variants)),
-        [availableVariants, knownCurrentModel],
-    );
-    const hasVariants = displayVariants.length > 0;
->>>>>>> upstream/main
 
     const costRows = [
         { label: 'Input', value: formatCost(currentMetadata?.cost?.input) },
@@ -1050,30 +587,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         currentSessionId ?? '',
         currentSessionDirectory ?? undefined,
     );
-<<<<<<< HEAD
     // A sent choice may restore the composer after its transcript is loaded.
     // Canonical sessions do not carry a separate legacy agent-selection record.
-||||||| bc50ba56aa
-    // OpenCode 2 keeps the selection on the session record itself (`model`
-    // with its variant, and `agent`), and that is what the next prompt runs
-    // on, so it is the authority when a session opens. The last assistant
-    // reply is the fallback for a record that has no model yet. The record's
-    // agent is followed by its own effect below, so a choice carries an agent
-    // only when the record has none.
-    // Both are read as derived choices: the record and the message list are
-    // replaced on every streamed step while the choice stays the same.
-    const sessionRecordAgent = useSessionSelector(
-        currentSessionId ?? undefined,
-        currentSessionDirectory ?? undefined,
-        selectSessionRecordAgent,
-    );
-=======
-    const sessionRecordAgent = useSessionSelector(
-        currentSessionId ?? undefined,
-        currentSessionDirectory ?? undefined,
-        selectSessionRecordAgent,
-    );
->>>>>>> upstream/main
     const sessionRecordChoice = useSessionSelector(
         currentSessionId ?? undefined,
         currentSessionDirectory ?? undefined,
@@ -1085,13 +600,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         currentSessionDirectory ?? undefined,
         selectLatestReplyModelChoice,
         areModelChoicesEqual,
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        // The choice is read from the reply's parts, which can load after it.
-        true,
-=======
-        true,
->>>>>>> upstream/main
     );
     const latestLoadedUserChoice = React.useMemo(() => {
         if (selection) return null;
@@ -1161,15 +669,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const variantOptions = getModelVariantOptions(providerId, modelId);
         if (variantOptions.length === 0) return undefined;
 
-<<<<<<< HEAD
         let currentInherited: string | undefined;
-||||||| bc50ba56aa
-        // Keep a `null` inherited choice: it is an explicit Default the model
-        // remembers, not "nothing chosen".
-        let currentInherited: string | null | undefined;
-=======
-        let currentInherited: string | null | undefined;
->>>>>>> upstream/main
         if (currentProviderId === providerId && currentModelId === modelId) {
             currentInherited = currentVariantSelection.inherited
                 ?? (currentVariantSelection.override === null || currentVariantSelection.override === undefined
@@ -1182,7 +682,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             : undefined;
     }, [currentModelId, currentProviderId, currentVariantSelection, effectiveCurrentVariant, getModelVariantOptions]);
 
-<<<<<<< HEAD
     /**
      * The session's recorded choice for this model, in the selection store's
      * three states: a route name, `null` for an explicit "Default", and
@@ -1191,26 +690,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
      * they would re-record it as a choice on the next write.
      */
     const resolveModelVariantSelection = React.useCallback((providerId: string, modelId: string): string | null | undefined => {
-||||||| bc50ba56aa
-    /**
-     * The session's recorded choice for this model, in the selection store's
-     * three states: an effort name, `null` for an explicit "Default", and
-     * `undefined` for no choice at all. Collapsing `null` into `undefined` here
-     * would hand a real "Default" back to the callers as "nothing chosen", and
-     * they would re-record it as a choice on the next write.
-     */
-    const resolveModelVariantSelection = React.useCallback((
-        providerId: string,
-        modelId: string,
-        options?: { includeInherited?: boolean },
-    ): string | null | undefined => {
-=======
-    const resolveModelVariantSelection = React.useCallback((
-        providerId: string,
-        modelId: string,
-        options?: { includeInherited?: boolean },
-    ): string | null | undefined => {
->>>>>>> upstream/main
         const variantOptions = getModelVariantOptions(providerId, modelId);
         if (variantOptions.length === 0) {
             return undefined;
@@ -1228,18 +707,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             }
         }
 
-<<<<<<< HEAD
         if (currentProviderId === providerId && currentModelId === modelId && currentVariant && variantOptions.includes(currentVariant)) {
             return currentVariant;
-||||||| bc50ba56aa
-        // Restoring a session must not record an inherited level as the
-        // session's own pick; the effort effect resolves it afterwards.
-        if (options?.includeInherited === false) {
-            return undefined;
-=======
-        if (options?.includeInherited === false) {
-            return undefined;
->>>>>>> upstream/main
         }
 
         return undefined;
@@ -1268,33 +737,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return liveConfigAgentName || currentAgentName;
     }, [currentAgentName, currentSessionId, selection]);
 
-<<<<<<< HEAD
     /**
      * Records the route selection independently of reasoning effort. `null`
      * explicitly chooses Default; `undefined` leaves the inherited route in place.
      */
-||||||| bc50ba56aa
-    const rememberVariantForModel = React.useCallback((providerId: string, modelId: string, variant: string | null | undefined) => {
-        if (!rememberVariantPicks) return;
-        rememberEffort(providerId, modelId, variant ?? null);
-    }, [rememberVariantPicks]);
-
-    /**
-     * Records `variant` as this session's effort for the model, in the same
-     * three states the selection store defines: an effort name, `null` for an
-     * explicit "Default", `undefined` for no choice so the inherited effort
-     * applies. Callers decide which one they mean — the picker turns its own
-     * "Default" into `null`, while restore paths pass `undefined` through when
-     * they found nothing, because "the history carries no effort" is not the
-     * user having chosen "Default".
-     */
-=======
-    const rememberVariantForModel = React.useCallback((providerId: string, modelId: string, variant: string | null | undefined) => {
-        if (!rememberVariantPicks) return;
-        rememberEffort(providerId, modelId, variant ?? null);
-    }, [rememberVariantPicks]);
-
->>>>>>> upstream/main
     const commitVariantSelectionForModel = React.useCallback((providerId: string, modelId: string, variant: string | null | undefined, agentNameOverride?: string | null) => {
         if (selection) {
             if (controlledSessionId && selection.agent) {
@@ -1341,34 +787,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return 'applied';
     }, [addRecentModel, commitVariantSelectionForModel, resolveLiveAgentName, tryApplyModelSelection, selection]);
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // Every agent switch lands on the session record (`session.agent.selected`),
-    // whoever made it: this composer's send, another client, a plugin. A switch
-    // the composer has not followed yet is newer than what the composer shows,
-    // so the picker takes it, unless a pick made here is still unsent: the
-    // next send switches the session to that pick. An unchanged record leaves
-    // a pick in place, across reopen and reload too. The model is not part of a switch:
-    // the session keeps running on its own, so the model shown (Auto included)
-    // stays as it is; a model switch is followed by the restore below.
-    React.useEffect(() => {
-        if (!currentSessionId || !contextHydrated || !sessionRecordAgent) return;
-        if (!useSelectionStore.getState().followSessionAgent(currentSessionId, sessionRecordAgent)) return;
-        if (useConfigStore.getState().currentAgentName === sessionRecordAgent) return;
-        // The model this session last used with that agent is not what it
-        // runs on now, so the agent-change effect must not bring it back.
-        prevAgentNameRef.current = sessionRecordAgent;
-        setAgent(sessionRecordAgent, { keepModel: true });
-    }, [contextHydrated, currentSessionId, sessionRecordAgent, setAgent]);
-=======
-    React.useEffect(() => {
-        if (!currentSessionId || !contextHydrated || !sessionRecordAgent) return;
-        if (!useSelectionStore.getState().followSessionAgent(currentSessionId, sessionRecordAgent)) return;
-        if (useConfigStore.getState().currentAgentName === sessionRecordAgent) return;
-        prevAgentNameRef.current = sessionRecordAgent;
-        setAgent(sessionRecordAgent, { keepModel: true });
-    }, [contextHydrated, currentSessionId, sessionRecordAgent, setAgent]);
->>>>>>> upstream/main
 
     React.useEffect(() => {
         if (!currentSessionId) {
@@ -1394,30 +812,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-<<<<<<< HEAD
-        // A message without an agent retains the composer's saved profile.
-||||||| bc50ba56aa
-        // Without an agent in the choice, the session's agent is whatever the
-        // composer holds for it now: the record's, once followed, or a pick
-        // made after it.
-=======
->>>>>>> upstream/main
         const restoreAgentName = latestLoadedUserChoice.agent || resolveLiveAgentName() || undefined;
 
-<<<<<<< HEAD
-        // The record's model follows the agent's rule: one the composer has
-        // not reconciled with yet is a newer switch (another client, a plugin)
-        // and outranks a model or route picked here. Auto is the exception:
-        // with Auto the router itself switches the session's model each turn,
-        // and the picker keeps showing Auto.
-||||||| bc50ba56aa
-        // The record's model follows the agent's rule: one the composer has
-        // not reconciled with yet is a newer switch (another client, a plugin)
-        // and outranks a model or effort picked here. Auto is the exception:
-        // with Auto the router itself switches the session's model each turn,
-        // and the picker keeps showing Auto.
-=======
->>>>>>> upstream/main
         const recordModelKey = sessionRecordChoice && latestLoadedUserChoice === sessionRecordChoice
             ? `${formatModelRef(sessionRecordChoice)}#${sessionRecordChoice.variant ?? ''}`
             : null;
@@ -1427,20 +823,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (recordModelKey) useSelectionStore.getState().markSessionModelFollowed(currentSessionId, recordModelKey);
         };
 
-<<<<<<< HEAD
-        // History can never say "Auto": the server replaces the sentinel with
-        // a real model before the runtime stores the message. A saved Auto is the
-        // newer truth, so it wins over the model the last turn actually ran on.
-        // Until the routing state has loaded, Auto cannot be applied yet, so
-        // the restore stays pending instead of letting history overwrite it.
-||||||| bc50ba56aa
-        // History can never say "Auto": the server replaces the sentinel with
-        // a real model before OpenCode stores the message. A saved Auto is the
-        // newer truth, so it wins over the model the last turn actually ran on.
-        // Until the routing state has loaded, Auto cannot be applied yet, so
-        // the restore stays pending instead of letting history overwrite it.
-=======
->>>>>>> upstream/main
         const savedSessionModel = getSessionModelSelection(currentSessionId);
         const savedAuto = Boolean(savedSessionModel) && isAutoModel(savedSessionModel!.providerId, savedSessionModel!.modelId);
         if (savedAuto && isStaleAutoSelection(savedSessionModel!.providerId, savedSessionModel!.modelId)) {
@@ -1485,14 +867,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 latestLoadedUserChoice.modelId,
             )
             : undefined;
-<<<<<<< HEAD
-        // A newer switch brings its own route; a record without one says
-        // nothing about routing, so the saved choice stays.
-||||||| bc50ba56aa
-        // A newer switch brings its own effort; a record without one says
-        // nothing about effort, so the saved choice stays.
-=======
->>>>>>> upstream/main
         let restoredVariant: string | null | undefined = savedVariant !== undefined ? savedVariant : historicalVariant;
         if (recordModelSwitched && historicalVariant) restoredVariant = historicalVariant;
         const applyResult = applyModelSelectionWithVariant(
@@ -1505,16 +879,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-<<<<<<< HEAD
-        // The route is not written again here: `applyModelSelectionWithVariant`
-        // above already recorded `historicalVariant` for this same agent and
-        // model, and a second write can only disagree with the first.
-||||||| bc50ba56aa
-        // The effort is not written again here: `applyModelSelectionWithVariant`
-        // above already recorded `historicalVariant` for this same agent and
-        // model, and a second write can only disagree with the first.
-=======
->>>>>>> upstream/main
         if (latestLoadedUserChoice.agent) {
             saveSessionAgentSelection(currentSessionId, latestLoadedUserChoice.agent);
         }
@@ -1631,13 +995,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 ? (useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
                 : null;
 
-<<<<<<< HEAD
-            // Keep a valid saved profile instead of replacing it with a fallback.
-||||||| bc50ba56aa
-            // If we already have a valid agent selected (often from server-injected mode switch),
-            // don't override it with a fallback.
-=======
->>>>>>> upstream/main
             const preferred =
                 (currentSessionId
                     ? (useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
@@ -1710,33 +1067,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         sync,
     ]);
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // The picker shows the session's agent, while a send carries the app-wide
-    // one. That one drifts on its own: another session or folder sets it, an
-    // agent list reload resolves it again. Whatever moved it, it goes back to
-    // the session's agent, so the agent shown is the agent sent; the switch
-    // brings back the model this session last used with it, and keeps Auto.
-    // Both are read live: the restores above may have moved either one in
-    // this same commit.
-    React.useEffect(() => {
-        if (selection || !currentSessionId || !contextHydrated || !agentsResolved) return;
-        const sessionAgentName = useSelectionStore.getState().getSessionAgentSelection(currentSessionId);
-        if (!sessionAgentName || sessionAgentName === useConfigStore.getState().currentAgentName) return;
-        if (!agents.some((agent) => agent.name === sessionAgentName)) return;
-        setAgent(sessionAgentName, { keepModel: isAutoSelected });
-    }, [agents, agentsResolved, contextHydrated, currentAgentName, currentSessionId, isAutoSelected, selection, sessionSavedAgentName, setAgent]);
-
-=======
-    React.useEffect(() => {
-        if (selection || !currentSessionId || !contextHydrated || !agentsResolved) return;
-        const sessionAgentName = useSelectionStore.getState().getSessionAgentSelection(currentSessionId);
-        if (!sessionAgentName || sessionAgentName === useConfigStore.getState().currentAgentName) return;
-        if (!agents.some((agent) => agent.name === sessionAgentName)) return;
-        setAgent(sessionAgentName, { keepModel: isAutoSelected });
-    }, [agents, agentsResolved, contextHydrated, currentAgentName, currentSessionId, isAutoSelected, selection, sessionSavedAgentName, setAgent]);
-
->>>>>>> upstream/main
     React.useEffect(() => {
         if (selection || !contextHydrated) {
             return;
@@ -1805,20 +1135,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
     }, [configuredCurrentReasoningEffort, contextHydrated, currentCatalogModel, currentModelId, currentProviderId, effortOptions, isReady, selection, setCurrentReasoningEffort]);
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    React.useEffect(() => {
-        if (selection) return;
-        // Missing discovery/context data cannot invalidate a configured effort.
-        // Clearing it here also marks the automatic draft selection as manual.
-        if (!contextHydrated || !currentAgentName || (currentModelId && !currentModelForMetadata)) return;
-=======
-    React.useEffect(() => {
-        if (selection) return;
-        if (!contextHydrated || !currentAgentName || (currentModelId && !currentModelForMetadata)) return;
->>>>>>> upstream/main
 
-<<<<<<< HEAD
     const handleVariantSelect = React.useCallback((variant: string | undefined, providerId = currentProviderId, modelId = currentModelId) => {
         if (!providerId || !modelId) return;
         const route = providers.find((provider) => provider.providerId === providerId)?.models.find((model) => model.modelId === modelId)?.variants.find((option) => option.variant === variant);
@@ -1827,170 +1144,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (!controlledSessionId || !selection.agent) return;
             commitVariantSelectionForModel(providerId, modelId, variant ?? null);
             saveAgentModelReasoningEffortForSession(controlledSessionId, selection.agent ?? ROOT_SELECTION_AGENT, providerId, modelId, effort ?? 'off');
-||||||| bc50ba56aa
-        if (!currentProviderId || !currentModelId) {
-            // Switching the draft to another directory empties the automatic
-            // model until that directory's catalog resolves it; that gap is not
-            // a model without efforts and must not erase the one picked.
-            if (!providersResolved) return;
-            manualVariantSelectionRef.current = false;
-            setCurrentVariant(undefined);
-=======
-        if (!currentProviderId || !currentModelId) {
-            if (!providersResolved) return;
-            manualVariantSelectionRef.current = false;
-            setCurrentVariant(undefined);
->>>>>>> upstream/main
             return;
         }
-<<<<<<< HEAD
         commitVariantSelectionForModel(providerId, modelId, variant ?? null);
         setCurrentReasoningEffort(effort ?? 'off');
         const agentName = resolveLiveAgentName();
         if (currentSessionId) saveAgentModelReasoningEffortForSession(currentSessionId, agentName ?? ROOT_SELECTION_AGENT, providerId, modelId, effort ?? 'off');
     }, [commitVariantSelectionForModel, currentModelId, currentProviderId, currentSessionId, providers, resolveLiveAgentName, saveAgentModelReasoningEffortForSession, selection, setCurrentReasoningEffort, controlledSessionId]);
-||||||| bc50ba56aa
-
-        if (availableVariants.length === 0) {
-            manualVariantSelectionRef.current = false;
-            setCurrentVariant(undefined);
-            return;
-        }
-
-        // The chosen effort does not exist on this model: drop the choice and
-        // inherit, rather than pin an explicit "Default" the user never picked.
-        if (currentVariant && !availableVariants.includes(currentVariant)) {
-            setCurrentVariantOverride(undefined, resolveInheritedVariantForModel(currentProviderId, currentModelId));
-            return;
-        }
-
-        // Draft state (no session yet): seed from the model's configured default, but don't override
-        // user selection while drafting.
-        if (!currentSessionId) {
-            if (currentVariantSelection.override === undefined && !manualVariantSelectionRef.current) {
-                const desired = resolveInheritedVariantForModel(currentProviderId, currentModelId);
-                setCurrentVariantOverride(undefined, desired);
-            }
-            return;
-        }
-
-        const savedVariant = getAgentModelVariantForSession(
-            currentSessionId,
-            currentAgentName,
-            currentProviderId,
-            currentModelId,
-        );
-
-        const inheritedVariant = resolveInheritedVariantForModel(currentProviderId, currentModelId);
-        if (savedVariant && availableVariants.includes(savedVariant)) {
-            setCurrentVariantOverride(savedVariant, inheritedVariant);
-        } else if (savedVariant === null || currentVariantSelection.override === null) {
-            // "Default" was picked for this session, or is picked right now.
-            setCurrentVariantOverride(null, inheritedVariant);
-        } else {
-            setCurrentVariantOverride(undefined, inheritedVariant);
-        }
-        manualVariantSelectionRef.current = false;
-    }, [
-        availableVariants,
-        currentModelForMetadata,
-        contextHydrated,
-        currentSessionId,
-        currentAgentName,
-        currentProviderId,
-        currentModelId,
-        currentVariant,
-        currentVariantSelection.override,
-        effectiveCurrentVariant,
-        getAgentModelVariantForSession,
-        providersResolved,
-        resolveInheritedVariantForModel,
-        setCurrentVariant,
-        setCurrentVariantOverride,
-        // `getDefaultVariantForModel` reads these from the store; listing them
-        // re-resolves the inherited effort when the Settings defaults change.
-        settingsDefaultModel,
-        settingsDefaultVariant,
-        selection,
-    ]);
-
-    const handleVariantSelect = React.useCallback((variant: string | undefined) => {
-        if (currentProviderId && currentModelId) {
-            // Picked in the effort menu, so no effort means the user picked
-            // "Default" — a choice, recorded as `null`.
-            commitVariantSelectionForModel(currentProviderId, currentModelId, variant ?? null);
-            rememberVariantForModel(currentProviderId, currentModelId, variant ?? null);
-        }
-    }, [commitVariantSelectionForModel, currentModelId, currentProviderId, rememberVariantForModel]);
-=======
-
-        if (availableVariants.length === 0) {
-            manualVariantSelectionRef.current = false;
-            setCurrentVariant(undefined);
-            return;
-        }
-
-        if (currentVariant && !availableVariants.includes(currentVariant)) {
-            setCurrentVariantOverride(undefined, resolveInheritedVariantForModel(currentProviderId, currentModelId));
-            return;
-        }
-
-        if (!currentSessionId) {
-            if (currentVariantSelection.override === undefined && !manualVariantSelectionRef.current) {
-                const desired = resolveInheritedVariantForModel(currentProviderId, currentModelId);
-                setCurrentVariantOverride(undefined, desired);
-            }
-            return;
-        }
-
-        const savedVariant = getAgentModelVariantForSession(
-            currentSessionId,
-            currentAgentName,
-            currentProviderId,
-            currentModelId,
-        );
-
-        const inheritedVariant = resolveInheritedVariantForModel(currentProviderId, currentModelId);
-        if (savedVariant && availableVariants.includes(savedVariant)) {
-            setCurrentVariantOverride(savedVariant, inheritedVariant);
-        } else if (savedVariant === null || currentVariantSelection.override === null) {
-            setCurrentVariantOverride(null, inheritedVariant);
-        } else {
-            setCurrentVariantOverride(undefined, inheritedVariant);
-        }
-        manualVariantSelectionRef.current = false;
-    }, [
-        availableVariants,
-        currentModelForMetadata,
-        contextHydrated,
-        currentSessionId,
-        currentAgentName,
-        currentProviderId,
-        currentModelId,
-        currentVariant,
-        currentVariantSelection.override,
-        effectiveCurrentVariant,
-        getAgentModelVariantForSession,
-        providersResolved,
-        resolveInheritedVariantForModel,
-        setCurrentVariant,
-        setCurrentVariantOverride,
-        settingsDefaultModel,
-        settingsDefaultVariant,
-        selection,
-    ]);
-
-    const handleVariantSelect = React.useCallback((variant: string | undefined) => {
-        if (currentProviderId && currentModelId) {
-            commitVariantSelectionForModel(currentProviderId, currentModelId, variant ?? null);
-            rememberVariantForModel(currentProviderId, currentModelId, variant ?? null);
-        }
-    }, [commitVariantSelectionForModel, currentModelId, currentProviderId, rememberVariantForModel]);
->>>>>>> upstream/main
 
     const handleAgentChange = React.useCallback((agentName: string, options?: { closeModelSelector?: boolean }) => {
         if (selection) {
-<<<<<<< HEAD
             if (!agentSelectable || !controlledSessionId) return;
             // The pick belongs to the controlled session only; the app-wide
             // agent stays the main chat's.
@@ -1999,30 +1162,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             const model = getAgentModelForSession(controlledSessionId, agentName) ?? profile?.model;
             if (model) {
                 saveSessionModelSelection(controlledSessionId, model.providerId, model.modelId);
-||||||| bc50ba56aa
-            if (!controlledSessionId) return;
-            // The pick belongs to the controlled session only; the app-wide
-            // agent stays the main chat's.
-            pickSessionAgent(controlledSessionId, agentName);
-            // An effort is remembered per agent and model, so an agent this
-            // session has not run yet has none for the current model. Carry
-            // the level the composer is on, including an explicit Default;
-            // without it a BTW fork loses the effort it copied from the main
-            // chat the moment its agent changes.
-            if (
-                currentProviderId && currentModelId && selection.variant !== undefined
-                && getAgentModelVariantForSession(controlledSessionId, agentName, currentProviderId, currentModelId) === undefined
-            ) {
-                saveAgentModelVariantForSession(controlledSessionId, agentName, currentProviderId, currentModelId, selection.variant);
-=======
-            if (!controlledSessionId) return;
-            pickSessionAgent(controlledSessionId, agentName);
-            if (
-                currentProviderId && currentModelId && selection.variant !== undefined
-                && getAgentModelVariantForSession(controlledSessionId, agentName, currentProviderId, currentModelId) === undefined
-            ) {
-                saveAgentModelVariantForSession(controlledSessionId, agentName, currentProviderId, currentModelId, selection.variant);
->>>>>>> upstream/main
             }
             if (options?.closeModelSelector ?? true) {
                 setAgentMenuOpen(false);
@@ -2030,18 +1169,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
         try {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-            // The pick reaches the session with the next send; held as
-            // unsent until then, so the session record cannot replace it.
-            if (currentSessionId) {
-                pickSessionAgent(currentSessionId, agentName);
-            }
-=======
-            if (currentSessionId) {
-                pickSessionAgent(currentSessionId, agentName);
-            }
->>>>>>> upstream/main
             setAgent(agentName);
             if (options?.closeModelSelector ?? true) {
                 setAgentMenuOpen(false);
@@ -2146,13 +1273,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     ) => {
         try {
             const effectiveAgentName = options?.agentName ?? resolveLiveAgentName() ?? undefined;
-<<<<<<< HEAD
-            // `applyVariant` means an explicit route selection; no route means Default.
-||||||| bc50ba56aa
-            // `applyVariant` is only set when the user adjusted the effort in
-            // the model picker, so no effort means an explicit "Default".
-=======
->>>>>>> upstream/main
             const result = options?.applyVariant
                 ? applyModelSelectionWithVariant(providerId, modelId, options.variant ?? null, effectiveAgentName)
                 : tryApplyModelSelection(providerId, modelId, effectiveAgentName);
@@ -2330,306 +1450,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     };
 
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        const hasCustomPrompt = Boolean(currentAgent.system && currentAgent.system.trim().length > 0);
-        const hasModelConfig = currentAgent.model?.providerID && currentAgent.model?.id;
-        const hasTemperatureOrTopP = agentTemperature(currentAgent) !== undefined || agentTopP(currentAgent) !== undefined;
-
-        const summarizePermission = (permissionName: string): { mode: EditPermissionMode; label: string } => {
-            const rules = currentAgent.permissions ?? [];
-            const hasCustom = rules.some((rule) => rule.action === permissionName && rule.resource !== '*');
-            const action = resolveWildcardPermissionEffect(rules, permissionName) ?? 'ask';
-
-            if (hasCustom) {
-                return { mode: 'ask', label: t('chat.modelControls.permissionLabel.custom') };
-            }
-
-            if (action === 'allow') return { mode: 'allow', label: t('chat.modelControls.permissionLabel.allow') };
-            if (action === 'deny') return { mode: 'deny', label: t('chat.modelControls.permissionLabel.deny') };
-            return { mode: 'ask', label: t('chat.modelControls.permissionLabel.ask') };
-        };
-
-        const editPermissionSummary = summarizePermission('edit');
-        const bashPermissionSummary = summarizePermission(OPENCODE_TOOLS.shell);
-        const webfetchPermissionSummary = summarizePermission(OPENCODE_TOOLS.webfetch);
-
-        return (
-            <MobileOverlayPanel
-                open={true}
-                onClose={closeMobileTooltip}
-                title={agentLabel(currentAgent)}
-            >
-                <div className="flex flex-col gap-1.5">
-                    {}
-                    {currentAgent.description && (
-                        <div className="oc-tile rounded-lg px-3 py-2">
-                            <div className="typography-meta text-foreground">{currentAgent.description}</div>
-                        </div>
-                    )}
-
-                    {}
-                    <div className="oc-tile rounded-lg px-3 py-2">
-                        <div className="typography-micro text-muted-foreground mb-0.5">{t('chat.modelControls.mode')}</div>
-                        <div className="typography-meta text-foreground font-medium">
-                            {currentAgent.mode === 'primary'
-                                ? t('chat.modelControls.modeValue.primary')
-                                : currentAgent.mode === 'subagent'
-                                    ? t('chat.modelControls.modeValue.subagent')
-                                    : currentAgent.mode === 'all'
-                                        ? t('chat.modelControls.modeValue.all')
-                                        : t('chat.modelControls.modeValue.none')}
-                        </div>
-                    </div>
-
-                    {}
-                    {(hasModelConfig || hasTemperatureOrTopP) && (
-                        <div className="oc-tile rounded-lg px-3 py-2">
-                            <div className="typography-micro text-muted-foreground mb-1">{t('chat.modelControls.model')}</div>
-                            {hasModelConfig && (
-                                <div className="typography-meta text-foreground font-medium mb-1">
-                                    {currentAgent.model!.providerID} / {currentAgent.model!.id}
-                                </div>
-                            )}
-                            {hasTemperatureOrTopP && (
-                                <div className="flex flex-col gap-0.5">
-                                    {agentTemperature(currentAgent) !== undefined && (
-                                        <div className="flex items-center justify-between">
-                                            <span className="typography-meta text-muted-foreground">{t('chat.modelControls.temperature')}</span>
-                                            <span className="typography-meta font-medium text-foreground">{agentTemperature(currentAgent)}</span>
-                                        </div>
-                                    )}
-                                    {agentTopP(currentAgent) !== undefined && (
-                                        <div className="flex items-center justify-between">
-                                            <span className="typography-meta text-muted-foreground">{t('chat.modelControls.topP')}</span>
-                                            <span className="typography-meta font-medium text-foreground">{agentTopP(currentAgent)}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {}
-                    <div className="oc-tile rounded-lg px-3 py-2">
-                        <div className="typography-micro text-muted-foreground mb-1">{t('chat.modelControls.permissions')}</div>
-                        <div className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.edit')}</span>
-                                <div className="flex items-center gap-1.5">
-                                    <EditModeIcon mode={editPermissionSummary.mode} className="size-3.5" />
-                                    <span className="typography-meta font-medium text-foreground">
-                                        {editPermissionSummary.label}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.bash')}</span>
-                                <div className="flex items-center gap-1.5">
-                                    <EditModeIcon mode={bashPermissionSummary.mode} className="size-3.5" />
-                                    <span className="typography-meta font-medium text-foreground">
-                                        {bashPermissionSummary.label}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.webFetch')}</span>
-                                <div className="flex items-center gap-1.5">
-                                    <EditModeIcon mode={webfetchPermissionSummary.mode} className="size-3.5" />
-                                    <span className="typography-meta font-medium text-foreground">
-                                        {webfetchPermissionSummary.label}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {}
-                    {hasCustomPrompt && (
-                        <div className="oc-tile rounded-lg px-3 py-2">
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.customPrompt')}</span>
-                                <Icon name="checkbox-circle" className="size-4 text-foreground" />
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </MobileOverlayPanel>
-        );
-    };
-
-    // Chosen in the phone's model sheet: the row runs with the effort it would
-    // show, and no effort there means "Default".
-    const handleMobileModelApply = (providerId: string, modelId: string) => {
-        const result = selection
-            ? applyModelSelectionWithVariant(providerId, modelId, resolveModelVariantSelection(providerId, modelId) ?? null)
-            : tryApplyModelSelection(providerId, modelId);
-        if (result !== 'applied') {
-            if (result === 'provider-missing') {
-                console.error('[ModelControls] Provider not available for selection:', providerId);
-            } else if (result === 'model-missing') {
-                console.error('[ModelControls] Model not available for selection:', { providerId, modelId });
-            }
-            return;
-        }
-        const pickedSessionId = selection ? controlledSessionId : currentSessionId;
-        if (pickedSessionId) useSelectionStore.getState().pickSessionModel(pickedSessionId, providerId, modelId);
-        if (!selection) setLastSelectedModel(providerId, modelId);
-        setMobileDetailsEntry(null);
-        closeMobilePanel();
-        requestAnimationFrame(focusColumnInput);
-    };
-
-    // The phone's sheet draws the desktop model list: one line per model and
-    // details on a long press. The effort lives in the composer, after the model.
-=======
-        const hasCustomPrompt = Boolean(currentAgent.system && currentAgent.system.trim().length > 0);
-        const hasModelConfig = currentAgent.model?.providerID && currentAgent.model?.id;
-        const hasTemperatureOrTopP = agentTemperature(currentAgent) !== undefined || agentTopP(currentAgent) !== undefined;
-
-        const summarizePermission = (permissionName: string): { mode: EditPermissionMode; label: string } => {
-            const rules = currentAgent.permissions ?? [];
-            const hasCustom = rules.some((rule) => rule.action === permissionName && rule.resource !== '*');
-            const action = resolveWildcardPermissionEffect(rules, permissionName) ?? 'ask';
-
-            if (hasCustom) {
-                return { mode: 'ask', label: t('chat.modelControls.permissionLabel.custom') };
-            }
-
-            if (action === 'allow') return { mode: 'allow', label: t('chat.modelControls.permissionLabel.allow') };
-            if (action === 'deny') return { mode: 'deny', label: t('chat.modelControls.permissionLabel.deny') };
-            return { mode: 'ask', label: t('chat.modelControls.permissionLabel.ask') };
-        };
-
-        const editPermissionSummary = summarizePermission('edit');
-        const bashPermissionSummary = summarizePermission(OPENCODE_TOOLS.shell);
-        const webfetchPermissionSummary = summarizePermission(OPENCODE_TOOLS.webfetch);
-
-        return (
-            <MobileOverlayPanel
-                open={true}
-                onClose={closeMobileTooltip}
-                title={agentLabel(currentAgent)}
-            >
-                <div className="flex flex-col gap-1.5">
-                    {}
-                    {currentAgent.description && (
-                        <div className="oc-tile rounded-lg px-3 py-2">
-                            <div className="typography-meta text-foreground">{currentAgent.description}</div>
-                        </div>
-                    )}
-
-                    {}
-                    <div className="oc-tile rounded-lg px-3 py-2">
-                        <div className="typography-micro text-muted-foreground mb-0.5">{t('chat.modelControls.mode')}</div>
-                        <div className="typography-meta text-foreground font-medium">
-                            {currentAgent.mode === 'primary'
-                                ? t('chat.modelControls.modeValue.primary')
-                                : currentAgent.mode === 'subagent'
-                                    ? t('chat.modelControls.modeValue.subagent')
-                                    : currentAgent.mode === 'all'
-                                        ? t('chat.modelControls.modeValue.all')
-                                        : t('chat.modelControls.modeValue.none')}
-                        </div>
-                    </div>
-
-                    {}
-                    {(hasModelConfig || hasTemperatureOrTopP) && (
-                        <div className="oc-tile rounded-lg px-3 py-2">
-                            <div className="typography-micro text-muted-foreground mb-1">{t('chat.modelControls.model')}</div>
-                            {hasModelConfig && (
-                                <div className="typography-meta text-foreground font-medium mb-1">
-                                    {currentAgent.model!.providerID} / {currentAgent.model!.id}
-                                </div>
-                            )}
-                            {hasTemperatureOrTopP && (
-                                <div className="flex flex-col gap-0.5">
-                                    {agentTemperature(currentAgent) !== undefined && (
-                                        <div className="flex items-center justify-between">
-                                            <span className="typography-meta text-muted-foreground">{t('chat.modelControls.temperature')}</span>
-                                            <span className="typography-meta font-medium text-foreground">{agentTemperature(currentAgent)}</span>
-                                        </div>
-                                    )}
-                                    {agentTopP(currentAgent) !== undefined && (
-                                        <div className="flex items-center justify-between">
-                                            <span className="typography-meta text-muted-foreground">{t('chat.modelControls.topP')}</span>
-                                            <span className="typography-meta font-medium text-foreground">{agentTopP(currentAgent)}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {}
-                    <div className="oc-tile rounded-lg px-3 py-2">
-                        <div className="typography-micro text-muted-foreground mb-1">{t('chat.modelControls.permissions')}</div>
-                        <div className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.edit')}</span>
-                                <div className="flex items-center gap-1.5">
-                                    <EditModeIcon mode={editPermissionSummary.mode} className="size-3.5" />
-                                    <span className="typography-meta font-medium text-foreground">
-                                        {editPermissionSummary.label}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.bash')}</span>
-                                <div className="flex items-center gap-1.5">
-                                    <EditModeIcon mode={bashPermissionSummary.mode} className="size-3.5" />
-                                    <span className="typography-meta font-medium text-foreground">
-                                        {bashPermissionSummary.label}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.webFetch')}</span>
-                                <div className="flex items-center gap-1.5">
-                                    <EditModeIcon mode={webfetchPermissionSummary.mode} className="size-3.5" />
-                                    <span className="typography-meta font-medium text-foreground">
-                                        {webfetchPermissionSummary.label}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {}
-                    {hasCustomPrompt && (
-                        <div className="oc-tile rounded-lg px-3 py-2">
-                            <div className="flex items-center justify-between">
-                                <span className="typography-meta text-muted-foreground">{t('chat.modelControls.customPrompt')}</span>
-                                <Icon name="checkbox-circle" className="size-4 text-foreground" />
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </MobileOverlayPanel>
-        );
-    };
-
-    const handleMobileModelApply = (providerId: string, modelId: string) => {
-        const result = selection
-            ? applyModelSelectionWithVariant(providerId, modelId, resolveModelVariantSelection(providerId, modelId) ?? null)
-            : tryApplyModelSelection(providerId, modelId);
-        if (result !== 'applied') {
-            if (result === 'provider-missing') {
-                console.error('[ModelControls] Provider not available for selection:', providerId);
-            } else if (result === 'model-missing') {
-                console.error('[ModelControls] Model not available for selection:', { providerId, modelId });
-            }
-            return;
-        }
-        const pickedSessionId = selection ? controlledSessionId : currentSessionId;
-        if (pickedSessionId) useSelectionStore.getState().pickSessionModel(pickedSessionId, providerId, modelId);
-        if (!selection) setLastSelectedModel(providerId, modelId);
-        setMobileDetailsEntry(null);
-        closeMobilePanel();
-        requestAnimationFrame(focusColumnInput);
-    };
-
->>>>>>> upstream/main
     const renderMobileModelPanel = () => {
         if (!isCompact) return null;
 
@@ -2879,7 +1699,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 onClose={closeMobilePanel}
                 title={t('chat.modelControls.selectModel')}
             >
-<<<<<<< HEAD
                 <div className="flex flex-col gap-2">
                     <div>
                         <div className="relative">
@@ -2907,126 +1726,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 </button>
                             )}
                         </div>
-||||||| bc50ba56aa
-                <ModelPickerList
-                    providers={providers}
-                    providerOrder={providerOrder}
-                    favoriteModels={favoriteModelsList}
-                    recentModels={recentModelsList}
-                    hiddenModels={hiddenModels}
-                    searchQuery={mobileModelQuery}
-                    onSearchQueryChange={setMobileModelQuery}
-                    onSelect={(entry) => handleMobileModelApply(entry.providerID, entry.modelID)}
-                    labels={modelPickerLabels}
-                    selectedModel={currentProviderId && currentModelId ? { providerID: currentProviderId, modelID: currentModelId } : null}
-                    leadingEntry={autoEntry}
-                    isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-                    onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
-                    onEntryDetails={(entry) => {
-                        // The details take the keys: a search field left focused
-                        // under them would close the list on Escape instead.
-                        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-                        setMobileDetailsEntry(entry);
-                    }}
-                    providersStartCollapsed
-                    autoFocus={false}
-                    tooltipsEnabled={false}
-                    maxHeightClassName="min-h-0 flex-1"
-                    showKeyboardHints={false}
-                    onEscape={() => {
-                        if (mobileDetailsEntry) setMobileDetailsEntry(null);
-                        else closeMobilePanel();
-                    }}
-                />
-            </MobileOverlayPanel>
-        );
-    };
-
-    // A long press on a model in the sheet: what the desktop card says, and
-    // the star, which rows on a touch screen leave off.
-    const renderMobileModelDetails = () => {
-        if (!isCompact || !mobileDetailsEntry) return null;
-        const { providerID, modelID, model } = mobileDetailsEntry;
-        const auto = isAutoModel(providerID, modelID);
-        const favorite = isFavoriteModel(providerID, modelID);
-        const metadata = mergeModelMetadataWithLiveModel(providerID, model, getModelMetadata(providerID, modelID));
-        const providerName = auto ? null : providers.find((provider) => provider.id === providerID)?.name || providerID;
-        return (
-            <MobileOverlayPanel
-                open
-                onClose={() => setMobileDetailsEntry(null)}
-                title={getModelDisplayName(model)}
-                footer={(
-                    // Stacked: side by side, "Remove from favorites" outgrew its half.
-                    <div className="flex flex-col gap-2">
-                        <Button size="lg" className="w-full" onClick={() => handleMobileModelApply(providerID, modelID)}>
-                            {t('chat.modelControls.useModel')}
-                        </Button>
-                        {!auto ? (
-                            <Button variant="outline" size="lg" className="w-full gap-1.5" onClick={() => toggleFavoriteModel(providerID, modelID)}>
-                                <Icon name={favorite ? 'star-fill' : 'star'} className={cn('size-4', favorite && 'text-primary')} />
-                                {favorite ? t('chat.modelControls.removeFromFavorites') : t('chat.modelControls.addToFavorites')}
-                            </Button>
-                        ) : null}
-=======
-                <ModelPickerList
-                    providers={providers}
-                    providerOrder={providerOrder}
-                    favoriteModels={favoriteModelsList}
-                    recentModels={recentModelsList}
-                    hiddenModels={hiddenModels}
-                    searchQuery={mobileModelQuery}
-                    onSearchQueryChange={setMobileModelQuery}
-                    onSelect={(entry) => handleMobileModelApply(entry.providerID, entry.modelID)}
-                    labels={modelPickerLabels}
-                    selectedModel={currentProviderId && currentModelId ? { providerID: currentProviderId, modelID: currentModelId } : null}
-                    leadingEntry={autoEntry}
-                    searchAction={selection ? null : { label: t('chat.modelControls.addNewProvider'), icon: 'add', onSelect: openAddProviderSettings }}
-                    isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-                    onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
-                    onEntryDetails={(entry) => {
-                        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-                        setMobileDetailsEntry(entry);
-                    }}
-                    providersStartCollapsed
-                    sheetCaptions
-                    autoFocus={false}
-                    tooltipsEnabled={false}
-                    maxHeightClassName="min-h-0 flex-1"
-                    showKeyboardHints={false}
-                    onEscape={() => {
-                        if (mobileDetailsEntry) setMobileDetailsEntry(null);
-                        else closeMobilePanel();
-                    }}
-                />
-            </MobileOverlayPanel>
-        );
-    };
-
-    const renderMobileModelDetails = () => {
-        if (!isCompact || !mobileDetailsEntry) return null;
-        const { providerID, modelID, model } = mobileDetailsEntry;
-        const auto = isAutoModel(providerID, modelID);
-        const favorite = isFavoriteModel(providerID, modelID);
-        const metadata = mergeModelMetadataWithLiveModel(providerID, model, getModelMetadata(providerID, modelID));
-        const providerName = auto ? null : providers.find((provider) => provider.id === providerID)?.name || providerID;
-        return (
-            <MobileOverlayPanel
-                open
-                onClose={() => setMobileDetailsEntry(null)}
-                title={getModelDisplayName(model)}
-                footer={(
-                    <div className="flex flex-col gap-2">
-                        <Button size="lg" className="w-full" onClick={() => handleMobileModelApply(providerID, modelID)}>
-                            {t('chat.modelControls.useModel')}
-                        </Button>
-                        {!auto ? (
-                            <Button variant="outline" size="lg" className="w-full gap-1.5" onClick={() => toggleFavoriteModel(providerID, modelID)}>
-                                <Icon name={favorite ? 'star-fill' : 'star'} className={cn('size-4', favorite && 'text-primary')} />
-                                {favorite ? t('chat.modelControls.removeFromFavorites') : t('chat.modelControls.addToFavorites')}
-                            </Button>
-                        ) : null}
->>>>>>> upstream/main
                     </div>
 
                     {!hasResults && (
@@ -3155,24 +1854,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const selectedVariant = resolveModelVariantSelection(targetProviderId, targetModelId);
         const isDefault = !selectedVariant;
 
-<<<<<<< HEAD
         const handleBack = () => {
             setActiveMobilePanel('model');
         };
-||||||| bc50ba56aa
-        const handleSelect = (variant: string | undefined) => {
-            // Chosen in the mobile effort panel: no effort means "Default".
-            const result = applyModelSelectionWithVariant(targetProviderId, targetModelId, variant ?? null);
-            if (result !== 'applied') {
-                return;
-            }
-=======
-        const handleSelect = (variant: string | undefined) => {
-            const result = applyModelSelectionWithVariant(targetProviderId, targetModelId, variant ?? null);
-            if (result !== 'applied') {
-                return;
-            }
->>>>>>> upstream/main
 
         const handleSelect = (variant: string | undefined) => {
             handleVariantSelect(variant, targetProviderId, targetModelId);
@@ -3266,7 +1950,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 onClose={closeMobilePanel}
                 title={t('chat.modelControls.effort')}
             >
-<<<<<<< HEAD
                 <div className="flex flex-col gap-1.5">
                     {levels.map((effort) => {
                         const isSelected = selected === effort;
@@ -3289,129 +1972,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         );
                     })}
                 </div>
-||||||| bc50ba56aa
-                <MobileSheetRow selected={isDefault} onClick={() => handleSelect(undefined)}>
-                    {t('chat.modelControls.default')}
-                </MobileSheetRow>
-                {targetVariants.map((variant) => (
-                    <MobileSheetRow key={variant} selected={selectedVariant === variant} onClick={() => handleSelect(variant)}>
-                        {formatEffortLabel(variant)}
-                    </MobileSheetRow>
-                ))}
-            </MobileOverlayPanel>
-        );
-    };
-
-    // The phone's agent sheet reads like the desktop agent menu: flat rows,
-    // the agent's colour on its dot only, starred agents first.
-    const renderMobileAgentPanel = () => {
-        if (!isCompact) return null;
-
-        const isFavoriteAgent = (agent: Agent) => favoriteAgents.includes(agent.name);
-        // Starred agents in the order the cycle runs through them.
-        const favoriteAgentRows = selectableDesktopAgents.filter(isFavoriteAgent);
-        const otherAgentRows = [...selectableDesktopAgents]
-            .filter((agent) => !isFavoriteAgent(agent))
-            .sort((a, b) => a.name.localeCompare(b.name));
-
-        const renderAgentRow = (agent: Agent) => (
-            <MobileSheetRow
-                key={agent.name}
-                selected={agent.name === uiAgentName}
-                leading={<span className="size-1.5 flex-shrink-0 rounded-full" style={{ background: getAgentColor(agent.name).color }} />}
-                action={(
-                    <AgentFavoriteToggle
-                        className="h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9"
-                        favorite={isFavoriteAgent(agent)}
-                        onToggle={() => toggleFavoriteAgent(agent.name)}
-                    />
-                )}
-                onClick={() => handleAgentChange(agent.name)}
-            >
-                {agentLabel(agent)}
-            </MobileSheetRow>
-        );
-
-        return (
-            <MobileOverlayPanel
-                open={activeMobilePanel === 'agent'}
-                onClose={closeMobilePanel}
-                title={t('chat.modelControls.selectAgent')}
-                contentMaxHeightClassName="max-h-[min(60dvh,420px)]"
-            >
-                {favoriteAgentRows.length > 0 ? (
-                    <>
-                        {/* The composer's agent button cycles through these on a tap. */}
-                        <MobileSheetSection title={t('chat.modelControls.favorites')} hint={t('chat.modelControls.favoriteAgentsTapHint')}>
-                            {favoriteAgentRows.map(renderAgentRow)}
-                        </MobileSheetSection>
-                        {otherAgentRows.length > 0 ? (
-                            <MobileSheetSection title={t('chat.modelControls.agentsSection')}>
-                                {otherAgentRows.map(renderAgentRow)}
-                            </MobileSheetSection>
-                        ) : null}
-                    </>
-                ) : otherAgentRows.map(renderAgentRow)}
-=======
-                <MobileSheetRow selected={isDefault} onClick={() => handleSelect(undefined)}>
-                    {t('chat.modelControls.default')}
-                </MobileSheetRow>
-                {targetVariants.map((variant) => (
-                    <MobileSheetRow key={variant} selected={selectedVariant === variant} onClick={() => handleSelect(variant)}>
-                        {formatEffortLabel(variant)}
-                    </MobileSheetRow>
-                ))}
-            </MobileOverlayPanel>
-        );
-    };
-
-    const renderMobileAgentPanel = () => {
-        if (!isCompact) return null;
-
-        const isFavoriteAgent = (agent: Agent) => favoriteAgents.includes(agent.name);
-        const favoriteAgentRows = selectableDesktopAgents.filter(isFavoriteAgent);
-        const otherAgentRows = [...selectableDesktopAgents]
-            .filter((agent) => !isFavoriteAgent(agent))
-            .sort((a, b) => a.name.localeCompare(b.name));
-
-        const renderAgentRow = (agent: Agent) => (
-            <MobileSheetRow
-                key={agent.name}
-                selected={agent.name === uiAgentName}
-                leading={<span className="size-1.5 flex-shrink-0 rounded-full" style={{ background: getAgentColor(agent.name).color }} />}
-                action={(
-                    <AgentFavoriteToggle
-                        className="h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9"
-                        favorite={isFavoriteAgent(agent)}
-                        onToggle={() => toggleFavoriteAgent(agent.name)}
-                    />
-                )}
-                onClick={() => handleAgentChange(agent.name)}
-            >
-                {agentLabel(agent)}
-            </MobileSheetRow>
-        );
-
-        return (
-            <MobileOverlayPanel
-                open={activeMobilePanel === 'agent'}
-                onClose={closeMobilePanel}
-                title={t('chat.modelControls.selectAgent')}
-                contentMaxHeightClassName="max-h-[min(60dvh,420px)]"
-            >
-                {favoriteAgentRows.length > 0 ? (
-                    <>
-                        <MobileSheetSection title={t('chat.modelControls.favorites')} hint={t('chat.modelControls.favoriteAgentsTapHint')}>
-                            {favoriteAgentRows.map(renderAgentRow)}
-                        </MobileSheetSection>
-                        {otherAgentRows.length > 0 ? (
-                            <MobileSheetSection title={t('chat.modelControls.agentsSection')}>
-                                {otherAgentRows.map(renderAgentRow)}
-                            </MobileSheetSection>
-                        ) : null}
-                    </>
-                ) : otherAgentRows.map(renderAgentRow)}
->>>>>>> upstream/main
             </MobileOverlayPanel>
         );
     };
@@ -3520,73 +2080,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (efforts.length <= 1) return false;
             e.preventDefault();
             e.stopPropagation();
-<<<<<<< HEAD
             const current = selectedItem.providerId === currentProviderId && selectedItem.modelId === currentModelId ? selectedReasoningEffort : 'off';
             const index = Math.max(0, efforts.indexOf(current));
             const direction = e.key === 'ArrowRight' ? 1 : -1;
             handleEffortSelect(efforts[(index + direction + efforts.length) % efforts.length], selectedItem.providerId, selectedItem.modelId);
-||||||| bc50ba56aa
-
-            const mapKey = buildModelRefKey(providerID, modelID);
-            const hasPendingVariant = pendingThinkingVariants.has(mapKey);
-            const currentPending = pendingThinkingVariants.get(mapKey);
-            const activeModelVariant = hasPendingVariant
-                ? currentPending
-                : resolveModelVariantSelection(providerID, modelID) ?? undefined;
-
-            const variantsWithDefault: Array<string | undefined> = [undefined, ...variantKeys];
-            const currentVariantIndex = variantsWithDefault.indexOf(activeModelVariant);
-            const safeCurrentIndex = currentVariantIndex >= 0 ? currentVariantIndex : 0;
-            // The next level lies toward the end of the line: right in LTR, left in RTL.
-            const forwardKey = isRightToLeft(e.currentTarget) ? 'ArrowLeft' : 'ArrowRight';
-            const direction = e.key === forwardKey ? 1 : -1;
-            const nextVariantIndex = (safeCurrentIndex + direction + variantsWithDefault.length) % variantsWithDefault.length;
-            const nextVariant = variantsWithDefault[nextVariantIndex];
-
-            setPendingThinkingVariants((prev) => {
-                const next = new Map(prev);
-                next.set(mapKey, nextVariant);
-                return next;
-            });
-            setAdjustedThinkingModels((prev) => {
-                const next = new Set(prev);
-                next.add(mapKey);
-                return next;
-            });
-            // Arrow keys change the level on the row itself, before a model is
-            // chosen: remember it for that model now.
-            rememberVariantForModel(providerID, modelID, nextVariant ?? null);
-            setModelPickerRenderVersion((version) => version + 1);
-=======
-
-            const mapKey = buildModelRefKey(providerID, modelID);
-            const hasPendingVariant = pendingThinkingVariants.has(mapKey);
-            const currentPending = pendingThinkingVariants.get(mapKey);
-            const activeModelVariant = hasPendingVariant
-                ? currentPending
-                : resolveModelVariantSelection(providerID, modelID) ?? undefined;
-
-            const variantsWithDefault: Array<string | undefined> = [undefined, ...variantKeys];
-            const currentVariantIndex = variantsWithDefault.indexOf(activeModelVariant);
-            const safeCurrentIndex = currentVariantIndex >= 0 ? currentVariantIndex : 0;
-            const forwardKey = isRightToLeft(e.currentTarget) ? 'ArrowLeft' : 'ArrowRight';
-            const direction = e.key === forwardKey ? 1 : -1;
-            const nextVariantIndex = (safeCurrentIndex + direction + variantsWithDefault.length) % variantsWithDefault.length;
-            const nextVariant = variantsWithDefault[nextVariantIndex];
-
-            setPendingThinkingVariants((prev) => {
-                const next = new Map(prev);
-                next.set(mapKey, nextVariant);
-                return next;
-            });
-            setAdjustedThinkingModels((prev) => {
-                const next = new Set(prev);
-                next.add(mapKey);
-                return next;
-            });
-            rememberVariantForModel(providerID, modelID, nextVariant ?? null);
-            setModelPickerRenderVersion((version) => version + 1);
->>>>>>> upstream/main
             return true;
         };
 
@@ -3622,7 +2119,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             setAgentMenuOpen(nextOpen);
         };
 
-<<<<<<< HEAD
         const modelPickerLabels = {
             searchPlaceholder: t('chat.modelControls.searchModels'),
             list: t('chat.modelControls.modelListAria'),
@@ -3638,58 +2134,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             input: t('chat.modelControls.input'),
             output: t('chat.modelControls.output'),
             costPerMillion: t('chat.modelControls.costPerMillion'),
-||||||| bc50ba56aa
-
-        const renderThinkingSlot = (entry: ModelPickerEntry, { isHighlighted, isSelected }: { isHighlighted: boolean; isSelected: boolean }) => {
-            const hasThinkingVariants = getModelVariantOptions(entry.providerID, entry.modelID).length > 0;
-            const mapKey = buildModelRefKey(entry.providerID, entry.modelID);
-            const wasAdjusted = adjustedThinkingModels.has(mapKey);
-            if (!hasThinkingVariants || (!isHighlighted && !isSelected)) return null;
-
-            const hasPendingVariant = pendingThinkingVariants.has(mapKey);
-            const pendingVariant = pendingThinkingVariants.get(mapKey);
-            const effectiveVariant = hasPendingVariant
-                ? pendingVariant
-                : resolveModelVariantSelection(entry.providerID, entry.modelID) ?? undefined;
-            const displayLabel = effectiveVariant ? formatEffortLabel(effectiveVariant) : t('chat.modelControls.default');
-
-            // The effort as the composer shows it after the model: "/ medium".
-            return (
-                <span className={cn(
-                    'typography-micro whitespace-nowrap lowercase',
-                    isHighlighted
-                        ? (wasAdjusted ? 'text-interactive-selection-foreground' : 'text-interactive-selection-foreground/70')
-                        : (wasAdjusted ? 'text-foreground' : 'text-muted-foreground'),
-                )}>
-                    <span aria-hidden="true" className="opacity-60">/ </span>{displayLabel}
-                </span>
-            );
-=======
-
-        const renderThinkingSlot = (entry: ModelPickerEntry, { isHighlighted, isSelected }: { isHighlighted: boolean; isSelected: boolean }) => {
-            const hasThinkingVariants = getModelVariantOptions(entry.providerID, entry.modelID).length > 0;
-            const mapKey = buildModelRefKey(entry.providerID, entry.modelID);
-            const wasAdjusted = adjustedThinkingModels.has(mapKey);
-            if (!hasThinkingVariants || (!isHighlighted && !isSelected)) return null;
-
-            const hasPendingVariant = pendingThinkingVariants.has(mapKey);
-            const pendingVariant = pendingThinkingVariants.get(mapKey);
-            const effectiveVariant = hasPendingVariant
-                ? pendingVariant
-                : resolveModelVariantSelection(entry.providerID, entry.modelID) ?? undefined;
-            const displayLabel = effectiveVariant ? formatEffortLabel(effectiveVariant) : t('chat.modelControls.default');
-
-            return (
-                <span className={cn(
-                    'typography-micro whitespace-nowrap lowercase',
-                    isHighlighted
-                        ? (wasAdjusted ? 'text-interactive-selection-foreground' : 'text-interactive-selection-foreground/70')
-                        : (wasAdjusted ? 'text-foreground' : 'text-muted-foreground'),
-                )}>
-                    <span aria-hidden="true" className="opacity-60">/ </span>{displayLabel}
-                </span>
-            );
->>>>>>> upstream/main
         };
 
 
@@ -3698,20 +2142,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 {!isCompact ? (
                     <DropdownMenu open={isReady && agentMenuOpen} onOpenChange={isReady ? handleModelMenuOpenChange : undefined}>
                         <TooltipTrigger asChild>
-<<<<<<< HEAD
                             <DropdownMenuTrigger asChild nativeButton>
                                 <button
                                     type="button"
-||||||| bc50ba56aa
-                            <DropdownMenuTrigger asChild nativeButton={false}>
-                                <div
-                                    ref={modelTriggerRef}
-=======
-                            <DropdownMenuTrigger asChild nativeButton={false}>
-                                <div
-                                    ref={modelTriggerRef}
-                                    aria-label={modelUnavailableText}
->>>>>>> upstream/main
                                     className={cn(
                                         'model-controls__model-trigger flex items-center gap-1.5 cursor-pointer select-none hover:bg-transparent hover:opacity-70 min-w-0',
                                         buttonHeight
@@ -3901,89 +2334,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
         const displayVariant = routeOptions.find((route) => route.variant === currentVariant)?.label ?? currentVariant ?? t('chat.modelControls.default');
         const isDefault = !currentVariant;
-<<<<<<< HEAD
         const colorClass = isDefault ? 'text-muted-foreground' : 'text-[color:var(--status-info)]';
-||||||| bc50ba56aa
-        const isGreyEffort = getEffortTone(currentVariant) === 'default';
-        // The effort reads as a quiet suffix of the model name: "Opus 5.5 / medium",
-        // tinted by level. It brightens on its own hover, so the pointer shows it
-        // is a control of its own; where the row is too narrow for it, its icon
-        // stands in.
-        const triggerLabel = (
-            <>
-                <Icon name="brain-ai-3" className={cn('model-controls__variant-icon flex-shrink-0 text-muted-foreground group-hover:text-foreground', controlIconSize)} />
-                <span aria-hidden="true" className="model-controls__variant-slash text-muted-foreground/60">/</span>
-                <span
-                    className={cn(
-                        'model-controls__variant-label',
-                        controlTextSize,
-                        'font-medium min-w-0 truncate lowercase',
-                        getEffortToneClass(currentVariant),
-                        isGreyEffort ? 'group-hover:text-foreground' : 'group-hover:opacity-100',
-                        isMobile && 'max-w-[60px]',
-                        isDesktop && 'max-w-[180px]',
-                    )}
-                >
-                    {displayVariant}
-                </span>
-            </>
-        );
-        // An effort nobody picked in this composer is this model's configured
-        // default; the tooltip says so.
-        const isInherited = !selection && !isDefault && currentVariantSelection.override === undefined;
-        const agentVariant = currentAgent?.model?.providerID === currentProviderId
-            && currentAgent.model.id === currentModelId
-            ? currentAgent.model.variant
-            : undefined;
-        const hasConfiguredInherited = [agentVariant, getDefaultVariantForModel(currentProviderId, currentModelId)]
-            .some((candidate) => candidate !== undefined && displayVariants.includes(candidate));
-        const rememberedVariant = lastUsedEfforts?.[effortMemoryKey(currentProviderId, currentModelId)];
-        const isRemembered = isInherited
-            && currentVariant === rememberedVariant
-            && !hasConfiguredInherited;
-        const tooltipText = isRemembered
-            ? t('chat.modelControls.rememberedVariantTooltip', { variant: displayVariant })
-            : isInherited
-                ? t('chat.modelControls.inheritedVariantTooltip', { variant: displayVariant })
-                : `${t('chat.modelControls.thinking')}: ${displayVariant}`;
-=======
-        const isGreyEffort = getEffortTone(currentVariant) === 'default';
-        const triggerLabel = (
-            <>
-                <Icon name="brain-ai-3" className={cn('model-controls__variant-icon flex-shrink-0 text-muted-foreground group-hover:text-foreground', controlIconSize)} />
-                <span aria-hidden="true" className={cn('model-controls__variant-slash text-muted-foreground/60', controlTextSize)}>/</span>
-                <span
-                    className={cn(
-                        'model-controls__variant-label',
-                        controlTextSize,
-                        'font-medium min-w-0 truncate lowercase',
-                        getEffortToneClass(currentVariant),
-                        isGreyEffort ? 'group-hover:text-foreground' : 'group-hover:opacity-100',
-                        isMobile && 'max-w-[60px]',
-                        isDesktop && 'max-w-[180px]',
-                    )}
-                >
-                    {displayVariant}
-                </span>
-            </>
-        );
-        const isInherited = !selection && !isDefault && currentVariantSelection.override === undefined;
-        const agentVariant = currentAgent?.model?.providerID === currentProviderId
-            && currentAgent.model.id === currentModelId
-            ? currentAgent.model.variant
-            : undefined;
-        const hasConfiguredInherited = [agentVariant, getDefaultVariantForModel(currentProviderId, currentModelId)]
-            .some((candidate) => candidate !== undefined && displayVariants.includes(candidate));
-        const rememberedVariant = lastUsedEfforts?.[effortMemoryKey(currentProviderId, currentModelId)];
-        const isRemembered = isInherited
-            && currentVariant === rememberedVariant
-            && !hasConfiguredInherited;
-        const tooltipText = isRemembered
-            ? t('chat.modelControls.rememberedVariantTooltip', { variant: displayVariant })
-            : isInherited
-                ? t('chat.modelControls.inheritedVariantTooltip', { variant: displayVariant })
-                : `${t('chat.modelControls.thinking')}: ${displayVariant}`;
->>>>>>> upstream/main
 
         if (isCompact) {
             return (
@@ -3996,14 +2347,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         if (event.pointerType === 'touch') event.preventDefault();
                     }}
                     className={cn(
-<<<<<<< HEAD
                         'model-controls__variant-trigger flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
-||||||| bc50ba56aa
-                        // Drawn as the main composer's phone row: 36px to tap in a 26px row.
-                        'model-controls__variant-trigger group -my-[5px] flex flex-shrink-0 items-center gap-1 px-1.5 focus:outline-none',
-=======
-                        'model-controls__variant-trigger group -my-[5px] flex flex-shrink-0 items-center gap-1 px-1.5 focus:outline-none',
->>>>>>> upstream/main
                         buttonHeight,
                         'cursor-pointer hover:bg-transparent hover:opacity-70',
                     )}
@@ -4031,13 +2375,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 type="button"
                                 aria-label={t('chat.modelControls.routes')}
                                 className={cn(
-<<<<<<< HEAD
                                     'model-controls__variant-trigger flex items-center gap-1.5 transition-colors cursor-pointer select-none hover:bg-transparent hover:opacity-70 min-w-0',
-||||||| bc50ba56aa
-                                    'model-controls__variant-trigger group flex items-center gap-1 cursor-pointer select-none hover:bg-transparent min-w-0 overflow-hidden',
-=======
-                                    'model-controls__variant-trigger group flex flex-shrink-0 items-center gap-1 cursor-pointer select-none hover:bg-transparent overflow-hidden',
->>>>>>> upstream/main
                                     buttonHeight,
                                 )}
                             >
@@ -4076,19 +2414,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 </DropdownMenuItem>
                             );
                         })}
-<<<<<<< HEAD
-||||||| bc50ba56aa
-                        {/* The model picker's footer, flush with the menu's edges. */}
-                        <div className="-mx-1 -mb-1 mt-1 flex items-center gap-x-2 overflow-hidden whitespace-nowrap border-t border-edge-muted px-3 pt-1 pb-1.5 typography-micro text-muted-foreground">
-                            <span>{t('chat.modelControls.keyboardHintNavigate')}</span>
-                            {thinkingShortcut ? <span>{t('chat.modelControls.keyboardHintSwitchThinking', { shortcut: thinkingShortcut })}</span> : null}
-                        </div>
-=======
-                        <div className="-mx-1 -mb-1 mt-1 flex items-center gap-x-4 overflow-hidden whitespace-nowrap border-t border-edge-muted px-3 pt-1 pb-1.5 typography-micro text-muted-foreground">
-                            <span>{t('chat.modelControls.keyboardHintNavigate')}</span>
-                            {thinkingShortcut ? <span>{t('chat.modelControls.keyboardHintSwitchThinking', { shortcut: thinkingShortcut })}</span> : null}
-                        </div>
->>>>>>> upstream/main
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <TooltipContent side="top">
@@ -4098,458 +2423,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // A missing agent swaps its own mark for the warning one, the same size.
-    const renderAgentMark = () => agentUnavailable ? (
-        <Icon name="error-warning" className={cn(controlIconSize, 'flex-shrink-0 text-[var(--status-warning)]')} />
-    ) : (
-        <Icon name="ai-agent"
-            className={cn(
-                controlIconSize,
-                'flex-shrink-0',
-                uiAgentName ? '' : 'text-muted-foreground'
-            )}
-            style={uiAgentName ? { color: getAgentColor(uiAgentName).color } : undefined}
-        />
-    );
-
-    const renderAgentSelector = () => {
-        if (!isCompact) {
-            const isFavoriteAgent = (agent: Agent) => favoriteAgents.includes(agent.name);
-            // Starred agents in the order Tab cycles through them. A search lists
-            // every match by rank instead, so Enter picks the row on top.
-            const favoriteAgentRows = agentSearchQuery.trim() ? [] : selectableDesktopAgents.filter(isFavoriteAgent);
-            const otherAgentRows = favoriteAgentRows.length > 0
-                ? sortedAndFilteredAgents.filter((agent) => !isFavoriteAgent(agent))
-                : sortedAndFilteredAgents;
-            const focusFirstAgentItem = () => {
-                agentListRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-            };
-            // The field keeps typing to itself; ArrowDown or Ctrl+N steps into the
-            // list, and Enter picks the top result.
-            const handleAgentSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-                if (handleDropdownNavigationKey(event, (key) => { if (key === 'ArrowDown') focusFirstAgentItem(); })) return;
-                if (event.key === 'ArrowDown') {
-                    event.preventDefault();
-                    focusFirstAgentItem();
-                } else if (event.key === 'Enter' && !isIMECompositionEvent(event)) {
-                    const topAgent = favoriteAgentRows[0] ?? otherAgentRows[0];
-                    if (topAgent) {
-                        event.preventDefault();
-                        handleAgentChange(topAgent.name);
-                        setIsAgentSelectorOpen(false);
-                    }
-                }
-                event.stopPropagation();
-            };
-            const renderAgentMenuItem = (agent: Agent) => (
-                <AgentDescriptionTooltip key={agent.name} description={agent.description}>
-                    <DropdownMenuItem
-                        className="typography-meta"
-                        onSelect={() => handleAgentChange(agent.name)}
-                    >
-                        <div className="flex w-full items-center gap-1.5">
-                            <div className="h-1 w-1 rounded-full" style={{ background: getAgentColor(agent.name).color }} />
-                            <span className="min-w-0 truncate font-medium">{agentLabel(agent)}</span>
-                            <span className="ms-auto flex flex-shrink-0 items-center gap-1.5">
-                                {agent.name === uiAgentName ? <Icon name="check" className="size-4 text-inherit" /> : null}
-                                <AgentFavoriteToggle
-                                    favorite={isFavoriteAgent(agent)}
-                                    onToggle={() => toggleFavoriteAgent(agent.name)}
-                                />
-                            </span>
-                        </div>
-                    </DropdownMenuItem>
-                </AgentDescriptionTooltip>
-            );
-            return (
-                <div className="flex items-center gap-2 min-w-0">
-                    <Tooltip delayDuration={600}>
-                        <DropdownMenu open={canSelectAgent && isAgentSelectorOpen} onOpenChange={canSelectAgent ? setIsAgentSelectorOpen : undefined}>
-                            <TooltipTrigger asChild>
-                                <DropdownMenuTrigger asChild nativeButton={false}>
-                                    <div ref={agentTriggerRef} aria-label={agentUnavailableText} className={cn(
-                                        'flex items-center gap-1.5 transition-colors cursor-pointer select-none hover:bg-transparent hover:opacity-70 min-w-0 overflow-hidden',
-                                        buttonHeight
-                                    )}>
-                                        {!agentSelectionReady ? (
-                                            <>
-                                                <ReadinessMark unavailable={isUnavailable}
-                                                    className={cn(
-                                                        controlIconSize,
-                                                        'flex-shrink-0 text-muted-foreground'
-                                                    )}
-                                                />
-                                                <span
-                                                    className={cn(
-                                                        'model-controls__agent-label',
-                                                        controlTextSize,
-                                                        'font-medium min-w-0 truncate text-muted-foreground'
-                                                    )}
-                                                >
-                                                    {readinessLabel}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                {renderAgentMark()}
-                                                <span
-                                                    className={cn(
-                                                        'model-controls__agent-label',
-                                                        controlTextSize,
-                                                        'font-medium min-w-0 truncate text-foreground',
-                                                        isDesktop ? 'max-w-[220px]' : undefined
-                                                    )}
-                                                >
-                                                    {getAgentDisplayName()}
-                                                </span>
-                                            </>
-                                        )}
-                                    </div>
-                                </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <DropdownMenuContent side={agentMenuSide} align="end" alignOffset={-40} constrainToMain collisionAvoidance={{ side: 'none', align: 'shift' }} className="w-[min(280px,calc(100vw-2rem))] p-0 flex flex-col overflow-hidden">
-                                <div className="px-2 py-1 border-b border-edge-muted">
-                                    <div className="relative">
-                                        <Icon name="search" className="absolute inset-s-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                                        <Input
-                                            type="text"
-                                            placeholder={t('chat.modelControls.searchAgents')}
-                                            value={agentSearchQuery}
-                                            onChange={(e) => setAgentSearchQuery(e.target.value)}
-                                            onKeyDown={handleAgentSearchKeyDown}
-                                            className="h-7 rounded-none bg-transparent ps-8 pe-0 typography-meta ring-0 hover:[&:not(:focus)]:bg-transparent hover:[&:not(:focus)]:[background-image:none] focus:ring-0 focus-visible:ring-0"
-                                        />
-                                    </div>
-                                </div>
-                                <ScrollableOverlay outerClassName="max-h-[min(400px,calc(var(--available-height)-4rem))] flex-1">
-                                    <div ref={agentListRef} className="p-1">
-                                        {sortedAndFilteredAgents.length === 0 ? (
-                                            <div className="px-2 py-4 text-center typography-meta text-muted-foreground">
-                                                {t('chat.modelControls.noAgentsFound')}
-                                            </div>
-                                        ) : favoriteAgentRows.length > 0 ? (
-                                            <>
-                                                <div role="group" aria-label={t('chat.modelControls.favorites')}>
-                                                    <div className={PICKER_SECTION_HEADER_CLASS}>
-                                                        <span className="min-w-0 truncate">{t('chat.modelControls.favorites')}</span>
-                                                        {agentShortcut ? (
-                                                            <span className="ms-auto flex-shrink-0 normal-case tracking-normal font-normal">
-                                                                {t('chat.modelControls.favoriteAgentsCycleHint', { shortcut: agentShortcut })}
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                    {favoriteAgentRows.map(renderAgentMenuItem)}
-                                                </div>
-                                                {otherAgentRows.length > 0 ? (
-                                                    <>
-                                                        <div className="h-px bg-edge-muted my-1" />
-                                                        <div role="group" aria-label={t('chat.modelControls.agentsSection')}>
-                                                            <div className={PICKER_SECTION_HEADER_CLASS}>{t('chat.modelControls.agentsSection')}</div>
-                                                            {otherAgentRows.map(renderAgentMenuItem)}
-                                                        </div>
-                                                    </>
-                                                ) : null}
-                                            </>
-                                        ) : (
-                                            sortedAndFilteredAgents.map(renderAgentMenuItem)
-                                        )}
-                                    </div>
-                                </ScrollableOverlay>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        {renderAgentTooltipContent()}
-                    </Tooltip>
-                </div>
-            );
-        }
-
-        return (
-            <button
-                type="button"
-                onClick={canSelectAgent ? () => setActiveMobilePanel('agent') : undefined}
-                onTouchStart={canSelectAgent ? () => handleLongPressStart('agent') : undefined}
-                onTouchEnd={canSelectAgent ? handleLongPressEnd : undefined}
-                onTouchCancel={canSelectAgent ? handleLongPressEnd : undefined}
-                disabled={!canSelectAgent}
-                aria-label={agentUnavailableText}
-                className={cn(
-                    'model-controls__agent-trigger -my-[5px] flex flex-shrink-0 items-center gap-1.5 transition-colors min-w-0 focus:outline-none',
-                    buttonHeight,
-                    canSelectAgent ? 'cursor-pointer hover:bg-transparent hover:opacity-70' : 'opacity-60 cursor-not-allowed',
-                )}
-            >
-                {!agentSelectionReady ? (
-                    <>
-                        <ReadinessMark unavailable={isUnavailable}
-                            className={cn(
-                                controlIconSize,
-                                'flex-shrink-0 text-muted-foreground'
-                            )}
-                        />
-                        <span
-                            className={cn(
-                                'model-controls__agent-label',
-                                controlTextSize,
-                                'font-medium truncate min-w-0 text-muted-foreground'
-                            )}
-                        >
-                            {readinessLabel}
-                        </span>
-                    </>
-                ) : (
-                    <>
-                        {/* As the main composer's agent button: the name in the
-                            agent's colour, a mark only when it is missing. */}
-                        {agentUnavailable ? renderAgentMark() : null}
-                        <span
-                            className={cn(
-                                'model-controls__agent-label',
-                                controlTextSize,
-                                'font-medium truncate min-w-0',
-                                (agentUnavailable || !uiAgentName) && 'text-foreground',
-                            )}
-                            style={!agentUnavailable && uiAgentName ? { color: getAgentColor(uiAgentName).color } : undefined}
-                        >
-                            {getAgentDisplayName()}
-                        </span>
-                    </>
-                )}
-            </button>
-        );
-    };
-=======
-    const renderAgentMark = () => agentUnavailable ? (
-        <Icon name="error-warning" className={cn(controlIconSize, 'flex-shrink-0 text-[var(--status-warning)]')} />
-    ) : (
-        <Icon name="ai-agent"
-            className={cn(
-                controlIconSize,
-                'flex-shrink-0',
-                uiAgentName ? '' : 'text-muted-foreground'
-            )}
-            style={uiAgentName ? { color: restingAgentColor(getAgentColor(uiAgentName).color) } : undefined}
-        />
-    );
-
-    const renderAgentSelector = () => {
-        if (!isCompact) {
-            const isFavoriteAgent = (agent: Agent) => favoriteAgents.includes(agent.name);
-            const favoriteAgentRows = agentSearchQuery.trim() ? [] : selectableDesktopAgents.filter(isFavoriteAgent);
-            const otherAgentRows = favoriteAgentRows.length > 0
-                ? sortedAndFilteredAgents.filter((agent) => !isFavoriteAgent(agent))
-                : sortedAndFilteredAgents;
-            const focusFirstAgentItem = () => {
-                agentListRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-            };
-            const handleAgentSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-                if (handleDropdownNavigationKey(event, (key) => { if (key === 'ArrowDown') focusFirstAgentItem(); })) return;
-                if (event.key === 'ArrowDown') {
-                    event.preventDefault();
-                    focusFirstAgentItem();
-                } else if (event.key === 'Enter' && !isIMECompositionEvent(event)) {
-                    const topAgent = favoriteAgentRows[0] ?? otherAgentRows[0];
-                    if (topAgent) {
-                        event.preventDefault();
-                        handleAgentChange(topAgent.name);
-                        setIsAgentSelectorOpen(false);
-                    }
-                }
-                event.stopPropagation();
-            };
-            const renderAgentMenuItem = (agent: Agent) => (
-                <AgentDescriptionTooltip key={agent.name} description={agent.description}>
-                    <DropdownMenuItem
-                        className="typography-meta"
-                        onSelect={() => handleAgentChange(agent.name)}
-                    >
-                        <div className="flex w-full items-center gap-1.5">
-                            <div className="h-1 w-1 rounded-full" style={{ background: getAgentColor(agent.name).color }} />
-                            <span className="min-w-0 truncate font-medium">{agentLabel(agent)}</span>
-                            <span className="ms-auto flex flex-shrink-0 items-center gap-1.5">
-                                {agent.name === uiAgentName ? <Icon name="check" className="size-4 text-inherit" /> : null}
-                                <AgentFavoriteToggle
-                                    favorite={isFavoriteAgent(agent)}
-                                    onToggle={() => toggleFavoriteAgent(agent.name)}
-                                />
-                            </span>
-                        </div>
-                    </DropdownMenuItem>
-                </AgentDescriptionTooltip>
-            );
-            return (
-                <div className="flex flex-shrink-0 items-center gap-2">
-                    <Tooltip delayDuration={600}>
-                        <DropdownMenu open={canSelectAgent && isAgentSelectorOpen} onOpenChange={canSelectAgent ? setIsAgentSelectorOpen : undefined}>
-                            <TooltipTrigger asChild>
-                                <DropdownMenuTrigger asChild nativeButton={false}>
-                                    <div ref={agentTriggerRef} aria-label={agentUnavailableText} className={cn(
-                                        'flex items-center gap-1.5 transition-colors cursor-pointer select-none hover:bg-transparent hover:opacity-70 min-w-0 overflow-hidden',
-                                        buttonHeight
-                                    )}>
-                                        {!agentSelectionReady ? (
-                                            <>
-                                                <ReadinessMark unavailable={isUnavailable}
-                                                    className={cn(
-                                                        controlIconSize,
-                                                        'flex-shrink-0 text-muted-foreground'
-                                                    )}
-                                                />
-                                                <span
-                                                    className={cn(
-                                                        'model-controls__agent-label',
-                                                        controlTextSize,
-                                                        'font-medium min-w-0 truncate text-muted-foreground'
-                                                    )}
-                                                >
-                                                    {readinessLabel}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                {renderAgentMark()}
-                                                <span
-                                                    className={cn(
-                                                        'model-controls__agent-label',
-                                                        controlTextSize,
-                                                        'font-medium min-w-0 truncate text-foreground',
-                                                        isDesktop ? 'max-w-[220px]' : undefined
-                                                    )}
-                                                >
-                                                    {getAgentDisplayName()}
-                                                </span>
-                                            </>
-                                        )}
-                                    </div>
-                                </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <DropdownMenuContent side={agentMenuSide} align="end" alignOffset={-40} constrainToMain collisionAvoidance={{ side: 'none', align: 'shift' }} className="w-[min(280px,calc(100vw-2rem))] p-0 flex flex-col overflow-hidden">
-                                <div className="px-2 py-1 border-b border-edge-muted">
-                                    <div className="relative">
-                                        <Icon name="search" className="absolute inset-s-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                                        <Input
-                                            type="text"
-                                            placeholder={t('chat.modelControls.searchAgents')}
-                                            value={agentSearchQuery}
-                                            onChange={(e) => setAgentSearchQuery(e.target.value)}
-                                            onKeyDown={handleAgentSearchKeyDown}
-                                            className="h-7 rounded-none bg-transparent ps-8 pe-0 typography-meta ring-0 hover:[&:not(:focus)]:bg-transparent hover:[&:not(:focus)]:[background-image:none] focus:ring-0 focus-visible:ring-0"
-                                        />
-                                    </div>
-                                </div>
-                                <ScrollableOverlay outerClassName="max-h-[min(400px,calc(var(--available-height)-4rem))] flex-1">
-                                    <div ref={agentListRef} className="p-1">
-                                        {sortedAndFilteredAgents.length === 0 ? (
-                                            <div className="px-2 py-4 text-center typography-meta text-muted-foreground">
-                                                {t('chat.modelControls.noAgentsFound')}
-                                            </div>
-                                        ) : favoriteAgentRows.length > 0 ? (
-                                            <>
-                                                <div role="group" aria-label={t('chat.modelControls.favorites')}>
-                                                    <div className={PICKER_SECTION_HEADER_CLASS}>
-                                                        <span className="min-w-0 truncate">{t('chat.modelControls.favorites')}</span>
-                                                        {agentShortcut ? (
-                                                            <span className="ms-auto flex-shrink-0 normal-case tracking-normal font-normal">
-                                                                {t('chat.modelControls.favoriteAgentsCycleHint', { shortcut: agentShortcut })}
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                    {favoriteAgentRows.map(renderAgentMenuItem)}
-                                                </div>
-                                                {otherAgentRows.length > 0 ? (
-                                                    <>
-                                                        <div className="h-px bg-edge-muted my-1" />
-                                                        <div role="group" aria-label={t('chat.modelControls.agentsSection')}>
-                                                            <div className={PICKER_SECTION_HEADER_CLASS}>{t('chat.modelControls.agentsSection')}</div>
-                                                            {otherAgentRows.map(renderAgentMenuItem)}
-                                                        </div>
-                                                    </>
-                                                ) : null}
-                                            </>
-                                        ) : (
-                                            sortedAndFilteredAgents.map(renderAgentMenuItem)
-                                        )}
-                                    </div>
-                                </ScrollableOverlay>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        {renderAgentTooltipContent()}
-                    </Tooltip>
-                </div>
-            );
-        }
-
-        return (
-            <button
-                type="button"
-                onClick={canSelectAgent ? () => setActiveMobilePanel('agent') : undefined}
-                onTouchStart={canSelectAgent ? () => handleLongPressStart('agent') : undefined}
-                onTouchEnd={canSelectAgent ? handleLongPressEnd : undefined}
-                onTouchCancel={canSelectAgent ? handleLongPressEnd : undefined}
-                disabled={!canSelectAgent}
-                aria-label={agentUnavailableText}
-                className={cn(
-                    'model-controls__agent-trigger -my-[5px] flex flex-shrink-0 items-center gap-1.5 transition-colors min-w-0 focus:outline-none',
-                    buttonHeight,
-                    canSelectAgent ? 'cursor-pointer hover:bg-transparent hover:opacity-70' : 'opacity-60 cursor-not-allowed',
-                )}
-            >
-                {!agentSelectionReady ? (
-                    <>
-                        <ReadinessMark unavailable={isUnavailable}
-                            className={cn(
-                                controlIconSize,
-                                'flex-shrink-0 text-muted-foreground'
-                            )}
-                        />
-                        <span
-                            className={cn(
-                                'model-controls__agent-label',
-                                controlTextSize,
-                                'font-medium truncate min-w-0 text-muted-foreground'
-                            )}
-                        >
-                            {readinessLabel}
-                        </span>
-                    </>
-                ) : (
-                    <>
-                        {agentUnavailable ? renderAgentMark() : null}
-                        <span
-                            className={cn(
-                                'model-controls__agent-label',
-                                controlTextSize,
-                                'font-medium truncate min-w-0',
-                                (agentUnavailable || !uiAgentName) && 'text-foreground',
-                            )}
-                            style={!agentUnavailable && uiAgentName ? { color: restingAgentColor(getAgentColor(uiAgentName).color) } : undefined}
-                        >
-                            {getAgentDisplayName()}
-                        </span>
-                    </>
-                )}
-            </button>
-        );
-    };
->>>>>>> upstream/main
 
     const inlineMobileSelection = isMobile && Boolean(selection);
     const inlineClassName = cn(
-<<<<<<< HEAD
         '@container/model-controls flex items-center min-w-0',
         // Only force full-width + truncation behaviors on true mobile layouts.
-||||||| bc50ba56aa
-        'flex items-center min-w-0',
-        // The labels collapse to icons as a desktop row narrows (index.css). A
-        // phone keeps them, as the main composer's row does, and truncates.
-        !isMobile && '@container/model-controls',
-        // Only force full-width + truncation behaviors on true mobile layouts.
-        // VS Code also uses "compact" mode, but should keep its right-aligned inline sizing.
-=======
-        'flex items-center min-w-0',
-        !isMobile && '@container/model-controls',
->>>>>>> upstream/main
         isMobile && 'w-full',
         className,
     );
@@ -4560,45 +2438,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 <div
                     className={cn(
                         'flex items-center min-w-0 flex-1',
-<<<<<<< HEAD
                         inlineMobileSelection ? 'justify-start' : 'justify-end',
-||||||| bc50ba56aa
-                        // A phone lays the row out as the main composer's: model left, agent right.
-                        inlineMobileSelection ? 'justify-between' : 'justify-end',
-                        // No overflow-hidden: mobile.css makes it a vertical scroller,
-                        // and the 36px triggers in this 26px row would draw its thumb.
-=======
-                        inlineMobileSelection ? 'justify-between' : 'justify-end',
->>>>>>> upstream/main
                         inlineGapClass,
-<<<<<<< HEAD
                         isMobile && 'overflow-hidden'
-||||||| bc50ba56aa
-=======
-                        sizeVariant === 'default' && 'model-controls__row pe-3',
->>>>>>> upstream/main
                     )}
                 >
-<<<<<<< HEAD
                     {!inlineMobileSelection && renderEffortSelector()}
                     {!inlineMobileSelection && renderVariantSelector()}
                     {renderModelSelector()}
                     {inlineMobileSelection && renderEffortSelector()}
                     {inlineMobileSelection && renderVariantSelector()}
-||||||| bc50ba56aa
-                    {/* The effort follows the model as its suffix, so the two sit closer than the other controls. */}
-                    <div className={cn('flex items-center min-w-0', isMobile ? 'gap-x-0.5' : 'gap-x-1')}>
-                        {renderModelSelector()}
-                        {renderVariantSelector()}
-                    </div>
-                    {!isAutoSelected && renderAgentSelector()}
-=======
-                    <div className={cn('flex items-center min-w-0', isMobile ? 'gap-x-0.5' : sizeVariant === 'vscode' ? 'gap-x-2' : 'gap-x-1.5')}>
-                        {renderModelSelector()}
-                        {renderVariantSelector()}
-                    </div>
-                    {!isAutoSelected && renderAgentSelector()}
->>>>>>> upstream/main
                 </div>
             </div>
 

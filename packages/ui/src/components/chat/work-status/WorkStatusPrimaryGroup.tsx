@@ -28,29 +28,7 @@ import {
 } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
-<<<<<<< HEAD
 import { formatChangeRequestReference } from '@/lib/source-control/identity';
-||||||| bc50ba56aa
-import { formatChangeRequestReference } from '@/lib/source-control/providers/terminology';
-import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
-import { PrChecksValue } from './PrChecksValue';
-import { useMobileAppActions } from '@/apps/mobileAppContext';
-import { useOpenTrackerItem } from '@/components/sourceBoard/openTrackerItem';
-import { useLeaveWorkStatus } from './leaveWorkStatus';
-import { prChecksTooltip } from './prChecks';
-=======
-import { formatChangeRequestReference } from '@/lib/source-control/providers/terminology';
-import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
-import { PrChecksValue } from './PrChecksValue';
-import { useMobileAppActions } from '@/apps/mobileAppContext';
-import { useOpenTrackerItem } from '@/components/sourceBoard/openTrackerItem';
-import { useLeaveWorkStatus } from './leaveWorkStatus';
-import { prChecksTooltip } from './prChecks';
-import { resolvePrRowTarget } from './prRowTarget';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { openExternalUrl } from '@/lib/url';
-import { DiffCount } from '@/components/ui/diff-count';
->>>>>>> upstream/main
 
 type Props = {
   sessionId: string | null;
@@ -66,24 +44,11 @@ const UNKNOWN_PERCENT = '\u2014';
 
 export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, goalRow, showSession, showRepository, children }) => {
   const { t } = useI18n();
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // On the phone the rows lead to the phone's own pages.
-  const mobile = useMobileAppActions();
-  const leaveWorkStatus = useLeaveWorkStatus();
-  const openTrackerItem = useOpenTrackerItem();
-=======
-  const mobile = useMobileAppActions();
-  const isVSCode = isVSCodeRuntime();
-  const leaveWorkStatus = useLeaveWorkStatus();
-  const openTrackerItem = useOpenTrackerItem();
->>>>>>> upstream/main
   const { git } = useRuntimeAPIs();
   const ensureStatus = useGitStore((state) => state.ensureStatus);
   const fetchStatus = useGitStore((state) => state.fetchStatus);
   const clearDiffCache = useGitStore((state) => state.clearDiffCache);
 
-<<<<<<< HEAD
   // The repository the readouts describe. Same resolution as the Git tab: the
   // session directory itself when it is a repository, otherwise the nested
   // repository selected (or auto-selected) for it, so a session in a plain
@@ -91,23 +56,6 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
   // shows. Navigation below stays keyed on `directory` — context-panel tabs
   // are per project root.
   const { gitDirectory } = useNestedGitDirectory(directory, { enabled: showRepository });
-||||||| bc50ba56aa
-  // The repository the readouts describe. Same resolution as the Git tab: the
-  // session directory itself when it is a repository, otherwise the nested
-  // repository selected (or auto-selected) for it, so a session in a plain
-  // folder of repositories still reports the branch and changes the Git tab
-  // shows. Navigation below stays keyed on `directory` — context-panel tabs
-  // are per project root.
-  // A draft waiting for a new space reads the space's tree once it runs, and
-  // none while it is made, as the other panels do (`panelContentDirectory`).
-  const draftSpace = useDraftSpaceTarget();
-  const repositoryDirectory = sessionId ? directory : panelContentDirectory(draftSpace, directory);
-  const { gitDirectory } = useNestedGitDirectory(repositoryDirectory, { enabled: showRepository });
-=======
-  const draftSpace = useDraftSpaceTarget();
-  const repositoryDirectory = sessionId ? directory : panelContentDirectory(draftSpace, directory);
-  const { gitDirectory } = useNestedGitDirectory(repositoryDirectory, { enabled: showRepository });
->>>>>>> upstream/main
 
   const gitStatus = useGitStore(
     React.useCallback(
@@ -167,18 +115,9 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
   }, [directory, gitDirectory]);
 
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-<<<<<<< HEAD
   // Worktrees normally sit beside rather than beneath their project directory,
   // so a prefix match alone cannot find their owning project. Reuse the shared
   // session-directory resolver, which consults the discovered worktree map.
-||||||| bc50ba56aa
-  // Worktrees normally sit beside rather than beneath their project directory,
-  // so a prefix match alone cannot find their owning project. Reuse the shared
-  // session-directory resolver, which consults the discovered worktree map.
-  const spaceProjectDirectory = useSpaceProjectDirectory(directory);
-=======
-  const spaceProjectDirectory = useSpaceProjectDirectory(directory);
->>>>>>> upstream/main
   const projectLabel = useProjectsStore(
     React.useCallback((state) => {
       const project = resolveProjectForSessionDirectory(
@@ -203,75 +142,16 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
     [sessionMessages, contextLimit],
   );
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // What the provider caches right now, from the reply the context reading comes from.
-  const lastReplyCacheHit = React.useMemo(() => computeLastReplyCacheHit(sessionMessages), [sessionMessages]);
-
-=======
-  const lastReplyCacheHit = React.useMemo(() => computeLastReplyCacheHit(sessionMessages), [sessionMessages]);
-
->>>>>>> upstream/main
   const openContextSurface = useUIStore((state) => state.openContextSurface);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
   const openSurface = React.useCallback(
-<<<<<<< HEAD
     (mode: 'git' | 'pr') => { if (directory) openContextSurface(directory, mode); },
     [directory, openContextSurface],
-||||||| bc50ba56aa
-    (mode: 'git' | 'pr') => {
-      if (!directory) return;
-      if (mobile) {
-        // The phone's Changes tab holds the branch; the board shows the PR.
-        if (mode === 'git') mobile.openChanges();
-        else if (prUrl) {
-          openTrackerItem(prUrl, directory);
-          leaveWorkStatus?.();
-        }
-        return;
-      }
-      // The branch's pull request is the Tracker's branch tab, whichever item tab was last in front.
-      if (mode === 'pr') openContextPanelTab(directory, { mode: 'pr' });
-      else openContextSurface(directory, mode);
-    },
-    [directory, leaveWorkStatus, mobile, openContextPanelTab, openContextSurface, openTrackerItem, prUrl],
-=======
-    (mode: 'git' | 'pr') => {
-      if (!directory) return;
-      if (isVSCode) {
-        if (mode === 'pr' && prUrl) void openExternalUrl(prUrl);
-        return;
-      }
-      if (mobile) {
-        if (mode === 'git') mobile.openChanges();
-        else if (prUrl) {
-          openTrackerItem(prUrl, directory);
-          leaveWorkStatus?.();
-        }
-        return;
-      }
-      if (mode === 'pr') openContextPanelTab(directory, { mode: 'pr' });
-      else openContextSurface(directory, mode);
-    },
-    [directory, isVSCode, leaveWorkStatus, mobile, openContextPanelTab, openContextSurface, openTrackerItem, prUrl],
->>>>>>> upstream/main
   );
-<<<<<<< HEAD
   // Working-tree diff without a target path: the panel opens on the whole
   // change set rather than picking a file on the user's behalf.
   // Same destination as the header's context readout.
-||||||| bc50ba56aa
-  // The phone opens the PR by its link on the board; without one there is nowhere to go.
-  const openPr = directory && (!mobile || prUrl) ? () => openSurface('pr') : undefined;
-  // Working-tree diff without a target path: the panel opens on the whole
-  // change set rather than picking a file on the user's behalf.
-  // Same destination as the header's context readout.
-=======
-  const openPr = resolvePrRowTarget({ directory, prUrl, mobile: Boolean(mobile), vscode: isVSCode })
-    ? () => openSurface('pr')
-    : undefined;
->>>>>>> upstream/main
   const openContext = React.useCallback(() => {
     if (directory) openContextOverview(directory);
   }, [directory, openContextOverview]);
@@ -327,50 +207,23 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
             <>
               <WorkStatusRow
                 icon="donut-chart"
-<<<<<<< HEAD
                 onClick={directory ? openContext : undefined}
-||||||| bc50ba56aa
-                // The context overview is a desktop panel; the phone has none.
-                onClick={directory && !mobile ? openContext : undefined}
-=======
-                onClick={directory && !mobile && !isVSCode ? openContext : undefined}
->>>>>>> upstream/main
                 ariaLabel={t('chat.workStatus.action.openContext')}
                 label={t('chat.workStatus.context.label')}
                 value={(
                   <>
-<<<<<<< HEAD
                     <WorkStatusValue>{usagePercent !== null ? formatPercent(usagePercent) : UNKNOWN_PERCENT}</WorkStatusValue>
                     {/* No icon of its own: the sprite has no currency glyph, and
                         spend belongs with consumption anyway. The `$` labels it. */}
                     {cost !== null ? <WorkStatusValue tone="muted">{formatCost(cost)}</WorkStatusValue> : null}
-||||||| bc50ba56aa
-                    {/* Keeping the cache warm is about this context, so its switch sits on the row. */}
-                    <WorkStatusWarmingToggle sessionId={sessionId} directory={directory} />
-                    <WorkStatusValue>{usagePercent !== null ? formatPercent(usagePercent) : UNKNOWN_PERCENT}</WorkStatusValue>
-                    {/* No icon of its own: the sprite has no currency glyph, and
-                        spend belongs with consumption anyway. The `$` labels it. */}
-                    {cost !== null ? <WorkStatusValue tone="muted">{formatCost(cost)}</WorkStatusValue> : null}
-=======
-                    <WorkStatusWarmingToggle sessionId={sessionId} directory={directory} />
-                    <WorkStatusValue>
-                      {`${usagePercent !== null ? formatPercent(usagePercent) : UNKNOWN_PERCENT}${cost !== null ? ` · ${formatCost(cost)}` : ''}`}
-                    </WorkStatusValue>
->>>>>>> upstream/main
                   </>
                 )}
               />
               <WorkStatusMeter percent={usagePercent ?? 0} color={meterColor} />
               {contextUsage.state === 'compacted' ? (
-<<<<<<< HEAD
                 <p className="mx-1 mb-1 text-[11px] leading-4 text-muted-foreground">
                   {t('contextUsage.compacted.description')}
                 </p>
-||||||| bc50ba56aa
-                <WorkStatusNote>{t('contextUsage.compacted.description')}</WorkStatusNote>
-=======
-                <WorkStatusNote tooltip={t('contextUsage.compacted.description')}>{t('contextUsage.compacted.short')}</WorkStatusNote>
->>>>>>> upstream/main
               ) : null}
               {showCostBreakdown ? (
                 <p className="mx-1 mb-1 truncate text-[11px] leading-4 text-muted-foreground tabular-nums">
@@ -382,29 +235,8 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
               ) : null}
             </>
           ) : null}
-<<<<<<< HEAD
           {/* Below the context readout: the goal is a standing instruction,
               while context is the live number the reader came for. */}
-||||||| bc50ba56aa
-          {/* Under the meter, from the same reply, so it reads as the cache right now. */}
-          {lastReplyCacheHit !== null ? (
-            <WorkStatusRow
-              muted
-              label={t('contextSidebar.tokens.cacheHit')}
-              value={<WorkStatusValue>{`${lastReplyCacheHit.toFixed(1)}%`}</WorkStatusValue>}
-            />
-          ) : null}
-          {/* Below the context readout: the goal is a standing instruction,
-              while context is the live number the reader came for. */}
-=======
-          {lastReplyCacheHit !== null ? (
-            <WorkStatusRow
-              icon="database-2"
-              label={t('chat.workStatus.replyCacheHit')}
-              value={<WorkStatusValue>{`${lastReplyCacheHit.toFixed(1)}%`}</WorkStatusValue>}
-            />
-          ) : null}
->>>>>>> upstream/main
           {goalRow}
         </WorkStatusSection>
       ) : null,
@@ -412,14 +244,7 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
       repository: hasRepository ? (
         <WorkStatusSection
           title={t('chat.workStatus.section.project')}
-<<<<<<< HEAD
           summary={projectLabel}
-||||||| bc50ba56aa
-          subject={projectLabel}
-=======
-          icon="folder"
-          subject={projectLabel}
->>>>>>> upstream/main
         >
           {attentionLabel ? <WorkStatusCallout>{attentionLabel}</WorkStatusCallout> : null}
 

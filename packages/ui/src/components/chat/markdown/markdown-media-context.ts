@@ -1,15 +1,5 @@
 import React from 'react';
 import type { ToolPopupContent } from '../message/types';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { runtimeAssetsNeedFetch } from '@/lib/runtime-asset';
-=======
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { fetchBypassingRuntimeBridge, runtimeFetch } from '@/lib/runtime-fetch';
-import { runtimeAssetsNeedFetch } from '@/lib/runtime-asset';
->>>>>>> upstream/main
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getRuntimeUrlResolver, type RuntimeUrlQuery } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
@@ -80,7 +70,6 @@ export class MarkdownMediaOwner {
    if (mode !== 'document' && !video) throw new Error('Remote chat image');
    return source;
   }
-<<<<<<< HEAD
   if (/^data:/i.test(source)) return resolveMarkdownImageSource(source, signal);
   if (mode === 'document') {
    if (!documentAssets) {
@@ -95,161 +84,12 @@ export class MarkdownMediaOwner {
    const workspace = documentAssets.workspaceRoot;
    const query = { path, directory: workspace || undefined, allowOutsideWorkspace: workspace && isFilePathWithinDirectory(path, workspace) ? undefined : 'true' };
    if (video) {
-||||||| bc50ba56aa
-
-  private check(signal: AbortSignal): void {
-    if (signal.aborted || this.disposed || this.runtimeKey !== getRuntimeKey() || this.resolver !== getRuntimeUrlResolver()) throw new DOMException('Media owner changed', 'AbortError');
-  }
-
-  async resolve(source: string, video = false, refresh = false): Promise<string> {
-    const signal = this.controller.signal;
-    this.check(signal);
-    const { mode, directory, sessionId, messageId, documentAssets } = this.options;
-    if (mode === 'assistant') {
-      await Promise.resolve();
-      this.check(signal);
-      if (![...this.sources.keys()].slice(0, 12).includes(source)) throw new Error('Message media limit');
-    }
-    const remote = /^(?:https?:)?\/\//i.test(source);
-    if (remote) {
-      if (mode !== 'document' && !video) throw new Error('Remote chat image');
-      return source;
-    }
-    if (/^data:/i.test(source)) return resolveMarkdownImageSource(source, signal);
-    if (mode === 'document') {
-      if (!documentAssets) {
-        if (video || !PROJECT_UPLOAD_ROUTE_RE.test(source)) return source;
-        const read = this.readDocumentImage(source, source, undefined, signal);
-        // A read the tunnel dropped is not kept, so opening the item again reads it again.
-        void read.catch(() => { if (this.documentUrls.get(source) === read) this.documentUrls.delete(source); });
-        return read;
-      }
-      if (!isMarkdownDocumentReference(source)) throw new Error('Document source is unavailable');
-      const path = resolveMarkdownDocumentReference(documentAssets.filePath, source);
-      const workspace = documentAssets.workspaceRoot;
-      const query = { path, directory: workspace || undefined, allowOutsideWorkspace: workspace && isFilePathWithinDirectory(path, workspace) ? undefined : 'true' };
-      if (video) {
-        if (isVSCodeRuntime()) throw new Error('Video bridge is unavailable');
-        await refreshRuntimeUrlAuthToken();
-        this.check(signal);
-        return getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', query);
-      }
-      return this.readDocumentImage(path, '/api/fs/raw', query, signal);
-    }
-    // Tool/reasoning local mode retains its direct local-source behavior.
-    // Only assistant media uses the message grant / workspace bridge policy.
-    if (mode === 'local') return source;
-    if (isVSCodeRuntime()) {
-      if (video) throw new Error('Video bridge is unavailable');
-      const url = await resolveWorkspaceMarkdownImageSource(source, directory, signal);
-      this.check(signal);
-      return url;
-    }
-    if (!sessionId || !messageId) throw new Error('Missing media owner');
-    // All owned nodes register in effects before the first viewport callback or
-    // microtask requests the batch. Embedded images count toward the same cap.
-    await Promise.resolve();
-    this.check(signal);
-    const sources = [...this.sources.keys()].slice(0, 12);
-    if (!sources.includes(source)) throw new Error('Message media limit');
-    if (!this.batch || refresh) {
-      if (refresh && this.refreshing) this.batch = this.refreshing;
-      else {
-        this.batch = prepareLocalMarkdownImages({ sources: sources.filter(isLocalMarkdownImageSource), directory, sessionId, messageId, signal });
-        if (refresh) {
-          const pending = this.batch;
-          this.refreshing = pending;
-          void pending.finally(() => { if (this.refreshing === pending) this.refreshing = undefined; }).catch(() => {});
-        }
-      }
-    }
-    const prepared = (await this.batch).get(source);
-    this.check(signal);
-    if (prepared?.status !== 'ready') throw new Error('Image is unavailable');
-    if (!video && runtimeAssetsNeedFetch()) {
-      const url = await loadPreparedImageAsDataUrl(prepared, directory, signal);
-      this.check(signal);
-      return url;
-    }
-=======
-
-  private check(signal: AbortSignal): void {
-    if (signal.aborted || this.disposed || this.runtimeKey !== getRuntimeKey() || this.resolver !== getRuntimeUrlResolver()) throw new DOMException('Media owner changed', 'AbortError');
-  }
-
-  async resolve(source: string, video = false, refresh = false): Promise<string> {
-    const signal = this.controller.signal;
-    this.check(signal);
-    const { mode, directory, sessionId, messageId, documentAssets } = this.options;
-    if (mode === 'assistant') {
-      await Promise.resolve();
-      this.check(signal);
-      if (![...this.sources.keys()].slice(0, 12).includes(source)) throw new Error('Message media limit');
-    }
-    const remote = /^(?:https?:)?\/\//i.test(source);
-    if (remote) {
-      if (mode !== 'document' && !video) throw new Error('Remote chat image');
-      return source;
-    }
-    if (/^data:/i.test(source)) return resolveMarkdownImageSource(source, signal);
-    if (mode === 'document') {
-      if (!documentAssets) {
-        if (video || !PROJECT_UPLOAD_ROUTE_RE.test(source)) return source;
-        const read = this.readDocumentImage(source, source, undefined, signal);
-        void read.catch(() => { if (this.documentUrls.get(source) === read) this.documentUrls.delete(source); });
-        return read;
-      }
-      if (!isMarkdownDocumentReference(source)) throw new Error('Document source is unavailable');
-      const path = resolveMarkdownDocumentReference(documentAssets.filePath, source);
-      const workspace = documentAssets.workspaceRoot;
-      const query = { path, directory: workspace || undefined, allowOutsideWorkspace: workspace && isFilePathWithinDirectory(path, workspace) ? undefined : 'true' };
-      if (video) {
-        if (isVSCodeRuntime()) throw new Error('Video bridge is unavailable');
-        await refreshRuntimeUrlAuthToken();
-        this.check(signal);
-        return getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', query);
-      }
-      return this.readDocumentImage(path, '/api/fs/raw', query, signal);
-    }
-    if (mode === 'local') return source;
-    if (isVSCodeRuntime()) {
-      if (video) throw new Error('Video bridge is unavailable');
-      const url = await resolveWorkspaceMarkdownImageSource(source, directory, signal);
-      this.check(signal);
-      return url;
-    }
-    if (!sessionId || !messageId) throw new Error('Missing media owner');
-    await Promise.resolve();
-    this.check(signal);
-    const sources = [...this.sources.keys()].slice(0, 12);
-    if (!sources.includes(source)) throw new Error('Message media limit');
-    if (!this.batch || refresh) {
-      if (refresh && this.refreshing) this.batch = this.refreshing;
-      else {
-        this.batch = prepareLocalMarkdownImages({ sources: sources.filter(isLocalMarkdownImageSource), directory, sessionId, messageId, signal });
-        if (refresh) {
-          const pending = this.batch;
-          this.refreshing = pending;
-          void pending.finally(() => { if (this.refreshing === pending) this.refreshing = undefined; }).catch(() => {});
-        }
-      }
-    }
-    const prepared = (await this.batch).get(source);
-    this.check(signal);
-    if (prepared?.status !== 'ready') throw new Error('Image is unavailable');
-    if (!video && runtimeAssetsNeedFetch()) {
-      const url = await loadPreparedImageAsDataUrl(prepared, directory, signal);
-      this.check(signal);
-      return url;
-    }
->>>>>>> upstream/main
     await refreshRuntimeUrlAuthToken();
     this.check(signal);
     return getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', query);
    }
    return this.readDocumentImage(path, '/api/fs/raw', query, signal);
   }
-<<<<<<< HEAD
   // Tool/reasoning local mode retains its direct local-source behavior.
   // Only assistant media uses the message grant / workspace bridge policy.
   if (mode === 'local') return source;
@@ -268,71 +108,8 @@ export class MarkdownMediaOwner {
      const pending = this.batch;
      this.refreshing = pending;
      void pending.finally(() => { if (this.refreshing === pending) this.refreshing = undefined; }).catch(() => { });
-||||||| bc50ba56aa
-
-  private readDocumentImage(key: string, path: string, query: RuntimeUrlQuery | undefined, signal: AbortSignal): Promise<string> {
-    const cached = this.documentUrls.get(key);
-    if (cached) return cached;
-    const pending = (async () => {
-      const response = await runtimeFetch(path, { query, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) });
-      if (!response.ok) throw new Error(`Image read failed (${response.status})`);
-      const blob = await response.blob();
-      if (blob.size > 25 * 1024 * 1024) throw new Error('Image too large for preview');
-      this.check(signal);
-      return URL.createObjectURL(blob);
-    })();
-    this.documentUrls.set(key, pending);
-    return pending;
-  }
-
-  /**
-   * An image's own bytes, to save it from the viewer. A message's local image
-   * is read whole through its grant; a document's, already read, and an
-   * inline one come from their object or data URL. A remote image is not
-   * ours to read.
-   */
-  async load(source: string): Promise<Blob> {
-    const signal = this.controller.signal;
-    const { mode, directory, sessionId, messageId } = this.options;
-    if (mode === 'assistant' && !isVSCodeRuntime() && isLocalMarkdownImageSource(source)) {
-      if (!sessionId || !messageId) throw new Error('Missing media owner');
-      return loadMessageImageBlob({ source, directory, sessionId, messageId, signal });
-=======
-
-  private readDocumentImage(key: string, path: string, query: RuntimeUrlQuery | undefined, signal: AbortSignal): Promise<string> {
-    const cached = this.documentUrls.get(key);
-    if (cached) return cached;
-    const pending = (async () => {
-      const response = await runtimeFetch(path, { query, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) });
-      if (!response.ok) throw new Error(`Image read failed (${response.status})`);
-      const blob = await response.blob();
-      if (blob.size > 25 * 1024 * 1024) throw new Error('Image too large for preview');
-      this.check(signal);
-      return URL.createObjectURL(blob);
-    })();
-    this.documentUrls.set(key, pending);
-    return pending;
-  }
-
-  async load(source: string): Promise<Blob> {
-    const signal = this.controller.signal;
-    const { mode, directory, sessionId, messageId } = this.options;
-    if (mode === 'assistant' && !isVSCodeRuntime() && isLocalMarkdownImageSource(source)) {
-      if (!sessionId || !messageId) throw new Error('Missing media owner');
-      return loadMessageImageBlob({ source, directory, sessionId, messageId, signal });
->>>>>>> upstream/main
     }
-<<<<<<< HEAD
    }
-||||||| bc50ba56aa
-    const url = await this.resolve(source);
-    if (!/^(?:data|blob):/i.test(url)) throw new Error('Image cannot be saved');
-    return (await fetch(url, { signal })).blob();
-=======
-    const url = await this.resolve(source);
-    if (!/^(?:data|blob):/i.test(url)) throw new Error('Image cannot be saved');
-    return (await fetchBypassingRuntimeBridge(url, { signal })).blob();
->>>>>>> upstream/main
   }
   const prepared = (await this.batch).get(source);
   this.check(signal);

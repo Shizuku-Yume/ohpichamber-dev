@@ -150,16 +150,7 @@ describe('section arrangement dialog', () => {
     await act(async () => dispatch('touchstart', 18));
     await act(async () => dispatch('touchmove', 90));
     await act(async () => dispatch('touchend', 90));
-<<<<<<< HEAD
     expect(order()).toEqual([...WORK_STATUS_SECTION_IDS]);
-||||||| bc50ba56aa
-    // Workflows are not in this build, so their section is not listed.
-    expect(order()).toEqual(WORK_STATUS_SECTION_IDS.filter((id) => id !== 'workflows'));
-=======
-    // Workflows are not in this build and the todo tool is off here, so
-    // neither section is listed.
-    expect(order()).toEqual(WORK_STATUS_SECTION_IDS.filter((id) => id !== 'workflows' && id !== 'tasks'));
->>>>>>> upstream/main
     await act(async () => {
       dispatch('touchstart', 18);
       await new Promise((resolve) => setTimeout(resolve, 220));

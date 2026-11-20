@@ -19,31 +19,6 @@ const PluginPane = React.lazy(() => import('@/components/layout/PluginPane').the
 
 const rememberedHeights = new Map<string, number>();
 
-<<<<<<< HEAD
-/**
- * An extension's own section (`contributes.statusSection`): the host draws the
- * header from the extension's title and icon, the body is its sandboxed page.
- *
- * The frame exists only while the section is expanded — the collapsible drops
- * its children when folded, and the panel drops the section when it is hidden
- * or the panel itself is — so a folded section costs nothing. Its height is
- * what the guest last asked for through `setHeight`, clamped by the SDK range
- * and remembered for the session; taller content scrolls inside the frame.
- */
-||||||| bc50ba56aa
-/**
- * An extension's own section (`contributes.statusSection`): the host draws the
- * header from the extension's title and icon. The body is the app's own rows
- * when the extension declares a `source`, otherwise its sandboxed page.
- *
- * The frame exists only while the section is expanded — the collapsible drops
- * its children when folded, and the panel drops the section when it is hidden
- * or the panel itself is — so a folded section costs nothing. Its height is
- * what the guest last asked for through `setHeight`, clamped by the SDK range
- * and remembered for the session; taller content scrolls inside the frame.
- */
-=======
->>>>>>> upstream/main
 export const WorkStatusExtensionSection: React.FC<{
   guest: InstalledGuest;
   directory: string | null;
@@ -75,13 +50,7 @@ export const WorkStatusExtensionSection: React.FC<{
     <WorkStatusCollapsibleSection
       id={sectionId}
       title={guest.statusTitle ?? guest.name}
-<<<<<<< HEAD
       iconNode={<GuestIcon icon={resolveGuestIconName(guest.icon)} iconSrc={iconSrc} className="size-4 shrink-0 text-muted-foreground" />}
-||||||| bc50ba56aa
-      iconNode={<GuestIcon icon={resolveGuestIconName(guest.icon)} iconSrc={iconSrc} className="size-3.5 shrink-0 text-muted-foreground" />}
-=======
-      iconNode={<GuestIcon icon={resolveGuestIconName(guest.icon)} iconSrc={iconSrc} className="size-[13px] shrink-0 text-muted-foreground" />}
->>>>>>> upstream/main
       defaultExpanded={guest.statusDefaultExpanded ?? true}
       actionLayout={actionLayout}
       action={expanded && statusControls ? (
@@ -92,7 +61,6 @@ export const WorkStatusExtensionSection: React.FC<{
         />
       ) : undefined}
     >
-<<<<<<< HEAD
       <div data-guest-status-body={guest.id} className="mx-1 overflow-hidden rounded-md" style={{ height }}>
         <ErrorBoundary fallback={<div className="px-1 text-xs text-muted-foreground">{t('contextPanel.plugin.loadFailed')}</div>}>
           <React.Suspense fallback={null}>
@@ -102,28 +70,6 @@ export const WorkStatusExtensionSection: React.FC<{
               item={null}
               onResize={handleResize}
               statusDirectory={directory}
-||||||| bc50ba56aa
-      {guest.statusSource ? (
-        // Drawn by the app from the service's answers: no frame, and the
-        // section is as tall as its rows. Keyed so a project change starts
-        // from an empty view instead of showing the last project's.
-        <div data-guest-status-body={guest.id}>
-          <ErrorBoundary fallback={<div className="px-1 text-xs text-muted-foreground">{t('contextPanel.plugin.loadFailed')}</div>}>
-            <GuestStatusViewBody
-              key={`${guest.id}:${directory ?? ''}`}
-              guestId={guest.id}
-              source={guest.statusSource}
-              directory={directory}
-=======
-      {guest.statusSource ? (
-        <div data-guest-status-body={guest.id}>
-          <ErrorBoundary fallback={<div className="px-1 text-xs text-muted-foreground">{t('contextPanel.plugin.loadFailed')}</div>}>
-            <GuestStatusViewBody
-              key={`${guest.id}:${directory ?? ''}`}
-              guestId={guest.id}
-              source={guest.statusSource}
-              directory={directory}
->>>>>>> upstream/main
               onStatusControls={setStatusControls}
             />
           </React.Suspense>

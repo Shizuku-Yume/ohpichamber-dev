@@ -18,33 +18,6 @@ interface SnippetAutocompleteProps {
   onSnippetSelect: (snippet: Snippet, trigger: string) => void;
   onClose: () => void;
   style?: React.CSSProperties;
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  /**
-   * The composer's text without the `#name` being typed. With it, a new name
-   * offers to save that text as the snippet.
-   */
-  draftText?: string;
-  /** Runs once the draft is saved, with the `#name` token that was typed. */
-  onDraftSaved?: (typedName: string) => void;
-}
-
-interface PickerAction {
-  id: string;
-  label: string;
-  icon: IconName;
-  run: () => void;
-=======
-  draftText?: string;
-  onDraftSaved?: (typedName: string) => void;
-}
-
-interface PickerAction {
-  id: string;
-  label: string;
-  icon: IconName;
-  run: () => void;
->>>>>>> upstream/main
 }
 
 function snippetPreview(snippet: Snippet): string {
@@ -59,23 +32,8 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
 }, ref) => {
   const { t } = useI18n();
   const containerRef = React.useRef<HTMLDivElement | null>(null);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // Narrowing as the user types, the box eases into its new height; its
-  // bottom edge stays on the composer (`bottom-full`), so it moves upward.
-  useHeightMorph(containerRef);
-=======
-  useHeightMorph(containerRef);
->>>>>>> upstream/main
   const isMobile = useUIStore((state) => state.isMobile);
-<<<<<<< HEAD
   const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, true, 240);
-||||||| bc50ba56aa
-  // A caret placement brings its own max-height.
-  const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined, 240);
-=======
-  const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined, 240);
->>>>>>> upstream/main
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
   const [filteredSnippets, setFilteredSnippets] = React.useState<Snippet[]>([]);
@@ -102,74 +60,9 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
       if (a.scope !== 'workspace' && b.scope === 'workspace') return 1;
       return a.name.localeCompare(b.name);
     });
-<<<<<<< HEAD
     setFilteredSnippets(sortedMatches);
     setSelectedIndex(sortedMatches.length ? 1 : 0);
   }, [searchQuery, snippets]);
-||||||| bc50ba56aa
-  }, [query, snippets]);
-
-  // A typed name no snippet answers to can become one, from the draft or
-  // from scratch. Every way in opens the dialog, so a stray Enter on `#42`
-  // never writes a snippet.
-  const actions = React.useMemo((): PickerAction[] => {
-    const create = (request: Parameters<typeof openQuickCreate>[0]) => () => {
-      openQuickCreate(request);
-      onClose();
-    };
-    const typedName = isValidSnippetName(query) && !findSnippetByTrigger(snippets, query) ? query : null;
-    if (!typedName) {
-      return [{ id: 'new', label: t('chat.snippetAutocomplete.action.addNew'), icon: 'add', run: create({ content: '' }) }];
-    }
-    const typedActions: PickerAction[] = [];
-    const draft = draftText?.trim() ?? '';
-    if (draft) {
-      typedActions.push({
-        id: 'save-draft',
-        label: t('chat.snippetAutocomplete.action.saveDraft', { name: typedName }),
-        icon: 'save-3',
-        // The typed token leaves the draft, whatever name the dialog saved under.
-        run: create({ name: typedName, content: draft, onSaved: onDraftSaved ? () => onDraftSaved(typedName) : undefined }),
-      });
-    }
-    typedActions.push({ id: 'create', label: t('chat.snippetAutocomplete.action.create', { name: typedName }), icon: 'add', run: create({ name: typedName, content: '' }) });
-    return typedActions;
-  }, [draftText, onClose, onDraftSaved, openQuickCreate, query, snippets, t]);
-
-  // A match is what the user most likely wants; with none, the first action.
-  React.useEffect(() => {
-    setSelectedIndex(filteredSnippets.length ? actions.length : 0);
-  }, [actions.length, filteredSnippets]);
-=======
-  }, [query, snippets]);
-
-  const actions = React.useMemo((): PickerAction[] => {
-    const create = (request: Parameters<typeof openQuickCreate>[0]) => () => {
-      openQuickCreate(request);
-      onClose();
-    };
-    const typedName = isValidSnippetName(query) && !findSnippetByTrigger(snippets, query) ? query : null;
-    if (!typedName) {
-      return [{ id: 'new', label: t('chat.snippetAutocomplete.action.addNew'), icon: 'add', run: create({ content: '' }) }];
-    }
-    const typedActions: PickerAction[] = [];
-    const draft = draftText?.trim() ?? '';
-    if (draft) {
-      typedActions.push({
-        id: 'save-draft',
-        label: t('chat.snippetAutocomplete.action.saveDraft', { name: typedName }),
-        icon: 'save-3',
-        run: create({ name: typedName, content: draft, onSaved: onDraftSaved ? () => onDraftSaved(typedName) : undefined }),
-      });
-    }
-    typedActions.push({ id: 'create', label: t('chat.snippetAutocomplete.action.create', { name: typedName }), icon: 'add', run: create({ name: typedName, content: '' }) });
-    return typedActions;
-  }, [draftText, onClose, onDraftSaved, openQuickCreate, query, snippets, t]);
-
-  React.useEffect(() => {
-    setSelectedIndex(filteredSnippets.length ? actions.length : 0);
-  }, [actions.length, filteredSnippets]);
->>>>>>> upstream/main
 
   React.useEffect(() => {
     selectedIndexRef.current = selectedIndex;
@@ -249,7 +142,6 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
             onClick={() => chooseSnippet(snippet)}
             onMouseMove={() => setSelectedIndex(index + 1)}
           >
-<<<<<<< HEAD
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-semibold truncate">/{snippet.name}</span>
@@ -258,42 +150,6 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
               {!isMobile && (
                 <div className="typography-meta text-muted-foreground mt-0.5 truncate">{snippetPreview(snippet)}</div>
               )}
-||||||| bc50ba56aa
-            <Icon name={action.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate text-muted-foreground">{action.label}</span>
-          </div>
-        ))}
-        {filteredSnippets.length ? filteredSnippets.map((snippet, index) => {
-          const itemIndex = actions.length + index;
-          return (
-            <div
-              key={`${snippet.source}:${snippet.filePath}`}
-              ref={(el) => { itemRefs.current[itemIndex] = el; }}
-              className={cn('flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg typography-ui-label', itemIndex === selectedIndex && 'bg-interactive-selection')}
-              onClick={() => chooseSnippet(snippet)}
-              onMouseMove={() => setSelectedIndex(itemIndex)}
-            >
-              <span className="max-w-[60%] shrink-0 truncate font-semibold">#{snippet.name}</span>
-              {/* A global snippet is the user's own, as a user skill or command is. */}
-              <AutocompleteRowDetail scope={snippet.source === 'project' ? 'project' : 'user'} description={snippetPreview(snippet)} />
-=======
-            <Icon name={action.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate text-muted-foreground">{action.label}</span>
-          </div>
-        ))}
-        {filteredSnippets.length ? filteredSnippets.map((snippet, index) => {
-          const itemIndex = actions.length + index;
-          return (
-            <div
-              key={`${snippet.source}:${snippet.filePath}`}
-              ref={(el) => { itemRefs.current[itemIndex] = el; }}
-              className={cn('flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg typography-ui-label', itemIndex === selectedIndex && 'bg-interactive-selection')}
-              onClick={() => chooseSnippet(snippet)}
-              onMouseMove={() => setSelectedIndex(itemIndex)}
-            >
-              <span className="max-w-[60%] shrink-0 truncate font-semibold">#{snippet.name}</span>
-              <AutocompleteRowDetail scope={snippet.source === 'project' ? 'project' : 'user'} description={snippetPreview(snippet)} />
->>>>>>> upstream/main
             </div>
           </div>
         )) : (

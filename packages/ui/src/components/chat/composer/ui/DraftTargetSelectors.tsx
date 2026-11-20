@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { DraftsHerePicker, MobileDraftsHerePicker } from './DraftsHerePicker';
 /**
  * Where a new session will run: the project and the directory within it.
@@ -9,19 +8,6 @@ import { DraftsHerePicker, MobileDraftsHerePicker } from './DraftsHerePicker';
  * the same hook, and both offer creating a worktree inline so the user does
  * not have to leave the draft to make one.
  */
-||||||| bc50ba56aa
-/**
- * Where a new session will run: the project and the directory within it.
- *
- * Desktop uses a searchable project popup and an inline branch/worktree
- * select; mobile uses bottom sheets, because a native select over a
- * keyboard-resized viewport is unusable. Both render the same options from
- * the same hook, and both offer creating a worktree inline so the user does
- * not have to leave the draft to make one. The project's isolated spaces are
- * a section of their own, by name, with the way to make a new one under it.
- */
-=======
->>>>>>> upstream/main
 
 import React from 'react';
 
@@ -33,13 +19,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Popover } from '@base-ui/react/popover';
 import { cn } from '@/lib/utils';
 import { dropdownMenuPopupClass } from '@/components/ui/dropdown-menu.styles';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { commandSearchAtBottomClass, usePopupSideOnOpen } from '@/components/ui/popup-side';
-=======
-import { GlassRedrawGuard } from '@/components/ui/glass-redraw-guard';
-import { commandSearchAtBottomClass, usePopupSideOnOpen } from '@/components/ui/popup-side';
->>>>>>> upstream/main
 import {
     Command,
     CommandInput,
@@ -67,17 +46,6 @@ import { useKeybind } from '@/hooks/useKeybind';
 import type { Theme } from '@/types/theme';
 import { normalizePath } from '../attachments/filePaths';
 import { getProjectDisplayLabel, type DraftTargetProject } from '../state/useDraftTarget';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { useProjectsInSidebarOrder } from '@/components/session/sidebar/list/useProjectsInSidebarOrder';
-import { DraftsHerePicker, MobileDraftsHerePicker } from './DraftsHerePicker';
-=======
-import { useProjectsInSidebarOrder } from '@/components/session/sidebar/list/useProjectsInSidebarOrder';
-import { DraftsHerePicker, MobileDraftsHerePicker } from './DraftsHerePicker';
-import { sessionEvents } from '@/lib/sessionEvents';
-
-const ADD_PROJECT_ITEM = '__add_project__';
->>>>>>> upstream/main
 
 interface BranchOption {
     value: string;
@@ -94,31 +62,13 @@ export interface DraftTargetProps {
     hasUncommittedChanges: boolean;
     projectRootBranchOption: BranchOption | null;
     worktreeBranchOptions: readonly BranchOption[];
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    /** The project's isolated spaces a new chat can start in, by name. */
-    spaceBranchOptions: readonly BranchOption[];
-=======
-    spaceBranchOptions: readonly BranchOption[];
->>>>>>> upstream/main
     branchItems: readonly BranchOption[];
     showBranchSelector: boolean;
     onProjectChange: (projectId: string) => void;
     onDirectoryChange: (directory: string) => void;
-<<<<<<< HEAD
     /**
      * Opens the create dialog of an isolated space; absent while the feature's switch is off.
      */
-||||||| bc50ba56aa
-    /** Re-reads the branch and worktree data behind the picker, throttled by the owner. */
-    onRefreshTarget?: () => void;
-    /**
-     * Opens the create dialog of an isolated space; absent where the entry is not offered: while
-     * the feature's switch is off, and always in VS Code (decision 16 of the design).
-     */
-=======
-    onRefreshTarget?: () => void;
->>>>>>> upstream/main
     onCreateSpace?: () => void;
     onCreateCustomWorktree?: () => void;
     theme: Theme;
@@ -208,17 +158,7 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
     const [projectFocusReturn, setProjectFocusReturn] = React.useState(false);
     const projectTriggerRef = React.useRef<HTMLButtonElement>(null);
     const worktreeTriggerRef = React.useRef<HTMLButtonElement>(null);
-<<<<<<< HEAD
     // Controlled Select closes can omit finalFocus's interaction type.
-||||||| bc50ba56aa
-    // Another project or branch eases each picker into its new width.
-    useWidthMorph(projectTriggerRef);
-    useWidthMorph(worktreeTriggerRef);
-    // Controlled Select closes can omit finalFocus's interaction type.
-=======
-    useWidthMorph(projectTriggerRef);
-    useWidthMorph(worktreeTriggerRef);
->>>>>>> upstream/main
     const keyboardCloseRef = React.useRef(false);
     const getComposerInput = () => projectTriggerRef.current?.closest('form')?.querySelector<HTMLElement>('[data-chat-input="true"] .cm-content');
     const getFinalFocus = () => keyboardCloseRef.current ? getComposerInput() : true;
@@ -231,21 +171,9 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
         setProjectPortalContainer(dialog instanceof HTMLElement ? dialog : null);
         setProjectCollisionBoundary(element?.closest('main') ?? null);
     }, []);
-<<<<<<< HEAD
     // The popover owns no shortcut suspension (unlike Select/DropdownMenu
     // wrappers), so suspend global shortcuts while the project popup is
     // open and restore them on close/unmount.
-||||||| bc50ba56aa
-    // Each picker picks its side when it opens and keeps it while open.
-    const projectPopupSide = usePopupSideOnOpen(openPicker === 'project', projectTriggerRef);
-    const worktreePopupSide = usePopupSideOnOpen(openPicker === 'worktree', worktreeTriggerRef);
-    // The popover owns no shortcut suspension (unlike Select/DropdownMenu
-    // wrappers), so suspend global shortcuts while the project popup is
-    // open and restore them on close/unmount.
-=======
-    const projectPopupSide = usePopupSideOnOpen(openPicker === 'project', projectTriggerRef);
-    const worktreePopupSide = usePopupSideOnOpen(openPicker === 'worktree', worktreeTriggerRef);
->>>>>>> upstream/main
     const projectSuspendRef = React.useRef<(() => void) | null>(null);
     React.useEffect(() => {
         if (openPicker !== 'project') return;
@@ -369,31 +297,6 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                     </span>
                 </Popover.Trigger>
                 <Popover.Portal container={projectPortalContainer ?? undefined}>
-<<<<<<< HEAD
-                    {/* side="bottom" anchors the popup's top edge at the
-                        trigger: the search field stays fixed at the
-                        selector's level while filtering, and only the
-                        results area below changes height. Disabling side
-                        flips keeps the input stationary during filtering.
-                        Horizontal shifting keeps the popup inside main. The
-                        --available-height cap comes free from the shared
-                        popup class, so the list scrolls within the space
-                        below the trigger. */}
-||||||| bc50ba56aa
-                    {/* The search field sits on the trigger's edge of the
-                        popup and stays fixed while filtering; only the
-                        results area beyond it changes height. Opening
-                        downward anchors the popup's top edge under the
-                        trigger. A low trigger (Mini Chat) opens it upward
-                        instead, anchored by its bottom edge, with the search
-                        field moved to the bottom. The side is chosen once per
-                        open and never flips while open, which would move the
-                        input. Horizontal shifting keeps the popup inside
-                        main. The --available-height cap comes free from the
-                        shared popup class, so the list scrolls within the
-                        space on the chosen side. */}
-=======
->>>>>>> upstream/main
                     <Popover.Positioner
                         side="bottom"
                         align="start"
@@ -410,21 +313,7 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                             finalFocus={false}
                         >
                             <Command
-<<<<<<< HEAD
                                 className="min-h-0 flex-1"
-||||||| bc50ba56aa
-                                className={cn(
-                                    'min-h-0 flex-1',
-                                    // Upward: the search field goes to the bottom, next to
-                                    // the trigger, with its divider above it.
-                                    projectPopupSide === 'top' && commandSearchAtBottomClass,
-                                )}
-=======
-                                className={cn(
-                                    'min-h-0 flex-1',
-                                    projectPopupSide === 'top' && commandSearchAtBottomClass,
-                                )}
->>>>>>> upstream/main
                                 shouldFilter={false}
                                 value={projectActiveId ?? undefined}
                                 onValueChange={setProjectActiveId}
@@ -510,21 +399,6 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                                 onKeyDown={handlePickerKeyDown}
                                 className="h-7 min-w-0 w-fit max-w-[48vw] sm:max-w-[20rem] border-transparent bg-transparent px-1.5 hover:[background-image:none] data-[popup-open]:[background-image:none]"
                             >
-<<<<<<< HEAD
-||||||| bc50ba56aa
-                                {selectedIsSpace ? <Icon name="instance" className="size-3.5 shrink-0 text-muted-foreground" aria-label={t('sessions.sidebar.group.space')} /> : null}
-                                <SelectValue>
-                                    {selectedBranchLabel ?? t('chat.chatInput.branch')}
-                                </SelectValue>
-                                {/* After the name: the check answers once the branch is
-                                    picked, and a mark arriving at the start would push
-                                    the name over. Here the picker grows into it. */}
-=======
-                                {selectedIsSpace ? <Icon name="instance" className="size-3.5 shrink-0 text-muted-foreground" aria-label={t('sessions.sidebar.group.space')} /> : null}
-                                <SelectValue>
-                                    {selectedBranchLabel ?? t('chat.chatInput.branch')}
-                                </SelectValue>
->>>>>>> upstream/main
                                 {hasUncommittedChanges ? (
                                     <Icon
                                         name="alert"
@@ -573,7 +447,6 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                             </SelectItem>
                         ) : null}
                         {onCreateSpace ? (
-<<<<<<< HEAD
                             <>
                                 <SelectSeparator />
                                 <div className="px-2 py-1.5">
@@ -587,28 +460,6 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                                     </button>
                                 </div>
                             </>
-||||||| bc50ba56aa
-                            <div className="px-2 py-1.5">
-                                <button
-                                    type="button"
-                                    className="text-muted-foreground typography-meta hover:text-foreground cursor-pointer"
-                                    onPointerDown={(e) => { e.stopPropagation(); }}
-                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenPicker(null); onCreateSpace(); }}
-                                >
-                                    {t('spaces.picker.new')}
-                                </button>
-                            </div>
-=======
-                            <button
-                                type="button"
-                                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
-                                onPointerDown={(e) => { e.stopPropagation(); }}
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenPicker(null); onCreateSpace(); }}
-                            >
-                                <Icon name="add" className="size-4 shrink-0 text-muted-foreground" />
-                                {t('spaces.picker.new')}
-                            </button>
->>>>>>> upstream/main
                         ) : null}
                     </SelectContent>
                 </Select>
@@ -682,7 +533,6 @@ export function ProjectPickerSheet({
     }, [open]);
 
     return (
-<<<<<<< HEAD
         <MobileOverlayPanel open={open} title={title} onClose={onClose}>
             <div className="flex flex-col gap-2 px-3 pb-4 pt-1">
                 <Input
@@ -712,58 +562,6 @@ export function ProjectPickerSheet({
                         ))}
                 </div>
             </div>
-||||||| bc50ba56aa
-        <MobileOverlayPanel
-            open={open}
-            title={title}
-            onClose={onClose}
-            subheader={<MobileSheetSearch value={query} onChange={setQuery} placeholder={searchPlaceholder} />}
-        >
-            {rankByQuery(projects, query, (project) => [getProjectDisplayLabel(project), project.path])
-                .map((project) => (
-                    <MobileSheetRow
-                        key={project.id}
-                        selected={project.id === selectedProjectId}
-                        onClick={() => {
-                            onSelectProject(project.id);
-                            onClose();
-                        }}
-                    >
-                        <ProjectLabel project={project} theme={theme} />
-                    </MobileSheetRow>
-                ))}
-=======
-        <MobileOverlayPanel
-            open={open}
-            title={title}
-            onClose={onClose}
-            subheader={<MobileSheetSearch value={query} onChange={setQuery} placeholder={searchPlaceholder} />}
-        >
-            {rankByQuery(projects, query, (project) => [getProjectDisplayLabel(project), project.path])
-                .map((project) => (
-                    <MobileSheetRow
-                        key={project.id}
-                        selected={project.id === selectedProjectId}
-                        onClick={() => {
-                            onSelectProject(project.id);
-                            onClose();
-                        }}
-                    >
-                        <ProjectLabel project={project} theme={theme} />
-                    </MobileSheetRow>
-                ))}
-            {addProjectLabel ? (
-                <MobileSheetRow
-                    icon="folder-add"
-                    onClick={() => {
-                        onClose();
-                        sessionEvents.requestDirectoryDialog();
-                    }}
-                >
-                    {addProjectLabel}
-                </MobileSheetRow>
-            ) : null}
->>>>>>> upstream/main
         </MobileOverlayPanel>
     );
 }
@@ -817,7 +615,6 @@ export function MobileDraftTargetSheets(
                 title={t('chat.chatInput.branch')}
                 onClose={() => onOpenPickerChange(null)}
             >
-<<<<<<< HEAD
                 <div className="flex flex-col gap-2 px-3 pb-4 pt-1">
                     <Input
                         value={branchQuery}
@@ -845,117 +642,6 @@ export function MobileDraftTargetSheets(
                                     <span className="min-w-0 flex-1 truncate">{label}</span>
                                     {value === selectedValue ? (
                                         <Icon name="check" className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-||||||| bc50ba56aa
-                {(() => {
-                    const matches = (label: string) => matchesRankQuery([label], branchQuery);
-                    const selectedValue = selectedDirectory
-                        ?? branchItems[0]?.value
-                        ?? normalizePath(selectedProject.path)
-                        ?? '';
-                    const renderRow = (value: string, label: React.ReactNode, key?: string, icon?: IconName) => (
-                        <MobileSheetRow
-                            key={key ?? value}
-                            icon={icon}
-                            selected={value === selectedValue}
-                            onClick={() => {
-                                onDirectoryChange(value);
-                                onOpenPickerChange(null);
-                            }}
-                        >
-                            {label}
-                        </MobileSheetRow>
-                    );
-                    return (
-                        <>
-                            {projectRootBranchOption && matches(projectRootBranchOption.label) ? (
-                                <MobileSheetSection title={t('chat.chatInput.projectRoot')}>
-                                    {renderRow(projectRootBranchOption.value, projectRootBranchOption.label)}
-                                </MobileSheetSection>
-                            ) : null}
-                            <MobileSheetSection title={t('chat.chatInput.worktrees')}>
-                                <MobileSheetRow icon="flashlight" onClick={() => { onOpenPickerChange(null); void createWorktreeDraft(); }}>
-                                    {t('chat.chatInput.worktreeQuick')}
-                                </MobileSheetRow>
-                                {onCreateCustomWorktree ? (
-                                    <MobileSheetRow icon="git-branch" onClick={() => { onOpenPickerChange(null); onCreateCustomWorktree(); }}>
-                                        {t('chat.chatInput.worktreeCustom')}
-                                    </MobileSheetRow>
-                                ) : null}
-                                {rankByQuery(worktreeBranchOptions, branchQuery, (option) => [option.label])
-                                    .map((option) => renderRow(option.value, `${option.pending ? '⏳ ' : ''}${option.label}`))}
-                                {selectedDirectory && !selectedBranchIsKnown && matches(selectedBranchLabel ?? '')
-                                    ? renderRow(selectedDirectory, selectedBranchLabel, 'unknown-current')
-                                    : null}
-                            </MobileSheetSection>
-                            {spaceBranchOptions.length > 0 || onCreateSpace ? (
-                                <MobileSheetSection title={t('spaces.picker.section')}>
-                                    {rankByQuery(spaceBranchOptions, branchQuery, (option) => [option.label])
-                                        .map((option) => renderRow(option.value, option.label, undefined, 'instance'))}
-                                    {onCreateSpace ? (
-                                        <MobileSheetRow
-                                            onClick={() => {
-                                                onOpenPickerChange(null);
-                                                onCreateSpace();
-                                            }}
-                                        >
-                                            {t('spaces.picker.new')}
-                                        </MobileSheetRow>
-=======
-                {(() => {
-                    const matches = (label: string) => matchesRankQuery([label], branchQuery);
-                    const selectedValue = selectedDirectory
-                        ?? branchItems[0]?.value
-                        ?? normalizePath(selectedProject.path)
-                        ?? '';
-                    const renderRow = (value: string, label: React.ReactNode, key?: string, icon?: IconName) => (
-                        <MobileSheetRow
-                            key={key ?? value}
-                            icon={icon}
-                            selected={value === selectedValue}
-                            onClick={() => {
-                                onDirectoryChange(value);
-                                onOpenPickerChange(null);
-                            }}
-                        >
-                            {label}
-                        </MobileSheetRow>
-                    );
-                    return (
-                        <>
-                            {projectRootBranchOption && matches(projectRootBranchOption.label) ? (
-                                <MobileSheetSection title={t('chat.chatInput.projectRoot')}>
-                                    {renderRow(projectRootBranchOption.value, projectRootBranchOption.label)}
-                                </MobileSheetSection>
-                            ) : null}
-                            <MobileSheetSection title={t('chat.chatInput.worktrees')}>
-                                <MobileSheetRow icon="flashlight" onClick={() => { onOpenPickerChange(null); void createWorktreeDraft(); }}>
-                                    {t('chat.chatInput.worktreeQuick')}
-                                </MobileSheetRow>
-                                {onCreateCustomWorktree ? (
-                                    <MobileSheetRow icon="git-branch" onClick={() => { onOpenPickerChange(null); onCreateCustomWorktree(); }}>
-                                        {t('chat.chatInput.worktreeCustom')}
-                                    </MobileSheetRow>
-                                ) : null}
-                                {rankByQuery(worktreeBranchOptions, branchQuery, (option) => [option.label])
-                                    .map((option) => renderRow(option.value, `${option.pending ? '⏳ ' : ''}${option.label}`))}
-                                {selectedDirectory && !selectedBranchIsKnown && matches(selectedBranchLabel ?? '')
-                                    ? renderRow(selectedDirectory, selectedBranchLabel, 'unknown-current')
-                                    : null}
-                            </MobileSheetSection>
-                            {spaceBranchOptions.length > 0 || onCreateSpace ? (
-                                <MobileSheetSection title={t('spaces.picker.section')}>
-                                    {rankByQuery(spaceBranchOptions, branchQuery, (option) => [option.label])
-                                        .map((option) => renderRow(option.value, option.label, undefined, 'instance'))}
-                                    {onCreateSpace ? (
-                                        <MobileSheetRow icon="add"
-                                            onClick={() => {
-                                                onOpenPickerChange(null);
-                                                onCreateSpace();
-                                            }}
-                                        >
-                                            {t('spaces.picker.new')}
-                                        </MobileSheetRow>
->>>>>>> upstream/main
                                     ) : null}
                                 </button>
                             );
