@@ -443,7 +443,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             onCopyMessage={handleCopyMessage}
                                             onCopyLink={handleCopyLink}
                                             copiedMessage={copiedMessage}
-                                            onSelectMessages={onSelectMessages}
+                                           
                                                 showReasoningTraces={showReasoningTraces}
                                             onRevert={handleRevert}
                                             onFork={handleFork}
@@ -478,7 +478,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             onCopyMessage={handleCopyMessage}
                                             onCopyLink={handleCopyLink}
                                             copiedMessage={copiedMessage}
-                                            onSelectMessages={onSelectMessages}
+                                           
                                         showReasoningTraces={showReasoningTraces}
                                             onRevert={handleRevert}
                                             onFork={handleFork}
@@ -527,7 +527,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 footerModelName={headerModelName}
                                 isDarkTheme={isDarkTheme}
                                 extraActions={guestMessageActions}
-                                onSelectMessages={onSelectMessages}
+                               
                             />
                         </div>
                     )}

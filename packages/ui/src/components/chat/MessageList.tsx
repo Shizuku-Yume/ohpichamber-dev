@@ -4,7 +4,7 @@ import { streamPerfMeasure } from '@/stores/utils/streamDebug';
 import { hasPendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
 import React from 'react';
-import type { LegendListRef } from '@legendapp/list/react';
+import { LegendList, type LegendListRef } from '@legendapp/list/react';
 
 import ChatMessage from './ChatMessage';
 import { filterVisibleParts, isEmptyTextPart } from './message/partUtils';
@@ -434,7 +434,7 @@ export const TurnBlock = React.memo(({
                     activityOwnerMessageId,
                     isFirstAssistantInTurn: isFirstAssistant,
                     isLastAssistantInTurn: isLastAssistant,
-                    hasEarlierAssistantText: chatRenderMode === 'live' && isLastAssistant && visibleAssistantMessages.some((assistant, index) => (
+                    earlierAssistantText: chatRenderMode === 'live' && isLastAssistant && visibleAssistantMessages.some((assistant, index) => (
                         index < assistantIndex && filterVisibleParts(assistant.parts).some((part) => part.type === 'text' && !isEmptyTextPart(part))
                     )),
                     isLatestTurn: isLastTurn,
@@ -1081,10 +1081,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         sessionKey,
         showTextJustificationActivity: chatRenderMode === 'sorted',
         showTurnChangedFiles,
-        showReasoningTraces,
         stickyUserHeader,
         defaultActivityExpanded,
-        turnExpansion,
     });
     const hasUngroupedStaticEntries = projection.ungroupedMessageIds.size > 0;
     const tailHasAssistant = Boolean(streamingTurn?.assistantMessages.length);
