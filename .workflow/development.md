@@ -4,6 +4,22 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+2026-11-20 upstream-sync audit reconciliation is partial. The first two commits
+remove 113 stale gap exceptions, repair surviving converted-owner citations and
+reconcile all 260 Git-contradicted ledger rows against `cf18602cc`. A further 162
+mechanically compared paths now cite package naming or runtime-equivalent source
+cleanup; the route audit recognizes typed Express calls and converted router
+owners, and request-method inference no longer reads a later request's options.
+Fifty-nine additional gap exceptions cover only the recorded OpenCode-engine,
+folder-trust and isolated-spaces exclusions or explicitly retired OpenCode
+dependencies. After merging the concurrent composer/reference/settings fixes,
+`bun run type-check` still reports 3/5 root checks passing: 222 unexplained paths
+and 146 unallowlisted gaps remain. Those entries are not accepted exceptions;
+the remaining source/parity review is unfinished. No retained feature, UI or Git
+implementation was changed by the audit commits. Detailed current evidence is
+under `/home/ubuntu/ci-logs/audit-*`; full retained-platform acceptance is not
+claimed.
+
 2026-11-20 upstream-sync tooling: excluded the inherited OpenCode-only
 `scripts/verify` stand (absent on main) and the orphan `.github` policy test;
 no OpenCode runtime was restored. Kept the fixture-request regression under
