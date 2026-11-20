@@ -1,194 +1,46 @@
-import React, { useRef, useCallback } from "react"
-import type { Message, Part } from '@openchamber/agent-contract';
-import { subscribeDirectorySessionMessages } from "./child-store"
-import { countSyncPerformance } from "./performance-diagnostics"
-import type { State } from "./types"
-import { getSessionMaterializationStatus } from "./materialization"
-import { EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT, buildUserMessageHistorySnapshot, type TranscriptPrompt, type UserMessageHistorySnapshot } from "./user-message-history"
-import { useDirectoryStore, useDirectorySync } from "./directory-sync-hooks"
-import { EMPTY_MESSAGES, EMPTY_PARTS } from "./sync-empty-values"
-import { useSyncRuntime } from "./sync-runtime-context"
-import { getSessionRevertMessageID } from "./session-message-records"
+import { useCallback, useRef, useSyncExternalStore } from 'react'
+import type { Message, Part } from '@openchamber/agent-contract'
+import { subscribeDirectorySessionMessages } from './child-store'
+import { useDirectoryStore, useDirectorySync } from './directory-sync-hooks'
+import { getSessionMaterializationStatus } from './materialization'
+import { buildUserMessageHistorySnapshot, EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT, type TranscriptPrompt } from './user-message-history'
+import type { State } from './types'
 
-export function useSessionMessages(sessionID: string, directory?: string) {
+const EMPTY_MESSAGES: Message[] = []
+const EMPTY_PART_MAP: Record<string, Part[]> = {}
+
+export function useSessionMessages(sessionId: string, directory?: string): Message[] {
   const store = useDirectoryStore(directory)
-  const getSnapshot = useCallback(() => {
-    if (!sessionID) return EMPTY_MESSAGES
-    return store.getState().message[sessionID] ?? EMPTY_MESSAGES
-  }, [sessionID, store])
-  const subscribe = useCallback((notify: () => void) => {
-    if (!sessionID) return () => undefined
-    return store.subscribe((state, previous) => {
-      if (state.message[sessionID] !== previous.message[sessionID]) notify()
-    })
-  }, [sessionID, store])
-  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, notify), [store, sessionId]), useCallback(() => store.getState().message[sessionId] ?? EMPTY_MESSAGES, [store, sessionId]), () => EMPTY_MESSAGES)
 }
-
-export function useSessionMessagesSelector<T>(
-  sessionID: string,
-  directory: string | undefined,
-  select: (messages: Message[], state: State) => T,
-  isEqual: (left: T, right: T) => boolean = Object.is,
-  watchParts = false,
-): T {
+export function useSessionMessagesSelector<T>(sessionId: string, directory: string | undefined, select: (messages: Message[], state: State) => T, isEqual: (left: T, right: T) => boolean = Object.is): T {
   const store = useDirectoryStore(directory)
-  const cacheRef = useRef<{ value: T } | null>(null)
-  const getSnapshot = useCallback(() => {
-    const state = store.getState()
-    const next = select(sessionID ? state.message[sessionID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES, state)
-    const cached = cacheRef.current
-    if (cached && isEqual(cached.value, next)) return cached.value
-    cacheRef.current = { value: next }
-    return next
-  }, [isEqual, select, sessionID, store])
-  const subscribe = useCallback((notify: () => void) => {
-    if (!sessionID) return () => undefined
-    return store.subscribe((state, previous) => {
-      if (state.message[sessionID] !== previous.message[sessionID] || (watchParts && state.part !== previous.part)) notify()
-    })
-  }, [sessionID, store, watchParts])
-  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const cache = useRef<{ value: T } | null>(null)
+  const get = useCallback(() => { const state = store.getState(); const value = select(state.message[sessionId] ?? EMPTY_MESSAGES, state); if (!cache.current || !isEqual(cache.current.value, value)) cache.current = { value }; return cache.current.value }, [store, sessionId, select, isEqual])
+  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, notify), [store, sessionId]), get, get)
 }
-
-export function useSessionMessagesResolved(sessionID: string, directory?: string): boolean {
-  return useDirectorySync(
-    useCallback((state: State) => {
-      if (!sessionID) return false
-      return Object.prototype.hasOwnProperty.call(state.message, sessionID)
-    }, [sessionID]),
-    directory,
-  )
-}
-
-const EMPTY_PARTS_BY_MESSAGE: Record<string, Part[]> = {}
-
-export function useSessionPartsForMessages(messageIDs: readonly string[], directory?: string): Record<string, Part[]> {
+export function useSessionRenderable(sessionId: string, directory?: string): boolean { return useSessionMessagesSelector(sessionId, directory, (_messages, state) => getSessionMaterializationStatus(state, sessionId).renderable) }
+export function useUserMessageHistory(sessionId: string, directory?: string): TranscriptPrompt[] {
   const store = useDirectoryStore(directory)
-  const cacheRef = React.useRef<{ ids: readonly string[]; parts: Record<string, Part[]> } | null>(null)
-  const getSnapshot = useCallback(() => {
-    if (messageIDs.length === 0) return EMPTY_PARTS_BY_MESSAGE
-    const state = store.getState()
-    const cached = cacheRef.current
-    if (
-      cached
-      && cached.ids === messageIDs
-      && messageIDs.every((id) => (state.part[id] ?? EMPTY_PARTS) === (cached.parts[id] ?? EMPTY_PARTS))
-    ) {
-      return cached.parts
-    }
-    const parts: Record<string, Part[]> = {}
-    for (const id of messageIDs) parts[id] = state.part[id] ?? EMPTY_PARTS
-    cacheRef.current = { ids: messageIDs, parts }
-    return parts
-  }, [messageIDs, store])
-  const subscribe = useCallback((notify: () => void) => {
-    if (messageIDs.length === 0) return () => undefined
-    return store.subscribe((state, previous) => {
-      for (const id of messageIDs) {
-        if (state.part[id] !== previous.part[id]) {
-          notify()
-          return
-        }
-      }
-    })
-  }, [messageIDs, store])
-  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const cache = useRef(EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT)
+  const get = useCallback(() => { cache.current = buildUserMessageHistorySnapshot(store.getState(), sessionId, cache.current); return cache.current.history }, [store, sessionId])
+  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, notify), [store, sessionId]), get, get)
 }
-
-export function useSessionRenderable(sessionID: string, directory?: string): boolean {
-  const runtime = useSyncRuntime()
+/** Inline parts selector; the canonical store never carries a split part map. */
+export function useSessionPartsForMessages(sessionId: string, messageIds: readonly string[], directory?: string): Record<string, Part[]> {
   const store = useDirectoryStore(directory)
-  const resolvedDirectory = React.useSyncExternalStore(
-    runtime.currentDirectory.subscribe,
-    () => directory ?? runtime.currentDirectory.get(),
-  )
-  const { messageLoader } = runtime
-  const renderableRef = useRef(false)
-  const getSnapshot = useCallback(() => {
-    const renderable = Boolean(sessionID && getSessionMaterializationStatus(store.getState(), sessionID, {
-      historyCovered: messageLoader.coversHistory({ directory: resolvedDirectory, sessionID }),
-    }).renderable)
-    renderableRef.current = renderable
-    return renderable
-  }, [messageLoader, resolvedDirectory, sessionID, store])
-  const subscribe = useCallback(
-    (notify: () => void) => {
-      if (!sessionID) return () => undefined
-      const stopLoader = messageLoader.subscribe({ directory: resolvedDirectory, sessionID }, notify)
-      const stopMessages = subscribeDirectorySessionMessages(store, sessionID, (change) => {
-        const state = store.getState()
-        const remainsRenderable = change.partMessageIDs.every((messageID) => (
-          Object.prototype.hasOwnProperty.call(state.part, messageID)
-        ))
-        if (
-          !change.messagesChanged
-          && !change.reset
-          && change.partMessageIDs.length > 0
-          && renderableRef.current
-          && remainsRenderable
-        ) {
-          countSyncPerformance("sessionRenderableNotificationSkips")
-          return
-        }
-        notify()
-      })
-      return () => {
-        stopLoader()
-        stopMessages()
-      }
-    },
-    [messageLoader, resolvedDirectory, sessionID, store],
-  )
-  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const cache = useRef<Record<string, Part[]>>(EMPTY_PART_MAP)
+  const get = useCallback(() => {
+    const wanted = new Set(messageIds)
+    const next: Record<string, Part[]> = {}
+    for (const message of store.getState().message[sessionId] ?? EMPTY_MESSAGES) if (wanted.has(message.messageId)) next[message.messageId] = message.parts
+    const previous = cache.current
+    if (Object.keys(previous).length !== Object.keys(next).length || Object.keys(next).some((id) => next[id] !== previous[id])) cache.current = next
+    return cache.current
+  }, [store, sessionId, messageIds])
+  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, (change) => { if (change.reset || change.messagesChanged || change.partMessageIds.some((id) => messageIds.includes(id))) notify() }), [store, sessionId, messageIds]), get, get)
 }
 
-const EMPTY_RECORD_IDS: ReadonlySet<string> = new Set()
-
-const userHistoryRecordIDs = new WeakMap<UserMessageHistorySnapshot["records"], ReadonlySet<string>>()
-
-const getUserHistoryRecordIDs = (snapshot: UserMessageHistorySnapshot): ReadonlySet<string> => {
-  let ids = userHistoryRecordIDs.get(snapshot.records)
-  if (!ids) {
-    ids = new Set(snapshot.records.map((record) => record.message.messageId))
-    userHistoryRecordIDs.set(snapshot.records, ids)
-  }
-  return ids
-}
-
-export function useUserMessageHistory(sessionID: string, directory?: string): TranscriptPrompt[] {
-  const store = useDirectoryStore(directory)
-  const snapshotRef = useRef<UserMessageHistorySnapshot>(EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT)
-
-  const getSnapshot = useCallback(() => {
-    const next = buildUserMessageHistorySnapshot(store.getState(), sessionID, snapshotRef.current)
-    snapshotRef.current = next
-    return next.history
-  }, [sessionID, store])
-
-  const subscribe = useCallback((notify: () => void) => {
-    if (!sessionID) return () => undefined
-    const unsubscribeMessages = subscribeDirectorySessionMessages(store, sessionID, (change) => {
-      if (!change.messagesChanged && !change.reset && change.partMessageIDs.length > 0) {
-        const snapshot = snapshotRef.current
-        const recordIDs = snapshot.sessionID === sessionID ? getUserHistoryRecordIDs(snapshot) : EMPTY_RECORD_IDS
-        const affectsUserHistory = change.partMessageIDs.some((messageID) => recordIDs.has(messageID))
-        if (!affectsUserHistory) {
-          countSyncPerformance("userMessageHistoryNotificationSkips")
-          return
-        }
-      }
-      notify()
-    })
-    const unsubscribeSession = store.subscribe((state, previous) => {
-      if (state.session === previous.session) return
-      if (getSessionRevertMessageID(state.session, sessionID) !== getSessionRevertMessageID(previous.session, sessionID)) notify()
-    })
-    return () => {
-      unsubscribeMessages()
-      unsubscribeSession()
-    }
-  }, [sessionID, store])
-
-  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+export function useSessionMessagesResolved(sessionId: string, directory?: string): boolean {
+  return useDirectorySync(useCallback((state: State) => Boolean(sessionId && Object.hasOwn(state.message, sessionId)), [sessionId]), directory)
 }

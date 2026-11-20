@@ -1,4 +1,5 @@
 import { normalizeProjectPath } from '@/lib/projectResolution';
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { CanonicalEvent, RuntimeSession, Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
@@ -316,7 +317,7 @@ export const getDirectoryOwnedSessionIds = (directory: string, sessions: readonl
   if (!scope) return [];
   const ids: string[] = [];
   for (const session of sessions) {
-    if (normalizeProjectPath(session.directory) === scope) ids.push(session.sessionId);
+    if (normalizeProjectPath(resolveGlobalSessionDirectory(session)) === scope) ids.push(session.sessionId);
   }
   return ids;
 };

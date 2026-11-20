@@ -2,7 +2,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { applyLaterPages, applyLaterPagesSnapshot, laterPagesSnapshotSchema } from './later-pages';
+import { applyLaterPages, applyLaterPagesSnapshot, laterPagesSnapshotSchema, laterPagesUpdatedEventSchema } from './later-pages';
 
 const isLaterPagesAvailable = (): boolean => !isVSCodeRuntime();
 
@@ -23,8 +23,9 @@ export const subscribeLaterPagesSync = (runtimeKey: string): (() => void) => {
   return subscribeOpenchamberEvents((event) => {
     if (runtimeKey !== getRuntimeKey()) return;
     if (event.type === 'event-stream-ready') void hydrateLaterPages().catch(() => undefined);
-    else if (event.type === 'openchamber:render-later.updated') {
-      applyLaterPages(event.properties.revision, event.properties.sessionID, event.properties.pages);
+    else {
+      const parsed = laterPagesUpdatedEventSchema.safeParse(event);
+      if (parsed.success) applyLaterPages(parsed.data.properties.revision, parsed.data.properties.sessionID, parsed.data.properties.pages);
     }
   });
 };

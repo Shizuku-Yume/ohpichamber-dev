@@ -344,33 +344,3 @@ const getPluginCacheKey = (directory: string | null): string => {
 export const getPluginsScopeKey = getPluginCacheKey;
 
 export const getPluginUpdateKey = (scope: string, target: string): string => JSON.stringify([scope, target]);
-
-export interface PluginEntry {
-  id: string;
-  spec: string;
-  options?: Record<string, unknown>;
-  scope: PluginScope;
-  kind: 'config';
-  parsedKind: PluginParsedKind;
-  sourcePath?: string;
-  policyResource?: string;
-  switchState?: PluginSwitchState;
-  resolvedPath?: string;
-}
-
-export interface PluginFile {
-  id: string;
-  fileName: string;
-  scope: PluginScope;
-  kind: 'file' | 'package';
-  absolutePath?: string;
-  policyResource?: string;
-  switchState?: PluginSwitchState;
-  resolvedPath?: string;
-}
-
-export type PluginParsedKind = 'control' | 'npm' | 'path' | 'git';
-
-export type PluginPackageUpdate =
-  | { kind: 'running' }
-  | { kind: 'failed'; error: string };

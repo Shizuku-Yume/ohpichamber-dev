@@ -36,7 +36,7 @@ export function useSessionMessageLoader(): SessionMessageLoader {
 export function useSessionMessageLoadState(sessionID: string, directory?: string): SessionMessageLoadState {
   const system = useSyncSystem()
   const runtimeKey = system.runtimeKey
-  const target = useMemo(() => ({ directory: directory ?? system.directory, sessionID }), [directory, sessionID, system.directory])
+  const target = useMemo(() => ({ directory: directory ?? system.directory, sessionId: sessionID }), [directory, sessionID, system.directory])
   return React.useSyncExternalStore(
     useCallback((notify) => {
       void runtimeKey

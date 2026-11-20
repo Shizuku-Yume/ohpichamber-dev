@@ -7,6 +7,7 @@ import { getAllSyncSessions } from "./sync-refs"
 import type { State } from "./types"
 import { useSyncRuntime } from "./sync-runtime-context"
 import { useDirectorySync, useDirectoryStore } from "./directory-sync-hooks"
+import { resolveWorkspaceDirectory, subscribeWorkspaceDirectories } from '@/stores/globalSessions'
 
 function getLiveStates(childStores: ChildStoreManager): State[] {
   return Array.from(childStores.children.values(), (store) => store.getState())
@@ -174,7 +175,7 @@ export function useParentSession(sessionID: string | null, directory?: string): 
   )
 }
 
-export function useSession(sessionID?: string | null, directory?: string) {
+export function useSession(sessionID?: string | null, directory?: string): Session | undefined {
   const { childStores } = useSyncRuntime()
   const getSnapshot = useCallback(() => {
     if (directory) {
@@ -231,8 +232,10 @@ export function useSessionSelector<T>(
   return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-const selectSessionDirectory = (session: Session | undefined): string | undefined => session?.directory ?? undefined
+const selectSessionWorkspace = (session: Session | undefined): string | undefined => session?.workspaceId
 
 export function useSessionDirectory(sessionID?: string | null, directory?: string): string | undefined {
-  return useSessionSelector(sessionID, directory, selectSessionDirectory)
+  const workspaceId = useSessionSelector(sessionID, directory, selectSessionWorkspace)
+  const getSnapshot = useCallback(() => workspaceId ? resolveWorkspaceDirectory(workspaceId) ?? undefined : undefined, [workspaceId])
+  return React.useSyncExternalStore(subscribeWorkspaceDirectories, getSnapshot, getSnapshot)
 }

@@ -148,5 +148,5 @@ const finiteTime = (value: unknown): number => (
 );
 
 export const getSessionActivityTime = (session: Session): number => (
-  finiteTime(session.time?.idle) || finiteTime(session.updatedAt) || finiteTime(session.createdAt)
+  finiteTime(session.metadata?.openchamber?.workbench?.lastIdleAt) || finiteTime(session.updatedAt) || finiteTime(session.createdAt)
 );

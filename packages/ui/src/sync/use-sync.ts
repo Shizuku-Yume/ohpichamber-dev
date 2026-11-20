@@ -97,7 +97,7 @@ export function usePrefetchSessionMessages() {
   }, [messageLoader, runtimeKey])
 }
 
-export function useLoadedSessionMessageRecords() {
+export function useLoadedSessionMessageRecords(): (target: { directory: string; sessionID: string }) => Message[] | null {
   const { childStores, runtimeKey } = useSyncRuntime()
 
   return useCallback(({ directory, sessionID }: { directory: string; sessionID: string }) => {

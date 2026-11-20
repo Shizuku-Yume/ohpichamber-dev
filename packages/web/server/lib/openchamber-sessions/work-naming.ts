@@ -1,7 +1,7 @@
 
 import { z } from 'zod';
 import type { setWorktreeTaskTitle as setWorktreeTaskTitleDefault } from '../git/service.js';
-import type { SessionInfo } from '@opencode/client';
+import type { SessionMetadata } from './session-metadata-store.js';
 
 const TITLE_MAX_LENGTH = 120;
 
@@ -16,7 +16,7 @@ const asText = (value: WorkNameInput['title']) => textSchema.parse(value);
 
 interface NamingSession {
   id: string;
-  metadata?: SessionInfo['metadata'];
+  metadata?: SessionMetadata;
   location?: { directory?: string };
   directory?: string;
   title?: string;

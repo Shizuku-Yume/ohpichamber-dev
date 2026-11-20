@@ -72,4 +72,21 @@ describe('native workspace MCP runtime consumers', () => {
     pending.resolve(configuration); await Promise.all([first, second]);
     expect(resolveWorkspace).toHaveBeenCalledTimes(1);
   });
+  test('forgetting one directory releases its projection without erasing another', async () => {
+    await useMcpStore.getState().refresh({ directory: '/repo' });
+    await useMcpStore.getState().refresh({ directory: '/other' });
+    useMcpStore.getState().forgetDirectory('/repo');
+    expect(useMcpStore.getState().getStatusForDirectory('/repo')).toEqual({});
+    expect(useMcpStore.getState().getPhaseForDirectory('/repo')).toBe('unknown');
+    expect(Object.keys(useMcpStore.getState().getStatusForDirectory('/other'))).toEqual(['tools']);
+  });
+  test('forgetting a directory rejects an in-flight read publication', async () => {
+    configRead = () => pending.promise;
+    const loading = useMcpStore.getState().refresh({ directory: '/repo' });
+    useMcpStore.getState().forgetDirectory('/repo');
+    pending.resolve(configuration);
+    await loading;
+    expect(useMcpStore.getState().getStatusForDirectory('/repo')).toEqual({});
+    expect(useMcpStore.getState().getPhaseForDirectory('/repo')).toBe('unknown');
+  });
 });

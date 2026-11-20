@@ -4,11 +4,13 @@ import { devtools } from 'zustand/middleware';
 import { getDeferredSafeStorage, getSafeStorage } from './utils/safeStorage';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { folderScopeKeepsMovedSession } from '@/lib/sessionFolders/folderScopes';
 import type { LoadPhase } from './loadPhase';
 import {
   applyFolderChange,
   applyFolderChanges,
   collectFolderSubtree,
+  chatPlacement,
   folderChangeSchema,
   folderSnapshotSchema,
   type FolderChange,
@@ -729,6 +731,15 @@ type ServerResult =
           removeSessionEverywhere: (runtimeKey: string, sessionId: string): void => {
             if (!runtimeKey || runtimeKey !== activeFolderRuntimeKey || runtimeKey !== runtime.runtimeKey() || !sessionId) return;
             commit({ type: 'forget-sessions', sessionIds: [sessionId] });
+          },
+
+          followSessionMove: (sessionId: string, destination: string, destinationWorktree: string | null): void => {
+            if (!sessionId || !destination) return;
+            for (const [scopeKey, folders] of Object.entries(get().foldersMap)) {
+              if (!folders.some((folder) => folder.sessionIds.includes(sessionId))) continue;
+              if (folderScopeKeepsMovedSession(scopeKey, destination, destinationWorktree)) continue;
+              commit({ type: 'unassign', scopeKey, sessionIds: [sessionId], from: chatPlacement(folders, [sessionId]) });
+            }
           },
 
           forgetScopes: (scopeKeys: string[]): void => {

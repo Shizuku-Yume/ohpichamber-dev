@@ -4,6 +4,7 @@ import {
   getSessionMaterializationStatus,
   getStaleRunningToolMessageID,
   materializeSessionSnapshots,
+  isSessionMaterializationStillNeeded,
 } from "../materialization"
 
 const message = (messageId: string, parts: Part[] = []): Message => ({
@@ -15,6 +16,13 @@ const tool = (partId: string, status: "pending_approval" | "running" | "complete
 })
 
 describe("native session materialization", () => {
+  test('repair checks inspect canonical inline message parts', () => {
+    const state = { message: { 'session-1': [message('message-1', [text('part-1', 'answer')])] } };
+    expect(isSessionMaterializationStillNeeded(state, 'session-1', { reason: 'empty-assistant-message', messageID: 'message-1' })).toBe(false);
+    expect(isSessionMaterializationStillNeeded(state, 'session-1', { reason: 'missing-delta-part', messageID: 'message-1', partID: 'part-1' })).toBe(false);
+    expect(isSessionMaterializationStillNeeded(state, 'session-1', { reason: 'orphan-delta', messageID: 'message-1', partID: 'missing' })).toBe(true);
+    expect(isSessionMaterializationStillNeeded({ message: {} }, 'session-1', { reason: 'missing-owning-message', messageID: 'message-1' })).toBe(true);
+  });
   test("materializes inline parts and marks the session renderable", () => {
     const result = materializeSessionSnapshots(
       { message: {} },

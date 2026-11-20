@@ -1,12 +1,4 @@
-import { findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
-import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
-import { createMessageQueueTarget } from '@/stores/messageQueueStore';
-import { useMessageQueueStore } from '@/stores/messageQueueStore';
-import { followSessionTabMove } from '@/lib/sessionTabs';
 import { ConnectionLostError } from './connection-lost-error';
-import type { Session } from '@openchamber/agent-contract';
-import { getDirectoryState } from './sync-refs';
-import { getAllSyncSessionMap } from './sync-refs';
 import type { SentMessage } from '@/sync/send-message-options';
 
 // The review-flow callback signature is retained for its Task 16 cutover;
@@ -815,15 +807,6 @@ async function submitQuestion(request: FormRequest, action: { action: "answer"; 
   throw error
  }
 }
-
-function findSessionRecordAnywhere(sessionId: string, directory: string | undefined): Session | undefined {
-  return getDirectoryState(directory)?.session.find((session) => session.sessionId === sessionId)
-    ?? getAllSyncSessionMap().get(sessionId)
-    ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
-}
-
-
-
 
 /** Capture the existing composer selection in native session admission options. */
 export type SessionCreateSelection = {
@@ -1908,13 +1891,12 @@ export async function dismissOpenFormsForSession(sessionId: string): Promise<boo
 
 export async function deferQuestionsAfterSend(forms: readonly FormRequest[], sent: SentMessage | undefined): Promise<void> {
   if (sent?.route !== "prompt") return
-  await Promise.all(forms.filter((form) => form.sessionID === sent.sessionId).map(async (form) => {
+  await Promise.all(forms.filter((form) => form.sessionId === sent.sessionId).map(async (form) => {
     try {
-      await cancelForm(form.sessionID, form.id, DEFERRED_QUESTION_NOTE)
+      await cancelForm(form.sessionId, form.questionId)
     } catch (error) {
-      if (error instanceof Error && isFormAlreadySettledError(error)) {
-        removeFormRequestFromChildStores(form.sessionID, form.id)
-        recoverStaleBlockingRequest(form.sessionID)
+      if (isFormRequestNotFoundError(error)) {
+        recoverStaleBlockingRequest(form.sessionId)
       } else if (!isFormRequestNotFoundError(error)) {
         console.error("[session-actions] Could not defer an open question after a send:", error)
       }

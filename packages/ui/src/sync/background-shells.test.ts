@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { CanonicalEvent, ShellJob, ShellSnapshot } from '@openchamber/agent-contract';
-import { ENDED_SHELLS_MAX, applyBackgroundShellEvents, backgroundShellRevision, backgroundShellsOfSessions, refreshBackgroundShells, replaceDirectoryShells, resetBackgroundShells, sessionsInTree, useBackgroundShellsStore } from './background-shells';
+import { ENDED_SHELLS_MAX, applyBackgroundShellEvents, backgroundShellRevision, backgroundShellsOfSessions, refreshBackgroundShells, replaceDirectoryShells, resetBackgroundShells, sessionsInTree, useBackgroundShellsStore, waitForShellSettle } from './background-shells';
 import { deferred } from './session-message-loader-test-fixtures';
 const running = (jobId: string, sessionId = 'session_1', background = true): Extract<ShellJob, { status: 'running' }> => ({ jobId, sessionId, epoch: 'epoch_1', workerGeneration: 'worker_1', workspaceId: 'workspace_1', projectId: 'project_1', command: `run ${jobId}`, background, startedAt: 1000, outputCursor: '0', status: 'running' });
 const ended = (jobId: string, sessionId = 'session_1'): ShellJob => ({ ...running(jobId, sessionId), status: 'ended', endedAt: 2000, termination: { reason: 'exit', exitCode: 0 } });
@@ -89,58 +89,57 @@ describe('native background shell index', () => {
   });
 });
 
-describe('waiting for a call to settle in the background', () => {
-  const outcome = async (settled: Promise<string>): Promise<string> => settled.catch((error: Error) => `rejected: ${error.message}`);
-
-  test('resolves on the call settling, not on the flag a list sets', async () => {
-    replaceDirectoryShells('/repo', [shell('sh_1')], backgroundShellRevision());
-    expect(isBackground('sh_1')).toBe(true);
-    const wait = waitForShellSettle('sh_1', 1000);
-    let result: string | undefined;
-    void wait.settled.then((value) => { result = value; });
+describe('waiting for a native shell to settle', () => {
+  test('a matching background observation settles a foreground job', async () => {
+    const job = running('job_1', 'session_1', false);
+    applyBackgroundShellEvents('/repo', [event(job)]);
+    const wait = waitForShellSettle(job, 1000);
+    applyBackgroundShellEvents('/repo', [event({ ...job, background: true })]);
+    expect(await wait.settled).toBe('background');
+  });
+  test('an observed terminal job settles as ended', async () => {
+    const job = running('job_1', 'session_1', false);
+    applyBackgroundShellEvents('/repo', [event(job)]);
+    const wait = waitForShellSettle(job, 1000);
+    applyBackgroundShellEvents('/repo', [event(ended('job_1'))]);
+    expect(await wait.settled).toBe('ended');
+  });
+  test('absence from a snapshot is not evidence that the command ended', async () => {
+    const job = running('job_1', 'session_1', false);
+    applyBackgroundShellEvents('/repo', [event(job)]);
+    const wait = waitForShellSettle(job, 1000);
+    let settled = false;
+    void wait.settled.then(() => { settled = true; });
+    replaceDirectoryShells('/repo', snapshot([]), backgroundShellRevision());
     await Promise.resolve();
-    expect(result).toBeUndefined();
-
-    applyBackgroundShellEvents('/repo', [settledInBackground('sh_1')]);
-    expect(await wait.settled).toBe('background');
-  });
-
-  test('resolves ended when the command ends first', async () => {
-    applyBackgroundShellEvents('/repo', [started(shell('sh_1'))]);
-    const wait = waitForShellSettle('sh_1', 1000);
-    applyBackgroundShellEvents('/repo', [ended('sh_1')]);
+    expect(settled).toBe(false);
+    applyBackgroundShellEvents('/repo', [event(ended('job_1'))]);
     expect(await wait.settled).toBe('ended');
   });
-
-  test('resolves ended when a list read no longer has the command', async () => {
-    applyBackgroundShellEvents('/repo', [started(shell('sh_1'))]);
-    const wait = waitForShellSettle('sh_1', 1000);
-    replaceDirectoryShells('/repo', [], backgroundShellRevision());
-    expect(await wait.settled).toBe('ended');
-  });
-
-  test('a settle and an end in one batch resolve background, with the command already gone from the index', async () => {
-    applyBackgroundShellEvents('/repo', [started(shell('sh_1'))]);
-    const wait = waitForShellSettle('sh_1', 1000);
-    applyBackgroundShellEvents('/repo', [settledInBackground('sh_1'), ended('sh_1')]);
+  test('another session or epoch cannot settle a worker-local job id', async () => {
+    const job = running('same', 'session_1', false);
+    const wait = waitForShellSettle(job, 1000);
+    let settled = false;
+    void wait.settled.then(() => { settled = true; });
+    applyBackgroundShellEvents('/repo', [event(running('same', 'session_2')), event({ ...running('same'), epoch: 'epoch_2' })]);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    applyBackgroundShellEvents('/repo', [event({ ...job, background: true })]);
     expect(await wait.settled).toBe('background');
-    expect(ids()).toEqual([]);
   });
-
-  test('rejects after the timeout, on a cancel and on a runtime switch, and a later event changes nothing', async () => {
-    applyBackgroundShellEvents('/repo', [started(shell('sh_1')), started(shell('sh_2')), started(shell('sh_3'))]);
-    const timedOut = waitForShellSettle('sh_1', 5);
-    expect(await outcome(timedOut.settled)).toBe('rejected: The command did not move to the background in time.');
-    const cancelled = waitForShellSettle('sh_2', 1000);
+  test('a complete native snapshot can settle an already background job', async () => {
+    const job = running('job_1');
+    replaceDirectoryShells('/repo', snapshot([job]), backgroundShellRevision());
+    expect(await waitForShellSettle(job, 1000).settled).toBe('background');
+  });
+  test('timeout, cancellation and reset reject rather than reporting success', async () => {
+    const timedOut = waitForShellSettle(running('job_timeout'), 5);
+    await expect(timedOut.settled).rejects.toThrow('in time');
+    const cancelled = waitForShellSettle(running('job_cancel'), 1000);
     cancelled.cancel();
-    expect(await outcome(cancelled.settled)).toBe('rejected: Cancelled.');
-    const switched = waitForShellSettle('sh_3', 1000);
+    await expect(cancelled.settled).rejects.toThrow('Cancelled');
+    const reset = waitForShellSettle(running('job_reset'), 1000);
     resetBackgroundShells();
-    expect(await outcome(switched.settled)).toBe('rejected: The runtime changed.');
-
-    // Nothing is left waiting: the events of a new wait resolve only that wait.
-    const next = waitForShellSettle('sh_1', 1000);
-    applyBackgroundShellEvents('/repo', [settledInBackground('sh_1'), settledInBackground('sh_2')]);
-    expect(await next.settled).toBe('background');
+    await expect(reset.settled).rejects.toThrow('runtime changed');
   });
 });

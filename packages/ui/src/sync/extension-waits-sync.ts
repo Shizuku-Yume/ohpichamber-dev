@@ -7,6 +7,7 @@ import {
   applyExtensionWaits,
   applyExtensionWaitsSnapshot,
   extensionWaitsSnapshotSchema,
+  extensionWaitsUpdatedEventSchema,
   restoreExtensionWaits,
   takeExtensionWaits,
 } from './extension-waits';
@@ -31,8 +32,9 @@ export const subscribeExtensionWaitsSync = (runtimeKey: string): (() => void) =>
   return subscribeOpenchamberEvents((event) => {
     if (runtimeKey !== getRuntimeKey()) return;
     if (event.type === 'event-stream-ready') void hydrateExtensionWaits().catch(() => undefined);
-    else if (event.type === 'openchamber:extension-waits.updated') {
-      applyExtensionWaits(event.properties.revision, event.properties.sessionID, event.properties.waits);
+    else {
+      const parsed = extensionWaitsUpdatedEventSchema.safeParse(event);
+      if (parsed.success) applyExtensionWaits(parsed.data.properties.revision, parsed.data.properties.sessionID, parsed.data.properties.waits);
     }
   });
 };

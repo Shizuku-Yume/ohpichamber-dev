@@ -401,7 +401,7 @@ export class SessionMessageLoader {
   coversHistory(target: SessionMessageTarget): boolean {
     const normalized = this.normalizeTarget(target)
     const entry = normalized ? this.entries.get(this.keyFor(normalized)) : undefined
-    return Boolean(entry && entryCoversHistory(entry))
+    return Boolean(entry?.snapshot.resolved && !entry.evicted)
   }
 
   subscribe(target: SessionMessageTarget, listener: () => void): () => void {

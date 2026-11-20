@@ -61,7 +61,7 @@ interface ProjectContextActions {
   setPlanPinned: (project: ProjectRef, planId: string, pinned: boolean) => Promise<boolean>;
   deletePlan: (project: ProjectRef, planId: string) => Promise<boolean>;
   /** Move a plan into the team's shared folder, or back; the plan gets a new id. */
-  movePlan: (project: ProjectRef, planId: string, direction: 'share' | 'unshare') => Promise<boolean>;
+  movePlan: (project: ProjectRef, planId: string, direction: 'share' | 'unshare') => Promise<string | null>;
   reset: () => void;
 }
 
@@ -214,15 +214,14 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
       flags.todos = true;
 
       try {
-        const committed = await enqueueWrite(projectId, 'todos', () => saveProjectTodos(project, todos));
-        patchEntry(projectId, { todos: committed.todos, loaded: true });
+        const committed = await enqueueWrite(projectId, 'todos', () => saveProjectTodos(project, todos, notesTodosStore));
+        patchEntry(projectId, { todos: committed.todos, notesTodosStore: committed.notesTodosStore, loaded: true });
         return true;
       } catch (error) {
         patchEntry(projectId, {
           todos: previous,
           error: errorMessage(error, 'Failed to save project todos'),
         });
-        if (!change) refreshAfterWrite = true;
         return false;
       } finally {
         flags.todos = false;

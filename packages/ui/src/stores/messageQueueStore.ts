@@ -302,7 +302,6 @@ interface MessageQueueActions {
     markSending: (target: MessageQueueTarget, messageId: string) => void;
     clearSending: (target: MessageQueueTarget, messageId: string) => void;
     getSendableQueue: (target: MessageQueueTarget) => QueuedMessage[];
-    followSessionMove: (destination: MessageQueueTarget) => void;
     locateQueuedMessage: (target: MessageQueueTarget, messageId: string) => MessageQueueTarget;
     setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
     getQueueForTarget: (target: MessageQueueTarget) => QueuedMessage[];
@@ -401,17 +400,7 @@ const clearSessionProjection = (
     return { queuedMessages, sendingIds };
 };
 
-const newestSessionRevision = (runtimeKey: string, owner: string, sessionId: string): number => {
-    let newest = -1;
-    for (const [key, revision] of appliedRevisions) {
-        if (revision <= newest) continue;
-        const parsed = parseMessageQueueKey(key);
-        if (parsed?.runtimeKey === runtimeKey && parsed.sessionId === sessionId && queueOwnerOf(parsed.directory) === owner) {
-            newest = revision;
-        }
-    }
-    return newest;
-};
+
 
 export const useMessageQueueStore = create<MessageQueueStore>()(
     devtools(
@@ -777,32 +766,6 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         const sending = state.sendingIds[key];
                         if (!sending || sending.length === 0) return queue;
                         return queue.filter((message) => !sending.includes(message.id));
-                    },
-
-                    followSessionMove: (destination) => {
-                        if (isServerOwnedMessageQueue()) return;
-                        const destinationKey = getMessageQueueKey(destination);
-                        set((state) => {
-                            const queuedMessages = { ...state.queuedMessages };
-                            const sendingIds = { ...state.sendingIds };
-                            let moved = false;
-                            for (const key of new Set([...Object.keys(state.queuedMessages), ...Object.keys(state.sendingIds)])) {
-                                if (key === destinationKey) continue;
-                                const parsed = parseMessageQueueKey(key);
-                                if (parsed?.runtimeKey !== destination.runtimeKey || parsed.sessionId !== destination.sessionId) continue;
-                                moved = true;
-                                const messages = queuedMessages[key] ?? [];
-                                delete queuedMessages[key];
-                                if (messages.length > 0) {
-                                    const existing = queuedMessages[destinationKey] ?? [];
-                                    queuedMessages[destinationKey] = [...existing, ...messages.filter((message) => !existing.some((entry) => entry.id === message.id))];
-                                }
-                                const ids = sendingIds[key] ?? [];
-                                delete sendingIds[key];
-                                if (ids.length > 0) sendingIds[destinationKey] = [...new Set([...(sendingIds[destinationKey] ?? []), ...ids])];
-                            }
-                            return moved ? { queuedMessages, sendingIds } : {};
-                        });
                     },
 
                     locateQueuedMessage: (target, messageId) => {

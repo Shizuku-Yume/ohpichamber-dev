@@ -128,7 +128,7 @@ export function isSessionMaterializationStillNeeded(
   request: SessionMaterializationRequest,
 ): boolean {
   if (request.reason === "empty-assistant-message") {
-    return !request.messageID || !Object.prototype.hasOwnProperty.call(state.part, request.messageID)
+    return !request.messageID || !(state.message[sessionID] ?? []).some((message) => message.messageId === request.messageID && message.parts.length > 0)
   }
 
   if (request.reason === "missing-owning-message") {
@@ -138,7 +138,7 @@ export function isSessionMaterializationStillNeeded(
 
   if (request.reason === "orphan-delta" || request.reason === "missing-delta-part") {
     if (!request.messageID || !request.partID) return true
-    return !(state.part[request.messageID] ?? []).some((part) => part.id === request.partID)
+    return !(state.message[sessionID] ?? []).find((message) => message.messageId === request.messageID)?.parts.some((part) => part.partId === request.partID)
   }
 
   if (request.reason === "settled-running-tool") {
@@ -147,6 +147,8 @@ export function isSessionMaterializationStillNeeded(
 
   return true
 }
+
+export type SessionMaterializationReason = 'empty-assistant-message' | 'missing-owning-message' | 'orphan-delta' | 'missing-delta-part' | 'settled-running-tool'
 
 export type SessionMaterializationRequest = {
   reason: SessionMaterializationReason

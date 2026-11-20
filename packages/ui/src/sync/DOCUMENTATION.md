@@ -2,15 +2,28 @@
 
 ## Scope
 
+Canonical sessions do not carry the inherited operator-child or workflow-agent
+tags. The operator-only Take Over and mark-done interception are not supported:
+ordinary child-session lineage does not imply either role. Pending tool
+approvals keep their existing CAS-scoped canonical response flow; taking over a
+legacy permission ruleset must never become blanket approval.
+
 This document covers the client-side session and data synchronization architecture in `packages/ui/src/sync` under the Task 13 native canonical contract, and the rules for updating stores safely.
 
 There are two distinct session data scopes in the UI:
 
 1. **Directory-scoped sync stores**
-   - Owned by the sync layer child stores created in `sync-context.tsx` and managed by `ChildStoreManager`
+   - Owned by the sync layer child stores created in `sync-stores.ts` and managed by `ChildStoreManager`
    - Source for per-directory live session state, messages with inline parts, approval requests, question requests, snapshots, queue state, catalog state, shell jobs, and runtime statuses
    - Backed by single-flight SSE event streaming per session (`subscribeSessionEvents`) and directory-scoped workspace discovery (`client.listSessions(workspaceId)`)
    - Read via narrow hooks including `useSessions()`, `useSessionMessages()`, `useSessionStatus()`, `useSessionPermissions()`, `useSessionForms()`, `useSessionPartsForMessages()`, `useDirectoryStore()`, and `useDirectorySync()`
+
+`sync-runtime-context.ts` owns the shared canonical contexts used by the provider
+and extracted hooks. Canonical message selectors and record snapshots live in
+`session-message-hooks.ts` and `session-message-records.ts`; `sync-context.tsx`
+re-exports their public API. Pre-mount reads use the same store and loader the
+provider adopts, with a 30-second expiry if no provider mounts. They do not
+create an additional transcript authority.
 
 2. **Global sessions cache**
    - Owned by `packages/ui/src/stores/useGlobalSessionsStore.ts` (Slice C)

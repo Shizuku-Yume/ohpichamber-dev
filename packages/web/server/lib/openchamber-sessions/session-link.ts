@@ -3,7 +3,7 @@ import { sourceControlProviderDescriptors } from '../source-control/provider-des
 import { buildLinkedIssuesPatch } from './session-linked-issues.js';
 import type { TrackerRegistry, TrackerImplementation } from '../trackers/tracker-contract.js';
 import type { LinkedIssuesPatch } from './session-linked-issues.js';
-import type { JsonValue } from '@opencode/client';
+import type { JsonValue } from '../shared/json-values.js';
 import type { SessionMetadata } from './session-metadata-store.js';
 
 export interface LinkEntry {

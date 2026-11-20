@@ -412,6 +412,3 @@ export const useSessionWarmingSaving = (sessionId: string | null | undefined): b
 export const isSessionKeptWarm = (state: SessionCacheWarmingState | null | undefined): boolean => (
   state !== null && state !== undefined && state.effectiveMode !== 'off'
 );
-
-export const useSessionWarmUntil = (sessionId: string | null): number | null | undefined =>
-  useSessionWarmingStore((state) => (sessionId && sessionId in state.sessions ? state.sessions[sessionId] : undefined));

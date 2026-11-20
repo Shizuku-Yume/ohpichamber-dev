@@ -4,7 +4,7 @@ import { resolveRecoveryDirectory } from "./form-recovery"
 
 export type SessionReadDirectorySources = {
   knownDirectory: (sessionID: string) => string | null
-  readUnscoped: (sessionID: string) => Promise<Pick<Session, "directory"> | null>
+  readUnscoped: (sessionID: string) => Promise<Pick<Session, "workspaceId"> | null>
   adopt: (sessionID: string, sourceDirectory: string, destinationDirectory: string) => void
 }
 

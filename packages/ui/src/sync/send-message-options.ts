@@ -1,8 +1,7 @@
-import type { SkillMentions } from "@/lib/opencode/client"
-import type { Metadata } from "@/lib/opencode/model"
+import type { JsonObject } from '@openchamber/agent-contract'
 import type { QueuedMessageGoal } from "@/stores/messageQueueStore"
 import type { InputHistorySubmission } from "@/stores/useInputHistoryStore"
-import type { NewSessionDraftState } from "./session-ui-store"
+import type { CanonicalSkillMentions, NewSessionDraftState } from "./session-ui-store"
 
 export type SentMessage = { route: 'command' | 'prompt' | 'shell'; sessionId: string }
 
@@ -26,8 +25,8 @@ export type SendMessageOptions = {
   historySubmissions?: InputHistorySubmission[]
   draftSnapshot?: NewSessionDraftState
   delivery?: 'steer'
-  skills?: SkillMentions
-  metadata?: Metadata
+  skills?: CanonicalSkillMentions
+  metadata?: JsonObject
   onSent?: (sent: SentMessage) => void
   queuedGoal?: QueuedMessageGoal | null
   recordEffort?: boolean

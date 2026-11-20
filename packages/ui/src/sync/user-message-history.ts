@@ -4,7 +4,7 @@ import type { State } from "./types"
 
 type UserMessageHistoryRecord = { message: Message; parts: Part[] }
 export type TranscriptPrompt = { text: string; createdAt: number }
-type UserMessageHistorySnapshot = {
+export type UserMessageHistorySnapshot = {
   sessionId: string
   records: UserMessageHistoryRecord[]
   history: TranscriptPrompt[]
@@ -57,10 +57,3 @@ export const buildUserMessageHistorySnapshot = (
   }
   return { sessionId, records, history }
 }
-
-export type UserMessageHistorySnapshot = {
-  sessionID: string;
-  revertMessageID?: string;
-  records: UserMessageHistoryRecord[];
-  history: TranscriptPrompt[];
-};

@@ -1,9 +1,9 @@
 
 import { applySessionLiveWorkEvents, applySessionLiveWorkSnapshot } from "./session-live-work"
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
-import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useStore, type StoreApi } from "zustand"
-import type { ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionCompacting, SessionRuntimeStatus, SessionSnapshot, TodoPhase } from "@openchamber/agent-contract"
+import type { ApprovalRequest, CanonicalEvent, Part, QuestionRequest, Run, Session, SessionCompacting, SessionRuntimeStatus, SessionSnapshot, TodoPhase } from "@openchamber/agent-contract"
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -11,7 +11,7 @@ import { useAuthSessionStore } from "@/lib/runtime-auth-expiry"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { resolveWorkspaceDirectory, subscribeWorkspaceDirectories } from "@/stores/globalSessions"
-import { ChildStoreManager, markDirectorySessionPartChanged, subscribeDirectorySessionMessages, subscribeDirectoryPermission, subscribeDirectoryForm, type DirectoryStore, type DirectoryBootstrapPriority, type DirectoryBootstrapReason } from "./child-store"
+import { ChildStoreManager, markDirectorySessionPartChanged, subscribeDirectoryPermission, subscribeDirectoryForm, type DirectoryStore, type DirectoryBootstrapPriority, type DirectoryBootstrapReason } from "./child-store"
 import { bootstrapDirectory, bootstrapGlobal } from "./bootstrap"
 import { BootstrapFailureError } from "./retry"
 import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
@@ -33,7 +33,9 @@ import { subscribeSessionMetadataSync } from "./session-metadata-sync";
 import { subscribePrWatchSync } from "./pr-watch-sync";
 import { subscribeAutoReviewSync } from "./auto-review-sync";
 
-import { SessionMessageLoader, getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
+import { getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
+import { createSyncStores, takePrefetchedSyncStores } from './sync-stores'
+export { prefetchSessionBeforeMount } from './sync-stores'
 import { setSyncRefs } from "./sync-refs"
 import { setActionRefs, setOptimisticRefs } from "./session-actions"
 import { aggregateLiveSessions, aggregateLiveSessionStatuses, areSessionListsEquivalent, areStatusMapsEquivalent, findLiveSession } from "./live-aggregate"
@@ -41,23 +43,16 @@ import { applyGlobalSessionStatusEvents, applyGlobalSessionStatusSnapshot, useGl
 import { applyGlobalBlockingRequestEvents, replaceGlobalBlockingRequestSnapshot } from "./global-blocking-requests"
 import { applyBackgroundShellEvents } from "./background-shells"
 import { collectScopedBlockingRequests, areRequestArraysReferentiallyEqual } from "./scoped-blocking-requests"
-import { buildUserMessageHistorySnapshot, EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT, type TranscriptPrompt } from "./user-message-history"
-import { getSessionMaterializationStatus } from "./materialization"
 import { appendErrorNotification } from "./notification-store"
 import { recordSessionError, summarizeSessionError } from "./session-error-log"
 import type { State } from "./types"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { fileTreeChanges } from "@/lib/fileTreeChanges"
+import { SyncContext, SyncRuntimeContext, useSyncRuntime, useSyncSystem, type CurrentDirectorySource, type SyncRuntime, type SyncSystem } from './sync-runtime-context'
+export { SyncContext, SyncRuntimeContext, useSyncRuntime, type SyncRuntime } from './sync-runtime-context'
 
-type CurrentDirectorySource = { get: () => string; subscribe: (notify: () => void) => () => void }
-export type SyncRuntime = { childStores: ChildStoreManager; messageLoader: SessionMessageLoader; runtimeKey: string; client: CanonicalClient; currentDirectory: CurrentDirectorySource }
-type SyncSystem = SyncRuntime & { directory: string }
-export const SyncContext = createContext<SyncSystem | null>(null)
-export const SyncRuntimeContext = createContext<SyncRuntime | null>(null)
-const EMPTY_MESSAGES: Message[] = []
 const EMPTY_APPROVALS: ApprovalRequest[] = []
 const EMPTY_QUESTIONS: QuestionRequest[] = []
-const EMPTY_PART_MAP: Record<string, Part[]> = {}
 const EMPTY_LOAD: SessionMessageLoadState = { status: "idle", loadingKind: null, error: null, resolved: false, limit: 0, cursor: undefined, complete: false, generation: 0, updatedAt: undefined }
 let activeTarget: SessionMessageTarget | null = null
 const externallyViewedSessions = new Map<string, number>()
@@ -79,17 +74,6 @@ export function setExternallyViewedSession(directory: string, sessionId: string,
     externallyViewedSessions.delete(key)
     getImperativeSessionMessageLoader()?.scheduleCacheRetention(normalized)
   }
-}
-
-export function useSyncRuntime(): SyncRuntime {
-  const runtime = useContext(SyncRuntimeContext)
-  if (!runtime) throw new Error("Sync hooks require SyncProvider")
-  return runtime
-}
-function useSyncSystem(): SyncSystem {
-  const system = useContext(SyncContext)
-  if (!system) throw new Error("Sync hooks require SyncProvider")
-  return system
 }
 
 /** Sequence-gated directory batch: only accepted events reach global projections. */
@@ -209,9 +193,13 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
   const client = props.client ?? canonicalClient
   const currentRef = useRef(true)
   const pipelineRef = useRef<EventPipeline | null>(null)
-  const childStoresRef = useRef<ChildStoreManager | null>(null)
-  if (!childStoresRef.current) childStoresRef.current = new ChildStoreManager()
-  const childStores = childStoresRef.current
+  const storesRef = useRef<ReturnType<typeof createSyncStores> | null>(null)
+  if (!storesRef.current) {
+    storesRef.current = takePrefetchedSyncStores(client, props.runtimeKey) ?? createSyncStores(client, props.runtimeKey)
+  }
+  const stores = storesRef.current
+  if (stores.configuration.client !== client) stores.configuration = { ...stores.configuration, client }
+  const { childStores, messageLoader } = stores
   const isCurrent = useCallback(() => currentRef.current && getRuntimeKey() === props.runtimeKey, [props.runtimeKey])
   /**
    * A child session's transcript is served by the history route only. Its
@@ -255,9 +243,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       fileTreeChanges.unknownChange(target.directory)
     }
   }, [childStores, isCurrent, isKnownChildSession])
-  const messageLoaderRef = useRef<SessionMessageLoader | null>(null)
-  if (!messageLoaderRef.current) messageLoaderRef.current = new SessionMessageLoader(childStores, { client, runtimeKey: props.runtimeKey, isCurrent, onSnapshot })
-  const messageLoader = messageLoaderRef.current
+  stores.callbacks.isCurrent = isCurrent
+  stores.callbacks.onSnapshot = onSnapshot
   const disposalRef = useRef<number | NodeJS.Timeout | undefined>(undefined)
   const currentDirectoryValue = normalizePath(props.directory) ?? ""
   const currentDirectoryRef = useRef<string>(currentDirectoryValue)
@@ -334,7 +321,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     clearTimeout(disposalRef.current)
     disposalRef.current = undefined
     messageLoader.activate()
-    messageLoader.configure({ client, runtimeKey: props.runtimeKey, isCurrent, onSnapshot })
+    messageLoader.configure(stores.configuration)
     const pipeline = createEventPipeline({
       client, isCurrent,
       onEvents(target, events) {
@@ -432,7 +419,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     for (const [directory, store] of childStores.children) {
       for (const snapshot of Object.values(store.getState().snapshot)) {
         if (isKnownChildSession(directory, snapshot.session.sessionId)) continue
-        pipeline.attach({ directory, sessionId: snapshot.session.sessionId }, snapshot)
+        onSnapshot({ directory, sessionId: snapshot.session.sessionId }, snapshot)
       }
     }
     const discoveryTimer = setInterval(() => {
@@ -484,7 +471,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       if (pipelineRef.current === pipeline) pipelineRef.current = null
       disposalRef.current = setTimeout(() => { messageLoader.dispose(); childStores.disposeAll() }, 0)
     }
-  }, [childStores, client, isCurrent, isKnownChildSession, loadSessions, messageLoader, onSnapshot, props.runtimeKey])
+  }, [childStores, client, isCurrent, isKnownChildSession, loadSessions, messageLoader, onSnapshot, props.runtimeKey, stores])
 
   useEffect(() => {
     const directory = currentDirectoryRef.current
@@ -574,17 +561,6 @@ export function useSyncDirectory() { return useSyncSystem().directory }
 export function useChildStoreManager() { return useSyncRuntime().childStores }
 export function useSessionMessageLoader() { return useSyncRuntime().messageLoader }
 
-export function useSessionMessages(sessionId: string, directory?: string): Message[] {
-  const store = useDirectoryStore(directory)
-  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, notify), [store, sessionId]), useCallback(() => store.getState().message[sessionId] ?? EMPTY_MESSAGES, [store, sessionId]), () => EMPTY_MESSAGES)
-}
-export function useSessionMessagesSelector<T>(sessionId: string, directory: string | undefined, select: (messages: Message[], state: State) => T, isEqual: (left: T, right: T) => boolean = Object.is): T {
-  const store = useDirectoryStore(directory)
-  const cache = useRef<{ value: T } | null>(null)
-  const get = useCallback(() => { const state = store.getState(); const value = select(state.message[sessionId] ?? EMPTY_MESSAGES, state); if (!cache.current || !isEqual(cache.current.value, value)) cache.current = { value }; return cache.current.value }, [store, sessionId, select, isEqual])
-  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, notify), [store, sessionId]), get, get)
-}
-export function useSessionRenderable(sessionId: string, directory?: string): boolean { return useSessionMessagesSelector(sessionId, directory, (_messages, state) => getSessionMaterializationStatus(state, sessionId).renderable) }
 export function useSessionStatus(sessionId: string, directory?: string): SessionRuntimeStatus | undefined { return useDirectorySync(useCallback((state) => state.sessionStatusInvalidated?.[sessionId] ? "unavailable" : state.session_status[sessionId], [sessionId]), directory) }
 export function useSessionActiveRun(sessionId: string, directory?: string): Run | null {
   return useDirectorySync(useCallback((state) => state.snapshot[sessionId]?.activeRun ?? null, [sessionId]), directory)
@@ -670,44 +646,15 @@ export function useSessionBlockingRequestCounts(scopes: readonly { directory: st
   return useSyncExternalStore(useCallback((notify) => { const subscriptions = scopes.map((scope) => { const store = childStores.ensureChild(scope.directory, { bootstrap: false }); return store.subscribe((state, prior) => { if (scope.sessionIds.some((id) => state.permission[id] !== prior.permission[id] || state.form[id] !== prior.form[id])) notify() }) }); return () => { for (const unsubscribe of subscriptions) unsubscribe() } }, [childStores, scopes]), get, get)
 }
 
-export type SessionMessageRecordsSnapshot = { sessionId: string; list: Message[]; byId: ReadonlyMap<string, Message> }
-export function buildSessionMessageRecordsSnapshot(state: State, sessionId: string, previous?: SessionMessageRecordsSnapshot): SessionMessageRecordsSnapshot {
-  const list = state.message[sessionId] ?? EMPTY_MESSAGES
-  return previous?.sessionId === sessionId && previous.list === list ? previous : { sessionId, list, byId: new Map(list.map((message) => [message.messageId, message])) }
-}
-export function useSessionMessageRecords(sessionId: string, directory?: string, options?: { enabled?: boolean; suspendPartUpdates?: boolean; suspendPartUpdatesForMessageId?: string | null }): Message[] {
-  const store = useDirectoryStore(directory)
-  const cache = useRef<SessionMessageRecordsSnapshot>({ sessionId, list: EMPTY_MESSAGES, byId: new Map() })
-  const get = useCallback(() => { if (options?.enabled === false) return cache.current.sessionId === sessionId ? cache.current.list : EMPTY_MESSAGES; cache.current = buildSessionMessageRecordsSnapshot(store.getState(), sessionId, cache.current); return cache.current.list }, [store, sessionId, options?.enabled])
-  return useSyncExternalStore(useCallback((notify) => options?.enabled === false ? () => { } : subscribeDirectorySessionMessages(store, sessionId, (change) => { if (options?.suspendPartUpdates && !change.messagesChanged && !change.reset && change.partMessageIds.length && change.partMessageIds.every((id) => !options.suspendPartUpdatesForMessageId || id === options.suspendPartUpdatesForMessageId)) return; notify() }), [store, sessionId, options?.enabled, options?.suspendPartUpdates, options?.suspendPartUpdatesForMessageId]), get, get)
-}
-export function useUserMessageHistory(sessionId: string, directory?: string): TranscriptPrompt[] {
-  const store = useDirectoryStore(directory)
-  const cache = useRef(EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT)
-  const get = useCallback(() => { cache.current = buildUserMessageHistorySnapshot(store.getState(), sessionId, cache.current); return cache.current.history }, [store, sessionId])
-  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, notify), [store, sessionId]), get, get)
-}
-/** Inline parts selector; the canonical store never carries a split part map. */
-export function useSessionPartsForMessages(sessionId: string, messageIds: readonly string[], directory?: string): Record<string, Part[]> {
-  const store = useDirectoryStore(directory)
-  const cache = useRef<Record<string, Part[]>>(EMPTY_PART_MAP)
-  const get = useCallback(() => {
-    const wanted = new Set(messageIds)
-    const next: Record<string, Part[]> = {}
-    for (const message of store.getState().message[sessionId] ?? EMPTY_MESSAGES) if (wanted.has(message.messageId)) next[message.messageId] = message.parts
-    const previous = cache.current
-    if (Object.keys(previous).length !== Object.keys(next).length || Object.keys(next).some((id) => next[id] !== previous[id])) cache.current = next
-    return cache.current
-  }, [store, sessionId, messageIds])
-  return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, (change) => { if (change.reset || change.messagesChanged || change.partMessageIds.some((id) => messageIds.includes(id))) notify() }), [store, sessionId, messageIds]), get, get)
-}
+const bootingRoot = false
 
-let bootingRoot = false
-
-let bootedAt = 0
+const bootedAt = 0
 
 const BOOT_DEBOUNCE_MS = 1500
 
 export function isRecentBoot() {
   return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
 }
+
+export { useSessionMessages, useSessionMessagesSelector, useSessionRenderable, useUserMessageHistory, useSessionPartsForMessages } from './session-message-hooks'
+export { buildSessionMessageRecordsSnapshot, useSessionMessageRecords, type SessionMessageRecordsSnapshot } from './session-message-records'

@@ -1,5 +1,4 @@
 import { isSurfaceAttended } from "@/lib/surfaceAttention"
-import { LOCATION_SCOPED_FORM_SESSION_ID } from "./location-scoped-forms"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { markSessionViewed } from "./notification-store"
 import { isSessionUnread } from "./session-unread"
@@ -39,7 +38,7 @@ export function setActiveSession(directory: string, sessionId: string) {
   _activeDirectory = directory
   _activeSession = sessionId
   getImperativeSessionMessageLoader()?.scheduleCacheRetention(previousDirectory)
-  getImperativeSessionMessageLoader()?.touchSessionCache({ directory, sessionID: sessionId })
+  getImperativeSessionMessageLoader()?.touchSessionCache({ directory, sessionId })
 }
 
 export function setExternallyViewedSession(directory: string, sessionId: string, viewed: boolean) {
@@ -65,9 +64,6 @@ export function isDirectoryExternallyViewed(directory: string): boolean {
 
 export function isViewedInCurrentSession(directory: string, sessionId?: string): boolean {
   if (!sessionId) return false
-  if (sessionId === LOCATION_SCOPED_FORM_SESSION_ID) {
-    return Boolean(_activeDirectory && _activeSession && directory === _activeDirectory && isSurfaceAttended())
-  }
   if (
     _activeDirectory && _activeSession
     && directory === _activeDirectory && sessionId === _activeSession

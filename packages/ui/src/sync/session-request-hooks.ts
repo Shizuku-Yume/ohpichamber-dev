@@ -1,12 +1,9 @@
 import React, { useRef, useCallback } from "react"
-import { useStore } from "zustand"
 import type { QuestionRequest as FormRequest, ApprovalRequest as PermissionRequest, Session } from '@openchamber/agent-contract';
 import { subscribeDirectoryPermission, subscribeDirectoryPermissions, subscribeDirectoryForms } from "./child-store"
-import { deriveRecoveredQuestions, useRecoverableQuestionsStore, type RecoveredQuestion } from "./recoverable-questions"
-import { LOCATION_SCOPED_FORM_SESSION_ID } from "./location-scoped-forms"
 import { useGlobalBlockingRequestsStore } from "./global-blocking-requests"
 import type { State } from "./types"
-import { areRequestArraysReferentiallyEqual, collectScopedBlockingRequests, computeSubtreeIds } from "./scoped-blocking-requests"
+import { areRequestArraysReferentiallyEqual, collectScopedBlockingRequests } from "./scoped-blocking-requests"
 import { useDirectoryStore, useDirectorySync } from "./directory-sync-hooks"
 import { EMPTY_PERMISSION_REQUESTS, EMPTY_FORM_REQUESTS } from "./sync-empty-values"
 import { useSyncRuntime } from "./sync-runtime-context"
@@ -39,7 +36,7 @@ export function useSessionStatusSnapshotReady(directory?: string, sessionID?: st
   return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-export function useSessionPermissions(sessionID: string, directory?: string, options?: { bootstrap?: boolean }) {
+export function useSessionPermissions(sessionID: string, directory?: string, options?: { bootstrap?: boolean }): PermissionRequest[] {
   const store = useDirectoryStore(directory, options)
   const getSnapshot = useCallback(() => {
     if (!sessionID) return EMPTY_PERMISSION_REQUESTS
@@ -89,7 +86,6 @@ export function useSessionBlockingRequests(
         hasPermission ||= Boolean(permissions[sessionID]?.length)
           || (!storeAuthoritative && Boolean(pending?.permissions.length))
         hasForm ||= Boolean(forms[sessionID]?.length)
-          || Boolean(pending?.pages.length)
           || (!storeAuthoritative && Boolean(pending?.forms.length))
       }
     }
@@ -126,20 +122,17 @@ export const collectComposerForms = (
   sessionID: string | null,
   empty: FormRequest[],
 ): FormRequest[] => {
-  const own = collectScopedBlockingRequests(sessions, formsBySession, sessionID, empty)
-  const locationScoped = sessionID ? formsBySession[LOCATION_SCOPED_FORM_SESSION_ID] : undefined
-  if (!locationScoped || locationScoped.length === 0) return own
-  return own === empty ? locationScoped : [...own, ...locationScoped]
+  return collectScopedBlockingRequests(sessions, formsBySession, sessionID, empty)
 }
 
-type ScopedBlockingRequestCache<T extends { id: string }> = {
+type ScopedBlockingRequestCache<T extends PermissionRequest | FormRequest> = {
   sessionID: string | null
   sessions: Session[] | null
   requestsBySession: Record<string, T[] | undefined> | null
   result: T[]
 }
 
-function useScopedBlockingRequests<T extends { id: string }>(
+function useScopedBlockingRequests<T extends PermissionRequest | FormRequest>(
   sessionID: string | null,
   directory: string | undefined,
   selectRequestsBySession: (state: State) => Record<string, T[] | undefined>,
@@ -190,33 +183,4 @@ export function useScopedBlockingPermissions(sessionID: string | null, directory
 
 export function useScopedBlockingForms(sessionID: string | null, directory?: string): FormRequest[] {
   return useScopedBlockingRequests(sessionID, directory, selectFormRequestsBySession, EMPTY_FORM_REQUESTS, collectComposerForms)
-}
-
-const NO_RECOVERED_QUESTIONS: RecoveredQuestion[] = []
-
-const sameRecoveredQuestions = (left: readonly RecoveredQuestion[], right: readonly RecoveredQuestion[]): boolean => (
-  left.length === right.length
-  && left.every((question, index) => {
-    const other = right[index]
-    return question.form === other.form
-      && question.directory === other.directory
-      && question.sessionID === other.sessionID
-      && question.toolMessageID === other.toolMessageID
-      && question.evidence === other.evidence
-  })
-)
-
-export function useRecoveredQuestions(sessionID: string | null, directory?: string): RecoveredQuestion[] {
-  const store = useDirectoryStore(directory)
-  const recovery = useRecoverableQuestionsStore()
-  const previousRef = useRef(NO_RECOVERED_QUESTIONS)
-  const select = useCallback((state: State) => {
-    const next = !sessionID || recovery.seen.size === 0
-      ? NO_RECOVERED_QUESTIONS
-      : deriveRecoveredQuestions(state, recovery, computeSubtreeIds(state.session, sessionID))
-    if (sameRecoveredQuestions(previousRef.current, next)) return previousRef.current
-    previousRef.current = next
-    return next
-  }, [recovery, sessionID])
-  return useStore(store, select)
 }

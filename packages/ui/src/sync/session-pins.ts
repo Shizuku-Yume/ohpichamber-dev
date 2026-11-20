@@ -83,8 +83,8 @@ useGlobalSessionsStore.subscribe((state, previous) => {
 });
 void migrateLegacyPins();
 
-export function setSessionPinList(target: PinTarget, pinned: boolean, list: string | null): Promise<void> {
+export function setSessionPinList(target: PinTarget, pinned: boolean, _list: string | null): Promise<void> {
   const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
   if (!key) return Promise.resolve();
-  return writeSessionPin(key, target, pinned, list);
+  return writeSessionPin(key, target, pinned);
 }

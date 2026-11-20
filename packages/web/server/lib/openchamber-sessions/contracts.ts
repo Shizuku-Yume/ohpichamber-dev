@@ -1,6 +1,6 @@
 import type fs from 'node:fs';
 import type path from 'node:path';
-import type { JsonValue } from '@opencode/client';
+import type { JsonValue } from '../shared/json-values.js';
 
 export interface FileStoreOptions {
   dataDir: string;

@@ -25,6 +25,7 @@ const EMPTY_STATUS: McpStatusMap = {};
 let generation = 0;
 let operationRevision = 0;
 const inFlight = new Map<string, Promise<void>>();
+const directoryGenerations = new Map<string, number>();
 const directoryKey = (directory?: string | null): string => { try { return resolveMcpDirectory(directory); } catch { return ''; } };
 export const computeMcpHealth = (status: McpStatusMap | null | undefined) => {
   const entries = Object.values(status ?? {});
@@ -53,6 +54,7 @@ interface McpStore {
   reconnect: (serverId: string, directory?: string | null) => Promise<void>;
   testConnection: (serverId: string, directory?: string | null) => Promise<MCPConnectionTestResult>;
   resetForRuntimeSwitch: () => void;
+  forgetDirectory: (directory: string) => void;
 }
 export const useMcpStore = create<McpStore>()(devtools((set, get) => {
   const toggle = async (serverId: string, enabled: boolean, directory?: string | null) => {
@@ -68,8 +70,16 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
     resetForRuntimeSwitch: () => {
       generation += 1;
       inFlight.clear();
+      directoryGenerations.clear();
       useMcpConfigStore.getState().resetForRuntimeSwitch();
       set({ byDirectory: {}, phaseKeys: {}, loadingKeys: {}, lastErrorKeys: {}, refreshedAtKeys: {} });
+    },
+    forgetDirectory: directory => {
+      const key = directoryKey(directory);
+      directoryGenerations.set(key, (directoryGenerations.get(key) ?? 0) + 1);
+      inFlight.delete(key);
+      const omit = <T,>(entries: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(entries).filter(([entry]) => entry !== key));
+      set(state => ({ byDirectory: omit(state.byDirectory), phaseKeys: omit(state.phaseKeys), loadingKeys: omit(state.loadingKeys), lastErrorKeys: omit(state.lastErrorKeys), refreshedAtKeys: omit(state.refreshedAtKeys) }));
     },
     getStatusForDirectory: directory => get().byDirectory[directoryKey(directory)] ?? EMPTY_STATUS,
     getPhaseForDirectory: directory => get().phaseKeys[directoryKey(directory)] ?? 'unknown',
@@ -78,6 +88,7 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
       const owner = generation;
       const revision = operationRevision;
       const key = directoryKey(options?.directory);
+      const directoryGeneration = directoryGenerations.get(key) ?? 0;
       if (!options?.silent) set(state => ({ loadingKeys: { ...state.loadingKeys, [key]: true } }));
       try {
         const directory = resolveMcpDirectory(options?.directory);
@@ -88,7 +99,7 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
         if (Object.keys(sessions.errors).length) throw new Error(Object.values(sessions.errors).join('\n'));
         const roots = sessions.items.filter(session => session.sessionId === session.rootSessionId && session.runtimeStatus !== 'unavailable');
         const catalogs = await Promise.all(roots.map(session => canonicalClient.getMcpCatalog(session)));
-        if (owner !== generation || revision !== operationRevision) return;
+        if (owner !== generation || revision !== operationRevision || directoryGeneration !== (directoryGenerations.get(key) ?? 0)) return;
         const previous = get().byDirectory[key];
         const workerCatalogs = catalogs.map(result => result.workerCatalog);
         const entries = Object.fromEntries(configuration.config.servers.map(server => {
@@ -101,7 +112,7 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
           phaseKeys: { ...state.phaseKeys, [key]: 'ready' },
           refreshedAtKeys: { ...state.refreshedAtKeys, [key]: Date.now() }, lastErrorKeys: { ...state.lastErrorKeys, [key]: null } }));
       } catch (error) {
-        if (owner !== generation || revision !== operationRevision) return;
+        if (owner !== generation || revision !== operationRevision || directoryGeneration !== (directoryGenerations.get(key) ?? 0)) return;
         const message = error instanceof Error ? error.message : 'Failed to load MCP status';
         set((state) => ({
           loadingKeys: { ...state.loadingKeys, [key]: false },

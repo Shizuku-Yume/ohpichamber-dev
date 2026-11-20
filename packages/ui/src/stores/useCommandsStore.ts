@@ -216,6 +216,15 @@ subscribeToConfigChanges((event) => {
   }
 });
 
+type CommandDirectorySource = {
+  open: boolean;
+  worktreeStartDirectory?: { worktreeRoot: string; directory: string | null } | null;
+};
+
+type ComposerCommandDirectory =
+  | { status: 'pending' }
+  | { status: 'resolved'; directory: string | null | undefined };
+
 export const selectCommandsForComposer = (
   state: Pick<CommandsStore, 'commandsByDirectory'>,
   target: ComposerCommandDirectory,

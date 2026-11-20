@@ -117,7 +117,7 @@ export const applySessionLiveWorkEvents = (payloads: readonly CanonicalEvent[]):
       case 'part.completed': {
         const part = event.part;
         if (part.type === 'tool_call') {
-          if (part.status === 'pending' || part.status === 'running') startCall(id, part.toolCallId, part.toolName, part.input);
+          if (part.status === 'pending_approval' || part.status === 'running') startCall(id, part.toolCallId, part.toolName, part.input);
           else finishCall(id, part.toolCallId);
         }
         break;
@@ -187,7 +187,7 @@ export const applySessionLiveWorkSnapshot = (snapshot: SessionSnapshot): void =>
     if (message.role === 'assistant' && message.usage && message.usage.totalTokens > 0) reading = { state: 'measured', tokens: message.usage.totalTokens };
     for (const part of message.parts) {
       if (part.type === 'notice' && part.noticeType === 'compaction') reading = part.details.tokensAfter === undefined ? { state: 'compacted' } : { state: 'measured', tokens: part.details.tokensAfter };
-      if (activeTurns.has(message.turnId) && part.type === 'tool_call' && (part.status === 'pending' || part.status === 'running')) calls.push({ partID: part.toolCallId, name: part.toolName, path: readInputPath(part.input) });
+      if (activeTurns.has(message.turnId) && part.type === 'tool_call' && (part.status === 'pending_approval' || part.status === 'running')) calls.push({ partID: part.toolCallId, name: part.toolName, path: readInputPath(part.input) });
     }
   }
   const state = useSessionLiveWorkStore.getState();

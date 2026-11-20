@@ -6,7 +6,6 @@ import { getAdmissionNavigationRevision, useSessionUIStore } from './session-ui-
 import { subscribeGlobalSessionMoves } from './session-moves';
 import { isSessionDirectoryAdmitted, resolveAdmittedLineageDirectory } from './session-admission-rule';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { isVSCodeRuntime } from '@/lib/desktop';
 
 const isSessionAdmitted = (directory: string | null | undefined): boolean => isSessionDirectoryAdmitted(
   directory, useProjectsStore.getState().projects, useSessionUIStore.getState().availableWorktreesByProject,
@@ -51,7 +50,7 @@ let generation = 0;
 subscribeRuntimeEndpointWillChange(() => { generation += 1; pending.clear(); });
 
 /** A discovered directory is admitted through the project it belongs to, without a trust prompt. */
-const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean> => {
+const tryAdmitSession = (sessionId: string, directory: string): Promise<string | null> => {
   const normalized = normalizePath(directory);
   if (!normalized) return Promise.resolve(null);
   if (isSessionAdmitted(normalized)) return Promise.resolve(normalized);
@@ -76,9 +75,8 @@ const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean>
     return null;
   };
   const request = (async () => {
-    if (!isVSCodeRuntime()) await ensureChatsRootDirectory();
-    if (!currentSession()) return false;
-    if (isSessionAdmitted(normalized)) return true;
+    await ensureChatsRootDirectory();
+    if (!currentSession()) return null;
     const currentId = currentSession();
     if (!currentId) return null;
     if (isSessionAdmitted(normalized)) return normalized;

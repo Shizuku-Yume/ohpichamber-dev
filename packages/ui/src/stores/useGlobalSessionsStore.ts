@@ -69,7 +69,6 @@ type GlobalSessionsState = {
    * session is not the authority for a child's or an archived one's absence.
    */
   refreshSessionHead: () => Promise<boolean>;
-  refreshRecentSessions: () => Promise<boolean>;
   refreshSessionsForDirectories: (directories: Iterable<string>, fallbackActive?: Session[]) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   applySessionMutations: (mutations: readonly GlobalSessionMutation[]) => void;
@@ -106,6 +105,7 @@ let inflightHead: Promise<boolean> | null = null;
 // Bumped on runtime switch: an in-flight load from the previous instance must
 // not apply its (stale) snapshot after the reset.
 let loadGeneration = 0;
+let completeLoadAt = 0;
 
 type ChildDiscovery = { sessions: Session[]; succeededParents: Set<string>; failedParents: Set<string> };
 
@@ -776,6 +776,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
 
   resetForRuntimeSwitch: () => {
     loadGeneration += 1;
+    completeLoadAt = 0;
     inflightLoad = null;
     inflightHead = null;
     resetWorkspaceDirectories();
@@ -855,6 +856,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           const committed = get();
           raiseSessionOrderingBaselines(committed.activeSessions);
           if (retryPartial) throw Object.assign(new Error('Session discovery is temporarily unavailable'), { status: 503 });
+          completeLoadAt = committed.discoveryErrors.size === 0 ? Date.now() : 0;
           binding.adoptGuessedSession();
           return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
         }, STARTUP_RETRY);
@@ -1195,12 +1197,6 @@ export const refreshGlobalSessions = async (fallbackActive?: Session[]): Promise
   return useGlobalSessionsStore.getState().loadSessions(fallbackActive);
 };
 
-let completeLoadAt = 0;
-useGlobalSessionsStore.subscribe((state, previous) => {
-  if (state.authoritativeSessions === previous.authoritativeSessions) return;
-  completeLoadAt = state.authoritativeSessions ? Date.now() : 0;
-});
-
 export const refreshGlobalSessionsWhenShown = async (completeMaxAgeMs: number, fallbackActive?: Session[]): Promise<void> => {
   const state = useGlobalSessionsStore.getState();
   const fresh = completeLoadAt > 0 && state.status === 'ready' && Date.now() - completeLoadAt < completeMaxAgeMs;
@@ -1209,7 +1205,7 @@ export const refreshGlobalSessionsWhenShown = async (completeMaxAgeMs: number, f
 };
 
 export const refreshRecentGlobalSessions = (): Promise<boolean> => (
-  useGlobalSessionsStore.getState().refreshRecentSessions()
+  useGlobalSessionsStore.getState().refreshSessionHead()
 );
 
 export const refreshGlobalSessionsForDirectories = async (

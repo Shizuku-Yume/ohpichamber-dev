@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { resolveSessionReadDirectory, type SessionReadDirectorySources } from "./session-read-directory"
+
+const sessionAt = (directory: string): Pick<Session, 'workspaceId'> => {
+  const workspaceId = `workspace-${directory}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return { workspaceId };
+};
 
 type Adoption = { sessionID: string; from: string; to: string }
 
@@ -12,7 +19,7 @@ const deferred = <T,>() => {
 
 const sources = (input: {
   known?: string | null
-  read?: () => Promise<Pick<Session, "directory"> | null>
+  read?: () => Promise<Pick<Session, "workspaceId"> | null>
 }) => {
   const adopted: Adoption[] = []
   let reads = 0
@@ -53,7 +60,7 @@ describe("resolveSessionReadDirectory", () => {
   })
 
   test("adopts the directory the unscoped read names for a session the record does not list", async () => {
-    const s = sources({ read: async () => ({ directory: "/repo/moved" }) })
+    const s = sources({ read: async () => (sessionAt("/repo/moved")) })
     expect(await resolveSessionReadDirectory("ses_1", "/repo", () => true, s.value)).toBe("/repo/moved")
     expect(s.adopted).toEqual([{ sessionID: "ses_1", from: "/repo", to: "/repo/moved" }])
   })
@@ -63,7 +70,7 @@ describe("resolveSessionReadDirectory", () => {
     expect(await resolveSessionReadDirectory("ses_1", "/repo", () => true, known.value)).toBe("/repo")
     expect(known.adopted).toEqual([])
 
-    const read = sources({ read: async () => ({ directory: "/repo/" }) })
+    const read = sources({ read: async () => (sessionAt("/repo/")) })
     expect(await resolveSessionReadDirectory("ses_1", "/repo", () => true, read.value)).toBe("/repo")
     expect(read.adopted).toEqual([])
   })
@@ -76,12 +83,12 @@ describe("resolveSessionReadDirectory", () => {
 
   test("a read that finishes after a switch to another runtime adopts nothing", async () => {
     const r = runtime()
-    const pending = deferred<Pick<Session, "directory"> | null>()
+    const pending = deferred<Pick<Session, "workspaceId"> | null>()
     const s = sources({ read: () => pending.promise })
     const result = resolveSessionReadDirectory("ses_1", "/repo", r.capture(), s.value)
 
     r.switchTo("B")
-    pending.resolve({ directory: "/repo/moved" })
+    pending.resolve(sessionAt("/repo/moved"))
 
     expect(await result).toBeNull()
     expect(s.adopted).toEqual([])
@@ -89,13 +96,13 @@ describe("resolveSessionReadDirectory", () => {
 
   test("a read that finishes after a round trip back to the same runtime adopts nothing", async () => {
     const r = runtime()
-    const pending = deferred<Pick<Session, "directory"> | null>()
+    const pending = deferred<Pick<Session, "workspaceId"> | null>()
     const s = sources({ read: () => pending.promise })
     const result = resolveSessionReadDirectory("ses_1", "/repo", r.capture(), s.value)
 
     r.switchTo("B")
     r.switchTo("A")
-    pending.resolve({ directory: "/repo/moved" })
+    pending.resolve(sessionAt("/repo/moved"))
 
     expect(await result).toBeNull()
     expect(s.adopted).toEqual([])
