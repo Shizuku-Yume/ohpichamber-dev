@@ -68,7 +68,6 @@ describe("native confirmed session creation", () => {
     expect(childStores.getChild(directory)?.getState().message[session.sessionId]).toEqual([])
   })
 
-<<<<<<< HEAD
   test("captures native workspace, metadata and composer options in the creation request", async () => {
     await createSession("Chosen title", directory, { notes: "Keep" }, "submitted-draft", {
       model: { providerId: "provider-a", modelId: "model-a" }, agent: "agent-a", variant: "variant-a", reasoningEffort: "high",
@@ -79,51 +78,6 @@ describe("native confirmed session creation", () => {
       options: { providerId: "provider-a", modelId: "model-a", agentId: "agent-a", variant: "variant-a", reasoningEffort: "high" },
       title: "Chosen title", metadata: {notes: "Keep"},
     })
-||||||| bc50ba56aa
-  test("retains newer metadata and the first prompt delivered before the create response", async () => {
-    const store = childStores.ensureChild(session.directory, { bootstrap: false })
-    const newerSession = { ...session, title: "Already renamed", time: { created: 1, updated: 2 } }
-    const record = {
-      id: "msg_first",
-      sessionID: session.id,
-      role: "user",
-      time: { created: 2 },
-    } satisfies UserMessage
-    opencodeClient.createSession = async () => {
-      store.setState({ session: [newerSession], message: { [session.id]: [record] } })
-      return session
-    }
-
-    await createSession(undefined, "/requested")
-
-    expect(requests).toBe(0)
-    expect(store.getState().session).toEqual([newerSession])
-    expect(store.getState().message[session.id]).toEqual([record])
-=======
-  test("retains newer metadata and the first prompt delivered before the create response", async () => {
-    const store = childStores.ensureChild(session.directory, { bootstrap: false })
-    const newerSession = { ...session, title: "Already renamed", time: { created: 1, updated: 2 } }
-    const record = {
-      id: "msg_first",
-      sessionID: session.id,
-      role: "user",
-      time: { created: 2 },
-    } satisfies UserMessage
-    opencodeClient.createSession = async () => {
-      store.setState({ session: [newerSession], message: { [session.id]: [record] } })
-      return session
-    }
-
-    await createSession(undefined, "/requested")
-
-    expect(requests).toBe(0)
-    expect(store.getState().session).toEqual([newerSession])
-    expect(store.getState().message[session.id]).toEqual([record])
-    const target = { directory: session.directory, sessionID: session.id }
-    expect(loader.coversHistory(target)).toBe(true)
-    await loader.ensure(target, { reason: "reactive" })
-    expect(requests).toBe(0)
->>>>>>> upstream/main
   })
 
   test("retains newer Host metadata and an inline first prompt received before the create response", async () => {

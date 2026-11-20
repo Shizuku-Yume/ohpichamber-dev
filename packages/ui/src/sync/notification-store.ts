@@ -67,7 +67,6 @@ export function markSessionRead(sessionId: string) {
 }
 
 export function markAllSessionsViewed() {
-<<<<<<< HEAD
   const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState()
   const marked: string[] = []
   for (const session of [...activeSessions, ...archivedSessions]) {
@@ -80,16 +79,6 @@ export function markAllSessionsViewed() {
   // The route only resets the push badge, so one call covers them all.
   runtimeFetch(`/api/sessions/${encodeURIComponent(marked[0])}/view`, { method: "POST" })
     .catch(() => { /* the badge resets on the next engagement signal */ })
-||||||| bc50ba56aa
-  const marked = markSessionsUnreadSeen(getUnreadSessionIds())
-  if (marked.length === 0) return
-  for (const sessionId of marked) clearDesktopSessionNotifications(sessionId)
-  // The route only resets the push badge, so one call covers them all.
-  runtimeFetch(`/api/sessions/${encodeURIComponent(marked[0])}/view`, { method: "POST" })
-    .catch(() => { /* the badge resets on the next engagement signal */ })
-=======
-  for (const sessionId of markSessionsUnreadSeen(getUnreadSessionIds(), { explicit: true })) clearSessionNotifications(sessionId)
->>>>>>> upstream/main
 }
 
 export function useLatestSessionError(sessionId: string): ErrorNotification | null {
