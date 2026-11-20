@@ -140,6 +140,16 @@ test('indirect dependency bags require owner review without claiming their keys 
   assert.match(empty.output, /\[route-deps\] createAutoReviewRuntime.enabled/);
 });
 
+test('callback transactions and typed collection helpers are not HTTP route registrations', () => {
+  const files = baseFiles();
+  files['packages/web/server/lib/collection.ts'] = `function registerEntry(registry: Map<string, string>, entry: string) { registry.set(entry, entry); }\nregisterEntry(new Map(), 'a');\nregisterTransaction(async (projects) => projects[0]);\n`;
+  const fixture = makeFixture(files);
+  fixture.fork('packages/web/server/lib/collection.ts', '');
+  assert.equal(runGuardrail(fixture).status, 0);
+  fixture.fork('packages/web/server/index.js', INDEX.replace('registerTrackerRoutes(app);', ''));
+  assert.match(runGuardrail(fixture).output, /\[route-registration\] registerTrackerRoutes/);
+});
+
 test('same-named factory dependencies are compared within their source owner', () => {
   const files = baseFiles();
   files['packages/web/server/lib/a.js'] = `createClient({ baseUrl: '/legacy' });\n`;

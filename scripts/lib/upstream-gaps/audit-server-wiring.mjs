@@ -217,6 +217,10 @@ function extractCalls(src, fileLabel) {
     if (closeParen === -1) continue;
     const rawArgs = src.slice(openParen + 1, closeParen);
     const argsList = splitTopLevelArgs(rawArgs);
+    if (fnName.startsWith('register') && (
+      /^(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(argsList[0] ?? '')
+      || new RegExp(`\\bfunction\\s+${fnName}\\s*\\(\\s*\\w+\\s*:\\s*(?:Readonly)?(?:Map|Set)\\s*<`).test(src)
+    )) continue;
     const objKeys = [];
     for (let i = 0; i < argsList.length; i++) {
       const k = extractObjectKeys(argsList[i]);
