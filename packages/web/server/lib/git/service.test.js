@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -1940,6 +1941,39 @@ describe('getWorktrees', () => {
    unsubscribe();
   }
  });
+
+ it.skipIf(process.platform !== 'win32')('publishes the removal when Git unregisters a worktree whose folder is busy', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+  const previousDataDir = process.env.OPENCHAMBER_DATA_DIR;
+  process.env.OPENCHAMBER_DATA_DIR = createTempDir();
+  const events = [];
+  const unsubscribe = subscribeWorktreeTopologyChanges((event) => events.push(event));
+  try {
+   const created = await createWorktree(repo, { mode: 'new', branchName: 'held', worktreeName: 'held' });
+   const child = spawn(process.execPath, ['-e', 'process.stdin.resume(); console.log("ready")'], { cwd: created.path });
+   const exited = once(child, 'exit');
+   try {
+    await once(child.stdout, 'data');
+    events.length = 0;
+    await expect(removeWorktree(repo, { directory: created.path })).rejects.toMatchObject({ code: 'WORKTREE_UNREGISTERED' });
+    expect(fs.existsSync(created.path)).toBe(true);
+    expect(await getWorktrees(repo)).toHaveLength(1);
+    expect(events).toHaveLength(1);
+   } finally {
+    child.stdin.end();
+    await exited;
+   }
+  } finally {
+   unsubscribe();
+   if (previousDataDir === undefined) delete process.env.OPENCHAMBER_DATA_DIR;
+   else process.env.OPENCHAMBER_DATA_DIR = previousDataDir;
+  }
+ }, 20_000);
 
  it('renames a worktree branch, tells subscribers, and names the worktree that holds a taken name', async () => {
   if (!canRunGit()) return;
@@ -5681,6 +5715,45 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
    }
   }
  });
+
+ it.skipIf(process.platform !== 'win32')('leases an existing Windows checkout before Git removes it', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+  const checkout = path.join(createTempDir(), 'linked');
+  runGit(repo, ['worktree', 'add', '-b', 'linked', checkout]);
+
+  const child = spawn(process.execPath, ['-e', 'process.stdin.resume(); console.log("ready")'], { cwd: checkout });
+  const exited = once(child, 'exit');
+  const refusal = Object.assign(new Error('The session still has an active run'), { status: 409 });
+  const acquire = vi.fn()
+    .mockRejectedValueOnce(refusal)
+    .mockImplementationOnce(async (directory) => {
+      expect(fs.realpathSync(directory)).toBe(fs.realpathSync(checkout));
+      expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('refs/heads/linked');
+      child.stdin.end();
+      await exited;
+    });
+  const release = vi.fn(async () => {});
+  const options = { removalWorkers: { acquire, release } };
+  try {
+   await once(child.stdout, 'data');
+   await expect(removeWorktree(repo, { directory: checkout }, options)).rejects.toBe(refusal);
+   expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('refs/heads/linked');
+   expect(child.exitCode).toBeNull();
+   expect(release).toHaveBeenNthCalledWith(1, acquire.mock.calls[0][1]);
+
+   await expect(removeWorktree(repo, { directory: checkout }, options)).resolves.toBe(true);
+   expect(fs.existsSync(checkout)).toBe(false);
+   expect(release).toHaveBeenNthCalledWith(2, acquire.mock.calls[1][1]);
+  } finally {
+   child.stdin.end();
+   await exited;
+  }
+ }, 20_000);
 
  it('releases the worktree instance again before retrying a busy removal', async () => {
   if (!canRunGit() || process.platform === 'win32' || process.getuid?.() === 0) return;

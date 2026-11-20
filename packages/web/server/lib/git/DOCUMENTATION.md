@@ -315,6 +315,8 @@ The parent record is written once, when OpenChamber makes or rebases the branch.
  - `deleteWorktreeArchive(directory, input)`: Delete an archive's ref and, with `deleteBranch`, its local branch unless a checkout uses that branch. The Host records branch intent before finalization; after a crash, replay checks the exact ref and per-session deletion progress before removing the binding. Branch-in-use, changed-OID, or ambiguous outcomes retain the binding and native-session evidence. Returns `{ id, branchDeleted }`.
 - `isLinkedWorktree(directory)`: Check if directory is a linked worktree (not primary).
 
+If Git has unregistered a checkout but cleanup of its remaining folder fails, the Host still publishes the new topology and the DELETE route returns `WORKTREE_UNREGISTERED`. The initiating client leaves the removed checkout without reporting successful folder cleanup.
+
 ### Worktree create command
 
 A project's personal `createWorktreeCommand` (`../projects/DOCUMENTATION.md`)
@@ -863,6 +865,9 @@ The branch list used to ask every remote by default, so a branch a collaborator 
 - The shared Git panel exposes explicit staging actions. Unstaged rows use `stageFile`, staged rows use `unstageFile`, and commits operate on the current staged index.
 - `stageFiles` remains supported for callers that need to stage a selected unstaged subset as part of commit. In that mode the server temporarily unstages unrelated index entries, stages `stageFiles`, commits from the index, then restores temporarily unstaged entries.
 ### Worktree Create/Remove Response
+
+On Windows, the DELETE route acquires the same scoped Agent Service lease used by archiving before Git removes an existing registered checkout. The lease stops idle workers in that checkout and blocks new workers until removal finishes. An active run or command can refuse the lease and leave the checkout registered.
+
 - `head`: HEAD commit SHA.
 - `name`: Worktree name.
 - `branch`: Local branch name.

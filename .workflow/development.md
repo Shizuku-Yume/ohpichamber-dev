@@ -4,6 +4,19 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Shared UI discovery now requests canonical snapshot recovery when a newer
+session head or epoch disagrees with cached run control. Stop also refreshes
+when the server has no active run. This closes two paths that kept cached
+working/Stop state alive after a missed terminal update, including after an
+abort, follow-up and session revisit. Failed reads preserve activity and can
+recover on the next poll; stale discovery still cannot replace newer live
+state. Focused isolated UI coverage passes 170 tests and worker projection
+coverage passes 33; contract, SDK and Agent Service builds and UI typecheck
+pass. The supplied iOS host log has no per-run event trace, so the original
+terminal-delivery failure is not established. The recovery regression needs
+neither app relaunch nor a missing session scope. Live-provider and on-device
+visual verification remain outstanding.
+
 Prepared-session ownership now transfers on authorized use by ID as well as
 normal create. Timeout, discard and shutdown share the claim and cannot delete
 an adopted session; inventory behavior is unchanged. The regression failed
@@ -21,6 +34,20 @@ the patched resolver. macOS mobile tooling sets a UTF-8 CocoaPods locale.
 Bun 1.4.4 clean installation, native
 `cap sync`, 13 focused path/environment tests, mobile lint, and
 `LANG=C LC_ALL=C bun run mobile:build:ios:simulator` pass. This verifies the build, not app launch, Android compilation, or SwiftPM builds.
+
+Desktop notification IPC now waits for Electron's `show`/`failed` events with a
+five-second deadline; native failure cannot fall back to browser success.
+The real macOS test of ee8b5ee34 showed that `show` also fires with Allow
+notifications disabled: it is not evidence of authorization or a visible banner.
+The macOS test action now acknowledges sending to macOS and explains how to
+allow OhPiChamber in System Settings → Notifications if no banner appeared.
+The failure toast and other platforms stay unchanged. Native/routing, adapter
+and UI tests cover handoff/failure feedback, not OS authorization or delivery.
+All 46 focused tests, workspace/package types and changed-file lint pass.
+Root checks previously failed unrelated upstream drift and, with packaged web
+assets present, stale createAgent/createScanner gap allowlisting; both reproduce
+on main source. Rebuilding over a running dist/mac-arm64 app is blocked; native
+presentation of the revised toast still needs manual verification.
 
 The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
 `no-favicon-found` discovery response: non-OK responses otherwise become an error

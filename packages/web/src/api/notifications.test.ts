@@ -318,7 +318,7 @@ describe('web notifications API', () => {
     installWindowMock();
     installFocusedDocument();
     installEmptyNavigator();
-    const invoke = vi.fn(async () => null);
+    const invoke = vi.fn(async () => true);
     // SAFETY: `installWindowMock` installed `globalThis.window` for this test,
     // so the asserted shape describes this own mock; the bridge reads only its
     // `invoke`.
@@ -339,5 +339,27 @@ describe('web notifications API', () => {
     expect(invoke).toHaveBeenCalledWith('desktop_notify', {
       payload: expect.objectContaining({ sessionId: 'ses_123', runtimeKey: 'host:abc123' }),
     });
+  });
+
+  it.each([false, null, undefined])('does not mask unconfirmed native delivery (%s) with browser success', async (result) => {
+    installWindowMock();
+    installFocusedDocument();
+    installEmptyNavigator();
+    const browserNotification = vi.fn();
+    installNotificationMock(browserNotification);
+    Object.assign(window, { __OPENCHAMBER_DESKTOP__: { invoke: vi.fn(async () => result) } });
+    const { createWebNotificationsAPI } = await import('./notifications');
+    await expect(createWebNotificationsAPI().notifyAgentCompletion({ title: 'Test' })).resolves.toBe(false);
+    expect(browserNotification).not.toHaveBeenCalled();
+  });
+
+  it('reports desktop IPC failure without falling back to browser success', async () => {
+    installWindowMock();
+    const browserNotification = vi.fn();
+    installNotificationMock(browserNotification);
+    Object.assign(window, { __OPENCHAMBER_DESKTOP__: { invoke: async () => { throw new Error('Native failure'); } } });
+    const { createWebNotificationsAPI } = await import('./notifications');
+    await expect(createWebNotificationsAPI().notifyAgentCompletion()).resolves.toBe(false);
+    expect(browserNotification).not.toHaveBeenCalled();
   });
 });

@@ -27,6 +27,7 @@ import { describeStartupEnvironmentOverrides, resolveStartupUrlProbePlan } from 
 import { clearAppCache } from './app-cache.mjs';
 import { hideWindow, isWindowHidePending, showWindow } from './window-hide.mjs';
 import { tryParseExternalUrl } from './external-url-policy.mjs';
+import { showNotificationAndWait } from './notification-delivery.mjs';
 
 const openExternalIfAllowed = (url, label) => {
   try {
@@ -1485,7 +1486,10 @@ const maybeShowNativeNotification = (rawInput) => {
   notification.on('close', release);
   notification.on('failed', release);
 
-  notification.show();
+  return showNotificationAndWait(notification).then((shown) => {
+    if (!shown) release();
+    return shown;
+  });
 };
 
 const mapUpdaterProgressEvent = (payload) => ({
@@ -4723,8 +4727,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
           },
         )
         : null;
-      maybeShowNativeNotification(stampForwardedNotification(args, senderHostId));
-      return null;
+      return maybeShowNativeNotification(stampForwardedNotification(args, senderHostId));
     }
 
     case 'desktop_set_window_runtime_key': {

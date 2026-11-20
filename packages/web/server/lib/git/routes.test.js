@@ -956,6 +956,31 @@ describe('git worktree teardown routes', () => {
       consoleError.mockRestore();
     }
   });
+
+  it.each(['RUN_ACTIVE', 'COMMAND_IN_FLIGHT'])('preserves a worktree lease refusal (%s)', async (code) => {
+    gitLibraries.removeWorktree.mockRejectedValue(Object.assign(new Error('The worktree lease was refused'), { status: 409, code }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore });
+    const response = createMockResponse();
+    await getRoute('DELETE', '/api/git/worktrees')({ query: { directory: '/repo' }, body: { directory: '/repo/wt' } }, response);
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({ error: 'The worktree lease was refused', code });
+  });
+
+  it('reports when Git unregistered the worktree but folder cleanup failed', async () => {
+    gitLibraries.removeWorktree.mockRejectedValue(Object.assign(new Error('Folder is still in use'), { code: 'WORKTREE_UNREGISTERED' }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = createMockResponse();
+      await getRoute('DELETE', '/api/git/worktrees')({ query: { directory: '/repo' }, body: { directory: '/repo/wt' } }, response);
+      expect(response.statusCode).toBe(500);
+      expect(response.body).toEqual({ error: 'Folder is still in use', code: 'WORKTREE_UNREGISTERED' });
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
 });
 
 describe('git worktree removal Host boundary', () => {
@@ -1752,6 +1777,24 @@ describe('git worktree removal', () => {
       directory: '/repo/wt',
       deleteLocalBranch: true,
     }, { bootstrapStore: worktreeBootstrapStore });
+  });
+
+  it('passes Host worker lifecycle control to worktree removal', async () => {
+    gitLibraries.removeWorktree.mockReset();
+    gitLibraries.removeWorktree.mockResolvedValue(true);
+    const worktreeLeaseControl = { acquire: vi.fn(), release: vi.fn() };
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('DELETE', '/api/git/worktrees')(
+      { query: { directory: '/repo' }, body: { directory: '/repo/wt' } }, response,
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(gitLibraries.removeWorktree).toHaveBeenCalledWith('/repo', expect.objectContaining({ directory: '/repo/wt' }), {
+      bootstrapStore: worktreeBootstrapStore,
+      removalWorkers: worktreeLeaseControl,
+    });
   });
 });
 

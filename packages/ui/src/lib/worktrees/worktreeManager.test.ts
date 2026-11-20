@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { GitNetworkOperation, GitNetworkOperationPlan, GitWorktreeCreateResult, RemoveGitWorktreePayload, SourceControlBindingRead, TeardownGitWorktreePayload } from '@/lib/api/types';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { GitWorktreeRequestError } from '@/lib/api/types';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 type WorktreeListEntry = {
@@ -41,7 +42,20 @@ const sessionState = {
   availableWorktreesByProject: new Map<string, WorktreeMetadata[]>(),
   availableWorktrees: [] as WorktreeMetadata[],
   worktreeMetadata: new Map<string, WorktreeMetadata>(),
+  newSessionDraft: {
+    open: false,
+    directoryOverride: null as string | null,
+    bootstrapPendingDirectory: null as string | null,
+  },
+  setDraftBootstrapPendingDirectory: mock(),
+  setDraftPreserveDirectoryOverride: mock(),
+  setNewSessionDraftTarget: mock(),
 };
+const directoryState = { currentDirectory: '', setDirectory: mock() };
+
+mock.module('@/stores/useDirectoryStore', () => ({
+  useDirectoryStore: { getState: () => directoryState },
+}));
 const attachmentState = {
   attachments: new Map<string, { worktreeStatus: 'pending' | 'ready'; worktreeRoot: string }>(),
 };
@@ -647,6 +661,34 @@ describe('worktreeManager list invalidation', () => {
     expect(sessionState.availableWorktrees).toEqual([sibling, ...unrelatedEntries]);
     expect(sessionState.worktreeMetadata.has('removed-session')).toBe(false);
     expect(sessionState.worktreeMetadata.get('sibling-session')).toBe(sibling);
+  });
+
+  test.each([
+    ['/repo', '/worktrees/target', '/worktrees/target/subfolder'],
+    ['C:/repo', 'c:\\worktrees\\target', 'C:/worktrees/target/subfolder'],
+  ])('leaves an unregistered draft worktree rooted at %s despite folder cleanup failure', async (root, path, draftPath) => {
+    const worktree = { path, projectDirectory: root, branch: 'target', label: 'target' };
+    sessionState.availableWorktreesByProject = new Map([[root, [worktree]]]);
+    sessionState.availableWorktrees = [worktree];
+    sessionState.newSessionDraft = { open: true, directoryOverride: draftPath, bootstrapPendingDirectory: null };
+    directoryState.currentDirectory = draftPath;
+    const error = new GitWorktreeRequestError('WORKTREE_UNREGISTERED', 'Folder is still in use', 500);
+    removeImplementation = async () => { throw error; };
+    try {
+      await expect(removeProjectWorktree({ id: 'project', path: root }, worktree)).rejects.toMatchObject({
+        code: error.code,
+        message: error.message,
+      });
+      expect(sessionState.availableWorktreesByProject.get(root)).toEqual([]);
+      expect(sessionState.availableWorktrees).toEqual([]);
+      expect(sessionState.setDraftBootstrapPendingDirectory).toHaveBeenCalledWith(null);
+      expect(sessionState.setDraftPreserveDirectoryOverride).toHaveBeenCalledWith(false);
+      expect(sessionState.setNewSessionDraftTarget).toHaveBeenCalledWith({ projectId: 'project', directoryOverride: root }, { force: true });
+      expect(directoryState.setDirectory).toHaveBeenCalledWith(root, { showOverlay: false });
+    } finally {
+      sessionState.newSessionDraft = { open: false, directoryOverride: null, bootstrapPendingDirectory: null };
+      directoryState.currentDirectory = '';
+    }
   });
 
   describe('removal shown on the row', () => {

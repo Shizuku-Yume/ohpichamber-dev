@@ -8,6 +8,8 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacSent': "Test notification sent to macOS. If no banner appeared, allow OhPiChamber in System Settings → Notifications.",
+  'settings.notifications.page.toast.testNotificationMacUnavailable': "Notification delivery could not be confirmed. Allow OhPiChamber in macOS System Settings → Notifications, then try again.",
   'settings.openchamber.sessionRetention.field.archivedDescription': 'Counts the retention period from archiving. Expired sessions are deleted.',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': 'Counts the retention period from the session\'s last activity. Expired sessions are archived.',
   'settings.openchamber.sessionRetention.field.unarchivedDeleteDescription': 'Counts the retention period from the session\'s last activity. Expired sessions are deleted.',

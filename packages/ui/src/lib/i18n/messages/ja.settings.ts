@@ -8,6 +8,8 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacSent': "テスト通知をmacOSに送信しました。バナーが表示されなかった場合は、システム設定 → 通知でOhPiChamberの通知を許可してください。",
+  'settings.notifications.page.toast.testNotificationMacUnavailable': "通知の配信を確認できませんでした。macOSのシステム設定 → 通知でOhPiChamberの通知を許可してから、もう一度お試しください。",
   'settings.openchamber.sessionRetention.field.archivedDescription': '保持期間はアーカイブ時点から数えます。期間を過ぎたセッションは削除されます。',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': '保持期間はセッションの最終アクティビティから数えます。期間を過ぎたセッションはアーカイブされます。',
   'settings.openchamber.sessionRetention.field.unarchivedDeleteDescription': '保持期間はセッションの最終アクティビティから数えます。期間を過ぎたセッションは削除されます。',

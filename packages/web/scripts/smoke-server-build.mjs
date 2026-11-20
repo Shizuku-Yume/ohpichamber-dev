@@ -92,7 +92,7 @@ try {
     const project = { id: 'project-with-favicon', path: projectPath, addedAt: Date.now(), lastOpenedAt: Date.now() };
     const saved = await requestJson('/api/config/settings', 'PUT', { projects: [project], activeProjectId: project.id });
     assert.equal(saved.status, 200, 'Project settings save');
-    const { activeProjectId } = await saved.json();
+    const { activeProjectId, projects } = await saved.json();
     assert.ok(activeProjectId, 'Saved project has an active ID');
     const discovered = await requestJson(`/api/projects/${encodeURIComponent(activeProjectId)}/icon/discover`, 'POST', { force: false });
     assert.equal(discovered.status, 200, 'Favicon discovery');
@@ -101,6 +101,14 @@ try {
     assert.equal(savedIcon?.source, 'auto');
     assert.equal(savedIcon?.mime, 'image/svg+xml');
     console.log(`${label} project add and favicon discovery: 200; icon source=auto`);
+    const stale = { ...projects.find(({ id }) => id === activeProjectId), lastOpenedAt: project.lastOpenedAt + 1 };
+    const rewritten = await requestJson('/api/config/settings', 'PUT', { projects: [stale], activeProjectId });
+    assert.equal(rewritten.status, 200, 'Queued project activation settings save');
+    const persisted = JSON.parse(fs.readFileSync(path.join(env.OPENCHAMBER_DATA_DIR, 'settings.json'), 'utf8'));
+    const persistedProject = persisted.projects.find(({ id }) => id === activeProjectId);
+    assert.equal(persistedProject.lastOpenedAt, stale.lastOpenedAt);
+    assert.deepEqual(persistedProject.iconImage, savedIcon);
+    console.log(`${label} discovered favicon survived the queued project settings write`);
   }
 } finally {
   child.kill('SIGTERM');

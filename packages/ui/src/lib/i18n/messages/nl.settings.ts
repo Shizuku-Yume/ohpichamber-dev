@@ -8,6 +8,8 @@ import { extensionCatalogI18n } from './extension-catalog.i18n';
 import { extensionPowersI18n } from './extension-powers.i18n';
 
 export const settingsDict = {
+  'settings.notifications.page.toast.testNotificationMacSent': "Testmelding naar macOS verstuurd. Als er geen strook verscheen, sta OhPiChamber dan toe in Systeeminstellingen → Meldingen.",
+  'settings.notifications.page.toast.testNotificationMacUnavailable': "De bezorging kon niet worden bevestigd. Sta OhPiChamber toe in macOS Systeeminstellingen → Meldingen en probeer het opnieuw.",
   'settings.openchamber.sessionRetention.field.archivedDescription': 'Telt de bewaartermijn vanaf het archiveren. Verlopen sessies worden verwijderd.',
   'settings.openchamber.sessionRetention.field.unarchivedArchiveDescription': 'Telt de bewaartermijn vanaf de laatste activiteit van de sessie. Verlopen sessies worden gearchiveerd.',
   'settings.openchamber.sessionRetention.field.unarchivedDeleteDescription': 'Telt de bewaartermijn vanaf de laatste activiteit van de sessie. Verlopen sessies worden verwijderd.',
