@@ -48,7 +48,8 @@ test('fails closed on wrong target, wrong Bun and missing SDK closure', t => {
 test('refuses dependency symlinks escaping the staged resource directory', t => {
   const { root, resources, manifest, save } = fixture(t);
   fs.writeFileSync(path.join(resources, 'outside'), 'outside');
-  fs.symlinkSync('../outside', path.join(root, 'escape'));
-  manifest.files.push({ path: 'escape', link: '../outside' }); save();
+  const link = path.join('..', 'outside');
+  fs.symlinkSync(link, path.join(root, 'escape'));
+  manifest.files.push({ path: 'escape', link }); save();
   assert.throws(() => verifyAgentPayload(root), /escapes resource directory/);
 });

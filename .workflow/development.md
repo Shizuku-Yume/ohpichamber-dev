@@ -4,18 +4,23 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Prepared-session ownership now transfers on authorized use by ID as well as
+normal create. Timeout, discard and shutdown share the claim and cannot delete
+an adopted session; inventory behavior is unchanged. The regression failed
+before the fix (5 failures, 50 passes). Isolated session coverage passes 193
+tests, including both cleanup/adoption orderings; contract, SDK and Agent
+Service builds and server lint/types pass. Packaged-app/provider behavior was
+not rechecked; existing deleted sessions are not recovered by this fix.
+
 The iOS clean-install build now uses stable mobile `node_modules` links in the
 Podfile and lockfile; Android's generated settings use the same package links.
 Capacitor CLI 8.6.0 is patched through Bun to preserve symlinks during package
 resolution and CocoaPods generation, preventing native sync from restoring
 store hashes. There is no committed SwiftPM manifest; its plugin paths share
 the patched resolver. macOS mobile tooling sets a UTF-8 CocoaPods locale.
-In `/Users/devin/repos/ohpi-ios-fix`, Bun 1.4.4 clean installation, native
+Bun 1.4.4 clean installation, native
 `cap sync`, 13 focused path/environment tests, mobile lint, and
-`LANG=C LC_ALL=C bun run mobile:build:ios:simulator` pass. The simulator build
-restored the full scanner Podfile and pods afterward. Logs live at
-`/Users/devin/ios-{clean-install-final,cap-sync,path-tests,lint,simulator-build}.log`.
-This verifies the build, not app launch, Android compilation, or SwiftPM builds.
+`LANG=C LC_ALL=C bun run mobile:build:ios:simulator` pass. This verifies the build, not app launch, Android compilation, or SwiftPM builds.
 
 The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
 `no-favicon-found` discovery response: non-OK responses otherwise become an error

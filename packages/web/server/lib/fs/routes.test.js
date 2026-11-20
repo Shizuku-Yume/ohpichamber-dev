@@ -134,11 +134,11 @@ const registerExec = ({ spawn }) => {
   return getRoute('POST', '/api/fs/exec');
 };
 
-const registerWrite = (fsPromises, directory = '/repo') => {
+const registerWrite = (fsPromises, directory = '/repo', paths = path.posix) => {
   const { app, getRoute } = createRouteRegistry();
   registerFsRoutes(app, {
     os: { homedir: () => '/home/user' },
-    path: path.posix,
+    path: paths,
     fsPromises: {
       realpath: async (targetPath) => targetPath,
       ...fsPromises,
@@ -557,7 +557,7 @@ describe('fs write', () => {
     try {
       const file = path.join(directory, 'file.txt');
       await nativeFs.writeFile(file, 'old');
-      const handler = registerWrite(nativeFs, directory);
+      const handler = registerWrite(nativeFs, directory, path);
       const res = await callWrite(handler, { path: file, content, mustExist: true });
       expect(res.statusCode).toBe(200);
       expect(await nativeFs.readFile(file, 'utf8')).toBe(content);
@@ -579,7 +579,7 @@ describe('fs write', () => {
           await nativeFs.writeFile(...args);
           if (duringWrite) await nativeFs.rename(file, moved);
         },
-      }, directory);
+      }, directory, path);
       const res = await callWrite(handler, { path: file, content: 'edited', mustExist: true });
       expect(res.statusCode).toBe(409);
       expect(res.body.error).toBe(`File no longer exists at ${file}. It may have been renamed or deleted outside the app.`);
@@ -595,7 +595,7 @@ describe('fs write', () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ordinary-write-'));
     try {
       const file = path.join(directory, 'new.txt');
-      const handler = registerWrite(nativeFs, directory);
+      const handler = registerWrite(nativeFs, directory, path);
       const res = await callWrite(handler, { path: file, content: 'created' });
       expect(res.statusCode).toBe(200);
       expect(await nativeFs.readFile(file, 'utf8')).toBe('created');

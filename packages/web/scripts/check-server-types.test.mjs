@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { batchByCommandLength, findPairedDeclarations, findServerJavaScript, findServerTypeScript } from './check-server-types.mjs';
+import { linkFixtureNodeModules } from './fixture-node-modules.mjs';
 
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -53,7 +54,7 @@ test('strict checking rejects unsafe types, overrides and source extensions', ()
   try {
     fs.mkdirSync(path.join(root, 'server'));
     fs.mkdirSync(path.join(root, 'bin'));
-    fs.symlinkSync(path.join(webRoot, 'node_modules'), path.join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+    linkFixtureNodeModules(path.join(webRoot, 'node_modules'), path.join(root, 'node_modules'));
     fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module"}');
     fs.writeFileSync(path.join(root, 'tsconfig.server-check.json'), JSON.stringify({
       extends: path.join(webRoot, 'tsconfig.server-check.json'),

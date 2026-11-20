@@ -503,43 +503,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
             {searchText !== '' && searchFailure ? <p role="status" className="px-2.5 pt-1 typography-micro text-muted-foreground">{searchFailure}</p> : null}
           </div>
         ) : null}
-        {empty ? (
-          <div className="min-h-0 flex-1">
-            <MobileSessionsEmpty
-              title={t('mobile.sessions.empty.noProjectsTitle')}
-              description={t('mobile.sessions.empty.noProjectsDescription')}
-              action={
-                <button
-                  type="button"
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 typography-ui-label text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => setDirectoryDialogOpen(true)}
-                >
-                  <Icon name="folder-add" className="size-4" />
-                  {t('sessions.sidebar.header.actions.addProject')}
-                </button>
-              }
-            />
-          </div>
-        ) : null}
-        {editingOrder ? (
-          <ScrollableOverlay outerClassName="min-h-0 flex-1" className="pb-4" useScrollShadow disableHorizontal>
-            <div className="flex flex-col gap-2 px-3 py-2">
-              <p className="px-1 typography-micro text-muted-foreground">{t('mobile.sessions.editOrderHint')}</p>
-              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleReorderDragEnd}>
-                <SortableContext items={reorderList.map((project) => project.id)} strategy={verticalListSortingStrategy}>
-                  <div className="flex flex-col gap-1.5">
-                    {reorderList.map((project) => <SortableProjectRow key={project.id} project={project} />)}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            </div>
-          </ScrollableOverlay>
-        ) : null}
-        <div className={cn('flex min-h-0 flex-1 flex-col', (editingOrder || empty) && 'hidden')}>
-          <MobileSidebarActionsProvider value={sidebarActions}>
-            <SessionSidebar mobileVariant isVisible={listActive} phone={phoneList} />
-          </MobileSidebarActionsProvider>
-        </div>
       {empty ? (
         <div className="min-h-0 flex-1">
           <MobileSessionsEmpty

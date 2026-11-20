@@ -20,7 +20,7 @@ if (!scenario) {
       try {
         const result = spawnSync(process.execPath, [
           '--conditions=openchamber-source',
-          '--import', fileURLToPath(new URL('../web/scripts/register-server-sources.mjs', import.meta.url)),
+          '--import', new URL('../web/scripts/register-server-sources.mjs', import.meta.url).href,
           fileURLToPath(import.meta.url),
         ], {
           env: { ...process.env, OPENCHAMBER_STARTUP_TEST: mode, OPENCHAMBER_DATA_DIR: directory },

@@ -1,6 +1,6 @@
 import { isEnterpriseMode } from '../enterprise-mode.js';
-import { pinnedRelayUrl } from '../relay/service.js';
-import { relayHttpBase, resolveShareRelayBase } from './relay-client.js';
+import { normalizeRelayUrl, pinnedRelayUrl } from '../relay/service.js';
+import { relayHttpBase } from './relay-client.js';
 import type { ShareRelaySettings } from './contracts.js';
 import type { Request } from '../shared/http-contracts.js';
 
@@ -14,7 +14,8 @@ export const allowedReceiveBases = (settings: ShareRelaySettings | null | undefi
     const pinned = pinnedRelayUrl();
     return pinned === null ? [] : [relayHttpBase(pinned)];
   }
-  return [...new Set([PUBLIC_SHARE_ORIGIN, resolveShareRelayBase(settings)])];
+  const relayUrl = pinnedRelayUrl() ?? normalizeRelayUrl(settings?.privateRelay?.relayUrl);
+  return relayUrl ? [...new Set([PUBLIC_SHARE_ORIGIN, relayHttpBase(relayUrl)])] : [PUBLIC_SHARE_ORIGIN];
 };
 
 export class ShareLinkError extends Error {
