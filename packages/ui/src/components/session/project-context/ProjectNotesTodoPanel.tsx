@@ -66,7 +66,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   const saveTodos = useProjectContextStore((state) => state.saveTodos);
   const { pinnedNoteIds, pinnedPlanIds, togglePin: toggleSessionPin } = useSessionKnowledgePins();
 
-<<<<<<< HEAD
   React.useEffect(() => {
     if (newSessionDraft.open) {
       setSessionPins(newSessionDraft.projectContextPins ?? { notes: [], plans: [] });
@@ -84,78 +83,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     return () => { cancelled = true; };
   }, [currentSessionDirectory, currentSessionId, newSessionDraft.open, newSessionDraft.projectContextPins]);
 
-  const toggleSessionPin = React.useCallback(async (kind: 'note' | 'plan', id: string, pinned: boolean) => {
-    if (newSessionDraft.open) {
-      setDraftProjectContextPin(kind, id, pinned);
-      return true;
-    }
-    if (!currentSessionId || !currentSessionDirectory) return false;
-    const next = await setSessionProjectContextPin(currentSessionDirectory, currentSessionId, kind, id, pinned);
-    if (!next) return false;
-    setSessionPins(next);
-    return true;
-  }, [currentSessionDirectory, currentSessionId, newSessionDraft.open, setDraftProjectContextPin]);
-
-  const pinnedNoteIds = React.useMemo(() => new Set(sessionPins.notes), [sessionPins.notes]);
-  const pinnedPlanIds = React.useMemo(() => new Set(sessionPins.plans), [sessionPins.plans]);
-
-||||||| bc50ba56aa
-  React.useEffect(() => {
-    if (newSessionDraft.open) {
-      setSessionPins(newSessionDraft.projectContextPins ?? { notes: [], plans: [] });
-      return;
-    }
-    let cancelled = false;
-    void fetchSessionKnowledgeSummary(currentSessionDirectory, currentSessionId).then((summary) => {
-      if (!cancelled) {
-        setSessionPins({
-          notes: summary.notes.map((note) => note.id),
-          plans: summary.plans.map((plan) => plan.id),
-        });
-      }
-    });
-    return () => { cancelled = true; };
-  }, [currentSessionDirectory, currentSessionId, newSessionDraft.open, newSessionDraft.projectContextPins]);
-
-  const toggleSessionPin = React.useCallback(async (kind: 'note' | 'plan', id: string, pinned: boolean) => {
-    if (newSessionDraft.open) {
-      setDraftProjectContextPin(kind, id, pinned);
-      return true;
-    }
-    if (!currentSessionId || !currentSessionDirectory) return false;
-    const next = await setSessionProjectContextPin(currentSessionDirectory, currentSessionId, kind, id, pinned);
-    if (!next) return false;
-    setSessionPins(next);
-    return true;
-  }, [currentSessionDirectory, currentSessionId, newSessionDraft.open, setDraftProjectContextPin]);
-
-  const pinnedNoteIds = React.useMemo(() => new Set(sessionPins.notes), [sessionPins.notes]);
-  const pinnedPlanIds = React.useMemo(() => new Set(sessionPins.plans), [sessionPins.plans]);
-
-  // The whole feature is one switch: with memory off there is nothing for the
-  // agent to manage, so showing the user what is stored would be pointless.
-  const memoryEnabled = useUIStore((state) => (
-    state.agentMemoryFeatureAvailable && state.agentMemoryToolEnabled
-  ));
-  const memoryDisabledByServer = useAgentMemoryStore((state) => state.disabled);
-  const memoryVisible = memoryEnabled && !memoryDisabledByServer;
-  const globalMemory = useAgentMemoryStore((state) => state.global);
-  const projectMemory = useAgentMemoryStore(
-    (state) => selectProjectMemoryForPath(state, projectRef?.path ?? null),
-  );
-
-=======
-  const memoryEnabled = useUIStore((state) => (
-    state.agentMemoryFeatureAvailable && state.agentMemoryToolEnabled
-  ));
-  const memoryDisabledByServer = useAgentMemoryStore((state) => state.disabled);
-  const memoryVisible = memoryEnabled && !memoryDisabledByServer;
-  const globalMemory = useAgentMemoryStore((state) => state.global);
-  const projectMemory = useAgentMemoryStore(
-    (state) => selectProjectMemoryForPath(state, projectRef?.path ?? null),
-  );
-
->>>>>>> upstream/main
   const isMobile = useUIStore((state) => state.isMobile);
   const [rootNode, setRootNode] = React.useState<HTMLDivElement | null>(null);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -202,20 +129,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   const activeTab: ProjectContextTab = TAB_ORDER.includes(storedTab as ProjectContextTab)
     ? storedTab as ProjectContextTab
     : 'notes';
-<<<<<<< HEAD
   // Todos open nothing, so they never split.
-||||||| bc50ba56aa
-  // A persisted 'memory' must not survive the feature being turned off, or the
-  // panel would open on a tab that no longer exists.
-  const activeTab: ProjectContextTab = requestedTab === 'memory' && !memoryVisible
-    ? 'notes'
-    : requestedTab;
-  // Todos open nothing, so they never split.
-=======
-  const activeTab: ProjectContextTab = requestedTab === 'memory' && !memoryVisible
-    ? 'notes'
-    : requestedTab;
->>>>>>> upstream/main
   const split = wide && activeTab !== 'todos';
 
   const [query, setQuery] = React.useState('');
@@ -286,31 +200,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     )).length,
   }), [contextEntry.notes, contextEntry.plans, pendingDeletes, projectRef, query, todos]);
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // Counted across both scopes against their own marks: a new global memory is
-  // the one the user most needs to see, and it would be invisible behind the
-  // project scope.
-  const globalViewedAt = useUIStore((state) => state.agentMemoryViewedAt[memoryViewKey('global', null)] ?? 0);
-  const projectViewedAt = useUIStore(
-    (state) => state.agentMemoryViewedAt[memoryViewKey('project', projectRef?.path ?? null)] ?? 0,
-  );
-  const highlightedMemoryCount = React.useMemo(
-    () => countHighlightedMemories(globalMemory, globalViewedAt)
-      + countHighlightedMemories(projectMemory, projectViewedAt),
-    [globalMemory, globalViewedAt, projectMemory, projectViewedAt],
-  );
-=======
-  const globalViewedAt = useUIStore((state) => state.agentMemoryViewedAt[memoryViewKey('global', null)] ?? 0);
-  const projectViewedAt = useUIStore(
-    (state) => state.agentMemoryViewedAt[memoryViewKey('project', projectRef?.path ?? null)] ?? 0,
-  );
-  const highlightedMemoryCount = React.useMemo(
-    () => countHighlightedMemories(globalMemory, globalViewedAt)
-      + countHighlightedMemories(projectMemory, projectViewedAt),
-    [globalMemory, globalViewedAt, projectMemory, projectViewedAt],
-  );
->>>>>>> upstream/main
 
   const send = useProjectTodoSend({ projectRef, canCreateWorktree, onActionComplete });
 
@@ -392,17 +281,9 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       if (!projectRef) {
         return;
       }
-<<<<<<< HEAD
       // The store owns per-project write serialization and rollback; the panel
       // only decides what to persist and how to report a failure.
       void saveTodos(projectRef, nextTodos).then((saved) => {
-||||||| bc50ba56aa
-      // The store owns per-project write serialization and rollback; the panel
-      // only decides what to persist and how to report a failure.
-      void saveTodos(projectRef, nextTodos, change).then((saved) => {
-=======
-      void saveTodos(projectRef, nextTodos, change).then((saved) => {
->>>>>>> upstream/main
         if (!saved) {
           toast.error(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
         }
@@ -411,43 +292,11 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [projectRef, saveTodos, t]
   );
 
-<<<<<<< HEAD
   const sections: Array<{ id: ProjectContextTab; icon: IconName; label: string; tooltip: string; count: number }> = React.useMemo(() => ([
     { id: 'notes', icon: 'sticky-note', label: t('rightSidebar.contextNotesTodo.tabs.notes'), tooltip: t('contextTooltips.workspace.section.notes'), count: counts.notes },
     { id: 'todos', icon: 'checkbox-circle', label: t('rightSidebar.contextNotesTodo.tabs.todos'), tooltip: t('contextTooltips.workspace.section.todos'), count: counts.todos },
     { id: 'plans', icon: 'file-text', label: t('rightSidebar.contextNotesTodo.tabs.plans'), tooltip: t('contextTooltips.workspace.section.plans'), count: counts.plans },
   ]), [counts, t]);
-||||||| bc50ba56aa
-  const sections: Array<{ id: ProjectContextTab; icon: IconName; label: string; tooltip: string; count: number; unseen: number }> = React.useMemo(() => ([
-    { id: 'notes', icon: 'sticky-note', label: t('rightSidebar.contextNotesTodo.tabs.notes'), tooltip: t('contextTooltips.workspace.section.notes'), count: counts.notes, unseen: 0 },
-    { id: 'todos', icon: 'checkbox-circle', label: t('rightSidebar.contextNotesTodo.tabs.todos'), tooltip: t('contextTooltips.workspace.section.todos'), count: counts.todos, unseen: 0 },
-    { id: 'plans', icon: 'file-text', label: t('rightSidebar.contextNotesTodo.tabs.plans'), tooltip: t('contextTooltips.workspace.section.plans'), count: counts.plans, unseen: 0 },
-    ...(memoryVisible ? [{
-      id: 'memory' as const,
-      icon: 'brain-4' as IconName,
-      label: t('rightSidebar.contextNotesTodo.tabs.memory'),
-      tooltip: t('contextTooltips.workspace.section.memory'),
-      count: counts.memory,
-      // What the agent stored without asking deserves the glance, so it gets
-      // its own mark beside the total instead of hiding inside it.
-      unseen: highlightedMemoryCount,
-    }] : []),
-  ]), [counts, highlightedMemoryCount, memoryVisible, t]);
-=======
-  const sections: Array<{ id: ProjectContextTab; icon: IconName; label: string; tooltip: string; count: number; unseen: number }> = React.useMemo(() => ([
-    { id: 'notes', icon: 'sticky-note', label: t('rightSidebar.contextNotesTodo.tabs.notes'), tooltip: t('contextTooltips.workspace.section.notes'), count: counts.notes, unseen: 0 },
-    { id: 'todos', icon: 'checkbox-circle', label: t('rightSidebar.contextNotesTodo.tabs.todos'), tooltip: t('contextTooltips.workspace.section.todos'), count: counts.todos, unseen: 0 },
-    { id: 'plans', icon: 'file-text', label: t('rightSidebar.contextNotesTodo.tabs.plans'), tooltip: t('contextTooltips.workspace.section.plans'), count: counts.plans, unseen: 0 },
-    ...(memoryVisible ? [{
-      id: 'memory' as const,
-      icon: 'brain-4' as IconName,
-      label: t('rightSidebar.contextNotesTodo.tabs.memory'),
-      tooltip: t('contextTooltips.workspace.section.memory'),
-      count: counts.memory,
-      unseen: highlightedMemoryCount,
-    }] : []),
-  ]), [counts, highlightedMemoryCount, memoryVisible, t]);
->>>>>>> upstream/main
 
   if (!projectRef) {
     return (
@@ -560,25 +409,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     <React.Suspense fallback={null}>
       <ContextPanelHeaderSlotProvider value={null}>
         <PlanView
-<<<<<<< HEAD
-||||||| bc50ba56aa
-          visible={visible}
-          leading={withBack ? (
-            <KnowledgeBackButton
-              label={t('rightSidebar.contextNotesTodo.plans.actions.back')}
-              onClick={() => setOpenEntry(null)}
-            />
-          ) : null}
-=======
-          key={planViewGeneration}
-          visible={visible}
-          leading={withBack ? (
-            <KnowledgeBackButton
-              label={t('rightSidebar.contextNotesTodo.plans.actions.back')}
-              onClick={() => setOpenEntry(null)}
-            />
-          ) : null}
->>>>>>> upstream/main
           savedProjectPlan={{ projectRef, planId }}
           onNavigatedToChat={() => setOpenEntry(null)}
           onClose={() => setOpenEntry(null)}
@@ -596,97 +426,11 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       )}
 
       <div className="relative min-h-0 min-w-0 flex-1">
-<<<<<<< HEAD
         {showSearchBar ? (
           // Over the list column in the split layout, so it never covers the
           // open entry's toolbar.
           <div className={cn('pointer-events-none absolute top-2 z-20', split ? 'inset-s-3' : 'inset-e-3')}>
             <KnowledgeSearchBar
-||||||| bc50ba56aa
-      {showSearchBar ? (
-        // Over the list column in the split layout, so it never covers the
-        // open entry's toolbar.
-        <div className={cn('pointer-events-none absolute top-2 z-20', split ? 'inset-s-3' : 'inset-e-3')}>
-          <KnowledgeSearchBar
-            query={query}
-            onQueryChange={setQuery}
-            placeholder={searchLabel}
-            nothingFound={nothingFound}
-            focusRequest={searchFocusRequest}
-            onClose={closeSearch}
-          />
-        </div>
-      ) : null}
-      {/* An open entry scrolls itself; nesting it in this scroller would give
-          the panel two scrollbars for one document. In the split layout each
-          column scrolls itself. */}
-      <ScrollableOverlay
-        ref={listScrollerRef}
-        outerClassName="h-full min-w-0"
-        className={cn(split ? 'overflow-hidden' : cn('p-3', entryOpen && 'overflow-hidden'))}
-        disableHorizontal
-      >
-        {activeTab === 'notes' ? (
-          <NotesSection
-            projectRef={projectRef}
-            notes={contextEntry.notes}
-            disabled={isLoading}
-            query={query}
-            pinnedNoteIds={pinnedNoteIds}
-            onTogglePinned={(noteId, pinned) => toggleSessionPin('note', noteId, pinned)}
-            openNoteId={openIdIn('notes')}
-            onOpenNote={openNote}
-            split={split}
-          />
-        ) : null}
-
-        {activeTab === 'todos' ? (
-          // Todos open nothing, so a wide panel gets one column of readable
-          // width instead of rows stretched edge to edge.
-          <div className={cn(wide && 'mx-auto max-w-3xl')}>
-            <TodosSection
-              todos={todos}
-=======
-      {showSearchBar ? (
-        <div className={cn('pointer-events-none absolute top-2 z-20', split ? 'inset-s-3' : 'inset-e-3')}>
-          <KnowledgeSearchBar
-            query={query}
-            onQueryChange={setQuery}
-            placeholder={searchLabel}
-            nothingFound={nothingFound}
-            focusRequest={searchFocusRequest}
-            onClose={closeSearch}
-          />
-        </div>
-      ) : null}
-      <ScrollableOverlay
-        ref={listScrollerRef}
-        outerClassName="h-full min-w-0"
-        className={cn(split ? 'overflow-hidden' : cn('p-3', entryOpen && 'overflow-hidden'))}
-        disableHorizontal
-      >
-        {activeTab === 'notes' ? (
-          <NotesSection
-            projectRef={projectRef}
-            notes={contextEntry.notes}
-            disabled={isLoading}
-            query={query}
-            pinnedNoteIds={pinnedNoteIds}
-            onTogglePinned={(noteId, pinned) => toggleSessionPin('note', noteId, pinned)}
-            openNoteId={openIdIn('notes')}
-            onOpenNote={openNote}
-            split={split}
-          />
-        ) : null}
-
-        {activeTab === 'todos' ? (
-          <div className={cn(wide && 'mx-auto max-w-3xl')}>
-            <TodosSection
-              projectPath={projectRef.path}
-              todos={todos}
-              plans={contextEntry.plans}
-              onOpenPlan={openPlanFromTodo}
->>>>>>> upstream/main
               query={query}
               onQueryChange={setQuery}
               placeholder={searchLabel}
