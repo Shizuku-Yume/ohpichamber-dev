@@ -16,6 +16,15 @@ const record = (tag, at = 100, sessionId = 'session') => ({ tag, nativeTag: `${t
 const memoryStore = (tags = []) => ({ read: async () => ({ version: 1, tags }), write: vi.fn(async () => {}) });
 
 describe('Host push tags', () => {
+  it('parses file entries independently and returns only valid tag records', async () => {
+    const { file, store } = await fileStore();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await writeFile(file, JSON.stringify({ version: 1, tags: [record('good'), { ...record('invalid'), tag: '' }] }));
+      expect(await store.read()).toEqual({ version: 1, tags: [record('good')] });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally { warn.mockRestore(); }
+  });
   it('starts empty, atomically saves private metadata and restores exact native tags after restart', async () => {
     const { file, store } = await fileStore();
     expect(await store.read()).toEqual({ version: 1, tags: [] });
