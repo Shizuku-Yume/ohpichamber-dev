@@ -300,10 +300,17 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       const live = session.filter((item) => item.rootSessionId === item.sessionId
         && (item.runtimeStatus === "running" || item.runtimeStatus === "awaiting_approval" || item.runtimeStatus === "awaiting_input"))
       const newChildParents = new Set(session.filter((item) => item.parentSessionId && !previousById.has(item.sessionId)).map((item) => item.parentSessionId!))
+      const recoverySessions = new Set(newChildParents)
+      for (const item of session) {
+        const cached = store.getState().snapshot[item.sessionId]?.session
+        if (cached && item.rootSessionId === item.sessionId
+          && (item.epoch !== cached.epoch || compareCounters(item.headSequence, cached.headSequence) > 0)
+          && (item.runtimeStatus !== cached.runtimeStatus || item.activeRunId !== cached.activeRunId)) recoverySessions.add(item.sessionId)
+      }
       // Discovering a child must also recover its parent's task tool record.
       await Promise.allSettled([
         ...live.filter((item) => !store.getState().snapshot[item.sessionId]).map((item) => messageLoader.ensure({ directory, sessionId: item.sessionId }, { reason: "reactive" })),
-        ...[...newChildParents].filter((sessionId) => Boolean(store.getState().snapshot[sessionId])).map((sessionId) => messageLoader.refresh({ directory, sessionId })),
+        ...[...recoverySessions].filter((sessionId) => Boolean(store.getState().snapshot[sessionId])).map((sessionId) => messageLoader.refresh({ directory, sessionId })),
       ])
       if (isStale()) return
       const statuses: Record<string, SessionRuntimeStatus> = {}

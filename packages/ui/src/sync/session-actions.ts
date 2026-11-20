@@ -1762,7 +1762,10 @@ export async function abortCurrentOperation(sessionId: string): Promise<void> {
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   return
  }
- if (!snapshot.activeRun) return
+ if (!snapshot.activeRun) {
+  await refetchSessionMessages(sessionId)
+  return
+ }
  const result = await canonicalClient.abortSession(sessionId, snapshot.activeRun.runId)
  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
  if (result.run.sessionId !== sessionId || result.run.runId !== snapshot.activeRun.runId) throw new Error("Abort response identified another run")
