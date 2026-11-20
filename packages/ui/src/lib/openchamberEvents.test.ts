@@ -65,6 +65,28 @@ describe('openchamber events', () => {
     }
   });
 
+  test('preserves desktop delivery flags and rejects malformed notification flags', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const notifications: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type === 'notification') notifications.push(event.payload);
+    });
+    try {
+      const source = MockEventSource.instances.at(-1)!;
+      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:notification', properties,
+      }) });
+      send({});
+      send({ title: 'Done', desktopNotificationDelivered: true, desktopStdoutActive: false });
+      expect(notifications).toEqual([{}, { title: 'Done', desktopNotificationDelivered: true, desktopStdoutActive: false }]);
+      send({ title: 'Invalid', desktopNotificationDelivered: 'true' });
+      send({ title: 'Invalid', desktopStdoutActive: 1 });
+      expect(notifications).toHaveLength(2);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('keeps reconnect status until the replacement Host stream is ready', async () => {
     const {
       isOpenchamberEventsReconnecting,
