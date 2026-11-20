@@ -485,14 +485,14 @@
   ],
   "patchedDependencies": {
     "@tanstack/virtual-core@3.19.11": "bun-patches/@tanstack+virtual-core+3.19.11.patch",
+    "@oh-my-pi/pi-coding-agent@vendor/omp/57771ae5/tarballs/oh-my-pi-pi-coding-agent-19.0.0.tgz": "vendor/omp/57771ae5/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2F57771ae5%2Ftarballs%2Foh-my-pi-pi-coding-agent-19.0.0.tgz.patch",
     "zod@4.6.7": "bun-patches/zod@4.6.7.patch",
     "@legendapp/list@3.7.2": "bun-patches/@legendapp%2Flist@3.7.2.patch",
-    "@oh-my-pi/pi-coding-agent@vendor/omp/57771ae5/tarballs/oh-my-pi-pi-coding-agent-19.0.0.tgz": "vendor/omp/57771ae5/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2F57771ae5%2Ftarballs%2Foh-my-pi-pi-coding-agent-19.0.0.tgz.patch",
+    "@capacitor/cli@8.6.0": "bun-patches/@capacitor%2Fcli@8.6.0.patch",
     "@codemirror/view@6.43.15": "bun-patches/@codemirror%2Fview@6.43.15.patch",
-    "@oh-my-pi/pi-coding-agent@vendor/omp/57771ae5/tarballs/oh-my-pi-pi-coding-agent-19.0.0.tgz": "vendor/omp/57771ae5/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2F57771ae5%2Ftarballs%2Foh-my-pi-pi-coding-agent-19.0.0.tgz.patch",
     "happy-dom@21.0.4": "bun-patches/happy-dom@21.0.4.patch",
-    "bun-pty@0.6.0": "bun-patches/bun-pty@0.6.0.patch",
     "puppeteer-core@25.3.0": "vendor/omp/57771ae5/patches/puppeteer-core@25.3.0.patch",
+    "bun-pty@0.6.0": "bun-patches/bun-pty@0.6.0.patch",
   },
   "overrides": {
     "@anush008/tokenizers@0.0.0": {

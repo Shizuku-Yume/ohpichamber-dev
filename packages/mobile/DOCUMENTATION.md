@@ -9,6 +9,8 @@
 ### Invariants
 
 - The simulator build restores the original Podfile and reinstalls its pods in `finally` so device and TestFlight builds retain the barcode scanner, including after a build failure.
+- Native dependency paths use package links under `packages/mobile/node_modules`, not Bun's versioned store directories. The Bun patch for `@capacitor/cli` preserves those links during CocoaPods, SwiftPM and Android dependency generation; keep it when upgrading Capacitor until upstream preserves symlink paths. This project uses CocoaPods and has no committed `Package.swift`.
+- On macOS, `with-mobile-env.mjs` sets `LANG` and `LC_ALL` to `en_US.UTF-8` for CocoaPods, including simulator builds and native sync.
 
 ### Why the simulator build omits the scanner and not the device build
 

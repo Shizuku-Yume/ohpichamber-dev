@@ -1,0 +1,45 @@
+diff --git a/dist/ios/update.js b/dist/ios/update.js
+index 8f1eccdce4452701e14b54a0f97f788f98bcd019..32e75f20b599044ec866f5f9273b2290b1018151 100644
+--- a/dist/ios/update.js
++++ b/dist/ios/update.js
+@@ -303,7 +303,7 @@ async function getRelativeCapacitoriOSPath(config) {
+         (0, errors_1.fatal)(`Unable to find ${colors_1.default.strong('node_modules/@capacitor/ios')}.\n` +
+             `Are you sure ${colors_1.default.strong('@capacitor/ios')} is installed?`);
+     }
+-    return (0, fs_1.convertToUnixPath)((0, path_1.relative)(config.ios.nativeProjectDirAbs, await (0, fs_extra_1.realpath)((0, path_1.dirname)(capacitoriOSPath))));
++    return (0, fs_1.convertToUnixPath)((0, path_1.relative)(config.ios.nativeProjectDirAbs, (0, path_1.dirname)(capacitoriOSPath)));
+ }
+ async function generatePodFile(config, plugins) {
+     const relativeCapacitoriOSPath = await getRelativeCapacitoriOSPath(config);
+@@ -312,7 +312,7 @@ async function generatePodFile(config, plugins) {
+         if (!p.ios) {
+             return '';
+         }
+-        return `  pod '${p.ios.name}', :path => '${(0, fs_1.convertToUnixPath)((0, path_1.relative)(config.ios.nativeProjectDirAbs, await (0, fs_extra_1.realpath)(p.rootPath)))}'\n`;
++        return `  pod '${p.ios.name}', :path => '${(0, fs_1.convertToUnixPath)((0, path_1.relative)(config.ios.nativeProjectDirAbs, p.rootPath))}'\n`;
+     }));
+     const cordovaPlugins = plugins.filter((p) => (0, plugin_1.getPluginType)(p, platform) === 1 /* PluginType.Cordova */);
+     cordovaPlugins.map(async (p) => {
+diff --git a/dist/util/node.js b/dist/util/node.js
+index 505b199c3c39ad715a33f6b9047f20ff858d23bd..774eb2d1e02c1d1b7c09eed0aec58e26f3e35569 100644
+--- a/dist/util/node.js
++++ b/dist/util/node.js
+@@ -74,6 +74,18 @@ const requireTS = async (ts, p) => {
+ };
+ exports.requireTS = requireTS;
+ function resolveNode(root, ...pathSegments) {
++    let directory = (0, path_1.resolve)(root);
++    while (true) {
++        const candidate = (0, path_1.join)(directory, 'node_modules', ...pathSegments);
++        if ((0, fs_1.existsSync)(candidate)) {
++            return candidate;
++        }
++        const parent = (0, path_1.dirname)(directory);
++        if (parent === directory) {
++            break;
++        }
++        directory = parent;
++    }
+     try {
+         return require.resolve(pathSegments.join('/'), { paths: [root] });
+     }
