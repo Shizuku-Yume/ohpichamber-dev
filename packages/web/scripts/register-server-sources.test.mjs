@@ -61,5 +61,6 @@ test('the source CLI serves Host health, Canonical readiness and project favicon
   expect(result.stdout).toContain('Node source CLI /health: 200');
   expect(result.stdout).toContain('Node source CLI /api/agent/v1/ready: 200');
   expect(result.stdout).toContain('Node source CLI project add and favicon discovery: 200; icon source=auto');
+  expect(result.stdout).toContain('Node source CLI discovered favicon survived the queued project settings write');
   expect(result.stdout).toContain('Server stopped; isolated data removed.');
 }, 95_000);

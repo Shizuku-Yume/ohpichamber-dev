@@ -2240,7 +2240,7 @@ async function main(options = {}) {
  registerSettingsRoutes(app, {
   readSettingsFromDiskMigrated,
   formatSettingsResponse,
-  persistSettings,
+  persistSettings: (changes, options) => persistSettings(changes, { ...options, preserveProjectIcons: true }),
   onSettingsUpdated: async (settings) => {
    try {
     const tools = {

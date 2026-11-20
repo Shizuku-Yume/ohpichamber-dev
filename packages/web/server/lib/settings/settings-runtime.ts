@@ -1037,7 +1037,7 @@ export const createSettingsRuntime = (deps) => {
     return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration8.settings;
   };
 
-  const persistResolvedSettings = async (resolveChanges, { surface = null } = {}) => {
+  const persistResolvedSettings = async (resolveChanges, { surface = null, preserveProjectIcons = false } = {}) => {
     const result = persistSettingsLock.then(async () => {
       const current = await readSettingsFromDisk({ surface });
       const changes = typeof resolveChanges === 'function' ? resolveChanges(current) : resolveChanges;
@@ -1045,6 +1045,13 @@ export const createSettingsRuntime = (deps) => {
       // client tokens, tunnel tokens) that must never reach the log file.
       console.log('[persistSettings] Updating fields:', Object.keys(changes || {}).join(', ') || '(none)');
       const sanitized = sanitizeSettingsUpdate(changes);
+      if (preserveProjectIcons && Array.isArray(sanitized.projects)) {
+        const iconsByPath = new Map(sanitizeProjects(current.projects)?.map(({ path, iconImage }) => [path, iconImage]));
+        sanitized.projects = sanitized.projects.map(({ iconImage: _clientIcon, ...project }) => {
+          const iconImage = iconsByPath.get(project.path);
+          return iconImage === undefined ? project : { ...project, iconImage };
+        });
+      }
       for (const key of Object.keys(sanitized)) {
         // Device state belongs to the install in front of the user, never to
         // the instance; a client that still sends it is simply ignored.
