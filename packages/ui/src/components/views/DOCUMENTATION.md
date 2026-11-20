@@ -536,7 +536,7 @@ while previewing, so same-length edits in the middle invalidate cached output.
 
 Markdown plan previews use the file preview's local-asset handling. Relative
 images resolve from the plan file's directory, including personal plans stored
-under the OpenChamber data directory and repository plans in a custom folder.
+under the OhPiChamber data directory and repository plans in a custom folder.
 
 ## Code size in files and diffs
 
@@ -707,128 +707,7 @@ filter those drafts out, and the fullscreen overlay shows them while it is open.
 Changes hands its PR source to walkthrough; walkthrough's Changes action opens
 PR mode with the shared selection. Picking a PR never generates a walkthrough.
 
-<<<<<<< HEAD
 Web, Electron, hosted mobile and Capacitor use the server route for PR comparisons.
-||||||| bc50ba56aa
-Web, Electron, hosted mobile and Capacitor use the server route. VS Code keeps
-PR comparison unavailable, like the other server-backed comparison modes.
-
-A PR of another project, opened from the Tracker or the board, keeps that
-project's folder on its Changes or walkthrough tab (`directory` on both views).
-The views then key everything by that folder: the binding the PR is read
-through, the selection and the hand-off between them. Changes shows only that
-PR there, without the scope switch, the last turn, review or opening files,
-which belong to the session on screen. The rail's own Changes and walkthrough
-return to the panel's project (`lib/surfaces/DOCUMENTATION.md`, Tracker).
-
-Mobile Changes uses the same expansion for branch, commit and PR files: the
-patch opens with 3 lines of context, and expanding reads that file in full once
-(git with whole-file context, or both PR sides from the provider), then replays the
-expansion. A failed read toasts and keeps the patch. Working-tree files there
-already load both full sides, so they expand without a read.
-
-## Hidden whitespace
-
-`diffHideWhitespace` is a synced profile preference, toggled from the DiffView
-toolbar and the mobile diff header. `PierreDiffViewer` applies it to whatever
-diff it receives, every comparison mode alike, through
-`lib/diff/hideWhitespaceChanges.ts`: line pairs equal once all whitespace is
-removed become context, each side keeping its own text, and hunks are recut
-with 3 lines of context inside the original hunk. A file with nothing left shows
-a whitespace-only note. Hunk stage and discard actions are withheld meanwhile,
-because they act on the whole hunk, whitespace included. Line numbers do not
-move, so comments and context expansion work unchanged.
-
-## Sticky horizontal scrollbar
-
-Pierre scrolls each code column sideways on its own (two in a split diff, one
-in a unified one), so the columns' scrollbars sit after the last line. The
-inline layout hides them inside the shadow root and draws one track per column
-in `DiffStickyScrollbar`, a `sticky bottom-0` strip after the diff: while the
-diff runs past the bottom of the panel, its scrollbar stays at that bottom.
-Each track and its column copy each other's `scrollLeft`; sizes are read only
-in ResizeObserver callbacks, so vertical scrolling does no work for it.
-
-Sticky elements stick to their nearest scroll box and keep clear of its
-padding. Everything between a diff and the panel that scrolls it therefore
-clips with `overflow: clip`, never `hidden`, and end space below the list is
-padding on the content, not on the scroller (the Changes panel's `pb-16`).
-
-### Why mirrored tracks and not a scroll area per diff
-
-A per-diff scroll area with its own horizontal bar would have to be as tall as
-the panel to keep the bar on screen, which nests a vertical scroll area inside
-the panel's. #213 removed exactly that after nested scroll areas broke
-scrolling in the All files view (#215). The tracks scroll sideways only, so the
-panel stays the one vertical scroller.
-=======
-Web, Electron, hosted mobile and Capacitor use the server route. VS Code keeps
-PR comparison unavailable, like the other server-backed comparison modes.
-
-A PR of another project, opened from the Tracker or the board, keeps that
-project's folder on its Changes or walkthrough tab (`directory` on both views).
-The views then key everything by that folder: the binding the PR is read
-through, the selection and the hand-off between them. Changes shows only that
-PR there, without the scope switch, the last turn, review or opening files,
-which belong to the session on screen. The rail's own Changes and walkthrough
-return to the panel's project (`lib/surfaces/DOCUMENTATION.md`, Tracker).
-
-Mobile Changes uses the same expansion for branch, commit and PR files: the
-patch opens with 3 lines of context, and expanding reads that file in full once
-(git with whole-file context, or both PR sides from the provider), then replays the
-expansion. A failed read toasts and keeps the patch. Working-tree files there
-already load both full sides, so they expand without a read.
-
-## Hidden whitespace
-
-`diffHideWhitespace` is a synced profile preference, toggled from the DiffView
-toolbar and the mobile diff header. `PierreDiffViewer` applies it to whatever
-diff it receives, every comparison mode alike, through
-`lib/diff/hideWhitespaceChanges.ts`: line pairs equal once all whitespace is
-removed become context, each side keeping its own text, and hunks are recut
-with 3 lines of context inside the original hunk. A file with nothing left shows
-a whitespace-only note. Hunk stage and discard actions are withheld meanwhile,
-because they act on the whole hunk, whitespace included. Line numbers do not
-move, so comments and context expansion work unchanged.
-
-## Hunk actions
-
-A hunk's stage and discard buttons float over the end of its last changed
-line, positioned from a zero-height line annotation after that line. They
-show while the pointer is on the hunk (Pierre's `onLineEnter`, matched to the
-hunk's line span on either side), on their own hover and keyboard focus, and
-while their action runs; touch screens without hover keep them shown.
-
-### Why an overlay shown on hover and not a row of its own
-
-A row under each hunk covered no code, but it striped the diff with empty
-bands and cost 2.25rem per hunk. An overlay shown at rest covered the code it
-acts on. Shown only while the user points at the hunk, it covers that line's
-end only then, and the diff keeps its rhythm.
-
-## Sticky horizontal scrollbar
-
-Pierre scrolls each code column sideways on its own (two in a split diff, one
-in a unified one), so the columns' scrollbars sit after the last line. The
-inline layout hides them inside the shadow root and draws one track per column
-in `DiffStickyScrollbar`, a `sticky bottom-0` strip after the diff: while the
-diff runs past the bottom of the panel, its scrollbar stays at that bottom.
-Each track and its column copy each other's `scrollLeft`; sizes are read only
-in ResizeObserver callbacks, so vertical scrolling does no work for it.
-
-Sticky elements stick to their nearest scroll box and keep clear of its
-padding. Everything between a diff and the panel that scrolls it therefore
-clips with `overflow: clip`, never `hidden`, and end space below the list is
-padding on the content, not on the scroller (the Changes panel's `pb-16`).
-
-### Why mirrored tracks and not a scroll area per diff
-
-A per-diff scroll area with its own horizontal bar would have to be as tall as
-the panel to keep the bar on screen, which nests a vertical scroll area inside
-the panel's. #213 removed exactly that after nested scroll areas broke
-scrolling in the All files view (#215). The tracks scroll sideways only, so the
-panel stays the one vertical scroller.
->>>>>>> upstream/main
 
 Most focused tests use Bun. `MultiFileDiffEntry.vitest.tsx` exercises the real
 diff component through the web workspace's Vitest runner because its transitive

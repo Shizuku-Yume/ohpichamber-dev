@@ -1,124 +1,29 @@
-<<<<<<< HEAD
-import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test';
-||||||| bc50ba56aa
-import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-=======
 import { afterAll, afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test';
->>>>>>> upstream/main
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
-||||||| bc50ba56aa
-import type { Session } from '@/lib/opencode/model';
-import type { SpaceArchive } from '@/lib/spaces/spaces-api';
-import { createProjectIdFromPath } from '@/lib/projectId';
-=======
-import type { Session } from '@/lib/opencode/model';
-import type { DesktopSettings } from '@/lib/settings/registry';
-import type { SpaceArchive } from '@/lib/spaces/spaces-api';
-import { createProjectIdFromPath } from '@/lib/projectId';
->>>>>>> upstream/main
 const browser = new Window({ url: 'http://localhost' });
 let root: Root;
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
 // React DOM detects input-event support when imported, so install the DOM first.
-<<<<<<< HEAD
-for (const [key, value] of Object.entries({ window: browser, document: browser.document, navigator: browser.navigator, localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) {
-||||||| bc50ba56aa
-for (const [key, value] of Object.entries({ window: browser, document: browser.document, navigator: browser.navigator, localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true,
-  // The row's context menu orders its items and animates its popup.
-  Node: browser.Node, MouseEvent: browser.MouseEvent, DOMRect: browser.DOMRect, getComputedStyle: browser.getComputedStyle.bind(browser), requestAnimationFrame: (callback: FrameRequestCallback) => { callback(0); return 1; }, cancelAnimationFrame: () => undefined })) {
-=======
-for (const [key, value] of Object.entries({ window: browser, document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent, navigator: browser.navigator, localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true,
-  // The row's context menu orders its items and animates its popup.
-  Node: browser.Node, MouseEvent: browser.MouseEvent, DOMRect: browser.DOMRect, getComputedStyle: browser.getComputedStyle.bind(browser), requestAnimationFrame: (callback: FrameRequestCallback) => { callback(0); return 1; }, cancelAnimationFrame: () => undefined })) {
->>>>>>> upstream/main
+for (const [key, value] of Object.entries({ window: browser, document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent, navigator: browser.navigator, localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) {
   descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
   Object.defineProperty(globalThis, key, { value, configurable: true });
 }
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const PROJECT = { id: createProjectIdFromPath('/workspace'), path: '/workspace' };
-let spaceArchives: SpaceArchive[] = [];
-const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-  const path = new URL(input instanceof Request ? input.url : String(input), 'http://localhost').pathname;
-  if (path === '/api/config/settings') return Response.json({ projects: [PROJECT] });
-  if (path.endsWith('/fs/home')) return Response.json({ home: '/home/test' });
-  if (path.endsWith('/fs/directory-stats')) return Response.json({ results: [{ path: '/gone/worktree', reason: 'not-found' }, { path: '/untrusted/clone', isDirectory: true }] });
-  if (path === '/api/openchamber/spaces/archives') return Response.json({ archives: spaceArchives });
-  if (path.endsWith('/archives')) return Response.json({ archives: [] });
-  if (path === '/api/config' || path === '/api/project') return Response.json([]);
-  if (path.endsWith('/location')) return Response.json({ directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } });
-  if (path.endsWith('/session/active')) return Response.json({ data: {} });
-  if (path.endsWith('/vcs')) return Response.json({ data: { branch: { current: 'main', default: 'main' } } });
-  return Response.json({ data: [], cursor: {} });
-});
-=======
-const PROJECT = { id: createProjectIdFromPath('/workspace'), path: '/workspace' };
-let spaceArchives: SpaceArchive[] = [];
-// A settings save made while the stores load lands on a real timer, possibly mid-test. Its reply must
-// carry the projects the test registered, as a real server's would, or it replaces them with the fixture's.
-let registeredSettings = (): DesktopSettings => ({ projects: [PROJECT] });
-let messageSearchRequests: URL[] = [];
-let messageSearchResponse: ((url: URL) => object) | null = null;
-let expandedRequests: URL[] = [];
-let expandedResponse: ((url: URL) => Response | Promise<Response>) | null = null;
-const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-  const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
-  const { pathname: path } = url;
-  if (path === '/api/openchamber/message-search/sessions') {
-    messageSearchRequests.push(url);
-    if (messageSearchResponse) {
-      const response = await messageSearchResponse(url);
-      return response instanceof Response ? response : Response.json(response);
-    }
-    return Response.json({ status: 'ok', hits: [], next: null, totals: { sessions: 0, byDirectory: {} }, index: { backfill: { state: 'done', total: 0, done: 0 }, sessions: 0, messages: 0, lifecycleComplete: true } });
-  }
-  if (path === '/api/openchamber/message-search') {
-    expandedRequests.push(url);
-    if (expandedResponse) return expandedResponse(url);
-  }
-  if (path === '/api/config/settings') return Response.json(registeredSettings());
-  if (path.endsWith('/fs/home')) return Response.json({ home: '/home/test' });
-  if (path.endsWith('/fs/directory-stats')) return Response.json({ results: [{ path: '/gone/worktree', reason: 'not-found' }, { path: '/untrusted/clone', isDirectory: true }] });
-  if (path === '/api/openchamber/spaces/archives') return Response.json({ archives: spaceArchives });
-  if (path.endsWith('/archives')) return Response.json({ archives: [] });
-  if (path === '/api/config' || path === '/api/project') return Response.json([]);
-  if (path.endsWith('/location')) return Response.json({ directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } });
-  if (path.endsWith('/session/active')) return Response.json({ data: {} });
-  if (path.endsWith('/vcs')) return Response.json({ data: { branch: { current: 'main', default: 'main' } } });
-  return Response.json({ data: [], cursor: {} });
-});
->>>>>>> upstream/main
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const { useProjectsStore } = await import('@/stores/useProjectsStore');
-const { useGlobalSyncStore } = await import('@/sync/global-sync-store');
-=======
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 registeredSettings = () => ({ projects: useProjectsStore.getState().projects });
 const { useGlobalSyncStore } = await import('@/sync/global-sync-store');
->>>>>>> upstream/main
 const { ArchiveSessionsView, ArchiveView } = await import('./ArchiveView');
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const { refreshSpaceArchives, useSpaceArchivesStore } = await import('@/lib/spaces/space-archives');
-const { updateDesktopSettings } = await import('@/lib/persistence');
-=======
-const { refreshSpaceArchives, useSpaceArchivesStore } = await import('@/lib/spaces/space-archives');
-const { updateDesktopSettings } = await import('@/lib/persistence');
 const navigation = await import('@/lib/router/openSessionFromRoute');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const initialSessionUI = useSessionUIStore.getState();
 const testRestorers: Array<() => void> = [];
->>>>>>> upstream/main
 const initialUI = useUIStore.getState();
 const initialSessions = useGlobalSessionsStore.getState();
 const session = (sessionId: string, title: string, archivedAt?: number): Session => ({
@@ -132,19 +37,6 @@ beforeEach(() => {
   const host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  spaceArchives = [];
-  useSpaceArchivesStore.getState().resetForRuntimeSwitch();
-=======
-  spaceArchives = [];
-  messageSearchRequests = [];
-  messageSearchResponse = null;
-  expandedRequests = [];
-  expandedResponse = null;
-  browser.localStorage.clear();
-  useSpaceArchivesStore.getState().resetForRuntimeSwitch();
->>>>>>> upstream/main
   useUIStore.setState({ isArchivePageOpen: true });
   registerWorkspaceDirectory('workspace', '/workspace');
 });
@@ -198,182 +90,6 @@ test('archive search uses exact IDs and preserves title search and archive membe
   expect(await search('')).toHaveLength(2);
 });
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-test('archive rows hide unregistered destinations while preserving raw archived records', async () => {
-  useGlobalSessionsStore.setState({ archivedSessions: [
-    session('kept-archive', 'Kept archive'),
-    { ...session('blocked-archive', 'Blocked archive'), directory: '/unregistered' },
-  ] });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  expect(document.body.textContent).toContain('Kept archive');
-  expect(document.body.textContent).not.toContain('Blocked archive');
-  expect(useGlobalSessionsStore.getState().archivedSessions).toHaveLength(2);
-});
-
-test('a session of a worktree that is gone is listed, one in an existing folder of the same OpenCode project is not', async () => {
-  const syncProjects = useGlobalSyncStore.getState().projects;
-  useGlobalSyncStore.setState({ projects: [{ id: 'project', worktree: '/workspace', time: { created: 1, updated: 1 }, sandboxes: [] }] });
-  useGlobalSessionsStore.setState({ archivedSessions: [
-    { ...session('gone-worktree', 'Gone worktree'), directory: '/gone/worktree' },
-    { ...session('untrusted-clone', 'Untrusted clone'), directory: '/untrusted/clone' },
-  ] });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  // Directory probes share one request after a short window.
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)); });
-  expect(document.body.textContent).toContain('Gone worktree');
-  expect(document.body.textContent).not.toContain('Untrusted clone');
-  useGlobalSyncStore.setState({ projects: syncProjects });
-});
-
-=======
-const groupButton = (label: string): HTMLButtonElement => {
-  const button = [...document.querySelectorAll<HTMLButtonElement>('.group\\/dir button')].find((entry) => entry.textContent?.startsWith(label));
-  if (!button) throw new Error(`Archive group ${label} missing`);
-  return button;
-};
-const resultIds = () => [...document.querySelectorAll('[data-conversation-result]')].map((row) => row.getAttribute('data-conversation-result'));
-
-test('picking a group narrows a search to it, All archives releases it, and a new search starts wide', async () => {
-  const advance = searchClock();
-  const secondProject = { id: createProjectIdFromPath('/second'), path: '/second' };
-  useProjectsStore.setState({ projects: [PROJECT, secondProject] });
-  useUIStore.setState({ messageSearchEnabled: true });
-  useGlobalSessionsStore.setState({
-    archivedSessions: [session('ses_workspace', 'Needle here'), { ...session('ses_second', 'Needle there'), directory: '/second' }],
-    activeSessions: [],
-    status: 'ready',
-  });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  const search = async (value: string) => {
-    await typeSearch(value);
-    await advance(250);
-  };
-  await search('needle');
-  expect(messageSearchRequests.at(-1)?.searchParams.getAll('directory')).toEqual(['/workspace', '/second']);
-  expect(resultIds().sort()).toEqual(['ses_second', 'ses_workspace']);
-
-  await act(async () => groupButton('second').click());
-  await advance(150);
-  expect(messageSearchRequests.at(-1)?.searchParams.getAll('directory')).toEqual(['/second']);
-  expect(resultIds()).toEqual(['ses_second']);
-  expect(groupButton('second').className).toContain('bg-interactive-selection');
-  // The words stay as typed: the group is the page's selection, not a flag in the field.
-  expect(browser.document.querySelector('input')?.value).toBe('needle');
-
-  await act(async () => groupButton('All').click());
-  await advance(150);
-  expect(messageSearchRequests.at(-1)?.searchParams.getAll('directory')).toEqual(['/workspace', '/second']);
-  expect(resultIds().sort()).toEqual(['ses_second', 'ses_workspace']);
-
-  // A group picked while browsing does not narrow the next search.
-  await search('');
-  await act(async () => groupButton('second').click());
-  await search('needle');
-  expect(resultIds().sort()).toEqual(['ses_second', 'ses_workspace']);
-  expect(groupButton('All').className).toContain('bg-interactive-selection');
-});
-
-test('typed flags are plain words, and nothing is read from or written to storage', async () => {
-  const advance = searchClock();
-  browser.localStorage.setItem('openchamber.search.filters.v1.archive', 'project:/nowhere search:titles');
-  useUIStore.setState({ messageSearchEnabled: true });
-  useGlobalSessionsStore.setState({
-    archivedSessions: [session('ses_flag', 'Notes on in:active'), session('ses_plain', 'Plain chat')],
-    activeSessions: [session('ses_live', 'Live chat', 0)],
-    status: 'ready',
-  });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  const stored = () => JSON.stringify(Array.from({ length: browser.localStorage.length }, (_, index) => {
-    const key = browser.localStorage.key(index) ?? '';
-    return [key, browser.localStorage.getItem(key)];
-  }).sort());
-  const before = stored();
-  expect(before).toContain('openchamber.search.filters.v1.archive');
-  await typeSearch('in:active');
-  await advance(250);
-  expect(browser.document.querySelector('input')?.value).toBe('in:active');
-  expect(document.querySelector('[data-search-filter-chip]')).toBeNull();
-  expect(resultIds()).toEqual(['ses_flag']);
-  // Message search stays on archived conversations and is not held to the stored project.
-  expect(messageSearchRequests.at(-1)?.searchParams.get('q')).toBe('in:active');
-  expect(messageSearchRequests.at(-1)?.searchParams.get('lifecycle')).toBe('archived');
-  expect(messageSearchRequests.at(-1)?.searchParams.getAll('directory')).toEqual(['/workspace']);
-  await typeSearch('plain');
-  await advance(250);
-  expect(resultIds()).toEqual(['ses_plain']);
-  expect(stored()).toBe(before);
-});
-
-test('one count sits beside the field, for the list and for a search, and the field keeps its width', async () => {
-  const advance = searchClock();
-  useUIStore.setState({ messageSearchEnabled: true });
-  useGlobalSessionsStore.setState({ archivedSessions: [session('ses_count', 'Needle archive'), session('ses_extra', 'Something else')], activeSessions: [], status: 'ready' });
-  messageSearchResponse = () => ({ status: 'ok', hits: [], next: null, totals: { sessions: 4, byDirectory: { '/workspace': 4 } }, index: { backfill: { state: 'done', total: 0, done: 0 }, sessions: 0, messages: 0, lifecycleComplete: true } });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  const toolbarText = () => document.querySelector('[data-archive-toolbar]')?.textContent;
-  const fieldCount = () => document.querySelector('[data-session-search-input] [data-archive-search-count]');
-  expect(toolbarText()).toBe('2 archived sessions');
-  expect(fieldCount()).toBeNull();
-  expect(document.querySelector('[data-search-in-trigger]')).toBeNull();
-  await typeSearch('needle');
-  await advance(250);
-  expect(fieldCount()).toBeNull();
-  expect(document.querySelector('[data-archive-count]')?.textContent).toBe('5 archived sessions');
-  expect(toolbarText()).toBe('5 archived sessions');
-  expect(document.querySelector('[data-search-in-trigger]')).not.toBeNull();
-  await typeSearch('');
-  expect(toolbarText()).toBe('2 archived sessions');
-});
-
-test('search project counts use known totals and omit capped totals', async () => {
-  const advance = searchClock();
-  useUIStore.setState({ messageSearchEnabled: true });
-  useGlobalSessionsStore.setState({ archivedSessions: [session('ses_count', 'Needle archive')], activeSessions: [], status: 'ready' });
-  messageSearchResponse = () => ({ status: 'ok', hits: [], next: null, totals: { sessions: 4, byDirectory: { '/workspace': 4 } }, index: { backfill: { state: 'done', total: 0, done: 0 }, sessions: 0, messages: 0, lifecycleComplete: true } });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  const search = async (query: string) => {
-    await typeSearch(query);
-    await advance(250);
-  };
-  await search('needle');
-  expect([...document.querySelectorAll('.group\\/dir button')].find((button) => button.textContent?.startsWith('workspace'))?.textContent).toContain('5');
-  messageSearchResponse = () => ({ status: 'ok', hits: [], next: null, totals: null, index: { backfill: { state: 'done', total: 0, done: 0 }, sessions: 0, messages: 0, lifecycleComplete: true } });
-  await search('needles');
-  expect([...document.querySelectorAll('.group\\/dir button')].find((button) => button.textContent?.startsWith('workspace'))?.textContent).toBe('workspace');
-});
-
-test('archive rows hide unregistered destinations while preserving raw archived records', async () => {
-  useGlobalSessionsStore.setState({ archivedSessions: [
-    session('kept-archive', 'Kept archive'),
-    { ...session('blocked-archive', 'Blocked archive'), directory: '/unregistered' },
-  ] });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  expect(document.body.textContent).toContain('Kept archive');
-  expect(document.body.textContent).not.toContain('Blocked archive');
-  expect(useGlobalSessionsStore.getState().archivedSessions).toHaveLength(2);
-});
-
-test('a session of a worktree that is gone is listed, one in an existing folder of the same OpenCode project is not', async () => {
-  const syncProjects = useGlobalSyncStore.getState().projects;
-  jest.useFakeTimers();
-  testRestorers.push(() => {
-    jest.useRealTimers();
-    useGlobalSyncStore.setState({ projects: syncProjects });
-  });
-  useGlobalSyncStore.setState({ projects: [{ id: 'project', worktree: '/workspace', time: { created: 1, updated: 1 }, sandboxes: [] }] });
-  useGlobalSessionsStore.setState({ archivedSessions: [
-    { ...session('gone-worktree', 'Gone worktree'), directory: '/gone/worktree' },
-    { ...session('untrusted-clone', 'Untrusted clone'), directory: '/untrusted/clone' },
-  ] });
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  // The client's DIRECTORY_AVAILABILITY_BATCH_WINDOW_MS batches both directory probes.
-  await act(async () => { jest.advanceTimersByTime(15); });
-  expect(document.body.textContent).toContain('Gone worktree');
-  expect(document.body.textContent).not.toContain('Untrusted clone');
-});
-
->>>>>>> upstream/main
 test('the chats of a deleted space are grouped under its name and cannot be restored', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = Object.assign(async () => new Response(JSON.stringify({
@@ -451,14 +167,8 @@ test('an empty archive is not reported before the session list has loaded, or af
 });
 
 test('a subsession archived while its parent stays active is listed under the parent\'s title', async () => {
-<<<<<<< HEAD
-  const boss = session('ses_boss', 'Boss');
-||||||| bc50ba56aa
-  const boss = session('ses_boss', 'Boss', 0);
-=======
   let commits = 0;
-  const boss = session('ses_boss', 'Boss', 0);
->>>>>>> upstream/main
+  const boss = session('ses_boss', 'Boss');
   const archivedParent = session('ses_old', 'Old run', 5);
   const sub = (id: string, title: string, parentSessionId: string, archivedAt: number): Session => ({
     ...session(id, title, archivedAt), parentSessionId, rootSessionId: parentSessionId,
@@ -474,18 +184,8 @@ test('a subsession archived while its parent stays active is listed under the pa
     ],
     'ready',
   );
-<<<<<<< HEAD
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  const list = document.querySelector('.max-w-3xl');
-||||||| bc50ba56aa
-  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
-  // The search sits in a column of the same width, so match the list itself.
-  const list = document.querySelector('.max-w-3xl.space-y-0\\.5');
-=======
   await act(async () => root.render(<React.Profiler id="archive" onRender={() => { commits += 1; }}><I18nProvider><ArchiveView /></I18nProvider></React.Profiler>));
-  // The search sits in a column of the same width, so match the list itself.
-  const list = document.querySelector('.max-w-3xl.space-y-0\\.5');
->>>>>>> upstream/main
+  const list = document.querySelector('.max-w-3xl');
   if (!list) throw new Error('Archive list missing');
   const rows = [...list.children].map((element) => (element.tagName === 'P'
     ? `# ${element.textContent}`
@@ -796,7 +496,7 @@ test('an archived chat in the chats root shows no project or folder, only its da
   await renderSearch();
   await act(async () => useGlobalSessionsStore.getState().applySnapshot(
     [],
-    [{ ...session('ses_chat', 'Chat result'), directory: '/home/test/.config/openchamber/chats/ses_chat' }],
+    [{ ...session('ses_chat', 'Chat result'), directory: '/home/test/.config/ohpichamber/chats/ses_chat' }],
     'ready',
   ));
   await typeSearch('chat result');

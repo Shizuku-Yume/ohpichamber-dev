@@ -1,11 +1,5 @@
-<<<<<<< HEAD
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-||||||| bc50ba56aa
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-=======
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
->>>>>>> upstream/main
+import { readFileSync } from 'node:fs';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';

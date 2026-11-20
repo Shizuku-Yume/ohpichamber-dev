@@ -470,18 +470,7 @@ function TokenComposition({ stats, formats }: { stats: UsageStats; formats: Form
   );
 }
 
-<<<<<<< HEAD
-/** Averages that need the whole report: cache reuse, cost of a session, how
- * much of the output the model spent reasoning, and the report's latency,
- * speed and error rate. Rendered for every report, not only comparisons. */
 function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStats; formats: Formats; isFullyUnpriced?: boolean }): React.ReactNode {
-||||||| bc50ba56aa
-/** Averages that need the whole report: cache reuse, cost of a session, and
- * how much of the output the model spent reasoning. */
-function EfficiencyTiles({ stats, formats }: { stats: UsageStats; formats: Formats }): React.ReactNode {
-=======
-function EfficiencyTiles({ stats, formats }: { stats: UsageStats; formats: Formats }): React.ReactNode {
->>>>>>> upstream/main
   const { t } = useI18n();
   const hitRate = cacheHitRate(stats.tokens);
   const costPerSession = averagePer(stats.cost, stats.sessions);
@@ -559,15 +548,8 @@ function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats 
     );
   }
   const successRate = toolSuccessRate(tools.totals);
-<<<<<<< HEAD
   // Canonical detail rows are sorted by calls; keep the page light past a toolbox.
   const rows = tools.usage.filter((tool) => tool.calls > 0).slice(0, 8);
-||||||| bc50ba56aa
-  // OpenCode returns detail rows sorted by calls; keep the page light past a toolbox.
-  const rows = tools.mode === 'detail' ? tools.usage.filter((tool) => tool.calls > 0).slice(0, 8) : [];
-=======
-  const rows = tools.mode === 'detail' ? tools.usage.filter((tool) => tool.calls > 0).slice(0, 8) : [];
->>>>>>> upstream/main
   return (
     <Section title={t('usageStats.tools.title')}>
       {tools.partial ? <PartialUsageNotice errors={tools.errors} /> : null}
@@ -670,15 +652,7 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
                   <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate" title={`${providerName} · ${formatModelRef(model)}`}>
                     <span className="truncate typography-ui-label text-foreground">{name}</span>
                     {model.variant ? <span className="shrink-0 typography-micro text-muted-foreground">{model.variant}</span> : null}
-<<<<<<< HEAD
-                    {/* Phones keep the row for the model name; the logo names the provider there. */}
                     <span className="hidden shrink-0 typography-micro text-muted-foreground @xl:inline">{providerName}</span>
-||||||| bc50ba56aa
-                    {/* Phones keep the row for the model name; the logo names the provider there. */}
-                    <span className="hidden shrink-0 typography-micro text-muted-foreground sm:inline">{providerName}</span>
-=======
-                    <span className="hidden shrink-0 typography-micro text-muted-foreground sm:inline">{providerName}</span>
->>>>>>> upstream/main
                   </span>
                   <span className="shrink-0 typography-micro tabular-nums text-muted-foreground">
                     {dimension === 'steps'
