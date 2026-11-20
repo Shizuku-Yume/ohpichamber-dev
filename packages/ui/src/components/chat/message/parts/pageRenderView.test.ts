@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { proposedWorkflowRunId, isShownInPlace, requestedSecret, requestedSecretRun } from './pageRenderView';
-import type { CanonicalToolView } from './toolView';
+import { toToolView, type CanonicalToolView } from './toolView';
 import { ProposedWorkflowResultSchema } from '@openchamber/agent-contract';
 import type { JsonValue } from '@openchamber/agent-contract';
 
@@ -13,6 +13,22 @@ const secretView = (input: Record<string, JsonValue>): CanonicalToolView => ({
 
 describe('canonical secret cards', () => {
   const parameters = { program: 'node', args: ['deploy.js', 'two words'], reason: 'Authenticate deploy', inputs: [{ env: 'TOKEN', label: 'API key' }] };
+  test('native action/input arguments survive the canonical join and select the run card', () => {
+    const view = toToolView({
+      type: 'tool_call', partId: 'native-part', toolCallId: 'native-call', toolName: 'openchamber_secret',
+      input: { action: 'secret.run', input: parameters }, status: 'running',
+    }, undefined, { sessionID: 'session-1', messageID: 'message-1' });
+    expect(requestedSecretRun(view)).toEqual({
+      program: 'node', command: "node deploy.js 'two words'", reason: 'Authenticate deploy', fields: [{ env: 'TOKEN', label: 'API key', placeholder: undefined }],
+    });
+    expect(isShownInPlace(view)).toBe(true);
+    expect(requestedSecret(view)).toBeNull();
+    expect(view.callID).toBe('native-call');
+  });
+  test('malformed native inputs cannot select a run card', () => {
+    const inputs: JsonValue[] = [null, [], {}, { ...parameters, inputs: [] }, { ...parameters, inputs: [{ env: 'TOKEN' }] }];
+    for (const input of inputs) expect(requestedSecretRun(secretView({ action: 'secret.run', input }))).toBeNull();
+  });
   test('recognizes wrapped and flat run inputs and reserves the in-place card', () => {
     const inputs: Record<string, JsonValue>[] = [{ action: 'secret.run', parameters }, { action: 'run', ...parameters }];
     for (const input of inputs) {

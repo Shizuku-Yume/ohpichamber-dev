@@ -4,6 +4,13 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+PR #68 review: secret-run card parsing now accepts the native `{ action, input }`
+envelope preserved by worker projection and the canonical tool join, alongside
+upstream forms. Canonical-join regressions include malformed native arguments.
+Parser and card suites pass 15 tests; full UI lint exits 0 (unchanged-file hook
+warnings), and UI type-check passes 4,234 files across two projects. Evidence:
+`/home/ubuntu/secret-review-checks/`. Visual verification remains unclaimed.
+
 Secret-tool Step A restores v2.7.3 memory-only command execution behind the
 authenticated worker Host action and exact-command Canonical Bash receipt.
 Public control cannot authorize it; file-mode requests refuse. Secret answers
