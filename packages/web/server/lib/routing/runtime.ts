@@ -131,14 +131,14 @@ export function createRoutingRuntime({
 
   /** Catalogs describe presence; only the source used for this request resolves a secret. */
   const resolveAccess = async (scope = null, useCredential = false) => {
-    const [typesafeKey, stored, savedEndpoint] = await Promise.all([
-      store.readToken(), store.readClassifierSource(), store.readCustomEndpoint(),
+    const [typesafeKey, stored, savedEndpoint, geminiKey] = await Promise.all([
+      store.readToken(), store.readClassifierSource(), store.readCustomEndpoint(), store.readGeminiKey(),
     ]);
     const pinned = readPinnedEndpoint();
     const customEndpoint = pinned ?? savedEndpoint;
     const enterprise = enterpriseMode();
     const selected = !enterprise ? stored : pinned && stored !== 'off' ? 'custom' : 'off';
-    const keys = { typesafeKey, customEndpoint };
+    const keys = { typesafeKey, customEndpoint, geminiKey };
     const selections = {};
     if (scope && !enterprise) {
       const catalog = ProviderCatalogSchema.parse(await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(scope.workspaceId)}/providers`));
@@ -163,7 +163,7 @@ export function createRoutingRuntime({
       }
       endpoint = classifierEndpoint(classifier.effective, keys);
     }
-    return { classifier, endpoint, tokenPresent: Boolean(typesafeKey), customEndpoint, pinned: pinned !== null };
+    return { classifier, endpoint, tokenPresent: Boolean(typesafeKey), geminiKeyPresent: Boolean(geminiKey), customEndpoint, pinned: pinned !== null };
   };
 
   // What Settings shows of the custom endpoint: never the key itself.
@@ -191,6 +191,7 @@ export function createRoutingRuntime({
       autoReady,
       jevAvailable,
       tokenPresent: access.tokenPresent,
+      geminiKeyPresent: access.geminiKeyPresent,
       customEndpoint: describeCustomEndpoint(access.customEndpoint, access.pinned),
       enterpriseMode: enterpriseMode(),
       jevSource: access.classifier.effective === 'typesafe' ? 'typesafe' : 'zen-free',
@@ -461,6 +462,20 @@ export function createRoutingRuntime({
     return publishUpdated();
   };
 
+  const setGeminiKey = async (key) => {
+    if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+    const parsed = z.string().trim().min(1).max(4000).safeParse(key);
+    if (!parsed.success) throw Object.assign(new Error('A Gemini API key is required'), { status: 400 });
+    await store.writeGeminiKey(parsed.data);
+    await store.writeClassifierSource('gemini');
+    return publishUpdated();
+  };
+
+  const clearGeminiKey = async () => {
+    await store.clearGeminiKey();
+    return publishUpdated();
+  };
+
   const setClassifierSource = async (source) => {
     const parsed = z.enum(CLASSIFIER_SOURCES).safeParse(source);
     if (!parsed.success) throw Object.assign(new Error(`Unknown classification provider: ${String(source)}`), { status: 400 });
@@ -566,6 +581,8 @@ export function createRoutingRuntime({
     updateConfig,
     setToken,
     clearToken,
+    setGeminiKey,
+    clearGeminiKey,
     setClassifierSource,
     setCustomEndpoint,
     clearCustomEndpoint,

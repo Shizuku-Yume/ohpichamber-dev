@@ -54,6 +54,22 @@ export function registerRoutingRoutes(app, runtime) {
     }
   });
 
+  app.put('/api/routing/classifier/gemini', express.json({ limit: '16kb' }), async (req, res) => {
+    try {
+      res.json(await runtime.setGeminiKey(req.body?.key));
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.delete('/api/routing/classifier/gemini', async (_req, res) => {
+    try {
+      res.json(await runtime.clearGeminiKey());
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.put('/api/routing/classifier/custom', express.json({ limit: '16kb' }), async (req, res) => {
     try {
       res.json(await runtime.setCustomEndpoint({ url: req.body?.url, model: req.body?.model, key: req.body?.key }));
