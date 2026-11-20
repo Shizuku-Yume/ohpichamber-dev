@@ -57,7 +57,7 @@ describe('service host calls', () => {
   test('starts a session through the control service and answers its id', async () => {
     const { call, control } = harness();
     const answer = await call('sessions.start', { prompt: 'hi', directory: '/repo' });
-    expect(control.execute).toHaveBeenCalledWith('session.create', { prompt: 'hi', directory: '/repo' }, undefined, { startedByExtension: 'desk' });
+    expect(control.execute).toHaveBeenCalledWith('session.create', { prompt: 'hi', directory: '/repo' });
     expect(answer).toEqual({ status: 200, body: { result: { sessionId: 'ses_1', directory: '/repo' } } });
   });
 
@@ -209,12 +209,12 @@ describe('acting for the user', () => {
     expect(control.answerForm).not.toHaveBeenCalled();
   });
 
-  test('an allow lets the agent do it once, and only a refusal carries a note', async () => {
+  test('forwards one-shot Guest permission decisions for Canonical translation', async () => {
     const { call, control } = harness(answering());
     await call('sessions.answerPermission', { sessionId: 'ses_1', requestId: 'per_1', decision: 'allow', message: 'ignored' });
-    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionID: 'ses_1', requestID: 'per_1', decision: 'once', message: undefined });
+    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionId: 'ses_1', requestId: 'per_1', decision: 'allow', message: 'ignored' });
     await call('sessions.answerPermission', { sessionId: 'ses_1', requestId: 'per_2', decision: 'deny', message: 'Not on main' });
-    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionID: 'ses_1', requestID: 'per_2', decision: 'reject', message: 'Not on main' });
+    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionId: 'ses_1', requestId: 'per_2', decision: 'deny', message: 'Not on main' });
     expect(await call('sessions.answerPermission', { sessionId: 'ses_1', requestId: 'per_3', decision: 'always' })).toMatchObject({ status: 400 });
   });
 
@@ -222,9 +222,9 @@ describe('acting for the user', () => {
     const { call, control } = harness(answering());
     expect(await call('sessions.answerForm', { sessionId: 'ses_1', formId: 'frm_1', values: { pick: 'a', tags: ['x'] } }))
       .toEqual({ status: 200, body: { result: { answered: true } } });
-    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionID: 'ses_1', formID: 'frm_1', answer: { pick: 'a', tags: ['x'] }, message: undefined });
+    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionId: 'ses_1', formId: 'frm_1', values: { pick: 'a', tags: ['x'] } });
     await call('sessions.answerForm', { sessionId: 'ses_1', formId: 'frm_2', values: null, message: 'Answered in Telegram' });
-    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionID: 'ses_1', formID: 'frm_2', answer: null, message: 'Answered in Telegram' });
+    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionId: 'ses_1', formId: 'frm_2', values: null, message: 'Answered in Telegram' });
   });
 
   test('an answer to a request that already settled says so', async () => {

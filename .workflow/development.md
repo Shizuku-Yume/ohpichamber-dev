@@ -14,8 +14,21 @@ a child process tree and absence of submitted values in SDK session files,
 Canonical projections, provider requests and wait events. Contract/service/SDK
 builds, server/service lint and both server/service type checks pass. The
 environment required a frozen-lockfile dependency repair before these checks.
-Guest callback mounting and the multi-field UI card remain separate steps;
-no visual verification or real-provider run is claimed for this backend step.
+Guest Step B now mounts the private service Host callback route from runtime
+composition and unregisters it after Guest shutdown. The Guest owner translates
+abort and approval/question replies through Canonical operations using current
+snapshot identities and CAS, without restoring OpenCode runtime methods. Private
+settings use auth-store, instructions retain their file owner, marks reuse the
+singleton, and configuration notes invalidate the catalog. Service events now
+reach the existing Guest frame subscriber through the validated UI broadcast
+parser. Real callback-listener HTTP tests use a Host-spawned service's bearer
+and exercise every callback, empty/stale/error cases, revocation, disposal and
+private-value log exclusion. Seven focused web suites pass 93 tests; the UI event
+suite passes 29 tests. Contract/service/SDK builds, server lint and server type
+check pass. The UI event suite emits filesystem/identity request warnings from
+its existing boot-side-effect tests and partial HTTP fixtures; it has no failed
+tests. Evidence: `/home/ubuntu/secret-step-b-checks/`. The multi-field secret UI
+card remains Step C; no visual verification or real-provider run is claimed.
 
 2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
 branch `67aedc75e` (including UI state/infra, extension waits and shared/later pages). Earlier stages

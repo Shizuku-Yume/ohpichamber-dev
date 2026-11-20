@@ -16,6 +16,7 @@ import { trackedItemRecordsSchema } from './trackedItems/model';
 import { workflowRunSchema, type WorkflowRun } from './workflows/model';
 import { SessionMetadataStateSchema, type SessionMetadataState } from '@openchamber/agent-contract';
 import { permissionPolicyWireSchema } from '@/stores/utils/permissionAutoAccept';
+import type { JsonValue } from 'ohpichamber-sdk';
 
 type ScheduledTaskRanEvent = {
  type: 'scheduled-task-ran';
@@ -199,6 +200,7 @@ type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
  /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
  | { type: 'guests-changed' }
+ | { type: 'guest-service-event'; guestId: string; topic: string; data: JsonValue }
  /** A terminal session was created, exited, restarted or removed. */
  | { type: 'terminal-sessions-changed' }
  /** A workflow run's state as the server last wrote it; the card and panel follow it. */
@@ -481,6 +483,13 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
 
  if (envelope.type === 'openchamber:guests-changed') {
   for (const listener of listeners) listener({ type: 'guests-changed' });
+  return;
+ }
+ if (envelope.type === 'openchamber:guest-service-event') {
+  const parsed = z.object({ guestId: z.string().min(1), topic: z.string().min(1), data: z.json().default(null) }).safeParse(envelope.properties);
+  if (parsed.success) {
+   for (const listener of listeners) listener({ type: 'guest-service-event', ...parsed.data });
+  }
   return;
  }
  if (envelope.type === 'openchamber:terminal-sessions-changed') {

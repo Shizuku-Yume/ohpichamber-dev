@@ -186,6 +186,7 @@ import { createExtensionWaitsRuntime } from './lib/extension-waits/runtime.js';
 import { createClientPushAccess } from './lib/notifications/client-push-access.js';
 import { proxyGuestServiceRequest } from './lib/guests/service.js';
 import { setHostCallbackRoute } from './lib/guests/host-callback.js';
+import { registerGuestServiceHost } from './lib/guests/service-host.js';
 // Background CLI launches enter here in a fresh process, without CLI defaults.
 applyConnectAttemptTimeout();
 applySystemCertificates();
@@ -1602,6 +1603,15 @@ const openChamberControlService = createOpenChamberControlService({
  workflowRuntime: workflowsModule.workflowRuntime,
 });
 
+const guestServiceHost = registerGuestServiceHost({
+ dataDir: OPENCHAMBER_DATA_DIR,
+ listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR) }),
+ control: openChamberControlService,
+ sessions: openChamberSessionService,
+ request: (pathname, init) => hostAgentRuntime.service.request(pathname, init),
+ broadcast: broadcastOpenChamberUiEvent,
+});
+
 const ensureGlobalWatcherStarted = async () => {
  if (hostAgentRuntime.service.getState().phase !== 'ready') return;
  await globalMessageStreamHub.start();
@@ -1665,7 +1675,9 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  scheduledTasksRuntime,
  hostSessionState,
  beginGuestServiceShutdown,
- stopAllGuestServices,
+ stopAllGuestServices: async () => {
+  try { await stopAllGuestServices(); } finally { guestServiceHost.dispose(); }
+ },
  getGuestSurfaceRuntime: () => guestSurfaceRuntime,
  getRealtimeProxyRuntime: () => realtimeProxyRuntime,
  getDictationRuntime: () => dictationRuntime,
