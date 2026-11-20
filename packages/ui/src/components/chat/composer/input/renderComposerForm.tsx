@@ -324,7 +324,6 @@ export function renderComposerForm({
                         emojiRef={emojiRef}
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
-                        onSnippetDraftSaved={handleSnippetDraftSaved}
                         onFileSelect={handleFileSelect}
                         onAgentSelect={handleAgentSelect}
                         onSessionSelect={isVSCode ? undefined : handleSessionSelect}

@@ -1,3 +1,4 @@
+import { useComposerTextValue } from '../../composer/state/composerText';
 import type { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
@@ -79,12 +80,14 @@ export function useComposerEditorActions({
     const { pastedSessionIds, linkPastedSessionId, setOpenSharedPageKey } = language;
     const { receivedPageBases, updateLinkedReferences } = referenceDrafts;
 
+    const autocompleteMessage = useComposerTextValue(composerText, (value) => value);
     const {
         position: autocompleteOverlayPosition,
         update: updateAutocompleteOverlayPosition,
     } = useAutocompletePosition({
+        enabled: !isMobile,
         openAutocomplete,
-        text: composerText,
+        message: autocompleteMessage,
         editorRef: composerRef,
         containerRef: dropZoneRef,
     });
