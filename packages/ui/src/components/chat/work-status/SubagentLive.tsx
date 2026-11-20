@@ -50,13 +50,13 @@ const useSubagentContextPercent = (child: Session, directory: string | null): nu
   const providers = useConfigStore((state) => state.providers);
   const tokens = useDirectorySync(
     React.useCallback((state: State) => {
-      const fill = findLatestContextFill(state.message[child.id] ?? []);
+      const fill = findLatestContextFill(state.message[child.sessionId] ?? []);
       return fill?.state === 'measured' ? fill.totalTokens : 0;
-    }, [child.id]),
+    }, [child.sessionId]),
     directory ?? undefined,
   );
   const answeringKey = useDirectorySync(
-    React.useCallback((state: State) => findAnsweringModelKey(state.message[child.id] ?? []), [child.id]),
+    React.useCallback((state: State) => findAnsweringModelKey(state.message[child.sessionId] ?? []), [child.sessionId]),
     directory ?? undefined,
   );
   const sessionKey = findSessionModelKey(child);

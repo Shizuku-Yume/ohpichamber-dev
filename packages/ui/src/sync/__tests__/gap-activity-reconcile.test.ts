@@ -13,7 +13,7 @@ import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 // down sends its idle once, so after the gap that index has to be re-read.
 
 const session = (id: string, directory: string): Session => ({
-  id, directory, projectID: "project", title: id,
+  sessionId: id, directory, projectID: "project", title: id,
   time: { created: 1, updated: 1 }, cost: 0,
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
 })

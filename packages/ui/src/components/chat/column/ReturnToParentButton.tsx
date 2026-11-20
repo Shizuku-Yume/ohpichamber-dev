@@ -17,7 +17,7 @@ export const ReturnToParentButton: React.FC<{
     const handleReturnToParentSession = React.useCallback(() => {
         if (!parentSession) return;
         const parentDirectory = (parentSession as Session & { directory?: string | null }).directory ?? null;
-        openSession(parentSession.id, parentDirectory);
+        openSession(parentSession.sessionId, parentDirectory);
     }, [openSession, parentSession]);
 
     if (!parentSession || hidden) return null;

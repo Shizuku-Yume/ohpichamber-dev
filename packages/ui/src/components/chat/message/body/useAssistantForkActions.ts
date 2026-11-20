@@ -96,7 +96,7 @@ export const useAssistantForkActions = ({
     const [askOtherModelsSession, setAskOtherModelsSession] = React.useState<Session | null>(null);
     const handleAskOtherModels = React.useCallback(() => {
         if (!sessionId) return;
-        const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.id === sessionId);
+        const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.sessionId === sessionId);
         if (!session) return;
         const identity = getMultiRunIdentity(session);
         if (identity) {

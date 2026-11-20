@@ -334,7 +334,7 @@ export function handleEvent(
     const idleSessionId = payload.properties.sessionID
     if (idleSessionId && resolvedDirectory && resolvedDirectory !== "global") {
       const sessionState = getDirectoryEventState(store, batch)
-      const parentID = sessionState.session.find((s) => s.id === idleSessionId)?.parentID
+      const parentID = sessionState.session.find((s) => s.sessionId === idleSessionId)?.parentSessionId
       if (parentID) {
         enqueueSessionMaterialization(resolvedDirectory, parentID, childStores, { reason: "child-session-idle" })
       }
@@ -351,7 +351,7 @@ export function handleEvent(
     ? current.part[toolPartRef.messageID]?.find((part) => part.id === toolPartRef.partID)
     : undefined
   const directoryBeforePatch = payload.type === "session.patched" && payload.properties.patch.directory !== undefined
-    ? current.session.find((session) => session.id === payload.properties.sessionID)?.directory
+    ? current.session.find((session) => session.sessionId === payload.properties.sessionID)?.directory
     : undefined
   let sessionMove: SessionMove | null = null
   const draft: State = { ...current }

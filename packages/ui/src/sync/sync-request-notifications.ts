@@ -79,9 +79,9 @@ const isSubtaskSession = (
   batch?: DirectoryEventBatch,
 ): boolean => {
   const store = childStores.getChild(directory)
-  const stored = store ? getDirectoryEventState(store, batch).session.find((s) => s.id === sessionID) : undefined
+  const stored = store ? getDirectoryEventState(store, batch).session.find((s) => s.sessionId === sessionID) : undefined
   const session = stored ?? useGlobalSessionsStore.getState().entityById.get(sessionID)
-  return Boolean(session?.parentID)
+  return Boolean(session?.parentSessionId)
 }
 
 export const notifyPermissionAsked = (permission: PermissionRequest, directory: string): void => {

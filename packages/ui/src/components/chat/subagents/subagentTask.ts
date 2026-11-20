@@ -13,7 +13,7 @@ export const findSubagentTask = (
 ): string | null => {
   for (const message of parentMessages ?? []) {
     if (message.role !== 'assistant') continue;
-    for (const part of partsByMessage[message.id] ?? []) {
+    for (const part of partsByMessage[message.messageId] ?? []) {
       if (part.type !== 'tool' || !isSubagentTool(part.tool) || part.state.status === 'pending') continue;
       if (subagentSessionId(part.state.metadata) !== childId) continue;
       const call = subagentCallInputSchema.safeParse(part.state.input);
@@ -22,8 +22,8 @@ export const findSubagentTask = (
   }
   const first = childMessages?.find((message) => message.role === 'user');
   if (!first) return null;
-  const text = (partsByMessage[first.id] ?? [])
-    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+  const text = (partsByMessage[first.messageId] ?? [])
+    .flatMap((part) => (part.type === 'text' ? [part.content] : []))
     .join('\n')
     .trim();
   return text || null;

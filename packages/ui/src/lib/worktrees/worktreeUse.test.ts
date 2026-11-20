@@ -50,7 +50,7 @@ describe('activeSessionsInWorktreeNow', () => {
       session('ses_live_only', '/repo-feature/sub'),
       archived,
       session('ses_live_elsewhere', '/repo-feature-two'),
-    ]).map((entry) => entry.id);
+    ]).map((entry) => entry.sessionId);
 
     expect(ids).toEqual(['ses_listed', 'ses_live_only']);
   });
@@ -58,7 +58,7 @@ describe('activeSessionsInWorktreeNow', () => {
   test('a session the global list places in another worktree stays out, whatever a stale live copy says', () => {
     useGlobalSessionsStore.setState({ activeSessions: [{ ...session('ses_moved', '/repo-other'), time: { created: 1, updated: 2 } }] });
 
-    const ids = activeSessionsInWorktreeNow('/repo-feature', [session('ses_moved', '/repo-feature')]).map((entry) => entry.id);
+    const ids = activeSessionsInWorktreeNow('/repo-feature', [session('ses_moved', '/repo-feature')]).map((entry) => entry.sessionId);
 
     expect(ids).toEqual([]);
   });
@@ -75,7 +75,7 @@ describe('worktree containment on Windows paths', () => {
       ],
     });
 
-    expect(activeSessionsInWorktreeNow('C:/work/feature/', []).map((entry) => entry.id)).toEqual(['ses_root', 'ses_sub']);
+    expect(activeSessionsInWorktreeNow('C:/work/feature/', []).map((entry) => entry.sessionId)).toEqual(['ses_root', 'ses_sub']);
   });
 
   test('a UNC share path holds its subfolders, never a sibling share folder', () => {
@@ -86,7 +86,7 @@ describe('worktree containment on Windows paths', () => {
       session('ses_sub', '\\\\server\\share\\feature\\src'),
       session('ses_sibling', '\\\\server\\share\\feature2'),
       session('ses_other_share', '\\\\server\\other\\feature'),
-    ]).map((entry) => entry.id);
+    ]).map((entry) => entry.sessionId);
 
     expect(ids).toEqual(['ses_root', 'ses_sub']);
   });
@@ -108,11 +108,11 @@ describe('readSessionsInWorktree', () => {
 
     child.setState({ session: [session('ses_live_only', '/repo-feature')] });
     expect(notifications).toBe(1);
-    expect(readSessionsInWorktree(manager, '/repo-feature').map((entry) => entry.id)).toEqual(['ses_live_only']);
+    expect(readSessionsInWorktree(manager, '/repo-feature').map((entry) => entry.sessionId)).toEqual(['ses_live_only']);
 
     useGlobalSessionsStore.setState({ activeSessions: [session('ses_listed', '/repo-feature/sub')] });
     expect(notifications).toBe(2);
-    expect(readSessionsInWorktree(manager, '/repo-feature').map((entry) => entry.id)).toEqual(['ses_listed', 'ses_live_only']);
+    expect(readSessionsInWorktree(manager, '/repo-feature').map((entry) => entry.sessionId)).toEqual(['ses_listed', 'ses_live_only']);
 
     unsubscribe();
     manager.disposeAll();

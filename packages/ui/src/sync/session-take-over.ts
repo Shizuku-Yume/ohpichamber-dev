@@ -24,9 +24,9 @@ export const takeOverSessions = async (sessions: readonly Session[], directoryOf
   for (const session of sessions) {
     if (getRuntimeKey() !== runtimeKey) break;
     try {
-      await takeOverSession(session.id, directoryOf(session));
+      await takeOverSession(session.sessionId, directoryOf(session));
     } catch {
-      failed.push(session.id);
+      failed.push(session.sessionId);
     }
   }
   return failed;

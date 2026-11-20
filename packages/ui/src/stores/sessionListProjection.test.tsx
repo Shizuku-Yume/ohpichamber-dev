@@ -35,7 +35,7 @@ let root: Root;
 let renders = 0;
 let entriesRead = 0;
 const session = (id: string, extra: Partial<Session> = {}): Session => ({
-  id, projectID: 'project', directory: '/repo', title: id,
+  sessionId: id, projectID: 'project', directory: '/repo', title: id,
   cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   time: { created: 1, updated: 1 }, ...extra,
 });
@@ -101,12 +101,12 @@ afterAll(async () => {
 
 test('archive projections preserve restorable lists and parent titles without visiting unchanged lists', async () => {
   const parent = session('parent', { title: 'Parent title' });
-  const child = archive('child', { parentID: parent.id });
+  const child = archive('child', { parentSessionId: parent.sessionId });
   const archivedParent = archive('archived-parent');
-  const hidden = archive('hidden', { parentID: archivedParent.id });
-  const missing = archive('missing', { parentID: 'absent' });
+  const hidden = archive('hidden', { parentSessionId: archivedParent.sessionId });
+  const missing = archive('missing', { parentSessionId: 'absent' });
   useGlobalSessionsStore.getState().applySnapshot(
-    [parent, session('active-child', { parentID: parent.id }), ...unrelated()],
+    [parent, session('active-child', { parentSessionId: parent.sessionId }), ...unrelated()],
     [child, archivedParent, hidden, missing],
   );
   observeLists();
@@ -121,13 +121,13 @@ test('archive projections preserve restorable lists and parent titles without vi
   }
   await act(async () => root.render(<Probe />));
   const state = useGlobalSessionsStore.getState();
-  expect(selected?.[0].map((entry) => entry.id)).toEqual(
-    state.archivedSessions.filter((entry) => !entry.parentID || (state.entityById.has(entry.parentID) && !state.entityById.get(entry.parentID)?.time.archived)).map((entry) => entry.id),
+  expect(selected?.[0].map((entry) => entry.sessionId)).toEqual(
+    state.archivedSessions.filter((entry) => !entry.parentSessionId || (state.entityById.has(entry.parentSessionId) && !state.entityById.get(entry.parentID)?.archivedAt)).map((entry) => entry.sessionId),
   );
   expect(selected?.[1]).toEqual([...state.activeSessions]);
   expect(selected?.[2]).toEqual(state.archivedSessions.flatMap((entry) => {
-    const owner = entry.parentID ? state.entityById.get(entry.parentID) : undefined;
-    return owner ? [owner.id, owner.title] : [];
+    const owner = entry.parentSessionId ? state.entityById.get(entry.parentSessionId) : undefined;
+    return owner ? [owner.sessionId, owner.title] : [];
   }));
   const before = selected;
   await deferred();
@@ -142,9 +142,9 @@ test('archive projections preserve restorable lists and parent titles without vi
   expect(renders).toBe(count + 1);
   await act(async () => useGlobalSessionsStore.getState().upsertSession({ ...parent, title: 'Renamed parent' }));
   expect(selected?.[2]).toContain('Renamed parent');
-  await act(async () => useGlobalSessionsStore.getState().upsertSession(archive(parent.id)));
-  expect(selected?.[0].map((entry) => entry.id)).not.toContain(child.id);
-  expect(selected?.[1].map((entry) => entry.id)).not.toContain('active-child');
+  await act(async () => useGlobalSessionsStore.getState().upsertSession(archive(parent.sessionId)));
+  expect(selected?.[0].map((entry) => entry.sessionId)).not.toContain(child.sessionId);
+  expect(selected?.[1].map((entry) => entry.sessionId)).not.toContain('active-child');
 });
 
 test('multi-run membership keeps list order and its reference through deferred and unrelated publications', async () => {
@@ -157,7 +157,7 @@ test('multi-run membership keeps list order and its reference through deferred a
     return null;
   }
   await act(async () => root.render(<Probe />));
-  expect(ids).toEqual(useGlobalSessionsStore.getState().activeSessions.filter((entry) => entry.id.startsWith('lane-')).map((entry) => entry.id));
+  expect(ids).toEqual(useGlobalSessionsStore.getState().activeSessions.filter((entry) => entry.sessionId.startsWith('lane-')).map((entry) => entry.sessionId));
   const before = ids;
   await deferred();
   expect(ids).toBe(before);
@@ -168,7 +168,7 @@ test('multi-run membership keeps list order and its reference through deferred a
   await act(async () => useGlobalSessionsStore.getState().upsertSession(archive('lane-2', { metadata: lane('lane-2').metadata })));
   expect(ids).toEqual([]);
   await act(async () => useGlobalSessionsStore.getState().upsertSession(lane('lane-3')));
-  expect(ids).toEqual(useGlobalSessionsStore.getState().activeSessions.filter((entry) => entry.id.startsWith('lane-')).map((entry) => entry.id));
+  expect(ids).toEqual(useGlobalSessionsStore.getState().activeSessions.filter((entry) => entry.sessionId.startsWith('lane-')).map((entry) => entry.sessionId));
   await act(async () => root.render(<Probe id="lane-2" />));
   expect(ids).toEqual([]);
   await act(async () => root.render(<Probe id={null} />));

@@ -110,7 +110,7 @@ const findLastTool = (
     if (message.role === 'user') break;
     if (message.role !== 'assistant') continue;
     steps += 1;
-    const parts = partsByMessage[message.id] ?? [];
+    const parts = partsByMessage[message.messageId] ?? [];
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = parts[partIndex];
       if (part.type === 'tool') return describeTool(part);

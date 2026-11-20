@@ -1010,7 +1010,7 @@ describe('moveWorktreeSessionsThenRemove', () => {
     worktreePath: WORKTREE,
     projectDirectory: '/repo',
     // The global list after the moves: only sessions not moved yet are still in the worktree.
-    readSessions: () => sessions.filter((session) => !moveCalls.some((call) => call.sessionId === session.id)),
+    readSessions: () => sessions.filter((session) => !moveCalls.some((call) => call.sessionId === session.sessionId)),
     removeWorktree: async () => {
       removals += 1;
       return true;
@@ -1073,7 +1073,7 @@ describe('moveWorktreeSessionsThenRemove', () => {
 
   test('a server switch while the first subsession move is pending stops the tree and rolls nothing back', async () => {
     moveSessionImplementation = async (session) => {
-      if (session.id === 'child') switchAway();
+      if (session.sessionId === 'child') switchAway();
     };
 
     expect(await stopReason(keep(tree()))).toBe('switched');
@@ -1082,7 +1082,7 @@ describe('moveWorktreeSessionsThenRemove', () => {
 
   test('switching away and back while a move is pending still stops it: the round trip is another instance', async () => {
     moveSessionImplementation = async (session) => {
-      if (session.id !== 'child') return;
+      if (session.sessionId !== 'child') return;
       switchAway();
       switchBack();
     };
@@ -1118,7 +1118,7 @@ describe('moveWorktreeSessionsThenRemove', () => {
   // loaded, so the server's map answers for it.
   test('moves a tree whose folder has no status store when the host lists nothing running', async () => {
     const result = await keep([makeSession('child', WORKTREE), makeSession('root', WORKTREE)].map((session) => (
-      session.id === 'child' ? { ...session, parentID: 'root' } : session
+      session.sessionId === 'child' ? { ...session, parentID: 'root' } : session
     )));
 
     expect(moveCalls).toEqual([
@@ -1141,7 +1141,7 @@ describe('moveWorktreeSessionsThenRemove', () => {
 
   test('a session that starts running between two moves stops the second one', async () => {
     moveSessionImplementation = async (session) => {
-      if (session.id === 'first') hostActiveSessions = { second: { type: 'busy' } };
+      if (session.sessionId === 'first') hostActiveSessions = { second: { type: 'busy' } };
     };
 
     expect(await stopReason(keep([makeSession('first', WORKTREE), makeSession('second', `${WORKTREE}/sub`)]))).toBe('busy');
@@ -1190,7 +1190,7 @@ describe('moveWorktreeSessionsThenRemove', () => {
     const result = await moveWorktreeSessionsThenRemove({
       worktreePath: WORKTREE,
       projectDirectory: '/repo',
-      readSessions: () => [makeSession('root', WORKTREE)].filter((session) => !moveCalls.some((call) => call.sessionId === session.id)),
+      readSessions: () => [makeSession('root', WORKTREE)].filter((session) => !moveCalls.some((call) => call.sessionId === session.sessionId)),
       removeWorktree: async () => {
         readsAtRemoval = serverSessionReads.length;
         return true;

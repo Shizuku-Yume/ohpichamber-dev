@@ -6,7 +6,7 @@ import { resolveLoadedSkillTarget, selectLoadedSkills } from './loadedSkills';
 const sessionID = 'ses_1';
 
 const assistant = (id: string): AssistantMessage => ({
-  id, sessionID, role: 'assistant', time: { created: 1 }, agent: 'build', providerID: 'p', modelID: 'm',
+  messageId: id, sessionID, role: 'assistant', time: { created: 1 }, agent: 'build', providerID: 'p', modelID: 'm',
 });
 
 const skillCall = (messageID: string, callID: string, state: ToolState): Part => ({
@@ -20,7 +20,7 @@ const completed = (id: string, metadata: Record<string, string>): ToolState => (
 describe('selectLoadedSkills', () => {
   test('lists each skill once, where it first loaded, from every way a skill loads', () => {
     const messages: Message[] = [
-      { id: 'u1', sessionID, role: 'user', time: { created: 1 }, skills: [{ id: 'attached', name: 'attached' }] },
+      { messageId: 'u1', sessionID, role: 'user', time: { created: 1 }, skills: [{ id: 'attached', name: 'attached' }] },
       assistant('a1'),
       { id: 's1', sessionID, role: 'skill', time: { created: 3 }, skill: 'activated', name: 'Activated', text: '' },
       assistant('a2'),
@@ -40,7 +40,7 @@ describe('selectLoadedSkills', () => {
 
   test('a skill attached first still opens from the folder a later call reported', () => {
     const messages: Message[] = [
-      { id: 'u1', sessionID, role: 'user', time: { created: 1 }, skills: [{ id: 'attached', name: 'attached' }] },
+      { messageId: 'u1', sessionID, role: 'user', time: { created: 1 }, skills: [{ id: 'attached', name: 'attached' }] },
       assistant('a1'),
     ];
     const parts = {

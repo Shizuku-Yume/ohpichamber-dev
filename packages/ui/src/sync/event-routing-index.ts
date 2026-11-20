@@ -51,11 +51,11 @@ export const setIndexedSessionMessages = (
   const next = new Set<string>()
 
   for (const message of messages) {
-    if (!message?.id) {
+    if (!message?.messageId) {
       continue
     }
-    next.add(message.id)
-    routingIndex.messageSessionById.set(message.id, sessionID)
+    next.add(message.messageId)
+    routingIndex.messageSessionById.set(message.messageId, sessionID)
   }
 
   if (previous) {
@@ -140,11 +140,11 @@ export const ingestDirectoryStateIntoRoutingIndex = (
   const nextSessionIds = new Set<string>()
 
   for (const session of state.session) {
-    if (!session?.id) {
+    if (!session?.sessionId) {
       continue
     }
-    nextSessionIds.add(session.id)
-    setIndexedSessionDirectory(routingIndex, session.id, directory)
+    nextSessionIds.add(session.sessionId)
+    setIndexedSessionDirectory(routingIndex, session.sessionId, directory)
   }
 
   for (const sessionID of Object.keys(state.message)) {
@@ -172,7 +172,7 @@ export const findSessionInChildStores = (
   for (const [dir, store] of childStores.children) {
     const state = getDirectoryEventState(store, batch)
     if (
-      state.session.some((s) => s.id === sessionID)
+      state.session.some((s) => s.sessionId === sessionID)
       || Object.prototype.hasOwnProperty.call(state.message, sessionID)
       || Object.prototype.hasOwnProperty.call(state.session_status ?? {}, sessionID)
     ) {
@@ -192,7 +192,7 @@ const childStoreHasSessionState = (
   const store = childStores.getChild(directory)
   if (!store) return false
   const state = getDirectoryEventState(store, batch)
-  return state.session.some((session) => session.id === sessionID)
+  return state.session.some((session) => session.sessionId === sessionID)
     || Object.prototype.hasOwnProperty.call(state.message, sessionID)
     || Object.prototype.hasOwnProperty.call(state.session_status ?? {}, sessionID)
 }
@@ -232,7 +232,7 @@ const isBlockingRequestEvent = (payload: SyncEvent): boolean => (
 
 export const directorySessionMovedTo = (state: State, directory: string, sessionID: string): string | null => {
   if (state.sessionDeletedRevision?.[sessionID] === undefined) return null
-  if (state.session.some((session) => session.id === sessionID)) return null
+  if (state.session.some((session) => session.sessionId === sessionID)) return null
   const ownDirectory = resolveCachedSessionDirectory(sessionID)
   if (ownDirectory === null) return null
   return normalizeEventDirectory(ownDirectory) === normalizeEventDirectory(directory) ? null : ownDirectory

@@ -24,10 +24,10 @@ export const activeSessionsInWorktreeNow = (path: string, liveSessions: readonly
   const root = normalizePath(path);
   if (!root) return [];
   const listed = useGlobalSessionsStore.getState().activeSessions;
-  const listedIds = new Set(listed.map((session) => session.id));
-  const merged = new Map(sessionsInWorktree(listed, root).map((session) => [session.id, session]));
+  const listedIds = new Set(listed.map((session) => session.sessionId));
+  const merged = new Map(sessionsInWorktree(listed, root).map((session) => [session.sessionId, session]));
   for (const session of liveSessions) {
-    if (!listedIds.has(session.id) && !session.time?.archived && isInside(resolveGlobalSessionDirectory(session), root)) merged.set(session.id, session);
+    if (!listedIds.has(session.sessionId) && !session.archivedAt && isInside(resolveGlobalSessionDirectory(session), root)) merged.set(session.sessionId, session);
   }
   return [...merged.values()];
 };

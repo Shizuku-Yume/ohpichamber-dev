@@ -44,10 +44,10 @@ const ask = (titles: readonly string[]): Promise<OperatorChildrenDoneChoice> => 
 const childrenByParent = (sessions: readonly Session[]): Map<string, Session[]> => {
   const children = new Map<string, Session[]>();
   for (const session of sessions) {
-    if (!session.parentID) continue;
-    const siblings = children.get(session.parentID);
+    if (!session.parentSessionId) continue;
+    const siblings = children.get(session.parentSessionId);
     if (siblings) siblings.push(session);
-    else children.set(session.parentID, [session]);
+    else children.set(session.parentSessionId, [session]);
   }
   return children;
 };
@@ -58,10 +58,10 @@ const collectSubtree = (rootId: string, children: Map<string, Session[]>): Sessi
   const seen = new Set<string>();
   while (stack.length > 0) {
     const session = stack.pop();
-    if (!session || seen.has(session.id)) continue;
-    seen.add(session.id);
+    if (!session || seen.has(session.sessionId)) continue;
+    seen.add(session.sessionId);
     found.push(session);
-    stack.push(...(children.get(session.id) ?? []));
+    stack.push(...(children.get(session.sessionId) ?? []));
   }
   return found;
 };
@@ -72,12 +72,12 @@ export const findRunningOperatorChildren = (
   activeSessionIds: ReadonlySet<string>,
 ): Session[] => {
   const children = childrenByParent(sessions);
-  const parentOf = (id: string) => sessions.find((session) => session.id === id)?.parentID;
+  const parentOf = (id: string) => sessions.find((session) => session.sessionId === id)?.parentSessionId;
   const running = new Map<string, Session>();
   for (const rootId of rootIds) {
     for (const session of collectSubtree(rootId, children)) {
       if (!isOperatorChildSession(session)) continue;
-      if (activeSessionIds.has(session.id) || hasActiveSubagent(session.id, activeSessionIds, parentOf)) running.set(session.id, session);
+      if (activeSessionIds.has(session.sessionId) || hasActiveSubagent(session.sessionId, activeSessionIds, parentOf)) running.set(session.sessionId, session);
     }
   }
   return [...running.values()];
@@ -102,9 +102,9 @@ const askAndSettle = async (rootIds: readonly string[], running: readonly Sessio
     const sessions = useGlobalSessionsStore.getState().activeSessions;
     const { activeSessionIds } = useGlobalSessionStatusStore.getState();
     const children = childrenByParent(sessions);
-    const stopping = readRunning(rootIds).flatMap((session) => [session, ...collectSubtree(session.id, children)])
-      .filter((session) => activeSessionIds.has(session.id));
-    await Promise.all(stopping.map((session) => abortCurrentOperation(session.id)));
+    const stopping = readRunning(rootIds).flatMap((session) => [session, ...collectSubtree(session.sessionId, children)])
+      .filter((session) => activeSessionIds.has(session.sessionId));
+    await Promise.all(stopping.map((session) => abortCurrentOperation(session.sessionId)));
   }
   return getRuntimeKey() === runtimeKey;
 };

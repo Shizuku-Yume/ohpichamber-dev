@@ -133,7 +133,7 @@ export function isSessionMaterializationStillNeeded(
 
   if (request.reason === "missing-owning-message") {
     if (!request.messageID) return true
-    return !(state.message[sessionID] ?? []).some((message) => message.id === request.messageID)
+    return !(state.message[sessionID] ?? []).some((message) => message.messageId === request.messageID)
   }
 
   if (request.reason === "orphan-delta" || request.reason === "missing-delta-part") {

@@ -32,7 +32,7 @@ export const selectLoadedSkills = (messages: readonly Message[], parts: Record<s
     } else if (message.role === 'skill') {
       add({ id: message.skill, name: message.name });
     } else if (message.role === 'assistant') {
-      for (const part of parts[message.id] ?? []) {
+      for (const part of parts[message.messageId] ?? []) {
         if (part.type !== 'tool' || !isSkillTool(part.tool) || part.state.status !== 'completed') continue;
         const { id } = skillCallInput.parse(part.state.input);
         if (!id) continue;

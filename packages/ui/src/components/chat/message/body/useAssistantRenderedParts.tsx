@@ -87,18 +87,18 @@ export const useAssistantRenderedParts = ({
 
         let rowsToSkip = activityRowSkip?.messageId === messageId ? activityRowSkip.rows : 0;
         let sliceStarted = !slice?.from;
-        const firstTextPartId = visibleParts.find((candidate) => candidate.type === 'text')?.id;
+        const firstTextPartId = visibleParts.find((candidate) => candidate.type === 'text')?.partId;
         let i = 0;
         while (i < visibleParts.length) {
             const part = visibleParts[i];
             if (!sliceStarted) {
-                sliceStarted = part.id === slice?.from?.partId;
+                sliceStarted = part.partId === slice?.from?.partId;
                 if (!sliceStarted) {
                     i += 1;
                     continue;
                 }
             }
-            if (slice?.to && (slice.to.offset === 0 ? part.id === slice.to.partId : visibleParts[i - 1]?.id === slice.to.partId)) break;
+            if (slice?.to && (slice.to.offset === 0 ? part.partId === slice.to.partId : visibleParts[i - 1]?.partId === slice.to.partId)) break;
             if (rowsToSkip > 0 && isActivityRowPart(part)) {
                 rowsToSkip -= 1;
                 i += 1;
@@ -107,13 +107,13 @@ export const useAssistantRenderedParts = ({
             rendered = splitLiveActivity && part.type !== 'text' ? activityRendered : answerRendered;
 
             if (part.type === 'text') {
-                if (part.id && hoistedPages?.has(part.id)) {
+                if (part.partId && hoistedPages?.has(part.partId)) {
                     i++;
                     continue;
                 }
-                const textStart = slice?.from?.partId === part.id ? slice.from.offset : 0;
-                const textEnd = slice?.to?.partId === part.id && slice.to.offset > 0 ? slice.to.offset : undefined;
-                if (textStart > 0 || (slice?.from && part.id !== firstTextPartId)) {
+                const textStart = slice?.from?.partId === part.partId ? slice.from.offset : 0;
+                const textEnd = slice?.to?.partId === part.partId && slice.to.offset > 0 ? slice.to.offset : undefined;
+                if (textStart > 0 || (slice?.from && part.partId !== firstTextPartId)) {
                     hasRenderedAnswerText = true;
                 } else if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || activityRendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.earlierAssistantText)) {
                     rendered.push(
@@ -141,7 +141,7 @@ export const useAssistantRenderedParts = ({
                             sessionId={sessionId}
                             unitKey={answerSelectionKey}
                             kind="answer"
-                            showCheckbox={Boolean(turnGroupingContext?.opensAnswerText) && part.id === firstTextPartId && textStart === 0}
+                            showCheckbox={Boolean(turnGroupingContext?.opensAnswerText) && part.partId === firstTextPartId && textStart === 0}
                         />
                         <AssistantTextPart
                             part={part}
@@ -169,7 +169,7 @@ export const useAssistantRenderedParts = ({
             if (part.type === 'reasoning') {
                 const reasoningEnded = part.time?.end !== undefined
                     || (effectiveStreamPhase !== 'streaming' && effectiveStreamPhase !== 'cooldown');
-                if (showReasoningTraces && !(reasoningEnded && isInvisibleText(part.text))) {
+                if (showReasoningTraces && !(reasoningEnded && isInvisibleText(part.content))) {
                     if (!collapsibleThinkingBlocks) {
                         rendered.push(
                             <AssistantTextPart

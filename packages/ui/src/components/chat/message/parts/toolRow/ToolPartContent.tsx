@@ -91,7 +91,7 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
         return isWriteTool(normalizedPartTool) ? parseWriteLineCount(input) : null;
     }, [input, normalizedPartTool]);
     const isMultiFileApplyPatch = isPatchTool(normalizedPartTool) && Array.isArray(metadata?.files) && metadata.files.length > 1;
-    const normalizedPart = normalizedPartTool !== part.tool ? ({ ...part, tool: normalizedPartTool } as ToolPartType) : part;
+    const normalizedPart = normalizedPartTool !== part.tool ? ({ ...part, toolName: normalizedPartTool } as ToolPartType) : part;
     const descriptionPath = getToolDescriptionPath(normalizedPart, state, currentDirectory);
     const stateOutput = typeof stateWithData.output === 'string' ? stateWithData.output : undefined;
     const scriptNamespace = isExecuteTool(part.tool) ? executeNamespace(metadata) : undefined;

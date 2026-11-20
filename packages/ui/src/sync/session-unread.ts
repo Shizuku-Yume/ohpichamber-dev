@@ -133,7 +133,7 @@ export const markSessionUnreadSeen = (sessionId: string): void => {
 };
 
 export const canSessionBeUnread = (session: Session | undefined): session is Session => (
-  Boolean(session) && !session?.parentID && session?.time.archived === undefined
+  Boolean(session) && !session?.parentSessionId && session?.archivedAt === undefined
 )
 
 const keptMarks = new Set<string>()

@@ -9,7 +9,7 @@ const session = (id: string, updated = 1, archived?: number): Session => {
   const time: Session['time'] = { created: 1, updated };
   if (archived) time.archived = archived;
   return {
-    id, title: id, projectID: 'project', directory: '/repo', time,
+    sessionId: id, title: id, projectID: 'project', directory: '/repo', time,
     cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   };
 };
@@ -47,8 +47,8 @@ describe('recent sessions for a surface without the complete list', () => {
     const state = useGlobalSessionsStore.getState();
     expect(list.mock.calls).toHaveLength(1);
     expect(list.mock.calls[0]?.[0]).toMatchObject({ global: true, limit: 50 });
-    expect(state.activeSessions.map((item) => item.id).sort()).toEqual(['new', 'seeded']);
-    expect(state.archivedSessions.map((item) => item.id)).toEqual(['done']);
+    expect(state.activeSessions.map((item) => item.sessionId).sort()).toEqual(['new', 'seeded']);
+    expect(state.archivedSessions.map((item) => item.sessionId)).toEqual(['done']);
     expect(state.hasLoaded).toBe(false);
     expect(state.authoritativeSessions).toBeNull();
     expect(state.status).not.toBe('ready');

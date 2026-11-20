@@ -30,7 +30,7 @@ export async function resyncBlockingRequestsForDirectory(
   const isCurrentRuntime = captureRuntimeInstance()
   const before = store.getState()
   const candidateIds = new Set<string>(candidateSessionIds ?? [
-    ...before.session.map((session) => session.id),
+    ...before.session.map((session) => session.sessionId),
     ...Object.keys(before.message ?? {}),
     ...Object.keys(before.session_status ?? {}),
     ...Object.keys(before.form ?? {}),

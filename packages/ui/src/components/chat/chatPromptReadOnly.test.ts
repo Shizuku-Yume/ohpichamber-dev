@@ -29,7 +29,7 @@ describe('resolveChatPromptReadOnly', () => {
 
         expect(resolveChatPromptReadOnly(worker, false, false)).toBe(true);
         expect(resolveChatPromptReadOnly(worker, true, false)).toBe(true);
-        expect(resolveChatPromptReadOnly({ ...worker, parentID: 'parent' }, true, false)).toBe(true);
+        expect(resolveChatPromptReadOnly({ ...worker, parentSessionId: 'parent' }, true, false)).toBe(true);
         expect(resolveChatPromptReadOnly({
             ...worker,
             metadata: metadataAfterTakeOver(worker.metadata ?? {}, 2),

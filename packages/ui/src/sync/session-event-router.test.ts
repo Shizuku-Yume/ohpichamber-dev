@@ -5,7 +5,7 @@ import type { SessionPatch, SyncEvent } from '@/lib/opencode/events';
 import { applySessionEventsToGlobalSessions } from './session-event-router';
 
 const session = (id: string, directory: string): Session => ({
-  id, directory, projectID: 'external', title: id, time: { created: 1, updated: 1 },
+  sessionId: id, directory, projectID: 'external', title: id, time: { created: 1, updated: 1 },
   cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
 });
 const patched = (sessionID: string, patch: SessionPatch): SyncEvent => ({ type: 'session.patched', properties: { sessionID, patch } });

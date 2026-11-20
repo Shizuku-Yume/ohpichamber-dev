@@ -19,7 +19,7 @@ export const resolveAdmittedLineageDirectory = (
   for (let depth = 0; current && depth < MAX_LINEAGE_DEPTH; depth += 1) {
     const directory = resolveGlobalSessionDirectory(current);
     if (isAdmitted(directory)) return normalizePath(directory);
-    current = current.parentID ? records.get(current.parentID) : undefined;
+    current = current.parentSessionId ? records.get(current.parentSessionId) : undefined;
   }
   return null;
 };

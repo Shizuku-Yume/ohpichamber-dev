@@ -9,15 +9,15 @@ const reference = (lists: Session[][]): Session[] => {
   const byId = new Map<string, Session>()
   for (const list of lists) {
     for (const session of list) {
-      const current = byId.get(session.id)
-      if (!current || (session.time.updated ?? 0) >= (current.time.updated ?? 0)) byId.set(session.id, session)
+      const current = byId.get(session.sessionId)
+      if (!current || (session.updatedAt ?? 0) >= (current.updatedAt ?? 0)) byId.set(session.sessionId, session)
     }
   }
-  return [...byId.values()].sort((left, right) => (right.time.updated ?? 0) - (left.time.updated ?? 0))
+  return [...byId.values()].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
 }
 
 const record = (id: string, updated: number, step: number): Session => ({
-  id,
+  sessionId: id,
   projectID: 'prj_1',
   title: `${id}@${step}`,
   directory: '/d',
@@ -52,8 +52,8 @@ describe('aggregateLiveSessions', () => {
           updated.splice(position, 1)
         } else {
           const old = updated[position]
-          const time = roll < 0.3 ? old.time.updated ?? 0 : roll < 0.4 ? Math.floor(next() * 5) : (old.time.updated ?? 0) + Math.floor(next() * 3)
-          updated[position] = record(old.id, time, step)
+          const time = roll < 0.3 ? old.updatedAt ?? 0 : roll < 0.4 ? Math.floor(next() * 5) : (old.updatedAt ?? 0) + Math.floor(next() * 3)
+          updated[position] = record(old.sessionId, time, step)
         }
         lists = lists.map((current, index) => (index === list ? updated : current))
         const result = aggregateLiveSessions(lists.map((session) => ({ session, session_status: {} })))

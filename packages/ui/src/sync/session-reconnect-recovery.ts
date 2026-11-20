@@ -56,7 +56,7 @@ export async function resyncDirectoryAfterReconnect(
       if (sessions === state.session) {
         return state
       }
-      if (!state.session.some((item) => item.id === nextSession.id) && !nextSession.parentID) sessionTotal += 1
+      if (!state.session.some((item) => item.sessionId === nextSession.id) && !nextSession.parentID) sessionTotal += 1
 
       return {
         session: sessions,

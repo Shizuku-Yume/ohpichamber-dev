@@ -74,7 +74,7 @@ test('Mini Chat mounts its shortcuts under the sync provider, and double Escape 
     // its bootstrap selects it.
     await act(async () => {
       getSyncChildStores().getChild(directory)?.setState({
-        session: [{ id: sessionId, projectID: 'project', directory, title: 'Mini', cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 } }],
+        session: [{ sessionId: sessionId, projectID: 'project', directory, title: 'Mini', cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 } }],
         session_status: { [sessionId]: { type: 'busy' } },
         sessionStatusReady: true,
       });

@@ -142,7 +142,7 @@ const hasTaskSessionIdentityChange = (previous: Part[], current: Part[] | undefi
   for (const part of previous) {
     if (!isTaskToolPart(part)) continue
     previousTaskCount += 1
-    const currentPart = current?.find((candidate) => candidate.id === part.id && isTaskToolPart(candidate))
+    const currentPart = current?.find((candidate) => candidate.partId === part.id && isTaskToolPart(candidate))
     if (!currentPart || readTaskSessionId(part) !== readTaskSessionId(currentPart)) return true
   }
 
@@ -158,13 +158,13 @@ const snapshotPartsMatchState = (snapshot: SessionMessageRecordsSnapshot, state:
     if (snapshot.suspendPartUpdates) {
       const suspendedID = snapshot.suspendedPartUpdatesMessageID
       if (
-        (!suspendedID || record.info.id === suspendedID)
-        && !hasTaskSessionIdentityChange(record.parts, state.part[record.info.id])
+        (!suspendedID || record.info.messageId === suspendedID)
+        && !hasTaskSessionIdentityChange(record.parts, state.part[record.info.messageId])
       ) {
         continue
       }
     }
-    if ((state.part[record.info.id] ?? EMPTY_PARTS) !== record.parts) {
+    if ((state.part[record.info.messageId] ?? EMPTY_PARTS) !== record.parts) {
       return false
     }
   }
@@ -173,7 +173,7 @@ const snapshotPartsMatchState = (snapshot: SessionMessageRecordsSnapshot, state:
 }
 
 export const getSessionRevertMessageID = (sessions: State["session"], sessionID: string): string | undefined => {
-  const result = Binary.search(sessions, sessionID, (session) => session.id)
+  const result = Binary.search(sessions, sessionID, (session) => session.sessionId)
   return result.found ? sessions[result.index]?.revert?.messageID : undefined
 }
 
@@ -237,20 +237,20 @@ export function buildSessionMessageRecordsSnapshot(
   const { sourceMessages, visibleMessages, revertMessageID } = getVisibleMessagesForSession(state, sessionID, previous)
   const nextById = new Map<string, SessionMessageRecord>()
   const nextList = visibleMessages.map((message) => {
-    const previousRecord = previous?.byId.get(message.id)
+    const previousRecord = previous?.byId.get(message.messageId)
     const shouldSuspendParts = suspendPartUpdates
       && previousRecord
-      && (!suspendedPartUpdatesMessageID || message.id === suspendedPartUpdatesMessageID)
-      && !hasTaskSessionIdentityChange(previousRecord.parts, state.part[message.id])
+      && (!suspendedPartUpdatesMessageID || message.messageId === suspendedPartUpdatesMessageID)
+      && !hasTaskSessionIdentityChange(previousRecord.parts, state.part[message.messageId])
     const parts = shouldSuspendParts
       ? previousRecord.parts
-      : (state.part[message.id] ?? EMPTY_PARTS)
+      : (state.part[message.messageId] ?? EMPTY_PARTS)
 
     const nextRecord = previousRecord && previousRecord.info === message && previousRecord.parts === parts
       ? previousRecord
       : { info: message, parts }
 
-    nextById.set(message.id, nextRecord)
+    nextById.set(message.messageId, nextRecord)
     return nextRecord
   })
 

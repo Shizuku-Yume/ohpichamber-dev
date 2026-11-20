@@ -142,7 +142,7 @@ export const createAgentSelection: ConfigSlice<'setAgent'> = (set, get) => ({
                     && (!model || modelHasVariant(model, candidate))
                 );
 
-                const agentVariant = agent?.model?.providerID === providerId && agent.model.id === modelId
+                const agentVariant = agent?.model?.providerId === providerId && agent.model.modelId === modelId
                     ? agent.model.variant
                     : undefined;
                 const configuredVariant = get().getDefaultVariantForModel(providerId, modelId);
@@ -203,7 +203,7 @@ export const createAgentSelection: ConfigSlice<'setAgent'> = (set, get) => ({
             }
 
             const agentModelSelection = agent?.model;
-            if (agentModelSelection?.providerID && agentModelSelection?.id) {
+            if (agentModelSelection?.providerId && agentModelSelection?.modelId) {
                 const { providerID, id: modelID } = agentModelSelection;
                 const agentProvider = providers.find((provider) => provider.id === providerID);
                 const agentModel = findCatalogModel(agentProvider?.models, modelID);
@@ -221,12 +221,12 @@ export const createAgentSelection: ConfigSlice<'setAgent'> = (set, get) => ({
 
             const prevAgent = agents.find((candidate) => candidate.name === currentAgentName);
             const prevAgentHasPinnedModel = Boolean(
-                prevAgent?.model?.providerID
-                && prevAgent?.model?.id
-                && prevAgent.model.providerID === currentProviderId
-                && prevAgent.model.id === currentModelId
+                prevAgent?.model?.providerId
+                && prevAgent?.model?.modelId
+                && prevAgent.model.providerId === currentProviderId
+                && prevAgent.model.modelId === currentModelId
             );
-            const targetHasPinnedModel = Boolean(agent?.model?.providerID && agent?.model?.id);
+            const targetHasPinnedModel = Boolean(agent?.model?.providerId && agent?.model?.modelId);
 
             if (
                 !targetHasPinnedModel

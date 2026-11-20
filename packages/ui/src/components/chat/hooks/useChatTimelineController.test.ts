@@ -157,7 +157,7 @@ describe('loadHistoryUntilMessage', () => {
         // A batch can end inside a turn: the reply is loaded, but the list
         // gives it a row only once the prompt that opens its turn is loaded.
         const reply: Message = {
-            id: 'msg_4', sessionID: 'session', role: 'assistant',
+            messageId: 'msg_4', sessionID: 'session', role: 'assistant',
             time: { created: 4, completed: 5 }, providerID: 'test', modelID: 'test', agent: 'build',
         };
         const harness = renderHarness({

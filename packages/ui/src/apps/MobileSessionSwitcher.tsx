@@ -29,7 +29,7 @@ const SwitcherRow: React.FC<{
   onSelect: () => void;
 }> = ({ session, meta, active, onSelect }) => {
   const { t } = useI18n();
-  const isUnread = useSessionUnread(session.id);
+  const isUnread = useSessionUnread(session.sessionId);
   const markedUnread = useSessionMarkedUnread(session.sessionId);
   const turnActivity = useSessionTurnActivity(session.sessionId);
   const isStreaming = turnActivity !== null;

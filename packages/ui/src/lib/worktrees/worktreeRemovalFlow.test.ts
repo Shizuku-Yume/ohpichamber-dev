@@ -101,7 +101,7 @@ describe('archiveSessionsThenRemoveWorktree', () => {
 const WORKTREE = '/repo-worktrees/feature';
 
 const session = (id: string, directory: string, parentID?: string): Session => ({
-  id,
+  sessionId: id,
   directory,
   parentID,
   projectID: 'project',
@@ -118,16 +118,16 @@ const flow = (sessions: Session[], calls: string[], overrides: Partial<FlowOptio
   const moved = new Set<string>();
   return moveSessionsThenRemoveWorktree({
     worktreePath: WORKTREE,
-    readSessions: () => sessions.filter((entry) => !moved.has(entry.id)),
+    readSessions: () => sessions.filter((entry) => !moved.has(entry.sessionId)),
     readActivity: async () => 'idle',
     resolveDestination: async (directory: string) => (directory.endsWith('/ai') ? '/repo/ai' : '/repo'),
     moveTree: async (tree) => {
       const members = [...tree.descendants, tree.root];
-      calls.push(`move:${members.map((entry) => entry.id).join(',')} ${tree.sourceDirectory} -> ${tree.projectDirectory}`);
-      for (const member of members) moved.add(member.id);
+      calls.push(`move:${members.map((entry) => entry.sessionId).join(',')} ${tree.sourceDirectory} -> ${tree.projectDirectory}`);
+      for (const member of members) moved.add(member.sessionId);
     },
     confirmMoves: async (moves) => {
-      calls.push(`confirm:${moves.map((move) => move.root.id).join(',')}`);
+      calls.push(`confirm:${moves.map((move) => move.root.sessionId).join(',')}`);
       return true;
     },
     removeWorktree: async () => {
@@ -174,7 +174,7 @@ describe('moveSessionsThenRemoveWorktree', () => {
       session('child-in-sub', `${WORKTREE}/sub`, 'root'),
     ]);
 
-    expect(trees.map((tree) => [tree.root.id, tree.descendants.map((entry) => entry.id), tree.sourceDirectory])).toEqual([
+    expect(trees.map((tree) => [tree.root.sessionId, tree.descendants.map((entry) => entry.sessionId), tree.sourceDirectory])).toEqual([
       ['root', [], WORKTREE],
       ['child-in-sub', [], `${WORKTREE}/sub`],
     ]);
@@ -185,7 +185,7 @@ describe('moveSessionsThenRemoveWorktree', () => {
     const reason = await stopReason(flow(
       [session('root', WORKTREE), session('child', WORKTREE, 'root')],
       calls,
-      { readActivity: async (sessions) => (sessions.some((entry) => entry.id === 'child') ? 'active' : 'idle') },
+      { readActivity: async (sessions) => (sessions.some((entry) => entry.sessionId === 'child') ? 'active' : 'idle') },
     ));
 
     expect(reason).toBe('busy');
@@ -214,8 +214,8 @@ describe('moveSessionsThenRemoveWorktree', () => {
     const calls: string[] = [];
     await expect(flow([session('first', WORKTREE), session('second', `${WORKTREE}/ai`)], calls, {
       moveTree: async (tree) => {
-        if (tree.root.id === 'second') throw new Error('Session is not idle');
-        calls.push(`move:${tree.root.id}`);
+        if (tree.root.sessionId === 'second') throw new Error('Session is not idle');
+        calls.push(`move:${tree.root.sessionId}`);
       },
     })).rejects.toThrow('Session is not idle');
 
@@ -280,7 +280,7 @@ describe('moveSessionsThenRemoveWorktree', () => {
     const reason = await stopReason(flow([session('first', WORKTREE), session('second', `${WORKTREE}/ai`)], calls, {
       isCurrent: () => current,
       moveTree: async (tree) => {
-        calls.push(`move:${tree.root.id}`);
+        calls.push(`move:${tree.root.sessionId}`);
         current = false;
       },
     }));
@@ -328,7 +328,7 @@ describe('moveSessionsThenRemoveWorktree on Windows paths', () => {
     expect(calls).toEqual([]);
 
     expect(groupSessionTreesByFolder([session('root', 'C:\\wt\\feature'), session('child', 'c:/wt/feature', 'root')])
-      .map((tree) => [tree.root.id, tree.descendants.map((entry) => entry.id), tree.sourceDirectory]))
+      .map((tree) => [tree.root.sessionId, tree.descendants.map((entry) => entry.sessionId), tree.sourceDirectory]))
       .toEqual([['root', ['child'], 'C:/wt/feature']]);
   });
 

@@ -150,7 +150,7 @@ const userHistoryRecordIDs = new WeakMap<UserMessageHistorySnapshot["records"], 
 const getUserHistoryRecordIDs = (snapshot: UserMessageHistorySnapshot): ReadonlySet<string> => {
   let ids = userHistoryRecordIDs.get(snapshot.records)
   if (!ids) {
-    ids = new Set(snapshot.records.map((record) => record.message.id))
+    ids = new Set(snapshot.records.map((record) => record.message.messageId))
     userHistoryRecordIDs.set(snapshot.records, ids)
   }
   return ids

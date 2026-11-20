@@ -11,7 +11,7 @@ import {
 } from './subagentActivity';
 
 const step = (id: string, extra: Partial<AssistantMessage> = {}): AssistantMessage => ({
-  id,
+  messageId: id,
   sessionID: 'child',
   role: 'assistant',
   time: { created: 1_000 },
@@ -62,10 +62,10 @@ describe('readSubagentActivity', () => {
   test('streaming reasoning or text is progress', () => {
     const messages: Message[] = [step('s1')];
     expect(readSubagentActivity(messages, {
-      s1: [{ id: 'r', sessionID: 'child', messageID: 's1', type: 'reasoning', text: '…', time: { start: 1_500 } }],
+      s1: [{ partId: 'r', sessionID: 'child', messageID: 's1', type: 'reasoning', text: '…', time: { start: 1_500 } }],
     }, { type: 'busy' })).toEqual({ kind: 'thinking' });
     expect(readSubagentActivity(messages, {
-      s1: [{ id: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: '…', time: { start: 1_500 } }],
+      s1: [{ partId: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: '…', time: { start: 1_500 } }],
     }, { type: 'busy' })).toEqual({ kind: 'writing' });
   });
 
@@ -106,8 +106,8 @@ describe('readSubagentActivity', () => {
 
   test('round-trips through its string form, which stays equal while nothing shown changes', () => {
     const messages: Message[] = [step('s1')];
-    const before = { s1: [{ id: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: 'a', time: { start: 1_500 } }] satisfies Part[] };
-    const after = { s1: [{ id: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: 'a longer text', time: { start: 1_500 } }] satisfies Part[] };
+    const before = { s1: [{ partId: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: 'a', time: { start: 1_500 } }] satisfies Part[] };
+    const after = { s1: [{ partId: 'x', sessionID: 'child', messageID: 's1', type: 'text', text: 'a longer text', time: { start: 1_500 } }] satisfies Part[] };
     const encoded = encodeSubagentActivity(readSubagentActivity(messages, before, { type: 'busy' }));
     expect(encodeSubagentActivity(readSubagentActivity(messages, after, { type: 'busy' }))).toBe(encoded);
     expect(decodeSubagentActivity(encoded)).toEqual({ kind: 'writing' });

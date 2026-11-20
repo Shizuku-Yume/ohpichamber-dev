@@ -31,7 +31,7 @@ const useSubagentTask = (parentId: string, childId: string, directory: string | 
 
 const SubagentDetails: React.FC<{ row: SubagentRow; parentId: string; directory: string | null; onOpenSession: (() => void) | null }> = ({ row, parentId, directory, onOpenSession }) => {
   const { t } = useI18n();
-  const childId = row.child.id;
+  const childId = row.child.sessionId;
   const permissions = useDirectorySync(React.useCallback((state: State) => state.permission[childId] ?? NO_PERMISSIONS, [childId]));
   const forms = useDirectorySync(React.useCallback((state: State) => state.form[childId] ?? NO_FORMS, [childId]));
   const task = useSubagentTask(parentId, childId, directory);
@@ -131,16 +131,16 @@ export const SubagentsPanel: React.FC<{ directory: string | null }> = ({ directo
         {rows.map((row) => {
           const { child } = row;
           const label = child.title?.trim() || t('chat.workStatus.subagent.untitled');
-          const open = (row.blocked || row.asked) !== toggled.has(child.id);
+          const open = (row.blocked || row.asked) !== toggled.has(child.sessionId);
           return (
             <SubagentEntry
-              key={child.id}
+              key={child.sessionId}
               row={row}
               parentId={sessionId}
               directory={directory}
               open={open}
-              onToggle={() => flip(child.id)}
-              onOpenSession={directory ? () => openChildSession(child.id, label, child.directory) : null}
+              onToggle={() => flip(child.sessionId)}
+              onOpenSession={directory ? () => openChildSession(child.sessionId, label, child.directory) : null}
             />
           );
         })}

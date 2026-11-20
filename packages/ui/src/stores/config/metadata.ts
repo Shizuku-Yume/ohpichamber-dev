@@ -112,7 +112,7 @@ const deriveModelMetadata = (providerId: string, model: ProviderModel): ModelMet
             cache_read: baseCost.cache.read,
             cache_write: baseCost.cache.write,
         } : undefined,
-        limit: { context: model.limit.context, output: model.limit.output },
+        limit: { context: model.contextWindow, output: model.maxOutputTokens },
     };
     if (releaseDate) metadata.release_date = releaseDate;
     return metadata;

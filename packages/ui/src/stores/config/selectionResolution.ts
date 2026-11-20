@@ -129,7 +129,7 @@ export const inheritedDefaultsFor = (
     const pinned = agents.find((agent) => agent.name === agentName)?.model;
     const opencode = opencodeDefaultModel ? parseModelSelection(opencodeDefaultModel) : null;
     return [
-        { model: pinned?.providerID && pinned.id ? `${pinned.providerID}/${pinned.id}` : undefined, variant: pinned?.variant },
+        { model: pinned?.providerId && pinned.modelId ? `${pinned.providerId}/${pinned.modelId}` : undefined, variant: pinned?.variant },
         { model: opencode ? `${opencode.providerID}/${opencode.modelID}` : undefined, variant: opencode?.variant },
     ];
 };
@@ -346,7 +346,7 @@ export const resolveDefaultAgentModelSelection = ({
         if (!model) return undefined;
         const variants = modelVariantNames(model);
         if (variants.length === 0) return undefined;
-        const agentVariant = resolvedAgent?.model?.providerID === providerId && resolvedAgent.model.id === modelId
+        const agentVariant = resolvedAgent?.model?.providerId === providerId && resolvedAgent.model.modelId === modelId
             ? resolvedAgent.model.variant
             : undefined;
         return resolveEffortChoice([agentVariant, readRememberedEffort(providerId, modelId)], variants);
@@ -376,10 +376,10 @@ export const resolveDefaultAgentModelSelection = ({
     }
 
     const agentModel = resolvedAgent?.model;
-    if (agentModel?.providerID && agentModel.id
-        && !isMissingFromCatalog(providers, catalogLoaded, agentModel.providerID, agentModel.id)) {
-        providerId = agentModel.providerID;
-        modelId = agentModel.id;
+    if (agentModel?.providerId && agentModel.modelId
+        && !isMissingFromCatalog(providers, catalogLoaded, agentModel.providerId, agentModel.modelId)) {
+        providerId = agentModel.providerId;
+        modelId = agentModel.modelId;
         variant = hasProviderModel(providers, providerId, modelId)
             ? resolveVariant(providerId, modelId, agentModel.variant)
             : agentModel.variant;

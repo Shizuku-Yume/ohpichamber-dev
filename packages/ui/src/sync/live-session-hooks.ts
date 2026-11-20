@@ -94,7 +94,7 @@ export function useLiveSessionsExcluding(excludedIds: ReadonlySet<string>): Sess
   return useLiveSyncSelector(
     useCallback((states) => {
       countSyncPerformance("liveSessionAggregateRuns")
-      const sessions = aggregateLiveSessions(states).filter((session) => !excludedIds.has(session.id))
+      const sessions = aggregateLiveSessions(states).filter((session) => !excludedIds.has(session.sessionId))
       return sessions.length === 0 ? EMPTY_LIVE_SESSIONS : sessions
     }, [excludedIds]),
     areSessionListsEquivalent,
@@ -122,7 +122,7 @@ const listsHaveSameStartTimes = (left: State["session"], right: State["session"]
   if (left === right) return true
   if (left.length !== right.length) return false
   for (let index = 0; index < left.length; index += 1) {
-    if (left[index].id !== right[index].id || left[index].time.created !== right[index].time.created) return false
+    if (left[index].sessionId !== right[index].sessionId || left[index].createdAt !== right[index].createdAt) return false
   }
   return true
 }
@@ -137,7 +137,7 @@ export function useSessionStartTimes(directory?: string): ReadonlyMap<string, nu
       cached.sessions = sessions
       return cached.startTimes
     }
-    const next: ReadonlyMap<string, number> = new Map(sessions.map((session) => [session.id, session.time.created]))
+    const next: ReadonlyMap<string, number> = new Map(sessions.map((session) => [session.sessionId, session.createdAt]))
     const startTimes = cached && haveSameStartTimes(cached.startTimes, next) ? cached.startTimes : next
     cacheRef.current = { sessions, startTimes }
     return startTimes
@@ -154,7 +154,7 @@ const getSessionById = (sessions: State["session"], sessionID?: string | null): 
   if (!sessionID) return undefined
   let sessionsById = sessionsByIdCache.get(sessions)
   if (!sessionsById) {
-    sessionsById = new Map(sessions.map((session) => [session.id, session]))
+    sessionsById = new Map(sessions.map((session) => [session.sessionId, session]))
     sessionsByIdCache.set(sessions, sessionsById)
   }
   return sessionsById.get(sessionID)
@@ -165,9 +165,9 @@ export function useParentSession(sessionID: string | null, directory?: string): 
     useCallback((state: State) => {
       if (!sessionID) return null
       const current = getSessionById(state.session, sessionID)
-      if (!current?.parentID) return null
-      return getSessionById(state.session, current.parentID)
-        ?? getAllSyncSessions().find((s) => s.id === current.parentID)
+      if (!current?.parentSessionId) return null
+      return getSessionById(state.session, current.parentSessionId)
+        ?? getAllSyncSessions().find((s) => s.sessionId === current.parentSessionId)
         ?? null
     }, [sessionID]),
     directory,

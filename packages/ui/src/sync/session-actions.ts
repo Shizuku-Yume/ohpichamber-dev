@@ -817,7 +817,7 @@ async function submitQuestion(request: FormRequest, action: { action: "answer"; 
 }
 
 function findSessionRecordAnywhere(sessionId: string, directory: string | undefined): Session | undefined {
-  return getDirectoryState(directory)?.session.find((session) => session.id === sessionId)
+  return getDirectoryState(directory)?.session.find((session) => session.sessionId === sessionId)
     ?? getAllSyncSessionMap().get(sessionId)
     ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
 }

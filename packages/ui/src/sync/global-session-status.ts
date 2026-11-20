@@ -316,7 +316,7 @@ export const getDirectoryOwnedSessionIds = (directory: string, sessions: readonl
   if (!scope) return [];
   const ids: string[] = [];
   for (const session of sessions) {
-    if (normalizeProjectPath(session.directory) === scope) ids.push(session.id);
+    if (normalizeProjectPath(session.directory) === scope) ids.push(session.sessionId);
   }
   return ids;
 };

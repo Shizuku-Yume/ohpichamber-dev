@@ -73,7 +73,7 @@ export async function runComposerActionCommand({
                     variant: capturedSendConfig?.variant ?? currentVariant ?? undefined,
                 }, {
                     fork: sessionActions.forkFromLastCompletedTurn,
-                    directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.id) || session.directory || null,
+                    directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.sessionId) || session.directory || null,
                     send: (text, selection, target) => useSessionUIStore.getState().sendMessage(
                         text,
                         selection.providerID,

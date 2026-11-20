@@ -3,7 +3,7 @@ import type { Session } from '@openchamber/agent-contract';
 import { resolveAdmittedLineageDirectory } from './session-admission-rule';
 
 const session = (id: string, directory: string, parentID?: string): Session => ({
-  id,
+  sessionId: id,
   parentID,
   projectID: 'project',
   directory,

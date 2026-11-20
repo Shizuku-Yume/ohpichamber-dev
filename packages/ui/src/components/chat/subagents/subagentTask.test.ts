@@ -4,7 +4,7 @@ import type { Message, Part } from '@openchamber/agent-contract';
 import { findSubagentTask } from './subagentTask';
 
 const assistant = (id: string, sessionID: string): Message => ({
-  id, sessionID, role: 'assistant', time: { created: 1 }, agent: 'build', providerID: 'p', modelID: 'm',
+  messageId: id, sessionID, role: 'assistant', time: { created: 1 }, agent: 'build', providerID: 'p', modelID: 'm',
 });
 
 const call = (id: string, messageID: string, childId: string, prompt: string): Part => ({
@@ -28,7 +28,7 @@ describe('findSubagentTask', () => {
   });
 
   test("falls back to the child's own first prompt", () => {
-    const child: Message[] = [{ id: 'u1', sessionID: 'child', role: 'user', time: { created: 1 } }];
+    const child: Message[] = [{ messageId: 'u1', sessionID: 'child', role: 'user', time: { created: 1 } }];
     const parts = { u1: [{ id: 'u1:text:0', sessionID: 'child', messageID: 'u1', type: 'text', text: 'Do the thing' } as Part] };
     expect(findSubagentTask([], child, parts, 'child')).toBe('Do the thing');
   });

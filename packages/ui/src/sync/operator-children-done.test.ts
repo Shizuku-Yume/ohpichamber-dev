@@ -5,7 +5,7 @@ import { findRunningOperatorChildren } from './operator-children-done';
 
 const session = (id: string, parentID?: string, operator = true): Session => {
   const record: Session = {
-    id,
+    sessionId: id,
     projectID: 'proj_1',
     title: id,
     directory: '/repo',
@@ -13,7 +13,7 @@ const session = (id: string, parentID?: string, operator = true): Session => {
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     time: { created: 1, updated: 1 },
   };
-  if (parentID) record.parentID = parentID;
+  if (parentID) record.parentSessionId = parentID;
   if (parentID && operator) record.metadata = { openchamber: { kind: 'operator-child', parentID } };
   return record;
 };
@@ -32,12 +32,12 @@ describe('running operator children', () => {
 
   test('finds the running ones under the roots, at any depth, and only operator children', () => {
     const active = new Set(['ses_worker', 'ses_grandchild', 'ses_subagent', 'ses_other_worker']);
-    expect(findRunningOperatorChildren(['ses_root'], sessions, active).map((entry) => entry.id).sort()).toEqual(['ses_grandchild', 'ses_idle_worker', 'ses_worker']);
+    expect(findRunningOperatorChildren(['ses_root'], sessions, active).map((entry) => entry.sessionId).sort()).toEqual(['ses_grandchild', 'ses_idle_worker', 'ses_worker']);
   });
 
   test('a child whose own subagent runs counts as running', () => {
     const active = new Set(['ses_subagent_of_worker']);
-    expect(findRunningOperatorChildren(['ses_root'], sessions, active).map((entry) => entry.id)).toEqual(['ses_idle_worker']);
+    expect(findRunningOperatorChildren(['ses_root'], sessions, active).map((entry) => entry.sessionId)).toEqual(['ses_idle_worker']);
   });
 
   test('nothing to ask about when every child is idle', () => {

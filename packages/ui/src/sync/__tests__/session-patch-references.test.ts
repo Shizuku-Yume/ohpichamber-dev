@@ -13,7 +13,7 @@ afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup() 
 let run = 0
 
 const session = (directory: string): Session => ({
-  id: "ses_1",
+  sessionId: "ses_1",
   projectID: "prj_1",
   directory,
   title: "Streaming",
@@ -21,8 +21,8 @@ const session = (directory: string): Session => ({
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   time: { created: 1, updated: 1 },
 })
-const user: Message = { id: "msg_u", sessionID: "ses_1", role: "user", time: { created: 1 } }
-const text: Part = { id: "prt_u", messageID: "msg_u", sessionID: "ses_1", type: "text", text: "hi" }
+const user: Message = { messageId: "msg_u", sessionID: "ses_1", role: "user", time: { created: 1 } }
+const text: Part = { partId: "prt_u", messageID: "msg_u", sessionID: "ses_1", type: "text", text: "hi" }
 
 function setup() {
   run += 1

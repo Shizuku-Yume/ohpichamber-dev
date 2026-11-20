@@ -85,19 +85,19 @@ export const groupSessionTreesByFolder = (sessions: readonly Session[]): Session
     else byFolder.set(folder, [session]);
   }
   return [...byFolder.entries()].flatMap(([sourceDirectory, members]) => {
-    const ids = new Set(members.map((session) => session.id));
+    const ids = new Set(members.map((session) => session.sessionId));
     const childrenById = new Map<string, Session[]>();
     for (const session of members) {
-      if (!session.parentID || !ids.has(session.parentID)) continue;
-      const siblings = childrenById.get(session.parentID);
+      if (!session.parentSessionId || !ids.has(session.parentSessionId)) continue;
+      const siblings = childrenById.get(session.parentSessionId);
       if (siblings) siblings.push(session);
-      else childrenById.set(session.parentID, [session]);
+      else childrenById.set(session.parentSessionId, [session]);
     }
     const descendantsOf = (id: string): Session[] => (childrenById.get(id) ?? [])
-      .flatMap((child) => [child, ...descendantsOf(child.id)]);
+      .flatMap((child) => [child, ...descendantsOf(child.sessionId)]);
     return members
-      .filter((session) => !session.parentID || !ids.has(session.parentID))
-      .map((root) => ({ root, descendants: descendantsOf(root.id).reverse(), sourceDirectory }));
+      .filter((session) => !session.parentSessionId || !ids.has(session.parentSessionId))
+      .map((root) => ({ root, descendants: descendantsOf(root.sessionId).reverse(), sourceDirectory }));
   });
 };
 
@@ -137,7 +137,7 @@ export async function moveSessionsThenRemoveWorktree(options: {
   const confirmed = moves.length === 0 || await options.confirmMoves(moves);
   assertCurrent();
   if (!confirmed) throw new WorktreeKeepStoppedError('unconfirmed');
-  const movedIds = new Set(sessions.map((session) => session.id));
-  if (options.readSessions().some((session) => !movedIds.has(session.id))) throw new WorktreeKeepStoppedError('added');
+  const movedIds = new Set(sessions.map((session) => session.sessionId));
+  if (options.readSessions().some((session) => !movedIds.has(session.sessionId))) throw new WorktreeKeepStoppedError('added');
   return { removed: await options.removeWorktree() };
 }

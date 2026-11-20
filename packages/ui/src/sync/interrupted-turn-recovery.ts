@@ -29,12 +29,12 @@ export function interruptedTurnToolParts(
 
   const message = messages[messageIndex]
   if (message.role !== "assistant") return null
-  const completed = message.time.completed !== undefined
+  const completed = message.timing?.completedAt !== undefined
   if (completed && !recordedInterruption) {
     return null
   }
 
-  const messageID = message.id
+  const messageID = message.messageId
   const nextMessages = completed ? messages : [...messages]
   const error: StructuredError = failure ?? { type: "aborted", message: "aborted" }
   if (!completed) nextMessages[messageIndex] = {
