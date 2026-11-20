@@ -1436,8 +1436,9 @@ describe('speculative session preparation', () => {
     const fixture = await setupPreparedSession();
     const { sessionService, sessionId, prompt, ws, deleted } = fixture;
     try {
-      expect((await sessionService.list(ws.workspaceId)).items.map(item => item.sessionId)).toContain(sessionId);
+      expect((await sessionService.list(ws.workspaceId)).items.map(item => item.sessionId)).not.toContain(sessionId);
       await sessionService.send(sessionId, prompt);
+      expect((await sessionService.list(ws.workspaceId)).items.map(item => item.sessionId)).toContain(sessionId);
       if (cleanup === 'timeout') await vi.advanceTimersByTimeAsync(300_001);
       if (cleanup === 'discard') await sessionService.discardPrepared(ws);
       if (cleanup === 'close') await sessionService.close();
