@@ -10,18 +10,17 @@ const settingsUpdates = () => environment.settingsWrites.map((write) => write.ch
 let loggedIn = false;
 let homeReads = 0;
 let probeDirectory = async (_directory: string): Promise<'available' | 'missing' | 'unknown'> => 'available';
-environment.respond(async (url, init) => {
+environment.respond(async (url) => {
   if (url.pathname === '/api/fs/home') {
     homeReads += 1;
     return loggedIn ? Response.json({ home: HOME, chatsRoot: CHATS_ROOT }) : Response.json({}, { status: 401 });
   }
-  if (url.pathname === '/api/fs/directory-stats') {
-    const { paths } = JSON.parse(String(init?.body));
-    const results = await Promise.all(paths.map(async (path: string) => {
-      const availability = await probeDirectory(path);
-      return { path, isDirectory: availability === 'available', reason: availability === 'missing' ? 'not-found' : 'unavailable' };
-    }));
-    return Response.json({ results });
+  if (url.pathname === '/api/fs/directory-stat') {
+    const availability = await probeDirectory(url.searchParams.get('path') ?? '');
+    return Response.json(
+      availability === 'available' ? { isDirectory: true } : { reason: availability === 'missing' ? 'not-found' : 'unavailable' },
+      { status: availability === 'available' ? 200 : availability === 'missing' ? 404 : 503 },
+    );
   }
   if (url.pathname === '/api/location' || url.pathname === '/api/session') return Response.json({}, { status: 401 });
   throw new Error(`Unexpected request: ${url}`);
@@ -124,10 +123,14 @@ describe('saved directory restoration', () => {
     test(`ignores a missing-directory probe after a newer ${change}`, async () => {
       const store = await prepare();
       let answerProbe: (value: 'missing') => void = () => undefined;
-      probeDirectory = () => new Promise((resolve) => { answerProbe = resolve; });
+      const probed = Promise.withResolvers<string>();
+      probeDirectory = (directory) => new Promise((resolve) => {
+        answerProbe = resolve;
+        probed.resolve(directory);
+      });
       const { applyPersistedDirectoryPreferences } = await import('@/lib/directoryPersistence');
       const restoration = applyPersistedDirectoryPreferences();
-      await settle();
+      expect(await probed.promise).toBe('/saved/chat');
       if (change === 'directory') store.getState().setDirectory('/new/project');
       if (change === 'runtime') switchRuntimeEndpoint({ apiBaseUrl: 'https://other-host.test', runtimeKey: 'other-host' });
       if (change === 'storage') storage.setItem('lastDirectory', '/new/project');

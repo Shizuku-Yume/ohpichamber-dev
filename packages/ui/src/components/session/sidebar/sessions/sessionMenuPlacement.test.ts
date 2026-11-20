@@ -60,7 +60,7 @@ describe('resolveSessionMenuPlacement', () => {
   });
 
   test('a session outside every project files nowhere', () => {
-    expect(placementOf(session('loose', '/elsewhere'))).toEqual({ projectId: null, folderOwnerKey: null, ownsWork: true });
+    expect(placementOf(session('loose', '/elsewhere', { projectId: 'unregistered-project' }))).toEqual({ projectId: null, folderOwnerKey: null, ownsWork: true });
   });
 });
 

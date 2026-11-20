@@ -74,7 +74,7 @@ export const NativeOperationDescriptorSchema = z.strictObject({
 });
 export type NativeOperationDescriptor = z.infer<typeof NativeOperationDescriptorSchema>;
 const HostToolActions = {
-  openchamber: ['projects.list', 'models.list', 'session.list', 'session.create', 'session.send', 'session.fork', 'session.status', 'session.messages', 'session.link', 'pr.watch', 'pr.unwatch', 'schedule.list', 'schedule.create', 'schedule.update', 'schedule.run', 'schedule.delete', 'schedule.toggle', 'file.open'],
+  openchamber: ['projects.list', 'models.list', 'session.list', 'session.create', 'session.send', 'session.fork', 'session.status', 'session.messages', 'session.link', 'pr.watch', 'pr.unwatch', 'wait.list', 'wait.start', 'wait.stop', 'schedule.list', 'schedule.create', 'schedule.update', 'schedule.run', 'schedule.delete', 'schedule.toggle', 'file.open'],
   web: ['browser.open', 'browser.snapshot', 'browser.click', 'browser.type', 'browser.scroll', 'browser.back', 'browser.forward', 'browser.inspect', 'browser.capture', 'browser.resize'],
   openchamber_knowledge: ['knowledge.list', 'knowledge.save', 'knowledge.delete', 'knowledge.show'],
   notify: ['notify.send'],

@@ -393,7 +393,7 @@ describe('agent catalog startup recovery', () => {
   });
 
   for (const joined of [false, true]) {
-    test(`configuration reload rejects retired readers (joined=${joined})`, async () => {
+    test(`configuration reload discards the retired response and lets a joined caller use the replacement (joined=${joined})`, async () => {
       await settleProjectDirectory();
       const held = deferred<AgentCatalog>();
       getAgents.mockImplementationOnce(() => held.promise).mockResolvedValue(catalog([agent('replacement')], '2'));
@@ -404,7 +404,7 @@ describe('agent catalog startup recovery', () => {
       expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(true);
       held.resolve(catalog([agent('retired')], '1'));
       expect(await old).toBe(false);
-      if (waiter) expect(await waiter).toBe(false);
+      if (waiter) expect(await waiter).toBe(true);
       expect(agents()).toEqual([agent('replacement')]);
       expect(getAgents).toHaveBeenCalledTimes(2);
     });

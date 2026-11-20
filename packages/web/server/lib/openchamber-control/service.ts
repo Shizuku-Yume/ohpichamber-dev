@@ -276,6 +276,7 @@ export const createOpenChamberControlService = (dependencies) => {
   // Watches a pull request for a session and wakes the session on change
   // (`pr.watch`); absent where pull request watches are not available.
   prWatch = null,
+  extensionWaits = null,
   // Archive lives in OpenChamber's own store now.
   archiveStore = null,
   // Agent workflows (../workflows/runtime.js); absent where they are not
@@ -1046,6 +1047,13 @@ export const createOpenChamberControlService = (dependencies) => {
      },
      carry: Array.isArray(carry) ? carry : [],
     }, { contextSessionId: options.contextSessionId });
+   }
+   if (action === 'wait.list' || action === 'wait.start' || action === 'wait.stop') {
+    if (!extensionWaits) throw new OpenChamberControlError('Waits are not available on this server', 503);
+    const sessionID = options.contextSessionId;
+    if (action === 'wait.list') return extensionWaits.listWaits(sessionID);
+    if (action === 'wait.stop') return extensionWaits.stopWaits(sessionID, input.waitId);
+    return extensionWaits.startWait({ sessionID, directory: asNonEmptyString(contextDirectory), source: input.source, args: input.args });
    }
    if (action === 'pr.watch' || action === 'pr.unwatch') {
     if (!prWatch) throw new OpenChamberControlError('Pull request watches are not available on this server', 503);

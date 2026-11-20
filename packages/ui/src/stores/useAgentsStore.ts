@@ -213,7 +213,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       const inFlight = agentsLoadInFlight.get(key);
       if (inFlight && inFlight.generation === (agentsLoadGeneration.get(key) ?? 0)) {
         const loaded = await inFlight.request;
-        if (!currentRuntime() || reloadEpoch !== agentsReloadEpoch) return false;
+        if (!currentRuntime()) return false;
         return inFlight.generation === (agentsLoadGeneration.get(key) ?? 0) ? loaded : get().loadAgents(directory);
       }
       const generation = agentsLoadGeneration.get(key) ?? 0;

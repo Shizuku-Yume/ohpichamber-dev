@@ -1650,8 +1650,8 @@ describe('useConfigStore provider persistence', () => {
       return [testAgent('new-agent')];
     };
 
-    const ownerLoad = refreshComposerCatalog(DIRECTORY);
-    const joinedLoad = refreshComposerCatalog(DIRECTORY);
+    const ownerLoad = useAgentsStore.getState().loadAgents(DIRECTORY);
+    const joinedLoad = useAgentsStore.getState().loadAgents(DIRECTORY);
     await Promise.resolve();
     expect(calls).toBe(1);
 

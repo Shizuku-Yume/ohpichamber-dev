@@ -532,6 +532,7 @@ export function ProjectPickerSheet({
     theme,
     title,
     searchPlaceholder,
+    addProjectLabel,
 }: ProjectPickerSheetProps) {
     const [query, setQuery] = React.useState('');
 
@@ -567,6 +568,19 @@ export function ProjectPickerSheet({
                                 ) : null}
                             </button>
                         ))}
+                    {addProjectLabel && (
+                        <button
+                            type="button"
+                            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2.5 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"
+                            onClick={() => {
+                                onClose();
+                                sessionEvents.requestDirectoryDialog();
+                            }}
+                        >
+                            <Icon name="add" className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            {addProjectLabel}
+                        </button>
+                    )}
                 </div>
             </div>
         </MobileOverlayPanel>

@@ -2,11 +2,13 @@ import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import type { Run } from '@openchamber/agent-contract';
 import { nativeHostSession, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
 
 const directory = '/workspace/mini-chat-abort';
 const sessionId = 'ses_mini';
 const runId = 'mini-run';
+const snapshotPath = `/api/agent/v1/sessions/${sessionId}/snapshot`;
 const controlPath = `/api/agent/v1/sessions/${sessionId}/control`;
 
 // The real Mini Chat app root, with its own provider placement: the
@@ -18,16 +20,21 @@ test('Mini Chat mounts its shortcuts under the sync provider, and double Escape 
   const requests: { method: string; path: string }[] = [];
   let onInterrupt = () => {};
   const interrupted = new Promise<void>((resolve) => { onInterrupt = resolve; });
+  const activeRun: Run = { runId, sessionId, origin: 'host', status: 'running', createdAt: 1 };
+  const snapshot = nativeSnapshot(sessionId);
+  snapshot.session = { ...snapshot.session, runtimeStatus: 'running', activeRunId: runId };
+  snapshot.activeRun = activeRun;
   const fetchResponse = async (input: Request | URL | string, init?: RequestInit) => {
     const request = input instanceof Request ? input : null;
     const path = new URL(request ? request.url : input.toString(), 'http://mini-chat.test').pathname;
     const method = request?.method ?? init?.method ?? 'GET';
     requests.push({ method, path });
+    if (method === 'GET' && path === snapshotPath) return Response.json(snapshot);
     if (method === 'POST' && path === controlPath) {
       const body = request ? await request.json() : JSON.parse(String(init?.body));
       expect(body).toEqual({ type: 'abort', runId });
       onInterrupt();
-      return Response.json({ run: { runId, sessionId, origin: 'host', status: 'aborted', createdAt: 1 } });
+      return Response.json({ run: { ...activeRun, status: 'cancelled', finishedAt: 2 } });
     }
     if (path.endsWith('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
     return new Promise<Response>(() => undefined);
@@ -80,7 +87,7 @@ test('Mini Chat mounts its shortcuts under the sync provider, and double Escape 
     // its bootstrap selects it.
     await act(async () => {
       getSyncChildStores().getChild(directory)?.setState({
-        session: [{ ...nativeHostSession(nativeSnapshot(sessionId)), title: 'Mini', archivedAt: undefined, runtimeStatus: 'running', activeRunId: runId }],
+        session: [{ ...nativeHostSession(snapshot), title: 'Mini', archivedAt: undefined }],
         session_status: { [sessionId]: 'running' },
       });
     });

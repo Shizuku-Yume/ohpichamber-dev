@@ -587,13 +587,13 @@ test('message search switched off shows off without a request', async () => {
   }
 });
 
-test('a VS Code runtime shows unsupported without a request', async () => {
+test('a legacy VS Code flag does not disable conversation search', async () => {
   const f = await setup();
   try {
     f.setVSCodeRuntime();
     await f.render({ metadataItems: ITEMS });
-    expect(f.state().contentStatus.kind).toBe('unsupported');
-    expect(f.pendingDelays()).toEqual([]);
+    expect(f.state().contentStatus.kind).toBe('idle');
+    expect(f.pendingDelays()).toContain(DEBOUNCE_MS);
     expect(ids(f.state().results)).toEqual(ITEM_IDS);
   } finally {
     await f.dispose();

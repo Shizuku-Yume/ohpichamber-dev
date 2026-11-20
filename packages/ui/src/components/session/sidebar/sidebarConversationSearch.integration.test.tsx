@@ -55,7 +55,16 @@ beforeEach(async () => {
     MouseEvent: dom.MouseEvent, PointerEvent: dom.PointerEvent, KeyboardEvent: dom.KeyboardEvent,
     ResizeObserver: dom.ResizeObserver, getComputedStyle: dom.getComputedStyle.bind(dom),
     requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
-    IS_REACT_ACT_ENVIRONMENT: true, fetch: async (input: RequestInfo | URL) => { const url = new URL(String(input), 'http://localhost'); requests.push(url); if (failRequest) throw new Error('offline'); return Response.json(url.searchParams.get('lifecycle') === 'archived' ? archivedResponse : response); },
+    IS_REACT_ACT_ENVIRONMENT: true,
+    fetch: async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+      if (url.pathname === '/api/fs/home') return Response.json({ home: '/fixture', chatsRoot: '/fixture/chats' });
+      if (url.pathname === '/api/config/settings') return Response.json({});
+      if (!url.pathname.startsWith('/api/openchamber/message-search/')) return new Response(null, { status: 404 });
+      requests.push(url);
+      if (failRequest) throw new Error('offline');
+      return Response.json(url.searchParams.get('lifecycle') === 'archived' ? archivedResponse : response);
+    },
   };
   originals = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   for (const [key, value] of Object.entries(globals)) Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });

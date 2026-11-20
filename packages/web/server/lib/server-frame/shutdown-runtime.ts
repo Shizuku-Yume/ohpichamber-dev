@@ -15,6 +15,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     contextObligatoryRuntime,
     autoReviewRuntime,
     prWatchRuntime,
+    extensionWaitsRuntime,
     messageQueueRuntime,
     dispatchResultsRuntime,
     messageSearchRuntime,
@@ -87,6 +88,10 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       () => contextObligatoryRuntime?.stop?.(),
       () => autoReviewRuntime?.stop?.(),
       () => prWatchRuntime?.stop?.(),
+      () => {
+        extensionWaitsRuntime?.stop();
+        return extensionWaitsRuntime?.flush();
+      },
       () => messageQueueRuntime?.stop?.(),
       () => dispatchResultsRuntime?.stop?.(),
       () => messageSearchRuntime?.stop?.(),

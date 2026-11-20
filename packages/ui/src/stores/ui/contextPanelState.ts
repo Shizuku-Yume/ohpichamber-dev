@@ -97,7 +97,7 @@ export const upsertContextPanelTab = (
       ? {
           ...tab,
           mode: nextTab.mode,
-          targetPath: nextTab.targetPath || tab.targetPath,
+          targetPath: descriptor.targetPath === null ? null : nextTab.targetPath || tab.targetPath,
           targetDirectory: nextTab.targetDirectory,
           dedupeKey: nextTab.dedupeKey,
           label: nextTab.label,

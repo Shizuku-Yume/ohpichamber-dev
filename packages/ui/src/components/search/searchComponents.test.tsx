@@ -88,7 +88,7 @@ test('empty context does not render metadata or a separator', () => withDom(asyn
 }));
 
 const HOME = '/home/me';
-const CHAT_DIRECTORY = `${HOME}/.config/openchamber/chats/ses_chat`;
+const CHAT_DIRECTORY = `${HOME}/.config/ohpichamber/chats/ses_chat`;
 const locationOf = (overrides: Partial<SidebarSessionLocation>): SidebarSessionLocation => ({
   projectId: 'p', groupDirectory: '/repo', projectLabel: 'repo', branchLabel: null, inSpace: false, worktree: null, ...overrides,
 });
