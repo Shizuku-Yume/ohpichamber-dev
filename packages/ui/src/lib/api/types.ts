@@ -44,13 +44,8 @@ import type { GitPathUnavailableReason } from './git-path-diff';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { DesktopSettings } from '@/lib/settings/registry';
 import type { GitIdentityProfile, GitIdentitySummary } from './git-identity';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import type { GitPathUnavailableReason } from './git-path-diff';
-=======
-import type { GitPathUnavailableReason } from './git-path-diff';
 import type { PushAPI } from './push';
->>>>>>> upstream/main
+export type { PushAPI, PushSubscribePayload, PushUnsubscribePayload, ApnsTokenPayload } from './push';
 import type {
   ChangeRequest,
   ChangeRequestContext,
@@ -169,14 +164,9 @@ export interface TerminalStreamEvent {
   sequence?: number;
   data?: string;
   replayData?: string;
-<<<<<<< HEAD
   /** False for a cached snapshot that does not confirm the current socket's attachment. */
   attached?: false;
   /** Current PTY size. Snapshot sizes describe how the history reached it. */
-||||||| bc50ba56aa
-  /** PTY size the snapshot history was drawn for; only `snapshot` events carry it. */
-=======
->>>>>>> upstream/main
   cols?: number;
   rows?: number;
   sizes?: readonly TerminalReplaySize[];
@@ -519,30 +509,12 @@ type GitNetworkSyncRemoteRequest = {
 
 export type GitNetworkOperationRequest =
   | (ExistingRepositoryNetworkOperationRequest & {
-<<<<<<< HEAD
-    operation: 'push';
-    forceWithLease?: { expectedRemoteSha: string };
-    configureUpstream?: boolean;
-    destinationSelectionId?: string;
-    /** A push for review (`destinationRef` is `refs/for/<target>`); the server composes the refspec from these fields. */
-    review?: GitPushReviewIntent;
-  })
-||||||| bc50ba56aa
-      operation: 'push';
-      forceWithLease?: { expectedRemoteSha: string };
-      configureUpstream?: boolean;
-      destinationSelectionId?: string;
-      /** A push for review (`destinationRef` is `refs/for/<target>`); the server composes the refspec from these fields. */
-      review?: GitPushReviewIntent;
-    })
-=======
       operation: 'push';
       forceWithLease?: { expectedRemoteSha: string };
       configureUpstream?: boolean;
       destinationSelectionId?: string;
       review?: GitPushReviewIntent;
     })
->>>>>>> upstream/main
   | (ExistingRepositoryNetworkOperationRequest & { operation: 'fetch'; fetchScope?: 'ref' })
   | (Omit<ExistingRepositoryNetworkOperationRequest, 'sourceRef' | 'destinationRef'> & {
     operation: 'fetch';
@@ -581,37 +553,6 @@ export type GitNetworkOperationRequest =
     };
   }
   | ({
-<<<<<<< HEAD
-    operation: 'clone';
-    remoteUrl: string;
-    destinationPath: string;
-    gitIdentityId?: string;
-    /**
-     * The account the cloned repository is associated with for issues and
-     * change requests. Independent of the transport credential, so a
-     * repository can fetch over SSH and still answer to a provider account.
-     */
-    providerAccount?: SourceControlIdentity & { accountId: string };
-    auxiliaryGrants?: Array<{
-      kind: 'submodule' | 'lfs';
-      endpoint: GitNetworkRedactedEndpoint;
-    } & (
-||||||| bc50ba56aa
-      operation: 'clone';
-      remoteUrl: string;
-      destinationPath: string;
-      gitIdentityId?: string;
-      /**
-       * The account the cloned repository is associated with for issues and
-       * change requests. Independent of the transport credential, so a
-       * repository can fetch over SSH and still answer to a provider account.
-       */
-      providerAccount?: SourceControlIdentity & { accountId: string };
-      auxiliaryGrants?: Array<{
-        kind: 'submodule' | 'lfs';
-        endpoint: GitNetworkRedactedEndpoint;
-      } & (
-=======
       operation: 'clone';
       remoteUrl: string;
       destinationPath: string;
@@ -621,7 +562,6 @@ export type GitNetworkOperationRequest =
         kind: 'submodule' | 'lfs';
         endpoint: GitNetworkRedactedEndpoint;
       } & (
->>>>>>> upstream/main
         | { transportMode: 'managed'; credentialId: string }
         | { transportMode: 'system'; unverifiedConfirmed: true; credentialId?: never }
         | { transportMode: 'anonymous'; credentialId?: never; unverifiedConfirmed?: never }
@@ -1135,32 +1075,18 @@ export interface GitWorktreeArchive {
   branchExists: boolean;
   title: string;
   archivedAt: number;
-<<<<<<< HEAD
   /** The sessions archived with it; the Host derives them, so a client read may omit them. */
   sessionIds?: string[];
   /** Host-derived authority; Git metadata does not authorize session mutations. The Host always reports one. */
   sessionBinding: { status: 'bound' | 'verified-empty' | 'unbound' | 'ref-changed'; phase?: string; revision?: number; recoveryHead?: string };
-||||||| bc50ba56aa
-  /** The sessions archived with it. */
-  sessionIds: string[];
-=======
-  sessionIds: string[];
->>>>>>> upstream/main
 }
 
 export interface ArchiveGitWorktreePayload {
   directory: string;
   id: string;
-<<<<<<< HEAD
   /** The sessions to archive with it; the Host derives them when this omits them. */
   sessionIds?: string[];
   /** The name the sidebar showed for the work, kept when the worktree has no task title. */
-||||||| bc50ba56aa
-  sessionIds: string[];
-  /** The name the sidebar showed for the work, kept when the worktree has no task title. */
-=======
-  sessionIds: string[];
->>>>>>> upstream/main
   title?: string;
 }
 
@@ -1224,15 +1150,8 @@ interface GitWorktreeAPI {
   snapshot?(directory: string, payload: GitWorktreeSnapshotPayload): Promise<GitWorktreeSnapshotResult>;
   archive?(directory: string, payload: ArchiveGitWorktreePayload): Promise<GitWorktreeArchive>;
   listArchives?(directory: string): Promise<GitWorktreeArchive[]>;
-<<<<<<< HEAD
   /** `directory` is the new checkout of the archive's branch. */
   restoreArchive?(directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }): Promise<GitWorktreeArchiveRestoreResult>;
-||||||| bc50ba56aa
-  /** `directory` is the new checkout of the archive's branch. */
-  restoreArchive?(directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult>;
-=======
-  restoreArchive?(directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult>;
->>>>>>> upstream/main
   deleteArchive?(directory: string, payload: DeleteGitWorktreeArchivePayload): Promise<{ id: string; branchDeleted: boolean }>;
 }
 
@@ -1242,30 +1161,10 @@ export interface GitAPI {
   initializeGit(directory: string): Promise<void>;
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;
-<<<<<<< HEAD
+  prefetchProjectStatuses?(directories: string[]): Promise<void>;
   getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
+
   getGitFileDiff(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
-||||||| bc50ba56aa
-  /**
-   * Warm the status cache for many directories with one request, so the
-   * per-directory `getGitStatus` reads that follow are cache hits. Runtimes
-   * without a batched status read (VS Code) omit it and read one by one.
-   */
-  prefetchProjectStatuses?(directories: string[]): Promise<void>;
-  getGitDiff?(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
-  /**
-   * `getGitDiff` for many paths of one side in one request. Rejects when the
-   * request itself fails; per-path failures are entries. Absent in runtimes
-   * that read per path (VS Code).
-   */
-  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
-  getGitFileDiff?(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
-=======
-  prefetchProjectStatuses?(directories: string[]): Promise<void>;
-  getGitDiff?(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
-  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
-  getGitFileDiff?(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
->>>>>>> upstream/main
   getGitRangeDiff?(directory: string, options: GetGitRangeDiffOptions): Promise<GitDiffResponse>;
   getGitRangeFiles?(directory: string, options: GetGitRangeFilesOptions): Promise<GitRangeFileEntry[]>;
   getBranchBase?(directory: string, branch: string): Promise<GitBranchBaseResponse>;
@@ -1278,22 +1177,11 @@ export interface GitAPI {
   unstageGitHunk?(directory: string, filePath: string, patch: string): Promise<void>;
   revertGitHunk?(directory: string, filePath: string, patch: string): Promise<void>;
   isLinkedWorktree(directory: string): Promise<boolean>;
-<<<<<<< HEAD
   /**
    * `remote: 'local'` lists what local refs know, without asking each remote
    * over the network; for callers that need only the checked-out branch and
    * its upstream. Runtimes that never ask remotes ignore it.
    */
-||||||| bc50ba56aa
-  /**
-   * `remote: 'local'` lists what local refs know. `remote: 'live'` also asks
-   * each remote over the network, which can start an SSH sign-in, so only an
-   * explicit request from the person may pass it. Callers name the mode: a
-   * server older than this contract treats a missing one as live. Runtimes
-   * that never ask remotes ignore it.
-   */
-=======
->>>>>>> upstream/main
   getGitBranches(directory: string, options?: GitBranchListOptions): Promise<GitBranch>;
   getGitUnpushedBranchCounts(directory: string, branches: string[]): Promise<GitUnpushedBranchCounts>;
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
@@ -1324,12 +1212,7 @@ export interface GitAPI {
   executeNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   getNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   cancelNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
-<<<<<<< HEAD
   /** Connected-server managed SSH credential inventory. */
-||||||| bc50ba56aa
-  /** Connected-server inventory only; the VS Code webview does not implement it. */
-=======
->>>>>>> upstream/main
   managedSshCredentials?(intent: GitManagedSshIntent): Promise<GitManagedSshResult>;
   configureTransportBinding?(intent: GitTransportBindingIntent): Promise<GitTransportBindingResult>;
   removeTransportBinding?(intent: GitTransportBindingRemovalIntent): Promise<GitTransportBindingRemovalResult>;
@@ -1343,23 +1226,9 @@ export interface GitAPI {
   checkoutBranch(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
   createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>;
   renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>;
-<<<<<<< HEAD
   getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
+
   getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>;
-||||||| bc50ba56aa
-  getGitLog?(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
-  /**
-   * Amends the checked-out commit to carry a Change-Id trailer, computed the
-   * way a review host's commit-msg hook computes it. Refuses when HEAD is no
-   * longer `expectedHead` or already has one. Absent where the runtime cannot.
-   */
-  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
-  getCommitFiles?(directory: string, hash: string): Promise<GitCommitFilesResponse>;
-=======
-  getGitLog?(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
-  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
-  getCommitFiles?(directory: string, hash: string): Promise<GitCommitFilesResponse>;
->>>>>>> upstream/main
   getGitCommitDiff?(directory: string, options: GetGitCommitDiffOptions): Promise<GitDiffResponse>;
   getCommitFileDiff?(directory: string, hash: string, filePath: string, isBinary: boolean): Promise<CommitFileDiffResponse>;
   getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>;
@@ -1383,30 +1252,15 @@ export interface GitAPI {
   resetToCommit(directory: string, hash: string, mode: 'soft' | 'mixed' | 'hard', force?: boolean): Promise<ResetToCommitResponse>;
   stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
   stashPop(directory: string): Promise<{ success: boolean }>;
-<<<<<<< HEAD
   getConflictDetails(directory: string): Promise<MergeConflictDetails>;
   /** Phase 1: validate that a cwd is inside a worktreeRoot */
-||||||| bc50ba56aa
-  getConflictDetails?(directory: string): Promise<MergeConflictDetails>;
-  /** Phase 1: validate that a cwd is inside a worktreeRoot */
-=======
-  getConflictDetails?(directory: string): Promise<MergeConflictDetails>;
->>>>>>> upstream/main
   validateWorktreeDirectory?(directory: string, worktreeRoot: string): Promise<{
     valid: boolean;
     insideWorktreeRoot: boolean;
     resolvedWorktreeRoot: string | null;
     resolvedCwd: string | null;
   }>;
-<<<<<<< HEAD
-  /** Phase 1: canonicalize a directory to full worktree state */
-||||||| bc50ba56aa
-  /** Where `directory` sits inside its checkout (`ai`, or `''` at the root); rejects when unknown. */
-  resolveRepositoryPrefix?(directory: string): Promise<string>;
-  /** Phase 1: canonicalize a directory to full worktree state */
-=======
-  resolveRepositoryPrefix?(directory: string): Promise<string>;
->>>>>>> upstream/main
+
   canonicalizeWorktreeState?(directory: string): Promise<{
     worktreeRoot: string | null;
     cwd: string | null;
@@ -1633,110 +1487,6 @@ export interface VSCodeAPI {
   addWorkspaceFolder?(path: string): Promise<Array<{ name: string; path: string }>>;
 }
 
-<<<<<<< HEAD
-export interface PushSubscribePayload {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-  origin?: string;
-  /** Runtime surface ('ios' | 'android' | 'vscode' | 'desktop' | 'web') for presence-aware routing. */
-  platform?: string;
-}
-
-export interface PushUnsubscribePayload {
-  endpoint: string;
-}
-
-export interface ApnsTokenPayload {
-  token: string;
-  /** 'ios' (APNs) or 'android' (FCM) — lets the relay route the token to the right service. */
-  platform?: string;
-  /**
-   * APNs environment the token belongs to: 'sandbox' for Xcode/dev-signed installs,
-   * 'production' for TestFlight/App Store. Omitted when unknown (server defaults to production).
-   */
-  environment?: 'sandbox' | 'production';
-  /**
-   * The device's key for end-to-end sealed push text (base64, 32 bytes). The
-   * server seals each notification's title and body with it, so the push
-   * relay, Apple and Google never see them. Omitted by shells that predate it.
-   */
-  pushKey?: string;
-}
-
-export interface PushAPI {
-  getVapidPublicKey(): Promise<{ publicKey: string } | null>;
-  subscribe(payload: PushSubscribePayload): Promise<{ ok: true } | null>;
-  unsubscribe(payload: PushUnsubscribePayload): Promise<{ ok: true } | null>;
-  setVisibility(payload: { visible: boolean; platform?: string }): Promise<{ ok: true } | null>;
-  /**
-   * Whether this server can deliver remote push to phones at all, and the
-   * setting that would turn it on. A server with no push relay configured
-   * sends nothing; the settings page says so from this answer, never by guessing.
-   */
-  nativeStatus(): Promise<NativePushStatus | null>;
-  /** Register a native iOS APNs device token (Capacitor mobile app only). */
-  registerApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
-  unregisterApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
-}
-
-/**
- * Whether this server can deliver remote push to phones at all. Each
- * unavailable reason names the setting that would turn it on; the page builds
- * its sentence from the reason, never from a guess.
- */
-export type NativePushStatus =
-  | { available: true }
-  | { available: false; reason: 'relay-url-missing'; relaySetting: string }
-  | { available: false; reason: 'direct-config-missing'; relaySetting: string; disabledSetting: string };
-
-||||||| bc50ba56aa
-export interface PushSubscribePayload {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-  origin?: string;
-  /** Runtime surface ('ios' | 'android' | 'vscode' | 'desktop' | 'web') for presence-aware routing. */
-  platform?: string;
-}
-
-export interface PushUnsubscribePayload {
-  endpoint: string;
-}
-
-export interface ApnsTokenPayload {
-  token: string;
-  /** 'ios' (APNs) or 'android' (FCM) — lets the relay route the token to the right service. */
-  platform?: string;
-  /**
-   * APNs environment the token belongs to: 'sandbox' for Xcode/dev-signed installs,
-   * 'production' for TestFlight/App Store. Omitted when unknown (server defaults to production).
-   */
-  environment?: 'sandbox' | 'production';
-  /**
-   * The device's key for end-to-end sealed push text (base64, 32 bytes). The
-   * server seals each notification's title and body with it, so the push
-   * relay, Apple and Google never see them. Omitted by shells that predate it.
-   */
-  pushKey?: string;
-}
-
-export interface PushAPI {
-  getVapidPublicKey(): Promise<{ publicKey: string } | null>;
-  subscribe(payload: PushSubscribePayload): Promise<{ ok: true } | null>;
-  unsubscribe(payload: PushUnsubscribePayload): Promise<{ ok: true } | null>;
-  setVisibility(payload: { visible: boolean; platform?: string }): Promise<{ ok: true } | null>;
-  /** Register a native iOS APNs device token (Capacitor mobile app only). */
-  registerApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
-  unregisterApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
-}
-
-=======
->>>>>>> upstream/main
 type GitHubRepoRef = {
   owner: string;
   repo: string;
@@ -1952,25 +1702,6 @@ export type ChangeRequestListStatusesResult =
 export type RepositoryReferencePage =
   | { connected: false }
   | {
-<<<<<<< HEAD
-    connected: true;
-    /** Null when the project has no GitHub remote. */
-    repo: GitHubRepoRef | null;
-    items: RepositoryReference[];
-    cursor: string | null;
-    hasMore: boolean;
-    total: number;
-  };
-||||||| bc50ba56aa
-      connected: true;
-      /** Null when the project has no GitHub remote. */
-      repo: GitHubRepoRef | null;
-      items: RepositoryReference[];
-      cursor: string | null;
-      hasMore: boolean;
-      total: number;
-    };
-=======
       connected: true;
       repo: GitHubRepoRef | null;
       items: RepositoryReference[];
@@ -1978,7 +1709,6 @@ export type RepositoryReferencePage =
       hasMore: boolean;
       total: number;
     };
->>>>>>> upstream/main
 
 export type RepositoryReferencesAcrossSkip = 'no-repo' | 'disconnected' | 'invalid-context' | 'error';
 
@@ -2219,191 +1949,11 @@ export interface RuntimeAPIs {
   worktrees?: WorktreeMetadata[];
 }
 
-<<<<<<< HEAD
+export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
+
 export interface GitCommitExtraFailure {
   extra: 'changeId' | 'notes';
   code: string;
-||||||| bc50ba56aa
-export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
-
-// ============== Skills Catalog Types ==============
-
-type SkillsCatalogSourceId = string;
-
-type SkillsCatalogSourceType = 'github';
-
-export interface SkillsCatalogSource {
-  id: SkillsCatalogSourceId;
-  label: string;
-  description?: string;
-  source: string;
-  defaultSubpath?: string;
-  sourceType?: SkillsCatalogSourceType;
-  /** GitHub repository star count (null when unavailable) */
-  stars?: number | null;
-  /** GitHub repository last-push timestamp, ISO (null when unavailable) */
-  repoUpdatedAt?: string | null;
-}
-
-interface SkillsCatalogItemInstalledBadge {
-  isInstalled: boolean;
-  scope?: 'user' | 'project';
-  source?: 'opencode' | 'agents' | 'claude';
-}
-
-export interface SkillsCatalogItem {
-  sourceId: SkillsCatalogSourceId;
-  repoSource: string;
-  repoSubpath?: string;
-  gitIdentityId?: string;
-  skillDir: string;
-  skillName: string;
-  frontmatterName?: string;
-  description?: string;
-  installable: boolean;
-  warnings?: string[];
-  installed?: SkillsCatalogItemInstalledBadge;
-}
-
-export interface SkillsCatalogResponse {
-  ok: boolean;
-  sources?: SkillsCatalogSource[];
-  itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>;
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsCatalogSourceResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsRepoScanRequest {
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
-}
-
-type SkillsRepoScanError =
-  | { kind: 'authRequired'; message: string; sshOnly: true; identities?: Array<{ id: string; name: string }> }
-  | { kind: 'invalidSource'; message: string }
-  | { kind: 'gitUnavailable'; message: string }
-  | { kind: 'networkError'; message: string }
-  | { kind: 'unknown'; message: string };
-
-export interface SkillsRepoScanResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: SkillsRepoScanError;
-}
-
-interface SkillsInstallSelection {
-  skillDir: string;
-}
-
-export interface SkillsInstallRequest {
-  source: string;
-  subpath?: string;
-  sourceId?: string;
-  gitIdentityId?: string;
-  scope: 'user' | 'project';
-  targetSource?: 'opencode' | 'agents';
-  selections: SkillsInstallSelection[];
-  conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
-  conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
-}
-
-export type SkillsInstallError = SkillsRepoScanError | {
-  kind: 'conflicts';
-=======
-export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
-
-type SkillsCatalogSourceId = string;
-
-type SkillsCatalogSourceType = 'github';
-
-export interface SkillsCatalogSource {
-  id: SkillsCatalogSourceId;
-  label: string;
-  description?: string;
-  source: string;
-  defaultSubpath?: string;
-  sourceType?: SkillsCatalogSourceType;
-  stars?: number | null;
-  repoUpdatedAt?: string | null;
-}
-
-interface SkillsCatalogItemInstalledBadge {
-  isInstalled: boolean;
-  scope?: 'user' | 'project';
-  source?: 'opencode' | 'agents' | 'claude';
-}
-
-export interface SkillsCatalogItem {
-  sourceId: SkillsCatalogSourceId;
-  repoSource: string;
-  repoSubpath?: string;
-  gitIdentityId?: string;
-  skillDir: string;
-  skillName: string;
-  frontmatterName?: string;
-  description?: string;
-  installable: boolean;
-  warnings?: string[];
-  installed?: SkillsCatalogItemInstalledBadge;
-}
-
-export interface SkillsCatalogResponse {
-  ok: boolean;
-  sources?: SkillsCatalogSource[];
-  itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>;
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsCatalogSourceResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsRepoScanRequest {
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
-}
-
-type SkillsRepoScanError =
-  | { kind: 'authRequired'; message: string; sshOnly: true; identities?: Array<{ id: string; name: string }> }
-  | { kind: 'invalidSource'; message: string }
-  | { kind: 'gitUnavailable'; message: string }
-  | { kind: 'networkError'; message: string }
-  | { kind: 'unknown'; message: string };
-
-export interface SkillsRepoScanResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: SkillsRepoScanError;
-}
-
-interface SkillsInstallSelection {
-  skillDir: string;
-}
-
-export interface SkillsInstallRequest {
-  source: string;
-  subpath?: string;
-  sourceId?: string;
-  gitIdentityId?: string;
-  scope: 'user' | 'project';
-  targetSource?: 'opencode' | 'agents';
-  selections: SkillsInstallSelection[];
-  conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
-  conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
-}
-
-export type SkillsInstallError = SkillsRepoScanError | {
-  kind: 'conflicts';
->>>>>>> upstream/main
   message: string;
 }
 

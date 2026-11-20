@@ -2,7 +2,7 @@
 
 ## Ownership
 
-`types.ts` owns the wire and in-process contract every runtime surface implements: `RuntimeAPIs` plus the Git, files, terminal, settings, notifications, source-control, tracking, push, client-auth and skills types. Web, desktop, the VS Code extension and the Capacitor shells supply these operations; the shared UI in `packages/ui` consumes them and never talks to a server directly. Behaviour behind a member belongs to the runtime that implements it: the server routes, the VS Code bridge, the Electron main process. Git identity profiles live in `git-identity.ts`, filesystem error classification in `files-errors.ts`, and the reasons a Git path has no diff in `git-path-diff.ts`. Source-control and tracker item shapes are re-exported from their own modules rather than redefined here.
+`types.ts` owns the shared Host `RuntimeAPIs` contract: Git, files, terminal, settings, notifications, source-control, tracking and client auth. Web/PWA, Electron, hosted mobile and Capacitor supply these operations through their runtime adapters. Shared agent functionality instead uses the Canonical Client in `../../api/canonicalClient.ts` through `/api/agent/v1`; OpenCode session, configuration and skills-install APIs are not runtime capabilities. Behaviour behind a Host member belongs to the runtime that implements it. Push contracts live in `push.ts` and are re-exported from `types.ts`, Git identity profiles live in `git-identity.ts`, filesystem error classification in `files-errors.ts`, and the reasons a Git path has no diff in `git-path-diff.ts`. Source-control and tracker item shapes are re-exported from their own modules rather than redefined here.
 
 ## Invariants
 
@@ -78,9 +78,9 @@ A restore that clashes with the branch leaves Git's conflict state in place and 
 
 Such an identity is a signature that pushes with the machine's own Git, and System Git needs no credential. Completion therefore requires a user name and email and, per transport, an account for `account`, a managed key for `ssh`, and nothing for `system` or `anonymous`.
 
-### Why the VS Code bridge rejects with a plain object
+### Why filesystem errors accept serialized messages
 
-Browser code sees an `Error`, while the VS Code bridge rejects with an object that only carries a message. `isFileMissingError` reads both, plus a `FilesystemError` whose reason is `not-found`, and falls back to the message text.
+`isFileMissingError` reads an `Error`, a serialized object carrying a message, or a `FilesystemError` whose reason is `not-found`, and falls back to the message text.
 
 ### Why a path from an earlier status listing can have no diff
 
