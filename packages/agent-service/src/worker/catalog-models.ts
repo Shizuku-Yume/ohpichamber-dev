@@ -349,7 +349,7 @@ export class NativeModels {
  markPoliciesApplied(): void {
   this.appliedPolicyKey = this.policyState();
  }
- private modelsFileStamp(): string {
+ modelsFileStamp(): string {
   const filePath = this.modelsFile.path();
   try {
    const info = statSync(filePath, { bigint: true });
