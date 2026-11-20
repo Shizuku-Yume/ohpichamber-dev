@@ -36,6 +36,11 @@ diagnostic build with `--render-probe` and read it with `profile:analyze`
 
 ## Before Measuring Anything
 
+`startFixture` keeps request-observation controls disabled by default. Tests
+can opt in with `verifyControl: true`; `/__verify/active` then returns uncached
+activity for the `x-openchamber-fixture-session-id` header and a prompt fragment.
+This is a fixture-only observation protocol, not an agent runtime API.
+
 **Measure a production build.** A development build's render and bundle
 behaviour does not represent what users run.
 

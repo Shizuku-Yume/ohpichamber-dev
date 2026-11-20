@@ -13,6 +13,10 @@ These scripts own desktop asset staging, Electron bundling and native-module rep
   the launcher and Electron entry load. It resolves converted source modules
   behind `.js` specifiers; packaged builds continue to read emitted JavaScript.
 
+- Tests select `openchamber-source` for both Node and Bun children. Node also
+  preloads the source registration hook using an absolute path so subprocesses
+  can change directories without requiring emitted web server artifacts.
+
 - The web package contributes `build/server` and `build/bin` to the archive.
   Its original source trees stay out. Server source maps remain packaged while
   maps from other dependencies are stripped.

@@ -472,7 +472,7 @@ const startFixtureProvider = (port, { verifyControl = false } = {}) => new Promi
       const id = Symbol()
       const messages = Array.isArray(body.messages) ? body.messages : []
       activeRequests.set(id, {
-        session: String(request.headers["x-opencode-session-id"] ?? ""),
+        session: String(request.headers["x-openchamber-fixture-session-id"] ?? ""),
         prompt: fixtureMessageText(messages.findLast((message) => message?.role === "user")?.content),
       })
       response.once("close", () => activeRequests.delete(id))

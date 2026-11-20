@@ -103,8 +103,7 @@
     "type-check:mobile": "bun run --cwd packages/mobile type-check",
     "dev:web": "bun run --cwd packages/web build:watch",
     "dev:web:hmr": "node ./scripts/dev-web-hmr.mjs",
-    "build:server": "bun run --cwd packages/web build:server",
-    "verify": "node scripts/verify/run.mjs"
+    "build:server": "bun run --cwd packages/web build:server"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",

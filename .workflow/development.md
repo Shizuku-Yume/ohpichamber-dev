@@ -4,6 +4,22 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+2026-11-20 upstream-sync tooling: excluded the inherited OpenCode-only
+`scripts/verify` stand (absent on main) and the orphan `.github` policy test;
+no OpenCode runtime was restored. Kept the fixture-request regression under
+`scripts/perf` and forwarded its opt-in observation flag to the child process,
+fixing the missing `no-store` response. Regenerated SDK examples with the
+existing Bun bundler; six bundles changed, including embedded Zod 4.3.6 code
+rebuilt against the frozen lockfile's 4.6.7. Electron tests now select source
+exports for Node and Bun, with an absolute Node source-registration preload;
+packaged exports are unchanged. On Bun 1.4.4 / Node 24.22.2, the exact CI suite
+commands reported scripts 35/38 files (only the same three PIDFD suites failing
+on main), SDK 36/36 and Electron 80/80. No `packages/web/build` artifacts existed.
+Changed-tooling oxlint exited 0 without diagnostics. Logs:
+`/home/ubuntu/ci-logs/tooling-{scripts,sdk,electron}.log`. This is tooling
+verification only, not canonical behavior-harness or retained-platform
+acceptance; UI, Git managed-sync and audit reconciliation remain separate work.
+
 The macOS tester confirmed first-send for `/tmp` aliases, `/private/tmp`, Gemini
 and devin-swe-2; the reported blocking Web/macOS smoke bugs are closed. A known
 display-only composer model-label issue remains recorded in technical debt.
