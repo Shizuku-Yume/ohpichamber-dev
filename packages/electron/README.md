@@ -291,11 +291,11 @@ token. Older servers without identity metadata remain supported. HTTP 401 and
 403 mean authentication is required, not that the instance is offline. Only
 local trusted UI may invoke the probe; remote page IPC rejects it before the
 main process makes a request.
-`/api/version` must advertise `api.runtime-url.v1` and report an
-`openchamberVersion` of 2 or later, or the host is Incompatible and the app
-refuses to open it. A server before 2.0 runs OpenCode 1.x with the same API
-version and capabilities, so its own version is the only thing that tells it
-apart. A version that does not parse does not block.
+`/api/version` must advertise `api.runtime-url.v1`. Compatibility follows the
+Host API version and minimum client API version, not the application's release
+major: OhPiChamber 1.x has its own version sequence. A compatible handshake
+still requires an authenticated `/auth/session` response before the Host is
+reported as available.
 
 There is no way to update a remote host from the desktop app: the host's update
 routes and the desktop command that called them are gone with the rest of the

@@ -4,6 +4,38 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The desktop authentication smoke investigation reproduced two separate bundled
+UI failures in the unchanged AppImage: the renderer sees `/auth/session` 401
+with its issued desktop credential, and Local probe returns incompatible for
+Host version 1.0.0 despite compatible API version 1 and runtime-url capability.
+The passwordless status handler lost the fork parent's registered-client check
+when ported to TypeScript and tested the opaque client token as a JWT instead.
+The desktop probe independently retained an obsolete OpenCode-era app-major
+gate. The fixes validate opaque credentials with the existing client owner and
+judge Host compatibility by the existing explicit protocol/capability handshake;
+they do not weaken revoked-token rejection or add an API or agent fallback.
+Surface policy: Web/PWA, Electron, hosted mobile and Capacitor all share the
+corrected Host credential check; Electron alone uses the repaired native probe.
+Guest MessagePort auth is unchanged. Desktop bootstrap/probe regression tests
+pass 40/40; Host authentication tests pass 17/17 and the authenticated real
+Canonical boundary passes 25/25. The null-response assertion now checks the
+TypeError contract, not Node-specific wording that differs under Bun/JSC.
+The full Linux AppImage build passes, including the 712-module Host closure
+and the verified 123-package OMP 19 payload. A new isolated headless run renders
+the bundled UI, gets HTTP 200 for both the real no-bearer control and the
+desktop bearer (`scope: client`), reports Local probe `ok`, observes native
+readiness and confirms the Unlock surface is absent. Screenshot:
+`/home/ubuntu/sync-notes/bundled-auth-check-lJIwtB/bundled-ui.png`.
+The no-header request inside Chromium is not an anonymous control: Electron
+injects its credential there too, so the helper uses independent Node fetch
+for that control. macOS itself remains unverified.
+Compilation passes for 4,538 files across five projects, but the root command
+still fails drift, error-cause, CSS and upstream-gaps (1/5 steps pass). Focused
+lint still flags the pre-existing unused `handlePasskeyRename` in the touched
+Auth owner; its declaration is unchanged from the merge parent and belongs
+with the outstanding Host lint/route repairs. Initial-draft first send and
+the updater controls/error-state reports remain the next priority.
+
 The sync branch now real-merges fork main `8de18dc0bc`, including the OMP 19
 integration and desktop runtime/update fixes from PRs 56–60. The entire vendor
 tree matches that main commit. All 75 native manifest pins and 35 native lock
@@ -28,8 +60,8 @@ three fixture/collection failures; their affected owners pass focused checks.
 Mixed UI tests also require the existing isolated-process runner because the
 Markdown fixture replaces the UI store; the Tasks suite passes alone (3 tests).
 Changed-source lint passes. Full root guards remain red and are not certified
-by these checks; desktop bearer authentication, bundled-UI access and macOS
-launch remain the next priority and are not covered by native readiness alone.
+by these checks; native readiness alone does not certify bundled-UI access or
+macOS launch (the separate Linux authentication smoke above does cover access).
 
 The production Host build now includes every retained server/bin JavaScript and
 MJS module, not just files reached by TypeScript's emit graph. Hand-written

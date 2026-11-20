@@ -23,6 +23,10 @@ Pairing v2 is implemented by `packages/web/server/lib/client-auth/pairing.js`. I
 - Explicit bearer authentication decides session status on its own. Falling
   back to an ambient session cookie would hide a revoked native-client token
   while bearer-only API requests fail.
+- A passwordless Host accepts both its signed passwordless session bearer and
+  registered client bearers. Desktop-local tokens use the same remote-client
+  hash lookup and revocation checks as mobile and paired devices; they are not
+  JWTs and must not be rejected by the session JWT verifier alone.
 - An empty passkey label restores its registration-time generated name, so
   clearing a custom name does not erase the device's identifiable label.
 

@@ -710,6 +710,10 @@ export const createUiAuth = ({
         }
         const token = passwordlessSessionToken(req);
         if (token && !await isSessionValid(token)) {
+          const clientAuth = await authenticateClientRequest(req, { allowUrlToken: false });
+          if (clientAuth) {
+            return res.json({ authenticated: true, disabled: true, scope: 'client' });
+          }
           return res.status(401).json({ authenticated: false, locked: true, disabled: true });
         }
         await ensureSessionToken(req, res);

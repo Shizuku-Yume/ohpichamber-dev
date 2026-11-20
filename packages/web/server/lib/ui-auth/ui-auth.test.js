@@ -1,7 +1,9 @@
 import { afterAll, describe, expect, it } from 'bun:test';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-ui-auth-test-'));
 process.env.OPENCHAMBER_DATA_DIR = dataDir;
@@ -45,6 +47,30 @@ const createResponse = () => {
 };
 
 describe('ui auth client credential seam', () => {
+  it('validates registered desktop credentials on a passwordless Host without trusting a cookie after revocation', async () => {
+    const createUiAuth = await loadCreateUiAuth();
+    const clients = createRemoteClientAuthRuntime({ fsPromises: fs.promises, path, crypto, storePath: path.join(dataDir, 'desktop-clients.json') });
+    const auth = createUiAuth({ clientAuthController: clients });
+    try {
+      const anonymous = createResponse();
+      await auth.handleSessionStatus({ headers: {} }, anonymous);
+      expect(anonymous.body).toEqual({ authenticated: true, disabled: true });
+      const { token, client } = await clients.createClient({ label: 'Desktop', clientKind: 'desktop-local', dedupeKey: 'desktop-local' });
+      const req = { headers: { authorization: `Bearer ${token}`, cookie: String(anonymous.getHeader('Set-Cookie')).split(';', 1)[0] } };
+      const accepted = createResponse();
+      await auth.handleSessionStatus(req, accepted);
+      expect(accepted.statusCode).toBe(200);
+      expect(accepted.body).toEqual({ authenticated: true, disabled: true, scope: 'client' });
+      await clients.revokeClient(client.id);
+      const revoked = createResponse();
+      await auth.handleSessionStatus(req, revoked);
+      expect(revoked.statusCode).toBe(401);
+      expect(revoked.body).toEqual({ authenticated: false, locked: true, disabled: true });
+    } finally {
+      auth.dispose();
+    }
+  });
+
   it('bootstraps signed passwordless bearer sessions with the same policy and lifetime as cookies', async () => {
     const createUiAuth = await loadCreateUiAuth();
     const auth = createUiAuth({ sessionTtlMs: 60_000, trustedSessionTtlMs: 3_600_000 });
@@ -94,7 +120,7 @@ describe('ui auth client credential seam', () => {
     const auth = createUiAuth();
     try {
       const req = { headers: { host: 'localhost:3000', upgrade: 'websocket' } };
-      await expect(auth.ensureSessionToken(req, null)).rejects.toThrow("Cannot read properties of null (reading 'setHeader')");
+      await expect(auth.ensureSessionToken(req, null)).rejects.toBeInstanceOf(TypeError);
       const response = createResponse();
       const token = await auth.ensureSessionToken(req, response);
       req.headers.cookie = String(response.getHeader('Set-Cookie')).split(';', 1)[0];
