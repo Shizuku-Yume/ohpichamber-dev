@@ -38,12 +38,6 @@ const firstText = (parts: readonly Part[] | undefined): string | null => {
   return plain || null;
 };
 
-/**
- * Messages pinned into the context.
- *
- * The row carries two destinations, so the pin is its own button: pressing the
- * pin unpins, pressing the text takes you to the message.
- */
 export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory }) => {
   const { t } = useI18n();
   const session = useSession(sessionId ?? '', directory ?? undefined);
@@ -57,11 +51,6 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
   )), directory ?? undefined);
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
-  // Pins are most useful on a long session, which is exactly when the pinned
-  // message sits before the loaded part of the transcript. Such a pin reads
-  // its message from canonical history instead: no session is materialised
-  // for it, and a pin that is loaded costs nothing. A failed read leaves the
-  // placeholder and is not retried until the section mounts again.
   const [fetched, setFetched] = React.useState<{ key: string; texts: ReadonlyMap<string, string | null> }>(
     () => ({ key: '', texts: new Map() }),
   );
@@ -114,8 +103,6 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
     if (!sessionId || busyId) return;
     setBusyId(messageId);
     try {
-      // Only the id matters when unpinning — `withContextObligatoryMessage`
-      // filters by it and discards the rest of the payload.
       await setContextObligatoryMessage(
         sessionId,
         directory,
@@ -136,7 +123,6 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
     if (sessionId) requestMessageFocus(sessionId, messageId);
   }, [sessionId]);
 
-  // While the timeline loads older history to reach a pin, its row spins.
   const inFlightId = React.useSyncExternalStore(
     subscribeMessageFocusStatus,
     () => readMessageFocusInFlight(sessionId),
@@ -148,7 +134,7 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
   if (pinned.length === 0) return null;
 
   return (
-    <WorkStatusSection title={t('chat.workStatus.section.pinned')}>
+    <WorkStatusSection title={t('chat.workStatus.section.pinned')} icon="pushpin">
       {pinned.map((entry) => (
         <WorkStatusRow
           key={entry.id}
@@ -169,7 +155,7 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
           muted
           label={entry.text ?? t('chat.workStatus.pinned.unavailable')}
           value={inFlightId === entry.id
-            ? <Icon name="loader-4" className="size-3.5 animate-spin text-muted-foreground" aria-hidden />
+            ? <Icon name="loader-4" className="size-[13px] animate-spin text-muted-foreground" aria-hidden />
             : undefined}
           onClick={() => handleReveal(entry.id)}
           ariaLabel={t('chat.workStatus.pinned.reveal')}

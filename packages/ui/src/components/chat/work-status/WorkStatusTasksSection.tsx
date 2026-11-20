@@ -31,7 +31,6 @@ const TaskRow: React.FC<{ todo: SessionTodo }> = ({ todo }) => {
       )}
       muted={done}
       label={<span className={done ? 'line-through' : undefined}>{todo.content}</span>}
-      labelDir="auto"
       tooltip={todo.content}
     />
   );
