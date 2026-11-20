@@ -35,10 +35,6 @@ export const showContextUsage: PaletteCommand = () => {
   useUIStore.getState().openContextOverview(directory);
 };
 
-export const showDiagnosticTimeline: PaletteCommand = () => {
-  void showOpenCodeStatus();
-};
-
 export const openOverview: PaletteCommand = () => {
   if (!useUIStore.getState().overviewFeatureAvailable) return false;
   useUIStore.getState().setOverviewOpen(true);
