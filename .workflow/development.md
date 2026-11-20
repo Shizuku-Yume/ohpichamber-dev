@@ -4,6 +4,24 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+2026-11-21 upstream-sync test repair: mobile Changes now keeps rename paths in
+comparison rows, shows the destination basename in detail, forwards the previous
+path for working-tree reads and renders unchanged-rename summaries. Retired
+VS Code PR-opening and PDF-webview assertions were removed or replaced with
+retained behavior; the settings registry fixture now includes the supported
+terminal-tool toggle. The isolated CI tests job passes SDK (36 files), UI (1,407
+files), agent-contract (274 tests), Electron (80 files) and Web (615 files,
+9 skipped; 9,768 tests, 127 skipped). Scripts remain 35/38 because of the known
+PIDFD environment limitation. Agent Service remains red at the native RPC
+three-turn goal test (682 passed, one failed, 12 skipped); its cause is unresolved
+and its original assertion is unchanged. No message-queue UI failure reproduced.
+The Git smudge-filter boundary test failed intermittently on an execution marker,
+then passed alone, with all 205 network-operation tests and in the full Web run;
+no Git security assertion or implementation was changed. `bun run build` exits 0.
+Runs use fresh isolated HOME, data, desktop-data and TMPDIR directories. UI is
+DOM-tested but visually unverified. Secret tooling and Guest service wiring are
+outside this test-repair branch.
+
 2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
 branch `67aedc75e` (including UI state/infra, extension waits and shared/later pages). Earlier stages
 removed 113 stale gap exceptions and reconciled all 260 contradicted ledger
