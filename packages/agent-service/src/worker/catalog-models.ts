@@ -145,6 +145,14 @@ export function credentialReference(providerId: string, id: number): string {
  return `credential_${createHash('sha256').update(`${providerId}\0${id}`).digest('hex').slice(0, 24)}`;
 }
 
+function customProviderBaseUrl(endpoint: string, protocol: ProviderModelDiscoveryRequest['protocol']): string {
+ if (protocol !== 'chat-completions' && protocol !== 'responses') return endpoint;
+ const url = new URL(endpoint);
+ if (url.pathname !== '/') return endpoint;
+ url.pathname = '/v1';
+ return url.href;
+}
+
 function sameDiscoveryEndpoint(left: string | undefined | null, right: string | undefined | null): boolean {
  if (!left || !right) return false;
  try {
@@ -341,7 +349,7 @@ export class NativeModels {
  markPoliciesApplied(): void {
   this.appliedPolicyKey = this.policyState();
  }
- private modelsFileStamp(): string {
+ modelsFileStamp(): string {
   const filePath = this.modelsFile.path();
   try {
    const info = statSync(filePath, { bigint: true });
@@ -585,12 +593,15 @@ export class NativeModels {
    const nativeProvider = request.providerId ? state.config.providers?.[request.providerId] : undefined;
    const providerEndpoint = configured?.endpoint ?? nativeProvider?.baseUrl
     ?? (request.providerId ? this.context.modelRegistry.getProviderBaseUrl(request.providerId) : undefined);
+   // A saved root endpoint is authoritative until its configuration is updated.
+   const baseUrl = sameDiscoveryEndpoint(providerEndpoint, request.endpoint)
+    ? request.endpoint : customProviderBaseUrl(request.endpoint, request.protocol);
    const matchesConfigured = configured !== undefined
-    && sameDiscoveryEndpoint(configured.endpoint, request.endpoint)
+    && sameDiscoveryEndpoint(configured.endpoint, baseUrl)
     && configured.protocol === request.protocol;
    // Native models.yml providers have no OpenChamber metadata entry, yet OMP
    // resolves their credentials and headers against this same base URL.
-   const ownsEndpoint = request.providerId !== undefined && sameDiscoveryEndpoint(providerEndpoint, request.endpoint);
+   const ownsEndpoint = request.providerId !== undefined && sameDiscoveryEndpoint(providerEndpoint, baseUrl);
    const headers = new Headers(ownsEndpoint ? {
     ...await resolveConfigHeaders(nativeProvider?.headers),
     ...(configured && matchesConfigured ? state.metadata.providerHeaders[configured.providerId] : undefined),
@@ -607,7 +618,7 @@ export class NativeModels {
     apiKey = credential.apiKey;
    }
    if (!apiKey && !reference && ownsEndpoint && request.providerId) {
-    const resolved = await this.context.authStorage.keys.get(request.providerId, undefined, { baseUrl: request.endpoint });
+    const resolved = await this.context.authStorage.keys.get(request.providerId, undefined, { baseUrl });
     // OMP keeps keyless-mode placeholders out of discovery bearers; ambient
     // auth (a cloud profile, ADC) has no bearer to send either.
     if (resolved && isDiscoveryBearerApiKey(resolved) && resolved !== AUTHENTICATED_SENTINEL) apiKey = resolved;
@@ -633,7 +644,7 @@ export class NativeModels {
    if (request.protocol === 'messages' && !headers.has('anthropic-version')) headers.set('anthropic-version', '2023-06-01');
    // A custom base URL may carry a query (`?api-version=`); the discovery path
    // appends to the pathname, so the query has to be reattached afterwards.
-   const endpoint = new URL(request.endpoint);
+   const endpoint = new URL(baseUrl);
    const url = new URL(`${endpoint.origin}${endpoint.pathname.replace(/\/+$/, '')}/models`);
    url.search = endpoint.search;
    const models: ProviderModelDiscoveryResult['models'] = [];
@@ -1028,7 +1039,10 @@ export class NativeModels {
   const state = await this.load();
   await this.reloadCredentials();
   await this.syncModelPolicies();
-  const configuration = request.configuration;
+  const configuration = {
+   ...request.configuration,
+   endpoint: customProviderBaseUrl(request.configuration.endpoint, request.configuration.protocol),
+  };
   if (configuration.credentialRef !== null && !this.context.authStorage.credentials.list(configuration.providerId)
    .some(row => credentialReference(configuration.providerId, row.id) === configuration.credentialRef && row.disabledCause === null)) {
    throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider credential reference is not available');

@@ -279,35 +279,48 @@ for (const field of ['input', 'output', 'cacheRead', 'cacheWrite'] as const) {
   });
 }
 
-test('custom endpoint, literal private headers and canonical models save and reopen together', async () => {
+test.each([
+  ['chat-completions', '', '/v1'],
+  ['responses', '/', '/v1'],
+  ['chat-completions', '/custom/v2', '/custom/v2'],
+  ['messages', '', ''],
+] as const)('%s endpoint "%s" shares its base path with model discovery and execution', async (protocol, inputPath, basePath) => {
   const requests: { path: string; authorization: string | null; custom: string | null }[] = [];
+  const authHeader = protocol === 'messages' ? 'X-Api-Key' : 'Authorization';
+  const headers = { [authHeader]: 'private-value', 'X-Private': '!literal-not-a-command' };
   const server = Bun.serve({
     hostname: '127.0.0.1', port: 0, fetch(request) {
-      requests.push({ path: new URL(request.url).pathname, authorization: request.headers.get('authorization'), custom: request.headers.get('x-private') });
+      const path = new URL(request.url).pathname;
+      requests.push({ path, authorization: request.headers.get(authHeader), custom: request.headers.get('x-private') });
+      if (path !== `${basePath}/models`) return new Response(null, { status: 404 });
       return Response.json({ data: [{ id: configuredModel.modelId, name: 'Discovered' }] });
     }
   });
   const fixture = await openCatalogFixture();
-  const saved = { ...configuration, endpoint: `http://127.0.0.1:${server.port}/v1` };
+  const origin = `http://127.0.0.1:${server.port}`;
+  const input = { ...configuration, protocol, endpoint: `${origin}${inputPath}` };
+  const saved = { ...input, endpoint: `${origin}${basePath}` };
+  const discovery = { models: [{ modelId: configuredModel.modelId, name: 'Discovered' }] };
   try {
+    expect(await fixture.writer.models.discoverProviderModels({ endpoint: input.endpoint, protocol, headers })).toEqual(discovery);
     const result = await fixture.writer.models.configureProvider({
-      expectedRevision: '0', configuration: saved,
-      headers: { Authorization: 'Bearer private-value', 'X-Private': '!literal-not-a-command' }, models: [configuredModel]
+      expectedRevision: '0', configuration: input, headers, models: [configuredModel]
     }, '1');
     expect(JSON.stringify(result)).not.toContain('private-value');
     const reopened = await fixture.reader.models.readProviderConfiguration(saved.providerId, '1');
     expect(reopened.configuration).toEqual(saved);
-    expect(reopened.headerNames.sort()).toEqual(['Authorization', 'X-Private']);
+    expect(reopened.headerNames.sort()).toEqual(Object.keys(headers).sort());
     expect(reopened.models).toEqual([configuredModel]);
     expect(JSON.stringify(reopened)).not.toContain('private-value');
     expect(JSON.stringify(await fixture.reader.models.readProviders('workspace_1', '1'))).not.toContain('private-value');
     const selection = await fixture.reader.models.selection({ providerId: saved.providerId, modelId: configuredModel.modelId });
     expect(selection.nativeModel.baseUrl).toBe(saved.endpoint);
-    expect(await selection.nativeModel.resolveHeaders?.()).toMatchObject({ Authorization: 'Bearer private-value', 'X-Private': '!literal-not-a-command' });
+    expect(await selection.nativeModel.resolveHeaders?.()).toMatchObject(headers);
     expect((await stat(fixture.writer.modelsPath)).mode & 0o777).toBe(0o600);
-    expect(await fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: saved.endpoint, protocol: saved.protocol }))
-      .toEqual({ models: [{ modelId: configuredModel.modelId, name: 'Discovered' }] });
-    expect(requests).toEqual([{ path: '/v1/models', authorization: 'Bearer private-value', custom: '!literal-not-a-command' }]);
+    expect(await fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: input.endpoint, protocol }))
+      .toEqual(discovery);
+    const expectedRequest = { path: `${basePath}/models`, authorization: 'private-value', custom: '!literal-not-a-command' };
+    expect(requests).toEqual([expectedRequest, expectedRequest]);
     await fixture.writer.models.configureProvider({ expectedRevision: '1', configuration: { ...saved, name: 'Renamed' } }, '2');
     expect((await fixture.reader.models.readProviderConfiguration(saved.providerId, '2')).headerNames).toHaveLength(2);
     await fixture.writer.models.configureProvider({ expectedRevision: '2', configuration: saved, headers: {}, models: [] }, '3');
@@ -560,7 +573,7 @@ test('models.yml-only providers resolve apiKey env names and literal headers at 
   await mkdir(cwd, { recursive: true });
   await mkdir(agentDirectory, { recursive: true });
   const modelsPath = join(agentDirectory, 'models.yml');
-  const nativeEndpoint = `http://127.0.0.1:${server.port}/native/v1`;
+  const nativeEndpoint = `http://127.0.0.1:${server.port}`;
   const unauthEndpoint = `http://127.0.0.1:${server.port}/unauth/v1`;
   await writeFile(modelsPath, YAML.stringify({
     providers: {
@@ -594,7 +607,7 @@ test('models.yml-only providers resolve apiKey env names and literal headers at 
       protocol: 'responses',
     });
     expect(requests).toEqual([
-      { path: '/native/v1/models', authorization: 'Bearer env-resolved-secret', custom: 'native-header-value' },
+      { path: '/models', authorization: 'Bearer env-resolved-secret', custom: 'native-header-value' },
       { path: '/other/v1/models', authorization: null, custom: null },
     ]);
     await runtime.models.configureProvider({

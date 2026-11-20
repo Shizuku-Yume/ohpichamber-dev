@@ -874,7 +874,7 @@ export class WorkerSession {
     }
   }
 
-  private lastSelectedOptions?: string;
+  private lastSelectedOptions?: { key: string; modelsFileStamp: string };
 
   private async selectOptions(options: CapturedSendOptions): Promise<void> {
     // Root options select only the model and thinking effort; OMP owns root tools.
@@ -885,7 +885,10 @@ export class WorkerSession {
     const modelId = options.modelId ?? fallback?.modelId;
     if (!providerId || !modelId) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model is unavailable');
     const optionsKey = JSON.stringify({ providerId, modelId, variant: options.variant, reasoningEffort: options.reasoningEffort, agentId: options.agentId });
-    if (this.lastSelectedOptions === optionsKey) return;
+    const previous = this.lastSelectedOptions;
+    if (previous?.key === optionsKey && this.session.isStreaming) return;
+    const modelsFileStamp = this.catalogs.models.modelsFileStamp();
+    if (previous?.key === optionsKey && previous.modelsFileStamp === modelsFileStamp) return;
     const selected = await this.catalogs.resolveSelection({ providerId, modelId }, { variant: options.variant, reasoningEffort: options.reasoningEffort });
     await this.session.setModelTemporary(selected.nativeModel);
     if (selected.reasoningEffort !== null || options.variant !== null || options.reasoningEffort !== null) {
@@ -902,7 +905,7 @@ export class WorkerSession {
       await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames, this.defaultRegisteredNames);
     }
     this.admission.profile = profile;
-    this.lastSelectedOptions = optionsKey;
+    this.lastSelectedOptions = { key: optionsKey, modelsFileStamp };
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }

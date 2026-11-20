@@ -1932,6 +1932,36 @@ test('a denied provider.use is never cached, so the next turn asks the Host agai
  } finally { await harness.close(); }
 }, 30000);
 
+test('the next turn in an open session uses the updated provider endpoint', async () => {
+ const paths: string[] = [];
+ const harness = await fixture({ respond: (_payload, _root, request) => {
+  paths.push(new URL(request.url).pathname);
+  return completion();
+ } });
+ const send = async (id: string, text: string) => {
+  await harness.worker.operation({ type: 'prompt', runId: id, request: prompt(text) });
+  await waitForGoal(harness.worker, () => harness.events.some(({ event }) =>
+   event.type === 'run.completed' && event.runId === id), 5000);
+ };
+ try {
+  await send('before-edit', 'Before endpoint edit.');
+  const endpoint = harness.worker.session.model!.baseUrl;
+  const updatedEndpoint = new URL('/moved/v1', endpoint).href;
+  const modelsPath = join(harness.agentDirectory, 'models.yml');
+  const models = await readFile(modelsPath, 'utf8');
+  expect(models).toContain(endpoint);
+  await writeFile(modelsPath, models.replace(endpoint, updatedEndpoint));
+  await send('after-edit', 'After endpoint edit.');
+  expect(paths).toEqual(['/v1/chat/completions', '/moved/v1/chat/completions']);
+  expect(promptRequest(harness.requests, 'After endpoint edit.').messages.some(message =>
+   message.role === 'user' && JSON.stringify(message.content).includes('Before endpoint edit.'),
+  )).toBe(true);
+  expect(harness.hostRequests).toContainEqual(expect.objectContaining({
+   type: 'tool', toolName: 'provider.use', input: { providerId: 'native-fixture', modelId: 'native-model', endpoint: updatedEndpoint },
+  }));
+ } finally { await harness.close(); }
+}, 30000);
+
 test('actual SDK edit reaches Host policy and projects its exact replace arguments', async () => {
  const input = {
   path: 'fixture-diff.txt', old_string: "export const greeting = 'hello';",
