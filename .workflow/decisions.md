@@ -1887,3 +1887,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** the JSX/import-only rows have identical source after removing the unused React default import and blank-line differences; the remaining compatibility rows emit identical JavaScript under the same Bun transpiler after the separately recorded package rename. Neither comparison licenses deleting a route, setting, feature or assertion.
 - **Mine:** yes, limited to the mechanically compared source rows in the audit reconciliation.
 - **Revisit when:** the upstream source converges, or a row gains a behavioral difference requiring its own review.
+
+## 2026-11-20 - Keep UI state aligned with the fork's runtime and workspace contracts
+
+- **Decided:** preserve recording scope and interrupted-send recovery at the Canonical boundary, and keep native preferences and layout validation in their shared UI state owners.
+- **Because:** upstream lacks the authorized workspace for dictation correction and the switch revision that retires pending sends even on a same-key Host change. Unknown delivery is not a reason to drop or replay a send. Upstream also lacks the rail-versus-link intent, native preference fields and same-version layout validation.
+- **Also retained:** the locale direction and dictionary contract, translated attachment regression, and standards-mode DOM setup used by math renderer tests.
+- **Instead of:** treating partial reads as proof of non-delivery, restoring retired state, or dropping behavior or regression coverage to match the upstream blob.
+- **Revisit when:** upstream supports equivalent scopes and state invariants or the corresponding fork feature is retired.
