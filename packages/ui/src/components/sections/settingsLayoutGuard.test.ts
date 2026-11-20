@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -826,6 +826,8 @@ const EXCLUDED_SOURCES: Record<string, true> = {
   'shared/SettingsSection.tsx': true,
 };
 
+const sectionPath = (file: string): string => relative(SECTIONS_ROOT, file).split(sep).join('/');
+
 function walkSources(directory: string, files: string[] = []): string[] {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const full = join(directory, entry.name);
@@ -835,7 +837,7 @@ function walkSources(directory: string, files: string[] = []): string[] {
       continue;
     }
     if (!entry.name.endsWith('.tsx') || entry.name.endsWith('.test.tsx')) continue;
-    if (EXCLUDED_SOURCES[relative(SECTIONS_ROOT, full)] === true) continue;
+    if (EXCLUDED_SOURCES[sectionPath(full)] === true) continue;
     files.push(full);
   }
   return files;
@@ -849,7 +851,7 @@ interface FileScan {
 
 function scanSections(): FileScan[] {
   const sectionFiles = walkSources(SECTIONS_ROOT).map((fullPath) => {
-    const file = relative(SECTIONS_ROOT, fullPath);
+    const file = sectionPath(fullPath);
     return {
       file,
       fullPath,

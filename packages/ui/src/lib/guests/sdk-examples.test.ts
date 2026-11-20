@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import * as sdk from 'ohpichamber-sdk';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
@@ -402,7 +403,7 @@ describe('checked-in SDK examples', () => {
         return { listen: (_port: number, _address: string, ready: () => void) => ready() };
       },
     };
-    const source = execFileSync(process.execPath, ['build', new URL('agent-desk/service/main.ts', examples).pathname,
+    const source = execFileSync(process.execPath, ['build', fileURLToPath(new URL('agent-desk/service/main.ts', examples)),
       '--target=node', '--format=cjs', '--external=node:http', '--external=ohpichamber-sdk'], { encoding: 'utf8' });
     runInNewContext(source, {
       process: { env: { OPENCHAMBER_SERVICE_PORT: '12345', OPENCHAMBER_SERVICE_TOKEN: 'fixture-token' } },

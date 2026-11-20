@@ -11,6 +11,7 @@ const KEY_LITERAL = /['"`]([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_-]+)+)['"`]/g;
 const IMPORT = /(?:^|[;\n}])\s*(?:import|export)\s+(?!type\b)(?:[^'";]*?\sfrom\s*)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g;
 const EXTENSIONS = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
 const SHIMS = new Map<string, string>(Object.entries(SHARE_DOCUMENT_SHIMS));
+const sourcePath = (file: string): string => path.relative(SOURCE_ROOT, file).split(path.sep).join('/');
 
 export const SHARE_DOCUMENT_MESSAGES_PATH = fileURLToPath(new URL('./messages.generated.ts', import.meta.url));
 
@@ -23,7 +24,7 @@ const resolveSource = (specifier: string, importer: string): string | null => {
   const candidates = /\.tsx?$/.test(base) ? [base] : EXTENSIONS.map((extension) => base + extension);
   const found = candidates.find((candidate) => existsSync(candidate));
   if (!found) return null;
-  const shim = SHIMS.get(path.relative(SOURCE_ROOT, found).replace(/\.tsx?$/, ''));
+  const shim = SHIMS.get(sourcePath(found).replace(/\.tsx?$/, ''));
   return shim ? path.join(SOURCE_ROOT, shim) : found;
 };
 
@@ -52,7 +53,7 @@ export async function collectShareDocumentMessages(): Promise<[Locale, Dictionar
   const english = dictionaries.find(([locale]) => locale === 'en')?.[1] ?? {};
   const keys = new Set<string>();
   const drawn = bundledSourceFiles().filter((file) => (
-    file !== SHARE_DOCUMENT_MESSAGES_PATH && /^(components|share-document)\//.test(path.relative(SOURCE_ROOT, file))
+    file !== SHARE_DOCUMENT_MESSAGES_PATH && /^(components|share-document)\//.test(sourcePath(file))
   ));
   for (const file of drawn) {
     for (const match of readFileSync(file, 'utf8').matchAll(KEY_LITERAL)) {
