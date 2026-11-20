@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { CanonicalEvent, StreamInvalidated } from '@openchamber/agent-contract';
 import { ProjectionError, SessionJournal } from './journal.ts';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from './protocol.ts';
+import { ProjectionInputSchema, ProjectionSeedSchema } from './protocol.ts';
 
 const session = { sessionId: 's', projectId: 'p', workspaceId: 'w', displayPath: '.', rootSessionId: 's' };
 const seed: ProjectionSeed = { createdAt: 1, updatedAt: 1, mode: { kind: 'main' }, branch: { branchId: 'branch:opaque', branchVersion: '1', leafMessageId: null }, turns: [], messages: [] };
@@ -23,6 +24,23 @@ function begin(journal: SessionJournal): void {
 }
 
 describe('SessionJournal consumer boundary', () => {
+  test('unstamped projections retain Canonical payload refinements and reject envelopes', () => {
+    const parse = (event: unknown) => ProjectionInputSchema.safeParse({ timestamp: 1, event });
+    expect(parse({ type: 'session.updated', title: 'Renamed' }).success).toBe(true);
+    expect(parse({ type: 'session.updated', metadata: null, metadataRevision: '0' }).success).toBe(true);
+    expect(parse({ type: 'session.updated' }).success).toBe(false);
+    expect(parse({ type: 'session.updated', metadata: null }).success).toBe(false);
+    expect(parse({ type: 'session.updated', metadata: null, metadataRevision: '1' }).success).toBe(false);
+    expect(parse({ type: 'session.updated', archivedAt: null }).success).toBe(false);
+    expect(parse({ type: 'session.updated', title: 'Renamed', sessionId: 'forged' }).success).toBe(false);
+    expect(parse({ type: 'session.status', runtimeStatus: 'idle', activeRunId: null }).success).toBe(true);
+    expect(parse({ type: 'session.status', runtimeStatus: 'running', activeRunId: 'run' }).success).toBe(true);
+    expect(parse({ type: 'session.status', runtimeStatus: 'idle', activeRunId: 'run' }).success).toBe(false);
+    expect(parse({ type: 'session.status', runtimeStatus: 'running', activeRunId: null }).success).toBe(false);
+    expect(ProjectionSeedSchema.parse(seed)).toEqual(seed);
+    expect(ProjectionSeedSchema.safeParse({ ...seed, branch: undefined }).success).toBe(false);
+  });
+
   test('mode changes reach two subscribers and recovery snapshots without Host state', () => {
     const journal = new SessionJournal(session, seed);
     const first: (CanonicalEvent | StreamInvalidated)[] = [];

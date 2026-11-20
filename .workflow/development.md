@@ -9,19 +9,20 @@ scoped snapshots/updates and cascading deletion events instead of SDK records.
 Its 40 filesystem/lifecycle tests pass and changed-source lint passes. The
 controller is not yet wired into the Native bootstrap; automatic cleanup is not
 runtime-certified. Native session snapshot/inventory readers now forward optional
-cancellation signals; their new regression test cannot collect yet.
+cancellation signals; all three cleanup/native session-route suites pass (112
+tests), including signal forwarding and failed-inventory handling.
 
 The latest scoped server check has one diagnostic: dictation correction still
 needs an authorized workspace ID instead of a retired directory argument.
-Separately, rebuilding the Agent Service exposes a real module-import failure in
-`agent-service/src/projection/protocol.ts`: refined Canonical schemas are merged
-then omitted/picked. Installed Zod 4.6.7 preserves those refinements and throws
-`.omit() cannot be used on object schemas containing refinements`. The same
-construction succeeds with installed 4.3.6. A Node import from the Web package
-reproduces it after the build has finished, so this is not a concurrent-build
-artifact. Both native session-route suites stop at collection. The projection
-schema fix is outside the current Web/sync/store ownership; preserve all
-Canonical validation rather than stripping refinements or downgrading Zod.
+The Agent Service projection import failure under Zod 4.6.7 is repaired by
+sharing refined unstamped Canonical payload schemas and snapshot-state fields.
+No wire DTO or cross-field validation was removed. Five focused contract/journal/
+worker suites pass (65 tests), changed-source lint passes, and the rebuilt private
+protocol imports successfully in Node from the Web package. Dead-code checking
+still reports 105 unused UI files and the duplicate config directory export;
+full gates remain outstanding. Fork parent `881705d19b` has no chat-directory
+cleanup composition, so the incoming standalone controller stays unmounted per
+the maintainer's conditional wiring instruction.
 
 The upstream `1928155551` merge remains in progress, not accepted. The maintainer
 selected Host-only queue delivery: edit/send-now are disabled for every entry,

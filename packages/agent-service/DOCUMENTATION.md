@@ -1,5 +1,13 @@
 # MCP backend integration
 
+## Projection validation
+
+Unstamped session update/status projections reuse Canonical payload schemas,
+including revision and live-run refinements. Journal stamping adds the actual
+envelope and validates the complete event. Projection seeds reuse snapshot state
+fields, not snapshot-only cursor/window checks. Refined schemas are never merged
+then omitted/picked, which Zod 4.6.7 rejects.
+
 The Agent Service owns workspace MCP configuration and routes sessionless workspace MCP operations through stateless workers. Workspace configuration is persisted by the catalog coordinator; worker operations remain authorized against the workspace root session.
 
 A session worker applies its initial external MCP configuration off the admission path: `WorkerSession.open` starts the application in the background instead of waiting for the handshake, so a slow or unreachable external server cannot delay the first prompt. Connection failures are reported as `mcp.runtime.failure` diagnostics and never fail the worker; a successful application publishes the ready catalog and its tools through `catalog.updated`. `close()` disconnects the MCP owner before awaiting that background application, so a stalled handshake settles rather than holding the worker's shutdown window.
