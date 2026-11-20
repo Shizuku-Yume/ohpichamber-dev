@@ -1768,6 +1768,24 @@ describe('git worktree removal', () => {
       deleteLocalBranch: true,
     }, { bootstrapStore: worktreeBootstrapStore });
   });
+
+  it('passes Host worker lifecycle control to worktree removal', async () => {
+    gitLibraries.removeWorktree.mockReset();
+    gitLibraries.removeWorktree.mockResolvedValue(true);
+    const worktreeLeaseControl = { acquire: vi.fn(), release: vi.fn() };
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('DELETE', '/api/git/worktrees')(
+      { query: { directory: '/repo' }, body: { directory: '/repo/wt' } }, response,
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(gitLibraries.removeWorktree).toHaveBeenCalledWith('/repo', expect.objectContaining({ directory: '/repo/wt' }), {
+      bootstrapStore: worktreeBootstrapStore,
+      removalWorkers: worktreeLeaseControl,
+    });
+  });
 });
 
 

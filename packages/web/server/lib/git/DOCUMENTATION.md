@@ -865,6 +865,9 @@ The branch list used to ask every remote by default, so a branch a collaborator 
 - The shared Git panel exposes explicit staging actions. Unstaged rows use `stageFile`, staged rows use `unstageFile`, and commits operate on the current staged index.
 - `stageFiles` remains supported for callers that need to stage a selected unstaged subset as part of commit. In that mode the server temporarily unstages unrelated index entries, stages `stageFiles`, commits from the index, then restores temporarily unstaged entries.
 ### Worktree Create/Remove Response
+
+On Windows, the DELETE route acquires the same scoped Agent Service lease used by archiving before Git removes an existing registered checkout. The lease stops idle workers in that checkout and blocks new workers until removal finishes. An active run or command can refuse the lease and leave the checkout registered.
+
 - `head`: HEAD commit SHA.
 - `name`: Worktree name.
 - `branch`: Local branch name.
