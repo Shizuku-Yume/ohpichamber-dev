@@ -16,7 +16,8 @@ import {
 } from '@/lib/worktrees/worktreeBootstrap';
 import { invalidateResolvedProjectRootCache, resolveProjectRoot } from '@/lib/worktrees/worktreeStatus';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
-import { checkoutHoldsSubfolder } from '@/lib/worktrees/worktreePaths';
+import { checkoutHoldsDirectory, checkoutHoldsSubfolder } from '@/lib/worktrees/worktreePaths';
+import { GitWorktreeRequestError } from '@/lib/api/types';
 import type {
   CreateGitWorktreePayload,
   GitWorktreeBootstrapStatus,
@@ -28,6 +29,7 @@ import type {
 } from '@/lib/api/types';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { generatedBranchPrefix } from '@/lib/git/branchNameGenerator';
 
 type WorktreeListEntry = {
@@ -736,6 +738,22 @@ const forgetRemovedWorktree = (project: ProjectRef, worktree: WorktreeMetadata):
     ),
     worktreeMetadata: updatedMetadata,
   });
+  const projectPath = normalizePath(project.path);
+  const isInRemovedWorktree = (directory: string | null | undefined): boolean => {
+    const normalized = normalizePath(directory);
+    return Boolean(normalized && normalizedWorktreePath && checkoutHoldsDirectory(normalizedWorktreePath, normalized));
+  };
+  const session = useSessionUIStore.getState();
+  if (projectPath && session.newSessionDraft.open
+    && (isInRemovedWorktree(session.newSessionDraft.directoryOverride) || isInRemovedWorktree(session.newSessionDraft.bootstrapPendingDirectory))) {
+    session.setDraftBootstrapPendingDirectory(null);
+    session.setDraftPreserveDirectoryOverride(false);
+    session.setNewSessionDraftTarget({ projectId: project.id, directoryOverride: projectPath }, { force: true });
+  }
+  const directory = useDirectoryStore.getState();
+  if (projectPath && isInRemovedWorktree(directory.currentDirectory)) {
+    directory.setDirectory(projectPath, { showOverlay: false });
+  }
   clearWorktreeRemoval(worktree.path);
 };
 
@@ -814,7 +832,11 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
       throw new Error('Worktree removal failed');
     }
   } catch (error) {
-    clearWorktreeRemoval(worktree.path);
+    if (error instanceof GitWorktreeRequestError && error.code === 'WORKTREE_UNREGISTERED') {
+      forgetRemovedWorktree(project, worktree);
+    } else {
+      clearWorktreeRemoval(worktree.path);
+    }
     throw error;
   }
 

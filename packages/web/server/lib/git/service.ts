@@ -6686,7 +6686,14 @@ try {
       const overrideLock = matchedEntry.locked === true && createdByCommand !== null;
       const removedByGit = await removeGitWorktreeWhenFree(context.primaryWorktree, matchedEntry.worktree, targetCanonical, releaseInstance, overrideLock);
       if (!removedByGit) {
-        await removeManagedOrphan({ registered: true });
+        try {
+          await removeManagedOrphan({ registered: true });
+        } catch (error) {
+          await publishWorktreeTopologyChange(context.primaryWorktree);
+          throw Object.assign(new Error(error instanceof Error ? error.message : String(error), { cause: error }), {
+            code: 'WORKTREE_UNREGISTERED',
+          });
+        }
       }
       await removeCreateCommandLink(createdByCommand?.link, matchedEntry.worktree);
     } catch (error) {

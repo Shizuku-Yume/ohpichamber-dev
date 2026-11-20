@@ -17,7 +17,6 @@ import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/work
 import { readSessionsInWorktree, withSessionsNowInWorktree } from '@/lib/worktrees/worktreeUse';
 import { BoundGitNetworkOperationError, GitOperationResultError } from '@/lib/boundGitNetworkOperation';
 import { PendingGitOperationError } from '@/lib/source-control/git-operation-recovery';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions, useSyncRuntime } from '@/sync/sync-context';
@@ -124,11 +123,8 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
       skipTeardown,
     });
 
-    if (normalizePath(useDirectoryStore.getState().currentDirectory) === worktreePath && normalizePath(project.path)) {
-      useDirectoryStore.getState().setDirectory(normalizePath(project.path), { showOverlay: false });
-    }
     return true;
-  }, [deleteLocalBranch, deleteRemoteBranch, git, canDeleteBranch, project, remoteName, sourceControl, worktreePath]);
+  }, [deleteLocalBranch, deleteRemoteBranch, git, canDeleteBranch, project, remoteName, sourceControl]);
   const removeWorktreeInBackground = React.useCallback((target: WorktreeMetadata, sessionIds: string[], keepInProject: boolean) => {
     const name = getWorktreeDisplayName(target);
     const run = async (skipTeardown: boolean, attemptSessionIds: string[]): Promise<void> => {

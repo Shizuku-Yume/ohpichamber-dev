@@ -19,7 +19,6 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { canDeleteWorktreeBranch, canDeleteWorktreeWithoutConfirm, getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeDisplayName, removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
-import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
 import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast, isWorktreeTeardownFailure } from '@/lib/worktrees/worktreeRemovalFlow';
 import { describeWorktreeKeepError, moveWorktreeSessionsThenRemove } from '@/lib/worktrees/sessionWorktreeMove';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
@@ -72,8 +71,6 @@ export const SessionDialogs: React.FC = () => {
     const [dirtyWorktreePaths, setDirtyWorktreePaths] = React.useState<Set<string>>(new Set());
 
     const getWorktreeMetadata = useSessionUIStore((s) => s.getWorktreeMetadata);
-    const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
-    const setDraftBootstrapPendingDirectory = useSessionUIStore((s) => s.setDraftBootstrapPendingDirectory);
     const deleteSession = sessionActions.deleteSession;
     const archiveSession = sessionActions.archiveSession;
     const deleteSessions = useSessionUIStore((s) => s.deleteSessions);
@@ -362,8 +359,6 @@ export const SessionDialogs: React.FC = () => {
     ): Promise<boolean> => {
         const shouldRemoveRemote = deleteDialogShouldRemoveRemote && canRemoveRemoteBranches;
         const projectRef = getProjectRefForWorktree(worktree);
-        const normalizedWorktreePath = normalizeProjectDirectory(worktree.path);
-        const normalizedProjectPath = normalizeProjectDirectory(projectRef.path);
         try {
             await removeProjectWorktree(
                 projectRef,
@@ -380,29 +375,6 @@ export const SessionDialogs: React.FC = () => {
                 }
             );
 
-            const isInRemovedWorktree = (directory: string): boolean => Boolean(
-                normalizedWorktreePath
-                && directory
-                && checkoutHoldsDirectory(normalizedWorktreePath, directory)
-            );
-            const newSessionDraft = useSessionUIStore.getState().newSessionDraft;
-            const draftDirectory = normalizeProjectDirectory(newSessionDraft?.directoryOverride);
-            if (
-                newSessionDraft?.open
-                && isInRemovedWorktree(draftDirectory)
-                && normalizedProjectPath
-            ) {
-                setDraftBootstrapPendingDirectory(null);
-                setNewSessionDraftTarget({
-                    projectId: projectRef.id,
-                    directoryOverride: normalizedProjectPath,
-                }, { force: true });
-            }
-
-            if (isInRemovedWorktree(normalizeProjectDirectory(useDirectoryStore.getState().currentDirectory)) && normalizedProjectPath) {
-                useDirectoryStore.getState().setDirectory(normalizedProjectPath, { showOverlay: false });
-            }
-
             return true;
         } catch (error) {
             if (error instanceof Error && isWorktreeTeardownFailure(error)) throw error;
@@ -412,7 +384,7 @@ export const SessionDialogs: React.FC = () => {
             });
             return false;
         }
-    }, [canRemoveRemoteBranches, deleteDialogShouldRemoveRemote, getProjectRefForWorktree, git, setDraftBootstrapPendingDirectory, setNewSessionDraftTarget, sourceControl, t]);
+    }, [canRemoveRemoteBranches, deleteDialogShouldRemoveRemote, getProjectRefForWorktree, git, sourceControl, t]);
 
     const removeSelectedWorktreeInBackground = React.useCallback((
         worktree: WorktreeMetadata,

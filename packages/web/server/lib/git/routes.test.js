@@ -956,6 +956,21 @@ describe('git worktree teardown routes', () => {
       consoleError.mockRestore();
     }
   });
+
+  it('reports when Git unregistered the worktree but folder cleanup failed', async () => {
+    gitLibraries.removeWorktree.mockRejectedValue(Object.assign(new Error('Folder is still in use'), { code: 'WORKTREE_UNREGISTERED' }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = createMockResponse();
+      await getRoute('DELETE', '/api/git/worktrees')({ query: { directory: '/repo' }, body: { directory: '/repo/wt' } }, response);
+      expect(response.statusCode).toBe(500);
+      expect(response.body).toEqual({ error: 'Folder is still in use', code: 'WORKTREE_UNREGISTERED' });
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
 });
 
 describe('git worktree removal Host boundary', () => {
