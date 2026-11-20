@@ -1,5 +1,3 @@
-import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import type { RuntimeAPIs } from '@/lib/api/types';
 import { describe, expect, test } from 'bun:test';
 type FilePart = { id: string; sessionID?: string; messageID?: string; type?: string; mime?: string; filename?: string; url: string };
 import {
@@ -98,14 +96,9 @@ describe('what opening a sent attachment does', () => {
         });
     });
 
-    test('a pdf stays a label in VS Code, whose webview blocks the preview', () => {
-        const pdf = file({ mime: 'application/pdf', filename: 'spec.pdf', url: 'data:application/pdf;base64,JVBERg==' });
-        registerRuntimeAPIs({ runtime: { platform: 'vscode', isDesktop: false, isVSCode: true } } as RuntimeAPIs);
-        try {
-            expect(resolveAttachmentOpenTarget(pdf, [pdf])).toBeNull();
-        } finally {
-            registerRuntimeAPIs(null);
-        }
+    test('a remote pdf is not opened as an inline document', () => {
+        const pdf = file({ mime: 'application/pdf', filename: 'spec.pdf', url: 'https://example.com/spec.pdf' });
+        expect(resolveAttachmentOpenTarget(pdf, [pdf])).toBeNull();
     });
 
     test('nothing opens for what the app cannot show', () => {

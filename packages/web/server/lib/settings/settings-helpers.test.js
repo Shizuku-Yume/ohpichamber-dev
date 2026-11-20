@@ -860,7 +860,7 @@ describe('settings registry gate', () => {
     permissionAutoAccept: { sessions: { 'ses_root': 'safety', 'ses_legacy': true }, revision: 3 },
     sessionGoalChecker: 'classifier', sessionGoalMaxAutoTurns: 20,
     planModeAllowAgents: true,
-    agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
+    agentControlToolEnabled: true, agentTerminalToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
     // Registry keys the settings-registry regeneration added; the gate fails
     // without a fixture line for each, and these are their real shapes.
     openLinksInBrowserPanel: true, liveBrowserTabLimit: 4, openTrackerLinksOnBoard: true, layoutAnimations: true,
