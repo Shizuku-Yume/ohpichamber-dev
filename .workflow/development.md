@@ -4,6 +4,35 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Desktop update checks now reject missing GitHub releases, missing manifests and
+network failures instead of reporting that the installed version is current.
+The existing error formatter exposes the failed check; downloaded pending
+updates survive failures and authoritative no-update responses still clear them.
+This intentionally changes the first-release behavior recorded on 2026-11-19.
+Updater tests pass 16/16 and renderer error tests pass 4/4 (7 assertions).
+A rebuilt Linux x64 AppImage exercised the real bundled UI's Check for Updates
+action against the production feed and visibly rendered "Failed to check for
+updates / Couldn't check for updates: No published versions on GitHub", without
+the latest-version message. Evidence:
+`/home/ubuntu/sync-notes/bundled-auth-check-Cw2Wmt/bundled-ui.png` and
+`/home/ubuntu/sync-notes/updater-honest-appimage-smoke.log`.
+No installer/restart behavior changed or was certified by this check. The native
+Automatic Updates checkbox is present in both platform menus, as on main #59;
+it is intentionally hidden outside Applications on macOS and on unsupported
+Linux installations. Main #59 did not add a shared Settings/registry/search
+entry; the maintainer confirmed menu-only parity is sufficient.
+
+PR #61 CI remains non-authoritative pending fork runner availability: its four
+Blacksmith jobs are pending, as are all four jobs on already-merged PR #60
+(lint 135977137432, type-check 135977137371, build 135977137299,
+tests 135977136995). Main head reports zero checks. The workflow is identical
+to main; runner policy stays unchanged. The maintainer accepted this as a
+pre-existing fork CI condition and directed local gates to be authoritative.
+Fresh full lint passes in all workspaces with existing React-hook warnings.
+Remaining local guard findings include five translation-only errors, two CSS
+tokens, and stale drift/gap ledgers; the initial Gemini/macOS draft report is
+parked awaiting the tester's console and network evidence.
+
 The desktop authentication smoke investigation reproduced two separate bundled
 UI failures in the unchanged AppImage: the renderer sees `/auth/session` 401
 with its issued desktop credential, and Local probe returns incompatible for

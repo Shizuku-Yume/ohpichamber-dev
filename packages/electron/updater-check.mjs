@@ -1,11 +1,3 @@
-const MISSING_UPDATE_FEED_RE =
-  /404|ENOTFOUND|No published versions on GitHub|Cannot find (?:channel|latest)|latest-linux(?:-arm64)?\.yml|HttpError:\s*404|status code 404/i;
-
-const isMissingUpdateFeedError = (error) => {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  return MISSING_UPDATE_FEED_RE.test(message);
-};
-
 const NETWORK_ERROR_RE = /net::(ERR_[A-Z_]+)|\b(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH)\b/;
 
 /**
@@ -24,26 +16,13 @@ export const describeCheckFailure = (error) => {
 };
 
 /**
- * Asks the updater for the newest release on the GitHub feed. A 404 before
- * any release exists means no update; any other failure is reported.
+ * Asks the updater for the newest release on the GitHub feed.
  */
 export const checkForDesktopUpdate = async ({ autoUpdater, currentVersion, pendingUpdate }) => {
   let updateResult;
   try {
     updateResult = await autoUpdater.checkForUpdates();
   } catch (error) {
-    // Before the first Linux (or platform) release publishes its feed, electron-updater
-    // returns 404 for latest-*.yml. With no pending package, keep the first-release
-    // "no update" behavior. A failed feed must preserve an existing package.
-    if (isMissingUpdateFeedError(error) && !pendingUpdate) {
-      return {
-        available: false,
-        updateInfo: null,
-        updateResult: null,
-        nextVersion: currentVersion,
-        pendingUpdate: null,
-      };
-    }
     throw new Error(`Unable to check for updates (${describeCheckFailure(error)})`, { cause: error });
   }
 

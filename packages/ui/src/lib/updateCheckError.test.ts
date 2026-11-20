@@ -20,6 +20,7 @@ describe('getUpdateCheckErrorMessage', () => {
   test('any other cause is named as is', () => {
     expect(getUpdateCheckErrorMessage(ipc('HTTP 403'))).toBe(t('updateDialog.error.checkFailed', { detail: 'HTTP 403' }));
     expect(getUpdateCheckErrorMessage(ipc('Cannot parse feed'))).toBe(t('updateDialog.error.checkFailed', { detail: 'Cannot parse feed' }));
+    expect(getUpdateCheckErrorMessage(ipc('No published versions on GitHub'))).toBe(t('updateDialog.error.checkFailed', { detail: 'No published versions on GitHub' }));
   });
 
   test('other errors keep their text without the IPC prefix', () => {
