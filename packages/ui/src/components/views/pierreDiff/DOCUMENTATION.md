@@ -11,6 +11,10 @@ comment anchoring, live in [the views documentation](../DOCUMENTATION.md).
 
 ## Invariants
 
+- The instance hook alone owns render, rebuild and cleanup. Pending worker
+  initialization waits; failed workers render through Pierre on the main
+  thread. The thin viewer does not install a second lifecycle. This policy is
+  shared by Web/PWA, Electron, hosted mobile and Capacitor.
 - An expansion request is replayed once per request object after the full diff
   renders. Its additions-side line identifies the gap because loading the full
   file can merge hunks and change their indices.

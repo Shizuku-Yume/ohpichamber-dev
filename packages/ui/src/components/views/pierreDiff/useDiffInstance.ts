@@ -12,6 +12,7 @@ import {
   type Virtualizer,
 } from '@pierre/diffs';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
+import type { WorkerPoolStatus } from '@/contexts/DiffWorkerProvider';
 import { makeContentCacheKey } from './contentCacheKey';
 import { preserveScrollPosition, waitForDiffReady } from './diffDom';
 import { isSameSelection } from './diffSelection';
@@ -30,6 +31,7 @@ interface DiffInstanceInput {
   sharedVirtualizerRef: RefObject<SharedVirtualizer | null>;
   instanceVirtualizerRef: RefObject<Virtualizer | null>;
   workerPool: WorkerPoolManager | undefined;
+  workerPoolStatus: WorkerPoolStatus;
   fileDiff: FileDiffMetadata | undefined;
   fileName: string | undefined;
   language: string;
@@ -56,6 +58,7 @@ export const useDiffInstance = ({
   sharedVirtualizerRef,
   instanceVirtualizerRef,
   workerPool,
+  workerPoolStatus,
   fileDiff,
   fileName,
   language,
@@ -107,7 +110,7 @@ export const useDiffInstance = ({
     const container = diffContainerRef.current;
     const wrapper = diffRootRef.current;
     if (!container) return;
-    if (!workerPool) return;
+    if (workerPoolStatus === 'pending') return;
 
     const preserveDone = preserveScrollPosition(wrapper, container);
     let sharedVirtualizer = sharedVirtualizerRef.current;
@@ -222,7 +225,7 @@ export const useDiffInstance = ({
       cancelReady();
       preserveDone();
     };
-  }, [diffContainerRef, diffInstanceRef, diffLineHeight, diffRootRef, diffThemeKey, fileDiff, fileName, forceUpdate, holdTypingField, instanceVirtualizerRef, language, lastAppliedSelectionRef, lineAnnotationsRef, modified, options, original, paintSelection, selectionRef, sharedVirtualizerRef, workerPool]);
+  }, [diffContainerRef, diffInstanceRef, diffLineHeight, diffRootRef, diffThemeKey, fileDiff, fileName, forceUpdate, holdTypingField, instanceVirtualizerRef, language, lastAppliedSelectionRef, lineAnnotationsRef, modified, options, original, paintSelection, selectionRef, sharedVirtualizerRef, workerPool, workerPoolStatus]);
 
   useEffect(() => {
     const instance = diffInstanceRef.current;
