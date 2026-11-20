@@ -1,3 +1,11 @@
+const MISSING_UPDATE_FEED_RE =
+  /404|ENOTFOUND|No published versions on GitHub|Cannot find (?:channel|latest)|latest-linux(?:-arm64)?\.yml|HttpError:\s*404|status code 404/i;
+
+const isMissingUpdateFeedError = (error) => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return MISSING_UPDATE_FEED_RE.test(message);
+};
+
 const NETWORK_ERROR_RE = /net::(ERR_[A-Z_]+)|\b(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH)\b/;
 
 /**
@@ -23,6 +31,15 @@ export const checkForDesktopUpdate = async ({ autoUpdater, currentVersion, pendi
   try {
     updateResult = await autoUpdater.checkForUpdates();
   } catch (error) {
+    if (isMissingUpdateFeedError(error) && !pendingUpdate) {
+      return {
+        available: false,
+        updateInfo: null,
+        updateResult: null,
+        nextVersion: currentVersion,
+        pendingUpdate: null,
+      };
+    }
     throw new Error(`Unable to check for updates (${describeCheckFailure(error)})`, { cause: error });
   }
 
