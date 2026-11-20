@@ -546,7 +546,8 @@ const createCanonicalSessionService = (dependencies) => {
               return { error: { sessionId: session.sessionId, code: code.success ? code.data : 'SERVICE_UNAVAILABLE' } };
             }
           }));
-          const items = sessionResults.flatMap(result => result.item ? [result.item] : []);
+          const unadopted = new Set([...speculativeSessions.values()].map(entry => entry.sessionId));
+          const items = sessionResults.flatMap(result => result.item && !unadopted.has(result.item.sessionId) ? [result.item] : []);
           const sessionErrors = sessionResults.flatMap(result => result.error ? [result.error] : []);
           return { items, errors: Object.fromEntries([...raw.errors, ...sessionErrors].map(error => [error.sessionId, error.code])) };
         }, true);

@@ -28,7 +28,9 @@ checkout creation, bootstrap and removal.
 ## Domain boundaries
 
 - Prepared sessions remain speculative until create claims them or an authorized
-  operation addresses their session ID. Inventory alone does not adopt them.
+  operation addresses their session ID. Inventory alone does not adopt them
+  and omits them until they are adopted, so another client never lists an
+  unused draft that its owner may still discard.
   Adoption cancels their timer and takes the same pool entry that timeout,
   discard and shutdown must claim before deleting. A cleanup already waiting
   for preparation rechecks that entry; if deletion has already claimed it,
