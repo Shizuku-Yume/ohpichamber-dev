@@ -8,6 +8,11 @@ A hook here owns the lifetime of what it subscribes to. Mechanics that another m
 
 ## Invariants
 
+Extension quota cards reload their provider catalog on the Host's
+`guests-changed` invalidation and control-stream reconnect. The quota store
+coalesces repeated reads, rejects stale runtime completions and retains the
+last catalog on failed reads; unrelated control events do not trigger reads.
+
 ### Session activity and queued sends
 
 - A pending permission or a form that still holds the turn makes a session idle, so the send button stays a send and the user can supersede the prompt. A form whose tool call has ended holds nothing, and the turn keeps Stop and Queue.
