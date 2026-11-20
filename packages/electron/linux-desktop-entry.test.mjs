@@ -7,6 +7,7 @@ import test from 'node:test';
 import { buildAppImageDesktopEntry, reconcileAppImageDesktopEntry } from './linux-desktop-entry.mjs';
 
 const ICON = Buffer.from('png-bytes');
+const desktopPathValue = (value) => value.replaceAll('\\', '\\\\');
 
 const makeLab = async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ohpichamber-desktop-entry-'));
@@ -45,10 +46,12 @@ test('a first AppImage launch writes a visible launcher entry and its icon', asy
   assert.deepEqual(await fs.readFile(lab.iconPath), ICON);
   const entry = await fs.readFile(lab.desktopPath, 'utf8');
   assert.match(entry, /^StartupWMClass=ohpichamber$/m);
-  assert.match(entry, new RegExp(`^TryExec=${lab.env.APPIMAGE}$`, 'm'));
-  assert.match(entry, new RegExp(`^Icon=${lab.iconPath}$`, 'm'));
+  const lines = entry.split('\n');
+  assert.ok(lines.includes(`TryExec=${desktopPathValue(lab.env.APPIMAGE)}`));
+  assert.ok(lines.includes(`Icon=${desktopPathValue(lab.iconPath)}`));
   assert.match(entry, /^MimeType=x-scheme-handler\/ohpichamber;$/m);
-  assert.match(entry, new RegExp(`^Exec=${lab.env.APPIMAGE} %U$`, 'm'));
+  const expected = buildAppImageDesktopEntry({ appImagePath: lab.env.APPIMAGE, iconPath: lab.iconPath });
+  assert.equal(lines.find((line) => line.startsWith('Exec=')), expected.split('\n').find((line) => line.startsWith('Exec=')));
   assert.doesNotMatch(entry, /NoDisplay/);
 });
 
@@ -77,7 +80,8 @@ test('a moved AppImage rewrites Exec and TryExec', async (t) => {
   const result = await reconcileAppImageDesktopEntry({ env: moved, homeDir: lab.homeDir });
 
   assert.equal(result.changed, true);
-  assert.match(await fs.readFile(lab.desktopPath, 'utf8'), new RegExp(`^TryExec=${moved.APPIMAGE}$`, 'm'));
+  const lines = (await fs.readFile(lab.desktopPath, 'utf8')).split('\n');
+  assert.ok(lines.includes(`TryExec=${desktopPathValue(moved.APPIMAGE)}`));
 });
 
 test('an entry written by Gear Lever under the same name is left alone', async (t) => {
