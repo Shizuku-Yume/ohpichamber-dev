@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { normalizePath } from '@/lib/pathNormalization';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { checkoutHoldsDirectory } from './worktreePaths';
 
 type WorktreeRemovalState = {
   removingPaths: ReadonlySet<string>;
@@ -32,6 +33,12 @@ const selectRemoving = (state: WorktreeRemovalState, path: string | null | undef
 
 export const isWorktreeRemoving = (path: string): boolean =>
   selectRemoving(useWorktreeRemovalStore.getState(), path);
+
+export const isDirectoryInRemovingWorktree = (directory: string): boolean => {
+  const normalized = normalizePath(directory);
+  return normalized !== null && [...useWorktreeRemovalStore.getState().removingPaths]
+    .some((path) => checkoutHoldsDirectory(path, normalized));
+};
 
 export const useWorktreeRemoving = (path: string | null | undefined): boolean =>
   useWorktreeRemovalStore((state) => selectRemoving(state, path));

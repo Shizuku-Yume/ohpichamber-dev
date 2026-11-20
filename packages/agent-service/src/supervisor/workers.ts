@@ -115,6 +115,7 @@ export interface WorkerRegistryOptions {
   callbacks?: WorkerLifecycleCallbacks;
   /** Absent only in registry tests that model no session activity. */
   isSessionIdle?: (rootSessionId: string) => boolean;
+  sessionOpening?: (rootSessionId: string) => Promise<unknown> | undefined;
   /** Returns true when a session's per-session warming mode keeps it alive past the background idle timeout. */
   isSessionKeptWarm?: (rootSessionId: string) => boolean;
   /** Test seam for the asynchronous path canonicalization race. */
@@ -670,11 +671,18 @@ export class WorkerRegistry {
   }
 
   private async stopLeasedWorker(entry: WorkerEntry, leaseDirectory: string): Promise<string | null> {
+    const refuse = (code: 'RUN_ACTIVE' | 'COMMAND_IN_FLIGHT') => new WorkerOperationError(409, code, code === 'RUN_ACTIVE' ? 'The session still has an active run'
+      : 'The session still has a command in flight', { sessionId: entry.info.rootSessionId });
+    if (entry.kind === 'session') {
+      const opening = this.options.sessionOpening?.(entry.info.rootSessionId);
+      if (opening) {
+        await waitWithin(opening.then(() => {}, () => {}), this.options.startupTimeoutMs ?? 15_000)
+          .catch(() => { throw refuse('COMMAND_IN_FLIGHT'); });
+      }
+    }
     return this.withRoot(entry.info.rootSessionId, async () => {
       const current = this.workerEntries.get(entry.info.rootSessionId);
       if (current !== entry) return null;
-      const refuse = (code: 'RUN_ACTIVE' | 'COMMAND_IN_FLIGHT') => new WorkerOperationError(409, code, code === 'RUN_ACTIVE' ? 'The session still has an active run'
-        : 'The session still has a command in flight', { sessionId: entry.info.rootSessionId });
       const pendingWork = (candidate: WorkerEntry): boolean => hasActiveWork(candidate.pending.values())
         || [...this.actions.values()].some(action => action.entry === candidate);
       if (entry.kind === 'session') {

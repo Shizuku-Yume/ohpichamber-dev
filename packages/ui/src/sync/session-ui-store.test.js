@@ -3,6 +3,7 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { ensureChatsRootDirectory, CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { hostFilesystem } from '@/lib/host-filesystem';
+import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
@@ -1602,5 +1603,21 @@ describe('speculative session preparation in draft lifecycle', () => {
     await new Promise(r => setTimeout(r, 20));
     expect(discardCalls).toHaveLength(1);
     expect(discardCalls[0]).toMatchObject({ workspaceId: expect.any(String) });
+  });
+
+  test('an automatic draft in a removing worktree does not prepare a worker', async () => {
+    const prepare = stub(canonicalClient, 'prepareSession', async () => ({ ok: true, sessionId: 'ses-prep-1' }));
+    const checkout = 'C:/repo/feature';
+    const directory = checkout + '/src';
+    markWorktreeRemoving(checkout);
+    try {
+      useDirectoryStore.setState({ currentDirectory: directory });
+      useSessionUIStore.getState().openNewSessionDraft({ automatic: true, directoryOverride: directory });
+      await Bun.sleep(0);
+      expect(useSessionUIStore.getState().newSessionDraft).toMatchObject({ open: true, directoryOverride: directory });
+      expect(prepare).not.toHaveBeenCalled();
+    } finally {
+      clearWorktreeRemoval(checkout);
+    }
   });
 });

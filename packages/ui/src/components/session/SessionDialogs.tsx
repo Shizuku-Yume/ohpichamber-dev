@@ -19,7 +19,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { canDeleteWorktreeBranch, canDeleteWorktreeWithoutConfirm, getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeDisplayName, removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
-import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast, isWorktreeTeardownFailure } from '@/lib/worktrees/worktreeRemovalFlow';
+import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast } from '@/lib/worktrees/worktreeRemovalFlow';
 import { describeWorktreeKeepError, moveWorktreeSessionsThenRemove } from '@/lib/worktrees/sessionWorktreeMove';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { readSessionsInWorktree, subscribeSessionsInWorktree, withSessionsNowInWorktree } from '@/lib/worktrees/worktreeUse';
@@ -354,37 +354,22 @@ export const SessionDialogs: React.FC = () => {
     const removeSelectedWorktree = React.useCallback(async (
         worktree: WorktreeMetadata,
         deleteLocalBranch: boolean,
-        toastId: string | number | undefined,
         skipTeardown: boolean,
     ): Promise<boolean> => {
         const shouldRemoveRemote = deleteDialogShouldRemoveRemote && canRemoveRemoteBranches;
         const projectRef = getProjectRefForWorktree(worktree);
-        try {
-            await removeProjectWorktree(
-                projectRef,
-                worktree,
-                {
-                    deleteRemoteBranch: shouldRemoveRemote,
-                    deleteLocalBranch,
-                    remoteName: worktree.status?.upstream?.split('/')[0]?.trim(),
-                    network: {
-                        git,
-                        sourceControl,
-                    },
-                    skipTeardown,
-                }
-            );
-
-            return true;
-        } catch (error) {
-            if (error instanceof Error && isWorktreeTeardownFailure(error)) throw error;
-            toast.error(t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle'), {
-                id: toastId,
-                description: renderToastDescription(error instanceof Error ? error.message : t('sessions.sidebar.dialogs.deleteResult.tryAgain')),
-            });
-            return false;
-        }
-    }, [canRemoveRemoteBranches, deleteDialogShouldRemoveRemote, getProjectRefForWorktree, git, sourceControl, t]);
+        await removeProjectWorktree(projectRef, worktree, {
+            deleteRemoteBranch: shouldRemoveRemote,
+            deleteLocalBranch,
+            remoteName: worktree.status?.upstream?.split('/')[0]?.trim(),
+            network: {
+                git,
+                sourceControl,
+            },
+            skipTeardown,
+        });
+        return true;
+    }, [canRemoveRemoteBranches, deleteDialogShouldRemoveRemote, getProjectRefForWorktree, git, sourceControl]);
 
     const removeSelectedWorktreeInBackground = React.useCallback((
         worktree: WorktreeMetadata,
@@ -404,7 +389,7 @@ export const SessionDialogs: React.FC = () => {
                         worktreePath: worktree.path,
                         projectDirectory: getProjectRefForWorktree(worktree).path,
                         readSessions,
-                        removeWorktree: () => removeSelectedWorktree(worktree, deleteLocalBranch, toastId, skipTeardown),
+                        removeWorktree: () => removeSelectedWorktree(worktree, deleteLocalBranch, skipTeardown),
                     });
                     if (!kept.removed) return;
                     leaveFinishedSessions(keptIds, { projectId: getProjectRefForWorktree(worktree).id });
@@ -418,7 +403,7 @@ export const SessionDialogs: React.FC = () => {
                 }
                 const result = await archiveSessionsThenRemoveWorktree({
                     sessionIds: attemptSessionIds,
-                    removeWorktree: () => removeSelectedWorktree(worktree, deleteLocalBranch, toastId, skipTeardown),
+                    removeWorktree: () => removeSelectedWorktree(worktree, deleteLocalBranch, skipTeardown),
                     restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
                     archiveSessions: async (ids) => {
                         if (ids.length === 1) {

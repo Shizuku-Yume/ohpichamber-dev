@@ -33,6 +33,7 @@ This module owns worktree topology, creation and bootstrap, archive recovery, re
 ### Removal and session moves
 
 - Removal state is client-local and clears on endpoint changes because different instances can use the same paths. A pending removal stays marked until Git answers, preventing cleanup and repeated actions from racing it.
+- Drafts in a checkout being removed skip speculative session preparation, including drafts opened after a session is archived. A refused deletion restores sessions archived by that attempt before the dialog reports the error.
 - Session membership includes subdirectories and live-store sessions absent from the global list. The global record wins when both contain the session. Retried removal actions include sessions created since the original attempt.
 - Activity checks read the host directly because unused directories can lose their cached statuses. Local activity is read after the host responds so activity started during the request counts. Session activity covers every child store because directory deduplication can omit the store carrying its live status; an unknown read prevents automatic cleanup and moves.
 - Tree moves group sessions by source folder and use parent links to move descendants before their root. Remaining source sessions are checked for idleness immediately before each move because setup and earlier moves can take long enough for them to start running.

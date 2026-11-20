@@ -97,6 +97,26 @@ describe('archiveSessionsThenRemoveWorktree', () => {
     expect(archived).toBe(false);
     expect(result.removed).toBe(true);
   });
+
+  test('reports RUN_ACTIVE only after undoing the archives made during deletion', async () => {
+    const archived = new Set(['already-archived']);
+    const refusal = new GitWorktreeRequestError('RUN_ACTIVE', 'The session still has an active run', 409);
+    const error = await archiveSessionsThenRemoveWorktree({
+      sessionIds: ['session-one'],
+      archiveSessions: async (ids) => {
+        ids.forEach((id) => archived.add(id));
+        return { archivedIds: ids, failedIds: [] };
+      },
+      removeWorktree: async () => { throw refusal; },
+      restoreSessions: async (ids) => {
+        ids.forEach((id) => archived.delete(id));
+        return { failedIds: [] };
+      },
+    }).catch((cause) => cause);
+
+    expect(error).toBe(refusal);
+    expect([...archived]).toEqual(['already-archived']);
+  });
 });
 
 const WORKTREE = '/repo-worktrees/feature';

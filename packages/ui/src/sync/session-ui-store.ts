@@ -32,6 +32,7 @@ import { CHAT_DRAFT_PROJECT_ID, createChatDirectory, deleteChatDirectory, getCha
 import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { noteDraftSendWaiting, waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
+import { isDirectoryInRemovingWorktree } from "@/lib/worktrees/worktreeRemovalState"
 import { getWorktreeSetupWaitEnabled } from "@/lib/openchamberConfig"
 import { createSessionDraftId } from "@/stores/useSessionDraftsStore"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
@@ -1488,9 +1489,11 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     }
 
     void recoverStaleDraftDirectory(nextDraft)
-    if (directory) {
+    if (directory && !isDirectoryInRemovingWorktree(directory)) {
       const prep = resolveDraftWorkspace(nextDraft.draftId, directory)
-        .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
+        .then((ws) => isDirectoryInRemovingWorktree(directory)
+          ? undefined
+          : canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
         .catch(() => undefined)
       pendingPreparationByDraft.set(nextDraft.draftId, prep)
     }
