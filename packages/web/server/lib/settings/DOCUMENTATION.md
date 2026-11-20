@@ -82,6 +82,7 @@ Validation probes every project's filesystem path. Theme and window-state saves 
   - `readSettingsFromDiskMigrated()`
   - `writeSettingsToDisk(settings)`
   - `persistSettings(changes)`
+  - `PUT /api/config/settings` preserves each project's Host-owned `iconImage` from the current settings inside the write queue, matching by normalized path. Project icon routes alone update that field; client project-list saves still control membership and other project fields.
   - `registerSessionProject(resolveProject)`: resolves one project against the
     latest registry inside the settings write queue and appends only if absent.
     It preserves unrelated keys and navigation pointers, writes only the instance
