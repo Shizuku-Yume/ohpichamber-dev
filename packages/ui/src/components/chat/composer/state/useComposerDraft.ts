@@ -1,5 +1,7 @@
 import { useComposerTextEffect, type ComposerText } from './composerText';
 import { isBtwPendingComposerKey } from "@/lib/btw";
+import { attachmentBasename, withMissingCitations } from '@/lib/attachmentIdentity';
+import { useLinkedReferenceDrafts } from '../linkedReferenceDrafts';
 import { isMentionEntryInText } from '../language/mentions';
 /**
  * Per-session draft persistence for the composer.
@@ -20,6 +22,7 @@ import { useInputStore } from '@/sync/input-store';
 import {
     clearChatDraft,
     getChatDraftIdentityKey,
+    isNewSessionDraftIdentity,
     readChatDraft,
     subscribeChatDraftDeletion,
     writeChatDraft,
@@ -41,6 +44,7 @@ export interface ComposerDraftOptions {
     selectAttachmentsOnIdentityChange?: boolean;
     /** User setting: when off, drafts stay in memory without durable writes. */
     persistEnabled: boolean;
+    newSessionDraftId?: number | null;
     /** The draft restored on mount, if any. */
     initialDraft: { text: string; identity: ChatDraftIdentity | null };
     /** Called when the composer switches to a different draft identity. */
@@ -63,6 +67,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         identity,
         selectAttachmentsOnIdentityChange = true,
         persistEnabled,
+        newSessionDraftId = null,
         initialDraft,
         onIdentityChange,
         onDraftRestored,
@@ -144,7 +149,10 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     }, [persistEnabled]);
 
     const previousIdentityRef = React.useRef<ChatDraftIdentity | null>(initialDraft.identity);
+    const previousNewSessionDraftIdRef = React.useRef(newSessionDraftId);
     React.useEffect(() => {
+        const sameNewSessionDraft = newSessionDraftId !== null && previousNewSessionDraftIdRef.current === newSessionDraftId;
+        previousNewSessionDraftIdRef.current = newSessionDraftId;
         const previous = previousIdentityRef.current;
         const previousKey = previous ? getChatDraftIdentityKey(previous) : null;
         const currentKey = identity ? getChatDraftIdentityKey(identity) : null;
@@ -155,21 +163,42 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         clearPending();
         skipNextPersistRef.current = true;
 
-        if (!skipOutgoingDraftRef.current && previousKey) {
-            const outgoing = { text: text.get(), confirmedMentions: new Set(confirmedMentionsRef.current) };
+        const outgoing = { text: text.get(), confirmedMentions: new Set(confirmedMentionsRef.current) };
+        const sameDraftMoved = !skipOutgoingDraftRef.current && previous !== null && identity !== null
+            && previous.runtimeKey === identity.runtimeKey
+            && (isNewSessionDraftIdentity(previous)
+                ? sameNewSessionDraft && isNewSessionDraftIdentity(identity)
+                : previous.sessionId === identity.sessionId);
+        if (sameDraftMoved) {
+            const input = useInputStore.getState();
+            input.setAttachedFiles([...input.getAttachedFiles(identity), ...input.getAttachedFiles(previous)], identity);
+            input.clearAttachedFiles(previous);
+            useLinkedReferenceDrafts.getState().move(previous, identity);
+        }
+        const carriesText = sameDraftMoved && outgoing.text.length > 0;
+        if (carriesText && previousKey) {
+            draftMemoryRef.current.set(previousKey, { text: '', confirmedMentions: new Set() });
+            persistNow(previous, '');
+        } else if (!skipOutgoingDraftRef.current && previousKey) {
             draftMemoryRef.current.set(previousKey, outgoing);
             if (persistEnabled) persistNow(previous, outgoing.text);
         }
         skipOutgoingDraftRef.current = false;
 
-        const restored = (currentKey && draftMemoryRef.current.get(currentKey))
+        const saved = (currentKey && draftMemoryRef.current.get(currentKey))
             || (persistEnabled ? readChatDraft(identity) : { text: '', confirmedMentions: new Set<string>() });
+        const restored = carriesText ? {
+            text: saved.text && saved.text !== outgoing.text ? `${saved.text}\n\n${outgoing.text}` : outgoing.text,
+            confirmedMentions: saved.confirmedMentions,
+        } : saved;
         setMessage(restored.text);
         confirmedMentionsRef.current = new Set(restored.confirmedMentions);
-        if (restored.text) {
+        if (carriesText) {
+            persistNow(identity, restored.text);
+        } else if (restored.text) {
             requestAnimationFrame(() => callbacksRef.current.onDraftRestored?.('saved'));
         }
-    }, [clearPending, confirmedMentionsRef, identity, text, persistEnabled, persistNow, setMessage]);
+    }, [clearPending, confirmedMentionsRef, identity, newSessionDraftId, text, persistEnabled, persistNow, setMessage]);
 
     React.useEffect(() => {
         if (!pendingComposerRestore) return;
@@ -180,9 +209,10 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         clearPending();
         skipNextPersistRef.current = true;
         confirmedMentionsRef.current = new Set();
-        setMessage(pending.text);
+        const restoredText = withMissingCitations(pending.text, pending.files.map((file) => ({ filename: attachmentBasename(file.filename) })));
+        setMessage(restoredText);
         // Equal source/replay text need not trigger another render to persist.
-        if (persistEnabled) persistNow(pending.target, pending.text);
+        if (persistEnabled) persistNow(pending.target, restoredText);
         input.clearAttachedFiles();
         for (const file of pending.files) input.addRestoredAttachment(file);
         requestAnimationFrame(() => {

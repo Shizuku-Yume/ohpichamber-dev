@@ -244,7 +244,7 @@ describe('live Activity with the real message body', () => {
         expect(container.textContent).toContain('Still working');
     });
 
-    test('keeps file statistics visible when expanded and uses an ASCII minus', async () => {
+    test('keeps file statistics visible when expanded', async () => {
         const edit = editParts;
         await act(async () => root.render(<Harness record={turn([
             assistant('progress', edit),

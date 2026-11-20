@@ -25,7 +25,6 @@ const { CodeMirrorEditor } = await import('./CodeMirrorEditor');
 const { ComposerEditorView } = await import('../chat/composer/editor/ComposerEditorView');
 const { ComposerEditor } = await import('../chat/composer/editor/ComposerEditor');
 const { history, undo } = await import('@codemirror/commands');
-const { EditorState, StateEffect } = await import('@codemirror/state');
 const { focusedHistory, handleNativeHistoryMenu } = await import('@/lib/codemirror/focusedHistory');
 
 type EditorProps = React.ComponentProps<typeof CodeMirrorEditor>;
@@ -288,7 +287,7 @@ test('menu history ignores invalid actions and consumes read-only CodeMirror his
   expect(await menuHistory('copy')).toBe(false);
   expect(await menuHistory(null)).toBe(false);
   await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
-  file.dispatch({ effects: StateEffect.appendConfig.of(EditorState.readOnly.of(true)) });
+  await render({ readOnly: true, onChange: (value) => changes.push(value) });
   changes.length = 0;
   expect(await menuHistory('undo')).toBe(true);
   expect(changes).toEqual([]);

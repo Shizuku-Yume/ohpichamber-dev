@@ -983,7 +983,6 @@ export const VoiceSettings: React.FC = () => {
             <SettingsSection
                 settingsItem="voice.speech-recognition"
                 title={t('settings.voice.page.section.speechRecognition')}
-                contentClassName="space-y-3"
             >
                 <SettingsCheckboxRow
                     checked={dictationEnabled}
@@ -1032,7 +1031,7 @@ export const VoiceSettings: React.FC = () => {
                             <SettingsStackedField
                                 label={t('settings.voice.page.field.language')}
                                 info={t('settings.voice.page.field.sttLanguageHint')}
-                                controlClassName="max-w-[8rem]"
+                                controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                             >
                                 <input
                                     type="text"
@@ -1106,7 +1105,7 @@ export const VoiceSettings: React.FC = () => {
                                 <SettingsStackedField
                                     label={t('settings.voice.page.field.language')}
                                     info={t('settings.voice.page.field.sttLanguageHint')}
-                                    controlClassName="max-w-[8rem]"
+                                    controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                 >
                                     <input
                                         type="text"

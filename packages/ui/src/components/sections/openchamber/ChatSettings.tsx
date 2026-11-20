@@ -235,7 +235,6 @@ const MessagesTab: React.FC = () => {
       <SettingsSection
         title={t('settings.layout.chat.section.reading')}
         settingsItem="chat.message-appearance"
-        contentClassName="space-y-3"
       >
         <SettingsFieldRow
           label={t('settings.openchamber.visual.field.chatWidth')}

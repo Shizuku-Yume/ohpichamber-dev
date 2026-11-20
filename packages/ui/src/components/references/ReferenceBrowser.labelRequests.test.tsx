@@ -61,10 +61,15 @@ beforeEach(() => {
   root = createRoot(host);
   reads = [];
   localStorage.clear();
-  // The app's stores fetch on import; only the list this test reads answers.
+  // Git repository discovery and the list under test answer startup reads.
   const realFetch = globalThis.fetch;
-  globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+  globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/api/git/status') return Response.json({ current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true });
+    if (url.pathname === '/api/git/projects') {
+      const request: { directories: string[] } = JSON.parse(String(init?.body));
+      return Response.json({ projects: request.directories.map((directory) => ({ directory, isGitRepository: true })) });
+    }
     if (url.pathname.endsWith('/issues/list')) {
       reads.push(url.searchParams.getAll('label'));
       return new Response(JSON.stringify({ items: [], page: 1, hasMore: false }), {
@@ -85,7 +90,7 @@ afterEach(async () => {
 
 const flush = async () => {
   for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 35)); });
 };
 
 /** Renders the browser on the board's folder, reading lists through the real web API. */
