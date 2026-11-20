@@ -16,18 +16,12 @@ Full-screen extension pages are separate from this rail registry. `contributes.p
   Built-in modes stay a closed list. Installed guests add `plugin:${id}`
   surfaces through `extras` on `sortContextSurfaces` /
   `getVisibleContextRailSurfaces`. Do not copy guest types out of
-<<<<<<< HEAD
   `ohpichamber-sdk`.
-||||||| bc50ba56aa
-  `@openchamber/sdk`.
-=======
-  `@openchamber/sdk`.
 - The rail's icons scroll when the window is too short for them, without a
   scrollbar, with the scroll fades drawn as bands in the rail's background
   colour (`ScrollShadow` with `surface`), never a mask, which would keep a
   GPU texture the height of the rail. Its configure button stays under the
   scroller, always in reach.
->>>>>>> upstream/main
 - `availability: 'always'` surfaces are always present on the rail.
   `availability: 'has-content'` surfaces (chat) are hidden from the
   rail until a tab of their mode exists, and stay visible for as long as one
@@ -176,7 +170,7 @@ waits for the release.
    Render the mode in `ContextPanel.tsx`. Add label/hint i18n keys.
 2. Guest panel: ship a package with `openchamber.contributes.panel`. The host
   lists it from `GET /api/guests` and renders `PluginPane`. Settings →
-  Extensions installs a folder path on that OpenChamber instance. A runtime
+  Extensions installs a folder path on that OhPiChamber instance. A runtime
   switch clears the catalog so a previous instance cannot leave a rail slot
   from the last host. The rail paints `panel.icon` as a Remixicon glyph.
   `contributes.attach: true` or `"panel"` puts a row on
@@ -358,4 +352,4 @@ chat/palette go through the `openContext*` actions in `useUIStore`.
   dropped on load, like any unknown mode.
 
 - User ordering keeps surfaces together in groups at each group's first position, preserving saved pre-group orders. Missing known surfaces append in default order, and unknown IDs drop.
-- Walkthrough visibility requires room for a stop list beside code and OpenChamber's Git routes. VS Code exposes no browser surface because its host lacks Chromium annotation, agent control and remote-preview capabilities.
+- Walkthrough visibility requires room for a stop list beside code and OhPiChamber's Git routes. VS Code exposes no browser surface because its host lacks Chromium annotation, agent control and remote-preview capabilities.

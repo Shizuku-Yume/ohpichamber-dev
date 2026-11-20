@@ -120,15 +120,10 @@ on the source-control side (`lib/source-control/`).
   tracker (`components/sections/integrations/`), with the account switch and a
   second sign-in only where `multipleAccounts` is set, `TrackerProjectMapping`
   where `projectMapping` is, `TrackerSessionComments` where `sessionComments`
-<<<<<<< HEAD
   is, and browser sign-in only where `authMethods` has `oauth`. A status may
   carry `signIn` when the server cannot start sign-in at all (Linear without a
   broker or redirect URI): the card then draws no sign-in button and shows the
   reason with the setting that enables it.
-||||||| bc50ba56aa
-  is, and browser sign-in only where `authMethods` has `oauth`.
-=======
-  is, and browser sign-in only where `authMethods` has `oauth`.
 - Item `id` is the provider's stable id for get and update calls; `identifier`
   is the case-insensitive human key used for other identities. Related items
   omit labels because the provider is not asked for them. Progress counts only
@@ -149,7 +144,6 @@ on the source-control side (`lib/source-control/`).
   `disconnected`, and a missing tracker or API reads as `unsupported`. A failed
   first registry read ends the sources-pending wait because there is no held
   list to wait for; a failed auth read preserves an existing signed-in tab.
->>>>>>> upstream/main
 
 ## Decisions
 

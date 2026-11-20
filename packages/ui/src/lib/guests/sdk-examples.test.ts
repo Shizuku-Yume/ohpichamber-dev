@@ -1,26 +1,10 @@
-<<<<<<< HEAD
 import { afterEach, describe, expect, test } from 'bun:test';
-||||||| bc50ba56aa
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
-=======
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
-import { execFileSync } from 'node:child_process';
->>>>>>> upstream/main
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
-<<<<<<< HEAD
 import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT, OPENCHAMBER_SDK_API_VERSION } from 'ohpichamber-sdk';
 import { guestMessageSchema } from 'ohpichamber-sdk/schemas';
 import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from 'ohpichamber-sdk';
-||||||| bc50ba56aa
-import { guestMessageSchema } from '@openchamber/sdk/schemas';
-import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from '@openchamber/sdk';
-=======
-import { guestMessageSchema } from '@openchamber/sdk/schemas';
-import * as sdk from '@openchamber/sdk';
-import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from '@openchamber/sdk';
->>>>>>> upstream/main
 
 import { resolveGuestIconName } from './icon.ts';
 
@@ -417,13 +401,13 @@ describe('checked-in SDK examples', () => {
       },
     };
     const source = execFileSync(process.execPath, ['build', new URL('agent-desk/service/main.ts', examples).pathname,
-      '--target=node', '--format=cjs', '--external=node:http', '--external=@openchamber/sdk'], { encoding: 'utf8' });
+      '--target=node', '--format=cjs', '--external=node:http', '--external=ohpichamber-sdk'], { encoding: 'utf8' });
     runInNewContext(source, {
       process: { env: { OPENCHAMBER_SERVICE_PORT: '12345', OPENCHAMBER_SERVICE_TOKEN: 'fixture-token' } },
       console,
       require(name: string) {
         if (name === 'node:http') return serviceHttp;
-        if (name === '@openchamber/sdk') return { ...sdk, createServiceHost: () => serviceHost };
+        if (name === 'ohpichamber-sdk') return { ...sdk, createServiceHost: () => serviceHost };
         throw new Error(`Unexpected service dependency: ${name}`);
       },
       URL,

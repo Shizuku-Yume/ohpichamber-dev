@@ -143,12 +143,7 @@ export class TerminalRequestError extends Error {
   }
 }
 
-<<<<<<< HEAD
 /** The PTY size carried by a snapshot or resize event, when the server reported one. */
-||||||| bc50ba56aa
-/** The PTY size a snapshot's history was drawn for, when the server reported one. */
-=======
->>>>>>> upstream/main
 export const terminalSnapshotSize = (event: Pick<TerminalStreamEvent, 'cols' | 'rows'>): TerminalChunkSize | undefined =>
   event.cols !== undefined && event.rows !== undefined ? { cols: event.cols, rows: event.rows } : undefined;
 
@@ -235,15 +230,9 @@ const appendProjectionBytes = (history: ProjectionHistory, bytes: Uint8Array): v
 
 const appendProjection = (history: ProjectionHistory, value: string): void => {
   if (!value) return;
-<<<<<<< HEAD
   history.units += value.length;
   // Encoding separately would replace a surrogate split between PTY messages.
   // Keep the original string until concatenating the next message resolves it.
-||||||| bc50ba56aa
-  // Encoding separately would replace a surrogate split between PTY messages.
-  // Keep the original string until concatenating the next message resolves it.
-=======
->>>>>>> upstream/main
   if (history.malformed !== null || !isWellFormed(value)) {
     const combined = trimProjection(projectionText(history) + value);
     history.parts = [];
@@ -409,28 +398,13 @@ export class TerminalTransport {
 
   forget(sessionId: string): void {
     this.projections.delete(sessionId);
-<<<<<<< HEAD
     this.attached.delete(sessionId);
-||||||| bc50ba56aa
-  }
-
-  /**
-   * Records a resize the server accepted, so a projection snapshot replayed to
-   * a later subscriber (tab switch, remount) still names the size the
-   * terminal's current screen is drawn for.
-   */
-  noteResize(sessionId: string, cols: number, rows: number): void {
-    const projection = this.projections.get(sessionId);
-    if (!projection) return;
-    this.projections.set(sessionId, { ...projection, cols, rows });
-=======
   }
 
   noteResize(sessionId: string, cols: number, rows: number): void {
     const projection = this.projections.get(sessionId);
     if (!projection) return;
     this.projections.set(sessionId, { ...projection, cols, rows });
->>>>>>> upstream/main
   }
 
   private async ensureConnected(): Promise<void> {
@@ -487,13 +461,7 @@ export class TerminalTransport {
             this.startKeepalive();
             finish();
           };
-<<<<<<< HEAD
-          socket.onmessage = (event) => { if (isCurrentSocket()) this.handleMessage(event.data); };
-||||||| bc50ba56aa
-          socket.onmessage = (event) => void this.handleMessage(event.data);
-=======
-          socket.onmessage = (event) => this.receive(socket, event.data);
->>>>>>> upstream/main
+          socket.onmessage = (event) => { if (isCurrentSocket()) this.receive(socket, event.data); };
           socket.onerror = () => {
             const current = isCurrentSocket();
             if (current) invalidatePreOpenAuth();
@@ -504,17 +472,10 @@ export class TerminalTransport {
             const current = isCurrentSocket();
             if (current) {
               this.stopKeepalive();
-<<<<<<< HEAD
               this.attached.clear();
               // An upgrade rejected before `open` commonly means the cached
               // URL-scoped auth token is stale. Retrying it reaches the 8s
               // backoff cap instead of minting a fresh token.
-||||||| bc50ba56aa
-              // An upgrade rejected before `open` commonly means the cached
-              // URL-scoped auth token is stale. Retrying it reaches the 8s
-              // backoff cap instead of minting a fresh token.
-=======
->>>>>>> upstream/main
               invalidatePreOpenAuth();
             }
             if (this.socket === socket) this.socket = null;

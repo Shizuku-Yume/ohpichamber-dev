@@ -24,23 +24,9 @@ import { getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
 import { resolveWorktreeSetupCommands } from '@/lib/sharedTrustConfirmation';
 import { guestProject, guestProjectWorktrees } from './workspace';
 import { normalizePath } from '@/lib/pathNormalization';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { isAutoModel } from '@/lib/routing/autoModel';
-=======
-import { isAutoModel } from '@/lib/routing/autoModel';
-import { isReviewSession } from '@/lib/sessionReviewMetadata';
->>>>>>> upstream/main
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useConfigStore } from '@/stores/useConfigStore';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { useContextStore } from '@/stores/contextStore';
-=======
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { useContextStore } from '@/stores/contextStore';
->>>>>>> upstream/main
 import { useUIStore } from '@/stores/useUIStore';
 import * as sessionActions from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -208,132 +194,6 @@ const sendGuestFirstMessage = async (
   }
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const captureGuestPromptSelection = (sessionId: string, directory: string) => {
-  const selection = useSelectionStore.getState();
-  const context = useContextStore.getState();
-  const sessions = useSessionUIStore.getState();
-  const config = useConfigStore.getState();
-  if (sessions.currentSessionId === sessionId && config.currentProviderId && config.currentModelId) {
-    return {
-      providerID: config.currentProviderId,
-      modelID: config.currentModelId,
-      agentName: selection.getSessionAgentPick(sessionId) ?? config.currentAgentName ?? undefined,
-      variant: config.currentVariantSelection.override === null ? null : config.currentVariant,
-    };
-  }
-  const last = sessions.getLastUserChoice(sessionId);
-  const fallback = captureDefaultSendSelection();
-  // Match resolveSendSelection's fallback when the panel's path form has no child store.
-  const sessionList = getDirectoryState(directory)?.session ?? getAllSyncSessions();
-  const record = sessionList.find((session) => session.id === sessionId);
-  const recordAgent = record?.agent;
-  const agentPick = selection.getSessionAgentPick(sessionId);
-  const agentSwitched = recordAgent ? selection.followSessionAgent(sessionId, recordAgent) : false;
-  const agentName = agentPick
-    ?? (agentSwitched ? recordAgent : undefined)
-    ?? selection.getSessionAgentSelection(sessionId)
-    ?? context.getSessionAgentSelection(sessionId)
-    ?? last?.agent
-    ?? fallback?.agentName;
-  const agentModel = agentName
-    ? selection.getAgentModelForSession(sessionId, agentName) ?? context.getAgentModelForSession(sessionId, agentName)
-    : null;
-  const savedModel = selection.getSessionModelSelection(sessionId) ?? context.getSessionModelSelection(sessionId);
-  const modelPick = selection.getSessionModelPick(sessionId);
-  const recordModel = record?.model;
-  const recordModelKey = recordModel?.providerID && recordModel.id
-    ? `${recordModel.providerID}/${recordModel.id}#${recordModel.variant ?? ''}` : null;
-  const switched = !modelPick && recordModelKey && selection.isSessionModelSwitched(sessionId, recordModelKey)
-    && !(savedModel && isAutoModel(savedModel.providerId, savedModel.modelId));
-  if (recordModelKey) selection.markSessionModelFollowed(sessionId, recordModelKey);
-  const model = modelPick
-    ?? (switched && recordModel ? { providerId: recordModel.providerID, modelId: recordModel.id } : null)
-    ?? (agentSwitched ? savedModel : agentModel) ?? savedModel
-    ?? (recordModel ? { providerId: recordModel.providerID, modelId: recordModel.id } : null)
-    ?? agentModel
-    ?? (last?.providerID && last.modelID ? { providerId: last.providerID, modelId: last.modelID } : null)
-    ?? (fallback ? { providerId: fallback.providerID, modelId: fallback.modelID } : null);
-  if (!model) return null;
-  const liveVariant = agentName
-    ? selection.getAgentModelVariantForSession(sessionId, agentName, model.providerId, model.modelId)
-    : undefined;
-  const storedVariant = agentName
-    ? context.getAgentModelVariantForSession(sessionId, agentName, model.providerId, model.modelId)
-    : undefined;
-  const recordVariant = recordModel?.providerID === model.providerId && recordModel.id === model.modelId ? recordModel.variant : undefined;
-  const variant = switched && recordVariant !== undefined ? recordVariant : liveVariant !== undefined ? liveVariant : storedVariant !== undefined ? storedVariant
-    : recordVariant !== undefined ? recordVariant
-    : last?.providerID === model.providerId && last.modelID === model.modelId && last.agent === agentName ? last.variant
-    : fallback?.providerID === model.providerId && fallback.modelID === model.modelId ? fallback.variant : undefined;
-  return { providerID: model.providerId, modelID: model.modelId, agentName, variant };
-};
-
-=======
-const captureGuestPromptSelection = (sessionId: string, directory: string) => {
-  const selection = useSelectionStore.getState();
-  const context = useContextStore.getState();
-  const sessions = useSessionUIStore.getState();
-  const config = useConfigStore.getState();
-  const record = getDirectoryState(directory)?.session.find((session) => session.id === sessionId)
-    ?? getAllSyncSessions().find((session) => session.id === sessionId)
-    ?? useGlobalSessionsStore.getState().entityById.get(sessionId);
-  // external: #6555 a guest prompt to an open subagent keeps its own record and picks, not the parent composer's.
-  const composerOwnsSession = !record?.parentID || isReviewSession(record);
-  if (sessions.currentSessionId === sessionId && composerOwnsSession && config.currentProviderId && config.currentModelId) {
-    return {
-      providerID: config.currentProviderId,
-      modelID: config.currentModelId,
-      agentName: selection.getSessionAgentPick(sessionId) ?? config.currentAgentName ?? undefined,
-      variant: config.currentVariantSelection.override === null ? null : config.currentVariant,
-    };
-  }
-  const last = sessions.getLastUserChoice(sessionId);
-  const fallback = captureDefaultSendSelection();
-  const recordAgent = record?.agent;
-  const agentPick = selection.getSessionAgentPick(sessionId);
-  const agentSwitched = recordAgent ? selection.followSessionAgent(sessionId, recordAgent) : false;
-  const agentName = agentPick
-    ?? (agentSwitched ? recordAgent : undefined)
-    ?? selection.getSessionAgentSelection(sessionId)
-    ?? context.getSessionAgentSelection(sessionId)
-    ?? last?.agent
-    ?? fallback?.agentName;
-  const agentModel = agentName
-    ? selection.getAgentModelForSession(sessionId, agentName) ?? context.getAgentModelForSession(sessionId, agentName)
-    : null;
-  const savedModel = selection.getSessionModelSelection(sessionId) ?? context.getSessionModelSelection(sessionId);
-  const modelPick = selection.getSessionModelPick(sessionId);
-  const recordModel = record?.model;
-  const recordModelKey = recordModel?.providerID && recordModel.id
-    ? `${recordModel.providerID}/${recordModel.id}#${recordModel.variant ?? ''}` : null;
-  const switched = !modelPick && recordModelKey && selection.isSessionModelSwitched(sessionId, recordModelKey)
-    && !(savedModel && isAutoModel(savedModel.providerId, savedModel.modelId));
-  if (recordModelKey) selection.markSessionModelFollowed(sessionId, recordModelKey);
-  const model = modelPick
-    ?? (switched && recordModel ? { providerId: recordModel.providerID, modelId: recordModel.id } : null)
-    ?? (agentSwitched ? savedModel : agentModel) ?? savedModel
-    ?? (recordModel ? { providerId: recordModel.providerID, modelId: recordModel.id } : null)
-    ?? agentModel
-    ?? (last?.providerID && last.modelID ? { providerId: last.providerID, modelId: last.modelID } : null)
-    ?? (fallback ? { providerId: fallback.providerID, modelId: fallback.modelID } : null);
-  if (!model) return null;
-  const liveVariant = agentName
-    ? selection.getAgentModelVariantForSession(sessionId, agentName, model.providerId, model.modelId)
-    : undefined;
-  const storedVariant = agentName
-    ? context.getAgentModelVariantForSession(sessionId, agentName, model.providerId, model.modelId)
-    : undefined;
-  const recordVariant = recordModel?.providerID === model.providerId && recordModel.id === model.modelId ? recordModel.variant : undefined;
-  const variant = switched && recordVariant !== undefined ? recordVariant : liveVariant !== undefined ? liveVariant : storedVariant !== undefined ? storedVariant
-    : recordVariant !== undefined ? recordVariant
-    : last?.providerID === model.providerId && last.modelID === model.modelId && last.agent === agentName ? last.variant
-    : fallback?.providerID === model.providerId && fallback.modelID === model.modelId ? fallback.variant : undefined;
-  return { providerID: model.providerId, modelID: model.modelId, agentName, variant };
-};
-
->>>>>>> upstream/main
 type GuestActionFailure = {
   ok: false;
   code: HostRequestErrorCode;

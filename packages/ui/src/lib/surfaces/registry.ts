@@ -211,24 +211,13 @@ type VisibleRailSurfacesOptions = {
   screenWidth: number;
   tabs: readonly { mode: ContextPanelMode; targetPath?: string | null }[];
   sourceControlConnected: boolean;
-<<<<<<< HEAD
   /** The Workflows icon shows while the session on screen has a workflow run,
       or a Workflows tab is open, and never in a build without workflows. Runs
       start from the chat, so hiding it removes no entry point. */
   workflowsShown?: boolean;
-  /** Installed guest panels. Empty on VS Code and when the catalog has not
-      loaded or failed. */
-||||||| bc50ba56aa
-  /** The Workflows icon shows while the session on screen has a workflow run,
-      or a Workflows tab is open, and never in a build without workflows. Runs
-      start from the chat, so hiding it removes no entry point. */
-  workflowsShown: boolean;
-  /** Installed guest panels. Empty on VS Code and when the catalog has not
-      loaded or failed. */
-=======
-  workflowsShown: boolean;
   receivedPagesShown?: boolean;
->>>>>>> upstream/main
+  /** Installed guest panels. Unavailable when the catalog has not
+      loaded or failed. */
   extras?: readonly ContextSurfaceDescriptor[];
 };
 

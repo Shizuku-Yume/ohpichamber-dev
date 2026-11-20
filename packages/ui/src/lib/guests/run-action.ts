@@ -29,13 +29,7 @@ export const useGuestActionHostStore = create<{ requests: GuestBackgroundAction[
 
 const isCurrentAction = (entry: GuestActionEntry, item: GuestActionItem, runtimeKey: string): boolean => {
   const catalog = useGuestsStore.getState();
-<<<<<<< HEAD
   if (isMobileSurfaceRuntime() || getRuntimeKey() !== runtimeKey || catalog.runtimeKey !== runtimeKey) return false;
-||||||| bc50ba56aa
-  if (isVSCodeRuntime() || isMobileSurfaceRuntime() || getRuntimeKey() !== runtimeKey || catalog.runtimeKey !== runtimeKey) return false;
-=======
-  if (isVSCodeRuntime() || getRuntimeKey() !== runtimeKey || catalog.runtimeKey !== runtimeKey) return false;
->>>>>>> upstream/main
   const guest = catalog.guests.find((candidate) => candidate.id === entry.guest.id);
   if (!guest || (!guest.entry && !guest.backgroundEntry) || !isGuestActive(guest)
     || guest.version !== entry.guest.version || guest.revision !== entry.guest.revision || guest.entry !== entry.guest.entry || guest.backgroundEntry !== entry.guest.backgroundEntry) return false;

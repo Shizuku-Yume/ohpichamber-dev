@@ -38,13 +38,7 @@ const loadGuestCatalogOnce = async (runtimeKey: string): Promise<void> => {
   alignCatalogRuntime(runtimeKey);
 
   const store = useGuestsStore.getState();
-<<<<<<< HEAD
   if (isMobileSurfaceRuntime()) {
-||||||| bc50ba56aa
-  if (isVSCodeRuntime() || isMobileSurfaceRuntime()) {
-=======
-  if (isVSCodeRuntime()) {
->>>>>>> upstream/main
     store.markUnsupported(runtimeKey);
     return;
   }

@@ -2,7 +2,7 @@
 
 ## Ownership
 
-This directory is OpenChamber's browser adapter for the official `libghostty-vt` C ABI, adapted from T3 Code (see `LICENSE-T3CODE`). It replaces the `ghostty-web` npm package: the emulator, the renderer and the input layer are all owned here, so a terminal bug is fixed in this directory rather than patched around in `node_modules`.
+This directory is OhPiChamber's browser adapter for the official `libghostty-vt` C ABI, adapted from T3 Code (see `LICENSE-T3CODE`). It replaces the `ghostty-web` npm package: the emulator, the renderer and the input layer are all owned here, so a terminal bug is fixed in this directory rather than patched around in `node_modules`.
 
 - `runtime.ts` owns the single WebAssembly instance per page, the C struct layouts read from `ghostty_type_json`, allocation helpers, and the PTY write callback trampoline (embedded bytes compiled from `../../../scripts/ghostty-write-pty.zig`).
 - `core.ts` owns one terminal's Ghostty handles: VT writes, resize, theme and 256-color palette, selection, key/mouse/paste encoding, and the render-state snapshot (`GhosttySnapshot`) the renderer draws.
@@ -36,15 +36,9 @@ Touch-owned viewports have no menu and no paste shortcut, so `TerminalView` puts
 - Overlapping `setFont` calls apply only while their epoch is current. `loadingdone` is ignored while an explicit load is pending, then re-runs the fixed-width guard with the newly loaded metrics. A metrics change clears the cached IME coordinates and refits.
 - The canvas context is created with `willReadFrequently: true`, which pins it to the software rasterizer. Gecko otherwise picks acceleration per canvas, and its GPU text path on macOS skips CoreText smoothing: a terminal created after page load drew thin, pencil-like glyphs while the first one stayed on the software path (confirmed: `gfx.canvas.accelerated=false` in Zen removed the symptom). The backing store is also sized to the mount at DPR before the first paint, so the compositor never sees the default 300×150 store stretched.
 - Cell-filling symbols (borders, bars, block logos) are drawn by `boxDrawing.ts`, snapped to whole CSS pixels so neighbouring cells meet without seams. Fonts draw these only as tall as their em box, so at the 1.35 em line height every TUI border showed a strip of background between rows.
-<<<<<<< HEAD
 - The PTY hears about a resize only after the grid settles (150 ms) and at most once per fit; `onResize` is the sole resize channel. The first successful fit always notifies, even at the construction size.
 - History replay (`resetAndWrite`) detaches the PTY writer so historical device queries never reach the live shell. Ghostty writes each retained span at its recorded PTY size and applies resize boundaries in output order before restoring the fitted viewport.
 - A hidden surface (`setVisible(false)`) keeps parsing output and answering VT queries but schedules no frames, no cursor timer and no scrollbar work. Reveal repaints in full.
-||||||| bc50ba56aa
-- The PTY hears about a resize only after the grid settles (150 ms) and at most once per fit; `onResize` is the sole resize channel. The first successful fit always notifies, even at the construction size.
-- History replay (`resetAndWrite`) detaches the PTY writer so historical device queries never reach the live shell, and runs at the PTY size the history was drawn for when the caller passes one, so Ghostty reflows lines where the shell wrapped them.
-- A hidden surface (`setVisible(false)`) keeps parsing output and answering VT queries but schedules no frames, no cursor timer and no scrollbar work. Reveal repaints in full.
-=======
 - The PTY hears about a resize only after the grid settles (150 ms) and at most once per fit; `onResize` is the sole resize channel. Notifying on every drag step would make the shell reprint its prompt mid-drag. The first successful fit always notifies, even at the construction size. Disposing inside the debounce window flushes the settled size so the PTY keeps the final grid.
 - The alternate screen has no scrollback, so wheel motion becomes arrow-key input there, matching xterm; the primary screen scrolls the viewport.
 - History replay (`resetAndWrite`) detaches the PTY writer so historical device queries never reach the live shell, and runs at the PTY size the history was drawn for when the caller passes one, so Ghostty reflows lines where the shell wrapped them.
@@ -61,11 +55,10 @@ Touch-owned viewports have no menu and no paste shortcut, so `TerminalView` puts
 - Safari signals an IME-opening keydown only through keyCode 229; encoding it or clearing the textarea would double the committed text, so that keydown returns untouched. A keyup produces data only when the program enabled Kitty report-event-types.
 - Hover motion is reportable only in any-event tracking; normal and button-event tracking report none without a pressed button. A tracking change without pointer movement clears the previous motion data so the next same-cell motion starts a session, and a drag already sent to the application cannot later turn into link activation.
 - The hidden textarea follows the terminal cursor's cell because the IME candidate window anchors to it. A preedit left edge is floored to a whole pixel so no sliver of the block cursor shows.
-- The artifact URL is built with `new URL(..., import.meta.url)` so Vite treats it as a static asset in web, the VS Code webview and the Electron protocol, while bun's test runner reads a file URL. The PTY trampoline is embedded bytes compiled from `scripts/ghostty-write-pty.zig`, and its table entry is registered with grow-then-set. The log import reads memory through a holder because the instance does not exist until `instantiate` returns. An opaque slot is zeroed before `*_new` writes it so a dispose after partial initialization cannot free a garbage pointer.
+- The artifact URL is built with `new URL(..., import.meta.url)` so Vite treats it as a static asset in web/mobile and the Electron protocol, while bun's test runner reads a file URL. The PTY trampoline is embedded bytes compiled from `scripts/ghostty-write-pty.zig`, and its table entry is registered with grow-then-set. The log import reads memory through a holder because the instance does not exist until `instantiate` returns. An opaque slot is zeroed before `*_new` writes it so a dispose after partial initialization cannot free a garbage pointer.
 - Grapheme codepoints are decoded in 4096-code-point chunks because engines cap spread-call arguments, and read through a `DataView` because the byte-array allocator gives no four-byte alignment. Styles are read after allocations and ABI calls, which can grow WASM memory.
 - A reset (`RIS`) restores Ghostty's steady cursor default, so the embedder's blink default is applied again before replay. Option 14 replaces the whole 256-color table; `NULL` restores the built-in one and a program's per-index OSC 4 overrides survive.
 - Grid tags are 1 for viewport and 2 for screen. `ghosttyKeyboardCodes` order is the `GhosttyKey` ABI value at the pin. Without layout data a shifted key reports unshifted codepoint 0, not the shifted character, which would corrupt Kitty alternate keys.
->>>>>>> upstream/main
 - Touch hosts (`handleTouchPointer: false`) own scroll and long-press gestures through `scrollLines`, `selectWordAt` and `extendSelectionTo`; the surface ignores touch pointers and the compatibility mouse events that follow them so a tap does not summon the soft keyboard.
 - Every terminal frees its own handles on `dispose()`; the WebAssembly instance is shared and never torn down.
 
@@ -85,7 +78,7 @@ On the same emulator, Chromium 158 ignored `preventDefault` on the `beforeinput`
 
 ### Why shell shortcuts yield to alternate-screen and Kitty programs
 
-OpenChamber applies Ghostty-style line editing and viewport bindings only at plain shell prompts to preserve application keyboard handling. Active screen and negotiated Kitty flags are authoritative; application cursor mode alone does not disable shell editing because shells can enable it too.
+OhPiChamber applies Ghostty-style line editing and viewport bindings only at plain shell prompts to preserve application keyboard handling. Active screen and negotiated Kitty flags are authoritative; application cursor mode alone does not disable shell editing because shells can enable it too.
 
 ### Why Option symbols go through consumed modifiers and not the encoder's option-as-alt setting
 
