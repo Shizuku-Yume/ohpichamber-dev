@@ -14,6 +14,8 @@ const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'models.search', title: 'Search models', description: 'The model catalog, favorites and recent models first; optional query, provider, all, limit, offset' },
   { action: 'models.list', title: 'Show model preferences', description: 'Show default, favorite, and recent model preferences; no parameters' },
   { action: 'session.list', title: 'List sessions', description: 'List sessions; optional projectId or directory, limit (default 10), all, or withStatus' },
+  { action: 'session.track', title: 'Track a session', description: 'Put sessionId (default: this session) In work; pinned, archived, child and non-project sessions cannot be tracked' },
+  { action: 'session.markDone', title: 'Mark a session done', description: 'Remove sessionId (default: this session) from In work' },
   { action: 'session.create', title: 'Create a session', description: 'Create a session in the current directory by default; prompt is optional' },
   { action: 'session.send', title: 'Send a prompt', description: 'Send a new prompt to sessionId; scope with projectId or directory' },
   { action: 'session.fork', title: 'Fork a session', description: 'Fork sessionId; messageId selects the boundary; prompt is optional' },
@@ -108,6 +110,11 @@ export const OPENCHAMBER_RENDER_ACTIONS = Object.freeze(
 
 export const OPENCHAMBER_SECRET_ACTIONS = Object.freeze(['secret.run', 'secret.forget', 'secret.request']);
 
+export const OPENCHAMBER_USAGE_ACTION_DEFINITIONS = Object.freeze([
+  { action: 'usage.read', title: 'Read usage limits', description: 'Usage windows, percentages and resets for configured providers in this workspace; providerId reads one' },
+]);
+export const OPENCHAMBER_USAGE_ACTIONS = Object.freeze(OPENCHAMBER_USAGE_ACTION_DEFINITIONS.map(({ action }) => action));
+
 /**
  * Workflows fan a large task out to many agents. They ship dark behind
  * OPENCHAMBER_WORKFLOWS_ENABLE; a build without the runtime answers 503.
@@ -178,6 +185,7 @@ export const OPENCHAMBER_AGENT_TOOL_ACTIONS = Object.freeze(
  * starts from the tool that asked.
  */
 const ACTIONS_BY_TOOL = Object.freeze({
+  openchamber_usage: OPENCHAMBER_USAGE_ACTIONS,
   openchamber: OPENCHAMBER_AGENT_TOOL_ACTIONS,
   openchamber_web: OPENCHAMBER_WEB_ACTIONS,
   openchamber_knowledge: OPENCHAMBER_KNOWLEDGE_ACTIONS,
@@ -230,6 +238,7 @@ export const resolveAgentToolAction = (requested, toolName) => {
 /** Everything the callback route will dispatch, whichever tool asked. */
 
 export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
+  ...OPENCHAMBER_USAGE_ACTIONS,
   ...OPENCHAMBER_CONTROL_ACTIONS,
   ...OPENCHAMBER_WEB_ACTIONS,
   ...OPENCHAMBER_KNOWLEDGE_ACTIONS,

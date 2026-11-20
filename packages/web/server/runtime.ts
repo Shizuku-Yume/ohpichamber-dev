@@ -105,6 +105,8 @@ import { registerHostPermissionRuntime } from './lib/permission-auto-accept/host
 import { createPermissionAutoAcceptRuntime, registerPermissionAutoAcceptRoutes } from './lib/permission-auto-accept/runtime.js';
 import { createJevClient } from './lib/routing/jev.js';
 import { createSessionWorkRuntime } from './lib/session-work/runtime.js';
+import { createSelectedUsageQuota } from './lib/quota/selected-usage.js';
+import { createCanonicalActivityProbe } from './lib/session-work/activity-probe.js';
 import { createSessionLineage } from './lib/session-lineage.js';
 import { beginGuestServiceHost, beginGuestServiceShutdown, stopAllGuestServices } from './lib/guests/service.js';
 import { findInstalledGuest, listInstalledGuests } from './lib/guests/catalog.js';
@@ -602,6 +604,7 @@ const resolveHostTools = async () => {
   web: settings?.agentWebToolEnabled !== false,
   openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
   notify: settings?.agentNotifyToolEnabled === true,
+  openchamber_usage: settings?.agentUsageToolEnabled === true,
   openchamber_render: settings?.agentRenderToolEnabled !== false,
   openchamber_secret: settings?.agentSecretToolEnabled !== false,
   openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
@@ -1117,6 +1120,7 @@ notificationTriggerRuntime.setGetIsSessionAutoAccepting(
 // "In work": Jev opens a session when real work starts in it and hints when a
 // turn looks like the end of it. The same turn-end call gates session assist.
 const sessionWorkRuntime = createSessionWorkRuntime({
+ activityProbe: createCanonicalActivityProbe({ service: hostAgentRuntime.service }),
  sessionService: openChamberSessionService,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
  classifierEndpoint: (workspaceId) => routingRuntime.classifierEndpoint(workspaceId),
@@ -1539,6 +1543,10 @@ const pluginNotificationEmitter = createPluginNotificationEmitter({
 
 const browserUploads = createUploadStore();
 const openChamberControlService = createOpenChamberControlService({
+ updateSessionMetadata: updateSessionMetadataWith,
+ isWorktreePinned: isWorktreeDirectoryPinned,
+ chatRoots: [path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR],
+ loadQuota: createSelectedUsageQuota({ loadQuota: () => import('./lib/quota/index.js'), listQuotaSelections, resolveQuotaSelection, resolveCredential }),
  readSettingsFromDiskMigrated,
  service: hostAgentRuntime.service,
  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
@@ -2240,6 +2248,7 @@ async function main(options = {}) {
      web: settings?.agentWebToolEnabled !== false,
      openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
      notify: settings?.agentNotifyToolEnabled === true,
+     openchamber_usage: settings?.agentUsageToolEnabled === true,
      openchamber_render: settings?.agentRenderToolEnabled !== false,
      openchamber_secret: settings?.agentSecretToolEnabled !== false,
      openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,

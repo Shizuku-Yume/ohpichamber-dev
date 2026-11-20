@@ -54,6 +54,26 @@ queue read does not admit a wait as if the queue were empty.
 
 ## Invariants
 
+`usage.read` is carried by the native `openchamber_usage` tool and is off unless
+`agentUsageToolEnabled` is true, checked again by the service at dispatch. The
+calling session supplies the workspace and agent directory; an explicit CLI
+workspace selector uses the same Host scope resolver. `usage-read.ts` reads
+configured providers or one `providerId`, strips account labels and preserves
+individual errors and timeouts. A failed provider list is reported as `listError`
+while each supported provider is tried, never as an authoritative empty list.
+`quota/selected-usage.ts` reuses the quota routes' catalog selection and private
+credential resolver. No credentials are included in the result. Worker tool
+results carry the existing `usage.read` card envelope.
+
+`session.track` and `session.markDone` default to the calling session and require
+In work to be enabled. Canonical session open and Host scope resolution establish
+identity and root eligibility; Host metadata, archive state, chat roots and Git
+worktree pins govern tracking. Children, managed Chats, reviews, `/btw` questions,
+scheduled runs, archived sessions and pinned sessions/worktrees cannot be tracked.
+Done remains available for those sessions to clear old membership. Both actions
+write `userStatePatch` through the queued Host metadata update/broadcast owner;
+the patch rechecks session pins against metadata at write time.
+
 - `openchamber_secret` carries the calling session and tool call id over the
   authenticated worker channel. Before `secret.run`, the worker asks the
   Canonical Bash approval owner for the exact command and reauthorizes its

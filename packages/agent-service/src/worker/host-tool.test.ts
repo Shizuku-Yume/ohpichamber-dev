@@ -339,8 +339,30 @@ test('normalizeHostToolEnablement preserves valid flags when an entry has a non-
     web: true,
     openchamber_knowledge: true,
     notify: false,
+    openchamber_usage: false,
     openchamber_render: true,
     openchamber_secret: true,
     openchamber_workflow: true,
   });
+});
+
+test('usage is opt-in, schema-restricted and publishes the native usage card envelope', async () => {
+  expect(normalizeHostToolEnablement({}).openchamber_usage).toBe(false);
+  expect(normalizeHostToolEnablement({ agentUsageToolEnabled: true }).openchamber_usage).toBe(true);
+  expect(normalizeHostToolEnablement({ agentUsageToolEnabled: false }).openchamber_usage).toBe(false);
+  for (const action of ['usage.read', 'session.track', 'session.markDone']) {
+    expect(HostActionRequestSchema.safeParse({ toolName: action === 'usage.read' ? 'openchamber_usage' : 'openchamber', action, sessionId: 'session-123', input: {} }).success).toBe(true);
+  }
+  expect(HostActionRequestSchema.safeParse({ toolName: 'openchamber_usage', action: 'session.send', sessionId: 'session-123', input: {} }).success).toBe(false);
+  const registered = new Map<string, RegisteredToolStub>();
+  const invoked: HostToolInvocation[] = [];
+  createHostToolExtension({
+    scope: { sessionId: 'session-123', rootSessionId: 'session-123', workspaceId: 'ws-123' },
+    initialEnablement: { openchamber_usage: true },
+    invoke: async (invocation) => { invoked.push(invocation); return { providers: [] }; },
+  })({ typebox: { Type: { Object: (props: unknown) => ({ properties: props }), String: () => ({}), Record: () => ({}), Unknown: () => ({}) } }, registerTool: (tool: RegisteredToolStub) => { registered.set(tool.name, tool); } } as never);
+  expect(registered.get('openchamber_usage')?.description).toContain('usage.read');
+  const result = await registered.get('openchamber_usage')!.execute('call-usage', { action: 'usage.read', input: {} });
+  expect(invoked[0]?.request).toEqual({ sessionId: 'session-123', toolName: 'openchamber_usage', action: 'usage.read', input: {} });
+  expect(result.details).toMatchObject({ ok: true, action: 'usage.read', openchamber: { schemaVersion: 1, ok: true, action: 'usage.read', data: { providers: [] } } });
 });
