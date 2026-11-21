@@ -207,6 +207,35 @@ describe('agent-runtime resolution and supervisor creation', () => {
       fs.rmSync(dataDir, { recursive: true, force: true });
     }
   });
+  it('admitWorkspace does not re-register a removed checkout with the Agent Service', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-rt-removed-'));
+    try {
+      const removedScope = { workspaceId: 'workspace-removed', projectId: 'project-test-1', projectDirectory: '/test/project', cwd: '/test/removed', agentDirectory: '/test/agent', agentDirectoryId: 'agent-dir-1', checkoutRemoved: true };
+      const runtime = createHostAgentRuntime({
+        dataDir,
+        scopeRuntime: {
+          resolveWorkspaceScope: async () => removedScope,
+          resolveWorkspaceDirectory: async () => null,
+          resolveSessionScope: async () => null,
+          resolveRepositoryWorkspace: async () => null,
+          resolveRelocationSourceScope: async () => null,
+        },
+        validateDirectoryPath: () => true,
+        getEnvironmentForDirectory: async () => { throw new Error('Unexpected environment read'); },
+        invokeHostAction: async () => null,
+        enterprisePolicyOptions: {},
+        bunPath: '/custom/bin/bun',
+        entrypoint: '/custom/service/index.js',
+        resolveHostTools: async () => ({ web: false, openchamber: false, notify: false }),
+      });
+      const requests = [];
+      runtime.service.request = async (requestPath) => { requests.push(requestPath); return new Response('{}', { status: 404 }); };
+      await expect(runtime.resolveWorkspaceScope(removedScope.workspaceId)).resolves.toMatchObject({ workspaceId: removedScope.workspaceId, cwd: '/test/removed', env: {} });
+      expect(requests).toEqual([]);
+    } finally {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
   it('ensureAgentRuntimeSymlinks does nothing if manifest.json is absent', () => {
     const dummy = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-rt-nosym-'));
     try {

@@ -93,6 +93,8 @@ export function createHostAgentRuntime({
   });
   skillFileOwner = createSkillFileOwner({ service });
   const admitWorkspace = async (scope) => {
+    // The Agent Service keeps a removed checkout's registered cwd, so re-registering it would conflict.
+    if (scope.checkoutRemoved) return { ...scope, env: {} };
     const env = isEnterpriseMode(enterprisePolicyOptions)
       ? {} : await getEnvironmentForDirectory(scope.cwd);
     // The workspace catalog answers from this admission, so the Host's current

@@ -266,6 +266,25 @@ describe('configured Host scope authority', () => {
     await expect(runtime.resolveSessionScope('native-session')).rejects.toMatchObject({ code: 'METADATA_READ_FAILED' });
   });
 
+  it('keeps archived sessions of a removed worktree listed and readable', async () => {
+    const { root, projectDirectory, owner, runtime } = await fixture();
+    execFileSync('git', ['init', '-q', projectDirectory]);
+    execFileSync('git', ['-C', projectDirectory, '-c', 'user.name=Scope fixture', '-c', 'user.email=scope@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'scope fixture']);
+    const worktreeDirectory = path.join(root, 'archived-worktree');
+    execFileSync('git', ['-C', projectDirectory, 'worktree', 'add', '-q', '-b', 'archived-fixture', worktreeDirectory]);
+    const linked = (await runtime.listWorkspaces()).items.find((item) => item.displayPath === path.join('..', 'archived-worktree'));
+    const scope = await runtime.resolveWorkspaceScope(linked.workspaceId);
+    await runtime.registerSessionScope(admittedSession(scope, 'archived-session'));
+    await runtime.registerSessionScope(admittedSession(scope, 'open-session'));
+    await owner.archiveStore.archive(['archived-session']);
+    execFileSync('git', ['-C', projectDirectory, 'worktree', 'remove', worktreeDirectory]);
+    expect((await runtime.listWorkspaces()).items.map((item) => item.workspaceId)).toContain(scope.workspaceId);
+    await expect(runtime.resolveSessionScope('archived-session')).resolves.toMatchObject({ workspaceId: scope.workspaceId, cwd: worktreeDirectory, checkoutRemoved: true });
+    await expect(runtime.resolveWorkspaceDirectory(worktreeDirectory)).resolves.toMatchObject({ workspaceId: scope.workspaceId });
+    fs.mkdirSync(worktreeDirectory);
+    await expect(runtime.resolveSessionScope('archived-session')).resolves.toBeNull();
+  });
+
   it('does not replace a failed settings read with authoritative empty discovery', async () => {
     const { runtime, settingsFile } = await fixture();
     const projects = await runtime.listProjects();

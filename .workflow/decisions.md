@@ -1951,3 +1951,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** a prepared session inside the removed checkout counts as an active run and makes the deletion refuse itself.
 - **Mine:** yes (requested drift classification)
 - **Revisit when:** upstream guards draft preparation during worktree removal itself.
+
+## 2026-11-21 - Keep chats of a deleted worktree readable from Archive
+
+- **Decided:** a workspace whose checkout no longer exists but still has archived sessions stays in Host discovery, its sessions resolve against the project (marked `checkoutRemoved`), and its directory resolves to that workspace. The Host does not register it with the Agent Service, so snapshot and history are served cold from the session files and execution is refused.
+- **Instead of:** failing every scope read once the checkout is gone, which dropped these chats from Archive after a reload and made opening them return 500.
+- **Because:** deleting a worktree archives its chats first, so they must remain recoverable; the worktree-archive flow already keeps absent checkouts readable this way.
+- **Mine:** yes (requested fix)
+- **Revisit when:** removed-checkout sessions gain a relocation or restore flow that moves them to a live workspace.

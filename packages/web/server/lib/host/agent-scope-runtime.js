@@ -146,7 +146,10 @@ export const createHostAgentScopeRuntime = ({
       } catch (error) { errors[workspaceId] = failureCode(error); }
     }
     if (typeof store.listArchivedWorktreeWorkspaces === 'function') {
-      const archivedWorkspaces = await store.listArchivedWorktreeWorkspaces();
+      const archivedWorkspaces = [...new Set([
+        ...await store.listArchivedWorktreeWorkspaces(),
+        ...(typeof store.listWorkspacesWithArchivedSessions === 'function' ? await store.listWorkspacesWithArchivedSessions() : []),
+      ])];
       for (const workspaceId of archivedWorkspaces) {
         try {
           const scope = await store.getWorkspace(workspaceId);
@@ -181,13 +184,16 @@ export const createHostAgentScopeRuntime = ({
       await store.checkWorktreeScope(scope.cwd, claimId);
       return { ...scope, displayPath: '.' };
     }
-    if (typeof store.isWorktreeArchived === 'function' && (await store.isWorktreeArchived(scope.workspaceId))) {
+    const checkoutRemoved = await fsPromises.lstat(scope.cwd).then(() => false, (cause) => cause?.code === 'ENOENT');
+    const removedWithArchivedSessions = checkoutRemoved && typeof store.hasArchivedSessions === 'function'
+      && await store.hasArchivedSessions(scope.workspaceId);
+    if ((typeof store.isWorktreeArchived === 'function' && (await store.isWorktreeArchived(scope.workspaceId))) || removedWithArchivedSessions) {
       const project = projects.find((item) => item.id === scope.hostProjectId);
       if (!project) return null;
       const projectDirectory = await validateDirectory(project.path);
       if (projectDirectory !== scope.projectDirectory || scope.agentDirectory !== selectedAgentDirectory) return null;
       await store.checkWorktreeScope(scope.cwd, claimId);
-      return { ...scope, displayPath: displayPath(scope) };
+      return { ...scope, displayPath: displayPath(scope), ...(checkoutRemoved ? { checkoutRemoved } : {}) };
     }
     const project = projects.find((item) => item.id === scope.hostProjectId);
     if (!project) return null;
@@ -215,7 +221,10 @@ export const createHostAgentScopeRuntime = ({
     const parsed = WorkspaceDirectorySchema.safeParse(directory);
     if (!parsed.success) return null;
     const requested = await validateDirectoryPath(parsed.data);
-    if (!requested.ok) return null;
+    if (!requested.ok) {
+      const removed = (await discover()).scopes.find((scope) => scope.checkoutRemoved && scope.cwd === parsed.data);
+      return removed ? publicWorkspace(removed) : null;
+    }
     const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
     let discoveryFailed = false;
     if (managedChatsScope) {
