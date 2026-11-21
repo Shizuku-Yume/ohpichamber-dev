@@ -1,6 +1,6 @@
 import React from 'react';
 import { create } from 'zustand';
-import { GitWorktreeRequestError, type GitWorktreeArchive } from '@/lib/api/types';
+import type { GitWorktreeArchive } from '@/lib/api/types';
 import { canArchiveWorktrees, git } from '@/lib/gitApi';
 import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -86,24 +86,17 @@ export async function archiveWorktreeWork(input: {
   askForTrust?: boolean;
 }): Promise<void> {
   const sessionIds = input.sessions.map((session) => session.sessionId);
-  let partial: Error | null = null;
   markWorktreeRemoving(input.worktree.path);
   try {
     const teardownCommand = await resolveWorktreeTeardownCommand(input.project, input.worktree, { ask: input.askForTrust });
     if (teardownCommand) {
       await git.worktree.teardown(normalizePath(input.project.path) ?? input.project.path, { directory: input.worktree.path, teardownCommand });
     }
-    try {
-      await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds, title: input.title });
-    } catch (error) {
-      if (!(error instanceof GitWorktreeRequestError) || error.code !== 'WORKTREE_ARCHIVE_PARTIAL') throw error;
-      partial = error;
-    }
+    await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds, title: input.title });
   } finally {
     clearWorktreeRemoval(input.worktree.path);
     void loadWorktreeArchives(input.project.path).catch(() => undefined);
   }
-  if (partial) throw partial;
 }
 
 export const archivedWorktreeLabel = (archive: GitWorktreeArchive): string => (

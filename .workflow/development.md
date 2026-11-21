@@ -17,6 +17,14 @@ are not rewritten. Web/PWA, Electron, hosted mobile and Capacitor share these
 flows. The live iOS data was inspected read-only. Regression and check receipts
 are under `/Users/devin/shared_files/archive-session-restore/`; on-device and
 visual verification remain outstanding.
+The pre-fix UI regressions failed with an unexpected pre-archive call and
+`moved` instead of `kept`; both files now pass 7 tests each. The Host archive
+suite passes 16 tests, including active versus independently archived chats
+restored into the recreated checkout. The final isolated full UI suite passes
+1,412/1,413 files, with only the known Intl duration-formatting failure. An
+earlier full run also hit the composer draft-length failure (20 versus 40),
+which reproduced in the full suite on unchanged main `ddf910d27` and passed
+alone on both branches. Changed-file UI lint and server lint pass.
 
 Host worktree restore claim release now rolls an untouched restore back to
 `archived` atomically. Store open repairs the equivalent unclaimed persisted

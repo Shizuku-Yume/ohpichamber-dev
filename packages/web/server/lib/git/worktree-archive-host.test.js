@@ -208,12 +208,22 @@ describe('Host-owned worktree archive capture', () => {
     store.releaseSessionDelete(deleting);
     const scopes = new Map([[pathKey(project), projectScope], [pathKey(checkout), checkoutScope], [pathKey(nested), nestedScope]]);
     const service = createOpenChamberSessionService({
-      service: { request: async () => { throw new Error('Native runtime must not be contacted for Host archive capture'); } },
+      service: { request: async (url) => {
+        const id = /^\/api\/agent\/v1\/sessions\/(restore-[^/]+)$/.exec(new URL(url, 'http://host').pathname)?.[1];
+        if (!id) throw new Error('Unexpected native runtime request');
+        const scope = await store.getSession(id);
+        return Response.json({
+          sessionId: id, rootSessionId: id, projectId: scope.projectId, workspaceId: scope.workspaceId,
+          displayPath: path.basename(scope.cwd), createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0',
+          runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+        });
+      } },
       agentScopeStore: store,
       resolveWorkspaceDirectory: async (directory) => scopes.get(pathKey(directory)) ?? null,
       resolveWorkspaceScope: (id) => store.getWorkspace(id),
       resolveSessionScope: (id) => store.getSession(id),
       resolveHostSessionScope: (id) => store.getSession(id),
+      resolveHostRelocationScope: (id) => store.getSession(id),
       registerSessionScope: async () => true,
       resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt,
       beforeDispatch: async () => { }, onPromptAccepted: async () => { },
