@@ -281,6 +281,19 @@ describe('configured Host scope authority', () => {
     expect((await runtime.listWorkspaces()).items.map((item) => item.workspaceId)).toContain(scope.workspaceId);
     await expect(runtime.resolveSessionScope('archived-session')).resolves.toMatchObject({ workspaceId: scope.workspaceId, cwd: worktreeDirectory, checkoutRemoved: true });
     await expect(runtime.resolveWorkspaceDirectory(worktreeDirectory)).resolves.toMatchObject({ workspaceId: scope.workspaceId });
+    const app = express();
+    registerCanonicalHostRoutes(app, {
+      express, service: { getState: () => ({ phase: 'ready' }), request: async () => { throw new Error('Unexpected Agent Service request'); } },
+      uiAuthController: { resolveAuthContext: async () => ({ type: 'client' }) },
+      tunnelAuthController: { classifyRequestScope: () => 'local', getTunnelSessionFromRequest: () => null },
+      isRequestOriginAllowed: () => true,
+      resolveWorkspaceScope: runtime.resolveWorkspaceScope, resolveWorkspaceDirectory: runtime.resolveWorkspaceDirectory,
+      resolveSessionScope: runtime.resolveSessionScope, resolveHostSessionScope: runtime.resolveSessionScope,
+      listProjects: runtime.listProjects, listWorkspaces: runtime.listWorkspaces,
+      resolveCredentialHandoff: async () => { throw new Error('Unexpected credential handoff'); },
+      queueRoutes: (router) => router, sessionRoutes: (router) => router, attachmentRoutes: (router) => router,
+    });
+    expect(await request(app).get(`/api/agent/v1/workspaces/${scope.workspaceId}/providers`)).toMatchObject({ status: 409, body: { code: 'SESSION_READ_ONLY' } });
     fs.mkdirSync(worktreeDirectory);
     await expect(runtime.resolveSessionScope('archived-session')).resolves.toBeNull();
   });

@@ -15,6 +15,7 @@ export function registerSkillFileRoutes(router, { express, owner, resolveWorkspa
       const workspaceId = C.EntityIdSchema.parse(decodeURIComponent(match[1]));
       const scope = await resolveWorkspaceScope(workspaceId);
       if (!scope || scope.workspaceId !== workspaceId) throw new SkillFileError(403, 'UNAUTHORIZED', 'The selected workspace is not authorized.');
+      if (scope.checkoutRemoved) throw new SkillFileError(409, 'SESSION_READ_ONLY', 'This workspace\'s worktree was deleted, so it is read-only.');
       if (req.method === 'POST' && match[2] === 'apply' && match[3] === undefined) {
         z.strictObject({}).parse(req.query);
         if (!req.is('application/json')) throw new SkillFileError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Send an application/json request body.');
