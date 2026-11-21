@@ -311,6 +311,21 @@ describe('Host native session control saga', () => {
     }
     expect(native.calls).toEqual([]);
   });
+  it('refuses prompt delivery for a removed checkout before any reopen or dispatch', async () => {
+    const { store, native, makeService } = await fixture();
+    const service = makeService();
+    const prompt = { input: { text: 'After removal', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const getSession = store.getSession;
+    store.getSession = async (id) => ({ ...await getSession(id), checkoutRemoved: true });
+    for (const mutate of [
+      () => service.send('public-root', prompt),
+      () => service.steer('public-root', { request: prompt }),
+      () => service.followUp('public-root', { request: prompt }),
+    ]) {
+      await expect(mutate()).rejects.toMatchObject({ statusCode: 409, code: 'SESSION_READ_ONLY' });
+    }
+    expect(native.calls).toEqual([]);
+  });
   it('forwards compact through the authorized session control endpoint and preserves optional instructions', async () => {
     const { native, makeService } = await fixture();
     const service = makeService();
