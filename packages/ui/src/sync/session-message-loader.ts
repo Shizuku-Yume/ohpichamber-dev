@@ -19,6 +19,9 @@ import { SessionCacheRetention } from "./session-cache-retention"
 import { SESSION_CACHE_LIMIT, type State } from "./types"
 import { retry, STARTUP_RETRY } from "./retry"
 
+// Archiving tombstones a session in its directory store; an archived session is still readable.
+const isArchivedSession = (sessionId: string): boolean => Boolean(useGlobalSessionsStore.getState().entityById.get(sessionId)?.archivedAt)
+
 const HISTORY_PAGE_SIZE = 100
 const INITIAL_USER_TURNS = 10
 const CONSTRAINED_SESSION_CACHE_LIMIT = 6
@@ -627,7 +630,8 @@ export class SessionMessageLoader {
       if (page.nextCursor !== null && (page.nextCursor === cursor || page.messages.length === 0)) throw new Error("Session history pagination made no progress")
       const current = store.getState()
       const deletedRevision = current.sessionDeletedRevision?.[target.sessionId]
-      if (deletedRevision !== undefined && deletedRevision >= requestedRevision) {
+      if (deletedRevision !== undefined && (deletedRevision > requestedRevision
+        || (deletedRevision >= requestedRevision && !isArchivedSession(target.sessionId)))) {
         this.patchEntry(entry, { status: "idle", loadingKind: null, resolved: false })
         return
       }
@@ -685,7 +689,7 @@ export class SessionMessageLoader {
       const current = store.getState()
       const deletedRevision = current.sessionDeletedRevision?.[target.sessionId]
       const sessionPresent = current.session.some(session => session.sessionId === target.sessionId)
-      if ((deletedRevision !== undefined && !sessionPresent && deletedRevision >= requestedRevision)
+      if ((deletedRevision !== undefined && !sessionPresent && deletedRevision >= requestedRevision && !isArchivedSession(target.sessionId))
         || (deletedRevision !== undefined && deletedRevision > requestedRevision)) {
         this.patchEntry(entry, { status: "idle", loadingKind: null, error: null, resolved: false, cursor: undefined, complete: false })
         return
@@ -741,7 +745,8 @@ export class SessionMessageLoader {
     let next: State = store.getState()
     const deletedRevision = next.sessionDeletedRevision?.[target.sessionId]
     const deletedAfterRead = deletedRevision !== undefined && (deletedRevision > requestedRevision
-      || (!next.session.some(session => session.sessionId === target.sessionId) && deletedRevision >= requestedRevision))
+      || (!next.session.some(session => session.sessionId === target.sessionId) && deletedRevision >= requestedRevision
+        && !isArchivedSession(target.sessionId)))
     const hostSession = deletedAfterRead ? undefined : hostList?.items.find(session => session.sessionId === target.sessionId)
     const runtime = next.snapshot[target.sessionId]?.session
     if (!deletedAfterRead && hostSession && runtime && hostSession.workspaceId === runtime.workspaceId) next = installHostSession(next, { ...hostSession, ...runtime })
