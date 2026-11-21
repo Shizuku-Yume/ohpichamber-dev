@@ -391,6 +391,8 @@ const createCanonicalSessionService = (dependencies) => {
   const deliver = async (operation, sessionId, payload, commandId) => {
     const scope = await scopeFor(sessionId);
     assertWritableScope(scope);
+    // A warm root skips the reopen that would refuse a removed checkout, so delivery refuses it here.
+    if (scope.checkoutRemoved) throw new OpenChamberControlError('This chat\'s worktree was deleted, so it is read-only', 409, { code: 'SESSION_READ_ONLY', retryable: false });
     const parsed = PromptRequestSchema.safeParse(operation === 'send' ? payload : payload?.request ?? payload);
     if (!parsed.success || (operation !== 'send' && payload?.sessionId !== undefined && payload.sessionId !== sessionId)) {
       throw new OpenChamberControlError('Prompt request is invalid', 400, { code: 'INVALID_REQUEST' });
