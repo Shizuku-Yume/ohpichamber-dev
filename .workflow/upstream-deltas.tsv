@@ -2,7 +2,7 @@
 path	state	class	decision	reason
 packages/web/server/lib/host/agent-scope-store.js	fork-only	omp-boundary		Atomically rolls unpinned restore claim release back to archived and repairs only equivalent unclaimed rows on store open; pinned and moved restores retain recovery fences.
 packages/web/server/lib/host/DOCUMENTATION.md	fork-only	omp-boundary		Documents the Host-owned pre-pin restore rollback and narrow persisted recovery invariant.
-packages/web/server/lib/git/worktree-archive-host.test.js	fork-only	fork-added		Covers pre-pin restore failure, persisted recovery, archived session discovery across reopen and preservation of pinned or moved recovery fences.
+packages/web/server/lib/git/worktree-archive-host.test.js	fork-only	fork-added		Covers pre-pin restore failure, persisted recovery, archived session discovery across reopen and preservation of pinned or moved recovery fences; canonical fixture paths support symlinked temporary directories.
 packages/web/bin/lib/cli-shell.test.js	fork-differs	decision	2026-11-21 - Skip the POSIX shell quoting round-trip on Windows	Skips the /bin/sh POSIX quoting round-trip on Windows hosts, which have no /bin/sh.
 packages/electron/startup-single-flight.test.mjs	fork-differs	decision	2026-11-20 - Keep portable and type-safe test harness fixes	Uses a file URL for the Node --import preload so Windows drive-letter paths resolve correctly (PR #78).
 packages/web/server/lib/git/storage-process.fixture.ts	fork-differs	decision	2026-11-20 - Keep portable and type-safe test harness fixes	Preserves Node readFileSync overloads through a proxy; the upstream overload wrapper fails TS2394 and TS2322 with the installed Node types.

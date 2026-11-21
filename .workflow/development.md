@@ -35,6 +35,14 @@ With the symlink fix, all 16 Host archive tests and the 11 focused Git archive
 service tests pass; type-check (including drift) and server lint pass again.
 The full UI suite was not rerun because no UI code changed and its two existing
 failures were already reproduced on main.
+The rebased archive suite exposed a fixture-only path alias bug with macOS
+`TMPDIR=/tmp/arh/tmp`: nine fence assertions used `/tmp` instead of the store's
+canonical `/private/tmp`, and the capture fixture's scope map refused canonical
+Git paths. Both fixture roots now use `realpathSync`, matching the existing
+discovery fixture. No product behavior or session admission was changed.
+The original package-script invocation and the reported `bunx vitest` invocation
+with the short `/tmp` path both pass all 16 tests after the fixture fix;
+type-check including drift and server lint pass on the rebased branch.
 
 Shared UI discovery now requests canonical snapshot recovery when a newer
 session head or epoch disagrees with cached run control. Stop also refreshes

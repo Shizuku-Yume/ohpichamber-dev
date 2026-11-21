@@ -39,7 +39,7 @@ describe('Host-owned worktree archive capture', () => {
     [null, 'move_intent'],
     [null, 'restored'],
   ])('preserves the pre-pin rollback boundary after release and reopen (%s, %s)', async (archiveUpdate, progress) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archive-recovery-fence-'));
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archive-recovery-fence-')));
     const owner = createHostSessionState({ dataDir: root });
     const fixture = { root, owner };
     fixtures.push(fixture);
@@ -173,7 +173,7 @@ describe('Host-owned worktree archive capture', () => {
     await assertDiscoverable();
   });
   it('captures every admitted nested scope independently of a client session list and preserves earlier archive state', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-archive-host-'));
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-archive-host-')));
     const project = path.join(root, 'project');
     const checkout = path.join(root, 'checkout');
     const agent = path.join(root, 'agent');
