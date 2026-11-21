@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
+import { GitWorktreeRequestError } from '@/lib/api/types';
 
 const archivedSessionIds: string[][] = [];
 const restoredSessionIds: string[][] = [];
@@ -10,6 +11,7 @@ const teardowns: Array<{ projectDirectory: string; directory: string; teardownCo
 let runTeardown: () => Promise<void> = async () => undefined;
 const teardownAsks: Array<boolean | undefined> = [];
 let resolveTeardown: () => Promise<string | undefined> = async () => undefined;
+let runArchive: () => Promise<void> = async () => undefined;
 
 type ProjectRef = { id: string; path: string };
 
@@ -20,6 +22,7 @@ mock.module('@/lib/worktrees/worktreeManager', () => ({
   },
   archiveProjectWorktree: async (_project: ProjectRef, _worktree: WorktreeMetadata, input: { sessionIds: string[] }) => {
     worktreeArchives.push({ sessionIds: input.sessionIds });
+    await runArchive();
     return { id: 'a1' };
   },
   createWorktree: mock(),
@@ -92,6 +95,7 @@ describe('archiveWorktreeWork teardown', () => {
     teardownAsks.length = 0;
     teardowns.length = 0;
     runTeardown = async () => undefined;
+    runArchive = async () => undefined;
   });
 
   test('a pass nobody started leaves the sessions alone when the shared teardown is not trusted', async () => {
@@ -128,7 +132,7 @@ describe('archiveWorktreeWork teardown', () => {
     expect(order).toEqual(['teardown, 0 sessions archived']);
     expect(teardownAsks).toEqual([undefined]);
     expect(teardowns).toEqual([{ projectDirectory: '/repo', directory: '/repo-feature', teardownCommand: 'docker compose down' }]);
-    expect(archivedSessionIds).toEqual([['ses_1']]);
+    expect(archivedSessionIds).toEqual([]);
     expect(worktreeArchives).toEqual([{ sessionIds: ['ses_1'] }]);
   });
 
@@ -139,5 +143,23 @@ describe('archiveWorktreeWork teardown', () => {
 
     expect(teardowns).toEqual([]);
     expect(worktreeArchives).toEqual([{ sessionIds: ['ses_1'] }]);
+  });
+
+  test('an empty client session list still lets the Host capture the checkout', async () => {
+    resolveTeardown = async () => undefined;
+    await archiveWorktreeWork({ project, worktree, sessions: [] });
+    expect(worktreeArchives).toEqual([{ sessionIds: [] }]);
+    expect(archivedSessionIds).toEqual([]);
+  });
+
+  test.each([
+    new Error('Host capture refused'),
+    new GitWorktreeRequestError('WORKTREE_ARCHIVE_PARTIAL', 'Checkout removal incomplete', 409),
+  ])('a Host failure leaves session rollback to the Host (%s)', async (error) => {
+    resolveTeardown = async () => undefined;
+    runArchive = async () => { throw error; };
+    await expect(archiveWorktreeWork({ project, worktree, sessions: [session] })).rejects.toThrow(error.message);
+    expect(archivedSessionIds).toEqual([]);
+    expect(restoredSessionIds).toEqual([]);
   });
 });

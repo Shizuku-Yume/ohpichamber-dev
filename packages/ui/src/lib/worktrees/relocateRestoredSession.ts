@@ -4,7 +4,7 @@ import { createSessionOwnershipIndex } from '@/components/session/sidebar/sessio
 import { formatMessage, useI18nStore } from '@/lib/i18n';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { normalizePath } from '@/lib/pathNormalization';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { moveSessionToDirectory } from '@/sync/session-actions';
@@ -18,6 +18,7 @@ export type RestoredSessionRelocation =
 type RelocationDeps = {
   getSession: (sessionId: string) => Session | undefined;
   getActiveSessions: () => readonly Session[];
+  resolveSessionDirectory: (session: Session) => string | null;
   getDirectoryAvailability: (directory: string) => Promise<'available' | 'missing' | 'unknown'>;
   resolveProjectRoot: (session: Session) => string | null;
   moveSession: (session: Session, sourceDirectory: string, destinationDirectory: string) => Promise<void>;
@@ -41,6 +42,7 @@ const resolveProjectRootFromStores = (session: Session): string | null => {
 const defaultDeps: RelocationDeps = {
   getSession: (sessionId) => useGlobalSessionsStore.getState().entityById.get(sessionId),
   getActiveSessions: () => useGlobalSessionsStore.getState().activeSessions,
+  resolveSessionDirectory: resolveGlobalSessionDirectory,
   getDirectoryAvailability: (directory) => hostFilesystem.getDirectoryAvailability(directory),
   resolveProjectRoot: resolveProjectRootFromStores,
   moveSession: moveSessionToDirectory,
@@ -50,6 +52,7 @@ const collectDescendantsInDirectory = (
   root: Session,
   sessions: readonly Session[],
   directory: string,
+  resolveDirectory: (session: Session) => string | null,
 ): Session[] => {
   const childrenByParent = new Map<string, Session[]>();
   for (const session of sessions) {
@@ -62,7 +65,7 @@ const collectDescendantsInDirectory = (
   const visit = (parentId: string) => {
     for (const child of childrenByParent.get(parentId) ?? []) {
       visit(child.sessionId);
-      if (normalizePath(child.displayPath) === directory) descendants.push(child);
+      if (normalizePath(resolveDirectory(child)) === directory) descendants.push(child);
     }
   };
   visit(root.sessionId);
@@ -74,7 +77,7 @@ export async function relocateRestoredSessionIfDirectoryMissing(
   deps: RelocationDeps = defaultDeps,
 ): Promise<RestoredSessionRelocation> {
   const session = deps.getSession(sessionId);
-  const sourceDirectory = normalizePath(session?.displayPath ?? null);
+  const sourceDirectory = session ? normalizePath(deps.resolveSessionDirectory(session)) : null;
   if (!session || !sourceDirectory) return { outcome: 'kept' };
   if (await deps.getDirectoryAvailability(sourceDirectory) !== 'missing') return { outcome: 'kept' };
 
@@ -83,7 +86,7 @@ export async function relocateRestoredSessionIfDirectoryMissing(
   if (await deps.getDirectoryAvailability(projectRoot) !== 'available') return { outcome: 'kept' };
 
   try {
-    const tree = [...collectDescendantsInDirectory(session, deps.getActiveSessions(), sourceDirectory), session];
+    const tree = [...collectDescendantsInDirectory(session, deps.getActiveSessions(), sourceDirectory, deps.resolveSessionDirectory), session];
     for (const member of tree) {
       await deps.moveSession(member, sourceDirectory, projectRoot);
     }

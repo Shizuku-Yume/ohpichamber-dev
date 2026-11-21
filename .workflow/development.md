@@ -4,6 +4,20 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Worktree archival no longer pre-archives sessions in the shared UI before the
+Host captures their original state. The iOS backup recorded fresh-salamander
+as already archived at capture (`original_archived_at` set, progress `pending`),
+so Host restore correctly preserved that captured state rather than unarchiving
+it. Standalone restore then committed its unarchive before a relocation helper
+mistook the relative `displayPath` for a missing filesystem directory. The helper
+now uses admitted workspace directory mappings, including descendants, and
+leaves unknown mappings alone. Host capture continues to preserve genuinely
+independently archived chats; existing ambiguous original archive timestamps
+are not rewritten. Web/PWA, Electron, hosted mobile and Capacitor share these
+flows. The live iOS data was inspected read-only. Regression and check receipts
+are under `/Users/devin/shared_files/archive-session-restore/`; on-device and
+visual verification remain outstanding.
+
 Host worktree restore claim release now rolls an untouched restore back to
 `archived` atomically. Store open repairs the equivalent unclaimed persisted
 state. Target pins, apply attempts, finalization and session movement still

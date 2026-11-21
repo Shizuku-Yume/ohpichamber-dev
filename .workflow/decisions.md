@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-21 - Let Host worktree capture own session archive state
+
+- **Decided:** archive worktrees without client-side session pre-archival, and resolve standalone restored-session relocation through the registered workspace directory.
+- **Instead of:** pre-archiving every chat before Host capture or treating a session display path as a filesystem path.
+- **Because:** the Host must distinguish chats active at capture from independently archived chats; only admitted workspace paths can authorize relocation or establish that a checkout is missing.
+- **Mine:** yes (requested archive restore follow-up)
+- **Revisit when:** Host archive capture or canonical workspace directory authority changes.
+
 ## 2026-11-20 - Keep portable and type-safe test harness fixes
 
 - **Decided:** retain file URLs for the Electron startup test's Node `--import` preload and the Git storage fixture's proxy around `readFileSync`.

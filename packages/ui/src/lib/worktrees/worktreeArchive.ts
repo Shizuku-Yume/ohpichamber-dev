@@ -14,12 +14,11 @@ import {
   resolveWorktreeTeardownCommand,
   type ProjectRef,
 } from '@/lib/worktrees/worktreeManager';
-import { archiveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { z } from 'zod';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { archiveSessions, deleteSessions, moveSessionToDirectory, unarchiveSessions } from '@/sync/session-actions';
+import { deleteSessions, moveSessionToDirectory, unarchiveSessions } from '@/sync/session-actions';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 type ProjectArchives =
@@ -94,23 +93,12 @@ export async function archiveWorktreeWork(input: {
     if (teardownCommand) {
       await git.worktree.teardown(normalizePath(input.project.path) ?? input.project.path, { directory: input.worktree.path, teardownCommand });
     }
-    await archiveSessionsThenRemoveWorktree({
-      sessionIds,
-      archiveSessions: (ids) => archiveSessions(ids),
-      restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
-      removeWorktree: async (archivedIds) => {
-        if (archivedIds.length !== sessionIds.length) {
-          throw new Error(`Could not archive ${sessionIds.length - archivedIds.length} session(s)`);
-        }
-        try {
-          await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds: archivedIds, title: input.title });
-        } catch (error) {
-          if (!(error instanceof GitWorktreeRequestError) || error.code !== 'WORKTREE_ARCHIVE_PARTIAL') throw error;
-          partial = error;
-        }
-        return true;
-      },
-    });
+    try {
+      await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds, title: input.title });
+    } catch (error) {
+      if (!(error instanceof GitWorktreeRequestError) || error.code !== 'WORKTREE_ARCHIVE_PARTIAL') throw error;
+      partial = error;
+    }
   } finally {
     clearWorktreeRemoval(input.worktree.path);
     void loadWorktreeArchives(input.project.path).catch(() => undefined);
