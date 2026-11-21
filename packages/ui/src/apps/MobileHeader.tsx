@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSession } from '@/sync/sync-context';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 
 import { MobileSessionMetadataButton } from './MobileSessionMetadata';
@@ -41,7 +42,8 @@ export const MobileHeader: React.FC<{
 
   const runOverviewKey = useUIStore((state) => state.runOverviewKey);
   const runTitle = useMultiRunTitle(runOverviewKey);
-  const sessionTitle = currentSession?.title?.trim();
+  const recordTitle = useGlobalSessionsStore((state) => (currentSessionId ? state.entityById.get(currentSessionId)?.title : undefined));
+  const sessionTitle = currentSession?.title?.trim() || recordTitle?.trim();
   const primaryLabel = (runOverviewKey ? runTitle : null)
     || sessionTitle
     || (currentSessionId ? t('mobile.sessions.untitled') : t('sessions.switcher.draftTitle'));

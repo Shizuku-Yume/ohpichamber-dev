@@ -309,8 +309,10 @@ export function registerCanonicalHostRoutes(app, {
    let scope;
    if (groups?.workspaceId) {
     const workspaceId = C.EntityIdSchema.parse(decodeURIComponent(groups.workspaceId));
-    scope = capturedScope(await resolveWorkspaceScope(workspaceId), workspaceId);
+    const resolved = await resolveWorkspaceScope(workspaceId);
+    scope = capturedScope(resolved, workspaceId);
     if (!scope) return problem(res, 403, 'UNAUTHORIZED', 'The selected workspace is not authorized.');
+    if (resolved.checkoutRemoved) return problem(res, 409, 'SESSION_READ_ONLY', 'This workspace\'s worktree was deleted, so it is read-only.');
    } else if (groups?.sessionId) {
     const sessionId = C.EntityIdSchema.parse(decodeURIComponent(groups.sessionId));
     scope = capturedScope(await resolveRouteSessionScope(sessionId));
