@@ -51,6 +51,12 @@ const workspaceColumns = `${projectColumns}, w.workspace_id AS workspaceId, w.cw
 const workspaceJoin = `host_agent_workspaces w
   JOIN host_agent_projects p ON p.project_id = w.project_id
   JOIN host_agent_directories d ON d.agent_directory_id = w.agent_directory_id`;
+const unpinnedRestore = `phase = 'restoring' AND target_workspace_id IS NULL
+  AND preapply_head IS NULL AND preapply_fingerprint IS NULL AND expected_fingerprint IS NULL
+  AND apply_attempted = 0 AND restore_cas_started = 0 AND restore_cas_completed = 0
+  AND NOT EXISTS (SELECT 1 FROM host_worktree_archive_sessions s
+    WHERE s.host_project_id = host_worktree_archives.host_project_id AND s.archive_id = host_worktree_archives.archive_id
+      AND (s.progress NOT IN ('pending', 'archived') OR s.target_workspace_id IS NOT NULL))`;
 
 const parseRow = (schema, row) => {
   const parsed = schema.safeParse(row);
@@ -66,6 +72,8 @@ const writeFailure = (error) => error instanceof MetadataCorruptError || error i
 export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) => {
   const db = database;
   const lifecycle = createMetadataLifecycle(db, false);
+  withTransaction(db, () => db.prepare(`UPDATE host_worktree_archives SET phase = 'archived', revision = revision + 1
+    WHERE claim_id IS NULL AND claim_generation IS NULL AND ${unpinnedRestore}`).run());
   const pendingSessionDeletes = new Map();
   const pendingDiscoveries = new Map();
   const liveAdmissions = new Set();
@@ -554,7 +562,8 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
     try {
       const value = WorktreeArchiveKeySchema.parse(key);
       return withTransaction(db, () => {
-        const result = db.prepare(`UPDATE host_worktree_archives SET claim_id = NULL, claim_generation = NULL, revision = revision + 1
+        const result = db.prepare(`UPDATE host_worktree_archives SET phase = CASE WHEN ${unpinnedRestore} THEN 'archived' ELSE phase END,
+          claim_id = NULL, claim_generation = NULL, revision = revision + 1
           WHERE host_project_id = ? AND archive_id = ? AND claim_id = ?`).run(value.hostProjectId, value.archiveId, EntityIdSchema.parse(claimId));
         if (result.changes === 0) return readWorktreeArchive(value);
         return readWorktreeArchive(value);

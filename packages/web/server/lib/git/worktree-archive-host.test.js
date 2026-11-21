@@ -6,6 +6,8 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHostSessionState } from '../host/session-state.js';
+import { createHostAgentScopeRuntime } from '../host/agent-scope-runtime.js';
+import { DatabaseSync } from 'node:sqlite';
 import { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
 import { archiveWorktree } from './service.js';
 import { registerGitRoutes } from './routes.js';
@@ -25,8 +27,153 @@ const pathKey = (directory) => {
 };
 
 describe('Host-owned worktree archive capture', () => {
+  it.each([
+    [null, null],
+    ["target_workspace_id = anchor_workspace_id", null],
+    ["preapply_head = 'head'", null],
+    ["preapply_fingerprint = '{}'", null],
+    ["expected_fingerprint = '{}'", null],
+    ['apply_attempted = 1', null],
+    ['restore_cas_started = 1', null],
+    ['restore_cas_completed = 1', null],
+    [null, 'move_intent'],
+    [null, 'restored'],
+  ])('preserves the pre-pin rollback boundary after release and reopen (%s, %s)', async (archiveUpdate, progress) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archive-recovery-fence-')));
+    const owner = createHostSessionState({ dataDir: root });
+    const fixture = { root, owner };
+    fixtures.push(fixture);
+    const store = owner.agentScopeStore;
+    const scope = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: root, workspaceDirectory: root, agentDirectory: root, name: 'Project' });
+    const safe = !archiveUpdate && !progress;
+    if (!safe) await store.bindSession({ sessionId: 'session', rootSessionId: 'session', workspaceId: scope.workspaceId });
+    const key = { hostProjectId: 'project', archiveId: 'archive' };
+    const binding = await store.createWorktreeArchive({ ...key, archiveRef: 'refs/openchamber/archive/archive', snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: scope.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_claim`, branchName: 'branch', branchOid: null });
+    await store.setWorktreeArchivePhase(key, 'claim', binding.revision, 'restoring');
+    const db = new DatabaseSync(owner.databasePath);
+    if (archiveUpdate) db.exec(`UPDATE host_worktree_archives SET ${archiveUpdate}`);
+    if (progress) db.prepare('UPDATE host_worktree_archive_sessions SET progress = ?').run(progress);
+    db.close();
+    expect(await store.releaseWorktreeArchiveClaim(key, 'wrong-claim')).toMatchObject({ phase: 'restoring', claimId: 'claim' });
+    expect(await store.releaseWorktreeArchiveClaim(key, 'claim')).toMatchObject({ phase: safe ? 'archived' : 'restoring', claimId: null });
+    if (safe) await expect(store.checkWorktreeScope(root)).resolves.toBeUndefined();
+    else await expect(store.checkWorktreeScope(root)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await owner.close();
+    fixture.owner = createHostSessionState({ dataDir: root });
+    expect(await fixture.owner.agentScopeStore.getWorktreeArchive(key)).toMatchObject({ phase: safe ? 'archived' : 'restoring', claimId: null });
+    if (safe) await expect(fixture.owner.agentScopeStore.checkWorktreeScope(root)).resolves.toBeUndefined();
+    else await expect(fixture.owner.agentScopeStore.checkWorktreeScope(root)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+  });
+  it.each([false, true])('recovers an unpinned restore without losing archived discovery (persisted: %s)', async (persisted) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archive-unpinned-')));
+    const project = path.join(root, 'project');
+    const agent = path.join(root, 'agent');
+    const dataDir = path.join(root, 'host');
+    fs.mkdirSync(project);
+    fs.mkdirSync(agent);
+    git(project, 'init', '-q');
+    git(project, '-c', 'user.name=Archive test', '-c', 'user.email=archive@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'base');
+    let owner = createHostSessionState({ dataDir });
+    const fixture = { owner, root };
+    fixtures.push(fixture);
+    const scopes = new Map();
+    const register = async (cwd) => {
+      const scope = await owner.agentScopeStore.ensureWorkspace({ hostProjectId: 'project', projectDirectory: project, workspaceDirectory: cwd, agentDirectory: agent, name: 'Project' });
+      scopes.set(pathKey(cwd), scope);
+      return scope;
+    };
+    await register(project);
+    let runtime;
+    const createService = () => createOpenChamberSessionService({
+      service: { request: async (url) => {
+        const workspaceId = new URL(url, 'http://host').searchParams.get('workspaceId');
+        const sessions = await Promise.all(['restore', 'control'].map((id) => owner.agentScopeStore.getSession(id)));
+        return Response.json({ items: sessions.filter((session) => session?.workspaceId === workspaceId).map((session) => ({
+          sessionId: session.sessionId, rootSessionId: session.rootSessionId, projectId: session.projectId,
+          workspaceId, displayPath: path.basename(session.cwd), createdAt: 1700000000000, updatedAt: 1700000000000,
+          epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+        })), errors: [] });
+      } },
+      agentScopeStore: owner.agentScopeStore, archiveStore: owner.archiveStore,
+      sessionMetadataStore: owner.sessionMetadataStore,
+      resolveWorkspaceDirectory: async (cwd) => scopes.get(pathKey(cwd)),
+      resolveWorkspaceScope: (id) => owner.agentScopeStore.getWorkspace(id),
+      listWorkspaceScopes: async () => {
+        const page = await runtime.listWorkspaces();
+        return { items: page.items.map(({ workspaceId }) => ({ workspaceId })), errors: page.errors };
+      },
+      resolveSessionScope: (id) => owner.agentScopeStore.getSession(id),
+      resolveHostSessionScope: (id) => owner.agentScopeStore.getSession(id),
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt,
+      beforeDispatch: async () => {}, onPromptAccepted: async () => {},
+      directCommandAdmissionStore: owner.directCommandAdmissionStore,
+    });
+    const service = createService();
+    for (const id of ['restore', 'control']) {
+      const cwd = path.join(root, id);
+      git(project, 'worktree', 'add', '-q', '-b', id, cwd);
+      const scope = await register(cwd);
+      await owner.agentScopeStore.bindSession({ sessionId: id, rootSessionId: id, workspaceId: scope.workspaceId });
+      await archiveWorktree(project, { directory: cwd, id }, {
+        worktreeWorkers: { acquire: async () => {}, release: async () => {} }, archiveSessions: service,
+      });
+    }
+    const key = { hostProjectId: 'project', archiveId: 'restore' };
+    if (persisted) {
+      await owner.close();
+      const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+      db.prepare("UPDATE host_worktree_archives SET phase = 'restoring', revision = revision + 2 WHERE archive_id = 'restore'").run();
+      db.close();
+      owner = createHostSessionState({ dataDir });
+      fixture.owner = owner;
+    } else {
+      const target = path.join(root, 'target');
+      git(project, 'worktree', 'add', '-q', target, 'restore');
+      await register(target);
+      let reachedPreflight = false;
+      const app = express();
+      app.use(express.json());
+      registerGitRoutes(app, { worktreeArchiveSessionService: {
+        ...service,
+        pinWorktreeArchiveRestore: async () => { reachedPreflight = true; throw new Error('injected pre-pin failure'); },
+      } });
+      const response = await request(app).post('/api/git/worktrees/archives/restore').query({ directory: target }).send({ id: 'restore' });
+      expect(response.status).toBe(500);
+      expect(reachedPreflight, JSON.stringify(response.body)).toBe(true);
+      git(project, 'worktree', 'remove', '--force', target);
+    }
+    const assertDiscoverable = async () => {
+      const store = owner.agentScopeStore;
+      expect(await store.getWorktreeArchive(key)).toMatchObject({ phase: 'archived', claimId: null, targetWorkspaceId: null, applyAttempted: 0 });
+      runtime = createHostAgentScopeRuntime({
+        store, agentDirectory: agent,
+        readSettings: async () => ({ projects: [{ id: 'project', path: project, label: 'Project' }] }),
+        sanitizeProjects: (projects) => projects,
+        validateDirectoryPath: async (cwd) => ({ ok: true, directory: fs.realpathSync(cwd) }),
+        getWorktrees: async () => [],
+      });
+      const discovery = await runtime.listWorkspaces();
+      expect(discovery.errors).toEqual({});
+      const sessions = await createService().list();
+      expect(sessions.errors).toEqual({});
+      expect(sessions.items.map((session) => session.sessionId).sort()).toEqual(['control', 'restore']);
+      expect(sessions.items.every((session) => session.archivedAt > 0)).toBe(true);
+      for (const id of ['restore', 'control']) {
+        const session = await store.getSession(id);
+        expect(discovery.items.map((scope) => scope.workspaceId)).toContain(session.workspaceId);
+        expect(await owner.archiveStore.getState(id)).toMatchObject({ revision: '1', archivedAt: expect.any(Number) });
+        await expect(store.checkWorktreeScope(session.cwd)).resolves.toBeUndefined();
+      }
+    };
+    await assertDiscoverable();
+    await owner.close();
+    owner = createHostSessionState({ dataDir });
+    fixture.owner = owner;
+    await assertDiscoverable();
+  });
   it('captures every admitted nested scope independently of a client session list and preserves earlier archive state', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-archive-host-'));
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-archive-host-')));
     const project = path.join(root, 'project');
     const checkout = path.join(root, 'checkout');
     const agent = path.join(root, 'agent');
@@ -153,7 +300,8 @@ describe('Host-owned worktree archive capture', () => {
     const emptySource = path.join(root, 'restore-source');
     git(project, 'worktree', 'add', '-q', '-b', 'restore-fixture', emptySource);
     fs.writeFileSync(path.join(emptySource, '.gitignore'), 'ignored.txt\nnode_modules/\n');
-    git(emptySource, 'add', '.gitignore');
+    fs.symlinkSync('.gitignore', path.join(emptySource, 'ignore-link'));
+    git(emptySource, 'add', '.gitignore', 'ignore-link');
     git(emptySource, '-c', 'user.name=Archive test', '-c', 'user.email=archive@example.invalid', 'commit', '-q', '-m', 'ignore setup');
     fs.writeFileSync(path.join(emptySource, 'restored.txt'), 'saved change\n');
     scopes.set(pathKey(emptySource), await register(emptySource));
@@ -170,6 +318,7 @@ describe('Host-owned worktree archive capture', () => {
       .query({ directory: restoreTarget }).send({ id: 'restore-fixture' });
     expect(restored.status, JSON.stringify(restored.body)).toBe(200);
     expect(restored.body.sessionBinding.status).toBe('bound');
+    expect(fs.readlinkSync(path.join(restoreTarget, 'ignore-link'))).toBe('.gitignore');
     expect(fs.readFileSync(path.join(restoreTarget, 'restored.txt'), 'utf8')).toBe('saved change\n');
     expect(fs.readFileSync(path.join(restoreTarget, 'ignored.txt'), 'utf8')).toBe('ignored content\n');
     expect(fs.readFileSync(path.join(restoreTarget, 'node_modules', 'dep.txt'), 'utf8')).toBe('module\n');
@@ -342,6 +491,11 @@ describe('Host-owned worktree archive capture', () => {
     const reclaimed = await reopened.agentScopeStore.claimWorktreeArchive({ hostProjectId: 'settings-project', archiveId: 'restart-fence' },
       { claimId: 'new-claim', claimGeneration: `host_${process.pid}_new`, revision: fenced.revision, phase: 'restoring' });
     expect(reclaimed.claimId).toBe('new-claim');
+    const fingerprint = { head: 'b'.repeat(40), tree: 'tree', index: 'index', unmerged: '', status: '', conflicts: false };
+    await reopened.agentScopeStore.pinWorktreeRestore({ hostProjectId: 'settings-project', archiveId: 'restart-fence' }, {
+      claimId: 'new-claim', revision: reclaimed.revision, targetWorkspaceId: projectScope.workspaceId,
+      preapplyHead: fingerprint.head, preapplyFingerprint: fingerprint, expectedFingerprint: fingerprint,
+    });
     await reopened.agentScopeStore.releaseWorktreeArchiveClaim({ hostProjectId: 'settings-project', archiveId: 'restart-fence' }, 'new-claim');
     await expect(reopened.agentScopeStore.bindSession({ sessionId: 'after-release', rootSessionId: 'after-release', workspaceId: secondScope.workspaceId }))
       .rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });

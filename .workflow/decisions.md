@@ -1960,6 +1960,14 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Mine:** yes (requested fix)
 - **Revisit when:** removed-checkout sessions gain a relocation or restore flow that moves them to a live workspace.
 
+## 2026-11-21 - Preserve relative symlinks in archive restore comparison checkouts
+
+- **Decided:** copy symlink text verbatim into the temporary restore comparison checkout while keeping the existing fingerprint safety check and the Host Git ownership recorded under the 2026-11-11 web work modules decision.
+- **Instead of:** allowing `fs.cp` to rewrite relative links into absolute links or weakening the comparison fingerprint check.
+- **Because:** rewriting a tracked relative link changes the comparison tree and status, refusing an otherwise safe restore before target pinning.
+- **Mine:** yes (requested fix and drift classification)
+- **Revisit when:** restore preflight no longer reconstructs a comparison checkout or upstream preserves relative symlinks itself.
+
 ## 2026-11-21 - Match deleted Windows worktree paths from Archive
 
 - **Decided:** match separator, drive-letter case, and trailing-separator variants when looking up an already authorized deleted Windows checkout.
