@@ -11,8 +11,14 @@ retain the recovery fence; session admission and transcript loading are
 unchanged. Both pre-fix Host regressions failed with expected `archived`,
 received `restoring`. Isolated Host regressions cover discovery of the failed
 archive alongside a control, reopen, empty bindings and unsafe-state fences.
-Check receipts are under `/Users/devin/shared_files/archive-restore-checks/`.
-No on-device or visual recheck was performed.
+The two touched-owner Host suites pass 22 tests; type-check (including drift)
+and server lint pass. The full UI run passes 1,411/1,413 files: composer
+keystroke and localized-duration failures reproduce unchanged on copied
+`origin/main` at `5d13c173f` with the same dependencies. A read-only SQLite
+backup of the real iOS Host metadata also repairs from `restoring` to
+`archived` on store open. Check receipts are under
+`/Users/devin/shared_files/archive-restore-checks/`. No on-device or visual
+recheck was performed.
 
 The original restore refusal reproduces against a separate, non-hardlinked
 mirror of the affected repository: `prospectiveWorktreeRestore` copies
