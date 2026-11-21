@@ -14,12 +14,11 @@ import {
   resolveWorktreeTeardownCommand,
   type ProjectRef,
 } from '@/lib/worktrees/worktreeManager';
-import { archiveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { z } from 'zod';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { archiveSessions, deleteSessions, moveSessionToDirectory, unarchiveSessions } from '@/sync/session-actions';
+import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { deleteSessions, moveSessionToDirectory, unarchiveSessions } from '@/sync/session-actions';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 type ProjectArchives =
@@ -86,36 +85,25 @@ export async function archiveWorktreeWork(input: {
   title?: string;
   askForTrust?: boolean;
 }): Promise<void> {
+  const runtimeKey = getRuntimeKey();
   const sessionIds = input.sessions.map((session) => session.sessionId);
-  let partial: Error | null = null;
+  let sessionsChanged = false;
   markWorktreeRemoving(input.worktree.path);
   try {
     const teardownCommand = await resolveWorktreeTeardownCommand(input.project, input.worktree, { ask: input.askForTrust });
     if (teardownCommand) {
       await git.worktree.teardown(normalizePath(input.project.path) ?? input.project.path, { directory: input.worktree.path, teardownCommand });
     }
-    await archiveSessionsThenRemoveWorktree({
-      sessionIds,
-      archiveSessions: (ids) => archiveSessions(ids),
-      restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
-      removeWorktree: async (archivedIds) => {
-        if (archivedIds.length !== sessionIds.length) {
-          throw new Error(`Could not archive ${sessionIds.length - archivedIds.length} session(s)`);
-        }
-        try {
-          await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds: archivedIds, title: input.title });
-        } catch (error) {
-          if (!(error instanceof GitWorktreeRequestError) || error.code !== 'WORKTREE_ARCHIVE_PARTIAL') throw error;
-          partial = error;
-        }
-        return true;
-      },
-    });
+    await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds, title: input.title });
+    sessionsChanged = true;
+  } catch (error) {
+    sessionsChanged = error instanceof GitWorktreeRequestError && error.code === 'WORKTREE_ARCHIVE_PARTIAL';
+    throw error;
   } finally {
     clearWorktreeRemoval(input.worktree.path);
     void loadWorktreeArchives(input.project.path).catch(() => undefined);
+    if (sessionsChanged && getRuntimeKey() === runtimeKey) await refreshGlobalSessions();
   }
-  if (partial) throw partial;
 }
 
 export const archivedWorktreeLabel = (archive: GitWorktreeArchive): string => (
@@ -148,6 +136,7 @@ async function restoreArchivedWorktreeOnce(input: {
   archive: GitWorktreeArchive;
   recovery?: { head: string; revision: number };
 }): Promise<WorktreeArchiveRestore> {
+  const runtimeKey = getRuntimeKey();
   const { project, archive } = input;
   const setupCommands = await resolveWorktreeSetupCommandsOrCancel(project);
   if (setupCommands === null) return { outcome: 'cancelled' };
@@ -170,6 +159,7 @@ async function restoreArchivedWorktreeOnce(input: {
       : undefined));
   } catch (error) {
     await removeProjectWorktree(project, worktree, { deleteLocalBranch: !archive.branchExists }).catch(() => undefined);
+    if (getRuntimeKey() === runtimeKey) await refreshGlobalSessions();
     throw error;
   }
   noteRestoredWorktree(worktree.path);
@@ -197,6 +187,7 @@ async function restoreArchivedWorktreeOnce(input: {
 
   void listProjectWorktrees(project, { force: true }).catch(() => undefined);
   void loadWorktreeArchives(project.path).catch(() => undefined);
+  if (getRuntimeKey() === runtimeKey) await refreshGlobalSessions();
   return { outcome: 'restored', worktree, conflicts, sessionsFailed };
 }
 

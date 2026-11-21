@@ -32,6 +32,8 @@ const setup = (options: {
   sessions: Session[];
   availability: Record<string, 'available' | 'missing' | 'unknown'>;
   projectRoot?: string | null;
+  directory?: string | null;
+  directories?: Record<string, string>;
   failMove?: boolean;
 }) => {
   const moves: Array<{ sessionId: string; from: string; to: string }> = [];
@@ -41,6 +43,7 @@ const setup = (options: {
     deps: {
       getSession: (sessionId: string) => byId.get(sessionId),
       getActiveSessions: () => options.sessions,
+      resolveSessionDirectory: (entry: Session) => options.directory === undefined ? options.directories?.[entry.sessionId] ?? WORKTREE : options.directory,
       getDirectoryAvailability: async (directory: string) => options.availability[directory] ?? 'unknown',
       resolveProjectRoot: () => (options.projectRoot === undefined ? PROJECT : options.projectRoot),
       moveSession: async (moved: Session, from: string, to: string) => {
@@ -52,6 +55,21 @@ const setup = (options: {
 };
 
 describe('relocateRestoredSessionIfDirectoryMissing', () => {
+  test('a restored workspace uses its admitted directory, not its relative display path', async () => {
+    const { deps, moves } = setup({
+      sessions: [session('root', { displayPath: '../worktrees/feature' })],
+      availability: { '../worktrees/feature': 'missing', [WORKTREE]: 'available', [PROJECT]: 'available' },
+    });
+    expect(await relocateRestoredSessionIfDirectoryMissing('root', deps)).toEqual({ outcome: 'kept' });
+    expect(moves).toEqual([]);
+  });
+
+  test('an unregistered workspace is not relocated using its display path', async () => {
+    const { deps, moves } = setup({ sessions: [session('root')], directory: null, availability: { [WORKTREE]: 'missing', [PROJECT]: 'available' } });
+    expect(await relocateRestoredSessionIfDirectoryMissing('root', deps)).toEqual({ outcome: 'kept' });
+    expect(moves).toEqual([]);
+  });
+
   test('a session whose folder still exists stays where it is', async () => {
     const { deps, moves } = setup({ sessions: [session('root')], availability: { [WORKTREE]: 'available', [PROJECT]: 'available' } });
     expect(await relocateRestoredSessionIfDirectoryMissing('root', deps)).toEqual({ outcome: 'kept' });
@@ -71,7 +89,7 @@ describe('relocateRestoredSessionIfDirectoryMissing', () => {
       session('grandchild', { parentSessionId: 'child', rootSessionId: 'root' }),
       session('elsewhere', { parentSessionId: 'root', rootSessionId: 'root', displayPath: '/other' }),
     ];
-    const { deps, moves } = setup({ sessions, availability: { [WORKTREE]: 'missing', [PROJECT]: 'available' } });
+    const { deps, moves } = setup({ sessions, directories: { elsewhere: '/other' }, availability: { [WORKTREE]: 'missing', [PROJECT]: 'available' } });
     expect(await relocateRestoredSessionIfDirectoryMissing('root', deps)).toEqual({ outcome: 'moved', projectRoot: PROJECT });
     expect(moves).toEqual([
       { sessionId: 'grandchild', from: WORKTREE, to: PROJECT },

@@ -4,6 +4,50 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The iOS replay on `ecf69a017` exposed the symmetric restore gap: Host session
+archive state reached revision 2 with no archived timestamp, while the client
+still retained revision 1 in Archive. Worktree restore now awaits authoritative
+session discovery before returning, including conflicts and failed session
+follow-ups, and after Host errors that may follow partial session restoration.
+Refreshes are scoped to the initiating runtime; cancellation before checkout
+creation leaves discovery alone. The shared Web/PWA, Electron, hosted-mobile
+and Capacitor flow is covered by store-state regressions. Pre-fix restore tests
+retained `ses_1` in Archive in four cases. Receipts are under
+`/Users/devin/shared_files/archive-session-restore/restore-*`; on-device and
+visual verification of this follow-up remain outstanding.
+
+PR #115 review found that Host capture updates no client session stores: after
+successful or partial archival, `ses_1` remained active and Archive stayed empty
+until discovery ran. Worktree archival now awaits the existing authoritative
+session discovery refresh after either outcome, scoped to the initiating
+runtime, without issuing a second archive mutation. Ordinary capture refusal
+does not refresh or change client classification. Shared Web/PWA, Electron,
+hosted-mobile and Capacitor paths all use this reconciliation. Regression
+receipts are under `/Users/devin/shared_files/archive-session-restore/review-*`;
+visual and on-device verification remain outstanding.
+
+Worktree archival no longer pre-archives sessions in the shared UI before the
+Host captures their original state. The iOS backup recorded fresh-salamander
+as already archived at capture (`original_archived_at` set, progress `pending`),
+so Host restore correctly preserved that captured state rather than unarchiving
+it. Standalone restore then committed its unarchive before a relocation helper
+mistook the relative `displayPath` for a missing filesystem directory. The helper
+now uses admitted workspace directory mappings, including descendants, and
+leaves unknown mappings alone. Host capture continues to preserve genuinely
+independently archived chats; existing ambiguous original archive timestamps
+are not rewritten. Web/PWA, Electron, hosted mobile and Capacitor share these
+flows. The live iOS data was inspected read-only. Regression and check receipts
+are under `/Users/devin/shared_files/archive-session-restore/`; on-device and
+visual verification remain outstanding.
+The pre-fix UI regressions failed with an unexpected pre-archive call and
+`moved` instead of `kept`; both files now pass 7 tests each. The Host archive
+suite passes 16 tests, including active versus independently archived chats
+restored into the recreated checkout. The final isolated full UI suite passes
+1,412/1,413 files, with only the known Intl duration-formatting failure. An
+earlier full run also hit the composer draft-length failure (20 versus 40),
+which reproduced in the full suite on unchanged main `ddf910d27` and passed
+alone on both branches. Changed-file UI lint and server lint pass.
+
 Host worktree restore claim release now rolls an untouched restore back to
 `archived` atomically. Store open repairs the equivalent unclaimed persisted
 state. Target pins, apply attempts, finalization and session movement still

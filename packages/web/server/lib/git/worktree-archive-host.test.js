@@ -208,12 +208,22 @@ describe('Host-owned worktree archive capture', () => {
     store.releaseSessionDelete(deleting);
     const scopes = new Map([[pathKey(project), projectScope], [pathKey(checkout), checkoutScope], [pathKey(nested), nestedScope]]);
     const service = createOpenChamberSessionService({
-      service: { request: async () => { throw new Error('Native runtime must not be contacted for Host archive capture'); } },
+      service: { request: async (url) => {
+        const id = /^\/api\/agent\/v1\/sessions\/(restore-[^/]+)$/.exec(new URL(url, 'http://host').pathname)?.[1];
+        if (!id) throw new Error('Unexpected native runtime request');
+        const scope = await store.getSession(id);
+        return Response.json({
+          sessionId: id, rootSessionId: id, projectId: scope.projectId, workspaceId: scope.workspaceId,
+          displayPath: path.basename(scope.cwd), createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0',
+          runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+        });
+      } },
       agentScopeStore: store,
       resolveWorkspaceDirectory: async (directory) => scopes.get(pathKey(directory)) ?? null,
       resolveWorkspaceScope: (id) => store.getWorkspace(id),
       resolveSessionScope: (id) => store.getSession(id),
       resolveHostSessionScope: (id) => store.getSession(id),
+      resolveHostRelocationScope: (id) => store.getSession(id),
       registerSessionScope: async () => true,
       resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt,
       beforeDispatch: async () => { }, onPromptAccepted: async () => { },
@@ -305,10 +315,15 @@ describe('Host-owned worktree archive capture', () => {
     git(emptySource, '-c', 'user.name=Archive test', '-c', 'user.email=archive@example.invalid', 'commit', '-q', '-m', 'ignore setup');
     fs.writeFileSync(path.join(emptySource, 'restored.txt'), 'saved change\n');
     scopes.set(pathKey(emptySource), await register(emptySource));
+    const restoreScope = scopes.get(pathKey(emptySource));
+    for (const id of ['restore-active', 'restore-already-archived']) {
+      await store.bindSession({ sessionId: id, rootSessionId: id, workspaceId: restoreScope.workspaceId });
+    }
+    await owner.archiveStore.archive(['restore-already-archived'], 1234);
     await archiveWorktree(project, { directory: emptySource, id: 'restore-fixture' }, {
       worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
     });
-    const restoreTarget = path.join(root, 'restore-target');
+    const restoreTarget = emptySource;
     git(project, 'worktree', 'add', '-q', restoreTarget, 'restore-fixture');
     scopes.set(pathKey(restoreTarget), await register(restoreTarget));
     fs.mkdirSync(path.join(restoreTarget, 'node_modules'));
@@ -318,6 +333,9 @@ describe('Host-owned worktree archive capture', () => {
       .query({ directory: restoreTarget }).send({ id: 'restore-fixture' });
     expect(restored.status, JSON.stringify(restored.body)).toBe(200);
     expect(restored.body.sessionBinding.status).toBe('bound');
+    expect(await owner.archiveStore.getState('restore-active')).toMatchObject({ archivedAt: null });
+    expect(await owner.archiveStore.getState('restore-already-archived')).toMatchObject({ archivedAt: 1234 });
+    expect(await store.getSession('restore-active')).toMatchObject({ workspaceId: restoreScope.workspaceId, cwd: restoreTarget });
     expect(fs.readlinkSync(path.join(restoreTarget, 'ignore-link'))).toBe('.gitignore');
     expect(fs.readFileSync(path.join(restoreTarget, 'restored.txt'), 'utf8')).toBe('saved change\n');
     expect(fs.readFileSync(path.join(restoreTarget, 'ignored.txt'), 'utf8')).toBe('ignored content\n');
