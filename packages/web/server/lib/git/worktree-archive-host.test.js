@@ -300,7 +300,8 @@ describe('Host-owned worktree archive capture', () => {
     const emptySource = path.join(root, 'restore-source');
     git(project, 'worktree', 'add', '-q', '-b', 'restore-fixture', emptySource);
     fs.writeFileSync(path.join(emptySource, '.gitignore'), 'ignored.txt\nnode_modules/\n');
-    git(emptySource, 'add', '.gitignore');
+    fs.symlinkSync('.gitignore', path.join(emptySource, 'ignore-link'));
+    git(emptySource, 'add', '.gitignore', 'ignore-link');
     git(emptySource, '-c', 'user.name=Archive test', '-c', 'user.email=archive@example.invalid', 'commit', '-q', '-m', 'ignore setup');
     fs.writeFileSync(path.join(emptySource, 'restored.txt'), 'saved change\n');
     scopes.set(pathKey(emptySource), await register(emptySource));
@@ -317,6 +318,7 @@ describe('Host-owned worktree archive capture', () => {
       .query({ directory: restoreTarget }).send({ id: 'restore-fixture' });
     expect(restored.status, JSON.stringify(restored.body)).toBe(200);
     expect(restored.body.sessionBinding.status).toBe('bound');
+    expect(fs.readlinkSync(path.join(restoreTarget, 'ignore-link'))).toBe('.gitignore');
     expect(fs.readFileSync(path.join(restoreTarget, 'restored.txt'), 'utf8')).toBe('saved change\n');
     expect(fs.readFileSync(path.join(restoreTarget, 'ignored.txt'), 'utf8')).toBe('ignored content\n');
     expect(fs.readFileSync(path.join(restoreTarget, 'node_modules', 'dep.txt'), 'utf8')).toBe('module\n');

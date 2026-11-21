@@ -7128,7 +7128,7 @@ const prospectiveWorktreeRestore = async (directory, archive, before) => {
    if (entry !== '.git') await fsp.rm(path.join(checkout, entry), { recursive: true, force: true });
   }
   for (const entry of await fsp.readdir(directory)) {
-   if (entry !== '.git') await fsp.cp(path.join(directory, entry), path.join(checkout, entry), { recursive: true, dereference: false, preserveTimestamps: true });
+   if (entry !== '.git') await fsp.cp(path.join(directory, entry), path.join(checkout, entry), { recursive: true, dereference: false, preserveTimestamps: true, verbatimSymlinks: true });
   }
   const indexPath = async (cwd) => {
    const result = await runGitCommandOrThrow(cwd, ['rev-parse', '--git-path', 'index'], 'Failed to resolve restore index');

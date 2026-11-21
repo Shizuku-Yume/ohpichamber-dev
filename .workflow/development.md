@@ -24,11 +24,17 @@ The original restore refusal reproduces against a separate, non-hardlinked
 mirror of the affected repository: `prospectiveWorktreeRestore` copies
 relative symlinks using `fs.cp` without `verbatimSymlinks`, changing them to
 absolute links. Its comparison checkout then fails the tree/status fingerprint
-check before pinning (`git/service.ts:7131–7140`). A control copy preserving
-symlink text matches every fingerprint component. This separate Git bug is
-not changed here; the original request body/response was not captured, so its
-exact historical exception remains unverified. The live iOS Host data was
-not mutated.
+check before pinning (`git/service.ts:7131–7140`). Restore comparison copies
+now use `verbatimSymlinks: true`. The Host archive/restore regression includes
+a tracked relative symlink and checks that its target remains relative; it
+failed before the fix with HTTP 409 `WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED`
+instead of 200. A control copy preserving symlink text matches every fingerprint
+component. The original request body/response was not captured, so its exact
+historical exception remains unverified. The live iOS Host data was not mutated.
+With the symlink fix, all 16 Host archive tests and the 11 focused Git archive
+service tests pass; type-check (including drift) and server lint pass again.
+The full UI suite was not rerun because no UI code changed and its two existing
+failures were already reproduced on main.
 
 Shared UI discovery now requests canonical snapshot recovery when a newer
 session head or epoch disagrees with cached run control. Stop also refreshes
