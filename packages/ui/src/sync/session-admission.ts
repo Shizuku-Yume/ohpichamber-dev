@@ -148,7 +148,7 @@ export const subscribeSessionAdmission = (): (() => void) => {
     }
     const selectedRecord = ui.currentSessionId ? records.get(ui.currentSessionId) : null;
     const selectedDirectory = selectedRecord ? resolveGlobalSessionDirectory(selectedRecord) : ui.currentSessionDirectory;
-    if (ui.currentSessionId && selectedDirectory && !isSessionAdmitted(selectedDirectory) && !admittedLineageDirectory(ui.currentSessionId)) {
+    if (ui.currentSessionId && selectedDirectory && !selectedRecord?.archivedAt && !isSessionAdmitted(selectedDirectory) && !admittedLineageDirectory(ui.currentSessionId)) {
       const id = ui.currentSessionId;
       ui.setCurrentSession(null);
       parked = { id, revision: getAdmissionNavigationRevision() };

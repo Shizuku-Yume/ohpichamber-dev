@@ -169,4 +169,23 @@ describe("adoptAuthoritativeSessionDirectory", () => {
       useGlobalSessionsStore.getState().resetForRuntimeSwitch()
     }
   })
+
+  test("keeps an archived session selected when its removed worktree is no longer admitted", () => {
+    const previousProjects = useProjectsStore.getState().projects
+    useProjectsStore.setState({ projects: [] })
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch()
+    registerWorkspaceDirectory("workspace-removed", WORKTREE)
+    useGlobalSessionsStore.getState().applySnapshot([], [{ ...session(SESSION_ID, "workspace-removed"), archivedAt: 5 }], "ready")
+    useSessionUIStore.getState().setCurrentSession(SESSION_ID, WORKTREE)
+
+    const unsubscribe = subscribeSessionAdmission()
+    try {
+      expect(useSessionUIStore.getState().currentSessionId).toBe(SESSION_ID)
+      expect(useSessionUIStore.getState().currentSessionDirectory).toBe(WORKTREE)
+    } finally {
+      unsubscribe()
+      useProjectsStore.setState({ projects: previousProjects })
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch()
+    }
+  })
 })
