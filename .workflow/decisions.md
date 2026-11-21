@@ -1959,3 +1959,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** deleting a worktree archives its chats first, so they must remain recoverable; the worktree-archive flow already keeps absent checkouts readable this way.
 - **Mine:** yes (requested fix)
 - **Revisit when:** removed-checkout sessions gain a relocation or restore flow that moves them to a live workspace.
+
+## 2026-11-21 - Match deleted Windows worktree paths from Archive
+
+- **Decided:** match separator, drive-letter case, and trailing-separator variants when looking up an already authorized deleted Windows checkout.
+- **Instead of:** changing live directory validation or case-folding the entire path.
+- **Because:** a missing checkout cannot be canonicalized on disk, and the renderer's forward-slash form must resolve to the same workspace without equating distinct directory names.
+- **Mine:** yes (requested fix)
+- **Revisit when:** Archive can open deleted worktree chats without resolving their former directory.
