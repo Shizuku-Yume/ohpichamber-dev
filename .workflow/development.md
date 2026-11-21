@@ -4,6 +4,26 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Host worktree restore claim release now rolls an untouched restore back to
+`archived` atomically. Store open repairs the equivalent unclaimed persisted
+state. Target pins, apply attempts, finalization and session movement still
+retain the recovery fence; session admission and transcript loading are
+unchanged. Both pre-fix Host regressions failed with expected `archived`,
+received `restoring`. Isolated Host regressions cover discovery of the failed
+archive alongside a control, reopen, empty bindings and unsafe-state fences.
+Check receipts are under `/Users/devin/shared_files/archive-restore-checks/`.
+No on-device or visual recheck was performed.
+
+The original restore refusal reproduces against a separate, non-hardlinked
+mirror of the affected repository: `prospectiveWorktreeRestore` copies
+relative symlinks using `fs.cp` without `verbatimSymlinks`, changing them to
+absolute links. Its comparison checkout then fails the tree/status fingerprint
+check before pinning (`git/service.ts:7131–7140`). A control copy preserving
+symlink text matches every fingerprint component. This separate Git bug is
+not changed here; the original request body/response was not captured, so its
+exact historical exception remains unverified. The live iOS Host data was
+not mutated.
+
 Shared UI discovery now requests canonical snapshot recovery when a newer
 session head or epoch disagrees with cached run control. Stop also refreshes
 when the server has no active run. This closes two paths that kept cached

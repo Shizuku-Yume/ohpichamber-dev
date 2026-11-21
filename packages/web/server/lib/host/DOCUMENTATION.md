@@ -92,6 +92,8 @@ A workspace whose checkout no longer exists (`lstat` reports `ENOENT`) stays aut
 
 Historical usage (`GET /api/agent/v1/usage` and `/usage/tools`) validates optional inclusive `from` and exclusive `to` bounds (omitted `to` defaults to now), viewer IANA timezone, and optional opaque project/workspace IDs. The Host resolves and authorizes both global and filtered scope sets before sending a private usage query to Bun. The service may read only registered native references in that set; client filesystem paths and the process-global OMP statistics database are never query sources. Node performs no transcript parsing or native SDK imports. Partial source failures retain healthy siblings; total source failure remains an error.
 
+Worktree restore claim release atomically returns the archive to `archived` only before any target workspace, HEAD or fingerprints are pinned, application is attempted, finalization starts, or sessions gain movement progress or a target workspace. Store open repairs only already-unclaimed rows with that same safe state and increments their revision. Claimed restores and any pinned, applied or moved restore keep the existing recovery fence; session admission and authorization rules are unchanged. This makes a failed preflight discoverable in Archive again, including after Host restart.
+
 ### Attachment store and routes
 
 `createAttachmentStore` stores binary files under `attachments/` in the data directory with `0600` permissions (`att_[A-Za-z0-9_-]{24}.bin`). Metadata is committed transactionally to `host_attachments` in `host-metadata.sqlite` with `attachmentId`, `projectId`, `workspaceId`, `agentDirectoryId`, `name`, `mediaType`, `size`, `storageName`, and `createdAt`.
