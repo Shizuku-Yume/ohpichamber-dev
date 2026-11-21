@@ -188,4 +188,26 @@ describe("adoptAuthoritativeSessionDirectory", () => {
       useGlobalSessionsStore.getState().resetForRuntimeSwitch()
     }
   })
+
+  test("restores a parked archived session once discovery binds its removed worktree", () => {
+    const previousProjects = useProjectsStore.getState().projects
+    useProjectsStore.setState({ projects: [] })
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch()
+    useSessionUIStore.getState().setCurrentSession(SESSION_ID, WORKTREE)
+
+    const unsubscribe = subscribeSessionAdmission()
+    try {
+      expect(useSessionUIStore.getState().currentSessionId).toBeNull()
+
+      registerWorkspaceDirectory("workspace-removed-parked", WORKTREE)
+      useGlobalSessionsStore.getState().applySnapshot([], [{ ...session(SESSION_ID, "workspace-removed-parked"), archivedAt: 5 }], "ready")
+
+      expect(useSessionUIStore.getState().currentSessionId).toBe(SESSION_ID)
+      expect(useSessionUIStore.getState().currentSessionDirectory).toBe(WORKTREE)
+    } finally {
+      unsubscribe()
+      useProjectsStore.setState({ projects: previousProjects })
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch()
+    }
+  })
 })

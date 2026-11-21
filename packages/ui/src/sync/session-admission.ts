@@ -137,7 +137,7 @@ export const subscribeSessionAdmission = (): (() => void) => {
       // Any navigation since replaces the parked session; keep waiting while
       // cold discovery has not yet indexed it or resolved its directory.
       if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision()) parked = null;
-      else if (directory && isSessionAdmitted(directory)) {
+      else if (directory && (isSessionAdmitted(directory) || record?.archivedAt)) {
         const { id } = parked;
         parked = null;
         void ui.setCurrentSession(id, directory);
