@@ -4,6 +4,18 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The iOS replay on `ecf69a017` exposed the symmetric restore gap: Host session
+archive state reached revision 2 with no archived timestamp, while the client
+still retained revision 1 in Archive. Worktree restore now awaits authoritative
+session discovery before returning, including conflicts and failed session
+follow-ups, and after Host errors that may follow partial session restoration.
+Refreshes are scoped to the initiating runtime; cancellation before checkout
+creation leaves discovery alone. The shared Web/PWA, Electron, hosted-mobile
+and Capacitor flow is covered by store-state regressions. Pre-fix restore tests
+retained `ses_1` in Archive in four cases. Receipts are under
+`/Users/devin/shared_files/archive-session-restore/restore-*`; on-device and
+visual verification of this follow-up remain outstanding.
+
 PR #115 review found that Host capture updates no client session stores: after
 successful or partial archival, `ses_1` remained active and Archive stayed empty
 until discovery ran. Worktree archival now awaits the existing authoritative

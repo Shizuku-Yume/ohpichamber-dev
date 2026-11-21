@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { GitWorktreeRequestError } from '@/lib/api/types';
+import { GitWorktreeRequestError, type GitWorktreeArchive } from '@/lib/api/types';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 
 const archivedSessionIds: string[][] = [];
 const restoredSessionIds: string[][] = [];
@@ -13,6 +14,11 @@ let runTeardown: () => Promise<void> = async () => undefined;
 const teardownAsks: Array<boolean | undefined> = [];
 let resolveTeardown: () => Promise<string | undefined> = async () => undefined;
 let runArchive: () => Promise<void> = async () => undefined;
+let runRestore: () => Promise<{ id: string; conflicts: boolean }> = async () => ({ id: 'a1', conflicts: false });
+let setupCommands: string[] | null = [];
+let restoreFailedIds: string[] = [];
+const createRestoreWorktree = mock(async () => worktree);
+const removeRestoreWorktree = mock(async () => undefined);
 const discoverSessions = mock(async () => {
   useGlobalSessionsStore.getState().upsertSession({ ...session, archivedAt: 1234, archiveRevision: '1' });
   const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
@@ -31,9 +37,9 @@ mock.module('@/lib/worktrees/worktreeManager', () => ({
     await runArchive();
     return { id: 'a1' };
   },
-  createWorktree: mock(),
-  listProjectWorktrees: mock(),
-  removeProjectWorktree: mock(),
+  createWorktree: createRestoreWorktree,
+  listProjectWorktrees: async () => [],
+  removeProjectWorktree: removeRestoreWorktree,
 }));
 
 const actualSessionActions = await import('@/sync/session-actions');
@@ -45,7 +51,7 @@ mock.module('@/sync/session-actions', () => ({
   },
   unarchiveSessions: async (ids: string[]) => {
     restoredSessionIds.push(ids);
-    return { failedIds: [] };
+    return { failedIds: restoreFailedIds };
   },
 }));
 
@@ -53,6 +59,7 @@ mock.module('@/lib/gitApi', () => ({
   canArchiveWorktrees: () => false,
   git: {
     worktree: {
+      restoreArchive: async () => runRestore(),
       teardown: async (projectDirectory: string, payload: { directory: string; teardownCommand: string }) => {
         teardowns.push({ projectDirectory, ...payload });
         await runTeardown();
@@ -61,7 +68,7 @@ mock.module('@/lib/gitApi', () => ({
     },
   },
 }));
-mock.module('@/lib/sharedTrustConfirmation', () => ({ resolveWorktreeSetupCommandsOrCancel: mock() }));
+mock.module('@/lib/sharedTrustConfirmation', () => ({ resolveWorktreeSetupCommandsOrCancel: async () => setupCommands }));
 
 // The module subscribes to runtime switches at import, which needs a window.
 const dom = new Window({ url: 'http://instance-a.test' });
@@ -69,7 +76,7 @@ for (const [name, value] of Object.entries({ window: dom, CustomEvent: dom.Custo
   Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
 }
 
-const { archiveWorktreeWork } = await import('./worktreeArchive');
+const { archiveWorktreeWork, restoreArchivedWorktree } = await import('./worktreeArchive');
 
 const project = { id: 'project', path: '/repo' };
 const worktree: WorktreeMetadata = { path: '/repo-feature', branch: 'feature', projectDirectory: '/repo', label: 'feature' };
@@ -218,5 +225,92 @@ describe('archiveWorktreeWork teardown', () => {
     await expect(archiveWorktreeWork({ project, worktree, sessions: [session] })).rejects.toThrow(error.message);
     expect(archivedSessionIds).toEqual([]);
     expect(restoredSessionIds).toEqual([]);
+  });
+});
+
+describe('restoreArchivedWorktree reconciliation', () => {
+  const archive: GitWorktreeArchive = {
+    id: 'a1', ref: 'refs/openchamber/archives/a1', commit: 'snapshot', head: 'head',
+    path: '/repo-feature', branch: 'feature', title: 'Feature', archivedAt: 1234,
+    sessionIds: ['ses_1'], branchExists: true, sessionBinding: { status: 'bound' },
+  };
+
+  beforeEach(() => {
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    useGlobalSessionsStore.setState({ loadSessions: discoverSessions });
+    useGlobalSessionsStore.getState().upsertSession({ ...session, archivedAt: 1234, archiveRevision: '1' });
+    discoverSessions.mockClear();
+    restoredSessionIds.length = 0;
+    restoreFailedIds = [];
+    setupCommands = [];
+    createRestoreWorktree.mockClear();
+    removeRestoreWorktree.mockClear();
+    runRestore = async () => ({ id: 'a1', conflicts: false });
+  });
+
+  test.each([
+    { conflicts: false, failedIds: [] },
+    { conflicts: true, failedIds: [] },
+    { conflicts: false, failedIds: ['ses_1'] },
+  ])('Host restore reconciles the client before returning (%j)', async ({ conflicts, failedIds }) => {
+    restoreFailedIds = failedIds;
+    runRestore = async () => {
+      expect(useGlobalSessionsStore.getState().archivedSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+      expect(discoverSessions).not.toHaveBeenCalled();
+      return { id: 'a1', conflicts };
+    };
+    discoverSessions.mockImplementationOnce(async () => {
+      useGlobalSessionsStore.getState().upsertSession({ ...session, archiveRevision: '2' });
+      const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
+      return { activeSessions, archivedSessions };
+    });
+
+    expect(await restoreArchivedWorktree({ project, archive })).toMatchObject({
+      outcome: 'restored', conflicts, sessionsFailed: failedIds.length,
+    });
+    const state = useGlobalSessionsStore.getState();
+    expect(state.archivedSessions).toEqual([]);
+    expect(state.activeSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+    expect(state.entityById.get('ses_1')?.archiveRevision).toBe('2');
+    expect(discoverSessions).toHaveBeenCalledTimes(1);
+  });
+
+  test('a Host error after session restoration still reconciles before rejecting', async () => {
+    runRestore = async () => { throw new Error('Archive finalization failed'); };
+    discoverSessions.mockImplementationOnce(async () => {
+      useGlobalSessionsStore.getState().upsertSession({ ...session, archiveRevision: '2' });
+      const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
+      return { activeSessions, archivedSessions };
+    });
+    await expect(restoreArchivedWorktree({ project, archive })).rejects.toThrow('Archive finalization failed');
+    expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([]);
+    expect(useGlobalSessionsStore.getState().activeSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+    expect(removeRestoreWorktree).toHaveBeenCalledTimes(1);
+    expect(discoverSessions).toHaveBeenCalledTimes(1);
+  });
+
+  test('cancellation does not create a checkout or refresh sessions', async () => {
+    setupCommands = null;
+    expect(await restoreArchivedWorktree({ project, archive })).toEqual({ outcome: 'cancelled' });
+    expect(createRestoreWorktree).not.toHaveBeenCalled();
+    expect(discoverSessions).not.toHaveBeenCalled();
+    expect(useGlobalSessionsStore.getState().archivedSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+  });
+
+  test('a restore completed on an old runtime does not refresh the new runtime', async () => {
+    const runtimeWindow = window as typeof window & { __OPENCHAMBER_API_BASE_URL__?: string };
+    const previousUrl = runtimeWindow.__OPENCHAMBER_API_BASE_URL__;
+    const runtimeKey = getRuntimeKey();
+    runRestore = async () => {
+      runtimeWindow.__OPENCHAMBER_API_BASE_URL__ = 'http://instance-b.test';
+      expect(getRuntimeKey()).not.toBe(runtimeKey);
+      return { id: 'a1', conflicts: false };
+    };
+    try {
+      await restoreArchivedWorktree({ project, archive: { ...archive, sessionIds: [] } });
+      expect(discoverSessions).not.toHaveBeenCalled();
+    } finally {
+      runtimeWindow.__OPENCHAMBER_API_BASE_URL__ = previousUrl;
+    }
   });
 });

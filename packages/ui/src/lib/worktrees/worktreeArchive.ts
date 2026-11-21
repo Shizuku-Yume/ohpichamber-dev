@@ -136,6 +136,7 @@ async function restoreArchivedWorktreeOnce(input: {
   archive: GitWorktreeArchive;
   recovery?: { head: string; revision: number };
 }): Promise<WorktreeArchiveRestore> {
+  const runtimeKey = getRuntimeKey();
   const { project, archive } = input;
   const setupCommands = await resolveWorktreeSetupCommandsOrCancel(project);
   if (setupCommands === null) return { outcome: 'cancelled' };
@@ -158,6 +159,7 @@ async function restoreArchivedWorktreeOnce(input: {
       : undefined));
   } catch (error) {
     await removeProjectWorktree(project, worktree, { deleteLocalBranch: !archive.branchExists }).catch(() => undefined);
+    if (getRuntimeKey() === runtimeKey) await refreshGlobalSessions();
     throw error;
   }
   noteRestoredWorktree(worktree.path);
@@ -185,6 +187,7 @@ async function restoreArchivedWorktreeOnce(input: {
 
   void listProjectWorktrees(project, { force: true }).catch(() => undefined);
   void loadWorktreeArchives(project.path).catch(() => undefined);
+  if (getRuntimeKey() === runtimeKey) await refreshGlobalSessions();
   return { outcome: 'restored', worktree, conflicts, sessionsFailed };
 }
 
