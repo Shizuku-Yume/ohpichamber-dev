@@ -7,6 +7,10 @@ import { MetadataReadError, MetadataWriteError, HostMetadataError } from './meta
 
 const WorkspaceDirectorySchema = z.string().refine((directory) => Boolean(directory.trim()) && path.isAbsolute(directory.trim()));
 
+const removedDirectoryKey = (directory) => process.platform === 'win32'
+  ? directory.replace(/\\/g, '/').replace(/^[a-z]:/i, (drive) => drive.toUpperCase()).replace(/\/+$/, '')
+  : directory;
+
 const failureCode = (error) => error instanceof HostMetadataError ? error.code : 'METADATA_READ_FAILED';
 const displayPath = (scope) => path.relative(scope.projectDirectory, scope.cwd) || '.';
 const publicWorkspace = (scope) => ({
@@ -222,7 +226,8 @@ export const createHostAgentScopeRuntime = ({
     if (!parsed.success) return null;
     const requested = await validateDirectoryPath(parsed.data);
     if (!requested.ok) {
-      const removed = (await discover()).scopes.find((scope) => scope.checkoutRemoved && scope.cwd === parsed.data);
+      const key = removedDirectoryKey(parsed.data);
+      const removed = (await discover()).scopes.find((scope) => scope.checkoutRemoved && removedDirectoryKey(scope.cwd) === key);
       return removed ? publicWorkspace(removed) : null;
     }
     const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);

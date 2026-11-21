@@ -293,6 +293,13 @@ describe('configured Host scope authority', () => {
       resolveCredentialHandoff: async () => { throw new Error('Unexpected credential handoff'); },
       queueRoutes: (router) => router, sessionRoutes: (router) => router, attachmentRoutes: (router) => router,
     });
+    if (process.platform === 'win32') {
+      const clientDirectory = worktreeDirectory.replace(/\\/g, '/');
+      for (const directory of [clientDirectory, clientDirectory.replace(/^[A-Z]:/i, (drive) => drive.toLowerCase()) + '/']) {
+        expect(await request(app).post('/api/agent/v1/workspaces/resolve').send({ directory }))
+          .toMatchObject({ status: 200, body: { workspaceId: scope.workspaceId } });
+      }
+    }
     expect(await request(app).get(`/api/agent/v1/workspaces/${scope.workspaceId}/providers`)).toMatchObject({ status: 409, body: { code: 'SESSION_READ_ONLY' } });
     fs.mkdirSync(worktreeDirectory);
     await expect(runtime.resolveSessionScope('archived-session')).resolves.toBeNull();
