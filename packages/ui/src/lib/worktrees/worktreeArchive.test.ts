@@ -3,6 +3,7 @@ import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { GitWorktreeRequestError } from '@/lib/api/types';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 const archivedSessionIds: string[][] = [];
 const restoredSessionIds: string[][] = [];
@@ -12,6 +13,11 @@ let runTeardown: () => Promise<void> = async () => undefined;
 const teardownAsks: Array<boolean | undefined> = [];
 let resolveTeardown: () => Promise<string | undefined> = async () => undefined;
 let runArchive: () => Promise<void> = async () => undefined;
+const discoverSessions = mock(async () => {
+  useGlobalSessionsStore.getState().upsertSession({ ...session, archivedAt: 1234, archiveRevision: '1' });
+  const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
+  return { activeSessions, archivedSessions };
+});
 
 type ProjectRef = { id: string; path: string };
 
@@ -89,6 +95,10 @@ const session: Session = {
 
 describe('archiveWorktreeWork teardown', () => {
   beforeEach(() => {
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    useGlobalSessionsStore.setState({ loadSessions: discoverSessions });
+    useGlobalSessionsStore.getState().upsertSession(session);
+    discoverSessions.mockClear();
     archivedSessionIds.length = 0;
     restoredSessionIds.length = 0;
     worktreeArchives.length = 0;
@@ -150,6 +160,53 @@ describe('archiveWorktreeWork teardown', () => {
     await archiveWorktreeWork({ project, worktree, sessions: [] });
     expect(worktreeArchives).toEqual([{ sessionIds: [] }]);
     expect(archivedSessionIds).toEqual([]);
+    expect(discoverSessions).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([false, true])('Host capture reconciles the client before settling (partial: %s)', async (partial) => {
+    resolveTeardown = async () => undefined;
+    runArchive = async () => {
+      expect(useGlobalSessionsStore.getState().activeSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+      expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([]);
+      expect(discoverSessions).not.toHaveBeenCalled();
+      if (partial) throw new GitWorktreeRequestError('WORKTREE_ARCHIVE_PARTIAL', 'Checkout removal incomplete', 409);
+    };
+
+    const archive = archiveWorktreeWork({ project, worktree, sessions: [session] });
+    if (partial) await expect(archive).rejects.toThrow('Checkout removal incomplete');
+    else await archive;
+
+    const state = useGlobalSessionsStore.getState();
+    expect(state.activeSessions.map((entry) => entry.sessionId)).toEqual([]);
+    expect(state.archivedSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+    expect(state.entityById.get('ses_1')).toMatchObject({ archivedAt: 1234, archiveRevision: '1' });
+    expect(discoverSessions).toHaveBeenCalledTimes(1);
+    expect(archivedSessionIds).toEqual([]);
+  });
+
+  test('a refused Host capture does not refresh or archive the client sessions', async () => {
+    resolveTeardown = async () => undefined;
+    runArchive = async () => { throw new Error('Host capture refused'); };
+    await expect(archiveWorktreeWork({ project, worktree, sessions: [session] })).rejects.toThrow('Host capture refused');
+    expect(discoverSessions).not.toHaveBeenCalled();
+    expect(useGlobalSessionsStore.getState().activeSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+    expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([]);
+  });
+
+  test('failed discovery preserves the previous client snapshot without undoing Host capture', async () => {
+    resolveTeardown = async () => undefined;
+    discoverSessions.mockImplementationOnce(async () => {
+      useGlobalSessionsStore.setState({ status: 'error', globalRefreshFailed: true });
+      const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
+      return { activeSessions, archivedSessions };
+    });
+    await archiveWorktreeWork({ project, worktree, sessions: [session] });
+    const state = useGlobalSessionsStore.getState();
+    expect(state.globalRefreshFailed).toBe(true);
+    expect(state.activeSessions.map((entry) => entry.sessionId)).toEqual(['ses_1']);
+    expect(state.archivedSessions).toEqual([]);
+    expect(restoredSessionIds).toEqual([]);
+    expect(discoverSessions).toHaveBeenCalledTimes(1);
   });
 
   test.each([

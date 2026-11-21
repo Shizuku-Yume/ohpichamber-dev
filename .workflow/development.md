@@ -4,6 +4,16 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+PR #115 review found that Host capture updates no client session stores: after
+successful or partial archival, `ses_1` remained active and Archive stayed empty
+until discovery ran. Worktree archival now awaits the existing authoritative
+session discovery refresh after either outcome, scoped to the initiating
+runtime, without issuing a second archive mutation. Ordinary capture refusal
+does not refresh or change client classification. Shared Web/PWA, Electron,
+hosted-mobile and Capacitor paths all use this reconciliation. Regression
+receipts are under `/Users/devin/shared_files/archive-session-restore/review-*`;
+visual and on-device verification remain outstanding.
+
 Worktree archival no longer pre-archives sessions in the shared UI before the
 Host captures their original state. The iOS backup recorded fresh-salamander
 as already archived at capture (`original_archived_at` set, progress `pending`),

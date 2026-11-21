@@ -1,6 +1,6 @@
 import React from 'react';
 import { create } from 'zustand';
-import type { GitWorktreeArchive } from '@/lib/api/types';
+import { GitWorktreeRequestError, type GitWorktreeArchive } from '@/lib/api/types';
 import { canArchiveWorktrees, git } from '@/lib/gitApi';
 import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -17,7 +17,7 @@ import {
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { z } from 'zod';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { deleteSessions, moveSessionToDirectory, unarchiveSessions } from '@/sync/session-actions';
 import type { WorktreeMetadata } from '@/types/worktree';
 
@@ -85,7 +85,9 @@ export async function archiveWorktreeWork(input: {
   title?: string;
   askForTrust?: boolean;
 }): Promise<void> {
+  const runtimeKey = getRuntimeKey();
   const sessionIds = input.sessions.map((session) => session.sessionId);
+  let sessionsChanged = false;
   markWorktreeRemoving(input.worktree.path);
   try {
     const teardownCommand = await resolveWorktreeTeardownCommand(input.project, input.worktree, { ask: input.askForTrust });
@@ -93,9 +95,14 @@ export async function archiveWorktreeWork(input: {
       await git.worktree.teardown(normalizePath(input.project.path) ?? input.project.path, { directory: input.worktree.path, teardownCommand });
     }
     await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds, title: input.title });
+    sessionsChanged = true;
+  } catch (error) {
+    sessionsChanged = error instanceof GitWorktreeRequestError && error.code === 'WORKTREE_ARCHIVE_PARTIAL';
+    throw error;
   } finally {
     clearWorktreeRemoval(input.worktree.path);
     void loadWorktreeArchives(input.project.path).catch(() => undefined);
+    if (sessionsChanged && getRuntimeKey() === runtimeKey) await refreshGlobalSessions();
   }
 }
 
