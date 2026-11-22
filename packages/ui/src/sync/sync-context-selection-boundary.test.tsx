@@ -499,6 +499,12 @@ describe("SyncProvider native scope and selection boundaries", () => {
       opened.push({ sessionId: id, cursor }); emitters.set(id, callback)
       return () => { closed.push(id) }
     }
+    const parks: (() => void)[] = []
+    const realTimeout = globalThis.setTimeout
+    const timeout = spyOn(globalThis, "setTimeout").mockImplementation(((run: () => void, delay?: number) => {
+      if (delay === 15_000) { parks.push(run); return 0 }
+      return realTimeout(run, delay)
+    }) as typeof setTimeout)
     let runtime: ReturnType<typeof useSyncRuntime> | undefined
     const Probe = () => { runtime = useSyncRuntime(); return null }
     try {
@@ -516,6 +522,9 @@ describe("SyncProvider native scope and selection boundaries", () => {
         emitters.get(live.sessionId)!({ sessionId: live.sessionId, epoch: "epoch-a", sequence: "5", timestamp: 5, type: "session.status", runtimeStatus: "idle", activeRunId: null })
         await new Promise(resolve => setTimeout(resolve, 50))
       })
+      expect(closed).toEqual([])
+      expect(parks).toHaveLength(1)
+      await act(async () => { parks.splice(0).forEach(run => run()) })
       expect(closed).toEqual([live.sessionId])
       expect(store.getState().snapshot[live.sessionId]?.session.headSequence).toBe("5")
 
@@ -524,6 +533,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
       await act(async () => { setActiveSession(directory, live.sessionId) })
       expect(opened).toHaveLength(2)
     } finally {
+      timeout.mockRestore()
       setActiveSession("", "")
       await act(async () => root.unmount())
       dom.restore()

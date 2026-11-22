@@ -217,6 +217,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
   const client = props.client ?? canonicalClient
   const currentRef = useRef(true)
   const pipelineRef = useRef<EventPipeline | null>(null)
+  const parkStreamRef = useRef<((target: SessionMessageTarget) => void) | null>(null)
   const storesRef = useRef<ReturnType<typeof createSyncStores> | null>(null)
   if (!storesRef.current) {
     storesRef.current = takePrefetchedSyncStores(client, props.runtimeKey) ?? createSyncStores(client, props.runtimeKey)
@@ -245,6 +246,9 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
   const wantsStream = useCallback((target: SessionMessageTarget, runtimeStatus?: SessionRuntimeStatus) => {
     if (isViewedSession(target) || (runtimeStatus !== undefined && LIVE_STREAM_STATUSES.has(runtimeStatus))) return true
     if ((streamRequests.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now()) return true
+    // BTW answers stream only as transient events that a resumed stream cannot replay.
+    const btw = useBtwStore.getState().byParent[target.sessionId]
+    if (btw?.ephemeralStatus === "running" || btw?.pendingSend) return true
     const status = childStores.getChild(target.directory)?.getState().session_status[target.sessionId]
     return status !== undefined && LIVE_STREAM_STATUSES.has(status)
   }, [childStores])
@@ -262,7 +266,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const session = store.getState().session.find((item) => item.sessionId === target.sessionId)
     if (session) useGlobalSessionsStore.getState().upsertSession(session)
     if (wantsStream(target, snapshot.session.runtimeStatus)) pipelineRef.current?.attach(target, snapshot)
-    else pipelineRef.current?.detach(target)
+    else parkStreamRef.current?.(target)
     const previous = recoveryPrevious?.session
     if (previous && (
       previous.epoch !== snapshot.session.epoch
@@ -376,7 +380,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
             pipelineRef.current?.detach(deletedTarget)
           }
         }
-        if (!wantsStream(target)) queueMicrotask(() => { if (isCurrent() && !wantsStream(target)) pipelineRef.current?.detach(target) })
+        if (!isViewedSession(target)) parkStreamRef.current?.(target)
         return contiguous
       },
       recover: async (target) => {
@@ -412,6 +416,19 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     })
     pipelineRef.current = pipeline
     const parkTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    // Off-screen streams are rechecked every STREAM_PARK_DELAY_MS until unwanted, so
+    // post-run events (suggestions) still arrive and expired send requests release.
+    const parkStream = (target: SessionMessageTarget) => {
+      const streamKey = `${target.directory}\n${target.sessionId}`
+      if (!pipeline.has(target) || parkTimers.has(streamKey)) return
+      parkTimers.set(streamKey, setTimeout(() => {
+        parkTimers.delete(streamKey)
+        if (!isCurrent() || !pipeline.has(target)) return
+        if (!wantsStream(target)) pipeline.detach(target)
+        else if (!isViewedSession(target)) parkStream(target)
+      }, STREAM_PARK_DELAY_MS))
+    }
+    parkStreamRef.current = parkStream
     const viewedSessionChange = (target: SessionMessageTarget) => {
       if (!isCurrent()) return
       const streamKey = `${target.directory}\n${target.sessionId}`
@@ -424,11 +441,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         pipeline.attach(target, { cursor: `${epoch}:${headSequence}`, session: { sessionId: target.sessionId, runtimeStatus } })
         return
       }
-      if (!pipeline.has(target) || parkTimers.has(streamKey)) return
-      parkTimers.set(streamKey, setTimeout(() => {
-        parkTimers.delete(streamKey)
-        if (isCurrent() && !wantsStream(target)) pipeline.detach(target)
-      }, STREAM_PARK_DELAY_MS))
+      parkStream(target)
     }
     onViewedSessionChange = viewedSessionChange
     const unconfigure = childStores.configure({
@@ -534,6 +547,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       document.removeEventListener("visibilitychange", visible)
       if (pipelineRef.current === pipeline) pipelineRef.current = null
       if (onViewedSessionChange === viewedSessionChange) onViewedSessionChange = null
+      if (parkStreamRef.current === parkStream) parkStreamRef.current = null
       for (const timer of parkTimers.values()) clearTimeout(timer)
       disposalRef.current = setTimeout(() => { messageLoader.dispose(); childStores.disposeAll() }, 0)
     }
