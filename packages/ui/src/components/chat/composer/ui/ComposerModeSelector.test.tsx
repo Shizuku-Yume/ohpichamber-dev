@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { Window } from 'happy-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
+import { canonicalClient } from '@/api/canonicalClient';
 import { ComposerModeSelector } from './ComposerModeSelector';
 
 type RenderProps = React.ComponentProps<typeof ComposerModeSelector>;
@@ -101,5 +102,24 @@ describe('ComposerModeSelector', () => {
             options[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
         });
         expect(document.activeElement).toBe(options[1]);
+    });
+
+    test('shows the acknowledged mode until the session snapshot changes', async () => {
+        setup();
+        const setMode = spyOn(canonicalClient, 'setMode').mockResolvedValue({ type: 'mode.set', mode: { kind: 'vibe' } });
+        try {
+            const main = { kind: 'main' } as const;
+            await render({ sessionId: 'session-1', draftOpen: false, mode: main, isMobile: true, defaultOpen: true });
+            const vibe = [...document.querySelectorAll<HTMLButtonElement>('#composer-mode-options-mobile button[role="option"]')]
+                .find((option) => option.textContent?.includes('Vibe'));
+            await act(async () => { vibe?.click(); });
+            expect(setMode).toHaveBeenCalledWith('session-1', 'vibe');
+            const label = () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')?.textContent;
+            expect(label()).toContain('Vibe');
+            await render({ sessionId: 'session-1', draftOpen: false, mode: { kind: 'plan', status: 'armed' }, isMobile: true });
+            expect(label()).toContain('Plan');
+        } finally {
+            setMode.mockRestore();
+        }
     });
 });
