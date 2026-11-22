@@ -341,6 +341,29 @@ describe('Host-owned worktree archive capture', () => {
     expect(fs.readFileSync(path.join(restoreTarget, 'ignored.txt'), 'utf8')).toBe('ignored content\n');
     expect(fs.readFileSync(path.join(restoreTarget, 'node_modules', 'dep.txt'), 'utf8')).toBe('module\n');
     expect(await store.getWorktreeArchive({ hostProjectId: 'settings-project', archiveId: 'restore-fixture' })).toBeNull();
+    const aloneSource = path.join(root, 'alone-source');
+    git(project, 'worktree', 'add', '-q', '-b', 'alone-fixture', aloneSource);
+    fs.writeFileSync(path.join(aloneSource, 'alone.txt'), 'saved change\n');
+    const aloneScope = await register(aloneSource);
+    scopes.set(pathKey(aloneSource), aloneScope);
+    for (const id of ['restore-alone-chat', 'restore-alone-kept'])
+      await store.bindSession({ sessionId: id, rootSessionId: id, workspaceId: aloneScope.workspaceId });
+    await archiveWorktree(project, { directory: aloneSource, id: 'alone-fixture' }, {
+      worktreeWorkers: { acquire: async () => { }, release: async () => { } }, archiveSessions: service,
+    });
+    await owner.archiveStore.unarchive(['restore-alone-chat']);
+    git(project, 'worktree', 'add', '-q', aloneSource, 'alone-fixture');
+    scopes.set(pathKey(aloneSource), await register(aloneSource));
+    const aloneRestore = await request(app).post('/api/git/worktrees/archives/restore')
+      .query({ directory: aloneSource }).send({ id: 'alone-fixture' });
+    expect(aloneRestore.status, JSON.stringify(aloneRestore.body)).toBe(200);
+    expect(aloneRestore.body.sessionBinding.status).toBe('bound');
+    for (const id of ['restore-alone-chat', 'restore-alone-kept']) {
+      expect(await owner.archiveStore.getState(id)).toMatchObject({ archivedAt: null });
+      expect(await store.getSession(id)).toMatchObject({ workspaceId: aloneScope.workspaceId, cwd: aloneSource });
+    }
+    expect(fs.readFileSync(path.join(aloneSource, 'alone.txt'), 'utf8')).toBe('saved change\n');
+    expect(await store.getWorktreeArchive({ hostProjectId: 'settings-project', archiveId: 'alone-fixture' })).toBeNull();
     const recoverySource = path.join(root, 'recovery-source');
     git(project, 'worktree', 'add', '-q', '-b', 'recovery-fixture', recoverySource);
     fs.writeFileSync(path.join(recoverySource, 'recovered.txt'), 'recovery change\n');
