@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-22 - Merge Host revisions across concurrent discovery mutations
+
+- **Decided:** preserve concurrent local live session fields while merging strictly newer Host archive and metadata revisions independently during full discovery and head refresh; derive archive membership from the merged record.
+- **Instead of:** treating every concurrent upsert, including unchanged snapshots, as authority to discard newer Host fields.
+- **Because:** worktree archival can finish and await discovery while a live snapshot upserts the older active record, leaving the chat outside Archive despite the Host's newer archive revision.
+- **Mine:** yes (requested fix and drift classification)
+- **Revisit when:** session discovery and live snapshots share a single revision authority. Deletion tombstones, runtime fences and the child-discovery failure rules remain unchanged.
+
 ## 2026-11-21 - Let Host worktree capture own session archive state
 
 - **Decided:** archive worktrees without client-side session pre-archival, and resolve standalone restored-session relocation through the registered workspace directory.
