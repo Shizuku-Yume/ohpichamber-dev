@@ -215,6 +215,7 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
                                 {options.map((option, index) => {
                                     const row = (
                                         <button
+                                            ref={(node) => { itemRefs.current[index] = node; }}
                                             type="button"
                                             role="option"
                                             aria-selected={option.value === selectedKind}

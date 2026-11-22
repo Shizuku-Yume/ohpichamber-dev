@@ -90,4 +90,16 @@ describe('ComposerModeSelector', () => {
         await render({ draftMode: 'goal' });
         expect(trigger()?.textContent).toContain('Goal');
     });
+
+    test('moves between mobile mode options with the arrow keys', async () => {
+        setup();
+        await render({ isMobile: true, defaultOpen: true });
+        const options = [...document.querySelectorAll<HTMLButtonElement>('#composer-mode-options-mobile button[role="option"]')];
+        expect(options.length).toBeGreaterThan(1);
+        options[0].focus();
+        await act(async () => {
+            options[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+        });
+        expect(document.activeElement).toBe(options[1]);
+    });
 });
