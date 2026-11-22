@@ -10,8 +10,13 @@ head refreshes. Membership follows the merged archive state; deletion tombstones
 and runtime-generation fences are unchanged. The scratch reproduction on
 04cdff384 failed both during-read cases (53 pass, 2 fail), while before/after
 controls passed. Coverage includes newer concurrent unarchives, Host metadata,
-live fields and deletions. Required verification is recorded with this change's
-handoff; on-device behavior remains unverified.
+live fields and deletions. Rebased onto main 73b6d4123. Isolated checks pass:
+59 race-store tests, 25 existing store tests, 19 sync-context tests, 17 worktree
+archive tests, changed-file UI lint and the complete type-check including drift.
+The final full UI run passes 1413/1414 files; only the known ICU relative-time
+test fails. An earlier full run hit the composer 20-versus-40 flake; it passes
+alone and in the final full run. On-device behavior remains unverified. Logs:
+`/Users/devin/shared_files/archive-discovery-repro/`.
 
 The iOS replay on `ecf69a017` exposed the symmetric restore gap: Host session
 archive state reached revision 2 with no archived timestamp, while the client
