@@ -85,7 +85,7 @@ const applyDeepLinkIntent = (intent: NavigationIntent): void => {
   flush();
 };
 
-const applyDeepLinkUrl = (raw: string | null | undefined, onPairing?: (payload: PairingConnectionPayload) => void): void => {
+const applyDeepLinkUrl = (raw: string | null | undefined, onPairing?: (payload: PairingConnectionPayload | null) => void): void => {
   const intent = parseDeepLink(raw);
   if (intent?.type === 'pairing') {
     onPairing?.(intent.payload);
@@ -113,7 +113,7 @@ export const useDeepLinkHandlers = (next: DeepLinkHandlers): void => {
 
 export const useDeepLinkSource = ({ ready: isReady, onPairing }: {
   ready: boolean;
-  onPairing?: (payload: PairingConnectionPayload) => void;
+  onPairing?: (payload: PairingConnectionPayload | null) => void;
 }): void => {
   const onPairingRef = React.useRef(onPairing);
   React.useEffect(() => {

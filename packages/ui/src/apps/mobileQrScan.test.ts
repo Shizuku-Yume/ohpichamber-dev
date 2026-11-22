@@ -74,6 +74,25 @@ describe('scanConnectionQr on Android', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
   });
 
+  test('classifies an expired pairing QR separately from an unrelated QR', async () => {
+    const payload = {
+      v: 2,
+      pairingId: 'pair_expired',
+      secret: 'synthetic-expired',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      candidates: [{ type: 'lan', url: 'http://127.0.0.1:3901', priority: 10 }],
+    };
+    let rawValue = `ohpichamber://connect?v=2&p=${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+      Capacitor: { getPlatform: () => 'ios', Plugins: { BarcodeScanner: {
+        scan: async () => ({ barcodes: [{ rawValue }] }),
+      } } },
+    } });
+    expect(await scanConnectionQr()).toEqual({ status: 'pairing-rejected' });
+    rawValue = 'unrelated QR';
+    expect(await scanConnectionQr()).toEqual({ status: 'invalid' });
+  });
+
   test('uses the bundled startScan flow and cleans up after a result', async () => {
     const listeners = new Map<string, (event: { barcodes?: Array<{ rawValue?: string }> }) => void>();
     let removeCalls = 0;

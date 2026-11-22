@@ -2009,6 +2009,14 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Mine:** yes (requested mobile pairing message fix)
 - **Revisit when:** the shared pairing response contract changes.
 
+## 2026-11-22 - Surface rejected mobile pairing links before navigation
+
+- **Decided:** retain recognized pairing deep links as pairing intents even when payload validation fails, and show the existing pairing-rejected toast without confirmation or redemption. Recognized invalid pairing QRs use the same rejection text.
+- **Instead of:** silently dropping expired external links or describing expired pairing QRs as unrelated codes.
+- **Because:** both native launch delivery paths need visible rejection without changing the connected Host or active chat; valid pairing still requires consent before network access.
+- **Mine:** yes (requested expired mobile pairing fix)
+- **Revisit when:** external pairing links gain a shared typed rejection contract.
+
 ## 2026-11-21 - Match deleted Windows worktree paths from Archive
 
 - **Decided:** match separator, drive-letter case, and trailing-separator variants when looking up an already authorized deleted Windows checkout.

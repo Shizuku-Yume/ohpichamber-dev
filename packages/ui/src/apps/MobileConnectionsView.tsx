@@ -185,6 +185,9 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
         case 'invalid':
           setError(t('mobile.connect.scan.invalid'));
           break;
+        case 'pairing-rejected':
+          setError(t('desktopHostSwitcher.error.pairingRejected'));
+          break;
         case 'unsupported':
           setError(t('mobile.connect.scan.unsupported'));
           break;

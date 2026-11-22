@@ -18,7 +18,7 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
   let pairingStatus = 400;
   let pairingBody: unknown = { error: 'Invalid or expired pairing session' };
   let onAppUrlOpen: ((event: { url: string }) => void) | undefined;
-  const launch = Promise.withResolvers<{ url: string } | undefined>();
+  let launch = Promise.withResolvers<{ url: string } | undefined>();
   let launchRequested = false;
   let confirmations = 0;
   const server = await serveTestHttp((request, response) => {
@@ -82,7 +82,9 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
   const { useDeepLinkSource } = await import('./deepLinkNavigation');
   const { useMobilePairingConfirmation } = await import('./useMobilePairingConfirmation');
   const { upsertMobileConnection, loadMobileConnectionHeaders, loadMobileConnections } = await import('./mobileConnections');
-  const { switchRuntimeEndpoint } = await import('@/lib/runtime-switch');
+  const { switchRuntimeEndpoint, getRuntimeApiBaseUrl } = await import('@/lib/runtime-switch');
+  const { toast } = await import('@/components/ui');
+  const { useSessionUIStore } = await import('@/sync/session-ui-store');
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
@@ -250,6 +252,45 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
     await settle(() => connected === connectedBeforeLink + 1);
     expect(pairingRequests).toEqual(['POST', 'POST', 'POST', 'POST', 'POST']);
     expect([...secrets.values()]).toContain('synthetic-paired-token');
+
+    const expiredPayload = {
+      ...buildPairingConnectionPayload({
+        pairingId: 'pair_expired',
+        secret: 'synthetic-expired',
+        candidates: [{ type: 'lan', url, priority: 10 }],
+      }),
+      expiresAt: '2000-01-01T00:00:00.000Z',
+    };
+    const expiredLink = `ohpichamber://connect?v=2&p=${Buffer.from(JSON.stringify(expiredPayload)).toString('base64url')}`;
+    const connectionsBeforeExpired = await loadMobileConnections();
+    const endpointBeforeExpired = getRuntimeApiBaseUrl();
+    useSessionUIStore.setState({ currentSessionId: 'existing-chat', currentSessionDirectory: '/existing-project' });
+    const sessionBeforeExpired = useSessionUIStore.getState();
+    const connectedBeforeExpired = connected;
+    const requestsBeforeExpired = received.length;
+    const toastsBeforeExpired = toast.getHistory().length;
+    launch = Promise.withResolvers<{ url: string } | undefined>();
+    onAppUrlOpen = undefined;
+    launchRequested = false;
+    await act(async () => root.render(<I18nProvider><PairingLinkReceiver key="expired" /></I18nProvider>));
+    await settle(() => Boolean(onAppUrlOpen) && launchRequested);
+    await act(async () => {
+      if (delivery === 'getLaunchUrl only') launch.resolve({ url: expiredLink });
+      else onAppUrlOpen?.({ url: expiredLink });
+    });
+    await settle(() => toast.getHistory().length === toastsBeforeExpired + 1);
+    expect(toast.getHistory().at(-1)).toMatchObject({ title: 'Pairing link is invalid or expired. Generate a new one.' });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(pairingRequests).toHaveLength(5);
+    expect(received).toHaveLength(requestsBeforeExpired);
+    expect(connected).toBe(connectedBeforeExpired);
+    expect(getRuntimeApiBaseUrl()).toBe(endpointBeforeExpired);
+    expect(await loadMobileConnections()).toEqual(connectionsBeforeExpired);
+    expect(useSessionUIStore.getState()).toBe(sessionBeforeExpired);
+    if (delivery === 'appUrlOpen before getLaunchUrl') {
+      await act(async () => launch.resolve({ url: expiredLink }));
+      expect(toast.getHistory()).toHaveLength(toastsBeforeExpired + 1);
+    }
   } finally {
     await act(async () => root.unmount());
     switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null });
