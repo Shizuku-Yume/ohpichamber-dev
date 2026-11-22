@@ -50,8 +50,8 @@ text, inconsistent abandoned-task progress and unreadable Work status task
 labels at 320–390 CSS pixels. Inline tool disclosures now retain their reserved
 geometry, expanded todo text wraps, phone task readouts do not depend on hover,
 and tool progress counts abandoned tasks as closed. The audit used persisted
-OMP transcript data loaded by the isolated Host; live-provider, packaged and
-native regression verification remains outstanding.
+OMP transcript data loaded by the isolated Host; the live-provider follow-up is
+recorded above. Packaged and native regression verification remains outstanding.
 
 Archive discovery reconciliation now preserves concurrent live fields while
 merging independently newer Host archive and metadata revisions in full and
