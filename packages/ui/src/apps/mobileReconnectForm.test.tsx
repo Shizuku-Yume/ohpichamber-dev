@@ -15,6 +15,8 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
   const pairingRequests: string[] = [];
   let healthRequests = 0;
   let allowPairing = false;
+  let pairingStatus = 400;
+  let pairingBody: unknown = { error: 'Invalid or expired pairing session' };
   let onAppUrlOpen: ((event: { url: string }) => void) | undefined;
   const launch = Promise.withResolvers<{ url: string } | undefined>();
   let launchRequested = false;
@@ -22,10 +24,10 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
   const server = await serveTestHttp((request, response) => {
     if (request.url === '/api/client-auth/pairing/redeem') {
       pairingRequests.push(request.method ?? '');
-      response.writeHead(allowPairing ? 200 : 400, { 'Content-Type': 'application/json' });
+      response.writeHead(allowPairing ? 200 : pairingStatus, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify(allowPairing
         ? { clientToken: 'synthetic-paired-token' }
-        : { error: 'Invalid or expired pairing session' }));
+        : pairingBody));
       return;
     }
     if (request.url === '/health') healthRequests += 1;
@@ -193,9 +195,23 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
       candidates: [{ type: 'lan', url, priority: 10 }],
     }));
     await input('input[type="url"]', pairingLink);
-    await settle(() => document.body.textContent!.includes('This server needs a password or client token.'));
+    await settle(() => document.body.textContent!.includes('Pairing link is invalid or expired. Generate a new one.'));
     expect(pairingRequests).toEqual(['POST']);
     expect(document.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe('');
+
+    pairingStatus = 429;
+    await input('input[type="url"]', pairingLink);
+    await settle(() => document.body.textContent!.includes('Pairing failed (HTTP 429).'));
+    expect(pairingRequests).toEqual(['POST', 'POST']);
+
+    pairingStatus = 200;
+    for (const body of [{}, { clientToken: '' }]) {
+      await input('input[type="url"]', url);
+      pairingBody = body;
+      await input('input[type="url"]', pairingLink);
+      await settle(() => document.body.textContent!.includes('The server returned an invalid pairing response.'));
+    }
+    expect(pairingRequests).toHaveLength(4);
 
     allowPairing = true;
     const connectedBeforeLink = connected;
@@ -213,10 +229,10 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(url);
     expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('synthetic-fixture');
     expect(healthRequests).toBe(probesBeforeLink);
-    expect(pairingRequests).toEqual(['POST']);
+    expect(pairingRequests).toHaveLength(4);
     await clickText('Cancel');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(pairingRequests).toEqual(['POST']);
+    expect(pairingRequests).toHaveLength(4);
     expect(connected).toBe(connectedBeforeLink);
 
     if (delivery !== 'getLaunchUrl only') {
@@ -225,14 +241,14 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
     expect(confirmations).toBe(1);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(healthRequests).toBe(probesBeforeLink);
-    expect(pairingRequests).toEqual(['POST']);
+    expect(pairingRequests).toHaveLength(4);
     expect(connected).toBe(connectedBeforeLink);
 
     await act(async () => onAppUrlOpen?.({ url: pairingLink }));
     expect(confirmations).toBe(2);
     await clickText('Connect');
     await settle(() => connected === connectedBeforeLink + 1);
-    expect(pairingRequests).toEqual(['POST', 'POST']);
+    expect(pairingRequests).toEqual(['POST', 'POST', 'POST', 'POST', 'POST']);
     expect([...secrets.values()]).toContain('synthetic-paired-token');
   } finally {
     await act(async () => root.unmount());

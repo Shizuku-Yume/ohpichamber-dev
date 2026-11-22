@@ -5,6 +5,7 @@ import React from 'react';
 import { z } from 'zod';
 
 import { useI18n } from '@/lib/i18n';
+import { readPairingResponse } from '@/lib/pairingResponse';
 import type { PairingConnectionPayload, PairingEndpointCandidate } from '@/lib/connectionPayload';
 import { isCapacitorApp } from '@/lib/platform';
 import { adoptRelayTunnel, getActiveRelayDescriptor, getActiveRelayTunnel, isRelayModeActive } from '@/lib/relay/runtime-tunnel';
@@ -1530,16 +1531,23 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
         : { response: await requestWithTimeout(`${chosen.url}/api/client-auth/pairing/redeem`, redeemInit), failure: null };
       const response = redeem.response;
       logConnect('pairing:redeem', { transport: chosen.kind, ok: response?.ok === true, status: response?.status ?? null, error: redeem.failure });
-      if (!response?.ok) {
+      if (!response) {
         setError(t('mobile.connect.error.authRequired'));
         return;
       }
       const result = await response.json().catch(() => null) as PairingRedeemResponse | null;
-      const issuedToken = typeof result?.clientToken === 'string' ? result.clientToken.trim() : '';
-      if (!issuedToken) {
-        setError(t('mobile.connect.error.authRequired'));
+      const pairingResult = await readPairingResponse(new Response(JSON.stringify(result), { status: response.status }));
+      if (pairingResult.kind !== 'success') {
+        if (pairingResult.kind === 'rejected') {
+          setError(t('desktopHostSwitcher.error.pairingRejected'));
+        } else if (pairingResult.kind === 'http-error') {
+          setError(t('desktopHostSwitcher.error.pairingFailed', { status: pairingResult.status }));
+        } else {
+          setError(t('desktopHostSwitcher.error.pairingInvalidResponse'));
+        }
         return;
       }
+      const issuedToken = pairingResult.token;
       const serverLabel = typeof result?.server?.label === 'string' ? result.server.label : '';
       const label = payload.label || serverLabel || getConnectionLabel(connectionDisplayUrl({ candidates: deviceCandidates }));
 
