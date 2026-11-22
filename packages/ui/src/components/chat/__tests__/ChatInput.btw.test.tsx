@@ -217,7 +217,7 @@ test.each([false, true])('the composer exposes live OMP rows (mobile: %s)', asyn
     await act(async () => useUIStore.setState({ isMobile }));
     await publish('plan');
     await act(async () => useSubagentsStore.getState().setSubagents(SESSION_ID, [
-      { parentSessionId: SESSION_ID, subagentId: 'child', role: 'reviewer', status: 'running' },
+      { parentSessionId: SESSION_ID, subagentId: 'reviewer', childSessionId: 'child', role: 'reviewer', status: 'running' },
     ]));
     expect(container.querySelector('[data-testid="todo-tray"]')?.textContent).toContain('Check the build');
     expect(container.querySelector('[data-testid="subagent-hud-tray"]')).not.toBeNull();
