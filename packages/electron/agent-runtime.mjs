@@ -12,6 +12,7 @@ const PATCHED_SDK_FILES = [
   'src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts',
   'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts',
   'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts',
+  'src/task/executor.ts', 'src/task/persisted-revive.ts', 'src/task/structured-subagent.ts', 'src/vibe/runtime.ts',
 ];
 const readManifest = (directory) => JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
 

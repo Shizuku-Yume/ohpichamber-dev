@@ -22,6 +22,11 @@ the Electron runtime staged: the upstream wiring audit now excludes staged
 SDK code from application constructor detection and leaves the allowlist
 intact. Independent workflow and security reviewers could not be spawned.
 
+PR review found that native Task and Vibe children did not receive the Host
+Bash authorizer. Fresh and restored children now inherit it; a loopback
+Task child test checks denial of Bash and separate authorization of a
+Bash-mounted tool.
+
 Custom-provider model projection now inherits native reasoning levels and budgets
 when configured options are empty, while explicit non-empty choices win. Worker
 projection regressions and the UI form contract are covered. On Windows the

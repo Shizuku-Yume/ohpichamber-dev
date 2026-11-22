@@ -687,6 +687,11 @@ export class WorkerSession {
         },
         initialEnablement: initialHostTools,
       });
+      const authorizeBashExecution = createNativeBashAuthorizer({
+        interaction,
+        authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
+        nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
+      });
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -695,11 +700,7 @@ export class WorkerSession {
         enableMCP: mcp !== undefined, mcpManager: mcp, disableExtensionDiscovery: true,
         tuiTranscript: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, hostToolsController.extension],
-        authorizeBashExecution: createNativeBashAuthorizer({
-          interaction,
-          authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
-          nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
-        }),
+        authorizeBashExecution,
         extensionRoots: () => nativeExtensionRoots(settings, pluginExtensionPaths),
         getApiKey: async model => {
           await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
@@ -804,6 +805,7 @@ export class WorkerSession {
       AgentLifecycleManager.global().setPersistedSubagentReviverFactory(
         createPersistedSubagentReviverFactory({
           session: nativeSession, authStorage, modelRegistry, settings: nativeSession.settings,
+          authorizeBashExecution,
           enableLsp: true, eventBus: subagentEventBus, subagentEventBus,
         }),
         () => Math.trunc(Number(cfgTaskAgentIdleTtlMs.get(nativeSession.settings)) || 0),

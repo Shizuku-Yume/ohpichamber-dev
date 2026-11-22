@@ -155,10 +155,11 @@ function waitForGoal(worker: WorkerSession, predicate: () => boolean, timeoutMs?
  return pending.promise;
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse, apiKey, headers }: {
+async function fixture({ respond, invoke, machineCommands = [], deniedCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse, apiKey, headers }: {
  respond: (payload: ProviderRequest, root: string, request: Request) => Promise<Response> | Response;
  invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
  machineCommands?: string[];
+ deniedCommands?: string[];
  onSubagent?: (payload: SubagentLifecyclePayload) => void;
  denyWebSearch?: boolean;
  denyLsp?: boolean;
@@ -234,6 +235,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   }
   if (request.type !== 'tool' || request.toolName !== 'bash') return;
   const command = z.string().parse(request.input.command);
+  if (deniedCommands.includes(command)) throw new Error('Host policy refused Bash');
   if (machineCommands.includes(command)) return;
   const grant = request.approvalId && request.toolCallId
    ? interactions.consumeApprovalGrant(rootSessionId, generation, request.approvalId, request.toolCallId, request.toolName, request.input) : undefined;
@@ -1891,6 +1893,42 @@ test('native child tool calls re-enter Host authorization', async () => {
   expect(harness.hostRequests.some(request => request.type === 'tool' && request.toolName === 'task')).toBe(true);
   expect(harness.hostRequests.some(request => request.type === 'tool' && request.toolName === 'write' && request.input.path === 'child.txt')).toBe(true);
   expect(harness.fatal()).toBe(false);
+ } finally {
+  unsubscribe();
+  await harness.close();
+ }
+}, 60000);
+
+test('native child Bash and its mounted commands both require Host authorization', async () => {
+ const shellCommand = 'printf child-bash-denied';
+ const mountedCommand = `lsp -j '{"action":"status"}'`;
+ let requests = 0;
+ const harness = await fixture({
+  deniedCommands: [shellCommand], machineCommands: [mountedCommand], denyLsp: true,
+  respond: () => {
+   requests += 1;
+   if (requests === 1) return completion({ name: 'task', id: 'child-bash-task', input: { agent: 'child', name: 'child-bash', task: 'Run both Bash commands.' } });
+   if (requests === 2) return completion({ name: 'bash', id: 'child-bash-shell', input: { command: shellCommand } });
+   if (requests === 3) return completion({ name: 'bash', id: 'child-bash-mounted', input: { command: mountedCommand } });
+   return completion();
+  },
+ });
+ const terminal = Promise.withResolvers<void>();
+ const unsubscribe = harness.worker.session.subscribe(event => {
+  if (event.type === 'agent_end') terminal.resolve();
+ });
+ try {
+  cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
+  cfgBashPatterns.override(harness.worker.session.settings, [shellCommand, mountedCommand].map(match => ({ match, approval: 'allow' })));
+  await harness.worker.operation({ type: 'prompt', runId: 'child-bash-run', request: prompt('Spawn one native child to run both Bash commands.') });
+  await terminal.promise;
+  expect(harness.hostRequests.filter(request => request.type === 'tool' && ['bash', 'lsp'].includes(request.toolName))).toEqual([
+   expect.objectContaining({ toolName: 'bash', input: { command: shellCommand }, toolCallId: 'child-bash-shell' }),
+   expect.objectContaining({ toolName: 'bash', input: { command: mountedCommand }, toolCallId: 'child-bash-mounted' }),
+   expect.objectContaining({ toolName: 'lsp', input: { action: 'status' } }),
+  ]);
+  expect(harness.requests[2]?.messages.at(-1)?.content).toContain('Host policy refused Bash');
+  expect(harness.requests[3]?.messages.at(-1)?.content).toContain('Host policy refused the tool operation');
  } finally {
   unsubscribe();
   await harness.close();

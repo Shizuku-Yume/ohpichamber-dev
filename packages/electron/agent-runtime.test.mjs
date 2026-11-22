@@ -58,7 +58,7 @@ test('resolveAgentRuntime validates platform manifest and required files', () =>
 test('desktop resolves an installed OMP SDK only when it matches the shipped SDK', { skip: process.platform === 'win32' }, () => {
   const fixture = createMockRuntimeFixture();
   const sdk = '@oh-my-pi/pi-coding-agent';
-  const patchedFiles = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts', 'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts', 'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts'];
+  const patchedFiles = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts', 'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts', 'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts', 'src/task/executor.ts', 'src/task/persisted-revive.ts', 'src/task/structured-subagent.ts', 'src/vibe/runtime.ts'];
   const writeSdk = (root, version, unpatchedFile) => {
     fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));
@@ -115,7 +115,7 @@ test('Windows local SDK probes allow cold imports and preserve SDK rejection rea
   const bin = path.join(fixture.root, 'bin');
   const localSdk = path.join(bin, 'node_modules', sdk);
   const overlay = path.join(fixture.root, 'overlay');
-  const files = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts', 'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts', 'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts'];
+  const files = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts', 'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts', 'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts', 'src/task/executor.ts', 'src/task/persisted-revive.ts', 'src/task/structured-subagent.ts', 'src/vibe/runtime.ts'];
   const writeSdk = (directory, version = '19.1.0') => {
     fs.mkdirSync(path.join(directory, 'dist'), { recursive: true });
     fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));

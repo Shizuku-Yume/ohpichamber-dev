@@ -595,3 +595,92 @@ index 37885f63e3..c6c6c282ec 100644
  	/** Agent registry for IRC routing across live sessions. */
  	agentRegistry?: AgentRegistryApi;
  	/** Idle→parked→revive lifecycle owner; lets explicit cancellation stop a non-job-backed agent registration. Default: AgentLifecycleManager.global(). */
+diff --git a/src/task/executor.ts b/src/task/executor.ts
+index a72081a0e..e7aede81b 100644
+--- a/src/task/executor.ts
++++ b/src/task/executor.ts
+@@ -458,6 +458,7 @@ export interface ExecutorOptions {
+ 	additionalDirectories?: string[];
+ 	/** Exact provider credential resolver inherited from the parent session. */
+ 	getApiKey?: CreateAgentSessionOptions["getApiKey"];
++	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
+ 	/** Parent session's manager; the child and its revived turns use this exact delivery scope. */
+ 	asyncJobManager?: AsyncJobManagerApi;
+ 	/** Parent session whose stored credential affinities seed the child session. */
+@@ -5234,6 +5235,7 @@ async function runSubprocessOnThisThread(options: ExecutorOptions): Promise<Sing
+ 					authStorage,
+ 					modelRegistry,
+ 					getApiKey: options.getApiKey,
++					authorizeBashExecution: options.authorizeBashExecution,
+ 					credentialSourceSessionId: options.credentialSourceSessionId,
+ 					oauthAccountPools: options.oauthAccountPools,
+ 					inheritedSessionAgents: options.inheritedSessionAgents,
+diff --git a/src/task/structured-subagent.ts b/src/task/structured-subagent.ts
+index 938d10a3e..302800e79 100644
+--- a/src/task/structured-subagent.ts
++++ b/src/task/structured-subagent.ts
+@@ -755,6 +755,7 @@ function buildExecutorOptions(
+ 		costGate: session.costGate,
+ 		additionalDirectories: session.additionalDirectories,
+ 		getApiKey: session.getApiKey,
++		authorizeBashExecution: session.authorizeBashExecution,
+ 		credentialSourceSessionId: session.getCredentialSourceSessionId?.(),
+ 		agent: policy.effectiveAgent,
+ 		// A stepped spawn starts on its first step prompt; the executor sends the rest.
+diff --git a/src/vibe/runtime.ts b/src/vibe/runtime.ts
+index 95854df39..53a227016 100644
+--- a/src/vibe/runtime.ts
++++ b/src/vibe/runtime.ts
+@@ -1288,6 +1288,7 @@ export class VibeSessionRegistry {
+ 		return {
+ 			cwd: session.cwd,
+ 			costGate: session.costGate,
++			authorizeBashExecution: session.authorizeBashExecution,
+ 			agent: record.agent,
+ 			task: message,
+ 			assignment: message,
+diff --git a/src/task/persisted-revive.ts b/src/task/persisted-revive.ts
+index 961dff07e..d34ffa43a 100644
+--- a/src/task/persisted-revive.ts
++++ b/src/task/persisted-revive.ts
+@@ -20,7 +20,7 @@ import type { AsyncJobManagerApi } from "../async";
+ import type { PreparedExtension } from "../extensibility/extensions/types";
+ import type { PersistedSubagentReviverFactory } from "../registry/agent-lifecycle";
+ import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+-import { createAgentSession } from "../sdk";
++import { type CreateAgentSessionOptions, createAgentSession } from "../sdk";
+ import type { AgentSession } from "../session/agent-session";
+ import type { AgentSessionHandle } from "../session/agent-session-handle";
+ import type { ArtifactManagerApi } from "../session/artifacts";
+@@ -67,6 +67,7 @@ import type { AgentDefinition } from "./types";
+  */
+ export interface PersistedSubagentReviveContext {
+ 	session: AgentSession;
++	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
+ 	authStorage: AuthStorage;
+ 	modelRegistry: ModelRegistry;
+ 	settings: Settings;
+@@ -103,6 +104,7 @@ export interface PersistedReviveSpec {
+ 	/** The root's artifact manager at revive time; a revived agent adopts it. */
+ 	readonly artifactManager: ArtifactManagerApi | undefined;
+ 	readonly preparedExtensions: readonly PreparedExtension[] | undefined;
++	readonly authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
+ 	readonly authStorage: AuthStorage;
+ 	readonly modelRegistry: ModelRegistry;
+ 	readonly settings: Settings;
+@@ -208,6 +210,7 @@ export function createPersistedSubagentReviverFactory(
+ 				asyncJobManager: ctx.session.asyncJobManager,
+ 				artifactManager: ctx.session.sessionManager.getArtifactManager() ?? undefined,
+ 				preparedExtensions: ctx.session.preparedExtensions,
++				authorizeBashExecution: ctx.authorizeBashExecution,
+ 				authStorage: ctx.authStorage,
+ 				modelRegistry: ctx.modelRegistry,
+ 				settings: ctx.settings,
+@@ -404,6 +407,7 @@ export async function revivePersistedSubagent(spec: PersistedReviveSpec, expecte
+ 		({ session } = await createAgentSession({
+ 			cwd: spec.root.sessionManager.getCwd(),
+ 			costGate: spec.costGate,
++			authorizeBashExecution: spec.authorizeBashExecution,
+ 			authStorage: spec.authStorage,
+ 			// Revived agents join the root session tree, so their observability
+ 			// frames ride the same bus the RPC/collab surfaces subscribed to.

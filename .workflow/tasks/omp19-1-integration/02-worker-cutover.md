@@ -19,4 +19,9 @@ no failures. Root type-check passed with the staged Electron runtime after
 the wiring audit excluded the generated SDK. No OpenChamber sync changes
 were made.
 
+PR review found that Task and Vibe children did not receive the Host Bash
+authorizer. The SDK now passes it into fresh and restored child sessions. A real Task child test
+checks that Host denial stops a shell command and that a Bash-mounted LSP
+command receives separate Host checks for Bash and the validated LSP input.
+
 Review: skipped — this session cannot spawn fresh workflow or security reviewers.
