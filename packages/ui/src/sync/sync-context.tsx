@@ -298,6 +298,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     if (session) useGlobalSessionsStore.getState().upsertSession(session)
     if (wantsStream(target, snapshot.session.runtimeStatus)) pipelineRef.current?.attach(target, snapshot)
     else parkStreamRef.current?.(target)
+    reconcileOffscreenRef.current?.()
     const previous = recoveryPrevious?.session
     if (previous && (
       previous.epoch !== snapshot.session.epoch
@@ -476,9 +477,13 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       const { epoch, headSequence, runtimeStatus } = snapshot.session
       pipeline.attach(target, { cursor: `${epoch}:${headSequence}`, session: { sessionId: target.sessionId, runtimeStatus } })
     }
+    let offscreenStream: SessionMessageTarget | null = null
     const reconcileOffscreen = () => {
       if (!isCurrent()) return
       const choice = offscreenStreamChoice()
+      const previous = offscreenStream
+      offscreenStream = choice
+      if (previous && (previous.directory !== choice?.directory || previous.sessionId !== choice.sessionId) && !isViewedSession(previous)) parkStream(previous)
       if (choice) resumeStream(choice)
     }
     reconcileOffscreenRef.current = reconcileOffscreen
@@ -498,10 +503,12 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       reconcileOffscreen()
     }
     let releaseOffscreenSlot: (() => void) | undefined
-    if (typeof navigator !== "undefined" && navigator.locks) {
+    let slotRequestActive = true
+    const usesSlotLock = typeof navigator !== "undefined" && Boolean(navigator.locks)
+    if (usesSlotLock) {
       void navigator.locks.request(`openchamber:offscreen-session-stream:${props.runtimeKey}`, () => new Promise<void>((release) => {
         releaseOffscreenSlot = release
-        if (!currentRef.current) { release(); return }
+        if (!slotRequestActive) { release(); return }
         offscreenSlotRef.current = true
         reconcileOffscreen()
       })).catch(() => { })
@@ -612,6 +619,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       if (onViewedSessionChange === viewedSessionChange) onViewedSessionChange = null
       if (parkStreamRef.current === parkStream) parkStreamRef.current = null
       if (reconcileOffscreenRef.current === reconcileOffscreen) reconcileOffscreenRef.current = null
+      slotRequestActive = false
+      if (usesSlotLock) offscreenSlotRef.current = false
       releaseOffscreenSlot?.()
       for (const timer of parkTimers.values()) clearTimeout(timer)
       disposalRef.current = setTimeout(() => { messageLoader.dispose(); childStores.disposeAll() }, 0)
