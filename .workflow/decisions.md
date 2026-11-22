@@ -2001,6 +2001,14 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Mine:** yes (requested mobile functional fixes)
 - **Revisit when:** these custom drawers adopt a shared dialog primitive with equivalent focus and lifetime behavior.
 
+## 2026-11-22 - Report mobile pairing rejection separately from server authentication
+
+- **Decided:** use the shared pairing response classifier and existing pairing error translations on mobile, with regression coverage for rejected links, rate limits and malformed successful responses.
+- **Instead of:** reporting every rejected pairing link as a missing password or client token.
+- **Because:** one-time pairing rejection is not a server sign-in request; consumed, invalid and expired secrets intentionally share one rejection response.
+- **Mine:** yes (requested mobile pairing message fix)
+- **Revisit when:** the shared pairing response contract changes.
+
 ## 2026-11-21 - Match deleted Windows worktree paths from Archive
 
 - **Decided:** match separator, drive-letter case, and trailing-separator variants when looking up an already authorized deleted Windows checkout.
