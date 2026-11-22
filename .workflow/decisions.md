@@ -1995,6 +1995,7 @@ Later successful listings also retire stale failures: global head polls replace 
 ## 2026-11-22 - Restore phone drawer focus without a keyboard
 
 - **Decided:** full-cover phone drawers focus their surface on entry and restore the opener on close unless another overlay owns focus. Retained closed drawers and tablet panels are inert. Inline tablet panels do not take modal focus.
+- **Touch entry:** header button clicks explicitly focus the opener before opening so WebKit taps do not leave the drawer restoring an unrelated input or body.
 - **Instead of:** leaving focus in a hidden drawer or opening the phone keyboard by focusing the search field.
 - **Because:** keyboard dismissal must return to the control that opened the drawer, and the exit animation must not leave invisible controls focusable.
 - **Mine:** yes (requested mobile functional fixes)
