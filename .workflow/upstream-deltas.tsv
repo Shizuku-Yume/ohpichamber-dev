@@ -1,5 +1,6 @@
 # The drift ledger's decision rows: a `fork-differs` path that is not owned by the
 path	state	class	decision	reason
+packages/ui/src/components/chat/composer/input/LoopRow.tsx	fork-only	omp-boundary		Renders Canonical loop state and routes Stop loop to the owning session control.
 packages/ui/src/components/chat/work-status/WorkStatusSubagentsSection.tsx	fork-differs	decision	2026-11-11 - Chat presentation is ported onto the canonical contract, not kept on the OpenCode engine	Keeps workflow child sessions in Workflows instead of counting them in Work Status Subagents as well.
 packages/ui/src/components/chat/work-status/WorkStatusSubagentsSection.test.tsx	fork-differs	decision	2026-11-11 - Chat presentation is ported onto the canonical contract, not kept on the OpenCode engine	Covers the separation of workflow agents and ordinary child sessions in Work Status.
 packages/ui/src/lib/worktrees/worktreeArchive.ts	fork-differs	decision	2026-11-21 - Let Host worktree capture own session archive state	Delegates capture and rollback to the Host without pre-archiving active chats; refreshes authoritative session discovery after capture and restore, including partial outcomes, on the initiating runtime.
