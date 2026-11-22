@@ -29,6 +29,9 @@ import { ComposerStatusStrip } from '@/components/chat/ComposerStatusStrip';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { useShownAfter } from '@/hooks/useShownAfter';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
+import { SubagentHudTray } from '../../SubagentHudTray';
+import { TodoTray } from '../../TodoTray';
+import { LoopRow } from './LoopRow';
 import { MemoMobileModelButton, MemoMobileEffortButton } from './memoComposerControls';
 import { ComposerModeSelector } from '../ui/ComposerModeSelector';
 
@@ -49,7 +52,7 @@ type Dependencies = {
     queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEdit' | 'handleQueuedMessageSend'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'handleOpenMobilePanel'>;
     editorActions: Pick<ReturnType<typeof useComposerEditorActions>, 'handleCycleThinking' | 'handleOpenThinkingPanel'>;
-    footerModes: Pick<ReturnType<typeof useComposerFooterModes>, 'mode' | 'draftMode' | 'draftGoalObjective' | 'runActive' | 'planRoleAvailable' | 'goalModeEnabled' | 'handleDraftModeChange'>;
+    footerModes: Pick<ReturnType<typeof useComposerFooterModes>, 'runOrigin' | 'mode' | 'draftMode' | 'draftGoalObjective' | 'runActive' | 'planRoleAvailable' | 'goalModeEnabled' | 'handleDraftModeChange'>;
 };
 
 export function useComposerRows({
@@ -172,16 +175,29 @@ export function useComposerRows({
         ? <SessionFolderMissingRow sessionId={currentSessionId} directory={currentSessionDirectoryForSync} busy={sessionPhase !== 'idle'} />
         : null;
 
-    const composerTopRows = folderMissingRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const liveSessionId = !isBtwActive && !newSessionDraftOpen ? currentSessionId : null;
+    const sessionDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? undefined;
+    const workerRunRow = liveSessionId && (footerModes.runOrigin === 'plan' || footerModes.runOrigin === 'goal')
+        ? <ComposerStatusStrip icon="loader-4" spin text={t(footerModes.runOrigin === 'plan' ? 'chat.run.origin.plan' : 'chat.run.origin.goal')} />
+        : null;
+
+    const hasTopRows = folderMissingRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow
+        || liveSessionId || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow
+        || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow;
+    const composerTopRows = hasTopRows ? (
         <>
             {folderMissingRow}
             {worktreeSetupRow}
             {creatingSessionRow}
             {spaceWaitRow}
+            {liveSessionId && <TodoTray key={`todo:${liveSessionId}`} sessionId={liveSessionId} directory={sessionDirectory} />}
             {goalRow}
+            {workerRunRow}
             {autoReviewRow}
             {prWatchRow}
             {extensionWaitRow}
+            {liveSessionId && <LoopRow key={`loop:${liveSessionId}`} sessionId={liveSessionId} directory={sessionDirectory} />}
+            {liveSessionId && <SubagentHudTray key={`subagent:${liveSessionId}`} sessionId={liveSessionId} />}
             {backgroundShellsRow}
             {revertRow}
             {queueRow}

@@ -908,7 +908,10 @@ export class WorkerSession {
     this.lastSelectedOptions = { key: optionsKey, modelsFileStamp };
   }
 
-  seed(): ProjectionSeed { return this.projection.seed(); }
+  seed(): ProjectionSeed {
+    const seed = this.projection.seed();
+    return this.loopState.active ? { ...seed, loop: this.loopState } : seed;
+  }
   get continuationPending(): boolean { return this.modeController.goal.continuationPending; }
   mode() { return this.modeController.mode(); }
 
@@ -1398,7 +1401,7 @@ export class WorkerSession {
       }));
       this.projection.resetSelection();
       this.syncTodoAutoClear();
-      const seed = this.projection.seed();
+      const seed = this.seed();
       this.permissionBridge?.reset();
       this.interaction.cancelAll();
       return {
@@ -1783,7 +1786,7 @@ export class WorkerSession {
         this.projection.resetSelection();
         this.syncTodoAutoClear();
         await this.session.sessionManager.flush();
-        const seed = this.projection.seed();
+        const seed = this.seed();
         return {
           type: 'btw.branch',
           sessionFile: branchRes.sessionFile,

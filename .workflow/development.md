@@ -4,6 +4,16 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The v2.7.3 sync's composer extraction dropped the OMP todo tray, subagent HUD,
+plan/goal status and loop control without removing their Canonical state.
+The repair wires those rows into both shared composer layouts and keeps workflow
+children from appearing twice in Work Status. The audit compared the merge's
+first parent, its result and later main, checking moved consumers as well as
+lost files. Browser testing also found a pre-existing recovery problem: live
+loop updates reached existing clients but new snapshots omitted them. The
+journal now projects the worker's loop state into snapshots without persisting
+the loop across worker restarts. Native-device behavior remains unverified.
+
 The phone UI audit reproduced overlapping tool glyphs, clipped unbroken todo
 text, inconsistent abandoned-task progress and unreadable Work status task
 labels at 320–390 CSS pixels. Inline tool disclosures now retain their reserved

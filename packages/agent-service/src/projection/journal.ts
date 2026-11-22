@@ -33,6 +33,7 @@ export class SessionJournal {
   private turns: Turn[];
   private messages: Message[];
   private mode: SessionMode;
+  private loop: RuntimeSession['loop'];
   private selection: ProjectionSeed['selection'];
   private compacting: SessionSnapshot['compacting'] = null;
   private todos: TodoPhase[] = [];
@@ -48,6 +49,7 @@ export class SessionJournal {
     this.branch = structuredClone(seed.branch);
     this.turns = structuredClone(seed.turns);
     this.mode = structuredClone(seed.mode);
+    this.loop = structuredClone(seed.loop);
     this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.messages = structuredClone(seed.messages);
     this.compacting = seed.compacting ? structuredClone(seed.compacting) : null;
@@ -104,7 +106,8 @@ export class SessionJournal {
       for (const message of this.messagesByTurn.get(turn.turnId) ?? []) messages.push(message);
     }
     return SessionSnapshotSchema.parse({
-      session: this.runtime(), cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
+      session: { ...this.runtime(), ...(this.loop && { loop: this.loop }) },
+      cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
       branch: this.branch, selection: this.selection, compacting: this.compacting, todos: this.todos,
       window: {
         firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null,
@@ -167,6 +170,7 @@ export class SessionJournal {
 
   replaceInitialSeed(seed: ProjectionSeed): void {
     this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
+    this.loop = structuredClone(seed.loop);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
     this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.compacting = seed.compacting ? structuredClone(seed.compacting) : null;
@@ -177,6 +181,7 @@ export class SessionJournal {
   replace(seed: ProjectionSeed): void {
     this.resetEpoch();
     this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
+    this.loop = structuredClone(seed.loop);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
     this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.compacting = seed.compacting ? structuredClone(seed.compacting) : null;
@@ -200,6 +205,7 @@ export class SessionJournal {
     this.continuationPending = false;
     this.approvals.clear(); this.questions.clear();
     this.compacting = null;
+    this.loop = undefined;
   }
 
   reasonUnavailable(): string | undefined {
@@ -257,6 +263,7 @@ export class SessionJournal {
         this.settleRun(event.runId, event.type === 'run.completed' ? 'completed' : event.type === 'run.cancelled' ? 'cancelled' : 'failed', event.finishedAt, event.type === 'run.failed' ? event.error : undefined); return;
       case 'session.updated':
         if (event.mode !== undefined) this.mode = structuredClone(event.mode);
+        if (event.loop !== undefined) this.loop = structuredClone(event.loop);
         if (event.title !== undefined) this.title = event.title;
         if (event.continuationPending !== undefined) this.continuationPending = event.continuationPending;
         if (event.selection !== undefined) this.selection = structuredClone(event.selection);

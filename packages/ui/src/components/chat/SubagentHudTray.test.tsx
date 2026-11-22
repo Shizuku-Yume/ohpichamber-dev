@@ -1,24 +1,27 @@
-import { afterEach, beforeEach, describe, expect, test, spyOn } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test, spyOn } from 'bun:test';
 import { Window } from 'happy-dom';
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { I18nProvider } from '@/lib/i18n';
+import type { Root } from 'react-dom/client';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
-import { SubagentHudTray } from './SubagentHudTray';
 import type { Session, Subagent } from '@openchamber/agent-contract';
 
 describe('SubagentHudTray', () => {
   let windowInstance: Window;
   let host: HTMLDivElement;
   let root: Root;
+  let I18nProvider: typeof import('@/lib/i18n').I18nProvider;
+  let SubagentHudTray: typeof import('./SubagentHudTray').SubagentHudTray;
 
   beforeEach(async () => {
     windowInstance = new Window();
     Object.assign(globalThis, {
       window: windowInstance,
       document: windowInstance.document,
+      Event: windowInstance.Event,
+      KeyboardEvent: windowInstance.KeyboardEvent,
+      HTMLInputElement: windowInstance.HTMLInputElement,
       HTMLElement: windowInstance.HTMLElement,
       Element: windowInstance.Element,
       Node: windowInstance.Node,
@@ -28,6 +31,9 @@ describe('SubagentHudTray', () => {
     useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [], entityById: new Map() });
     host = document.createElement('div');
     document.body.append(host);
+    const { createRoot } = await import('react-dom/client');
+    ({ I18nProvider } = await import('@/lib/i18n'));
+    ({ SubagentHudTray } = await import('./SubagentHudTray'));
     root = createRoot(host);
   });
 
@@ -169,10 +175,14 @@ describe('SubagentHudTray', () => {
 
     useSubagentsStore.getState().applySubagentUpdate('ses_root', subagent);
 
+    const submitParent = mock((event: React.FormEvent) => event.preventDefault());
     await act(async () => {
       root.render(
         <I18nProvider>
-          <SubagentHudTray sessionId="ses_root" />
+          <form onSubmit={submitParent}>
+            <textarea defaultValue="Unsent parent draft" />
+            <SubagentHudTray sessionId="ses_root" />
+          </form>
         </I18nProvider>,
       );
     });
@@ -197,22 +207,44 @@ describe('SubagentHudTray', () => {
       cancelled: true,
     });
 
-    // Test cancel button
     const row = host.querySelector('[data-testid="subagent-hud-row-sub_worker_1"]');
     expect(row).not.toBeNull();
-    const buttons = row?.querySelectorAll('button');
-    expect(buttons?.length).toBeGreaterThanOrEqual(2);
 
-    // Cancel button is the second button
-    const cancelButton = buttons?.[1];
-    await act(async () => {
-      cancelButton?.click();
-    });
+    try {
+      for (const method of ['click', 'enter'] as const) {
+        const toggle = row?.querySelector<HTMLButtonElement>('button[title="Steer"]');
+        await act(async () => toggle?.click());
+        const input = row?.querySelector('input');
+        expect(input).not.toBeNull();
+        expect(host.querySelectorAll('form')).toHaveLength(1);
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, method);
+          input?.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await act(async () => {
+          if (method === 'click') {
+            const send = Array.from(row?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Send');
+            expect(send?.type).toBe('button');
+            send?.click();
+          } else {
+            const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+            input?.dispatchEvent(enter);
+            expect(enter.defaultPrevented).toBe(true);
+          }
+        });
+        expect(steerSpy).toHaveBeenLastCalledWith('ses_root', 'sub_worker_1', method);
+      }
+      expect(steerSpy).toHaveBeenCalledTimes(2);
+      expect(submitParent).not.toHaveBeenCalled();
+      expect(host.querySelector('textarea')?.value).toBe('Unsent parent draft');
 
-    expect(cancelSpy).toHaveBeenCalledTimes(1);
-    expect(cancelSpy).toHaveBeenCalledWith('ses_root', 'sub_worker_1');
-
-    cancelSpy.mockRestore();
-    steerSpy.mockRestore();
+      const cancel = row?.querySelector<HTMLButtonElement>('button[title="Cancel"]');
+      await act(async () => cancel?.click());
+      expect(cancelSpy).toHaveBeenCalledTimes(1);
+      expect(cancelSpy).toHaveBeenCalledWith('ses_root', 'sub_worker_1');
+    } finally {
+      cancelSpy.mockRestore();
+      steerSpy.mockRestore();
+    }
   });
 });

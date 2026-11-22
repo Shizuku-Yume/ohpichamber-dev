@@ -8,6 +8,7 @@ import { AgentHubModal } from '@/components/chat/AgentHubModal';
 import { toast } from '@/components/ui';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
+import { useSessionWorkflowRuns } from '@/lib/workflows/store';
 import type { IconName } from '@/components/icon/icons';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
@@ -48,9 +49,14 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
 
  const liveSessions = useAllLiveSessions();
  const statuses = useAllSessionStatuses();
+ const workflowRuns = useSessionWorkflowRuns(sessionId);
+ const workflowAgentIds = React.useMemo(
+  () => new Set(workflowRuns.flatMap((run) => run.agents.map((agent) => agent.sessionId))),
+  [workflowRuns],
+ );
  const children = React.useMemo(
-  () => (sessionId ? liveSessions.filter((candidate) => candidate.parentSessionId === sessionId) : []),
-  [liveSessions, sessionId],
+  () => (sessionId ? liveSessions.filter((candidate) => candidate.parentSessionId === sessionId && !workflowAgentIds.has(candidate.sessionId)) : []),
+  [liveSessions, sessionId, workflowAgentIds],
  );
  const liveSubagents = useSubagentsStore(
   React.useCallback((state) => (sessionId && state.byParent[sessionId]) ? state.byParent[sessionId] : EMPTY_SUBAGENTS, [sessionId]),

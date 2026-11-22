@@ -76,6 +76,31 @@ describe('SessionJournal consumer boundary', () => {
     subscription.unsubscribe();
     journal.close();
   });
+  test('snapshots reflect loop updates without replaying events and drop the loop when the worker exits', () => {
+    const journal = new SessionJournal(session, seed);
+    expect(journal.snapshot().session.loop).toBeUndefined();
+
+    const loop = { active: true, iteration: 1, maxIterations: 4 };
+    journal.append([input({ type: 'session.updated', loop })]);
+    expect(journal.snapshot().session.loop).toEqual(loop);
+    expect(journal.subscribe(journal.snapshot().cursor, () => { }).replay).toEqual([]);
+
+    const next = { ...loop, iteration: 2 };
+    journal.replace({ ...seed, loop: next });
+    expect(journal.snapshot().session.loop).toEqual(next);
+    journal.append([input({ type: 'session.updated', title: 'Renamed' })]);
+    expect(journal.snapshot().session.loop).toEqual(next);
+
+    const stopped = { active: false, iteration: 0 };
+    journal.append([input({ type: 'session.updated', loop: stopped })]);
+    expect(journal.snapshot().session.loop).toEqual(stopped);
+
+    journal.append([input({ type: 'session.updated', loop })]);
+    journal.unavailable();
+    expect(journal.snapshot().session.loop).toBeUndefined();
+    journal.replace(seed);
+    expect(journal.snapshot().session.loop).toBeUndefined();
+  });
   test('transient events never advance or collide with the first durable cursor', () => {
     const journal = new SessionJournal(session, seed);
     const transient: CanonicalEvent[] = [];
