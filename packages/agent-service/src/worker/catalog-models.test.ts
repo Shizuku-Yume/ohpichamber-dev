@@ -267,6 +267,27 @@ test('a model publishes its own default effort only when it advertises that leve
   expect(publicModel(noDefault as NativeCatalogModel).defaultReasoningEffort).toBeUndefined();
 });
 
+test('empty configured reasoning options inherit the native ladder and budgets', () => {
+  const native = { ...routed, reasoning: true, thinking: { mode: 'effort', efforts: ['low', 'high'], effortBudgets: { low: 1024, high: 8192 }, defaultLevel: 'high' } } as NativeCatalogModel;
+  const configured = { ...configuredModel, reasoningEffortSupported: true };
+  const model = publicModel(native, configured);
+  expect(model.reasoningOptions).toEqual([
+    { reasoningEffort: 'low', label: 'low', budgetTokens: 1024 },
+    { reasoningEffort: 'high', label: 'high', budgetTokens: 8192 },
+  ]);
+  expect(model.defaultReasoningEffort).toBe('high');
+  expect(publicModel({ ...native, thinking: undefined }, configured).reasoningOptions).toEqual([]);
+  expect(publicModel({ ...native, reasoning: false, thinking: undefined }, configuredModel).reasoningEffortSupported).toBe(false);
+});
+
+test('explicit configured reasoning options win without publishing an excluded native default', () => {
+  const native = { ...routed, reasoning: true, thinking: { mode: 'effort', efforts: ['low', 'high'], defaultLevel: 'high' } } as NativeCatalogModel;
+  const options = [{ reasoningEffort: 'low', label: 'Careful', budgetTokens: 2048 }];
+  const model = publicModel(native, { ...configuredModel, reasoningEffortSupported: true, reasoningOptions: options });
+  expect(model.reasoningOptions).toEqual(options);
+  expect(model.defaultReasoningEffort).toBeUndefined();
+});
+
 test('fixed native pricing preserves each published token rate', () => {
   const native: NativeCatalogModel = { ...routed, cost: { input: 1, output: 2, cacheRead: 0.25, cacheWrite: 1.5 }, pricingStatus: undefined };
   expect(publicModel(native).pricing).toEqual({ inputPerMillionTokens: 1, outputPerMillionTokens: 2, cacheReadPerMillionTokens: 0.25, cacheWritePerMillionTokens: 1.5 });

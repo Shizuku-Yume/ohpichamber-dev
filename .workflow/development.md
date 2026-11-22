@@ -4,6 +4,16 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Custom-provider model projection now inherits native reasoning levels and budgets
+when configured options are empty, while explicit non-empty choices win. Worker
+projection regressions and the UI form contract are covered. On Windows the
+provider UI tests pass; the worker file retains the same 44 failures as main
+(locked-directory cleanup and POSIX permissions). Root type-check passes its
+initial type phase but stops at existing upstream-gap allowlist failures, also
+reproduced on main. Packaged composer-to-provider effort propagation remains
+unverified: the pre-fix package still offered only Off after isolated metadata
+edits, and no provider chat request was captured.
+
 The v2.7.3 sync's composer extraction dropped the OMP todo tray, subagent HUD,
 plan/goal status and loop control without removing their Canonical state.
 The repair wires those rows into both shared composer layouts and keeps workflow
