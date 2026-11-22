@@ -173,7 +173,8 @@ const createCanonicalSessionService = (dependencies) => {
     }
   };
   const admissionRecoveries = new Map();
-  // A create admission stranded by an earlier Host process is settled by the
+  // A create admission stranded by an earlier Host process, or answered with a
+  // failure by the Agent Service in this one, is settled by the
   // Agent Service's complete listing of its workspace. The Host chose the root
   // id, so a listed root is registered. An absent root left at most an empty
   // native file, which every listing hides; a native file with content is
@@ -202,6 +203,7 @@ const createCanonicalSessionService = (dependencies) => {
     await recoverPriorCreateAdmissions(scope);
     const admission = await agentScopeStore.reserveSessionAdmission(scope.workspaceId, operation, rootSessionId);
     let complete = false;
+    let answered = false;
     try {
       const result = await work(() => { complete = true; });
       complete = true;
@@ -210,11 +212,12 @@ const createCanonicalSessionService = (dependencies) => {
       // A validated supervisor refusal is authoritative: no native admission
       // was accepted, so it must not strand the Host scope fence.
       if (error instanceof OpenChamberControlError && error.statusCode >= 400 && error.statusCode < 500) complete = true;
+      answered = error instanceof OpenChamberControlError && error.refusalVerified === true;
       if (!complete && !readOnly) throw new OpenChamberControlError('Native session admission outcome is uncertain; the worktree archive remains blocked until the admission is reconciled', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false, cause: error });
       throw error;
     } finally {
       if (complete || readOnly) await agentScopeStore.releaseSessionAdmission(admission);
-      else agentScopeStore.markSessionAdmissionUncertain(admission);
+      else agentScopeStore.markSessionAdmissionUncertain(admission, answered);
     }
   };
   const speculativeSessions = new Map();

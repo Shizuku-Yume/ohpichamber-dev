@@ -49,6 +49,7 @@ const fixture = async () => {
     if (native.pause?.pathname === pathname) { native.pause.entered(); await native.pause.wait; }
     if (native.refusePath === pathname) return Response.json({ type: 'urn:ohpichamber:problem:COMMAND_IN_FLIGHT', title: 'Busy', status: 409, code: 'COMMAND_IN_FLIGHT', detail: 'Admission refused', retryable: false }, { status: 409 });
     if (native.failPath === pathname) throw new Error('Native reply was lost');
+    if (native.unavailablePath === pathname) return Response.json({ type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'The worker failed to initialize', retryable: false }, { status: 503 });
     if (pathname.endsWith('/relocation')) return Response.json({ relocation: native.pending });
     if (pathname.endsWith('/relocation/prepare')) {
       if (native.prepareFailure) return Response.json({ type: 'urn:ohpichamber:problem:RUN_ACTIVE', title: 'Busy', status: 409, code: 'RUN_ACTIVE', detail: 'Session run is active', retryable: false }, { status: 409 });
@@ -243,6 +244,22 @@ describe('Host native session control saga', () => {
     await expect(create(makeService(reopened))).resolves.toBeDefined();
     expect(registrations.includes(strandedRoot)).toBe(rootListed);
     await expect(reopened.agentScopeStore.listPriorCreateAdmissions(source.workspaceId)).resolves.toEqual([]);
+  });
+  it.each([false, true])('settles a create the Agent Service answered with a failure before the next admission in the same Host process (root listed: %s)', async (rootListed) => {
+    const { source, native, makeService, registrations, owner } = await fixture();
+    const service = makeService();
+    const create = () => service.create({ projectId: source.projectId, workspaceId: source.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } });
+    native.unavailablePath = '/internal/sessions';
+    await expect(create()).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT', retryable: false });
+    const strandedRoot = native.calls.find(({ pathname }) => pathname === '/internal/sessions').body.rootSessionId;
+    native.unavailablePath = null;
+    native.listErrors = [{ sessionId: 'unreadable', code: 'SESSION_RESTORE_FAILED' }];
+    await expect(create()).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    native.listErrors = [];
+    native.listed = !rootListed ? [] : [{ sessionId: strandedRoot, rootSessionId: strandedRoot, projectId: source.projectId, workspaceId: source.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001, mode: { kind: 'main' }, epoch: 'epoch-native', headSequence: '0', runtimeStatus: 'idle', activeRunId: null }];
+    await expect(create()).resolves.toBeDefined();
+    expect(registrations.includes(strandedRoot)).toBe(rootListed);
+    await expect(owner.agentScopeStore.listPriorCreateAdmissions(source.workspaceId)).resolves.toEqual([]);
   });
   it('keeps an uncertain fork admission fenced after Host restart', async () => {
     const { owner, root, native, makeService } = await fixture();
