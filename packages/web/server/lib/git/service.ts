@@ -6790,10 +6790,32 @@ const fingerprintWorktreeRestore = async (directory) => {
  return { head, tree, index: digest(index), unmerged: digest(unmerged), status: digest(status), conflicts: unmerged.length > 0 };
 };
 
+// Restore runs in a checkout created for it, after the project's setup commands.
+// A setup command that writes a file the archive also holds, with the same
+// content, would make git refuse the archive; that copy is dropped so the archived
+// file comes back. A copy with other content is left for git to refuse.
+const clearSetupCopiesOfArchivedFiles = async (directory, archive) => {
+ const added = await runGitCommandOrThrow(directory, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=A', archive.head, archive.commit], 'Failed to read the worktree archive');
+ const archivedPaths = new Set(added.stdout.split('\0').filter(Boolean));
+ if (archivedPaths.size === 0) return;
+ const untracked = await runGitCommandOrThrow(directory, ['ls-files', '--others', '--exclude-standard', '-z'], 'Failed to read the restored checkout');
+ for (const file of untracked.stdout.split('\0')) {
+  if (!archivedPaths.has(file)) continue;
+  const [archived, written] = await Promise.all([
+   runGitCommand(directory, ['rev-parse', '--verify', '--quiet', `${archive.commit}:${file}`]),
+   runGitCommand(directory, ['hash-object', '--', file]),
+  ]);
+  if (archived.success && written.success && archived.stdout.trim() === written.stdout.trim()) {
+   await fsp.rm(path.join(directory, file), { force: true });
+  }
+ }
+};
+
 const applyWorktreeArchiveSnapshot = async (directory, archive) => {
  const trees = await runGitCommandOrThrow(directory, ['rev-parse', `${archive.commit}^{tree}`, `${archive.head}^{tree}`], 'Failed to read the worktree archive');
  const [snapshotTree, headTree] = trees.stdout.trim().split('\n');
  if (snapshotTree === headTree) return false;
+ await clearSetupCopiesOfArchivedFiles(directory, archive);
  const env = { ...(await buildGitEnv(directory)), ...SNAPSHOT_IDENTITY_ENV };
  const applied = await runGitCommand(directory, ['cherry-pick', '--no-commit', archive.commit], { env });
  if (applied.success) {

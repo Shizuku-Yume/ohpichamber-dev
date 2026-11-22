@@ -5244,6 +5244,25 @@ describe('worktree archives', () => {
   expect(() => runGit(linked, ['rev-parse', '--verify', '--quiet', 'CHERRY_PICK_HEAD'])).toThrow();
  });
 
+ it('restores an archived untracked file that a setup command wrote again with the same content', async () => {
+  if (!canRunGit()) return;
+  const { repo, linked } = createArchivableWorktree();
+  fs.writeFileSync(path.join(linked, 'quoted-setup.txt'), 'setup\n');
+  await archiveWorktree(repo, { directory: linked, id: 'setup' }, { worktreeWorkers: createLeaseControl().worktreeWorkers });
+
+  runGit(repo, ['worktree', 'add', linked, 'feature/task']);
+  // The project's setup command runs before the restore and writes the same files again.
+  fs.writeFileSync(path.join(linked, 'quoted-setup.txt'), 'setup\n');
+  fs.writeFileSync(path.join(linked, 'setup.log'), 'ran\n');
+
+  await expect(restoreWorktreeArchive(linked, { id: 'setup' })).resolves.toMatchObject({ id: 'setup', conflicts: false });
+  expect(fs.readFileSync(path.join(linked, 'quoted-setup.txt'), 'utf8')).toBe('setup\n');
+  expect(fs.readFileSync(path.join(linked, 'new.txt'), 'utf8')).toBe('untracked\n');
+  expect(fs.readFileSync(path.join(linked, 'setup.log'), 'utf8')).toBe('ran\n');
+  expect(fs.readFileSync(path.join(linked, 'README.md'), 'utf8')).toBe('# Changed\n');
+  expect(await listWorktreeArchives(repo)).toEqual([]);
+ });
+
  it('archives a worktree whose folder is gone and restores its branch', async () => {
   if (!canRunGit()) return;
   const { repo, linked: created } = createArchivableWorktree();
