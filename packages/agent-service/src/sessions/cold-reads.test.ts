@@ -110,6 +110,10 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
   await manager.flush();
   const sessionFile = manager.getSessionFile();
   const sessionId = manager.getSessionId();
+  manager.createBranchedSession(manager.getLeafId()!);
+  const branchSessionId = manager.getSessionId();
+  manager.appendMessage({ role: 'user', content: 'Branch prompt', timestamp: Date.now() });
+  await manager.flush();
   await manager.close();
   if (!sessionFile) throw new Error('Native session file is required');
 
@@ -183,6 +187,12 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
       expect.objectContaining({ sessionId, cwd, recap: 'Native cold recap' }),
     ]);
     expect((await sessionWorkers()).map((worker: { rootSessionId: string }) => worker.rootSessionId)).toEqual([sessionId]);
+
+    // A discovered branch has its own native identity even when its parent is registered.
+    recordSessionRecap(branchSessionId, cwd, 'Native branch recap');
+    expect((await request(`/api/agent/v1/sessions/${branchSessionId}/recaps`)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId: branchSessionId, cwd, recap: 'Native branch recap' }),
+    ]);
 
     const references = JSON.parse(await readFile(join(stateDirectory, 'session-references.json'), 'utf8'));
     expect(references.references[sessionId]).toMatchObject({

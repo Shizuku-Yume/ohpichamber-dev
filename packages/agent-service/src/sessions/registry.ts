@@ -1442,10 +1442,10 @@ export class SessionRegistry {
   }
   /** Journaled idle recaps for one session, newest first, in epoch milliseconds. */
   async listRecaps(sessionId: string): Promise<SessionRecapEntry[]> {
-    const { rootSessionId } = this.warmingScope(sessionId);
+    this.warmingScope(sessionId);
     const native = this.nativeCold.get(sessionId);
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
-    const reference = this.references.get(rootSessionId);
+    const reference = this.references.get(child?.rootSessionId ?? sessionId);
     const sessionFile = child?.sessionFile ?? reference?.sessionFile ?? native?.info.path;
     const cwd = reference?.cwd ?? native?.workspace.cwd;
     const sessionIds = [sessionId];

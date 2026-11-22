@@ -22,6 +22,9 @@ the shared recap endpoint rejecting native-only cold sessions, also reproduced
 on desktop. Recaps now use the existing admitted read-scope lookup and native
 session file/cwd without spawning a worker or promoting a cold session. Web,
 Electron, hosted mobile and Capacitor all read through the same Host route.
+Registered recap scope takes precedence after relocation, but native branches
+without their own reference retain their own file/cwd rather than querying an
+ancestor's recaps. Both transitions are covered through the real service routes.
 Focused lifecycle and real Agent Service cold-read regressions pass, as do root
 type-check/drift, UI and Agent Service lint, and the web build. Actual 320px
 MobileApp regression verifies opener restoration, inert closed drawers and two
