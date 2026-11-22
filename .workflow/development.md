@@ -4,6 +4,21 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Custom-provider model projection now inherits native reasoning levels and budgets
+when configured options are empty, while explicit non-empty choices win. Worker
+projection regressions and the UI form contract are covered. On Windows the
+provider UI tests pass; the worker file retains the same 44 failures as main
+(locked-directory cleanup and POSIX permissions). Root type-check passes its
+initial type phase but stops at existing upstream-gap allowlist failures, also
+reproduced on main. A rebuilt Windows package with a fresh custom-provider row
+and catalog auto-fill exposes Off, Minimal, Low, Medium and High for
+`gemini-3.5-flash-lite`. Composer sends at Low and High reached the forwarding
+proxy as `reasoning_effort: "low"` and `reasoning_effort: "high"` in
+`/v1/chat/completions`; both returned visible assistant replies. A fresh
+`devin-swe-2` row has no catalog metadata and exposes no Effort control, so its
+effort propagation remains unverified. Redacted request excerpts and the open
+menu screenshot are under `C:\Users\Administrator\effort-evidence` on the Windows VM.
+
 The v2.7.3 sync's composer extraction dropped the OMP todo tray, subagent HUD,
 plan/goal status and loop control without removing their Canonical state.
 The repair wires those rows into both shared composer layouts and keeps workflow

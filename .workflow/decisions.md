@@ -2016,3 +2016,10 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** browsers allow six HTTP/1.1 connections per origin across all tabs; two production tabs filled them with streams and stalled every request, including approval responses.
 - **Mine:** yes (requested fix)
 - **Revisit when:** the Host serves session events over a multiplexed transport (HTTP/2 or one shared stream).
+## 2026-11-22 - Empty custom reasoning options inherit the native catalog ladder
+
+- **Decided:** project native selectable efforts and token budgets when a custom model's configured reasoning options are empty. Preserve non-empty configured options and publish a native default only if it belongs to the resulting options.
+- **Instead of:** duplicating native effort metadata in the custom-provider form or treating an empty configured list as an override that hides the native ladder.
+- **Because:** catalog-filled custom rows already mark reasoning support but save an empty options list, leaving the composer with only Off despite native selectable efforts.
+- **Mine:** yes (requested fix)
+- **Revisit when:** the canonical model configuration distinguishes an explicit empty override from absent reasoning metadata.

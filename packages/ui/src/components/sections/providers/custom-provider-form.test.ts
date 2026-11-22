@@ -279,6 +279,22 @@ test('a filled value may be refilled, and the label follows the later source', (
   expect(second.models[0]!.filledFrom.maxOutputTokens).toBe('openrouter');
 });
 
+test('new catalog-filled reasoning rows defer selectable levels to the native model', () => {
+  const form = createEmptyCustomProviderForm();
+  form.providerId = 'campus';
+  form.name = 'Campus';
+  form.endpoint = 'https://models.example.edu/v1';
+  form.models = [createDiscoveredModelRow({ modelId: 'research', name: 'Research', catalog: catalog() })];
+  expect(buildCustomProviderRequest(form, '4').request.models?.[0]).toMatchObject({
+    reasoningEffortSupported: true, reasoningOptions: [], variants: [],
+  });
+  const plain = applyModelCatalogInfo([createModelRow({ modelId: 'plain', name: 'Plain' })], new Map([['plain', catalog({ reasoning: false })]]));
+  form.models = plain.models;
+  expect(buildCustomProviderRequest(form, '4').request.models?.[0]).toMatchObject({
+    reasoningEffortSupported: false, reasoningOptions: [],
+  });
+});
+
 test('stale ids are the form rows the fresh discovery list no longer carries', () => {
   const kept = createModelRow({ modelId: 'kept', name: 'Kept' });
   const gone = createModelRow({ modelId: 'gone', name: 'Gone' });

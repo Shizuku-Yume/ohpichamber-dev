@@ -231,7 +231,7 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
   modalities: [...new Set(modalities)], contextWindow: native.contextWindow,
   maxOutputTokens: Math.min(native.contextWindow, native.maxTokens),
   reasoningEffortSupported: native.reasoning || efforts.length > 0,
-  reasoningOptions: configured?.reasoningOptions ?? efforts.map(reasoningEffort => ({
+  reasoningOptions: configured?.reasoningOptions.length ? configured.reasoningOptions : efforts.map(reasoningEffort => ({
    reasoningEffort, label: reasoningEffort, budgetTokens: native.thinking?.effortBudgets?.[reasoningEffort] ?? null,
   })),
   variants: configured?.variants ?? variants,
@@ -244,7 +244,7 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
  // an effort picker can show the level that actually runs instead of a
  // synthetic "default" row.
  const defaultLevel = native.thinking?.defaultLevel;
- if (defaultLevel !== undefined && efforts.includes(defaultLevel)) {
+ if (defaultLevel !== undefined && candidate.reasoningOptions.some(option => option.reasoningEffort === defaultLevel)) {
   candidate.defaultReasoningEffort = defaultLevel;
  }
  if (native.supportsTools !== undefined) candidate.toolsSupported = native.supportsTools;
