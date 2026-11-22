@@ -91,13 +91,13 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
   const url = server.url.toString().replace(/\/$/, '');
   let connected = 0;
   const onConnected = () => { connected += 1; };
-  const PairingLinkReceiver = () => {
+  const PairingLinkReceiver = ({ welcome = false }: { welcome?: boolean }) => {
     const { onPairing, pairingConfirmation } = useMobilePairingConfirmation(onConnected);
     useDeepLinkSource({ ready: false, onPairing: (payload) => {
       confirmations += 1;
       void onPairing(payload);
     } });
-    return pairingConfirmation;
+    return <>{welcome ? <MobileConnectionWelcome onConnected={onConnected} /> : null}{pairingConfirmation}</>;
   };
   const input = async (selector: string, value: string) => {
     const element = document.querySelector<HTMLInputElement>(selector);
@@ -113,8 +113,8 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
     if (!element) throw new Error(`Missing button ${selector}`);
     await act(async () => element.click());
   };
-  const clickText = async (text: string) => {
-    const element = [...document.querySelectorAll('button')].find((button) => button.textContent?.trim() === text);
+  const clickText = async (text: string, selector = 'button') => {
+    const element = [...document.querySelectorAll<HTMLButtonElement>(selector)].find((button) => button.textContent?.trim() === text);
     if (!element) throw new Error(`Missing button ${text}`);
     await act(async () => element.click());
   };
@@ -217,22 +217,30 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
 
     allowPairing = true;
     const connectedBeforeLink = connected;
-    await act(async () => root.render(<I18nProvider><PairingLinkReceiver /></I18nProvider>));
+    await act(async () => root.render(<I18nProvider><PairingLinkReceiver welcome /></I18nProvider>));
     await settle(() => Boolean(onAppUrlOpen) && launchRequested);
+    await clickText('Connect by address');
+    await input('input[type="url"]', 'http://draft.example');
     const probesBeforeLink = healthRequests;
     expect(confirmations).toBe(0);
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
+    expect(document.querySelector('#mobile-overlay-root [role="dialog"]')?.classList.contains('z-[60]')).toBe(true);
     await act(async () => {
       if (delivery === 'getLaunchUrl only') launch.resolve({ url: pairingLink });
       else onAppUrlOpen?.({ url: pairingLink });
     });
     expect(confirmations).toBe(1);
-    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(url);
-    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('synthetic-fixture');
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+    expect(document.querySelector('[data-slot="dialog-layer"]')?.classList.contains('z-[70]')).toBe(true);
+    expect(document.querySelector('[data-slot="dialog-overlay"]')?.classList.contains('z-[70]')).toBe(true);
+    expect(document.querySelector('[data-slot="dialog-content"]')?.textContent).toContain(url);
+    expect(document.querySelector('[data-slot="dialog-content"]')?.textContent).not.toContain('synthetic-fixture');
     expect(healthRequests).toBe(probesBeforeLink);
     expect(pairingRequests).toHaveLength(4);
     await clickText('Cancel');
+    expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
+    expect(document.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe('http://draft.example');
+    await click('#mobile-overlay-root [aria-label="Close"]');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(pairingRequests).toHaveLength(4);
     expect(connected).toBe(connectedBeforeLink);
@@ -248,7 +256,7 @@ test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] 
 
     await act(async () => onAppUrlOpen?.({ url: pairingLink }));
     expect(confirmations).toBe(2);
-    await clickText('Connect');
+    await clickText('Connect', '[data-slot="dialog-content"] button');
     await settle(() => connected === connectedBeforeLink + 1);
     expect(pairingRequests).toEqual(['POST', 'POST', 'POST', 'POST', 'POST']);
     expect([...secrets.values()]).toContain('synthetic-paired-token');

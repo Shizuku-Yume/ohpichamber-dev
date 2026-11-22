@@ -186,6 +186,8 @@ Reasoning hits appear only when reasoning is both indexed and visible, so every 
 
 Native confirmation can leave Electron text input unfocusable on Windows and does not open in a webview. Dismissal, owner unmount and replacement by another question resolve the pending answer as false so no caller waits for an answer that cannot arrive.
 
+`useConfirmDialog` forwards optional `layerClassName` and `backdropProps` to `DialogContent`. App-level confirmations above mobile overlay panels raise both together; other callers retain the default dialog layer.
+
 ### Why popup placement and dismissal stay explicit
 
 Searchable popups choose their side once before paint and hold it until close so filtering cannot move the input; upward popups put search next to the trigger. Window blur closes menus, and an open menu disables the desktop title bar's drag region so title-bar clicks reach dismissal; Shift+F10 explicitly opens context menus on browsers that lack that translation and cancels the original key event to avoid duplicate opening.

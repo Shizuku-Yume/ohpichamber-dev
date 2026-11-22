@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-22 - Keep mobile pairing confirmation above address sheets
+
+- **Decided:** expose the existing shared dialog layer and backdrop overrides through `useConfirmDialog`, and raise only mobile pairing confirmation to the app-level confirmation layer used by shared trust prompts.
+- **Instead of:** closing and clearing the address form or raising every confirmation globally.
+- **Because:** mobile overlay panels use layer 60, above the default dialog layer 50; pairing must remain visible and actionable while preserving the address draft underneath.
+- **Mine:** yes (requested pairing-over-sheet fix)
+- **Revisit when:** mobile overlays and shared dialogs adopt one stacking owner.
+
 ## 2026-11-22 - Merge Host revisions across concurrent discovery mutations
 
 - **Decided:** preserve concurrent local live session fields while merging strictly newer Host archive and metadata revisions independently during full discovery and head refresh; derive archive membership from the merged record.

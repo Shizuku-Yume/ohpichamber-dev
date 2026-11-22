@@ -19,7 +19,7 @@ type ConfirmRequest = {
   checkbox?: ConfirmCheckbox;
 };
 
-export function useConfirmDialog() {
+export function useConfirmDialog({ layerClassName, backdropProps }: Pick<React.ComponentProps<typeof DialogContent>, 'layerClassName' | 'backdropProps'> = {}) {
   const { t } = useI18n();
   const [request, setRequest] = React.useState<ConfirmRequest | null>(null);
   const [checkboxChecked, setCheckboxChecked] = React.useState(false);
@@ -58,7 +58,7 @@ export function useConfirmDialog() {
 
   const dialog = (
     <Dialog open={request !== null} onOpenChange={(open) => { if (!open) settle(false); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" layerClassName={layerClassName} backdropProps={backdropProps}>
         <DialogHeader>
           <DialogTitle>{request?.title}</DialogTitle>
           <DialogDescription className="whitespace-pre-line">{request?.message}</DialogDescription>
