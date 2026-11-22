@@ -78,6 +78,7 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
   const pendingDiscoveries = new Map();
   const liveAdmissions = new Set();
   const uncertainAdmissions = new Set();
+  const answeredAdmissions = new Set();
   const workspaceStatement = db.prepare(`SELECT ${workspaceColumns} FROM ${workspaceJoin} WHERE w.workspace_id = ?`);
   const sessionStatement = db.prepare(`SELECT ${workspaceColumns}, s.session_id AS sessionId, s.root_session_id AS rootSessionId
     FROM ${workspaceJoin} JOIN host_agent_sessions s ON w.workspace_id = s.workspace_id
@@ -455,16 +456,24 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
     db.prepare('DELETE FROM host_session_admissions WHERE admission_id = ?').run(EntityIdSchema.parse(id));
     liveAdmissions.delete(id);
     uncertainAdmissions.delete(id);
+    answeredAdmissions.delete(id);
   });
-  const markSessionAdmissionUncertain = (id) => { liveAdmissions.delete(id); uncertainAdmissions.add(id); };
-  // Create admissions an earlier Host process left in this scope. The caller
-  // must prove the native outcome before releasing one.
+  // An answered admission failed with an Agent Service problem response, so the
+  // service finished handling it and its native listing can settle the outcome.
+  const markSessionAdmissionUncertain = (id, answered = false) => {
+    liveAdmissions.delete(id);
+    uncertainAdmissions.add(id);
+    if (answered) answeredAdmissions.add(id);
+  };
+  // Create admissions an earlier Host process left in this scope, or that this
+  // process saw answered with a failure. The caller must prove the native
+  // outcome before releasing one.
   const listPriorCreateAdmissions = (workspaceId) => lifecycle.run(() => {
     const workspace = readWorkspace(EntityIdSchema.parse(workspaceId));
     if (!workspace) return [];
     return db.prepare("SELECT admission_id AS id, workspace_id AS workspaceId, root_session_id AS rootSessionId FROM host_session_admissions WHERE operation = 'create'").all()
       .filter((row) => {
-        if (liveAdmissions.has(row.id) || uncertainAdmissions.has(row.id)) return false;
+        if (liveAdmissions.has(row.id) || (uncertainAdmissions.has(row.id) && !answeredAdmissions.has(row.id))) return false;
         const owner = readWorkspace(row.workspaceId);
         return Boolean(owner && scopesOverlap(workspace.cwd, owner.cwd));
       });
