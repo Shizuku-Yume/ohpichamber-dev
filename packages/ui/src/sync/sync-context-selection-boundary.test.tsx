@@ -532,6 +532,10 @@ describe("SyncProvider native scope and selection boundaries", () => {
       expect(opened.at(-1)).toEqual({ sessionId: live.sessionId, cursor: "epoch-a:5" })
       await act(async () => { setActiveSession(directory, live.sessionId) })
       expect(opened).toHaveLength(2)
+      await act(async () => { setActiveSession(directory, idle.sessionId) })
+      expect(closed).toEqual([live.sessionId, live.sessionId])
+      expect(opened.at(-1)).toEqual({ sessionId: idle.sessionId, cursor: "epoch-a:4" })
+      expect(parks).toHaveLength(0)
     } finally {
       timeout.mockRestore()
       setActiveSession("", "")

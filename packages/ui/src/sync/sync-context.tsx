@@ -416,8 +416,9 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     })
     pipelineRef.current = pipeline
     const parkTimers = new Map<string, ReturnType<typeof setTimeout>>()
-    // Off-screen streams are rechecked every STREAM_PARK_DELAY_MS until unwanted, so
-    // post-run events (suggestions) still arrive and expired send requests release.
+    // Off-screen streams that are still wanted, or whose run just ended, are
+    // rechecked every STREAM_PARK_DELAY_MS until unwanted, so post-run events
+    // (suggestions) still arrive and expired send requests release.
     const parkStream = (target: SessionMessageTarget) => {
       const streamKey = `${target.directory}\n${target.sessionId}`
       if (!pipeline.has(target) || parkTimers.has(streamKey)) return
@@ -441,7 +442,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         pipeline.attach(target, { cursor: `${epoch}:${headSequence}`, session: { sessionId: target.sessionId, runtimeStatus } })
         return
       }
-      parkStream(target)
+      // Leaving an idle chat frees its connection at once; rapid switching
+      // must not hold one stream per chat visited.
+      if (wantsStream(target)) parkStream(target)
+      else if (!parkTimers.has(streamKey)) pipeline.detach(target)
     }
     onViewedSessionChange = viewedSessionChange
     const unconfigure = childStores.configure({
