@@ -85,8 +85,12 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
     const [draftGoalDialogOpen, setDraftGoalDialogOpen] = React.useState(false);
     const itemRefs = React.useRef<Array<HTMLElement | null>>([]);
 
-    const selectedKind: ComposerModeValue = sessionId ? mode?.kind ?? 'main' : draftMode ?? 'main';
-    const triggerDisabled = pending || (sessionId ? !mode || runActive : !draftOpen);
+    // A cold chat's worker opens on the control request under a new epoch, so the
+    // snapshot can lag the acknowledged mode by seconds; show the ack until it lands.
+    const [acknowledged, setAcknowledged] = React.useState<{ sessionId: string; base: SessionMode | undefined; mode: SessionMode } | null>(null);
+    const shownMode = acknowledged && acknowledged.sessionId === sessionId && acknowledged.base === mode ? acknowledged.mode : mode;
+    const selectedKind: ComposerModeValue = sessionId ? shownMode?.kind ?? 'main' : draftMode ?? 'main';
+    const triggerDisabled = pending || (sessionId ? !shownMode || runActive : !draftOpen);
     const selectedLabel = t(MODE_LABEL_KEYS[selectedKind]);
     const selectedDescription = t(MODE_DESCRIPTION_KEYS[selectedKind]);
 
@@ -106,9 +110,10 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
         }
         if (sessionId) {
             setOpen(false);
-            if (pending || runActive || !mode || value === selectedKind) return;
+            if (pending || runActive || !shownMode || value === selectedKind) return;
             setPending(true);
             canonicalClient.setMode(sessionId, value)
+                .then((result) => setAcknowledged({ sessionId, base: mode, mode: result.mode }))
                 .catch((error) => {
                     toast.error(t('sessions.sidebar.session.work.updateFailed'), {
                         description: error instanceof Error ? error.message : undefined,
@@ -120,7 +125,7 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
         if (!draftOpen) return;
         setOpen(false);
         onDraftModeChange(value, null);
-    }, [draftOpen, mode, onDraftModeChange, pending, runActive, selectedKind, sessionId, t]);
+    }, [draftOpen, mode, onDraftModeChange, pending, runActive, selectedKind, sessionId, shownMode, t]);
 
     const moveFrom = React.useCallback((from: number, direction: NavigationDirection) => {
         const index = nextEnabledModeIndex(options, from, direction);
@@ -215,6 +220,7 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
                                 {options.map((option, index) => {
                                     const row = (
                                         <button
+                                            ref={(node) => { itemRefs.current[index] = node; }}
                                             type="button"
                                             role="option"
                                             aria-selected={option.value === selectedKind}

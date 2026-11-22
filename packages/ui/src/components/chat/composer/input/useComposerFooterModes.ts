@@ -24,6 +24,11 @@ export function useComposerFooterModes({ sessionScope, expansion, queueActions }
     const planRoleAvailable = useDirectorySync(React.useCallback((state) => state.models?.planRoleAvailable, []), directory);
     const goalModeEnabled = useGoalModeEnabled();
     const workerRun = useSessionActiveRun(currentSessionId ?? '', directory);
+    const mode = useDirectorySync(React.useCallback((state) => (
+        currentSessionId ? state.snapshot[currentSessionId]?.session.mode : undefined
+    ), [currentSessionId]), directory);
+    const draftMode = useSessionUIStore((state) => state.newSessionDraft.mode);
+    const draftGoalObjective = useSessionUIStore((state) => state.newSessionDraft.goalObjective ?? null);
 
     const handleDraftModeChange = React.useCallback((next: ComposerModeValue, goal?: DraftGoalObjective | null) => {
         useSessionUIStore.getState().setDraftMode(next, goal ?? null);
@@ -43,6 +48,9 @@ export function useComposerFooterModes({ sessionScope, expansion, queueActions }
         goalModeEnabled,
         runActive: Boolean(workerRun),
         runOrigin: workerRun?.origin,
+        mode,
+        draftMode,
+        draftGoalObjective,
         isExpandedInput,
         handleDraftModeChange,
         handleToggleExpandedInput,

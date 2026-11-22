@@ -9,6 +9,7 @@ import { TODO_STATUS_ICON } from '../todoStatus';
 import { isClosedTodo } from '../todoProgress';
 import { WorkStatusCollapsibleSection, WorkStatusRow } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
+import { WorkStatusTouchContext } from './touchContext';
 
 type Props = {
   sessionId: string | null;
@@ -23,6 +24,7 @@ const STATUS_RANK = {
 } satisfies Record<TodoItem['status'], number>;
 
 const TaskRow: React.FC<{ todo: TodoItem }> = ({ todo }) => {
+  const touch = React.useContext(WorkStatusTouchContext);
   const done = isClosedTodo(todo);
   const icon = TODO_STATUS_ICON[todo.status];
   return (
@@ -34,7 +36,8 @@ const TaskRow: React.FC<{ todo: TodoItem }> = ({ todo }) => {
       )}
       muted={done}
       label={<span className={done ? 'line-through' : undefined}>{todo.content}</span>}
-      tooltip={todo.content}
+      tooltip={touch ? undefined : todo.content}
+      wrapLabel={touch}
     />
   );
 };

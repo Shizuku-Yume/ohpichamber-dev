@@ -106,4 +106,14 @@ describe('OMP tool presentation coverage', () => {
         expect(toolPresentation('runtime.read:2').label).toBe('Read');
         expect(toolPresentation('search').label).toBe('Grep');
     });
+
+    test('todo progress counts completed and abandoned tasks as closed across phases', () => {
+        const todo = toolPresentation('todo');
+        expect(todo.describeResult({ phases: [
+            { name: 'Plan', tasks: [{ content: 'Done', status: 'completed' }, { content: 'Dropped', status: 'abandoned' }] },
+            { name: 'Verify', tasks: [{ content: 'Working', status: 'in_progress' }, { content: 'Next', status: 'pending' }] },
+        ] })).toBe('2/4');
+        expect(todo.describeResult({ phases: [] })).toBeNull();
+        expect(todo.describeResult({})).toBeNull();
+    });
 });

@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Window } from 'happy-dom';
 import type { RuntimeAPIs } from '@/lib/api/types';
-import type { ReactNode } from 'react';
+import type { ProfilerOnRenderCallback, ReactNode } from 'react';
 
 /**
  * Counts which components render per keystroke without instrumenting them.
@@ -185,6 +185,30 @@ type TypingCost = {
   rendersByComponent: Map<string, number>;
 };
 
+
+const mountComposer = async (onRender: ProfilerOnRenderCallback = () => undefined) => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(
+      <RuntimeAPIContext.Provider value={runtimeAPIs}>
+        <ThemeSystemProvider>
+          <I18nProvider>
+            <SyncProvider directory="/workspace">
+              <Profiler id="composer" onRender={onRender}>
+                <ChatInput />
+              </Profiler>
+            </SyncProvider>
+          </I18nProvider>
+        </ThemeSystemProvider>
+      </RuntimeAPIContext.Provider>,
+    );
+  });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+  return { container, root };
+};
+
 /** Mounts a fresh composer, types KEYSTROKES characters, and reports the per-keystroke cost. */
 const measureTyping = async (scenario: 'session' | 'draft'): Promise<TypingCost> => {
   // Both scenarios share one process: text persisted by the previous one
@@ -198,28 +222,10 @@ const measureTyping = async (scenario: 'session' | 'draft'): Promise<TypingCost>
         currentSessionDirectory: null,
         newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, open: true, target: 'project', directoryOverride: '/workspace' },
       });
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const root = createRoot(container);
   let commits = 0;
   let renderMs = 0;
+  const { container, root } = await mountComposer((_id, _phase, actual) => { commits += 1; renderMs += actual; });
   try {
-    await act(async () => {
-      root.render(
-        <RuntimeAPIContext.Provider value={runtimeAPIs}>
-          <ThemeSystemProvider>
-            <I18nProvider>
-              <SyncProvider directory="/workspace">
-                <Profiler id="composer" onRender={(_id, _phase, actual) => { commits += 1; renderMs += actual; }}>
-                  <ChatInput />
-                </Profiler>
-              </SyncProvider>
-            </I18nProvider>
-          </ThemeSystemProvider>
-        </RuntimeAPIContext.Provider>,
-      );
-    });
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     // The project registry arrives with the settings sync, and a session is
     // only shown once its folder is admitted: let it install before typing so
     // the run measures keystrokes, not bootstrap.
@@ -467,3 +473,28 @@ test('Enter pressed right after the last key sends the whole text', async () => 
     useConfigStore.setState({ currentProviderId: config.currentProviderId, currentModelId: config.currentModelId });
   }
 });
+
+for (const isMobile of [false, true]) {
+  test(`the ${isMobile ? 'mobile' : 'desktop'} composer shows the mode chosen for a new-session draft`, async () => {
+    const { useUIStore } = await import('@/stores/useUIStore');
+    const wasMobile = useUIStore.getState().isMobile;
+    useUIStore.setState({ isMobile });
+    useDirectoryStore.setState({ currentDirectory: '/workspace' });
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, open: true, target: 'project', directoryOverride: '/workspace', mode: 'plan' },
+    });
+    const { container, root } = await mountComposer();
+    try {
+      const triggers = [...container.querySelectorAll<HTMLButtonElement>('button[aria-label="Session mode"], button[aria-label="Plan"]')];
+      expect(triggers.map((button) => button.textContent?.trim())).toEqual(['Plan']);
+      expect(triggers[0]?.disabled).toBe(false);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+      useUIStore.setState({ isMobile: wasMobile });
+      useSessionUIStore.setState({ newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, mode: undefined } });
+    }
+  });
+}
