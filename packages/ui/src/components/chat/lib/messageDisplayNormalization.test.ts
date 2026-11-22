@@ -21,4 +21,33 @@ describe('display normalization', () => {
         expect(normalized.parts).toHaveLength(1);
         expect(getNormalizedMessageForDisplay(source)).toBe(normalized);
     });
+
+    test('anchors streamed results beside their calls rather than in completion order', () => {
+        const calls = ['todo', 'bash', 'task'].map((toolName) => ({
+            type: 'tool_call' as const, partId: `${toolName}-call`, toolCallId: toolName, toolName, input: {}, status: 'running' as const,
+        }));
+        const results = ['todo', 'task', 'bash'].map((toolName) => ({
+            type: 'tool_result' as const, partId: `${toolName}-result`, toolCallId: toolName, toolName, isError: false,
+        }));
+        for (let count = 0; count <= results.length; count++) {
+            const source = message([...calls, ...results.slice(0, count)]);
+            const normalized = getNormalizedMessageForDisplay(source);
+            const resultIds = new Set(results.slice(0, count).map((part) => part.toolCallId));
+            const rows = normalized.parts.filter((part) => part.type !== 'tool_call' || !resultIds.has(part.toolCallId));
+            expect(rows.map((part) => part.type === 'tool_call' || part.type === 'tool_result' ? part.toolName : part.type))
+                .toEqual(['todo', 'bash', 'task']);
+            expect(source.parts).toEqual([...calls, ...results.slice(0, count)]);
+            expect(getNormalizedMessageForDisplay(source)).toBe(normalized);
+        }
+    });
+
+    test('keeps unmatched results and does not pair a different tool with the same call id', () => {
+        const source = message([
+            { type: 'tool_call', partId: 'call', toolCallId: 'shared', toolName: 'bash', input: {}, status: 'running' },
+            { type: 'text', partId: 'text', content: 'between' },
+            { type: 'tool_result', partId: 'wrong-tool', toolCallId: 'shared', toolName: 'task', isError: false },
+            { type: 'tool_result', partId: 'orphan', toolCallId: 'orphan', toolName: 'bash', isError: false },
+        ]);
+        expect(getNormalizedMessageForDisplay(source)).toBe(source);
+    });
 });

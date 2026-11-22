@@ -14,13 +14,44 @@ loop updates reached existing clients but new snapshots omitted them. The
 journal now projects the worker's loop state into snapshots without persisting
 the loop across worker restarts. Native-device behavior remains unverified.
 
+The phone audit follow-up fixes focus loss on closing the Sessions and Workspace
+drawers: entry focuses the surface without summoning a keyboard, close restores
+the opener unless another overlay owns focus, and closed retained trees are
+inert, as are collapsed tablet panels. Inline tablet panels retain non-modal behavior. The two console 404s were
+the shared recap endpoint rejecting native-only cold sessions, also reproduced
+on desktop. Recaps now use the existing admitted read-scope lookup and native
+session file/cwd without spawning a worker or promoting a cold session. Web,
+Electron, hosted mobile and Capacitor all read through the same Host route.
+Registered recap scope takes precedence after relocation, but native branches
+without their own reference retain their own file/cwd rather than querying an
+ancestor's recaps. Both transitions are covered through the real service routes.
+Focused lifecycle and real Agent Service cold-read regressions pass, as do root
+type-check/drift, UI and Agent Service lint, and the web build. Actual 320px
+MobileApp regression verifies opener restoration, inert closed drawers and two
+recap HTTP 200 responses; a 1180px tablet recheck verifies non-modal opening and
+inert closed panels without Chrome hidden-focus warnings. Browser-edge reverse
+tabbing from the first app control is normal, not failed focus restoration.
+Dead-code reports unrelated existing findings and none in the changed files.
+Overlay focus preservation is unit-covered, not browser-verified; physical-device
+keyboards and native Android/iOS remain unverified here. A live
+`gemini-3.5-flash-lite` phone turn exercised Todo 0/3 to 3/3, Bash approval/output
+and a same-model Scout subagent; reload restored the transcript with recap 200s.
+It exposed tool rows moving into completion order as results arrived. Display
+normalization now anchors each result beside its call without changing canonical
+arrays, so both inline and Activity projections preserve call order. Focused
+normalization and live-tail regressions pass. A second real Gemini turn kept
+Todo/Bash/Task order at 320/390px through approval and completion, and after hard
+reload with two recap 200s. With two same-origin HMR tabs, one approval POST stayed
+browser-pending until the other tab closed, then returned 200 without retry;
+connection pressure is an unconfirmed follow-up, not a verified root cause.
+
 The phone UI audit reproduced overlapping tool glyphs, clipped unbroken todo
 text, inconsistent abandoned-task progress and unreadable Work status task
 labels at 320–390 CSS pixels. Inline tool disclosures now retain their reserved
 geometry, expanded todo text wraps, phone task readouts do not depend on hover,
 and tool progress counts abandoned tasks as closed. The audit used persisted
-OMP transcript data loaded by the isolated Host; live-provider, packaged and
-native regression verification remains outstanding.
+OMP transcript data loaded by the isolated Host; the live-provider follow-up is
+recorded above. Packaged and native regression verification remains outstanding.
 
 Archive discovery reconciliation now preserves concurrent live fields while
 merging independently newer Host archive and metadata revisions in full and

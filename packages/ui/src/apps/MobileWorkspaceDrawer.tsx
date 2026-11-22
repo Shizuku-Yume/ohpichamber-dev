@@ -29,6 +29,7 @@ import type { MobileChangesCommitRequest } from './mobileChangesCommitRequest';
 import { MobileFilesSurface } from './MobileFilesSurface';
 import { MobileStatusPane } from './MobileStatusPane';
 import { useEdgeSwipe } from './useEdgeSwipe';
+import { useMobileDrawerFocus } from './useMobileDrawerFocus';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
 import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS } from '@/components/ui/mobileHeader';
 
@@ -57,6 +58,7 @@ export const MobileWorkspaceDrawer: React.FC<{
   const { t, direction } = useI18n();
   const rootRef = React.useRef<HTMLElement | null>(null);
   const drawerRef = React.useRef<HTMLElement>(null);
+  useMobileDrawerFocus(drawerRef, open && variant === 'drawer');
   const [entered, setEntered] = React.useState(false);
   const [visible, setVisible] = React.useState(open);
   const onCloseRef = React.useRef(onClose);
@@ -358,7 +360,8 @@ export const MobileWorkspaceDrawer: React.FC<{
       role="dialog"
       aria-modal="true"
       aria-label={t('mobile.header.openWorkspaceAria')}
-      aria-hidden={!open}
+      inert={!open}
+      tabIndex={-1}
       className={cn('oc-keyboard-inset-surface oc-bottom-safe-surface oc-side-safe-area fixed inset-0 z-50 flex flex-col bg-background text-foreground', terminalWorkspaceClass)}
       style={{
         paddingTop: 'var(--oc-safe-area-top, 0px)',

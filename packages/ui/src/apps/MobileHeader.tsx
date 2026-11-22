@@ -53,7 +53,8 @@ export const MobileHeader: React.FC<{
     setSwitcherOpen(false);
   }, [currentSessionId, effectiveDirectory]);
 
-  const handleOpenSessions = React.useCallback(() => {
+  const handleOpenSessions = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.focus({ preventScroll: true });
     setMetadataOpen(false);
     setSwitcherOpen(false);
     onOpenSessions();
@@ -135,7 +136,8 @@ export const MobileHeader: React.FC<{
             aria-label={hasUncommittedChanges
               ? t('mobile.header.openWorkspaceWithChangesAria')
               : t('mobile.header.openWorkspaceAria')}
-            onClick={() => {
+            onClick={(event) => {
+              event.currentTarget.focus({ preventScroll: true });
               setMetadataOpen(false);
               setSwitcherOpen(false);
               onOpenWorkspace();

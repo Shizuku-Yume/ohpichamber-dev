@@ -5,15 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { closeSessionIndex, recordSessionRecap } from '@oh-my-pi/pi-coding-agent/session/session-index';
 import { HistoryPageSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { AgentService } from '../supervisor/service.ts';
 
 test('snapshot and history read a persisted session without starting a worker', async () => {
   const root = await mkdtemp(join(tmpdir(), 'cold-reads-'));
   const previousHome = process.env.HOME;
+  const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
   process.env.HOME = root;
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
+  process.env.PI_CODING_AGENT_DIR = agentDirectory;
   await Promise.all([cwd, agentDirectory].map(directory => mkdir(directory, { recursive: true })));
   const sessionsDirectory = SessionManager.getDefaultSessionDir(cwd, agentDirectory);
   const manager = SessionManager.create(cwd, sessionsDirectory);
@@ -69,6 +72,13 @@ test('snapshot and history read a persisted session without starting a worker', 
     expect(snapshot.session.runtimeStatus).toBe('unavailable');
     expect(snapshot.messages.map(message => message.role)).toEqual(['user', 'assistant']);
 
+    const recaps = await request(`/api/agent/v1/sessions/${rootSessionId}/recaps`);
+    expect(recaps).toEqual({ status: 200, body: { recaps: [] } });
+    recordSessionRecap(manager.getSessionId(), cwd, 'Referenced native recap');
+    expect((await request(`/api/agent/v1/sessions/${rootSessionId}/recaps`)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId: rootSessionId, cwd, recap: 'Referenced native recap' }),
+    ]);
+
     const historyResponse = await request(`/api/agent/v1/sessions/${rootSessionId}/history?limit=10`);
     expect(historyResponse.status).toBe(200);
     const history = HistoryPageSchema.parse(historyResponse.body);
@@ -76,6 +86,8 @@ test('snapshot and history read a persisted session without starting a worker', 
     expect((await request('/internal/workers')).body.workers).toEqual([]);
   } finally {
     await service.stop();
+    closeSessionIndex();
+    if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
     if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
     await rm(root, { recursive: true, force: true });
   }
@@ -84,9 +96,11 @@ test('snapshot and history read a persisted session without starting a worker', 
 test('a listed unreferenced OMP session reads cold and promotes on its first reopen', async () => {
   const root = await mkdtemp(join(tmpdir(), 'native-promotion-'));
   const previousHome = process.env.HOME;
+  const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
   process.env.HOME = root;
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
+  process.env.PI_CODING_AGENT_DIR = agentDirectory;
   await Promise.all([cwd, agentDirectory].map(directory => mkdir(directory, { recursive: true })));
   const sessionsDirectory = SessionManager.getDefaultSessionDir(cwd, agentDirectory);
   const manager = SessionManager.create(cwd, sessionsDirectory);
@@ -96,6 +110,10 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
   await manager.flush();
   const sessionFile = manager.getSessionFile();
   const sessionId = manager.getSessionId();
+  manager.createBranchedSession(manager.getLeafId()!);
+  const branchSessionId = manager.getSessionId();
+  manager.appendMessage({ role: 'user', content: 'Branch prompt', timestamp: Date.now() });
+  await manager.flush();
   await manager.close();
   if (!sessionFile) throw new Error('Native session file is required');
 
@@ -149,12 +167,32 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
     const history = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?limit=10`);
     expect(history.status).toBe(200);
     expect(HistoryPageSchema.parse(history.body).messages.map(message => message.role)).toEqual(['user', 'assistant']);
+
+    const recapsPath = `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/recaps`;
+    expect(await request(recapsPath)).toEqual({ status: 200, body: { recaps: [] } });
+    recordSessionRecap(sessionId, cwd, 'Native cold recap');
+    recordSessionRecap(sessionId, join(root, 'other-workspace'), 'Do not cross workspace scope');
+    expect((await request(recapsPath)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId, cwd, recap: 'Native cold recap' }),
+    ]);
+    const missing = await request(`/api/agent/v1/sessions/${randomUUID()}/recaps`);
+    expect(missing.status).toBe(404);
+    expect(missing.body.code).toBe('SESSION_NOT_FOUND');
     expect(await sessionWorkers()).toEqual([]);
 
     const reopened = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/reopen`, { method: 'POST', body: reopenBody });
     expect(reopened.status).toBe(200);
     expect(reopened.body).toMatchObject({ sessionId, rootSessionId: sessionId, projectId, workspaceId });
+    expect((await request(recapsPath)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId, cwd, recap: 'Native cold recap' }),
+    ]);
     expect((await sessionWorkers()).map((worker: { rootSessionId: string }) => worker.rootSessionId)).toEqual([sessionId]);
+
+    // A discovered branch has its own native identity even when its parent is registered.
+    recordSessionRecap(branchSessionId, cwd, 'Native branch recap');
+    expect((await request(`/api/agent/v1/sessions/${branchSessionId}/recaps`)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId: branchSessionId, cwd, recap: 'Native branch recap' }),
+    ]);
 
     const references = JSON.parse(await readFile(join(stateDirectory, 'session-references.json'), 'utf8'));
     expect(references.references[sessionId]).toMatchObject({
@@ -164,8 +202,27 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
     // A second reopen joins the live root instead of starting a second worker.
     expect((await request(`/internal/sessions/${encodeURIComponent(sessionId)}/reopen`, { method: 'POST', body: reopenBody })).status).toBe(200);
     expect((await sessionWorkers()).map((worker: { rootSessionId: string }) => worker.rootSessionId)).toEqual([sessionId]);
+
+    const destinationCwd = join(root, 'destination');
+    const destinationWorkspaceId = randomUUID();
+    await mkdir(destinationCwd);
+    expect((await request(`/internal/workspaces/${destinationWorkspaceId}`, { method: 'POST',
+      body: JSON.stringify({ projectId, cwd: destinationCwd, agentDirectory, agentDirectoryId, env }) })).status).toBe(201);
+    expect((await request(`/internal/sessions/${sessionId}/relocation/prepare`, { method: 'POST', body: JSON.stringify({
+      transactionId: 'native-recap-move', sourceWorkspaceId: workspaceId,
+      destination: { rootSessionId: sessionId, projectId, workspaceId: destinationWorkspaceId, cwd: destinationCwd,
+        agentDirectory, agentDirectoryId, displayPath: 'destination', env },
+    }) })).status).toBe(200);
+    expect((await request(`/internal/sessions/${sessionId}/relocation/finalize`, { method: 'POST',
+      body: JSON.stringify({ transactionId: 'native-recap-move', action: 'commit' }) })).status).toBe(200);
+    recordSessionRecap(sessionId, destinationCwd, 'Moved native recap');
+    expect((await request(recapsPath)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId, cwd: destinationCwd, recap: 'Moved native recap' }),
+    ]);
   } finally {
     await service.stop();
+    closeSessionIndex();
+    if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
     if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
     await rm(root, { recursive: true, force: true });
   }
