@@ -17,7 +17,11 @@ export const useMobilePairingConfirmation = (onConnected: () => void) => {
     if (error) toast.error(error);
   }, [error]);
 
-  const onPairing = React.useCallback(async (payload: PairingConnectionPayload) => {
+  const onPairing = React.useCallback(async (payload: PairingConnectionPayload | null) => {
+    if (!payload) {
+      toast.error(t('desktopHostSwitcher.error.pairingRejected'));
+      return;
+    }
     if (isBusy) return;
     const origins = new Set(payload.candidates.map((candidate) =>
       new URL(candidate.type === 'relay' ? candidate.relayUrl : candidate.url).origin,

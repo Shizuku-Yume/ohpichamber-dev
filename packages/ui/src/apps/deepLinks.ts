@@ -8,7 +8,7 @@ export type SessionsFilter = 'all' | 'attention' | 'recent';
 export type ViewTarget = 'files' | 'mcp' | 'instances';
 
 export type DeepLinkIntent =
-  | { type: 'pairing'; payload: PairingConnectionPayload }
+  | { type: 'pairing'; payload: PairingConnectionPayload | null }
   | { type: 'session'; sessionId: string; directory?: string; messageId?: string }
   | { type: 'new-session'; directory?: string; projectId?: string; agent?: string; model?: string }
   | { type: 'sessions'; filter?: SessionsFilter }
@@ -34,7 +34,7 @@ export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | 
 
   if (/^ohpichamber:\/\/connect[/?]/i.test(raw.trim())) {
     const payload = parsePairingConnectionPayload(raw) ?? parsePairingConnectionPayloadString(raw);
-    return payload ? { type: 'pairing', payload } : null;
+    return { type: 'pairing', payload };
   }
 
   let url: URL;

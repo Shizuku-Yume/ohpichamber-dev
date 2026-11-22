@@ -18,6 +18,7 @@ type QrScanResult =
   | { status: 'unsupported' }
   | { status: 'permission-denied' }
   | { status: 'invalid' }
+  | { status: 'pairing-rejected' }
   | { status: 'failed' };
 
 type ScannedBarcode = { rawValue?: string; displayValue?: string };
@@ -64,7 +65,7 @@ export const parseConnectionPayload = (raw: string): MobileConnectionPayload | M
 
 const resultFromRawValue = (raw: string): QrScanResult => {
   const payload = parseConnectionPayload(raw);
-  if (!payload) return { status: 'invalid' };
+  if (!payload) return { status: /^ohpichamber:\/\/connect(?:[/?]|$)/i.test(raw.trim()) ? 'pairing-rejected' : 'invalid' };
   if ('pairing' in payload) return { status: 'pairing', ...payload };
   return { status: 'ok', ...payload };
 };
