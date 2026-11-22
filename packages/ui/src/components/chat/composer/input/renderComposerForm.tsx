@@ -462,6 +462,9 @@ export function renderComposerForm({
                         goalModeEnabled={footerModes.goalModeEnabled}
                         onDraftModeChange={footerModes.handleDraftModeChange}
                         runActive={footerModes.runActive}
+                        mode={footerModes.mode}
+                        draftMode={footerModes.draftMode}
+                        draftGoalObjective={footerModes.draftGoalObjective}
                         isExpandedInput={footerModes.isExpandedInput}
                         onToggleExpandedInput={footerModes.handleToggleExpandedInput}
                         onQueueMessage={footerModes.handleQueueFromFooter}
