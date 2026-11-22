@@ -495,7 +495,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
               transitionDuration: '200ms',
               transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
             }}
-            aria-hidden={!sidebarOpen}
+            inert={!sidebarOpen}
             data-page-scroll-lock="true"
           >
             <div
@@ -570,7 +570,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
             transitionDuration: '200ms',
             transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
           }}
-          aria-hidden={!workspacePanelWidth}
+          inert={!workspacePanelWidth}
           data-page-scroll-lock="true"
         >
           <div

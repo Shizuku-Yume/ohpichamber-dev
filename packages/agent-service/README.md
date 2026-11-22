@@ -62,6 +62,8 @@ The service journal retains the newest 1,000 ordered events and a tail of 100 tu
 
 History uses an opaque cursor bound to the selected branch version and leaf. It is not an SSE cursor. Session deletion uses the native SDK storage owner before removing its private service reference. Archive and operational metadata remain with Host SQLite.
 
+Recap reads accept both registered sessions and native-only sessions already discovered in an authorized workspace, without starting a worker or persisting a bootstrap reference. Queries bind the canonical/native session identity and workspace cwd; missing sessions remain `404 SESSION_NOT_FOUND`, while an existing session with no recaps returns an empty recap list.
+
 ## Projection, compaction, and usage
 
 `WorkerProjection` translates native SDK session events into canonical projection inputs for `SessionJournal`.

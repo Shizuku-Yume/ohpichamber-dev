@@ -5,15 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { closeSessionIndex, recordSessionRecap } from '@oh-my-pi/pi-coding-agent/session/session-index';
 import { HistoryPageSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { AgentService } from '../supervisor/service.ts';
 
 test('snapshot and history read a persisted session without starting a worker', async () => {
   const root = await mkdtemp(join(tmpdir(), 'cold-reads-'));
   const previousHome = process.env.HOME;
+  const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
   process.env.HOME = root;
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
+  process.env.PI_CODING_AGENT_DIR = agentDirectory;
   await Promise.all([cwd, agentDirectory].map(directory => mkdir(directory, { recursive: true })));
   const sessionsDirectory = SessionManager.getDefaultSessionDir(cwd, agentDirectory);
   const manager = SessionManager.create(cwd, sessionsDirectory);
@@ -69,6 +72,13 @@ test('snapshot and history read a persisted session without starting a worker', 
     expect(snapshot.session.runtimeStatus).toBe('unavailable');
     expect(snapshot.messages.map(message => message.role)).toEqual(['user', 'assistant']);
 
+    const recaps = await request(`/api/agent/v1/sessions/${rootSessionId}/recaps`);
+    expect(recaps).toEqual({ status: 200, body: { recaps: [] } });
+    recordSessionRecap(manager.getSessionId(), cwd, 'Referenced native recap');
+    expect((await request(`/api/agent/v1/sessions/${rootSessionId}/recaps`)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId: rootSessionId, cwd, recap: 'Referenced native recap' }),
+    ]);
+
     const historyResponse = await request(`/api/agent/v1/sessions/${rootSessionId}/history?limit=10`);
     expect(historyResponse.status).toBe(200);
     const history = HistoryPageSchema.parse(historyResponse.body);
@@ -76,6 +86,8 @@ test('snapshot and history read a persisted session without starting a worker', 
     expect((await request('/internal/workers')).body.workers).toEqual([]);
   } finally {
     await service.stop();
+    closeSessionIndex();
+    if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
     if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
     await rm(root, { recursive: true, force: true });
   }
@@ -84,9 +96,11 @@ test('snapshot and history read a persisted session without starting a worker', 
 test('a listed unreferenced OMP session reads cold and promotes on its first reopen', async () => {
   const root = await mkdtemp(join(tmpdir(), 'native-promotion-'));
   const previousHome = process.env.HOME;
+  const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
   process.env.HOME = root;
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
+  process.env.PI_CODING_AGENT_DIR = agentDirectory;
   await Promise.all([cwd, agentDirectory].map(directory => mkdir(directory, { recursive: true })));
   const sessionsDirectory = SessionManager.getDefaultSessionDir(cwd, agentDirectory);
   const manager = SessionManager.create(cwd, sessionsDirectory);
@@ -149,11 +163,25 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
     const history = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?limit=10`);
     expect(history.status).toBe(200);
     expect(HistoryPageSchema.parse(history.body).messages.map(message => message.role)).toEqual(['user', 'assistant']);
+
+    const recapsPath = `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/recaps`;
+    expect(await request(recapsPath)).toEqual({ status: 200, body: { recaps: [] } });
+    recordSessionRecap(sessionId, cwd, 'Native cold recap');
+    recordSessionRecap(sessionId, join(root, 'other-workspace'), 'Do not cross workspace scope');
+    expect((await request(recapsPath)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId, cwd, recap: 'Native cold recap' }),
+    ]);
+    const missing = await request(`/api/agent/v1/sessions/${randomUUID()}/recaps`);
+    expect(missing.status).toBe(404);
+    expect(missing.body.code).toBe('SESSION_NOT_FOUND');
     expect(await sessionWorkers()).toEqual([]);
 
     const reopened = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/reopen`, { method: 'POST', body: reopenBody });
     expect(reopened.status).toBe(200);
     expect(reopened.body).toMatchObject({ sessionId, rootSessionId: sessionId, projectId, workspaceId });
+    expect((await request(recapsPath)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId, cwd, recap: 'Native cold recap' }),
+    ]);
     expect((await sessionWorkers()).map((worker: { rootSessionId: string }) => worker.rootSessionId)).toEqual([sessionId]);
 
     const references = JSON.parse(await readFile(join(stateDirectory, 'session-references.json'), 'utf8'));
@@ -166,6 +194,8 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
     expect((await sessionWorkers()).map((worker: { rootSessionId: string }) => worker.rootSessionId)).toEqual([sessionId]);
   } finally {
     await service.stop();
+    closeSessionIndex();
+    if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
     if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
     await rm(root, { recursive: true, force: true });
   }

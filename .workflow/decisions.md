@@ -1992,6 +1992,14 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Mine:** yes (requested mobile display fixes)
 - **Revisit when:** upstream provides equivalent mobile readouts or the shared todo presentation changes.
 
+## 2026-11-22 - Restore phone drawer focus without a keyboard
+
+- **Decided:** full-cover phone drawers focus their surface on entry and restore the opener on close unless another overlay owns focus. Retained closed drawers and tablet panels are inert. Inline tablet panels do not take modal focus.
+- **Instead of:** leaving focus in a hidden drawer or opening the phone keyboard by focusing the search field.
+- **Because:** keyboard dismissal must return to the control that opened the drawer, and the exit animation must not leave invisible controls focusable.
+- **Mine:** yes (requested mobile functional fixes)
+- **Revisit when:** these custom drawers adopt a shared dialog primitive with equivalent focus and lifetime behavior.
+
 ## 2026-11-21 - Match deleted Windows worktree paths from Archive
 
 - **Decided:** match separator, drive-letter case, and trailing-separator variants when looking up an already authorized deleted Windows checkout.

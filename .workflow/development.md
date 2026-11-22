@@ -14,6 +14,24 @@ loop updates reached existing clients but new snapshots omitted them. The
 journal now projects the worker's loop state into snapshots without persisting
 the loop across worker restarts. Native-device behavior remains unverified.
 
+The phone audit follow-up fixes focus loss on closing the Sessions and Workspace
+drawers: entry focuses the surface without summoning a keyboard, close restores
+the opener unless another overlay owns focus, and closed retained trees are
+inert, as are collapsed tablet panels. Inline tablet panels retain non-modal behavior. The two console 404s were
+the shared recap endpoint rejecting native-only cold sessions, also reproduced
+on desktop. Recaps now use the existing admitted read-scope lookup and native
+session file/cwd without spawning a worker or promoting a cold session. Web,
+Electron, hosted mobile and Capacitor all read through the same Host route.
+Focused lifecycle and real Agent Service cold-read regressions pass, as do root
+type-check/drift, UI and Agent Service lint, and the web build. Actual 320px
+MobileApp regression verifies opener restoration, inert closed drawers and two
+recap HTTP 200 responses; a 1180px tablet recheck verifies non-modal opening and
+inert closed panels without Chrome hidden-focus warnings. Browser-edge reverse
+tabbing from the first app control is normal, not failed focus restoration.
+Dead-code reports unrelated existing findings and none in the changed files.
+Overlay focus preservation is unit-covered, not browser-verified; physical-device
+keyboards, native Android/iOS and live generation remain unverified here.
+
 The phone UI audit reproduced overlapping tool glyphs, clipped unbroken todo
 text, inconsistent abandoned-task progress and unreadable Work status task
 labels at 320–390 CSS pixels. Inline tool disclosures now retain their reserved

@@ -73,6 +73,7 @@ import { getProjectLabel, normalizePath } from './mobilePaths';
 import { MobileSessionList } from './mobileSidebar/MobileSessionList';
 import { MobileSidebarActionsProvider, useMobileSidebarRowsStore, type MobileSidebarActions } from './mobileSidebar/mobileSidebarState';
 import { useEdgeSwipe } from './useEdgeSwipe';
+import { useMobileDrawerFocus } from './useMobileDrawerFocus';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS } from '@/components/ui/mobileHeader';
 
@@ -710,6 +711,7 @@ const MobileSessionsDrawerContainer: React.FC<{
   const { direction } = useI18n();
   const rootRef = React.useRef<HTMLElement | null>(null);
   const drawerRef = React.useRef<HTMLElement>(null);
+  useMobileDrawerFocus(drawerRef, open);
   const [entered, setEntered] = React.useState(false);
   const [visible, setVisible] = React.useState(open);
   const onCloseRef = React.useRef(onClose);
@@ -770,7 +772,8 @@ const MobileSessionsDrawerContainer: React.FC<{
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
-      aria-hidden={!open}
+      inert={!open}
+      tabIndex={-1}
       className="oc-keyboard-inset-surface oc-side-safe-area fixed inset-0 z-50 flex flex-col bg-background text-foreground"
       style={{
         paddingTop: 'var(--oc-safe-area-top, 0px)',
