@@ -193,6 +193,22 @@ describe('configured Host scope authority', () => {
     await expect(restarted.resolveSessionScope('chat-session')).rejects.toMatchObject({ code: 'METADATA_READ_FAILED' });
   });
 
+  it('leaves a managed chat whose folder was deleted out of discovery instead of failing it', async () => {
+    const { runtime, managedChatsScope } = await fixture({ managedChats: true });
+    const removed = path.join(managedChatsScope.root, 'chat-removed');
+    const kept = path.join(managedChatsScope.root, 'chat-kept');
+    fs.mkdirSync(removed);
+    fs.mkdirSync(kept);
+    const removedScope = await runtime.resolveWorkspaceDirectory(removed);
+    const keptScope = await runtime.resolveWorkspaceDirectory(kept);
+    fs.rmSync(removed, { recursive: true });
+    const listed = await runtime.listWorkspaces();
+    expect(listed.errors).toEqual({});
+    const ids = listed.items.map((item) => item.workspaceId);
+    expect(ids).toContain(keptScope.workspaceId);
+    expect(ids).not.toContain(removedScope.workspaceId);
+  });
+
   it('does not fall through to an overlapping project when managed admission fails', async () => {
     const { projectDirectory, agentDirectory, runtime, saveProjects, managedChatsScope } = await fixture({ managedChats: true });
     const directory = path.join(managedChatsScope.root, 'chat-one');

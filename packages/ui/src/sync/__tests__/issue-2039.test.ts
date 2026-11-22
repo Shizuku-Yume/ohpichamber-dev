@@ -449,6 +449,33 @@ describe("issue 2039 draft auto-accept", () => {
     expect(applyDefaultModelAgentSelectionCalls).toHaveLength(1)
   })
 
+  test("moving a prepared chat draft to a project discards its prepared session before deleting the folder", async () => {
+    const order: string[] = []
+    spyOn(canonicalClient, "prepareSession").mockImplementation(async () => ({ ok: true, sessionId: "prepared" }))
+    spyOn(canonicalClient, "discardPreparedSession").mockImplementation(async ({ workspaceId }) => {
+      order.push(`discard:${workspaceId}`)
+      return { ok: true }
+    })
+    spyOn(globalThis, "fetch").mockRestore()
+    spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/api/fs/delete")) {
+        order.push("delete")
+        return Response.json({ success: true })
+      }
+      throw new Error(`Unexpected network request: ${String(input)}`)
+    })
+    useProjectsStore.setState({ projects: [{ id: "project-1", path: "/repo" }] })
+    useSessionUIStore.getState().openNewSessionDraft()
+    const directory = await useSessionUIStore.getState().prepareChatDraftDirectory()
+    expect(useSessionUIStore.getState().newSessionDraft.preparedChatDirectory).toBe(directory)
+
+    useSessionUIStore.getState().setNewSessionDraftTarget({ projectId: "project-1", directoryOverride: "/repo" })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(useSessionUIStore.getState().newSessionDraft.preparedChatDirectory).toBe(null)
+    expect(order).toEqual(["discard:workspace-issue-2039", "delete"])
+  })
+
   test("late project activation cannot replace a newer draft target or a closed draft", async () => {
     let finish!: () => void
     activationPending = new Promise<void>((resolve) => { finish = resolve })
