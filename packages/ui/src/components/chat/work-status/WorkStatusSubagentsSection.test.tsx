@@ -13,6 +13,7 @@ import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
+import { useWorkflowRunsStore } from '@/lib/workflows/store';
 import type { State } from '@/sync/types';
 import type { WorkStatusSubagentsSection as WorkStatusSubagentsSectionType } from './WorkStatusSubagentsSection';
 
@@ -133,6 +134,31 @@ describe('subagent status rows', () => {
     expect(icon()).toBe('#oc-checkbox-circle');
     expect(rowContent().textContent).toBe('Child');
     expect(row().getAttribute('aria-label')).toContain('Done');
+  });
+
+  test('leaves workflow agents in Workflows while still showing ordinary children', async () => {
+    const workflowChild = session('workflow-child', { parentSessionId: parent.sessionId, title: 'Workflow child' });
+    const { agentWorkflowFeatureAvailable, agentWorkflowToolEnabled } = useUIStore.getState();
+    try {
+      await act(async () => {
+        useUIStore.setState({ agentWorkflowFeatureAvailable: true, agentWorkflowToolEnabled: true });
+        useWorkflowRunsStore.setState({
+          bySession: { [parent.sessionId]: { status: 'ready', runs: [{
+            id: 'workflow', directory, parentSessionId: parent.sessionId, name: 'Workflow', description: '',
+            state: 'running', attempt: 1, createdAt: 1, currentPhase: null, phases: [], logs: [],
+            agents: [{ key: 'workflow-child', label: 'Workflow child', phase: null, state: 'running', sessionId: workflowChild.sessionId }],
+          }] } },
+        });
+      });
+      await publish({ session: [parent, child, workflowChild] });
+      expect(rowButtons()).toHaveLength(1);
+      expect(rowContent().textContent).toBe('Child');
+    } finally {
+      await act(async () => {
+        useUIStore.setState({ agentWorkflowFeatureAvailable, agentWorkflowToolEnabled });
+        useWorkflowRunsStore.getState().reset();
+      });
+    }
   });
 
   test('marks a subagent whose last turn failed instead of calling it done', async () => {

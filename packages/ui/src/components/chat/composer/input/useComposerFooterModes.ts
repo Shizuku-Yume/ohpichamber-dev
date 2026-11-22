@@ -42,6 +42,7 @@ export function useComposerFooterModes({ sessionScope, expansion, queueActions }
         planRoleAvailable,
         goalModeEnabled,
         runActive: Boolean(workerRun),
+        runOrigin: workerRun?.origin,
         isExpandedInput,
         handleDraftModeChange,
         handleToggleExpandedInput,

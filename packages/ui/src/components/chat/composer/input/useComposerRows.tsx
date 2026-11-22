@@ -1,4 +1,5 @@
-import type { useI18n } from '@/lib/i18n';
+import type { Run } from '@openchamber/agent-contract';
+import { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
@@ -13,6 +14,11 @@ import type { useComposerEditorActions } from './useComposerEditorActions';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerDraftTarget } from './useComposerDraftTarget';
 import React from 'react';
+import { canonicalClient } from '@/api/canonicalClient';
+import { Icon } from '@/components/icon/Icon';
+import { toast } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { useDirectorySync } from '@/sync/sync-context';
 import { QueuedMessagesStrip } from '../../QueuedMessagesStrip';
 import { AutoReviewStrip } from '../../AutoReviewStrip';
 import { PullRequestWatchStrip } from '../../PullRequestWatchStrip';
@@ -28,9 +34,42 @@ import { ComposerStatusStrip } from '@/components/chat/ComposerStatusStrip';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { useShownAfter } from '@/hooks/useShownAfter';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
+import { SubagentHudTray } from '../../SubagentHudTray';
+import { TodoTray } from '../../TodoTray';
 import { MemoMobileModelButton, MemoMobileEffortButton } from './memoComposerControls';
 
 const CREATING_SESSION_LINE_DELAY_MS = 300;
+
+const LoopRow = React.memo(function LoopRow({ sessionId, directory }: { sessionId: string; directory?: string }) {
+    const { t } = useI18n();
+    const loop = useDirectorySync(React.useCallback((state) => state.snapshot[sessionId]?.session.loop, [sessionId]), directory);
+    const [stopping, setStopping] = React.useState(false);
+    if (!loop?.active) return null;
+
+    const stop = async () => {
+        setStopping(true);
+        try {
+            await canonicalClient.stopLoop(sessionId);
+        } catch (error) {
+            toast.error(t('chat.run.loop.stopFailed'), { description: error instanceof Error ? error.message : undefined });
+        } finally {
+            setStopping(false);
+        }
+    };
+    const progress = loop.maxIterations ? `${loop.iteration}/${loop.maxIterations}` : String(loop.iteration);
+    return (
+        <div className="flex oc-composer-row min-w-0 items-center gap-2 border-b border-edge ps-3 pe-1.5">
+            <Icon name="refresh" className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span role="status" className="min-w-0 flex-1 truncate typography-meta text-muted-foreground" title={loop.condition}>
+                {t('chat.run.loop.iteration', { progress })}
+                {loop.condition && ` · ${loop.condition}`}
+            </span>
+            <Button variant="ghost" size="sm" className="shrink-0" disabled={stopping} onClick={() => void stop()} data-testid="composer-stop-loop-button">
+                {t('chat.run.loop.stop')}
+            </Button>
+        </div>
+    );
+});
 
 type Dependencies = {
     draftText: Pick<ReturnType<typeof useComposerDraftText>, 'setMessage'>;
@@ -47,12 +86,13 @@ type Dependencies = {
     queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEdit' | 'handleQueuedMessageSend'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'handleOpenMobilePanel'>;
     editorActions: Pick<ReturnType<typeof useComposerEditorActions>, 'handleCycleThinking' | 'handleOpenThinkingPanel'>;
+    runOrigin: Run['origin'] | undefined;
 };
 
 export function useComposerRows({
     draftText, editorState, i18n, preferences, mobileShell: mobile, inlineContext, referenceActions,
     sendAvailability, sessionScope, queueState, draftTarget, queueActions, sessionLifecycle,
-    editorActions,
+    editorActions, runOrigin,
 }: Dependencies) {
     const { setMessage } = draftText;
     const { composerRef } = editorState;
@@ -169,16 +209,29 @@ export function useComposerRows({
         ? <SessionFolderMissingRow sessionId={currentSessionId} directory={currentSessionDirectoryForSync} busy={sessionPhase !== 'idle'} />
         : null;
 
-    const composerTopRows = folderMissingRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const liveSessionId = !isBtwActive && !newSessionDraftOpen ? currentSessionId : null;
+    const sessionDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? undefined;
+    const workerRunRow = liveSessionId && (runOrigin === 'plan' || runOrigin === 'goal')
+        ? <ComposerStatusStrip icon="loader-4" spin text={t(runOrigin === 'plan' ? 'chat.run.origin.plan' : 'chat.run.origin.goal')} />
+        : null;
+
+    const hasTopRows = folderMissingRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow
+        || liveSessionId || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow
+        || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow;
+    const composerTopRows = hasTopRows ? (
         <>
             {folderMissingRow}
             {worktreeSetupRow}
             {creatingSessionRow}
             {spaceWaitRow}
+            {liveSessionId && <TodoTray key={`todo:${liveSessionId}`} sessionId={liveSessionId} directory={sessionDirectory} />}
             {goalRow}
+            {workerRunRow}
             {autoReviewRow}
             {prWatchRow}
             {extensionWaitRow}
+            {liveSessionId && <LoopRow key={`loop:${liveSessionId}`} sessionId={liveSessionId} directory={sessionDirectory} />}
+            {liveSessionId && <SubagentHudTray key={`subagent:${liveSessionId}`} sessionId={liveSessionId} />}
             {backgroundShellsRow}
             {revertRow}
             {queueRow}

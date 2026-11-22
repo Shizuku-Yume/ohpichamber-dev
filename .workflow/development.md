@@ -4,6 +4,15 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The v2.7.3 sync's composer extraction dropped the OMP todo tray, subagent HUD,
+plan/goal status and loop control without removing their Canonical state.
+The repair wires those rows into both shared composer layouts and keeps workflow
+children from appearing twice in Work Status. The audit compared the merge's
+first parent, its result and later main, checking moved consumers as well as
+lost files. Desktop and collapsed mobile composer DOM regressions and Work
+Status regressions cover the confirmed gaps; native-device behavior remains
+unverified.
+
 Archive discovery reconciliation now preserves concurrent live fields while
 merging independently newer Host archive and metadata revisions in full and
 head refreshes. Membership follows the merged archive state; deletion tombstones

@@ -183,6 +183,67 @@ beforeAll(() => {
   useAuthSessionStore.setState({ state: 'ok' });
 });
 
+test.each([false, true])('the composer exposes live OMP rows (mobile: %s)', async (isMobile) => {
+  await mount();
+  const { getSyncChildStores } = await import('@/sync/sync-refs');
+  const { nativeSnapshot } = await import('@/sync/session-message-loader-test-fixtures');
+  const { useSubagentsStore } = await import('@/stores/useSubagentsStore');
+  const { useUIStore } = await import('@/stores/useUIStore');
+  const previousIsMobile = useUIStore.getState().isMobile;
+  const store = getSyncChildStores().getChild('/workspace');
+  if (!store) throw new Error('Expected composer directory store');
+  const snapshot = nativeSnapshot(SESSION_ID, []);
+  const stop = spyOn(canonicalClient, 'stopLoop').mockResolvedValue({ type: 'loop.stop', stopped: true });
+  const publish = async (origin: 'plan' | 'goal' | null) => {
+    await act(async () => {
+      const active = origin !== null;
+      store.setState((state) => ({
+        snapshot: {
+          ...state.snapshot,
+          [SESSION_ID]: {
+            ...snapshot,
+            session: {
+              ...snapshot.session, runtimeStatus: active ? 'running' : 'idle', activeRunId: active ? 'run' : null,
+              loop: { active, iteration: 2, maxIterations: 4 },
+            },
+            activeRun: origin ? { runId: 'run', sessionId: SESSION_ID, status: 'running', origin, createdAt: 1 } : null,
+            todos: [{ name: 'Verify', tasks: [{ content: 'Check the build', status: active ? 'in_progress' : 'completed' }] }],
+          },
+        },
+      }));
+    });
+  };
+  try {
+    await act(async () => useUIStore.setState({ isMobile }));
+    await publish('plan');
+    await act(async () => useSubagentsStore.getState().setSubagents(SESSION_ID, [
+      { parentSessionId: SESSION_ID, subagentId: 'child', role: 'reviewer', status: 'running' },
+    ]));
+    expect(container.querySelector('[data-testid="todo-tray"]')?.textContent).toContain('Check the build');
+    expect(container.querySelector('[data-testid="subagent-hud-tray"]')).not.toBeNull();
+    expect(container.textContent).toContain('Plan is running');
+    expect(container.textContent).toContain('Loop iteration 2/4');
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="composer-stop-loop-button"]');
+    if (!button) throw new Error('Expected Stop loop button');
+    await act(async () => button.click());
+    expect(stop).toHaveBeenCalledWith(SESSION_ID);
+    await publish('goal');
+    expect(container.textContent).toContain('Goal is running');
+    expect(container.textContent).not.toContain('Plan is running');
+    await publish(null);
+    expect(container.querySelector('[data-testid="todo-tray"]')).toBeNull();
+    expect(container.querySelector('[data-testid="composer-stop-loop-button"]')).toBeNull();
+    expect(container.textContent).not.toContain('Goal is running');
+  } finally {
+    stop.mockRestore();
+    await act(async () => {
+      useSubagentsStore.getState().setSubagents(SESSION_ID, []);
+      store.setState({ snapshot: {} });
+      useUIStore.setState({ isMobile: previousIsMobile });
+    });
+  }
+});
+
 test('/btw <question> activates the panel and clears the main composer instead of sending a run', async () => {
   const view = await mount();
   const askBtw = spyOn(canonicalClient, 'askBtw').mockResolvedValue({ recordId: 'btw-record' });
