@@ -10,7 +10,7 @@ import { MobileQrConnectionLoading } from './MobileQrScannerOverlay';
 
 export const useMobilePairingConfirmation = (onConnected: () => void) => {
   const { t } = useI18n();
-  const { confirm, dialog } = useConfirmDialog();
+  const { confirm, dialog } = useConfirmDialog({ layerClassName: 'z-[70]', backdropProps: { className: 'z-[70]' } });
   const { redeemPairingConnection, isBusy, error } = useMobileConnection(onConnected);
 
   React.useEffect(() => {

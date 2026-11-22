@@ -15,8 +15,8 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { useConfirmDialog } = await import('./confirm-dialog');
 
 type Confirmation = { confirmed: boolean; checkboxChecked: boolean };
-function Harness({ onResult }: { onResult: (result: Confirmation) => void }) {
-  const { confirmWithCheckbox, dialog } = useConfirmDialog();
+function Harness({ onResult, raised = false }: { onResult: (result: Confirmation) => void; raised?: boolean }) {
+  const { confirmWithCheckbox, dialog } = useConfirmDialog(raised ? { layerClassName: 'z-[70]', backdropProps: { className: 'z-[70]' } } : undefined);
   const ask = React.useCallback(async () => {
     const result = await confirmWithCheckbox({
       title: 'Delete archive?',
@@ -57,6 +57,8 @@ test("confirmed archive deletion carries the user's keep-or-delete branch choice
   const results: Confirmation[] = [];
   const onResult = (result: Confirmation) => results.push(result);
   await render(<Harness onResult={onResult} />);
+  expect(document.querySelector('[data-slot="dialog-layer"]')?.classList.contains('z-50')).toBe(true);
+  expect(document.querySelector('[data-slot="dialog-overlay"]')?.classList.contains('z-50')).toBe(true);
   const confirm = () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Confirm delete');
   const keepBranch = confirm();
   if (!keepBranch) throw new Error('Confirmation action is missing');
@@ -75,4 +77,16 @@ test("confirmed archive deletion carries the user's keep-or-delete branch choice
     { confirmed: true, checkboxChecked: false },
     { confirmed: true, checkboxChecked: true },
   ]);
+});
+
+test('confirmation layer overrides raise both the popup and backdrop without changing dismissal', async () => {
+  const results: Confirmation[] = [];
+  await render(<Harness raised onResult={(result) => results.push(result)} />);
+  expect(document.querySelector('[data-slot="dialog-layer"]')?.classList.contains('z-[70]')).toBe(true);
+  expect(document.querySelector('[data-slot="dialog-overlay"]')?.classList.contains('z-[70]')).toBe(true);
+  const cancel = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Cancel');
+  if (!cancel) throw new Error('Cancel action is missing');
+  await act(async () => cancel.click());
+  expect(results).toEqual([{ confirmed: false, checkboxChecked: false }]);
+  expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
 });
