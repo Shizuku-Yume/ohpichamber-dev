@@ -1536,7 +1536,7 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
         return;
       }
       const result = await response.json().catch(() => null) as PairingRedeemResponse | null;
-      const pairingResult = await readPairingResponse(Response.json(result, { status: response.status }));
+      const pairingResult = await readPairingResponse(new Response(JSON.stringify(result), { status: response.status }));
       if (pairingResult.kind !== 'success') {
         if (pairingResult.kind === 'rejected') {
           setError(t('desktopHostSwitcher.error.pairingRejected'));
