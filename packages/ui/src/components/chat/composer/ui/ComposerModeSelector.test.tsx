@@ -116,7 +116,7 @@ describe('ComposerModeSelector', () => {
             expect(setMode).toHaveBeenCalledWith('session-1', 'vibe');
             const label = () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')?.textContent;
             expect(label()).toContain('Vibe');
-            await render({ sessionId: 'session-1', draftOpen: false, mode: { kind: 'plan', status: 'armed' }, isMobile: true });
+            await render({ sessionId: 'session-1', draftOpen: false, mode: { kind: 'plan', status: 'armed', planReference: 'local://plan.md' }, isMobile: true });
             expect(label()).toContain('Plan');
         } finally {
             setMode.mockRestore();
