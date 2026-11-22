@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { canonicalClient } from '@/api/canonicalClient';
+import { isIMECompositionEvent } from '@/lib/ime';
 import { isDraftSessionId } from '@/lib/sessionIdentity';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
@@ -39,8 +40,7 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
   const [isSteering, setIsSteering] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
 
-  const handleSteer = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleSteer = async () => {
     if (!steerMessage.trim() || isSteering) return;
     setIsSteering(true);
     try {
@@ -166,23 +166,31 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
       )}
 
       {showSteerInput && (
-        <form onSubmit={handleSteer} className="flex items-center gap-1.5 ps-5 pt-1">
+        <div className="flex items-center gap-1.5 ps-5 pt-1">
           <Input
             inputSize="compact"
             placeholder={t('chat.subagentHud.steerPlaceholder')}
             value={steerMessage}
             onChange={(e) => setSteerMessage(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.stopPropagation();
+              if (isIMECompositionEvent(event)) return;
+              event.preventDefault();
+              void handleSteer();
+            }}
             disabled={isSteering}
             autoFocus
           />
           <Button
-            type="submit"
+            type="button"
+            onClick={() => void handleSteer()}
             size="xs"
             disabled={!steerMessage.trim() || isSteering}
           >
             {t('chat.subagentHud.steerSend')}
           </Button>
-        </form>
+        </div>
       )}
     </div>
   );
