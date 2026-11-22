@@ -23,7 +23,8 @@ Object.assign(globalThis, { window: browser, document: browser.document, Event: 
   DOMParser: browser.DOMParser, XMLSerializer: browser.XMLSerializer, IntersectionObserver: browser.IntersectionObserver,
   ResizeObserver: browser.ResizeObserver });
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, value: true });
-const { MarkdownContent } = await import('./MarkdownRendererImpl');
+const { MarkdownContent, MarkdownRenderer } = await import('./MarkdownRendererImpl');
+const effectiveDirectory = await import('@/hooks/useEffectiveDirectory');
 const { I18nProvider } = await import('@/lib/i18n');
 const { createMarkdownCodePlugin } = await import('./markdown/streamdownCode');
 const { markdownCodeHighlighter } = await import('./markdown/markdownCodeHighlighter');
@@ -242,7 +243,7 @@ test('Plan-style document assets resolve relative media while raw HTML stays ine
   }
 });
 
-test('an svg fence draws as an image only where the document preview asks for it', async () => {
+test('a standalone Markdown view only draws an svg fence when it opts in', async () => {
   const content = '```svg\n<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>\n```';
   const draw = (svgFences: boolean) => act(() => root.render(<I18nProvider><MarkdownContent content={content} svgFences={svgFences} enableFileReferences={false} directory="/project" settled /></I18nProvider>));
   await draw(true);
@@ -250,6 +251,36 @@ test('an svg fence draws as an image only where the document preview asks for it
   await draw(false);
   expect(host.querySelector('img')).toBeNull();
   expect(host.textContent).toContain('xmlns');
+});
+
+test('an assistant reply draws a closed svg fence as an image without inserting SVG markup', async () => {
+  const directory = spyOn(effectiveDirectory, 'useEffectiveDirectory').mockReturnValue('/project');
+  const source = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>';
+  const openFence = `\`\`\`svg\n${source}`;
+  const closedFence = `${openFence}\n\`\`\``;
+  const draw = (content: string, isStreaming: boolean, variant: 'assistant' | 'reasoning' | 'tool' = 'assistant') => act(() => root.render(
+    <I18nProvider><MarkdownRenderer content={content} isStreaming={isStreaming} variant={variant}
+      messageId="diagram-message" isAnimated={false} enableFileReferences={false} /></I18nProvider>,
+  ));
+  const diagram = () => host.querySelector('[data-streamdown="svg-block"]');
+
+  try {
+    await draw(openFence, true);
+    expect(diagram()).toBeNull();
+    await draw(closedFence, true);
+    expect(host.querySelector('[data-streamdown="svg-block"] img[src^="data:image/svg+xml;"]')).not.toBeNull();
+    expect(diagram()?.getAttribute('data-oc-svg-source')?.trim()).toBe(source);
+    expect(host.querySelector('svg')).toBeNull();
+    await draw(closedFence, false);
+    expect(diagram()).not.toBeNull();
+    for (const variant of ['reasoning', 'tool'] as const) {
+      await draw(closedFence, false, variant);
+      expect(diagram()).toBeNull();
+      expect(host.textContent).toContain('xmlns');
+    }
+  } finally {
+    directory.mockRestore();
+  }
 });
 
 test('an svg fence with a script stays an ordinary code block', async () => {
