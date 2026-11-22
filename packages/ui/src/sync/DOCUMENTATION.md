@@ -92,6 +92,11 @@ a remote Host's desktop delivery does not suppress notifications on this client.
 
 ## Host operational metadata authority
 
+Read/modify/write metadata actions include the confirmed Host revision. A
+`METADATA_CONFLICT` re-reads and recomputes the merge patch, up to three attempts;
+read failures, other errors and runtime switches reject without another write.
+This preserves concurrent context-pin edits without OpenCode metadata routes.
+
 The Host owns session operational metadata (pins, color, icon, notes), workspace associations, archive state, and folder membership; OMP owns session titles directly in session storage. Execution session records and persisted UI caches are not metadata fallbacks. Metadata responses and change events carry decimal-string revisions; the metadata patch route (`PATCH /api/agent/v1/sessions/:sessionId/metadata`) requires a `{ changes: { ... } }` wrapper and returns `SessionMetadataState` (`{ sessionId, revision, metadata }`).
 
 Host metadata revisions stay attached to projected sessions, HTTP write responses, and committed events. Revisions are non-negative integer decimal strings compared with uint64 numeric ordering via `compareCounters(left, right)` (length check first, then lexical). The session merger `mergeHostSession` in `event-reducer.ts` enforces monotonic revision progression:

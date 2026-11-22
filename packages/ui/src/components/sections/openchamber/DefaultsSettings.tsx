@@ -27,6 +27,7 @@ import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { refreshDirectoryCatalogs } from '@/sync/sync-refs';
 
@@ -57,6 +58,11 @@ export const DefaultsSettings: React.FC = () => {
   // The catalog loader already read this directory's models; a second fetch
   // here duplicated the slowest request the Settings page made.
   const models = useSettingsModels(directory);
+  const chatsDefaultModel = useConfigStore((state) => state.chatsDefaultModel);
+  const chatsDefaultVariant = useConfigStore((state) => state.chatsDefaultVariant);
+  const chatsDefaultsLoaded = useConfigStore((state) => state.settingsDefaultsLoaded);
+  const setChatsDefaultModel = useConfigStore((state) => state.setChatsDefaultModel);
+  const setChatsDefaultVariant = useConfigStore((state) => state.setChatsDefaultVariant);
   const [isSavingOmp, setIsSavingOmp] = React.useState(false);
 
 
@@ -437,6 +443,22 @@ export const DefaultsSettings: React.FC = () => {
             )}
           </SettingsFieldRow>
 
+          <ModelRoleEditor
+            role="chats"
+            roles={{ chats: formatRoleSelector(chatsDefaultModel || '', chatsDefaultVariant || '') }}
+            models={models}
+            directory={directory ?? undefined}
+            settingsItem="sessions.chats-default-model"
+            globalLevel={configuredThinkingLevel || undefined}
+            label={t('settings.openchamber.defaults.field.chatsDefaultModel')}
+            disabled={!chatsDefaultsLoaded}
+            loading={!chatsDefaultsLoaded}
+            onChange={(selector) => {
+              const { model, effort } = splitRoleSelector(selector, models);
+              setChatsDefaultModel(model || undefined);
+              setChatsDefaultVariant(effort || undefined);
+            }}
+          />
           <SettingsFieldRow
             settingsItem="sessions.default-mode"
             label={t('chat.chatInput.mode.label')}

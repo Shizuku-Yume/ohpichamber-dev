@@ -124,7 +124,7 @@ export function CanonicalProviderPicker({
           <CommandList disableHorizontal>
             {status ? <CommandEmpty>{status}</CommandEmpty> : visibleRows.map((provider) => (
               <CommandItem key={provider.id || NONE_ITEM} value={provider.id || NONE_ITEM} onSelect={() => choose(provider.id)}>
-                <span className="typography-small truncate">{provider.name}</span>
+                <span className="typography-ui-label truncate">{provider.name}</span>
               </CommandItem>
             ))}
             {listEndMarker}

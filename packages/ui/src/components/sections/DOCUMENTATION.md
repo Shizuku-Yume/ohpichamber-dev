@@ -4,6 +4,12 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+Session defaults keep native OMP model roles authoritative. The managed-chat
+model/effort row is a Host-persisted override for chats outside projects, uses the
+shared model effort picker, and remains disabled until preferences are loaded.
+OpenCode plugin banners, source-file provider editors and separate quota
+credential forms are excluded; Canonical provider credentials remain selected.
+
 Voice playback renders its voice-picker row only when the selected provider
 can render a picker: local voice options exist, OpenAI speech is available,
 system speech has voices, or Browser has voices with a language. The label and

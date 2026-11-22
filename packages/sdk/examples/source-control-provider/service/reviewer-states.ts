@@ -1,4 +1,4 @@
-import type { SourceControlChangeRequestContext, SourceControlReviewerState } from '@openchamber/sdk';
+import type { SourceControlChangeRequestContext, SourceControlReviewerState } from 'ohpichamber-sdk';
 
 export type GiteaPerson = { id: number; login: string; avatar_url?: string };
 

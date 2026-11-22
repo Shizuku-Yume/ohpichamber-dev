@@ -63,6 +63,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       fs,
       path,
       uiAuthController,
+      tunnelAuthController,
       buildAugmentedPath,
       searchPathFor,
       isExecutable,

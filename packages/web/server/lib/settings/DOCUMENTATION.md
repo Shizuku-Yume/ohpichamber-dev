@@ -6,6 +6,8 @@ This module owns OhPiChamber's settings persistence: the instance and profile fi
 
 ## Invariants
 
+- Managed-chat model and effort overrides round-trip through `chatsDefaultModel` and `chatsDefaultVariant`; blank strings clear them. Named OpenCode agent defaults do not become a second OMP root-agent authority.
+
 - Feature read/modify/write operations use `updateSettingsFromDisk`. The same `settings-write-queue.ts` serializes user saves and feature writes for VAPID keys, public origin and private relay configuration. Each operation rereads under the queue; a failed operation rejects only its caller. Profile surfaces, unreadable-preference protection, icon preservation and reserved OMP preferences retain their existing owners.
 
 - Settings callers that regenerate persisted identity use the strict reader: only ENOENT means first run. Corrupt JSON, non-object content, and I/O errors throw so a transient read failure cannot replace pairing keys and orphan devices.

@@ -915,6 +915,7 @@ describe('settings registry gate', () => {
     sidebarPinLists: [{ id: 'pinned', name: 'Pinned' }], sidebarHiddenSections: ['work'],
     sessionTabsPerWorkspace: true, selectionApprovalText: 'Looks good.', customProviderLogos: { acme: { mime: 'image/png', updatedAt: 1 } },
     lastUsedEfforts: { 'anthropic/claude': 'high' },
+    chatsDefaultModel: 'anthropic/claude', chatsDefaultVariant: 'high',
   };
 
   it('accepts a valid value for every persistable registry key (no server-side drift)', () => {
@@ -1022,6 +1023,17 @@ describe('settings registry gate', () => {
       expect(helpers.formatSettingsResponse(helpers.mergePersistedSettings({}, accepted))).toMatchObject({ documentAttachBehavior: mode });
     }
     expect(helpers.sanitizeSettingsUpdate({ documentAttachBehavior: 'attach' })).toEqual({});
+  });
+
+  it('round trips managed-chat model preferences, clears blanks and rejects non-text values', () => {
+    const helpers = createTestHelpersWithRealSanitizers();
+    const accepted = helpers.sanitizeSettingsUpdate({ chatsDefaultModel: ' anthropic/claude ', chatsDefaultVariant: ' high ' });
+    expect(accepted).toEqual({ chatsDefaultModel: 'anthropic/claude', chatsDefaultVariant: 'high' });
+    expect(helpers.formatSettingsResponse(helpers.mergePersistedSettings({}, accepted))).toMatchObject(accepted);
+    const cleared = helpers.sanitizeSettingsUpdate({ chatsDefaultModel: ' ', chatsDefaultVariant: '' });
+    expect(cleared).toEqual({ chatsDefaultModel: undefined, chatsDefaultVariant: undefined });
+    expect(helpers.mergePersistedSettings(accepted, cleared).chatsDefaultModel).toBeUndefined();
+    expect(helpers.sanitizeSettingsUpdate({ chatsDefaultModel: 5, chatsDefaultVariant: ['high'] })).toEqual({});
   });
 
   it('trims a mode choice and drops one that is not text', () => {

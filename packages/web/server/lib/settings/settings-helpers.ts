@@ -312,7 +312,7 @@ type StringSettingsKey =
 type ClearableStringSettingsKey =
   | 'managedRemoteTunnelHostname' | 'managedRemoteTunnelSelectedPresetId' | 'defaultModel' | 'defaultVariant'
   | 'defaultAgent' | 'smallModelOverride' | 'smallModelVariant' | 'walkthroughModelOverride' | 'walkthroughModelVariant'
-  | 'fallbackModel' | 'fallbackVariant' | 'defaultGitIdentityId' | 'zenModel' | 'chatsDefaultModel' | 'chatsDefaultVariant' | 'chatsDefaultAgent';
+  | 'fallbackModel' | 'fallbackVariant' | 'defaultGitIdentityId' | 'zenModel' | 'chatsDefaultModel' | 'chatsDefaultVariant';
 
 type NumberSettingsKey =
   | 'inputHistoryLimit' | 'sidebarSessionBatchSize' | 'liveBrowserTabLimit' | 'sessionGoalMaxAutoTurns'
@@ -1288,6 +1288,11 @@ if (isString(candidate.managedRemoteTunnelSelectedPresetId)) {
 if (isString(candidate.defaultModel)) {
       const trimmed = candidate.defaultModel.trim();
       result.defaultModel = trimmed.length > 0 ? trimmed : undefined;
+    }
+
+    for (const key of ['chatsDefaultModel', 'chatsDefaultVariant'] as const) {
+      const value = z.string().trim().safeParse(candidate[key]);
+      if (value.success) result[key] = value.data.length > 0 ? value.data : undefined;
     }
 
 const lastSelectedModel = lastSelectedModelSchema.safeParse(candidate.lastSelectedModel);

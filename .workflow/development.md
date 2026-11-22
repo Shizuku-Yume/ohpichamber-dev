@@ -9,8 +9,16 @@ OpenChamber v2.8.0 (`30c70496a5`) is integrated by the two-parent merge
 without conflicts. Agent Service and vendored SDK content match main's OMP
 19.1.0 integration. The upstream pin and complete delta ledger now track v2.8.0;
 the settled exclusions are recorded in the 2026-11-22 v2.8.0 merge decision.
-Root validation after dependency installation remains pending; this is source
-integration, not new provider, device, updater or visual certification.
+`bun install`, full root type-check (all five check guardrails plus Electron,
+Agent Contract, Agent Service and mobile) and root lint pass; lint retains
+nonfatal hook warnings. Final guard reconciliation preserves the excluded
+engines rather than restoring their constructors. It also caught missing
+terminal tunnel-auth injection and managed-chat model/effort persistence, now
+covered by focused regressions. Context-pin read/modify/write keeps concurrent
+edits through Canonical metadata revision preconditions checked in the Host's
+SQLite transaction, with bounded runtime-scoped UI retries. Focused SDK, UI,
+Host and contract checks pass. This is source integration, not new provider,
+device, updater or visual certification.
 
 The [OMP 19.1 integration](specs/omp19-1-integration.md) pins 19.1.0 at
 `a7135b8f`. The worker uses tool commands behind Host authorization, retains

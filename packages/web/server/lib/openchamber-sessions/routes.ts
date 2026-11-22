@@ -170,6 +170,14 @@ const createCanonicalSessionService = (dependencies) => {
         try { broadcastGlobalUiEvent?.({ type: 'openchamber:session-metadata', properties: { sessionId: id, sessionID: id, metadata: result.metadata, revision: result.revision } }); } catch { }
       }
       return result;
+    },
+    update: async (id, decide, directory = '') => {
+      if (updateSessionMetadata) return updateSessionMetadata(id, decide, { directory });
+      const result = await sessionMetadataStore.updateSessionMetadata(id, decide);
+      if (result.changed) {
+        try { broadcastGlobalUiEvent?.({ type: 'openchamber:session-metadata', properties: { sessionId: id, sessionID: id, metadata: result.metadata, revision: result.revision } }); } catch { }
+      }
+      return result;
     }
   };
   const admissionRecoveries = new Map();
@@ -610,7 +618,17 @@ const createCanonicalSessionService = (dependencies) => {
     // A client-supplied shape is invalid input, not a server failure.
     const parsed = SessionMetadataPatchSchema.safeParse(payload);
     if (!parsed.success) throw new OpenChamberControlError('Session metadata patch is invalid', 400, { code: 'INVALID_REQUEST' });
-    const result = await metadata.set(id, parsed.data.changes, scope.cwd);
+    let conflict = false;
+    const result = parsed.data.expectedRevision === undefined
+      ? await metadata.set(id, parsed.data.changes, scope.cwd)
+      : await metadata.update(id, (_current, revision) => {
+        if (revision !== parsed.data.expectedRevision) {
+          conflict = true;
+          return null;
+        }
+        return parsed.data.changes;
+      }, scope.cwd);
+    if (conflict) throw new OpenChamberControlError('Session metadata changed before the update', 409, { code: 'METADATA_CONFLICT' });
     return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata });
   };
   const rename = async (id, payload = {}) => {

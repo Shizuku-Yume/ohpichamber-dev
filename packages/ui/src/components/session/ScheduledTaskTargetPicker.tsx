@@ -130,7 +130,7 @@ export function ScheduledTaskTargetPicker({ value, eligible, known, load, isMobi
             {status ? <CommandEmpty>{status}</CommandEmpty> : rows.map((row) => (
               <CommandItem key={row.id} value={row.id} onSelect={() => choose(row.id)} aria-current={row.id === value ? true : undefined}>
                 <span className="flex min-w-0 flex-col">
-                  <span dir="auto" className="truncate typography-small">{row.title}</span>
+                  <span dir="auto" className="truncate typography-ui-label">{row.title}</span>
                   {row.subagent ? <span className="truncate typography-meta text-muted-foreground">{subagentLabel(row)}</span> : null}
                 </span>
                 {row.id === value ? <Icon name="check" className="ms-auto size-4 shrink-0" /> : null}
