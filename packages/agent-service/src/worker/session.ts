@@ -249,6 +249,7 @@ export class WorkerSession {
     /** The shared catalog identity; a `/btw` branch rekeys its root in place. */
     private readonly workerIdentity: { rootSessionId: string },
     private readonly sanitizeProviderError: (text: string) => string,
+    private readonly toolPolicy: { observer: ExtensionFactory; authorizeBashExecution: ReturnType<typeof createNativeBashAuthorizer> },
     private readonly hostToolsController?: HostToolController,
   ) {
     this.modeController = new WorkerModeController(
@@ -798,7 +799,7 @@ export class WorkerSession {
       const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, runtime.sanitizeProviderError, hostToolsController);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, runtime.sanitizeProviderError, { observer, authorizeBashExecution }, hostToolsController);
       // Persisted subagents must be revivable after a worker restart: the factory
       // rebuilds one from its transcript, and the TTL mirrors the native task-agent
       // idle setting so a parked agent is collected exactly when OMP would.
@@ -2068,6 +2069,9 @@ export class WorkerSession {
               settings: this.session.settings,
               hasUI: false,
               enableMCP: false,
+              disableExtensionDiscovery: true,
+              extensions: [this.toolPolicy.observer],
+              authorizeBashExecution: this.toolPolicy.authorizeBashExecution,
               cacheWarming: 'off',
               agentId: cloneId,
               agentDisplayName: 'tan',

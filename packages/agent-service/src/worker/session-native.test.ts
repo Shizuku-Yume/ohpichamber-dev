@@ -2768,6 +2768,39 @@ test('valid execution model with thinking level applies to session execution', a
  }
 }, 30000);
 
+test('/tan authorizes Bash and Bash-mounted tools through the Host', async () => {
+ const shellCommand = 'printf tan-bash-denied';
+ const mountedCommand = `lsp -j '{"action":"status"}'`;
+ const completed = Promise.withResolvers<void>();
+ let requests = 0;
+ const harness = await fixture({
+  deniedCommands: [shellCommand], machineCommands: [mountedCommand], denyLsp: true,
+  respond: () => {
+   requests += 1;
+   if (requests === 1) return completion({ name: 'bash', id: 'tan-bash-shell', input: { command: shellCommand } });
+   if (requests === 2) return completion({ name: 'bash', id: 'tan-bash-mounted', input: { command: mountedCommand } });
+   completed.resolve();
+   return completion();
+  },
+ });
+ try {
+  cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
+  cfgBashPatterns.override(harness.worker.session.settings, [shellCommand, mountedCommand].map(match => ({ match, approval: 'allow' })));
+  expect(harness.worker.session.getMountedToolCommandNames()).toContain('lsp');
+  await harness.worker.operation({ type: 'command', text: '/tan Run both Bash commands.' });
+  await completed.promise;
+  expect(harness.hostRequests.filter(request => request.type === 'tool' && ['bash', 'lsp'].includes(request.toolName))).toEqual([
+   expect.objectContaining({ toolName: 'bash', input: { command: shellCommand }, toolCallId: 'tan-bash-shell' }),
+   expect.objectContaining({ toolName: 'bash', input: { command: mountedCommand }, toolCallId: 'tan-bash-mounted' }),
+   expect.objectContaining({ toolName: 'lsp', input: { action: 'status' } }),
+  ]);
+  expect(harness.requests[1]?.messages.at(-1)?.content).toContain('Host policy refused Bash');
+  expect(harness.requests[2]?.messages.at(-1)?.content).toContain('Host policy refused the tool operation');
+ } finally {
+  await harness.close();
+ }
+}, 30000);
+
 test('autonomous commands /loop, /omfg, /cleanse, /tan, /advisor and loop.stop resolve properly', async () => {
  const ttsrJson = JSON.stringify({
   name: 'no-any',

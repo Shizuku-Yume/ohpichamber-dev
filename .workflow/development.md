@@ -25,7 +25,9 @@ intact. Independent workflow and security reviewers could not be spawned.
 PR review found that native Task and Vibe children did not receive the Host
 Bash authorizer. Fresh and restored children now inherit it; a loopback
 Task child test checks denial of Bash and separate authorization of a
-Bash-mounted tool.
+Bash-mounted tool. The independently constructed `/tan` clone also lacked
+the Host Bash guard on 19.0. It now receives both the Bash authorizer and
+the tool observer. A loopback `/tan` test verifies both checks.
 
 Custom-provider model projection now inherits native reasoning levels and budgets
 when configured options are empty, while explicit non-empty choices win. Worker
