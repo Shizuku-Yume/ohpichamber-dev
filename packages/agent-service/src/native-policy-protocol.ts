@@ -4,7 +4,7 @@ import { EntityIdSchema, JsonObjectSchema, JsonValueSchema, ProblemCodeSchema, M
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
 /** OMP internal URL schemes the Host passes to the SDK instead of resolving. */
-export const OMP_INTERNAL_URL_SCHEMES = ['agent', 'history', 'local', 'proc', 'skill', 'xd', 'mcp', 'omp', 'issue', 'pr'] as const;
+export const OMP_INTERNAL_URL_SCHEMES = ['agent', 'history', 'local', 'proc', 'skill', 'help', 'mcp', 'omp', 'issue', 'pr'] as const;
 const OMP_INTERNAL_URL_SCHEME_SET: Record<string, true> = Object.fromEntries(OMP_INTERNAL_URL_SCHEMES.map(scheme => [scheme, true]));
 const OmpInternalUrlSchema = z.string().min(1).refine((value) => {
   if (value.includes('\0')) return false;

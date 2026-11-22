@@ -222,8 +222,8 @@ export function createHostToolController({
       const currentEnabled = typeof boundSession.getEnabledToolNames === 'function'
         ? boundSession.getEnabledToolNames()
         : boundSession.getActiveToolNames();
-      const currentMounted = typeof boundSession.getMountedXdevToolNames === 'function'
-        ? boundSession.getMountedXdevToolNames()
+      const currentMounted = typeof boundSession.getMountedToolCommandNames === 'function'
+        ? boundSession.getMountedToolCommandNames()
         : [];
       const nextEnabled = enabled
         ? (currentEnabled.includes(tool) ? currentEnabled : [...currentEnabled, tool])

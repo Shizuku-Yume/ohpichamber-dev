@@ -74,7 +74,8 @@ test('the authenticated session stream delivers a replayed backlog in order acro
     const sessions: unknown = Object.getOwnPropertyDescriptor(service, 'sessions')?.value;
     if (!(sessions instanceof SessionRegistry)) throw new Error('AgentService did not expose a SessionRegistry');
     const journal = sessions.journal(rootSessionId);
-    const cursor = `${journal.runtime().epoch}:0`;
+    const { epoch, headSequence } = journal.runtime();
+    const cursor = `${epoch}:${headSequence}`;
     const events = journal.append(Array.from({ length: 1000 }, (_, index) => ({
       timestamp: 2,
       event: { type: 'tool.started' as const, toolCallId: `tool${index}`, toolName: 'bash', input: { arguments: ['x'.repeat(1024)] } },

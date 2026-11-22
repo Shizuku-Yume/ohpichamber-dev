@@ -58,7 +58,7 @@ test('resolveAgentRuntime validates platform manifest and required files', () =>
 test('desktop resolves an installed OMP SDK only when it matches the shipped SDK', { skip: process.platform === 'win32' }, () => {
   const fixture = createMockRuntimeFixture();
   const sdk = '@oh-my-pi/pi-coding-agent';
-  const patchedFiles = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/tools/bash.ts'];
+  const patchedFiles = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts', 'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts', 'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts'];
   const writeSdk = (root, version, unpatchedFile) => {
     fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));
@@ -74,33 +74,33 @@ test('desktop resolves an installed OMP SDK only when it matches the shipped SDK
   try {
     const manifestPath = path.join(fixture.runtimeDir, 'manifest.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    manifest.packages = [{ name: sdk, version: '19.0.0' }];
+    manifest.packages = [{ name: sdk, version: '19.1.0' }];
     fs.writeFileSync(manifestPath, JSON.stringify(manifest));
-    writeSdk(path.join(fixture.runtimeDir, 'service', 'node_modules', sdk), '19.0.0');
+    writeSdk(path.join(fixture.runtimeDir, 'service', 'node_modules', sdk), '19.1.0');
     const localSdk = path.join(fixture.root, 'global', 'node_modules', sdk);
     const bin = path.join(fixture.root, 'bin');
     const localServiceDir = path.join(fixture.root, 'overlay');
     fs.mkdirSync(bin);
-    fs.symlinkSync(writeSdk(localSdk, '19.0.0'), path.join(bin, 'omp'));
+    fs.symlinkSync(writeSdk(localSdk, '19.1.0'), path.join(bin, 'omp'));
     const options = { localServiceDir, home: fixture.root, env: { PATH: bin } };
     const selected = resolveAgentRuntime(fixture.root, options);
     assert.equal(selected.source, 'system');
-    assert.equal(selected.ompVersion, '19.0.0');
+    assert.equal(selected.ompVersion, '19.1.0');
     assert.equal(selected.entrypoint, path.join(localServiceDir, 'dist', 'index.js'));
     assert.equal(fs.realpathSync(path.join(localServiceDir, 'node_modules', sdk)), fs.realpathSync(localSdk));
 
     writeSdk(localSdk, '20.0.0');
     const fallback = resolveAgentRuntime(fixture.root, options);
     assert.equal(fallback.source, 'bundled');
-    assert.equal(fallback.ompVersion, '19.0.0');
+    assert.equal(fallback.ompVersion, '19.1.0');
     assert.equal(fallback.entrypoint, fixture.entrypoint);
 
     for (const file of patchedFiles) {
-      writeSdk(localSdk, '19.0.0', file);
+      writeSdk(localSdk, '19.1.0', file);
       assert.equal(resolveAgentRuntime(fixture.root, options).entrypoint, fixture.entrypoint, file);
     }
 
-    writeSdk(localSdk, '19.0.0');
+    writeSdk(localSdk, '19.1.0');
     fs.writeFileSync(fixture.bunPath, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
     assert.equal(resolveAgentRuntime(fixture.root, options).entrypoint, fixture.entrypoint);
     assert.equal(fs.existsSync(localServiceDir), false);
@@ -115,8 +115,8 @@ test('Windows local SDK probes allow cold imports and preserve SDK rejection rea
   const bin = path.join(fixture.root, 'bin');
   const localSdk = path.join(bin, 'node_modules', sdk);
   const overlay = path.join(fixture.root, 'overlay');
-  const files = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/tools/bash.ts'];
-  const writeSdk = (directory, version = '19.0.0') => {
+  const files = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts', 'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts', 'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts'];
+  const writeSdk = (directory, version = '19.1.0') => {
     fs.mkdirSync(path.join(directory, 'dist'), { recursive: true });
     fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));
     fs.writeFileSync(path.join(directory, 'dist', 'cli.js'), '');
@@ -139,7 +139,7 @@ test('Windows local SDK probes allow cold imports and preserve SDK rejection rea
   try {
     const manifestPath = path.join(fixture.runtimeDir, 'manifest.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    manifest.packages = [{ name: sdk, version: '19.0.0' }];
+    manifest.packages = [{ name: sdk, version: '19.1.0' }];
     fs.writeFileSync(manifestPath, JSON.stringify(manifest));
     writeSdk(path.join(fixture.runtimeDir, 'service', 'node_modules', sdk));
     writeSdk(localSdk);
@@ -165,7 +165,7 @@ test('Windows local SDK probes allow cold imports and preserve SDK rejection rea
     writeSdk(localSdk, '20.0.0');
     assert.equal(resolveAgentRuntime(fixture.root, options).reason, 'LOCAL_SDK_VERSION_MISMATCH');
     writeSdk(localSdk);
-    fs.writeFileSync(path.join(localSdk, 'package.json'), JSON.stringify({ name: sdk, version: '19.0.0', bin: { omp: 'other.js' } }));
+    fs.writeFileSync(path.join(localSdk, 'package.json'), JSON.stringify({ name: sdk, version: '19.1.0', bin: { omp: 'other.js' } }));
     assert.equal(resolveAgentRuntime(fixture.root, options).reason, 'LOCAL_SDK_LAYOUT_MISMATCH');
     assert.equal(probes, beforeMismatch);
     const empty = resolveAgentRuntime(fixture.root, { ...options, env: {} });
@@ -344,7 +344,7 @@ test('probes each manifest package slot rather than its top-level namesake', { s
 case "$*" in
   *-e*) echo "__COMPAT_OK__" ;;
   *)
-    if [ "$BUN_BE_BUN" = "1" ]; then echo "1.4.4"; else echo "omp/19.0.0"; fi
+    if [ "$BUN_BE_BUN" = "1" ]; then echo "1.4.4"; else echo "omp/19.1.0"; fi
     ;;
 esac
 `, { mode: 0o755 });

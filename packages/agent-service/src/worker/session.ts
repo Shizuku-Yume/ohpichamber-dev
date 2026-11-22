@@ -64,14 +64,13 @@ import { consumePrewarmedNativeRuntime, nativeExtensionRoots, nativeModelsContex
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import { NativeApprovalRequired, type WorkerAuthorize } from './policy.ts';
 import { createHostToolController, normalizeHostToolEnablement, HOST_TOOL_DESCRIPTIONS, type HostToolController, type HostToolName } from './host-tool.ts';
-import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { DEFERRED_TITLE_SYSTEM_PROMPT, deferredTitleContext, firstUserMessageText, generateSelectedModelTitle } from './auto-title.ts';
 import { cfgTitleRefreshOnReplan } from '@oh-my-pi/pi-coding-agent/utils/title-settings';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
-import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
+import { createNativeBashAuthorizer } from './native-bash-policy.ts';
 import { resolveDeclaredTier } from './tool-tier.ts';
 import { NativePermissionBridge } from './native-permission-bridge.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
@@ -261,7 +260,7 @@ export class WorkerSession {
     );
     this.projection = new WorkerProjection(session.sessionManager, this._sessionId, [], () => session.getTodoPhases(), sanitizeProviderError);
     this.defaultToolNames = session.getActiveToolNames();
-    this.defaultMountedNames = session.getMountedXdevToolNames();
+    this.defaultMountedNames = session.getMountedToolCommandNames();
     this.defaultRegisteredNames = session.getAllToolNames();
     this.btw = new RpcBtwController(session, frame => {
       if (frame.type === 'btw_delta') this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'btw.delta', recordId: frame.recordId, delta: frame.delta } }]);
@@ -515,8 +514,9 @@ export class WorkerSession {
         if (key !== null && authorizedProviderUses.has(key)) return;
         await capturePolicy?.();
         const model = session?.model;
+        const editMode = runtime.effectiveEditMode(model ? formatModelString(model) : undefined);
         const nativeContext: NativePolicyContext = {
-          editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined),
+          editMode: editMode === 'magic' ? 'none' : editMode,
           declaredTier: resolveDeclaredTier(session, toolName, toolInput),
         };
         if (model) {
@@ -530,8 +530,12 @@ export class WorkerSession {
       }
       await capturePolicy?.();
       const model = session?.model;
+      const editMode = runtime.effectiveEditMode(model ? formatModelString(model) : undefined);
+      if (toolName === 'edit' && editMode === 'magic') {
+        throw new ProjectionError(403, 'UNAUTHORIZED', 'Magic edit mode is not supported');
+      }
       const nativeContext: NativePolicyContext = {
-        editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined),
+        editMode: editMode === 'magic' ? 'none' : editMode,
         declaredTier: resolveDeclaredTier(session, toolName, toolInput),
       };
       if (model) {
@@ -558,13 +562,6 @@ export class WorkerSession {
         // tool grant. Host authorization already owns web-search policy (including
         // enterprise refusal), so route exactly this SDK name to that capability.
         // Every other tool keeps the descriptor/approval-aware generic path.
-        // A mounted tool device (`xd://<tool>`) is a call into an extension
-        // tool, not a file read or write: the device enforces its own policy
-        // and its inner call is authorized by the capability owner, so the
-        // generic path/command descriptor would wrongly refuse it.
-        const internalDevice = (event.toolName === 'read' || event.toolName === 'write')
-          && isSingleDevicePath(event.input?.path);
-        if (internalDevice) return;
         if (event.toolName === 'web_search') {
           try { await authorize({ type: 'web-search' }); }
           catch (error) {
@@ -697,11 +694,12 @@ export class WorkerSession {
         cacheWarming: 'idle',
         enableMCP: mcp !== undefined, mcpManager: mcp, disableExtensionDiscovery: true,
         tuiTranscript: true,
-        hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({
-          interaction, approval: bashPolicy.approval,
+        hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, hostToolsController.extension],
+        authorizeBashExecution: createNativeBashAuthorizer({
+          interaction,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
           nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
-        }), hostToolsController.extension],
+        }),
         extensionRoots: () => nativeExtensionRoots(settings, pluginExtensionPaths),
         getApiKey: async model => {
           await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
@@ -1464,7 +1462,7 @@ export class WorkerSession {
       this.planReviewTask = this.continuePlanReview(response, review, revision).catch(() => { if (!this.closed) this.fail(); }).finally(() => { this.reviewingPlan = false; });
     });
     this.planRevision = revision;
-    // Complete xd://propose without waiting for human input: the planning run
+    // Complete propose without waiting for human input: the planning run
     // must settle before an origin:plan run can own the next execution turn.
     return result;
   }
@@ -2062,7 +2060,7 @@ export class WorkerSession {
               model: this.session.model,
               systemPrompt: [...this.session.systemPrompt],
               toolNames: this.session.getEnabledToolNames(),
-              mountedToolNames: this.session.getMountedXdevToolNames(),
+              mountedToolNames: this.session.getMountedToolCommandNames(),
               modelRegistry: this.session.modelRegistry,
               authStorage: this.authStorage,
               settings: this.session.settings,

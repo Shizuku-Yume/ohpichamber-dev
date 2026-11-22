@@ -8,8 +8,11 @@ import { detectSystemOmpRuntime, findSystemOmpCandidates } from 'ohpichamber/ser
 import { withoutInjectedEnv } from 'ohpichamber/server/lib/injected-env.js';
 
 const CODING_AGENT = '@oh-my-pi/pi-coding-agent';
-// Same-version registry builds lack the app's offline model and shell observation patches.
-const PATCHED_SDK_FILES = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/tools/bash.ts'];
+const PATCHED_SDK_FILES = [
+  'src/sdk.ts', 'src/async/job-manager.ts', 'src/config/settings.ts', 'src/exec/tool-command-host.ts',
+  'src/mcp/host/endpoint.ts', 'src/mcp/host/peers.ts', 'src/mcp/host/store.ts', 'src/mcp/link.ts',
+  'src/mcp/protocol.ts', 'src/tools/bash.ts', 'src/tools/browser/relay/native-host-manifest.ts', 'src/tools/index.ts',
+];
 const readManifest = (directory) => JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
 
 // Bun must read physical files, never Electron's virtual ASAR filesystem.
