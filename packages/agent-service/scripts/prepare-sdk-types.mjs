@@ -10,7 +10,7 @@ const outputDirectory = join(packageDirectory, 'node_modules/.cache/omp-types');
 const rootSchema = z.object({ overrides: z.record(z.string(), z.string()) });
 const exportSchema = z.union([
   z.string().transform(types => ({ types })),
-  z.object({ types: z.string().optional() }),
+  z.object({ types: z.string().optional(), import: z.string().optional() }),
 ]);
 const packageSchema = z.object({
   name: z.string(), types: z.string().optional(),
@@ -64,12 +64,17 @@ function configPath(from, to) {
 }
 
 const roots = installations.flatMap(({ directory }) => packageSources(directory));
+function sourceType(entry) {
+  const candidates = [entry.import, entry.types];
+  return candidates.find(path => path?.endsWith('.ts') && !path.endsWith('.d.ts'));
+}
 const sourcePaths = {};
 for (const { name, directory, manifest } of installations) {
   const exports = manifest.exports ?? { '.': { types: manifest.types } };
   for (const [key, entry] of Object.entries(exports)) {
-    if (!entry.types?.endsWith('.ts')) continue;
-    sourcePaths[key === '.' ? name : `${name}/${key.slice(2)}`] = [join(directory, entry.types)];
+    const source = sourceType(entry);
+    if (!source) continue;
+    sourcePaths[key === '.' ? name : `${name}/${key.slice(2)}`] = [join(directory, source)];
   }
 }
 const emitPaths = Object.fromEntries(
@@ -105,9 +110,10 @@ const paths = {};
 for (const { name, directory, manifest } of installations) {
   const exports = manifest.exports ?? { '.': { types: manifest.types } };
   for (const [key, entry] of Object.entries(exports)) {
-    if (!entry.types?.endsWith('.ts')) continue;
+    const source = sourceType(entry);
+    if (!source) continue;
     const moduleName = key === '.' ? name : `${name}/${key.slice(2)}`;
-    const emittedPath = join(outputDirectory, relative(sourceRoot, directory), entry.types.replace(/\.ts$/, '.d.ts'));
+    const emittedPath = join(outputDirectory, relative(sourceRoot, directory), source.replace(/\.ts$/, '.d.ts'));
     paths[moduleName] = [configPath(outputDirectory, emittedPath)];
   }
 }

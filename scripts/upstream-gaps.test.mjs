@@ -369,6 +369,22 @@ test('deleting a create*Runtime call fails even while its import remains', () =>
   assert.match(result.output, /\[runtime-constructor\] createAutoReviewRuntime/);
 });
 
+test('a constructor in the staged Electron runtime is not application wiring', () => {
+  const fixture = makeFixture(baseFiles(), [
+    'runtime-constructor\tcreateAutoReviewRuntime\t## 2026-01-01 - Keep the tracker surface\tThe fork does not instantiate this runtime.',
+  ]);
+  fixture.remove('packages/web/server/lib/auto-review/runtime.js');
+  fixture.fork('packages/web/server/index.js', INDEX
+    .replace(/^import \{ createAutoReviewRuntime \} .*\n/m, '')
+    .replace(/const autoReview = createAutoReviewRuntime\(\{ enabled: true \}\);\n/, ''));
+  for (const directory of ['agent-runtime', 'agent-runtime.staging']) {
+    fixture.fork(`packages/electron/resources/${directory}/packages/sdk/src/main.ts`, 'createAutoReviewRuntime({ enabled: true });\n');
+  }
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /PASSED/);
+});
+
 test('an imported but never-called route function is not coverage', () => {
   const fixture = makeFixture(baseFiles());
   fixture.fork('packages/web/server/index.js', INDEX.replace("import { createAutoReviewRuntime }", "import { createAutoReviewRuntime, registerNoteRoutes }"));

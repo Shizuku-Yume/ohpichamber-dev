@@ -32,7 +32,7 @@ test('every TUI-visible OMP setting has a placement and no hand-kept id list rem
   expect((contract as Record<string, unknown>).OMP_SETTING_IDS).toBeUndefined();
   const all = orderedSettings();
   const tuiVisible = all.filter(s => s.ui?.tab !== undefined);
-  expect(tuiVisible.length).toBe(477);
+  expect(tuiVisible.length).toBe(482);
 
   for (const setting of tuiVisible) {
     const placement = OMP_SETTING_PLACEMENTS[setting.id];
@@ -245,7 +245,7 @@ test('a value no generic row can draw is owned by the control that writes it, or
   // writes them or stay in config.yml; none sits on a page as a hollow row.
   expect(OMP_SETTING_PLACEMENTS['retry.fallbackChains']).toEqual({ type: 'owned-by', owner: 'sessions.fallback-model' });
   expect(OMP_SETTING_EXPOSED_IDS.has('retry.fallbackChains')).toBe(true);
-  for (const id of ['tools.approval', 'tools.restrictedFolders', 'compaction.methodOrder', 'ttsr.disabledRules', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools', 'task.perCallModelAllow', 'goal.continuationModes', 'tools.xdevInlineDevices']) {
+  for (const id of ['tools.approval', 'tools.restrictedFolders', 'compaction.methodOrder', 'ttsr.disabledRules', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools', 'task.perCallModelAllow', 'goal.continuationModes', 'tools.commandInline']) {
     expect(OMP_SETTING_PLACEMENTS[id], id).toEqual({ type: 'config-only' });
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
@@ -338,6 +338,7 @@ test('every page and engine option has a label and, where OMP describes it, a de
         : (setting.enumValues ?? []).map((value) => ({ value: String(value) }));
       for (const option of options) {
         const value = String(option.value).trim();
+        if (id === 'edit.mode' && value === 'magic') continue;
         // A number row's `default` sentinel uses the shared Default label,
         // unless OMP attaches an option description rendered under the label;
         // keeping both keys preserves the label+description key pairing.

@@ -12,6 +12,7 @@ import { cfgDisabledExtensions, cfgExtensions, cfgSkills } from '@oh-my-pi/pi-co
 import type { LoadSkillsOptions } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
 import { NativeModels, type BoundProviderCredentialResolution, type NativeCatalogModel, type NativeModelsContext } from './catalog-models.ts';
 import { resolveEditMode } from '@oh-my-pi/pi-coding-agent/utils/edit-mode';
+import { cfgMcpShared } from '@oh-my-pi/pi-coding-agent/mcp/settings';
 import type { NativePolicyContext } from '../native-policy-protocol.ts';
 
 type BoundCredentialResolver = (
@@ -83,7 +84,7 @@ export interface NativeWorkerRuntime {
   settings: Settings;
   modelsPath: string;
   bindSessionId: (currentNativeSessionId: () => string) => void;
-  effectiveEditMode: (activeModel?: string) => NativePolicyContext['editMode'];
+  effectiveEditMode: (activeModel?: string) => NativePolicyContext['editMode'] | 'magic';
   sanitizeProviderError: (text: string) => string;
 }
 
@@ -101,6 +102,7 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
   }
   const { modelsPath } = syncNativeConfigPair(input.agentDirectory);
   const settings = await Settings.init({ cwd: input.cwd, agentDir: input.agentDirectory });
+  cfgMcpShared.override(settings, false);
   const authStorage = await discoverAuthStorage(input.agentDirectory, { cwd: input.cwd, settings });
   try {
     let currentNativeSessionId = () => '';

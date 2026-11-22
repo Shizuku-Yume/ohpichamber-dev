@@ -4,6 +4,31 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The [OMP 19.1 integration](specs/omp19-1-integration.md) pins 19.1.0 at
+`a7135b8f`. The worker uses tool commands behind Host authorization, retains
+worker-local MCP (including the upstream legacy-negotiation fallback), migrates
+explicit tool-command preferences, and refuses magic edit mode. A real
+Agent Service/worker smoke with loopback fixtures verified Canonical plan
+proposal and resolution, refusal of a mounted tool through Host policy, MCP
+connection and tool publication, and shell output retrieval. No live provider
+was used. Agent Service types, the focused UI/Host tests, and Linux Electron
+runtime staging and readiness were verified. The settings UI was not
+visually checked.
+
+The uncapped Agent Service suite passed with 703 passes and 12 skips. The
+socket replay test now starts from the journal's current cursor so session
+startup events do not use up its replay window. Root type-check passed with
+the Electron runtime staged: the upstream wiring audit now excludes staged
+SDK code from application constructor detection and leaves the allowlist
+intact. Independent workflow and security reviewers could not be spawned.
+
+PR review found that native Task and Vibe children did not receive the Host
+Bash authorizer. Fresh and restored children now inherit it; a loopback
+Task child test checks denial of Bash and separate authorization of a
+Bash-mounted tool. The independently constructed `/tan` clone also lacked
+the Host Bash guard on 19.0. It now receives both the Bash authorizer and
+the tool observer. A loopback `/tan` test verifies both checks.
+
 Custom-provider model projection now inherits native reasoning levels and budgets
 when configured options are empty, while explicit non-empty choices win. Worker
 projection regressions and the UI form contract are covered. On Windows the

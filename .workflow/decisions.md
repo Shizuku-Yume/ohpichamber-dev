@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-22 - Keep OMP 19.1 commands and MCP behind the Host boundary
+
+- **Decided:** retain OMP's native Bash command transport while authorizing both Bash and the dispatched tool, and keep MCP hosts local to the worker. Keep magic edit mode out of the Canonical settings and authorization surface.
+- **Instead of:** replacing the built-in Bash tool, using OMP's shared MCP daemon, or exposing every upstream edit mode.
+- **Because:** replacing Bash disables tool mounts; daemon sharing changes the owner of session-scoped connections and credentials; magic edits need an explicit authorization model before exposure.
+- **Mine:** yes (19.1 upgrade scope).
+- **Revisit when:** upstream supplies equivalent authorization hooks, or the Host boundary can enforce equivalent isolation for shared MCP and magic edits.
+
 ## 2026-11-22 - Keep mobile pairing confirmation above address sheets
 
 - **Decided:** expose the existing shared dialog layer and backdrop overrides through `useConfirmDialog`, and raise only mobile pairing confirmation to the app-level confirmation layer used by shared trust prompts.
