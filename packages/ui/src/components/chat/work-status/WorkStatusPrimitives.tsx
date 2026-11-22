@@ -129,6 +129,7 @@ type RowProps = {
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   ariaLabel?: string;
   tooltip?: React.ReactNode;
+  wrapLabel?: boolean;
   className?: string;
 };
 
@@ -146,6 +147,7 @@ export const WorkStatusRow: React.FC<RowProps> = ({
   onClick,
   ariaLabel,
   tooltip,
+  wrapLabel = false,
   className,
 }) => {
   const labelId = React.useId();
@@ -158,7 +160,7 @@ export const WorkStatusRow: React.FC<RowProps> = ({
           style={iconColor ? { color: iconColor } : undefined}
         />
       ) : null)}
-      <span id={labelId} className={cn('min-w-0 flex-1 truncate text-[13px]', muted && 'text-muted-foreground')}>
+      <span id={labelId} className={cn('min-w-0 flex-1 text-[13px]', wrapLabel ? 'whitespace-normal [overflow-wrap:anywhere]' : 'truncate', muted && 'text-muted-foreground')}>
         {label}
       </span>
       {value !== undefined && value !== null ? (
@@ -168,7 +170,8 @@ export const WorkStatusRow: React.FC<RowProps> = ({
   );
 
   const shared = cn(
-    'flex h-7 w-full items-center gap-2 rounded-md px-1 text-left text-muted-foreground',
+    'flex w-full gap-2 rounded-md px-1 text-left text-muted-foreground',
+    wrapLabel ? 'min-h-7 items-start py-1' : 'h-7 items-center',
     className,
   );
 

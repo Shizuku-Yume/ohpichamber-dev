@@ -83,7 +83,8 @@ own data fetching and reconciliation; the layout's right slot owns column width.
   edge, because label-column indentation makes them look detached from the bar.
 - Task ordering preserves the agent's order within each state rank and retains
   completed tasks as a session record. Active work leads because it answers what
-  is happening now.
+  is happening now. Phone task labels wrap, including unbroken identifiers, rather
+  than relying on a hover tooltip; desktop readouts retain their compact rows.
 - Confirmed absence of quota providers creates no ongoing refresh demand after
   discovery. Credential changes invalidate that absence.
 - Whole-session token totals remain unavailable when counters are stripped from

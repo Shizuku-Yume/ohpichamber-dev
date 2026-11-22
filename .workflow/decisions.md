@@ -1984,6 +1984,14 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Mine:** yes (requested fix and drift classification)
 - **Revisit when:** restore preflight no longer reconstructs a comparison checkout or upstream preserves relative symlinks itself.
 
+## 2026-11-22 - Keep mobile todo and tool readouts readable
+
+- **Decided:** keep inline tool disclosures inside their reserved icon boxes while the containing row supplies the touch target; wrap phase names and task identifiers in expanded checklists, and wrap phone Work status task labels without hover tooltips. Count completed and abandoned tasks as closed in tool summaries, matching the checklist and Work status.
+- **Instead of:** expanding absolute-positioned icon buttons to the global mobile minimum, clipping long todo content, or reporting different progress for the same snapshot.
+- **Because:** the shared phone UI must expose the complete task and consistent progress in hosted mobile and Capacitor without pointer hover. Desktop Work status keeps its compact row layout.
+- **Mine:** yes (requested mobile display fixes)
+- **Revisit when:** upstream provides equivalent mobile readouts or the shared todo presentation changes.
+
 ## 2026-11-21 - Match deleted Windows worktree paths from Archive
 
 - **Decided:** match separator, drive-letter case, and trailing-separator variants when looking up an already authorized deleted Windows checkout.
