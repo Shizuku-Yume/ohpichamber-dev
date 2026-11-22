@@ -218,6 +218,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
   const currentRef = useRef(true)
   const pipelineRef = useRef<EventPipeline | null>(null)
   const parkStreamRef = useRef<((target: SessionMessageTarget) => void) | null>(null)
+  const reconcileOffscreenRef = useRef<(() => void) | null>(null)
+  // One tab per runtime holds the origin's off-screen live stream slot (Web Locks);
+  // without Web Locks each tab keeps its own slot.
+  const offscreenSlotRef = useRef(typeof navigator === "undefined" || !navigator.locks)
   const storesRef = useRef<ReturnType<typeof createSyncStores> | null>(null)
   if (!storesRef.current) {
     storesRef.current = takePrefetchedSyncStores(client, props.runtimeKey) ?? createSyncStores(client, props.runtimeKey)
@@ -243,15 +247,42 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     }
     return false
   }, [childStores])
+  const isLiveSession = useCallback((target: SessionMessageTarget) => {
+    const status = childStores.getChild(target.directory)?.getState().session_status[target.sessionId]
+    return status !== undefined && LIVE_STREAM_STATUSES.has(status)
+  }, [childStores])
+  /**
+   * The single off-screen live session this tab streams while it holds the slot:
+   * a session waiting on the user before a running one, keeping the attached one
+   * on ties. Other off-screen live sessions update through session discovery.
+   */
+  const offscreenStreamChoice = useCallback((): SessionMessageTarget | null => {
+    if (!offscreenSlotRef.current) return null
+    let choice: SessionMessageTarget | null = null
+    let best = 0
+    for (const [directory, store] of childStores.children) {
+      const { session_status: statuses, snapshot } = store.getState()
+      for (const sessionId in statuses) {
+        const status = statuses[sessionId]
+        if (!LIVE_STREAM_STATUSES.has(status) || !snapshot[sessionId]) continue
+        const target = { directory, sessionId }
+        if (isViewedSession(target)) continue
+        const rank = (status === "running" ? 1 : 3) + (pipelineRef.current?.has(target) ? 1 : 0)
+        if (rank > best) { best = rank; choice = target }
+      }
+    }
+    return choice
+  }, [childStores])
   const wantsStream = useCallback((target: SessionMessageTarget, runtimeStatus?: SessionRuntimeStatus) => {
-    if (isViewedSession(target) || (runtimeStatus !== undefined && LIVE_STREAM_STATUSES.has(runtimeStatus))) return true
+    if (isViewedSession(target)) return true
     if ((streamRequests.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now()) return true
     // BTW answers stream only as transient events that a resumed stream cannot replay.
     const btw = useBtwStore.getState().byParent[target.sessionId]
     if (btw?.ephemeralStatus === "running" || btw?.pendingSend) return true
-    const status = childStores.getChild(target.directory)?.getState().session_status[target.sessionId]
-    return status !== undefined && LIVE_STREAM_STATUSES.has(status)
-  }, [childStores])
+    if (!(runtimeStatus !== undefined ? LIVE_STREAM_STATUSES.has(runtimeStatus) : isLiveSession(target))) return false
+    const choice = offscreenStreamChoice()
+    return choice?.directory === target.directory && choice.sessionId === target.sessionId
+  }, [isLiveSession, offscreenStreamChoice])
   const onSnapshot = useCallback((target: SessionMessageTarget, snapshot: SessionSnapshot, recoveryPrevious?: SessionSnapshot) => {
     if (!isCurrent()) return
     const store = childStores.getChild(target.directory)
@@ -381,6 +412,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
           }
         }
         if (!isViewedSession(target)) parkStreamRef.current?.(target)
+        reconcileOffscreenRef.current?.()
         return contiguous
       },
       recover: async (target) => {
@@ -421,7 +453,15 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     // (suggestions) still arrive and expired send requests release.
     const parkStream = (target: SessionMessageTarget) => {
       const streamKey = `${target.directory}\n${target.sessionId}`
-      if (!pipeline.has(target) || parkTimers.has(streamKey)) return
+      if (!pipeline.has(target)) return
+      // A live session outside the off-screen slot has no post-run events to wait for.
+      if (isLiveSession(target) && !wantsStream(target)) {
+        clearTimeout(parkTimers.get(streamKey))
+        parkTimers.delete(streamKey)
+        pipeline.detach(target)
+        return
+      }
+      if (parkTimers.has(streamKey)) return
       parkTimers.set(streamKey, setTimeout(() => {
         parkTimers.delete(streamKey)
         if (!isCurrent() || !pipeline.has(target)) return
@@ -430,22 +470,41 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       }, STREAM_PARK_DELAY_MS))
     }
     parkStreamRef.current = parkStream
+    const resumeStream = (target: SessionMessageTarget) => {
+      const snapshot = childStores.getChild(target.directory)?.getState().snapshot[target.sessionId]
+      if (!snapshot || pipeline.has(target) || isKnownChildSession(target.directory, target.sessionId)) return
+      const { epoch, headSequence, runtimeStatus } = snapshot.session
+      pipeline.attach(target, { cursor: `${epoch}:${headSequence}`, session: { sessionId: target.sessionId, runtimeStatus } })
+    }
+    const reconcileOffscreen = () => {
+      if (!isCurrent()) return
+      const choice = offscreenStreamChoice()
+      if (choice) resumeStream(choice)
+    }
+    reconcileOffscreenRef.current = reconcileOffscreen
     const viewedSessionChange = (target: SessionMessageTarget) => {
       if (!isCurrent()) return
       const streamKey = `${target.directory}\n${target.sessionId}`
       if (isViewedSession(target)) {
         clearTimeout(parkTimers.get(streamKey))
         parkTimers.delete(streamKey)
-        const snapshot = childStores.getChild(target.directory)?.getState().snapshot[target.sessionId]
-        if (!snapshot || pipeline.has(target) || isKnownChildSession(target.directory, target.sessionId)) return
-        const { epoch, headSequence, runtimeStatus } = snapshot.session
-        pipeline.attach(target, { cursor: `${epoch}:${headSequence}`, session: { sessionId: target.sessionId, runtimeStatus } })
+        resumeStream(target)
         return
       }
       // Leaving an idle chat frees its connection at once; rapid switching
       // must not hold one stream per chat visited.
       if (wantsStream(target)) parkStream(target)
       else if (!parkTimers.has(streamKey)) pipeline.detach(target)
+      reconcileOffscreen()
+    }
+    let releaseOffscreenSlot: (() => void) | undefined
+    if (typeof navigator !== "undefined" && navigator.locks) {
+      void navigator.locks.request(`openchamber:offscreen-session-stream:${props.runtimeKey}`, () => new Promise<void>((release) => {
+        releaseOffscreenSlot = release
+        if (!currentRef.current) { release(); return }
+        offscreenSlotRef.current = true
+        reconcileOffscreen()
+      })).catch(() => { })
     }
     onViewedSessionChange = viewedSessionChange
     const unconfigure = childStores.configure({
@@ -552,10 +611,12 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       if (pipelineRef.current === pipeline) pipelineRef.current = null
       if (onViewedSessionChange === viewedSessionChange) onViewedSessionChange = null
       if (parkStreamRef.current === parkStream) parkStreamRef.current = null
+      if (reconcileOffscreenRef.current === reconcileOffscreen) reconcileOffscreenRef.current = null
+      releaseOffscreenSlot?.()
       for (const timer of parkTimers.values()) clearTimeout(timer)
       disposalRef.current = setTimeout(() => { messageLoader.dispose(); childStores.disposeAll() }, 0)
     }
-  }, [childStores, client, isCurrent, isKnownChildSession, loadSessions, messageLoader, onSnapshot, props.runtimeKey, stores, wantsStream])
+  }, [childStores, client, isCurrent, isKnownChildSession, loadSessions, messageLoader, onSnapshot, props.runtimeKey, stores, wantsStream, offscreenStreamChoice, isLiveSession])
 
   useEffect(() => {
     const directory = currentDirectoryRef.current

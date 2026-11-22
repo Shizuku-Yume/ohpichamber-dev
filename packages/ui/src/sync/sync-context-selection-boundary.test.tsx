@@ -544,6 +544,43 @@ describe("SyncProvider native scope and selection boundaries", () => {
     }
   })
 
+  test("an off-screen live session streams only in the tab holding the origin's off-screen slot", async () => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/stream-slot"
+    const resolved = workspace(directory)
+    const live = { directory, sessionId: "slot-live-session" }
+    const client = createNativeClient()
+    const opened: { sessionId: string; cursor: string }[] = []
+    client.getSnapshot = async (id) => {
+      const snapshot = nativeSnapshot(id, [])
+      return { ...snapshot, session: { ...snapshot.session, workspaceId: resolved.workspaceId, runtimeStatus: "awaiting_approval" } }
+    }
+    client.subscribeSessionEvents = (id, cursor) => { opened.push({ sessionId: id, cursor }); return () => {} }
+    let grant: (() => Promise<void>) | undefined
+    let released = false
+    const locks = { request: (_name: string, callback: () => Promise<void>) => { grant = callback; return new Promise<void>(() => {}) } }
+    Object.defineProperty(navigator, "locks", { value: locks, configurable: true })
+    let runtime: ReturnType<typeof useSyncRuntime> | undefined
+    const Probe = () => { runtime = useSyncRuntime(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!runtime) throw new Error("Sync runtime was not mounted")
+      const store = runtime.childStores.ensureChild(directory, { bootstrap: false })
+      store.setState({ workspace: resolved, project: resolved.projectId })
+      await act(async () => { await runtime!.messageLoader.ensure(live) })
+      expect(opened).toEqual([])
+      await act(async () => { void grant!().then(() => { released = true }) })
+      expect(opened).toEqual([{ sessionId: live.sessionId, cursor: "epoch-a:4" }])
+      await act(async () => root.unmount())
+      await act(async () => { await Promise.resolve() })
+      expect(released).toBe(true)
+    } finally {
+      delete (navigator as { locks?: unknown }).locks
+      dom.restore()
+    }
+  })
+
   test("a child session never attaches events or reads the root-only snapshot route", async () => {
     const dom = installHookTestDom()
     const root = createRoot(dom.container)

@@ -2011,7 +2011,7 @@ Later successful listings also retire stale failures: global head polls replace 
 
 ## 2026-11-22 - Park idle off-screen session streams
 
-- **Decided:** keep a session's SSE stream only while it is viewed, live (`running`, `awaiting_approval`, `awaiting_input`) or just sent to; park idle off-screen sessions and resume from the snapshot head when viewed again.
+- **Decided:** keep a session's SSE stream only while it is viewed or just sent to, plus one off-screen live session per origin (the tab holding a Web Lock streams it, preferring one waiting on the user); park the rest, update them through session discovery, and resume from the snapshot head when viewed again.
 - **Instead of:** keeping a stream for every cached transcript until cache eviction (up to 20 per tab for 5 minutes).
 - **Because:** browsers allow six HTTP/1.1 connections per origin across all tabs; two production tabs filled them with streams and stalled every request, including approval responses.
 - **Mine:** yes (requested fix)
