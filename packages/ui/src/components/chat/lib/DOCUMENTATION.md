@@ -40,6 +40,11 @@ remain with the OpenCode integration and sync modules.
   parts retain object identity. Turn reuse and rail memoization depend on these
   references, so normalizing into a fresh array on every publish invalidates
   otherwise unchanged rows.
+- Display normalization places a tool result immediately after its exact call
+  in the same message, preserving the call order while parallel results arrive.
+  The canonical arrays and part identities remain unchanged; orphan results
+  retain their original position. Live-tail and history preparation share this
+  normalization, so Activity segments and inline rows use the same order.
 - Running-action notes accompany user sends and record delivery for the session
   that takes the message. They announce running browser actions and later stops
   without starting another turn, so the agent can reuse an existing stack.

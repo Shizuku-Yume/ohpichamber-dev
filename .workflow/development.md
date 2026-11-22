@@ -33,7 +33,17 @@ inert closed panels without Chrome hidden-focus warnings. Browser-edge reverse
 tabbing from the first app control is normal, not failed focus restoration.
 Dead-code reports unrelated existing findings and none in the changed files.
 Overlay focus preservation is unit-covered, not browser-verified; physical-device
-keyboards, native Android/iOS and live generation remain unverified here.
+keyboards and native Android/iOS remain unverified here. A live
+`gemini-3.5-flash-lite` phone turn exercised Todo 0/3 to 3/3, Bash approval/output
+and a same-model Scout subagent; reload restored the transcript with recap 200s.
+It exposed tool rows moving into completion order as results arrived. Display
+normalization now anchors each result beside its call without changing canonical
+arrays, so both inline and Activity projections preserve call order. Focused
+normalization and live-tail regressions pass. A second real Gemini turn kept
+Todo/Bash/Task order at 320/390px through approval and completion, and after hard
+reload with two recap 200s. With two same-origin HMR tabs, one approval POST stayed
+browser-pending until the other tab closed, then returned 200 without retry;
+connection pressure is an unconfirmed follow-up, not a verified root cause.
 
 The phone UI audit reproduced overlapping tool glyphs, clipped unbroken todo
 text, inconsistent abandoned-task progress and unreadable Work status task
