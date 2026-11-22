@@ -577,6 +577,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       enableFileReferences={enableFileReferences}
       loopbackPreview
       uiBlocks={variant === 'assistant'}
+      svgFences={variant === 'assistant'}
       guestLinks={guestLinks}
     />
   );

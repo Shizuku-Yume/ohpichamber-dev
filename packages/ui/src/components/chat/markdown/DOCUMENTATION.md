@@ -171,11 +171,11 @@ The tool row is the one place that already turns terminal bytes into text (`rend
 
 OpenCode drops the output when the shell is removed and records "output is no longer available". The block keeps what it had read, and after a reload shows the status alone.
 
-# SVG fences in document previews
+# SVG fences in chat and document previews
 
 ## Ownership
 
-An `svg` fence in the Files Markdown preview draws as an image (`MarkdownSvg`). The preview opts in with `svgFences`; chat, tool output and copies keep the fence as code.
+A closed `svg` fence in an assistant reply or the Files Markdown preview draws as an image (`MarkdownSvg`). Those surfaces opt in with `svgFences`; open fences, reasoning, tool output and copies keep the fence as code.
 
 ## Invariants
 

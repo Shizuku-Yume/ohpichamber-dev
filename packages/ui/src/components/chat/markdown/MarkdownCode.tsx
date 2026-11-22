@@ -136,7 +136,7 @@ export function MarkdownCode({ children, className, node, ...props }: React.Comp
     if (purpose && !customRenderer) onExportCode?.(code, language);
   }, [purpose, customRenderer, onExportCode, code, language]);
 
-  if (language === 'svg' && presentation.svgFences && !activeSvg.test(code) && failedSvg !== code) {
+  if (language === 'svg' && presentation.svgFences && !incomplete && !activeSvg.test(code) && failedSvg !== code) {
     return (
       <MarkdownSvgFailureContext.Provider value={() => setFailedSvg(code)}>
         <defaultComponents.code {...props} node={node} className={className}>
