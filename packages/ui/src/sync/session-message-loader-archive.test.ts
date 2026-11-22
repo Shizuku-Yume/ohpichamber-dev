@@ -23,3 +23,19 @@ test("opens an archived session that archiving tombstoned before the request", a
     childStores.disposeAll()
   }
 })
+
+test("leaves a snapshot loaded through another workspace's directory idle instead of failing", async () => {
+  const childStores = new ChildStoreManager()
+  const snapshot = nativeSnapshot()
+  const loader = new SessionMessageLoader(childStores, { runtimeKey: "runtime-a", client: nativeClient({ getSnapshot: async () => snapshot }) })
+  const store = childStores.ensureChild(target.directory, { bootstrap: false })
+  try {
+    store.setState({ workspace: { ...(store.getState().workspace ?? {}), workspaceId: `${snapshot.session.workspaceId}-project-root` } as never })
+    await loader.ensure(target)
+    expect(store.getState().message[target.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "idle", error: null, resolved: false })
+  } finally {
+    loader.dispose()
+    childStores.disposeAll()
+  }
+})

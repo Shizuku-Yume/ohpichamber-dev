@@ -694,7 +694,12 @@ export class SessionMessageLoader {
         this.patchEntry(entry, { status: "idle", loadingKind: null, error: null, resolved: false, cursor: undefined, complete: false })
         return
       }
-      if (snapshot.session.sessionId !== target.sessionId || snapshot.session.workspaceId !== workspace.workspaceId || current.workspace && current.workspace.workspaceId !== workspace.workspaceId) throw new Error("Session snapshot does not belong to the requested workspace")
+      if (snapshot.session.sessionId !== target.sessionId || current.workspace && current.workspace.workspaceId !== workspace.workspaceId) throw new Error("Session snapshot does not belong to the requested workspace")
+      // A selection opened before discovery guesses its directory; the load for the owning directory follows once it is known.
+      if (snapshot.session.workspaceId !== workspace.workspaceId) {
+        this.patchEntry(entry, { status: "idle", loadingKind: null, error: null, resolved: false, cursor: undefined, complete: false })
+        return
+      }
       registerWorkspaceDirectory(workspace.workspaceId, target.directory)
       const old = current.snapshot[target.sessionId]
       if (old?.session.epoch === snapshot.session.epoch && compareCounters(snapshot.session.headSequence, old.session.headSequence) < 0) throw new Error("Session snapshot is older than the live state")
