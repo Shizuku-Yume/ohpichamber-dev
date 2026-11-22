@@ -132,6 +132,10 @@ export const createHostAgentScopeRuntime = ({
         Object.assign(errors, listed.errors);
         for (const scope of listed.items) {
           try {
+            // A chat's folder is deleted with its last session, so a folder that is gone
+            // leaves nothing to list unless an archived session still reads from it.
+            const folderRemoved = await fsPromises.lstat(scope.cwd).then(() => false, (cause) => cause?.code === 'ENOENT');
+            if (folderRemoved && !(typeof store.hasArchivedSessions === 'function' && await store.hasArchivedSessions(scope.workspaceId))) continue;
             const allowed = await authorize(scope);
             if (allowed) scopes.push(allowed);
             else errors[scope.workspaceId] = 'METADATA_READ_FAILED';

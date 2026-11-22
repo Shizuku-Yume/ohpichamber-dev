@@ -780,6 +780,29 @@ const resolveDraftWorkspace = (draftId: number, directory: string): Promise<Work
   pending.catch(() => { if (workspaceByDraftDirectory.get(key) === pending) workspaceByDraftDirectory.delete(key) })
   return pending
 }
+// The Host resolves a prepared session's scope through its folder, so the
+// discard must finish before a prepared chat folder is deleted; otherwise the
+// session row outlives its folder and inventory reads of it keep failing.
+const discardDraftPreparation = (
+  draftId: number,
+  directory: string | null | undefined,
+  pendingPrep: Promise<unknown> | undefined,
+  chatDirectory: string | null,
+): void => {
+  const discard = () => {
+    // The same per-draft resolution the open and admission used, so the
+    // discard is the last reader of a workspace already resolved.
+    const discarded = directory
+      ? resolveDraftWorkspace(draftId, directory)
+        .then((ws) => canonicalClient.discardPreparedSession({ workspaceId: ws.workspaceId }))
+        .catch(() => undefined)
+      : Promise.resolve()
+    if (chatDirectory) void discarded.then(() => deleteChatDirectory(chatDirectory)).catch(() => undefined)
+  }
+  if (pendingPrep) void pendingPrep.finally(discard).catch(() => undefined)
+  else discard()
+}
+
 const forgetDraftWorkspaces = (draftId: number): void => {
   const prefix = `${draftId}\u0000`
   for (const key of workspaceByDraftDirectory.keys()) if (key.startsWith(prefix)) workspaceByDraftDirectory.delete(key)
@@ -1536,23 +1559,14 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   closeNewSessionDraft: () => {
     const currentDraft = get().newSessionDraft
-    if (currentDraft.preparedChatDirectory) {
-      void deleteChatDirectory(currentDraft.preparedChatDirectory).catch(() => undefined)
-    }
     const pendingPrep = pendingPreparationByDraft.get(currentDraft.draftId)
     pendingPreparationByDraft.delete(currentDraft.draftId)
-    const discard = () => {
-      const dir = currentDraft.preparedChatDirectory ?? currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory
-      if (dir) {
-        // The same per-draft resolution the open and admission used, so the
-        // discard is the last reader of a workspace already resolved.
-        void resolveDraftWorkspace(currentDraft.draftId, dir)
-          .then((ws) => canonicalClient.discardPreparedSession({ workspaceId: ws.workspaceId }))
-          .catch(() => undefined)
-      }
-    }
-    if (pendingPrep) void pendingPrep.finally(discard)
-    else discard()
+    discardDraftPreparation(
+      currentDraft.draftId,
+      currentDraft.preparedChatDirectory ?? currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory,
+      pendingPrep,
+      currentDraft.preparedChatDirectory ?? null,
+    )
     // The draft is over: nothing may reuse its resolutions, and leaving them
     // would let a newer draft with a recycled path read a stale workspace.
     forgetDraftWorkspaces(currentDraft.draftId)
@@ -1601,7 +1615,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
   setNewSessionDraftTarget: (target) => {
     const previousDraft = get().newSessionDraft
     if (previousDraft.preparedChatDirectory && target.projectId !== CHAT_DRAFT_PROJECT_ID) {
-      void deleteChatDirectory(previousDraft.preparedChatDirectory).catch(() => undefined)
+      const pendingPrep = pendingPreparationByDraft.get(previousDraft.draftId)
+      pendingPreparationByDraft.delete(previousDraft.draftId)
+      discardDraftPreparation(previousDraft.draftId, previousDraft.preparedChatDirectory, pendingPrep, previousDraft.preparedChatDirectory)
     }
     let nextDirectory: string | null = null
     set((s) => {

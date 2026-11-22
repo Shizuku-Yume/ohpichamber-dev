@@ -144,6 +144,7 @@ Authentication requires a validated UI cookie (`ui-session` or signed `ui-passwo
 - `POST /prepare` accepts `{ projectId, workspaceId }` and starts background session admission and worker warmup. If an admission is already in flight or prepared for the workspace, the existing promise is returned (at most 1 prepared session per workspace).
 - `POST /sessions` checks for an existing preparation in the workspace. If preparation is in flight, `create` joins the in-flight promise and adopts the prepared session once resolved, ensuring single ownership and preventing concurrent admission 409 conflicts. If preparation rejected or does not exist, `create` falls back to normal session creation.
 - Prepared sessions are idle-reaped after 5 minutes using unreferenced timers (`timer.unref?.()`).
+- Discard resolves the scope through the workspace directory, so a client discards a prepared chat session before it deletes that chat folder. Discovery leaves out a managed chat workspace whose folder no longer exists unless it holds archived sessions, so a prepared row that outlived its folder does not fail session inventory with `METADATA_READ_FAILED`.
 - `DELETE /prepare` discards the speculative session and tears down its admitted worker when the composer draft is closed.
 - Canonical session service lifecycle `close()` clears all pending timers and discards remaining prepared sessions during host shutdown.
 
