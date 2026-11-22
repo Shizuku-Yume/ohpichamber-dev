@@ -2008,3 +2008,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** a missing checkout cannot be canonicalized on disk, and the renderer's forward-slash form must resolve to the same workspace without equating distinct directory names.
 - **Mine:** yes (requested fix)
 - **Revisit when:** Archive can open deleted worktree chats without resolving their former directory.
+
+## 2026-11-22 - Park idle off-screen session streams
+
+- **Decided:** keep a session's SSE stream only while it is viewed, live (`running`, `awaiting_approval`, `awaiting_input`) or just sent to; park idle off-screen sessions and resume from the snapshot head when viewed again.
+- **Instead of:** keeping a stream for every cached transcript until cache eviction (up to 20 per tab for 5 minutes).
+- **Because:** browsers allow six HTTP/1.1 connections per origin across all tabs; two production tabs filled them with streams and stalled every request, including approval responses.
+- **Mine:** yes (requested fix)
+- **Revisit when:** the Host serves session events over a multiplexed transport (HTTP/2 or one shared stream).

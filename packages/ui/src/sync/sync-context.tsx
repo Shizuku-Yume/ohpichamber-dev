@@ -58,6 +58,19 @@ const EMPTY_QUESTIONS: QuestionRequest[] = []
 const EMPTY_LOAD: SessionMessageLoadState = { status: "idle", loadingKind: null, error: null, resolved: false, limit: 0, cursor: undefined, complete: false, generation: 0, updatedAt: undefined }
 let activeTarget: SessionMessageTarget | null = null
 const externallyViewedSessions = new Map<string, number>()
+// Browsers allow six HTTP/1.1 connections per origin across every tab, and each
+// session stream holds one. Only viewed and live sessions keep a stream; an idle
+// session left off screen is parked and resumes from its head when viewed again.
+const LIVE_STREAM_STATUSES = new Set<SessionRuntimeStatus>(["running", "awaiting_approval", "awaiting_input"])
+const STREAM_PARK_DELAY_MS = 15_000
+let onViewedSessionChange: ((target: SessionMessageTarget) => void) | null = null
+// A send asks for its session's stream even when the chat is not on screen.
+const streamRequests = new Map<string, number>()
+
+function isViewedSession(target: SessionMessageTarget): boolean {
+  return activeTarget?.directory === target.directory && activeTarget.sessionId === target.sessionId
+    || (externallyViewedSessions.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now()
+}
 
 export function setActiveSession(directory: string, sessionId: string) {
   const previous = activeTarget
@@ -66,6 +79,8 @@ export function setActiveSession(directory: string, sessionId: string) {
   const loader = getImperativeSessionMessageLoader()
   if (previous) loader?.scheduleCacheRetention(previous.directory)
   if (activeTarget) loader?.touchSessionCache(activeTarget)
+  if (previous) onViewedSessionChange?.(previous)
+  if (activeTarget) onViewedSessionChange?.(activeTarget)
 }
 export function setExternallyViewedSession(directory: string, sessionId: string, viewed: boolean) {
   const normalized = normalizePath(directory)
@@ -76,6 +91,7 @@ export function setExternallyViewedSession(directory: string, sessionId: string,
     externallyViewedSessions.delete(key)
     getImperativeSessionMessageLoader()?.scheduleCacheRetention(normalized)
   }
+  onViewedSessionChange?.({ directory: normalized, sessionId })
 }
 
 /** Sequence-gated directory batch: only accepted events reach global projections. */
@@ -226,6 +242,12 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     }
     return false
   }, [childStores])
+  const wantsStream = useCallback((target: SessionMessageTarget, runtimeStatus?: SessionRuntimeStatus) => {
+    if (isViewedSession(target) || (runtimeStatus !== undefined && LIVE_STREAM_STATUSES.has(runtimeStatus))) return true
+    if ((streamRequests.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now()) return true
+    const status = childStores.getChild(target.directory)?.getState().session_status[target.sessionId]
+    return status !== undefined && LIVE_STREAM_STATUSES.has(status)
+  }, [childStores])
   const onSnapshot = useCallback((target: SessionMessageTarget, snapshot: SessionSnapshot, recoveryPrevious?: SessionSnapshot) => {
     if (!isCurrent()) return
     const store = childStores.getChild(target.directory)
@@ -239,7 +261,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     replaceGlobalBlockingRequestSnapshot(target.directory, snapshot)
     const session = store.getState().session.find((item) => item.sessionId === target.sessionId)
     if (session) useGlobalSessionsStore.getState().upsertSession(session)
-    pipelineRef.current?.attach(target, snapshot)
+    if (wantsStream(target, snapshot.session.runtimeStatus)) pipelineRef.current?.attach(target, snapshot)
+    else pipelineRef.current?.detach(target)
     const previous = recoveryPrevious?.session
     if (previous && (
       previous.epoch !== snapshot.session.epoch
@@ -250,7 +273,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       // surfaces to re-list the addressed directory once; they coalesce it.
       fileTreeChanges.unknownChange(target.directory)
     }
-  }, [childStores, isCurrent, isKnownChildSession])
+  }, [childStores, isCurrent, isKnownChildSession, wantsStream])
   stores.callbacks.isCurrent = isCurrent
   stores.callbacks.onSnapshot = onSnapshot
   const disposalRef = useRef<number | NodeJS.Timeout | undefined>(undefined)
@@ -353,6 +376,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
             pipelineRef.current?.detach(deletedTarget)
           }
         }
+        if (!wantsStream(target)) queueMicrotask(() => { if (isCurrent() && !wantsStream(target)) pipelineRef.current?.detach(target) })
         return contiguous
       },
       recover: async (target) => {
@@ -387,6 +411,26 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       },
     })
     pipelineRef.current = pipeline
+    const parkTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    const viewedSessionChange = (target: SessionMessageTarget) => {
+      if (!isCurrent()) return
+      const streamKey = `${target.directory}\n${target.sessionId}`
+      if (isViewedSession(target)) {
+        clearTimeout(parkTimers.get(streamKey))
+        parkTimers.delete(streamKey)
+        const snapshot = childStores.getChild(target.directory)?.getState().snapshot[target.sessionId]
+        if (!snapshot || pipeline.has(target) || isKnownChildSession(target.directory, target.sessionId)) return
+        const { epoch, headSequence, runtimeStatus } = snapshot.session
+        pipeline.attach(target, { cursor: `${epoch}:${headSequence}`, session: { sessionId: target.sessionId, runtimeStatus } })
+        return
+      }
+      if (!pipeline.has(target) || parkTimers.has(streamKey)) return
+      parkTimers.set(streamKey, setTimeout(() => {
+        parkTimers.delete(streamKey)
+        if (isCurrent() && !wantsStream(target)) pipeline.detach(target)
+      }, STREAM_PARK_DELAY_MS))
+    }
+    onViewedSessionChange = viewedSessionChange
     const unconfigure = childStores.configure({
       isCurrentScope: isCurrent,
       onBootstrap(context) {
@@ -426,6 +470,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       resetExtensionWaitsForRuntimeSwitch()
       activeTarget = null
       externallyViewedSessions.clear()
+      streamRequests.clear()
     })
     const resumeAfterSwitch = subscribeRuntimeEndpointChanged((detail) => {
       if (detail.runtimeKey !== props.runtimeKey || !isCurrent()) return
@@ -488,9 +533,11 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       window.removeEventListener("openchamber:system-resume", resume)
       document.removeEventListener("visibilitychange", visible)
       if (pipelineRef.current === pipeline) pipelineRef.current = null
+      if (onViewedSessionChange === viewedSessionChange) onViewedSessionChange = null
+      for (const timer of parkTimers.values()) clearTimeout(timer)
       disposalRef.current = setTimeout(() => { messageLoader.dispose(); childStores.disposeAll() }, 0)
     }
-  }, [childStores, client, isCurrent, isKnownChildSession, loadSessions, messageLoader, onSnapshot, props.runtimeKey, stores])
+  }, [childStores, client, isCurrent, isKnownChildSession, loadSessions, messageLoader, onSnapshot, props.runtimeKey, stores, wantsStream])
 
   useEffect(() => {
     const directory = currentDirectoryRef.current
@@ -509,6 +556,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
           pipelineRef.current?.detach({ directory: dir, sessionId })
           return
         }
+        streamRequests.set(`${dir}\n${sessionId}`, Date.now() + STREAM_PARK_DELAY_MS)
         if (options?.refreshSnapshot) {
           void messageLoader.refresh({ directory: dir, sessionId }, undefined, { recovered: true, requireAvailable: true })
           return
@@ -542,7 +590,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
 
   useEffect(() => messageLoader.startCacheRetention({
     isCurrent,
-    isViewed: (target) => activeTarget?.directory === target.directory && activeTarget.sessionId === target.sessionId || (externallyViewedSessions.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now(),
+    isViewed: isViewedSession,
     isActive: (target) => { const status = childStores.getChild(target.directory)?.getState().session_status[target.sessionId]; return status === "running" || status === "awaiting_approval" || status === "awaiting_input" },
     releaseDerivedCache: (target) => { pipelineRef.current?.detach(target) },
   }), [childStores, isCurrent, messageLoader])

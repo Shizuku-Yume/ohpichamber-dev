@@ -469,10 +469,62 @@ describe("SyncProvider native scope and selection boundaries", () => {
       const store = runtime.childStores.ensureChild(directory, { bootstrap: false })
       store.setState({ workspace: resolved, session: [fork] })
       const { messageLoader } = runtime
+      setActiveSession(directory, fork.sessionId)
       await act(async () => { await messageLoader.ensure({ directory, sessionId: fork.sessionId }) })
       expect(snapshots).toContain(fork.sessionId)
       expect(streams).toContain(fork.sessionId)
     } finally {
+      setActiveSession("", "")
+      await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+
+  test("only viewed or live sessions hold an event stream; parked sessions resume from their head", async () => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/stream-budget"
+    const resolved = workspace(directory)
+    const idle = { directory, sessionId: "idle-session" }
+    const live = { directory, sessionId: "live-session" }
+    const client = createNativeClient()
+    const opened: { sessionId: string; cursor: string }[] = []
+    const closed: string[] = []
+    const emitters = new Map<string, (event: CanonicalEvent) => void>()
+    client.getSnapshot = async (id) => {
+      const snapshot = nativeSnapshot(id, [])
+      return { ...snapshot, session: { ...snapshot.session, workspaceId: resolved.workspaceId, runtimeStatus: id === live.sessionId ? "awaiting_approval" : "idle" } }
+    }
+    client.subscribeSessionEvents = (id, cursor, callback) => {
+      opened.push({ sessionId: id, cursor }); emitters.set(id, callback)
+      return () => { closed.push(id) }
+    }
+    let runtime: ReturnType<typeof useSyncRuntime> | undefined
+    const Probe = () => { runtime = useSyncRuntime(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!runtime) throw new Error("Sync runtime was not mounted")
+      const store = runtime.childStores.ensureChild(directory, { bootstrap: false })
+      store.setState({ workspace: resolved, project: resolved.projectId })
+      await act(async () => {
+        await runtime!.messageLoader.ensure(idle)
+        await runtime!.messageLoader.ensure(live)
+      })
+      expect(opened).toEqual([{ sessionId: live.sessionId, cursor: "epoch-a:4" }])
+
+      await act(async () => {
+        emitters.get(live.sessionId)!({ sessionId: live.sessionId, epoch: "epoch-a", sequence: "5", timestamp: 5, type: "session.status", runtimeStatus: "idle", activeRunId: null })
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+      expect(closed).toEqual([live.sessionId])
+      expect(store.getState().snapshot[live.sessionId]?.session.headSequence).toBe("5")
+
+      await act(async () => { setActiveSession(directory, live.sessionId) })
+      expect(opened.at(-1)).toEqual({ sessionId: live.sessionId, cursor: "epoch-a:5" })
+      await act(async () => { setActiveSession(directory, live.sessionId) })
+      expect(opened).toHaveLength(2)
+    } finally {
+      setActiveSession("", "")
       await act(async () => root.unmount())
       dom.restore()
     }

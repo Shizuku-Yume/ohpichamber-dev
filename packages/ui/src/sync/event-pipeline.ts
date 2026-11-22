@@ -37,6 +37,7 @@ export type EventPipeline = {
   attach: (target: SessionMessageTarget, snapshot: SessionSnapshot | EventPipelineAttachTarget) => void
   invalidate: (target: SessionMessageTarget) => void
   detach: (target: SessionMessageTarget) => void
+  has: (target: SessionMessageTarget) => boolean
   clearDirectory: (directory: string) => void
   reconnect: () => void
   cleanup: () => void
@@ -159,6 +160,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     attach,
     invalidate(target) { const stream = streams.get(key(target)); if (stream) scheduleRecovery(stream) },
     detach(target) { const stream = streams.get(key(target)); if (stream) remove(stream) },
+    has(target) { return streams.has(key(target)) },
     clearDirectory(directory) { for (const stream of streams.values()) if (stream.target.directory === directory) remove(stream) },
     reconnect() {
       for (const stream of streams.values()) {

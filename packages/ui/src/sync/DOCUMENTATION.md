@@ -49,7 +49,7 @@ Use the directory sync stores for live session, message, approval, and question 
 
 ## Snapshot startup and cold-send recovery
 
-Snapshot and workspace reads use the bounded `STARTUP_RETRY` policy; non-retryable failures stop immediately, exhausted failures preserve prior state and report a loader error, and retired loads stop before another request. Every adopted snapshot reaches the existing event pipeline through `onSnapshot`.
+Snapshot and workspace reads use the bounded `STARTUP_RETRY` policy; non-retryable failures stop immediately, exhausted failures preserve prior state and report a loader error, and retired loads stop before another request. Every adopted snapshot reaches `onSnapshot`, which attaches its event stream only while the session holds a stream (see stream budget below).
 
 Discovery also recovers materialized root sessions when a newer head or epoch reports different run control than the cached snapshot. It requests a canonical snapshot through the same loader rather than replacing live activity with a list row. Older discovery cannot displace newer live state, and a failed recovery preserves the cached transcript and activity. Stop requests snapshot recovery when its authoritative read finds no active run, so an already-idle server can clear stale client controls without relaunching.
 
@@ -237,6 +237,7 @@ The directory event reducer (`applyDirectoryEvent` in `event-reducer.ts`) enforc
 
 ### Stream lifecycle and disconnection rules
 
+- **Stream budget**: Browsers share six HTTP/1.1 connections per origin across all tabs, and each session stream holds one, so too many streams stall every other request (including approval responses). A session holds a stream only while it is viewed (`setActiveSession` or an external viewer), its status is `running`, `awaiting_approval` or `awaiting_input`, or a send requested it within the last 15 s. An idle session is parked: a batch that leaves it unwanted detaches it, a session that stops being viewed detaches after 15 s unless it became wanted again, and a parked session that is viewed again attaches from its snapshot head (`epoch:headSequence`). Parked sessions that start running elsewhere are picked up by session discovery's recovery snapshot.
 - **Evicted stream detachment**: When a session history is evicted by `SessionCacheRetention`, the provider detaches its active SSE stream (`pipeline.detach(target)`) rather than triggering recovery or reconnecting.
 - **Snapshot setup reattachment**: The provider attaches streams for existing snapshots once during lifecycle setup (iterating `childStores.children` on mount), avoiding redundant reattachments on subsequent store creations.
 - **Disconnection status invalidation**: When an active SSE stream disconnects, `onDisconnect` marks `sessionStatusInvalidated` for that target in the directory store and authoritatively reports the native `"unavailable"` status to `applyGlobalSessionStatusSnapshot` for the addressed session ID, ensuring ghost active indicators are cleared immediately upon connection loss.
