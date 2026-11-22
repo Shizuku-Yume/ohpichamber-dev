@@ -4,6 +4,14 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+OpenChamber v2.8.0 (`30c70496a5`) is integrated by the two-parent merge
+`cb5c92b26`; `8173b1275` then merges `origin/main` (`08000b159`, PR #134)
+without conflicts. Agent Service and vendored SDK content match main's OMP
+19.1.0 integration. The upstream pin and complete delta ledger now track v2.8.0;
+the settled exclusions are recorded in the 2026-11-22 v2.8.0 merge decision.
+Root validation after dependency installation remains pending; this is source
+integration, not new provider, device, updater or visual certification.
+
 The [OMP 19.1 integration](specs/omp19-1-integration.md) pins 19.1.0 at
 `a7135b8f`. The worker uses tool commands behind Host authorization, retains
 worker-local MCP (including the upstream legacy-negotiation fallback), migrates
