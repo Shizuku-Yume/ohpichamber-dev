@@ -192,6 +192,23 @@ test('a listed unreferenced OMP session reads cold and promotes on its first reo
     // A second reopen joins the live root instead of starting a second worker.
     expect((await request(`/internal/sessions/${encodeURIComponent(sessionId)}/reopen`, { method: 'POST', body: reopenBody })).status).toBe(200);
     expect((await sessionWorkers()).map((worker: { rootSessionId: string }) => worker.rootSessionId)).toEqual([sessionId]);
+
+    const destinationCwd = join(root, 'destination');
+    const destinationWorkspaceId = randomUUID();
+    await mkdir(destinationCwd);
+    expect((await request(`/internal/workspaces/${destinationWorkspaceId}`, { method: 'POST',
+      body: JSON.stringify({ projectId, cwd: destinationCwd, agentDirectory, agentDirectoryId, env }) })).status).toBe(201);
+    expect((await request(`/internal/sessions/${sessionId}/relocation/prepare`, { method: 'POST', body: JSON.stringify({
+      transactionId: 'native-recap-move', sourceWorkspaceId: workspaceId,
+      destination: { rootSessionId: sessionId, projectId, workspaceId: destinationWorkspaceId, cwd: destinationCwd,
+        agentDirectory, agentDirectoryId, displayPath: 'destination', env },
+    }) })).status).toBe(200);
+    expect((await request(`/internal/sessions/${sessionId}/relocation/finalize`, { method: 'POST',
+      body: JSON.stringify({ transactionId: 'native-recap-move', action: 'commit' }) })).status).toBe(200);
+    recordSessionRecap(sessionId, destinationCwd, 'Moved native recap');
+    expect((await request(recapsPath)).body.recaps).toEqual([
+      expect.objectContaining({ sessionId, cwd: destinationCwd, recap: 'Moved native recap' }),
+    ]);
   } finally {
     await service.stop();
     closeSessionIndex();

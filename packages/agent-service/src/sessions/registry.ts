@@ -1446,8 +1446,8 @@ export class SessionRegistry {
     const native = this.nativeCold.get(sessionId);
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
     const reference = this.references.get(rootSessionId);
-    const sessionFile = child?.sessionFile ?? native?.info.path ?? reference?.sessionFile;
-    const cwd = native?.workspace.cwd ?? reference?.cwd;
+    const sessionFile = child?.sessionFile ?? reference?.sessionFile ?? native?.info.path;
+    const cwd = reference?.cwd ?? native?.workspace.cwd;
     const sessionIds = [sessionId];
     if (sessionFile) {
       const match = /_([a-zA-Z0-9_-]+)\.jsonl$/.exec(sessionFile);
