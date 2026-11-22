@@ -136,6 +136,7 @@ import { createRelayService, pinnedRelayUrl, relayBlockedByEnterprise } from './
 import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createRelayKeyStore } from './lib/relay/key-store.js';
 import { createBrowserControlBroker } from './lib/browser-control/broker.js';
+import { createBrowserClientEvents } from './lib/browser-control/client-events.js';
 import { createBrowserControlRouter } from './lib/browser-control/provider.js';
 import { createDevServerScanner } from './lib/dev-servers/routes.js';
 import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
@@ -486,7 +487,6 @@ const settingsRuntime = createSettingsRuntime({
 const readSettingsFromDiskMigrated = (...args) => settingsRuntime.readSettingsFromDiskMigrated(...args);
 const readSettingsFromDisk = (...args) => settingsRuntime.readSettingsFromDisk(...args);
 const readSettingsFromDiskStrict = (...args) => settingsRuntime.readSettingsFromDiskStrict(...args);
-const writeSettingsToDisk = (...args) => settingsRuntime.writeSettingsToDisk(...args);
 const persistSettings = (...args) => settingsRuntime.persistSettings(...args);
 
 const requestSecurityRuntime = createRequestSecurityRuntime({
@@ -502,7 +502,7 @@ const pushRuntime = createPushRuntime({
  loadWebPush: () => import('web-push').then((module) => module.default),
  PUSH_SUBSCRIPTIONS_FILE_PATH,
  readSettingsFromDiskMigrated,
- writeSettingsToDisk,
+ updateSettingsFromDisk: settingsRuntime.updateSettingsFromDisk,
 });
 
 const getOrCreateVapidKeys = (...args) => pushRuntime.getOrCreateVapidKeys(...args);
@@ -530,7 +530,7 @@ const relayKeyStore = createRelayKeyStore({
  dataDir: OPENCHAMBER_DATA_DIR,
  readSettingsFromDiskMigrated,
  readSettingsStrict: readSettingsFromDiskStrict,
- writeSettingsToDisk,
+ updateSettingsFromDisk: settingsRuntime.updateSettingsFromDisk,
 });
 
 const apnsRuntime = createApnsRuntime({
@@ -1456,33 +1456,10 @@ const scheduledTaskService = createScheduledTaskService({
 // Browser actions are published to whichever OpenChamber clients are connected;
 // the one owning the browser panel answers. `emitRequest` returns the number of
 // clients reached so the broker can fail fast when nobody is listening.
+const browserClientEvents = createBrowserClientEvents({ clients: uiOpenChamberEventClients, writeEvent: writeSseEvent });
 const browserControlBroker = createBrowserControlBroker({
  createId: () => `browser-${crypto.randomUUID()}`,
- emitRequest: (request) => {
-  // Opening a page only needs a panel to open it in; everything else needs a
-  // client that can actually drive one. Counting the right clients is what
-  // lets the broker say "not here" instead of timing out.
-  const needsBrowserView = request.action !== 'browser.open';
-  let delivered = 0;
-  for (const client of uiOpenChamberEventClients) {
-   if (needsBrowserView && client.openchamberBrowserCapable !== true) continue;
-   try {
-    writeSseEvent(client, {
-     type: 'openchamber:browser-control-request',
-     properties: {
-      requestId: request.requestId,
-      action: request.action,
-      parameters: request.parameters,
-      context: request.context,
-     },
-    });
-    delivered += 1;
-   } catch {
-    uiOpenChamberEventClients.delete(client);
-   }
-  }
-  return delivered;
- },
+ emitRequest: browserClientEvents.emitRequest,
 });
 
 /**
@@ -2091,7 +2068,7 @@ async function main(options = {}) {
   ensureGlobalWatcherStarted,
   getOrCreateVapidKeys,
   getUiSessionTokenFromRequest,
-  writeSettingsToDisk,
+  updateSettingsFromDisk: settingsRuntime.updateSettingsFromDisk,
   addOrUpdatePushSubscription,
   removePushSubscription,
   addOrUpdateApnsToken,
@@ -2175,7 +2152,7 @@ async function main(options = {}) {
   crypto,
   os,
   readSettingsFromDiskMigrated,
-  writeSettingsToDisk,
+  updateSettingsFromDisk: settingsRuntime.updateSettingsFromDisk,
   relayKeyStore,
   remoteClientAuthRuntime,
   onShareState: (shareId) => {
@@ -2217,9 +2194,9 @@ async function main(options = {}) {
   },
  });
  relayServiceInstance = relayService;
- relayService.registerRoutes(app);
+ relayService.registerRoutes(app, server);
 
- registerBrowserControlRoutes(app, { express, broker: browserControlBroker });
+ registerBrowserControlRoutes(app, { express, broker: browserControlBroker, preferredClient: browserClientEvents.preferredClient });
  registerUploadRoute(app, { store: browserUploads });
 
  // One scanner backs both discovery and the tunnel allowlist, so a port the

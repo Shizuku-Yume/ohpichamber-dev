@@ -63,6 +63,8 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 
 - `ReasoningPart.tsx`
   - Thinking block UI (`ReasoningTimelineBlock`), summary + optional duration.
+  - Live reasoning displays throttled partial paragraphs, so an expanded trace does not stay empty until a paragraph finishes. The 100 ms throttle limits updates; assistant answer text retains its block-level reveal.
+  - The collapsed header keeps up to 400 characters of the summary in the DOM; CSS truncates at the real row width. A per-row measured character budget was rejected because a ResizeObserver per row would re-render the chat on every frame of a sidebar animation, the cost `useWorkStatusVisibility` records.
   - Presentation titles accept inline content. `TimelineNotice` uses this for completed compactions, appending the recorded `providerID/id` in the description color (also on empty-summary rows). Attribution comes from the stored compaction message or `session.compaction.ended`, never the current session selection. Running, failed, and older model-less compactions have no attribution. Custom presentation headers can shrink and wrap long identifiers; ordinary thinking rows retain their existing layout.
 
 - `reasoningText.ts`
@@ -154,6 +156,25 @@ entries no own tool call touched are appended after the turn's own files. The
 list is projected once the last assistant message finished with `stop`, so no
 tool patch is parsed while the turn streams.
 
+### Why a write row prefers a reported diff to its input preview
+
+A `write` row draws the call's content as a diff preview because the native
+tool reports no diff. A plugin that replaces the file tools reports one for the
+same call, and the row drew both, so one file's changes appeared twice.
+`carriesFileDiffs('write')` answers which tools *produce* per-file diffs, not
+which may show one, so the row's gate reads the result's own entries instead of
+that predicate. The reported diff wins because it is the only source with
+deletions when an existing file is overwritten, and because
+`resolveToolQuickOpenTarget` already resolves the row's line from the same
+entry. The preview hides only when the result branch actually draws that
+patch: an extension's output rule that replaces the result, or metadata whose
+diff text is no usable patch (the plain-text fallback entry), keeps the
+preview, while a valid patch shown as plain text because of its size still
+counts when it carries a hunk header; a long diagnostic in the diff field does
+not. Gating the result-diff branch back to edit and patch reopens the
+duplicate; `ToolPart.write-row-diff.test.tsx` pins the completed, running,
+native, unusable-patch and long-diagnostic cases.
+
 ### Message parts
 
 - Assistant markdown treats raw HTML as inert visible text. The final generated
@@ -181,7 +202,7 @@ tool patch is parsed while the turn streams.
   the assistant image-label policy without gallery-specific link rewriting,
   completion-state switching, or hidden placeholders. A
   completed assistant message hydrates at most 12 unique image candidates,
-  including persisted text parts that omit their optional part-level end time.
+  including persisted Canonical text parts.
   In retained web/PWA, Electron embedded Node Host, hosted mobile, and
   Capacitor runtimes, a gallery approaching the viewport prepares all local
   candidates through the host's message-scoped grant route, then reuses the
@@ -207,7 +228,7 @@ tool patch is parsed while the turn streams.
 - Native `bash` command input and terminal text output remain visible. Final result text normalizes ANSI terminal controls with a bounded synthetic-cell budget; there is no legacy mutable-state/metadata output fallback.
 - A tool result made of `{type:"text",text}` content blocks is shown as its joined text, not as a JSON envelope the reader has to open. `toolRenderers.unwrapTextBlocks` validates blocks one at a time and unwraps up to four nested serialized envelopes; `nativeToolResultContent` applies it before generic coercion, and the JSON summary view uses it too.
 - Thinking/Justification duration is hidden in `sorted` mode (handled in `ReasoningPart.tsx` + `JustificationBlock.tsx`).
-- Reasoning streaming presentation derives from the live stream phase (`streaming`/`cooldown`) only: canonical reasoning parts carry no persisted timing, so a cached part outside a live phase renders complete and never streams (issue #2020).
+- Reasoning streaming presentation derives from the `streaming` live phase only: canonical reasoning parts carry no persisted timing, so a cached part outside that phase renders complete and never streams (issue #2020).
 - `reasoningText.ts` owns reasoning normalization for both `ReasoningPart.tsx` and `JustificationBlock.tsx`; there is no second copy. `cleanReasoningText` normalizes CRLF/CR line endings, preserves paragraph breaks (OMP folds provider summary parts with `\n\n`; blank-line suppression had merged a multi-paragraph thought into one running paragraph), keeps genuinely empty lines, turns an invisible-only line (zero-width space and the like) into an empty line instead of deleting it, collapses runs of blank lines to one, and strips a leading `> ` marker. Only whole-line empty HTML comment sentinels are dropped — `<!-- -->` alone on a line, plus an unterminated `<!--` on the last line while streaming — and that rule, like fence detection, is scoped to fenced code only: indented code blocks are ordinary text, and a sentinel sharing its line with prose is left intact. Fenced content is kept verbatim apart from de-quoting: a fence opened inside a blockquote keeps its body's `> ` markers removed along with the opener's, and a backtick opener whose info string contains a backtick is prose, not a fence (CommonMark). The header summary (`stripMarkdown`/`getReasoningSummary`) keeps its own flat single-line wording.
 - Single newlines render as line breaks in the reasoning variant only, through the in-repo remark line-break plugin that `MarkdownRenderer` wires for `variant='reasoning'`; assistant and user text rendering are unchanged (user text already applies hard line breaks in `userTextPartContent.ts`).
 - Streamed assistant and reasoning text holds back only a still-growing GFM table row (`lib/streamTextCommit.ts`, a port of OMP's `holdPartialTableRow`): the unterminated last line when a run of pipe lines with a header and delimiter row sits above it, outside an open fence. Everything else — a paragraph, a list item, an open fence — appends as it arrives, so the first token shows immediately and thinking streams live while expanded. `AssistantTextPart` and `ReasoningPart` share the one function. The throttle in `hooks/useStreamingTextThrottle.ts` passes streaming text straight through without a second per-part throttle, keeping its identity reset, while the event pipeline flushes at 33 ms.

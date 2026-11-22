@@ -444,6 +444,9 @@ export const toPublicGuest = (guest, toolLinkSettings = {}) => {
   if (guest.enterpriseBlocked?.length) {
     row.enterpriseBlocked = [...guest.enterpriseBlocked];
   }
+  if (guest.folders?.length) {
+    row.folders = [...guest.folders];
+  }
   if (guest.entry) {
     row.entry = guest.entry;
   }
@@ -678,6 +681,7 @@ const listInstalledGuestsUncached = async ({ persistPath }: { persistPath: strin
         ...withSource(guest, 'bundled', null),
         capabilityGrants: requestedGuestCapabilities(guest),
         enabled: !stored.disabledGuests?.[guest.id],
+        folders: stored.guestFolders?.[guest.id],
         socketBindings,
         storageDescriptor: { id: guest.id, storedPath: null, builtIn: true },
       });
@@ -716,6 +720,7 @@ const listInstalledGuestsUncached = async ({ persistPath }: { persistPath: strin
         guestGrantScope(guest),
       ),
       enabled: !stored.disabledGuests?.[guest.id],
+      folders: stored.guestFolders?.[guest.id],
       socketBindings,
       revision: packageRevisions.get(persistPath)?.get(guest.id) ?? 0,
       storageDescriptor: { id: guest.id, storedPath, builtIn: false },

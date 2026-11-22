@@ -30,7 +30,7 @@ Electron do not invoke this Android bridge.
 
 - On mobile, a request for the Settings dialog opens the fullscreen Settings surface and clears the dialog flag (`mobileSettingsNavigation.ts`). It lands on the requested page when the phone shows that page, otherwise on the page list. Entry points keep calling `setSettingsDialogOpen` and need no mobile branch.
 - Mobile Settings exposes Projects in navigation, search and shared Settings links. Project chat defaults use the shared Projects page and its project-scoped save path; the main-window worktrees shortcut remains unavailable on mobile. `MobileSessionsSheet` receives shared Add project requests so its directory picker can open above Settings.
-- On mobile web, Back runs the same close ladder as the Android back button, one step per press, and the app is left only when nothing is open. Forward and traversals between routes never run the ladder. Layers closed through the UI leave no empty Back presses (`useMobileWebBackButton`, `lib/router/backGuard.ts`).
+- On mobile web, Back shares Android's layer-close ladder, one step per press, then resumes normal browser history navigation when nothing is open. Native Android additionally tries the parent-session fallback after the close ladder; mobile web does not. Forward and traversals between routes never run the ladder. Layers closed through the UI leave no empty Back presses (`useMobileWebBackButton`, `lib/router/backGuard.ts`).
 - Every route entry written while a layer is open goes through `pushRouteEntry` or `updateBrowserURL`, so it lands under the back guard. A direct `pushState` would bury the guard between two routes. A replacement keeps the guard and changes its URL; the route under it normalizes to the same place when Back reaches it.
 - Inside the mobile shell the Settings stages write no history. A `SettingsView` given `registerBackHandler` steps through its stages in state only.
 - The visible Files viewer registers its return-to-browser action through the workspace drawer. The shell asks it at the workspace step, after popups, plans and fullscreen surfaces. The header arrow uses the same action: a dirty editor asks before leaving; a clean editor returns to its folder immediately. Once at the folder, the next Back closes the workspace. Hidden viewers, browser routes, root changes and unmounted viewers release the handler. Android and hosted mobile share this ladder; desktop web and Electron do not mount the mobile Files surface.
@@ -38,6 +38,7 @@ Electron do not invoke this Android bridge.
 - When the Android soft keyboard leaves a short viewport, the active Terminal workspace hides its two tab bars and trims vertical padding. The terminal stays mounted, and the quick keys stay available. Dismissing the keyboard restores the tab bars.
 - Settings uses the existing persistence and broadcast protocol. Moving its host changes no stored format, registry key or runtime availability.
 - Notification commands and initial session tabs in VS Code use the shared session opener, so a `/btw` fork opens its parent and expands the panel mounted in the shared composer. Notification commands also reveal the chat view.
+- The expanded VS Code layout uses the shared `useUIStore` sidebar state (`isSidebarOpen`, `sidebarWidth`). Only the drag preview is local.
 - A sessions-sheet row is never a scroll container of its own: it clips with `oc-row-clip`, and the two-line row's 54 px box ends flush with the 32 px chevron at `top: 22`, so a drag that starts on a row scrolls the list.
 
 ### Boot, runtime changes and mini chat
@@ -77,6 +78,7 @@ Electron do not invoke this Android bridge.
 - Deep-link parsing stays independent of React, stores and Capacitor so native producers share one vocabulary. Unknown routes return null, and both authority and authority-less custom-scheme forms parse. Provider selection belongs only to Usage, including extension provider IDs.
 - Native link listeners register before connection completes so cold-launch notification and URL intents survive splash and sync remounts. A module-level holder keeps only the newest intent, consumes it before dispatch and restores it when its shell handler is absent. Legacy notification session IDs remain a fallback when no explicit URL is supplied.
 - Shortcuts can carry a first message; URL deep links cannot. A shortcut naming an unknown project leaves that message unsent in the default draft so the user chooses its destination. Session links use the shared opener, including parent-panel resolution for `/btw` forks.
+- A share from another app opens a new-session draft of its own in the projects store's active project (the first project when none is active), and in Chat only when there is no project. The sidebar lists drafts only under projects, so a Chat draft could not be reopened once the user left it. The composer document owns the rest of the handoff.
 - An agent's file request stages navigation only for the session on screen or its lineage. Unknown subagents resolve from the server; lineage traversal stops at unreadable sessions and cycles because `/btw` metadata is writable. A delayed trust decision cannot stage a path into the previously visible session's Files pane.
 - Workspace panes retain their tree position across keyboard resizes and folding so an editor's draft and focus survive size-class changes. Closing retains the pending Changes request because it keys the persistent pane. New diff and commit requests are mutually exclusive and consumed once across remounts.
 - Tablet panel opening and closing uses compositor transforms over a width changed once. Width animation repeatedly lays out chat. Closing holds space until the slide ends, except when a size-class change or a displaced panel must release it immediately to avoid squeezing chat between two panels.
@@ -103,6 +105,13 @@ Electron do not invoke this Android bridge.
 - Identity selection uses the repository's bound primary remote and the same configuration answers as add and clone. Trusting system Git is confirmed in repository configuration because selecting a menu item alone cannot authorize that trust.
 - Worktree deletion handles sessions in every subfolder while their directory still exists. Archiving rolls back if removal fails; keeping sessions moves them to the project first. Teardown retries reread options at execution time, and failed remote-branch deletion preserves the worktree with its reason.
 - Files navigation remains rooted for parent traversal, while an explicit chat tool target can open outside the workspace through the editor's existing outside-workspace read path. Image-preview navigation retains the browsed folder as Back's destination. Upload completion reloads only the folder still on screen.
+- A phone file or change list keeps the offset it left when a preview or diff
+  replaces it, and a file's search results, a folder's listing and each change
+  mode are their own list. A folder child starts at its top rather than
+  inheriting the parent's offset (the list's `memoryKey`). Search results of
+  the same folder and query stay on screen while a return re-runs the search
+  (`mobileFilesList`): a loading placeholder there would clamp the restored
+  offset and be saved as the list's. A failed folder read or search is not the list.
 
 ### Native chrome, notifications and snapshots
 
@@ -119,6 +128,18 @@ Electron do not invoke this Android bridge.
 
 ## Decisions
 
+### Why mobile push registers with every saved instance and not only the connected one
+
+A phone with two saved servers stayed quiet for the one it was not connected to: the token went only to the active server, and the relay kept one owning server per token. The relay now keeps one binding per token and server (openchamber-website `apps/api`, `push_tokens`), and the app registers with every saved server, in no particular order. An ordering that left the active server registered last was weighed and dropped: it only mattered while each registration took the token from the previous server, and the relay change ships before this app. The cost is that every saved server can push to the phone.
+
+### Why a notification switch holds the tap until the runtime is ready
+
+Switching instances resets the shell and clears `ready`. Opening the session as soon as the endpoint changes would run against the previous server's stores or session list. The intent stays stashed until the shell reports ready again, then opens on the new runtime.
+
+### Why a direct connection learns its pushServerId from /health
+
+A manually added instance had no relay identity on file, so a push from it carried an id that matched no saved entry. The health probe already runs on every connect; keeping the reported id under a separate field makes a later notification switch possible without re-pairing, and without changing the key the client token is stored under.
+
 ### Why a visited extension tab keeps its frame and not a fresh load per visit
 
 The drawer keeps every visited pane mounted while hidden, and the desktop rail keeps a panel frame it has shown; an extension tab does the same, so its page keeps its place, a half-filled form and an item it was handed across tab switches and a closed drawer. The memory is one frame per extension the user opened in this run, and a frame unmounts when its extension leaves the catalog. A live screen's picture mounts only while its tab is on screen, so an unwatched surface keeps no socket open.
@@ -134,6 +155,10 @@ The secure store and localStorage cannot commit together. A new reference lets a
 ### Why navigation carries intent and not the source's stores
 
 Each webview owns its own stores. A small parsed request preserves the originating Settings directory, page links, provider-connect action, new-snippet action and selected skill without transferring chat state or overwriting the tab's independently edited settings.
+
+### Why the VS Code sessions sidebar shares the app's sidebar state
+
+The existing store remembers the open state and width across reloads. The VS Code resize hook previews changes locally and saves on release so pointer moves do not write to storage. VS Code allows resizing from 196px to 520px to fit its smaller webview. A drag whose handle leaves the DOM (the sidebar hidden or the layout collapsed mid-drag) or loses pointer capture ends there and saves its last preview width. The desktop layout still clamps its displayed width to at least 264px to fit the toolbar.
 
 ### Why mobile web holds one back guard and not one history entry per layer
 

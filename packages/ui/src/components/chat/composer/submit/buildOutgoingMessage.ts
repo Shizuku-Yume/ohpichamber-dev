@@ -43,7 +43,7 @@ export const selectComposerQueue = (messages: readonly QueuedMessage[]): readonl
 
 export type ComposerContextReference =
     | { kind: 'repository-issue'; provider?: SourceControlProvider; number: number; title: string; url: string; contextText: string }
-    | { kind: 'change-request'; provider: SourceControlProvider; number: number; title: string; url: string; context: string }
+    | { kind: 'change-request'; provider: SourceControlProvider; number: number; title: string; url: string; sourceLinks?: string[]; context: string }
     | { kind: 'shared-page'; receivedId: string | null; host: string; title: string; opened: boolean; contextText: string }
     | { kind: 'repository-discussion'; provider: SourceControlProvider; number: number; title: string; url: string; contextText: string }
     | { kind: 'tracker-item'; provider: string; identifier: string; title: string; url: string; contextText: string }
@@ -172,8 +172,10 @@ export function buildComposerContext(
                 break;
             }
             case 'change-request': {
-                const { provider, number, title, url, context: prContext } = reference;
-                attach(createContextPart({ kind: 'change-request', provider, number, title, url }, prContext));
+                const { provider, number, title, url, sourceLinks, context: prContext } = reference;
+                const payload: Extract<ContextPartPayload, { kind: 'change-request' }> = { kind: 'change-request', provider, number, title, url };
+                if (sourceLinks?.length) payload.sourceLinks = sourceLinks;
+                attach(createContextPart(payload, prContext));
                 break;
             }
             case 'shared-page': {

@@ -2,9 +2,11 @@
 
 ## Ownership
 
-This module owns OpenChamber's settings persistence: the instance and profile files, their migrations, path and record normalization, request sanitizing and response shaping, and the generated registry snapshot `settings-registry.json` (`bun run settings-registry:generate` writes it from the UI registry). `GET` and `PUT /api/config/settings` are registered by `../opencode/routes.js`, which receives this runtime from server composition. What a setting means belongs to the feature that reads it.
+This module owns OhPiChamber's settings persistence: the instance and profile files, their migrations, path and record normalization, request sanitizing and response shaping, and the generated registry snapshot `settings-registry.json` (`bun run settings-registry:generate` writes it from the UI registry). `GET` and `PUT /api/config/settings` are registered by `../host/settings-routes.js`, which receives this runtime from server composition. What a setting means belongs to the feature that reads it.
 
 ## Invariants
+
+- Feature read/modify/write operations use `updateSettingsFromDisk`. The same `settings-write-queue.ts` serializes user saves and feature writes for VAPID keys, public origin and private relay configuration. Each operation rereads under the queue; a failed operation rejects only its caller. Profile surfaces, unreadable-preference protection, icon preservation and reserved OMP preferences retain their existing owners.
 
 - Settings callers that regenerate persisted identity use the strict reader: only ENOENT means first run. Corrupt JSON, non-object content, and I/O errors throw so a transient read failure cannot replace pairing keys and orphan devices.
 - Settings writes replace complete files atomically because Electron and SSH readers can treat a partial JSON read as an empty document and then overwrite the user's settings. Only directories created by the write receive tightened permissions; existing administrator permissions and ACLs remain intact.
@@ -17,6 +19,12 @@ This module owns OpenChamber's settings persistence: the instance and profile fi
 - Sidebar-order saves from older clients preserve omitted built-in sections beside their stored neighbours. The generated settings registry remains authoritative for writable keys; its JSON snapshot is loaded with `createRequire` because the server runs plain ESM across Node versions with differing import-attribute support.
 
 ## Decisions
+
+### Why settings preserve the transcription prompt as typed
+
+`settings-dictation.ts` keeps `sttPrompt` untrimmed because the client applies
+the save response to the field as the user types. Dictation trims it when
+starting a transcription.
 
 ### Why request values and sanitized settings have separate types
 

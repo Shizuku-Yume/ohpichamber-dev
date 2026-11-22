@@ -54,6 +54,8 @@
 
 `DesktopSettings`, `SettingsPayload`, the client sanitizer, the mirror, the apply step and the auto-save all follow from step 1; no second list has to stay in step for persistence.
 
+`sttPrompt` is the profile preference for the transcription prompt. Its live copy is `useTranscriptionPromptStore`, a store of its own so `useConfigStore` does not grow; the Settings field writes it through `updateDesktopSettings`. It is kept as typed: a save echo is applied back to the field, and a trimmed one would remove the line break being typed. Dictation trims it before sending, and an older document without the key leaves it empty. The store remembers which host the prompt belongs to and reads empty on any other host: sync skips keys a snapshot omits, so without that a host that never saved a prompt would send the previous host's vocabulary.
+
 `selectionApprovalText` is a shared profile preference for the selection approval shortcut. An empty string means no custom text; older documents can omit the field. The setting stores only the override and does not define fallback message text or dispatch behavior.
 
 ## Decisions

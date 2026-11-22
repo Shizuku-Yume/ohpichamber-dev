@@ -11,7 +11,7 @@ The mark is upstream's open shell with OMP's π on its left face, the bar folded
 | App icon, an Icon Composer document (`packages/electron/resources/icons/AppIcon.icon`) | macOS Dock and Finder, the iOS app (the Xcode project references the same document). Its layers carry the six macOS appearances: Default, Dark, Clear and Tinted, light and dark |
 | Icon without a tile: the open shell with a dark grey inside, white edges, black outline, the π in colour | Windows, Linux; on a black square for phone home screens, PWA and Android |
 | In-app logo: the open shell in one colour | Every splash, About, sign-in, empty states, README |
-| Glyph: cube outline, two roof rings and the π, one colour | macOS menu bar, favicon, model picker sprite, Android notification and themed icon, iOS Control Center |
+| Glyph: cube outline, two roof rings and the π, one colour | macOS menu bar, favicon, model picker sprite, Android notification, Quick Settings tile and themed icon, iOS Control Center |
 
 This fork ships a single release channel, so there is no second icon set: `packages/electron/resources/icons` is the only one.
 
@@ -30,7 +30,7 @@ Per drawing the π follows that drawing's paint:
 
 - **Colour drawings** (the icon without a tile) fill the face with white → `#9fa1a6` and the fold with `#d6d7da` → `#85878d`, top to bottom, from the no-tile palette's `pi` entry; `piGradients` builds both gradients with the drawing's `idPrefix`. `ROOF_CENTRE_SCALE` (`0.16`) keeps the white roof centre the tiers frame.
 - **One-colour drawings** (in-app logo, glyph) use `piOneColourInner`, which paints both polygons `currentColor` and offsets the fold by `PI_ONE_COLOUR_GAP` (1 unit). Without the gap the two would merge into a cross wherever both are the same paint.
-- **Android notification** is the glyph's 32 grid as a vector drawable, so its π is two extra paths filled solid white: `classifyGlyphPaths` splits the glyph into stroked shell lines, the two alpha rings and the solid π, and throws rather than emitting a vector without one.
+- **Android notification and Quick Settings tile** use the glyph's 32 grid as a vector drawable, so its π is two extra paths filled solid white: `classifyGlyphPaths` splits the glyph into stroked shell lines, the two alpha rings and the solid π, and throws rather than emitting a vector without one.
 - **Pixel drawings**: `pixelCube` redraws the π on whole pixels for the 16–24 px `.ico` frames (and favicon-16). `PIXEL_CUBES[16].legs = 'bar'` keeps the 16 px face to the bar and the long leg alone — four face pixels cannot hold three strokes — while 20 and 24 px keep the short leg. The menu bar templates are their own per-pixel drawing: `pixelGlyph`/`pixelGlyphPng` lay the cube, the roof rings and the π out on `PIXEL_GLYPH`'s 18 × 18 grid, and the 36 px `@2x` file is that grid at exactly twice the resolution.
 - **macOS document**: `piLayerSvg` renders the π as its own white-on-transparent layer (`pi.png`), placed between `shell` and `roof` in the shell group, so Clear and Tinted draw it as separate glass.
 

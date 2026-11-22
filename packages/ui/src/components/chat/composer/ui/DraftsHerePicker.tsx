@@ -133,22 +133,22 @@ const MobileDraftsHerePickerView: React.FC = () => {
  const close = React.useCallback(() => setOpen(false), []);
  if (drafts.length === 0) return null;
 
- return (
-  <>
-   <button
-    type="button"
-    className="ms-auto inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
-    onClick={() => setOpen(true)}
-   >
-    <Icon name="edit" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-    <span>{countLabel}</span>
-    <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-   </button>
-   <MobileOverlayPanel open={open} title={t('chat.draftTarget.drafts.heading')} onClose={close}>
-    {drafts.map((draft) => <DraftSheetRow key={draft.id} draft={draft} onClose={close} />)}
-   </MobileOverlayPanel>
-  </>
- );
+    return (
+        <>
+            <button
+                type="button"
+                className="ms-auto inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
+                onClick={() => setOpen(true)}
+                aria-label={countLabel}
+            >
+                <Icon name="edit" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            </button>
+            <MobileOverlayPanel open={open} title={t('chat.draftTarget.drafts.heading')} onClose={close}>
+                {drafts.map((draft) => <DraftSheetRow key={draft.id} draft={draft} onClose={close} />)}
+            </MobileOverlayPanel>
+        </>
+    );
 };
 
 export const MobileDraftsHerePicker = React.memo(MobileDraftsHerePickerView);

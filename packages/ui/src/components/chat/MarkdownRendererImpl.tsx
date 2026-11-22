@@ -27,7 +27,9 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-sw
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import type { ToolPopupContent } from './message/types';
 import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath } from './markdown/streamdownPlugins';
+import { parseMarkdownBlocksWithMath } from './markdown/mathBlocks';
 import { remarkEmojiShortcodes } from './markdown/remarkEmojiShortcodes';
+import { useProgramCheck } from './uiBlocks/useUiBlockComponent';
 import type { EmojiShortcodes } from '@/lib/emoji/shortcodes';
 import { MarkdownMediaProvider, type MarkdownDocumentAssets } from './markdown/MarkdownMediaContext';
 import {
@@ -55,7 +57,7 @@ import type { FileReferenceSource } from './markdown/MarkdownPresentationContext
 import { MarkdownSvg } from './markdown/MarkdownSvg';
 import { MarkdownBlockquote } from './markdown/MarkdownBlockquote';
 import { createMarkdownCodePlugin } from './markdown/streamdownCode';
-import { confirmCodePaths, confirmMarkdownFile, resolveMarkdownFile } from './markdown/markdownFileReferences';
+import { confirmCodePaths, confirmMarkdownFile, releaseFileReferenceTabStop, resolveMarkdownFile } from './markdown/markdownFileReferences';
 import { getMarkdownSyntaxVars } from './markdown/markdownSyntaxVars';
 import { splitFrontmatter } from './markdown/frontmatter';
 import { FrontmatterProperties } from './markdown/FrontmatterProperties';
@@ -273,6 +275,7 @@ export interface MarkdownContentProps {
   mermaidControls?: MermaidControls;
   allowMermaidWheelEvents?: boolean;
   purpose?: 'copy' | 'image';
+  chatTableExpansion?: boolean;
   theme?: Theme;
   preparedHighlights?: ReadonlyMap<string, ReadonlyMap<string, HighlightResult>>;
   onExportCode?: (source: string, language: string) => void;
@@ -306,6 +309,7 @@ export function MarkdownContent({
   mermaidControls = defaultMermaidControls,
   allowMermaidWheelEvents,
   purpose,
+  chatTableExpansion = false,
   theme: exportTheme,
   preparedHighlights,
   onExportCode,
@@ -437,6 +441,7 @@ export function MarkdownContent({
     settledReply: uiBlocks && !purpose && settled && sessionId && messageId ? { sessionId, messageId } : null,
     disableLinkSafety,
     tableWidthScope,
+    chatTableExpansion: chatTableExpansion && variant === 'assistant' && !purpose,
     theme,
     mermaidControls,
     allowMermaidWheelEvents,
@@ -446,7 +451,7 @@ export function MarkdownContent({
     confirmFile,
     code,
   }), [
-    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, svgFences, activeGuestLinks, sessionId, messageId, disableLinkSafety, tableWidthScope, theme,
+    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, svgFences, sessionId, messageId, disableLinkSafety, activeGuestLinks, tableWidthScope, chatTableExpansion, variant, theme,
     mermaidControls, allowMermaidWheelEvents, onShowPopup, onExportCode, preparedHighlights, confirmFile, code,
   ]);
 
@@ -459,7 +464,7 @@ export function MarkdownContent({
       mode={windowed ? 'streaming' : mode}
       isAnimating={isStreaming}
       BlockComponent={windowed ? WindowedMarkdownBlock : MarkdownArrivalBlock}
-      parseMarkdownIntoBlocksFn={mode === 'static' && !windowed ? wholeDocument : undefined}
+      parseMarkdownIntoBlocksFn={mode === 'static' && !windowed ? wholeDocument : parseMarkdownBlocksWithMath}
       parseIncompleteMarkdown={isStreaming}
       normalizeHtmlIndentation={false}
       animated={false}
@@ -517,6 +522,7 @@ export function MarkdownContent({
         className,
       )}
       style={syntaxVars}
+      onPointerDown={releaseFileReferenceTabStop}
     >
       <MarkdownPresentationContext.Provider value={presentation}>
         <BlockArrivalContext.Provider value={arrival}>
@@ -559,6 +565,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
     setRenderMode({ identity, mode: initialMode });
   }
   const mode = renderMode.identity === identity ? renderMode.mode : initialMode;
+  useProgramCheck(variant === 'assistant' ? content : '');
   const body = (
     <MarkdownContent
       key={identity}
@@ -569,6 +576,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       isStreaming={isStreaming}
       variant={variant}
       className={className}
+      chatTableExpansion={variant === 'assistant'}
       directory={directory}
       settled={!isStreaming}
       sessionId={sessionId}

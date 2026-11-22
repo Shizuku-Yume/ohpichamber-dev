@@ -1,6 +1,7 @@
 import { createRealpathCache } from '../path-realpath-cache.js';
 
 import { canonicalDirectoryPath } from './canonical-path.js';
+import { containedPath, containedRenamePaths, containedWritePath, isPathWithinRoot } from './workspace-target.js';
 
 import { redactGitText } from '../git/redaction.js';
 
@@ -381,15 +382,6 @@ const GIT_READ_CACHE_MAX_BYTES = 1024 * 1024;
 
 const gitReadEntryBytes = (key: string, result: CommandResult) =>
   key.length + (result?.stdout?.length || 0) + (result?.stderr?.length || 0);
-
-const isPathWithinRoot = (resolvedPath: string, rootPath: string | null | undefined, path: typeof nodePath, os: FsRouteDependencies['os']) => {
-  const resolvedRoot = path.resolve(rootPath || os.homedir());
-  const relative = path.relative(resolvedRoot, resolvedPath);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    return false;
-  }
-  return true;
-};
 
 const resolveWorkspacePath = ({ targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots }: WorkspacePathOptions & { managedRoots: string[] }): WorkspacePathResult => {
   const normalized = normalizeDirectoryPath(targetPath);
@@ -969,7 +961,7 @@ app.post('/api/fs/mkdir', async (req, res) => {
      if (resolutionError) throw resolutionError;
      return res.status(400).json({ error: 'Path is outside of active workspace' });
     }
-    resolvedPath = resolved.resolved;
+    resolvedPath = canonicalTarget;
    }
 
    await fsPromises.mkdir(resolvedPath, { recursive: true });
@@ -1637,19 +1629,16 @@ app.post('/api/fs/write', async (req, res) => {
    }
 
    const missingMessage = `File no longer exists at ${filePath}. It may have been renamed or deleted outside the app.`;
-   const writePath = await fsPromises.realpath(resolved.resolved).catch((error) => {
-    if (error && typeof error === 'object' && error.code === 'ENOENT') {
-     if (mustExist === true) return null;
-     return resolved.resolved;
-    }
-    throw error;
-   });
-   if (writePath === null) {
-    return res.status(409).json({ error: missingMessage });
-   }
-   const canonicalBase = await fsPromises.realpath(resolved.base).catch(() => path.resolve(resolved.base));
-   if (!isPathWithinRoot(writePath, canonicalBase, path, os)) {
+   const writePath = await containedWritePath(resolved, { fsPromises, path, os });
+   if (!writePath) {
     return res.status(403).json({ error: 'Access denied' });
+   }
+   if (mustExist === true) {
+    const exists = await fsPromises.realpath(writePath).catch((error) => {
+     if (error && typeof error === 'object' && error.code === 'ENOENT') return null;
+     throw error;
+    });
+    if (!exists) return res.status(409).json({ error: missingMessage });
    }
 
    const existing = await fsPromises.readFile(writePath, 'utf8').catch(() => null);
@@ -1838,7 +1827,9 @@ app.post('/api/fs/delete', async (req, res) => {
         return res.status(400).json({ error: resolved.error });
       }
 
-      await fsPromises.rm(resolved.resolved, { recursive: true, force: true });
+      const deletePath = await containedPath(resolved, { fsPromises, path, os });
+      if (!deletePath) return res.status(403).json({ error: 'Access denied' });
+      await fsPromises.rm(deletePath, { recursive: true, force: true });
       return res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       const err = error;
@@ -1897,6 +1888,9 @@ app.post('/api/fs/rename', async (req, res) => {
         return res.status(400).json({ error: 'Source and destination must share the same workspace root' });
       }
 
+      const renamePaths = await containedRenamePaths(resolvedOld, resolvedNew, { fsPromises, path, os });
+      if (!renamePaths) return res.status(403).json({ error: 'Access denied' });
+
       if (
         resolvedOld.resolved !== resolvedNew.resolved
         && isPathWithinRoot(resolvedNew.resolved, resolvedOld.resolved, path, os)
@@ -1905,8 +1899,8 @@ app.post('/api/fs/rename', async (req, res) => {
       }
 
       const [sourceStats, destinationStats] = await Promise.all([
-        fsPromises.lstat(resolvedOld.resolved),
-        fsPromises.lstat(resolvedNew.resolved).catch((error) => {
+        fsPromises.lstat(renamePaths.sourcePath),
+        fsPromises.lstat(renamePaths.destinationPath).catch((error) => {
           if (errorFields(error)?.code === 'ENOENT') return null;
           throw error;
         }),
@@ -1915,7 +1909,7 @@ app.post('/api/fs/rename', async (req, res) => {
         return res.status(409).json({ error: 'Destination path already exists', reason: 'already-exists' });
       }
 
-      await fsPromises.rename(resolvedOld.resolved, resolvedNew.resolved);
+      await fsPromises.rename(renamePaths.sourcePath, renamePaths.destinationPath);
       return res.json({ success: true, path: resolvedNew.resolved });
     } catch (error) {
       const err = error;

@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { UiBlockReplyAnswerData } from './answer';
+import { captureRuntimeInstance } from '@/lib/runtime-switch';
 
 type ReplyBlock = { sessionId: string; directory: string; messageId: string; block: string };
 
@@ -58,6 +59,7 @@ export async function sendUiBlockReplyAnswer(
  answer: UiBlockReplyAnswerData,
  text: string,
 ): Promise<void> {
+ const isCurrentRuntime = captureRuntimeInstance();
  const options = resolveReplyOptions(target.sessionId);
  if (!options) throw new Error('Select a model before answering a UI block');
  await patchSessionMetadata(target.sessionId, target.directory, (metadata) => ({
@@ -70,6 +72,7 @@ export async function sendUiBlockReplyAnswer(
    },
   },
  }));
+ if (!isCurrentRuntime()) throw new Error('Runtime changed');
  await sendMessage({
   sessionId: target.sessionId,
   request: {

@@ -1,4 +1,10 @@
 import React from 'react';
+import { z } from 'zod';
+import { reportSkippedSharedFiles, type RejectedSharedFile } from '@/lib/nativeSharedFiles';
+import { keepWorkDraftOwnSlot } from '@/lib/chatDraftPersistence';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { createSessionDraftId } from '@/stores/useSessionDraftsStore';
+import { useInputStore } from '@/sync/input-store';
 
 import { isCapacitorApp } from '@/lib/platform';
 import type { PairingConnectionPayload } from '@/lib/connectionPayload';
@@ -7,6 +13,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { openSession } from '@/lib/router/openSessionFromRoute';
 
 import { parseDeepLink, type DeepLinkIntent, type SessionsFilter, type ViewTarget } from './deepLinks';
+import type { SavedInstanceSwitchOutcome } from './mobileConnections';
 
 
 interface DeepLinkHandlers {
@@ -17,9 +24,28 @@ interface DeepLinkHandlers {
 }
 
 let handlers: DeepLinkHandlers = {};
-let ready = false;
+type InstanceSwitcher = (serverId: string) => Promise<SavedInstanceSwitchOutcome>;
+type SharedFilesIntent = { type: 'shared-files'; files: File[]; text: string | null; rejected: RejectedSharedFile[]; accept?: () => void };
 type NavigationIntent = Exclude<DeepLinkIntent, { type: 'pairing' }>;
-let pending: NavigationIntent | null = null;
+
+export const openSharedFilesSession = (intent: SharedFilesIntent): boolean => {
+  if (intent.files.length === 0 && !intent.text) {
+    reportSkippedSharedFiles(intent.rejected);
+    intent.accept?.();
+    return true;
+  }
+  const projects = useProjectsStore.getState();
+  const project = projects.getActiveProject() ?? projects.projects[0] ?? null;
+  if (!project && !projects.hasServerSnapshot && !projects.serverSnapshotFailed) return false;
+  const workDraftId = createSessionDraftId();
+  keepWorkDraftOwnSlot(workDraftId);
+  useSessionUIStore.getState().openNewSessionDraft(project
+    ? { workDraftId, selectedProjectId: project.id }
+    : { workDraftId, target: 'chat' });
+  const draftId = useSessionUIStore.getState().newSessionDraft.draftId;
+  useInputStore.getState().requestDraftContent(draftId, intent);
+  return true;
+};
 
 const execute = (intent: NavigationIntent): boolean => {
   switch (intent.type) {
@@ -71,18 +97,74 @@ const execute = (intent: NavigationIntent): boolean => {
   }
 };
 
-const flush = (): void => {
-  if (!ready || !pending) return;
-  const intent = pending;
-  pending = null;
-  if (!execute(intent)) {
-    pending = intent;
-  }
+export const createDeepLinkQueue = <Intent extends { type: string; serverId?: string }>(run: (intent: Intent) => boolean) => {
+  let ready = false;
+  let pending: Intent | null = null;
+  let switchToServer: InstanceSwitcher | null = null;
+  let switching: Promise<void> | null = null;
+  let waitingForSwitchedRuntime = false;
+
+  const switchThenFlush = (switcher: InstanceSwitcher, serverId: string): Promise<void> => switcher(serverId).then((outcome) => {
+    switching = null;
+    if (!pending || pending.serverId !== serverId) return flush();
+    if (outcome === 'unavailable') {
+      pending = null;
+      return undefined;
+    }
+    if (outcome === 'switched') {
+      waitingForSwitchedRuntime = true;
+      ready = false;
+      return undefined;
+    }
+    pending.serverId = undefined;
+    return flush();
+  }, () => {
+    switching = null;
+    pending = null;
+  });
+
+  const flush = (): Promise<void> => {
+    if (switching) return switching;
+    if (!pending || waitingForSwitchedRuntime) return Promise.resolve();
+    const intent = pending;
+    if (intent.type === 'session' && intent.serverId && switchToServer) {
+      switching = switchThenFlush(switchToServer, intent.serverId);
+      return switching;
+    }
+    if (!ready) return Promise.resolve();
+    pending = null;
+    if (!run(intent)) pending = intent;
+    return Promise.resolve();
+  };
+
+  return {
+    apply: (intent: Intent): Promise<void> => {
+      pending = intent;
+      return flush();
+    },
+    setReady: (value: boolean, switcher: InstanceSwitcher | null): Promise<void> => {
+      ready = value;
+      switchToServer = switcher;
+      if (value) waitingForSwitchedRuntime = false;
+      return flush();
+    },
+    flush,
+  };
 };
 
+const queue = createDeepLinkQueue<NavigationIntent>(execute);
+const shareQueue = createDeepLinkQueue<SharedFilesIntent>(openSharedFilesSession);
+useProjectsStore.subscribe((state, previous) => {
+  if (
+    state.projects === previous.projects
+    && state.hasServerSnapshot === previous.hasServerSnapshot
+    && state.serverSnapshotFailed === previous.serverSnapshotFailed
+  ) return;
+  queueMicrotask(() => void shareQueue.flush());
+});
+
 const applyDeepLinkIntent = (intent: NavigationIntent): void => {
-  pending = intent;
-  flush();
+  void queue.apply(intent);
 };
 
 const applyDeepLinkUrl = (raw: string | null | undefined, onPairing?: (payload: PairingConnectionPayload | null) => void): void => {
@@ -94,15 +176,30 @@ const applyDeepLinkUrl = (raw: string | null | undefined, onPairing?: (payload: 
   }
 };
 
-const setReady = (value: boolean): void => {
-  ready = value;
-  flush();
+const notificationTapDataSchema = z.object({
+  serverId: z.string().min(1).optional().catch(undefined),
+  sessionId: z.string().min(1).optional().catch(undefined),
+  url: z.string().optional().catch(undefined),
+  deeplink: z.string().optional().catch(undefined),
+});
+
+export type NotificationTapData = z.input<typeof notificationTapDataSchema>;
+
+export const notificationTapIntent = (data: NotificationTapData | null | undefined): DeepLinkIntent | null => {
+  const parsed = notificationTapDataSchema.safeParse(data ?? {});
+  if (!parsed.success) return null;
+  const { serverId, sessionId, url, deeplink } = parsed.data;
+  const fromUrl = parseDeepLink(url ?? deeplink);
+  const intent: DeepLinkIntent | null = fromUrl ?? (sessionId ? { type: 'session', sessionId } : null);
+  if (intent?.type === 'session' && serverId) intent.serverId = serverId;
+  return intent;
 };
 
 export const useDeepLinkHandlers = (next: DeepLinkHandlers): void => {
   React.useEffect(() => {
     handlers = next;
-    flush();
+    void queue.flush();
+    void shareQueue.flush();
     return () => {
       if (handlers === next) {
         handlers = {};
@@ -111,9 +208,10 @@ export const useDeepLinkHandlers = (next: DeepLinkHandlers): void => {
   }, [next]);
 };
 
-export const useDeepLinkSource = ({ ready: isReady, onPairing }: {
-  ready: boolean;
-  onPairing?: (payload: PairingConnectionPayload | null) => void;
+export const useDeepLinkSource = ({ ready: isReady, onPairing, switchToServer }: {
+ ready: boolean;
+ onPairing?: (payload: PairingConnectionPayload | null) => void;
+ switchToServer?: InstanceSwitcher;
 }): void => {
   const onPairingRef = React.useRef(onPairing);
   React.useEffect(() => {
@@ -121,8 +219,9 @@ export const useDeepLinkSource = ({ ready: isReady, onPairing }: {
   }, [onPairing]);
 
   React.useEffect(() => {
-    setReady(isReady);
-  }, [isReady]);
+    void queue.setReady(isReady, switchToServer ?? null);
+    void shareQueue.setReady(isReady, null);
+  }, [isReady, switchToServer]);
 
   React.useEffect(() => {
     if (!isCapacitorApp()) return;
@@ -155,16 +254,8 @@ export const useDeepLinkSource = ({ ready: isReady, onPairing }: {
       .then(async ({ PushNotifications }) => {
         if (disposed) return;
         const handle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-          const data = action?.notification?.data as Record<string, unknown> | undefined;
-          const url = typeof data?.url === 'string' ? data.url : typeof data?.deeplink === 'string' ? data.deeplink : undefined;
-          if (url) {
-            applyDeepLinkUrl(url);
-            return;
-          }
-          const sessionId = typeof data?.sessionId === 'string' ? data.sessionId : undefined;
-          if (sessionId) {
-            applyDeepLinkIntent({ type: 'session', sessionId });
-          }
+          const intent = notificationTapIntent(action?.notification?.data);
+          if (intent && intent.type !== 'pairing') applyDeepLinkIntent(intent);
         });
         if (disposed) {
           void handle.remove();

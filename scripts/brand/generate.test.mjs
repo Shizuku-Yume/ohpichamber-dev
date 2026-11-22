@@ -74,6 +74,7 @@ test('every drawing carries both π polygons', () => {
     ['packages/web/public/favicon.svg', glyphFace, glyphFold],
     ['packages/electron/resources/icons/tray/tray-glyph.svg', glyphFace, glyphFold],
     ['packages/mobile/android/app/src/main/res/drawable/ic_stat_notify.xml', glyphFace, glyphFold],
+    ['packages/mobile/android/app/src/main/res/drawable/ic_tile_new_session.xml', glyphFace, glyphFold],
   ];
   const missing = drawings.flatMap(([path, face, fold]) => {
     const text = readFileSync(path, 'utf8');

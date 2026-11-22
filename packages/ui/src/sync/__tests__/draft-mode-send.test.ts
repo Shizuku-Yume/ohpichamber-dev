@@ -118,7 +118,8 @@ const openDraft = () => {
     useSessionUIStore.getState().openNewSessionDraft({ target: 'project', directoryOverride: '/repo', selectedProjectId: 'project-1' });
 };
 
-const send = () => useSessionUIStore.getState().sendMessage('Ship it', 'provider', 'model', null, undefined, undefined, undefined, undefined, 'normal');
+type SendOptions = NonNullable<Parameters<ReturnType<typeof useSessionUIStore.getState>['sendMessage']>[9]>;
+const send = (options?: SendOptions) => useSessionUIStore.getState().sendMessage('Ship it', 'provider', 'model', null, undefined, undefined, undefined, undefined, 'normal', options);
 
 describe('draft mode application', () => {
     test('Plan is applied after the session exists and before the prompt', async () => {
@@ -152,4 +153,36 @@ describe('draft mode application', () => {
         expect(events).toEqual(['create', 'prompt']);
         expect(canonicalClient.setMode).not.toHaveBeenCalled();
     });
+});
+
+
+test('reports the authoritative created session before prompting and never for an existing session', async () => {
+    openDraft();
+    const receipt = mock((target: { sessionId: string; directory: string | null }) => {
+        expect(target).toEqual({ sessionId: 'ses_draft_mode', directory: '/repo' });
+        events.push('receipt');
+    });
+    await send({ onSessionCreated: receipt });
+    expect(events).toEqual(['create', 'receipt', 'prompt']);
+    await send({ onSessionCreated: receipt });
+    expect(receipt).toHaveBeenCalledTimes(1);
+});
+
+test('a post-creation mode failure retains the creation receipt for its captured composer', async () => {
+    openDraft();
+    useSessionUIStore.getState().setDraftMode('plan');
+    failMode = true;
+    const receipt = mock(() => { events.push('receipt'); });
+    await expect(send({ onSessionCreated: receipt })).rejects.toThrow('The plan model role is unavailable');
+    expect(events).toEqual(['create', 'receipt', 'mode:plan']);
+    expect(receipt).toHaveBeenCalledTimes(1);
+});
+
+test('failed session admission never reports a created session', async () => {
+    openDraft();
+    spyOn(canonicalClient, 'createSession').mockRejectedValue(new Error('Admission failed'));
+    const receipt = mock(() => undefined);
+    await expect(send({ onSessionCreated: receipt })).rejects.toThrow('Failed to create session');
+    expect(receipt).not.toHaveBeenCalled();
+    expect(canonicalClient.createRun).not.toHaveBeenCalled();
 });

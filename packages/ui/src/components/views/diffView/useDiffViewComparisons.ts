@@ -42,6 +42,7 @@ interface DiffViewComparisonsOptions {
     visible: boolean;
     onDiffScopeChange: DiffViewProps['onDiffScopeChange'];
     diffScope: DiffScope | null;
+    turnId?: string;
 }
 
 export function useDiffViewComparisons({

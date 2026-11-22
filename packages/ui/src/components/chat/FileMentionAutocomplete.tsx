@@ -1,4 +1,9 @@
 import React from 'react';
+import { keepGuestItemsInScope } from '@/lib/guests/folders';
+import { useGuestScopeOf } from '@/hooks/useGuestScopeSync';
+import { guestsOfferMentions, searchGuestMentions, type GuestMention } from '@/lib/guests/mentions';
+import { useGuestsStore } from '@/lib/guests/store';
+import { captureRuntimeInstance, getRuntimeSwitchRevision, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -39,6 +44,7 @@ export interface FileMentionHandle {
 interface FileMentionAutocompleteProps {
   searchQuery: string;
   onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
+  onExtensionMentionSelect?: (mention: GuestMention) => void;
   onClose: () => void;
   style?: React.CSSProperties;
 }
@@ -46,6 +52,7 @@ interface FileMentionAutocompleteProps {
 export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileMentionAutocompleteProps>(({
   searchQuery,
   onFileSelect,
+  onExtensionMentionSelect,
   onClose,
   style,
 }, ref) => {
@@ -207,6 +214,25 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     if (visibleSchemes.length === 0) return ranked;
     return [...visibleSchemes, ...ranked];
   }, [files, directories, normalizedSearchQuery, visibleSchemes]);
+
+  const runtimeRevision = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeSwitchRevision, getRuntimeSwitchRevision);
+  const guests = useGuestsStore((state) => state.guests);
+  const mentionScope = useGuestScopeOf(currentDirectory || null);
+  const asksExtensions = onExtensionMentionSelect !== undefined && guestsOfferMentions(guests, mentionScope);
+  const [extensionResult, setExtensionResult] = React.useState<{ runtimeRevision: number; rows: GuestMention[] }>({ runtimeRevision, rows: [] });
+  React.useEffect(() => {
+    if (!asksExtensions) {
+      setExtensionResult({ runtimeRevision, rows: [] });
+      return undefined;
+    }
+    const controller = new AbortController();
+    const isCurrent = captureRuntimeInstance();
+    void searchGuestMentions(debouncedQuery ?? '', currentDirectory || null, controller.signal).then((rows) => {
+      if (!controller.signal.aborted && isCurrent()) setExtensionResult({ runtimeRevision, rows });
+    });
+    return () => controller.abort();
+  }, [asksExtensions, currentDirectory, debouncedQuery, runtimeRevision]);
+  const visibleExtensions = React.useMemo(() => extensionResult.runtimeRevision === runtimeRevision ? keepGuestItemsInScope(extensionResult.rows, guests, mentionScope) : [], [extensionResult, guests, mentionScope, runtimeRevision]);
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -421,7 +447,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         return;
       }
 
-      const total = visibleRecentFiles.length + visibleResults.length;
+      const total = visibleRecentFiles.length + visibleResults.length + visibleExtensions.length;
       if (total === 0) {
         return;
       }
@@ -444,10 +470,13 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           : visibleResults[recentIndex - visibleRecentFiles.length];
         if (selectedFile) {
           handleFileSelect(selectedFile);
+        } else {
+          const mention = visibleExtensions[safeIndex - visibleRecentFiles.length - visibleResults.length];
+          if (mention) onExtensionMentionSelect?.(mention);
         }
       }
     }
-  }), [visibleResults, visibleRecentFiles, onClose, handleFileSelect]);
+  }), [visibleResults, visibleRecentFiles, visibleExtensions, onExtensionMentionSelect, onClose, handleFileSelect]);
 
   const getFileIcon = (file: { path: string; extension?: string }) => {
     const ext = file.extension?.toLowerCase();
@@ -477,11 +506,12 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   return (
       <div
         ref={containerRef}
+        aria-busy={loading}
         className="absolute z-[100] min-w-0 w-full max-w-[640px] max-h-64 oc-glass-popover border-2 border-border/60 rounded-xl shadow-none bottom-full mb-2 left-0 flex flex-col"
         style={mobileMaxHeight !== undefined ? { ...style, maxHeight: mobileMaxHeight } : style}
       >
         <ScrollableOverlay preventOverscroll outerClassName="flex-1 min-h-0" className="px-0">
-        {loading ? (
+        {loading && visibleResults.length + visibleRecentFiles.length + visibleExtensions.length === 0 ? (
           <div className="flex items-center justify-center py-4">
             <Icon name="refresh" className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
@@ -595,7 +625,17 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 </React.Fragment>
               );
             })}
-            {visibleResults.length === 0 && visibleRecentFiles.length === 0 && (
+            {visibleExtensions.map((mention, index) => {
+              const rowIndex = visibleRecentFiles.length + visibleResults.length + index;
+              return <div key={`extension-${mention.guestId}-${mention.id}`} ref={(el) => { itemRefs.current[rowIndex] = el; }}
+                className={cn('flex items-center gap-2 px-2 py-1.5 cursor-pointer typography-ui-label rounded-lg', selectedIndex === rowIndex && 'bg-interactive-selection')}
+                onClick={() => onExtensionMentionSelect?.(mention)} onMouseMove={() => setSelectedIndex(rowIndex)}>
+                <Icon name="apps" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="max-w-[60%] shrink-0 truncate font-medium">{mention.title}</span>
+                <span className="truncate text-muted-foreground">{mention.subtitle ?? mention.label}</span>
+              </div>;
+            })}
+            {visibleResults.length === 0 && visibleRecentFiles.length === 0 && visibleExtensions.length === 0 && (
               <div className="px-3 py-2 typography-ui-label text-muted-foreground">
                 {t('chat.fileMentionAutocomplete.empty')}
               </div>

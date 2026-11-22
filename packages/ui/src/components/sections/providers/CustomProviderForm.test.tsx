@@ -7,14 +7,15 @@ const dom = new Window({ url: 'http://localhost' });
 Object.assign(globalThis, {
   window: dom, document: dom.document, CustomEvent: dom.CustomEvent, navigator: dom.navigator, localStorage: dom.localStorage,
   HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, Event: dom.Event,
-  MouseEvent: dom.MouseEvent, KeyboardEvent: dom.KeyboardEvent, MutationObserver: dom.MutationObserver,
-  ResizeObserver: dom.ResizeObserver, getComputedStyle: dom.getComputedStyle.bind(dom),
+  MouseEvent: dom.MouseEvent, PointerEvent: dom.PointerEvent, KeyboardEvent: dom.KeyboardEvent, MutationObserver: dom.MutationObserver,
+  ResizeObserver: dom.ResizeObserver, IntersectionObserver: class { observe() {} disconnect() {} }, getComputedStyle: dom.getComputedStyle.bind(dom),
   requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { CustomProviderForm } = await import('./CustomProviderForm');
+
 
 const savedProvider: ProviderConfigurationRead = {
   revision: '0',

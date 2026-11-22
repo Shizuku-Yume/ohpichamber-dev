@@ -9,6 +9,7 @@ import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useGitmojiList } from '@/hooks/useGitmojiList';
+import { readGitViewSnapshot, rememberGitViewSnapshot } from '@/components/views/gitViewSnapshots';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -117,12 +118,6 @@ type HistoryBranchDivider = {
 
 const GIT_RECONCILE_DELAY_MS = 15000;
 
-type GitViewSnapshot = {
- directory?: string;
- commitMessage: string;
- generatedHighlights: string[];
-};
-
 type GitmojiEntry = {
  emoji: string;
  code: string;
@@ -197,23 +192,6 @@ const matchGitmojiFromSubject = (subject: string, gitmojis: GitmojiEntry[]): Git
  }
 
  return null;
-};
-
-const GIT_VIEW_SNAPSHOTS_CAP = 20;
-
-const gitViewSnapshots = new Map<string, GitViewSnapshot>();
-
-const rememberSnapshot = (key: string, snapshot: GitViewSnapshot) => {
- // Touch-on-write LRU: deleting before re-inserting promotes the key to
- // the Map's insertion order, so the oldest key falls off the end.
- gitViewSnapshots.delete(key);
- gitViewSnapshots.set(key, snapshot);
- if (gitViewSnapshots.size > GIT_VIEW_SNAPSHOTS_CAP) {
-  const oldest = gitViewSnapshots.keys().next().value;
-  if (oldest !== undefined) {
-   gitViewSnapshots.delete(oldest);
-  }
- }
 };
 
 const isStagedStatusFile = (file: GitStatus['files'][number]): boolean => {
@@ -645,10 +623,8 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
  const postBootstrapRefreshFailed = isPostBootstrapRefreshForCurrentDirectory
   && postBootstrapRefresh?.status === 'failed';
 
- const initialSnapshot = React.useMemo(() => {
-  if (!gitDirectory) return null;
-  return gitViewSnapshots.get(gitDirectory) ?? null;
- }, [gitDirectory]);
+ const snapshotKey = gitDirectory ? JSON.stringify([getRuntimeKey(), gitDirectory]) : null;
+ const initialSnapshot = React.useMemo(() => snapshotKey ? readGitViewSnapshot(snapshotKey) : null, [snapshotKey]);
 
  const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
  const { settings: commitSettings } = useCommitSettings();
@@ -964,19 +940,20 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
  // mirroring the fresh-mount behavior of a directory switch.
  React.useEffect(() => {
   if (!gitDirectory) return;
-  const snapshot = gitViewSnapshots.get(gitDirectory) ?? null;
+  const snapshot = snapshotKey ? readGitViewSnapshot(snapshotKey) : null;
   setCommitMessage(snapshot?.commitMessage ?? '');
   setGeneratedHighlights(snapshot?.generatedHighlights ?? []);
- }, [gitDirectory]);
+ }, [gitDirectory, snapshotKey]);
 
  React.useEffect(() => {
   if (!gitDirectory) return;
-  rememberSnapshot(gitDirectory, {
+  if (!snapshotKey) return;
+  rememberGitViewSnapshot(snapshotKey, {
    directory: gitDirectory,
    commitMessage,
    generatedHighlights,
   });
- }, [commitMessage, gitDirectory, generatedHighlights]);
+ }, [commitMessage, gitDirectory, generatedHighlights, snapshotKey]);
 
 
  const refreshRemotes = React.useCallback(async () => {

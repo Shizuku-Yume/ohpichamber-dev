@@ -46,7 +46,7 @@ import { hasOpenDropdown } from '@/hooks/keyboard-shortcut-dom';
 import { ComposerEditor } from '../../composer/editor/ComposerEditor';
 import { composerAutoCorrect } from '../../composer/editor/autocorrect';
 import { MobileCommentComposer } from '../../composer/comment/MobileCommentComposer';
-import { DraftTargetSelectors, MobileDraftTargetTriggers } from '../../composer/ui/DraftTargetSelectors';
+import { ComposerDraftTargets } from '../../composer/ui/ComposerDraftTargets';
 import { ComposerAutocompletePopups } from '../../composer/ui/ComposerAutocompletePopups';
 import { ComposerFooter } from '../../composer/ui/ComposerFooter';
 import { MobilePillComposer } from '../../composer/ui/MobilePillComposer';
@@ -170,7 +170,7 @@ export function renderComposerForm({
     } = editorActions;
     const {
         handleCommandSelect, handleSkillSelect, 
-        handleFileSelect, 
+        handleFileSelect, handleExtensionMentionSelect,
         handleEmojiSelect,
     } = completions;
     const {
@@ -229,9 +229,12 @@ export function renderComposerForm({
             ) : null}
             <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 {!mobileCommentActive ? (<>
-                {!isMobile && (showDraftTargetSelectors || draftPresentationExiting) && selectedDraftProject ? (
-                    <div className={draftPresentationClassName}>
-                        <DraftTargetSelectors
+                <ComposerDraftTargets
+                            isMobile={isMobile}
+                            showSelectors={showDraftTargetSelectors}
+                            exiting={draftPresentationExiting ?? false}
+                            presentationClassName={draftPresentationClassName}
+                            onOpenPicker={handleMobileDraftPickerChange}
                             projects={draftProjects}
                             selectedProject={selectedDraftProject}
                             selectedDirectory={selectedDraftDirectory}
@@ -247,18 +250,7 @@ export function renderComposerForm({
                             onCreateSpace={handleCreateSpace}
                             onCreateCustomWorktree={handleCreateCustomWorktree}
                             theme={currentTheme}
-                        />
-                    </div>
-                ) : null}
-                {isMobile && showDraftTargetSelectors && selectedDraftProject ? (
-                    <MobileDraftTargetTriggers
-                        selectedProject={selectedDraftProject}
-                        selectedBranchLabel={selectedDraftBranchLabel}
-                        showBranchSelector={shouldShowDraftBranchSelector}
-                        theme={currentTheme}
-                        onOpenPicker={handleMobileDraftPickerChange}
-                    />
-                ) : null}
+                />
                 </>) : null}
                 <div
                     data-dictation-host="true"
@@ -282,7 +274,6 @@ export function renderComposerForm({
                         sessionId={currentSessionId}
                         newSessionDraftOpen={newSessionDraftOpen}
                         hasContent={Boolean(hasContent) && !pendingFirstSend}
-                        isVSCode={isVSCode}
                         canAbort={canAbort}
                         footerIconButtonClass={footerIconButtonClass}
                         iconSizeClass={iconSizeClass}
@@ -311,6 +302,7 @@ export function renderComposerForm({
                     {largeTextPasteOffer ? (
                         <LargeTextPasteChoice
                             key={largeTextPasteOffer.id}
+                            kind={largeTextPasteOffer.kind}
                             takeFocus={!isMobile}
                             expanded={isComposerExpanded}
                             onChoose={(action, explicitlyChosen) => largeTextPasteOffer.resolve(action, explicitlyChosen)}
@@ -328,6 +320,7 @@ export function renderComposerForm({
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
                         onFileSelect={handleFileSelect}
+                        onExtensionMentionSelect={handleExtensionMentionSelect}
                         onEmojiSelect={handleEmojiSelect}
                         onClose={closeAutocomplete}
                     />
@@ -416,6 +409,7 @@ export function renderComposerForm({
                         >
                             <ComposerEditor
                                 ref={composerRef}
+                                scriptAwareWords
                                 viewStore={composerViewStore}
                                 data-testid="chat-input"
                                 value={composerText.get()}
@@ -458,6 +452,7 @@ export function renderComposerForm({
                         </div>
                     </div>
                     <ComposerFooter
+                        isVSCode={isVSCode}
                         planRoleAvailable={footerModes.planRoleAvailable}
                         goalModeEnabled={footerModes.goalModeEnabled}
                         onDraftModeChange={footerModes.handleDraftModeChange}
@@ -469,7 +464,6 @@ export function renderComposerForm({
                         onToggleExpandedInput={footerModes.handleToggleExpandedInput}
                         onQueueMessage={footerModes.handleQueueFromFooter}
                         isMobile={isMobile}
-                        isVSCode={isVSCode}
                         escapeStops={abortShortcutReaches}
                         sessionId={currentSessionId}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}

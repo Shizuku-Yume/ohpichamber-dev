@@ -3,6 +3,10 @@ import { nativeProvidersI18n } from './native-providers.i18n';
 /** Providers settings strings (card grid, provider accounts) — merged into each locale's main dictionary. */
 export const providersI18n = {
   en: {
+  'settings.openchamber.defaults.chatsTitle': 'Chats',
+  'settings.openchamber.defaults.chatsInfo': 'New chats outside a project start with these settings, including chats an agent or a scheduled task opens. An empty field uses the New sessions default.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'This model isn\'t available anymore, so new chats use the New sessions model.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'This model isn\'t available anymore, so new chats use another model.',
   'settings.providers.enterpriseTitle': 'Enterprise mode',
   'settings.providers.enterpriseManagedBy': 'Managed by {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'The machine policy file could not be read, so enterprise mode stays on. Ask your administrator to check it.',
@@ -129,6 +133,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Models this provider returned just now. Empty model fields can be filled in from the OMP model catalog and OpenRouter; nothing updates on its own afterwards.'
 },
   nl: {
+  'settings.openchamber.defaults.chatsTitle': 'Gesprekken',
+  'settings.openchamber.defaults.chatsInfo': 'Nieuwe gesprekken buiten een project starten met deze instellingen, ook gesprekken die een agent of een geplande taak opent. Een leeg veld gebruikt de standaard van Nieuwe sessies.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Dit model is niet meer beschikbaar, dus nieuwe gesprekken gebruiken het model van Nieuwe sessies.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Dit model is niet meer beschikbaar, dus nieuwe gesprekken gebruiken een ander model.',
   'settings.providers.enterpriseTitle': 'Enterprise-modus',
   'settings.providers.enterpriseManagedBy': 'Beheerd door {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'Het beleidsbestand op deze computer kon niet worden gelezen, dus de enterprise-modus blijft aan. Vraag uw beheerder het te controleren.',
@@ -255,6 +263,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Modellen die deze provider zojuist heeft geretourneerd. Lege modelvelden kunnen worden ingevuld uit de OMP-modelcatalogus en OpenRouter; daarna wordt niets vanzelf bijgewerkt.'
 },
   uk: {
+  'settings.openchamber.defaults.chatsTitle': 'Чати',
+  'settings.openchamber.defaults.chatsInfo': 'Нові чати поза проєктом починаються з цими налаштуваннями, зокрема чати, які відкриває агент або заплановане завдання. Порожнє поле бере значення з розділу Нові сесії.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Ця модель більше недоступна, тож нові чати використовують модель із розділу Нові сесії.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Ця модель більше недоступна, тож нові чати використовують іншу модель.',
   'settings.providers.enterpriseTitle': 'Режим enterprise',
   'settings.providers.enterpriseManagedBy': 'Керує {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'Не вдалося прочитати файл політики на цьому комп’ютері, тому режим enterprise лишається увімкненим. Попросіть адміністратора його перевірити.',
@@ -381,6 +393,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Моделі, які провайдер щойно повернув. Порожні поля моделей можна заповнити з каталогу моделей OMP і OpenRouter; далі нічого не оновлюється само.'
 },
   de: {
+  'settings.openchamber.defaults.chatsTitle': 'Chats',
+  'settings.openchamber.defaults.chatsInfo': 'Neue Chats außerhalb eines Projekts starten mit diesen Einstellungen, auch Chats, die ein Agent oder eine geplante Aufgabe öffnet. Ein leeres Feld übernimmt die Vorgabe aus dem Abschnitt „Neue Sitzungen“.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Dieses Modell ist nicht mehr verfügbar, daher verwenden neue Chats das Modell aus dem Abschnitt „Neue Sitzungen“.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Dieses Modell ist nicht mehr verfügbar, daher verwenden neue Chats ein anderes Modell.',
   'settings.providers.enterpriseTitle': 'Enterprise-Modus',
   'settings.providers.enterpriseManagedBy': 'Verwaltet von {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'Die Richtliniendatei dieses Rechners ließ sich nicht lesen, daher bleibt der Enterprise-Modus an. Bitte deinen Administrator, sie zu prüfen.',
@@ -507,6 +523,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Modelle, die dieser Anbieter gerade zurückgegeben hat. Leere Modellfelder lassen sich aus dem OMP-Modellkatalog und OpenRouter füllen; danach aktualisiert sich nichts von selbst.'
 },
   es: {
+  'settings.openchamber.defaults.chatsTitle': 'Chats',
+  'settings.openchamber.defaults.chatsInfo': 'Los chats nuevos fuera de un proyecto empiezan con estos valores, también los que abre un agente o una tarea programada. Un campo vacío usa el valor de Sesiones nuevas.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Este modelo ya no está disponible, así que los chats nuevos usan el modelo de Sesiones nuevas.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Este modelo ya no está disponible, así que los chats nuevos usan otro modelo.',
   'settings.providers.enterpriseTitle': 'Modo empresa',
   'settings.providers.enterpriseManagedBy': 'Gestionado por {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'No se pudo leer el archivo de políticas del equipo, así que el modo empresa sigue activo. Pide a tu administrador que lo revise.',
@@ -633,6 +653,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Modelos que este proveedor acaba de devolver. Los campos vacíos del modelo se pueden rellenar desde el catálogo de modelos de OMP y OpenRouter; después nada se actualiza solo.'
 },
   fr: {
+  'settings.openchamber.defaults.chatsTitle': 'Discussions',
+  'settings.openchamber.defaults.chatsInfo': 'Les nouvelles discussions hors projet démarrent avec ces réglages, y compris celles qu\'ouvre un agent ou une tâche planifiée. Un champ vide reprend la valeur de Nouvelles sessions.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Ce modèle n\'est plus disponible : les nouvelles discussions utilisent le modèle de Nouvelles sessions.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Ce modèle n\'est plus disponible : les nouvelles discussions utilisent un autre modèle.',
   'settings.providers.enterpriseTitle': 'Mode entreprise',
   'settings.providers.enterpriseManagedBy': 'Géré par {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'Le fichier de stratégie de cette machine est illisible, le mode entreprise reste donc actif. Demandez à votre administrateur de le vérifier.',
@@ -759,6 +783,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Modèles que ce fournisseur vient de renvoyer. Les champs vides du modèle peuvent être remplis depuis le catalogue de modèles OMP et OpenRouter ; ensuite, rien ne se met à jour tout seul.'
 },
   ja: {
+  'settings.openchamber.defaults.chatsTitle': 'チャット',
+  'settings.openchamber.defaults.chatsInfo': 'プロジェクト外の新しいチャットはこの設定で始まります。Agent やスケジュールタスクが開くチャットも同様です。空欄の項目は新しいセッションの既定値を使用します。',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'このモデルは利用できなくなったため、新しいチャットでは新しいセッションのモデルを使用します。',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'このモデルは利用できなくなったため、新しいチャットでは別のモデルを使用します。',
   'settings.providers.enterpriseTitle': 'エンタープライズモード',
   'settings.providers.enterpriseManagedBy': '{organization} が管理しています。',
   'settings.providers.enterprisePolicyUnreadable': 'このマシンのポリシーファイルを読み込めなかったため、エンタープライズモードは有効のままです。管理者に確認を依頼してください。',
@@ -885,6 +913,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'このプロバイダーが今返したモデルです。空のモデル項目は OMP モデルカタログと OpenRouter から入力できます。その後は自動では更新されません。'
 },
   ko: {
+  'settings.openchamber.defaults.chatsTitle': '채팅',
+  'settings.openchamber.defaults.chatsInfo': '프로젝트 밖의 새 채팅은 이 설정으로 시작합니다. 에이전트나 예약 작업이 여는 채팅도 마찬가지입니다. 비워 둔 항목은 새 세션의 기본값을 사용합니다.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': '이 모델은 더 이상 사용할 수 없어 새 채팅은 새 세션의 모델을 사용합니다.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': '이 모델은 더 이상 사용할 수 없어 새 채팅은 다른 모델을 사용합니다.',
   'settings.providers.enterpriseTitle': '엔터프라이즈 모드',
   'settings.providers.enterpriseManagedBy': '{organization}에서 관리합니다.',
   'settings.providers.enterprisePolicyUnreadable': '이 컴퓨터의 정책 파일을 읽을 수 없어 엔터프라이즈 모드가 켜진 상태로 유지됩니다. 관리자에게 확인을 요청하세요.',
@@ -1011,6 +1043,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': '이 제공자가 방금 반환한 모델입니다. 빈 모델 필드는 OMP 모델 카탈로그와 OpenRouter에서 채울 수 있으며, 그 뒤로는 자동으로 업데이트되지 않습니다.'
 },
   pl: {
+  'settings.openchamber.defaults.chatsTitle': 'Czaty',
+  'settings.openchamber.defaults.chatsInfo': 'Nowe czaty poza projektem zaczynają z tymi ustawieniami, także czaty otwierane przez agenta lub zaplanowane zadanie. Puste pole używa wartości z sekcji Nowe sesje.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Ten model nie jest już dostępny, więc nowe czaty używają modelu z sekcji Nowe sesje.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Ten model nie jest już dostępny, więc nowe czaty używają innego modelu.',
   'settings.providers.enterpriseTitle': 'Tryb enterprise',
   'settings.providers.enterpriseManagedBy': 'Zarządzane przez {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'Nie udało się odczytać pliku zasad na tym komputerze, więc tryb enterprise pozostaje włączony. Poproś administratora o sprawdzenie go.',
@@ -1137,6 +1173,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Modele, które ten dostawca właśnie zwrócił. Puste pola modeli można uzupełnić z katalogu modeli OMP i OpenRouter; potem nic nie aktualizuje się samo.'
 },
   'pt-BR': {
+  'settings.openchamber.defaults.chatsTitle': 'Conversas',
+  'settings.openchamber.defaults.chatsInfo': 'Novas conversas fora de um projeto começam com estes valores, inclusive as que um agente ou uma tarefa agendada abre. Um campo vazio usa o valor de Novas sessões.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Este modelo não está mais disponível, então novas conversas usam o modelo de Novas sessões.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Este modelo não está mais disponível, então novas conversas usam outro modelo.',
   'settings.providers.enterpriseTitle': 'Modo empresarial',
   'settings.providers.enterpriseManagedBy': 'Gerenciado por {organization}.',
   'settings.providers.enterprisePolicyUnreadable': 'Não foi possível ler o arquivo de política desta máquina, então o modo empresarial continua ativo. Peça ao seu administrador para verificá-lo.',
@@ -1263,6 +1303,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Modelos que este provedor acabou de retornar. Os campos vazios do modelo podem ser preenchidos com o catálogo de modelos do OMP e o OpenRouter; depois disso, nada é atualizado sozinho.'
 },
   tr: {
+  'settings.openchamber.defaults.chatsTitle': 'Sohbetler',
+  'settings.openchamber.defaults.chatsInfo': 'Bir proje dışındaki yeni sohbetler bu ayarlarla başlar; bir agent\'ın veya zamanlanmış bir görevin açtığı sohbetler de. Boş bir alan Yeni oturumlar varsayılanını kullanır.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'Bu model artık kullanılamıyor, bu yüzden yeni sohbetler Yeni oturumlar modelini kullanır.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'Bu model artık kullanılamıyor, bu yüzden yeni sohbetler başka bir model kullanır.',
   'settings.providers.enterpriseTitle': 'Kurumsal mod',
   'settings.providers.enterpriseManagedBy': '{organization} tarafından yönetiliyor.',
   'settings.providers.enterprisePolicyUnreadable': 'Bu bilgisayardaki politika dosyası okunamadı, bu yüzden kurumsal mod açık kalıyor. Yöneticinizden dosyayı kontrol etmesini isteyin.',
@@ -1389,6 +1433,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'Bu sağlayıcının az önce döndürdüğü modeller. Boş model alanları OMP model kataloğundan ve OpenRouter’dan doldurulabilir; sonrasında hiçbir şey kendiliğinden güncellenmez.'
 },
   'zh-CN': {
+  'settings.openchamber.defaults.chatsTitle': '聊天',
+  'settings.openchamber.defaults.chatsInfo': '项目之外的新聊天使用这些设置，包括由智能体或计划任务打开的聊天。留空的字段沿用新会话的默认值。',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': '此模型已不可用，因此新聊天将使用新会话的模型。',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': '此模型已不可用，因此新聊天将使用其他模型。',
   'settings.providers.enterpriseTitle': '企业模式',
   'settings.providers.enterpriseManagedBy': '由 {organization} 管理。',
   'settings.providers.enterprisePolicyUnreadable': '无法读取本机的策略文件，因此企业模式保持开启。请联系管理员检查该文件。',
@@ -1515,6 +1563,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': '此提供商刚刚返回的模型。空白的模型字段可以用 OMP 模型库和 OpenRouter 填写；此后不会自动更新。'
 },
   'zh-TW': {
+  'settings.openchamber.defaults.chatsTitle': '聊天',
+  'settings.openchamber.defaults.chatsInfo': '專案以外的新聊天會使用這些設定，包括由 Agent 或排程任務開啟的聊天。留空的欄位沿用新工作階段的預設值。',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': '此模型已無法使用，因此新聊天將使用新工作階段的模型。',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': '此模型已無法使用，因此新聊天將使用其他模型。',
   'settings.providers.enterpriseTitle': '企業模式',
   'settings.providers.enterpriseManagedBy': '由 {organization} 管理。',
   'settings.providers.enterprisePolicyUnreadable': '無法讀取本機的原則檔案，因此企業模式維持開啟。請聯絡管理員檢查該檔案。',
@@ -1641,6 +1693,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': '此供應商剛剛回傳的模型。空白的模型欄位可以用 OMP 模型目錄和 OpenRouter 填寫；此後不會自動更新。'
 },
   ar: {
+  'settings.openchamber.defaults.chatsTitle': 'المحادثات',
+  'settings.openchamber.defaults.chatsInfo': 'تبدأ المحادثات الجديدة خارج أي مشروع بهذه الإعدادات، ومنها المحادثات التي يفتحها وكيل أو مهمة مجدولة. يستخدم الحقل الفارغ القيمة الافتراضية من الجلسات الجديدة.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'لم يعد هذا النموذج متاحًا، لذا تستخدم المحادثات الجديدة نموذج الجلسات الجديدة.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'لم يعد هذا النموذج متاحًا، لذا تستخدم المحادثات الجديدة نموذجًا آخر.',
   "settings.providers.enterpriseTitle": "وضع المؤسسات",
   "settings.providers.enterpriseManagedBy": "تديره {organization}.",
   "settings.providers.enterprisePolicyUnreadable": "تعذّرت قراءة ملف سياسة الجهاز، لذا يبقى وضع المؤسسات مفعّلًا. اطلب من المسؤول التحقق منه.",
@@ -1766,6 +1822,10 @@ export const providersI18n = {
   'settings.providers.page.custom.models.dialog.info': 'النماذج التي أعادها هذا الموفر للتو. يمكن ملء حقول النموذج الفارغة من كتالوج نماذج OMP وOpenRouter؛ ولا يتحدّث شيء تلقائيًا بعد ذلك.'
 },
   he: {
+  'settings.openchamber.defaults.chatsTitle': 'צ\'אטים',
+  'settings.openchamber.defaults.chatsInfo': 'צ\'אטים חדשים מחוץ לפרויקט מתחילים עם ההגדרות האלה, כולל צ\'אטים שסוכן או משימה מתוזמנת פותחים. שדה ריק משתמש בברירת המחדל מסשנים חדשים.',
+  'settings.openchamber.defaults.field.chatsModelUnavailableUsesGlobal': 'המודל הזה כבר לא זמין, ולכן צ\'אטים חדשים משתמשים במודל מסשנים חדשים.',
+  'settings.openchamber.defaults.field.chatsModelUnavailable': 'המודל הזה כבר לא זמין, ולכן צ\'אטים חדשים משתמשים במודל אחר.',
   "settings.providers.enterpriseTitle": "מצב ארגוני",
   "settings.providers.enterpriseManagedBy": "מנוהל על ידי {organization}.",
   "settings.providers.enterprisePolicyUnreadable": "לא ניתן היה לקרוא את קובץ המדיניות של המחשב, ולכן המצב הארגוני נשאר פעיל. כדאי לבקש ממנהל המערכת לבדוק אותו.",

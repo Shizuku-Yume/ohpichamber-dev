@@ -45,7 +45,7 @@ fallback is synthesized. Recognition remains independent of Agent availability.
   terminal WS: UI session token or `oc_url_token`, plus origin check).
   Created from the startup pipeline (`startup-pipeline-runtime.js`) before
   the generic OpenCode proxy so routes are not shadowed.
-- `stream-manager.js` — `DictationStreamManager`, one per WS connection.
+- `stream-manager.ts` — `DictationStreamManager`, one per runtime.
   Chunk reordering by `seq` + ack, resampling to the provider rate, segment
   splitting, silence suppression by PCM peak, partial-transcript
   concatenation, adaptive finalization timeout.
@@ -84,11 +84,42 @@ Server → client: `ready`, `ack {ackSeq}`, `partial {text}`,
 
 `options` in `start` carries the client-selected provider config:
 `{ provider: 'local' | 'openai-compatible', language?, localModel?,
-openaiCompatible?: { baseUrl, model, apiKey, endpointPath }, correct? }`. With
+openaiCompatible?: { baseUrl, model, apiKey, endpointPath, prompt }, correct? }`. With
 `correct: true` the final text goes through the correction pass first, and
 `finish_accepted.timeoutMs` includes its budget (`CORRECTION_TIMEOUT_MS`).
 An empty or
-absent `endpointPath` keeps the OpenAI `/v1/audio/transcriptions` path.
+absent `endpointPath` keeps the OpenAI `/v1/audio/transcriptions` path. A
+non-empty `prompt` goes out as the multipart `prompt` field on every committed
+segment; an empty or absent one sends no field. The local provider takes no
+prompt.
+
+### Resume after a dropped connection
+
+A dictation outlives its socket. The runtime keeps one manager for all
+connections, and a stream whose socket closed stays alive for
+`DICTATION_RESUME_GRACE_MS` (30 s). The client reconnects within that window and
+sends `start` again with the dictation id it already had and the same options;
+the server answers with `ack {ackSeq}` carrying its last acked seq and creates
+no new session. A `start` repeated while the first one is still creating its
+session (a local model can take seconds to load) waits for that session's ack
+instead of opening a second one; a cancel, a start with other options, the end
+of the grace period or shutdown closes a session that finishes loading after
+it. The client continues at `ackSeq + 1`, so only the audio sent
+during the interruption is uploaded and nothing already decoded is decoded
+again. A repeated `start` with changed options, a different `format`, or an id
+the server no longer holds starts a fresh stream and acks `-1`, which makes the
+client replay from the first segment.
+
+A stream that already sealed its `finish` is resumed too: it is not done until
+`final` went out, and resuming it keeps the finished audio instead of starting
+an empty stream. Sealing and the final timeout are idempotent, so the repeated
+`finish` the client sends after the reconnect only renews the wait.
+
+A dictation that was already finished while the socket was gone is answered
+from a small cache: the runtime keeps the last `final` texts for
+`DICTATION_FINAL_CACHE_TTL_MS` (30 s, dropped on access and by an unref'd
+timer). A `start` naming such an id gets `final` with the same text and no new
+stream, so the text is not lost to a reconnect that came too late.
 
 ## Segmentation
 
@@ -150,6 +181,15 @@ failure, a missing Small Model or the 10 s cap returns the text as heard, so
 the pass never costs the user the dictation. The prompt names colloquial
 forms ("шо", "gonna") as speech to keep, because small models otherwise
 "correct" them into the literary form.
+
+### Why the transcription prompt is sent to any model and not gated by model name
+
+The server model is free text, and the same name can mean different engines on
+different servers, so OpenChamber cannot tell which models accept a prompt.
+The prompt goes out whenever the user filled it; a model without prompt
+support ignores it or the server rejects the request, and that error reaches
+the user like any other transcription error. A model catalog or an automatic
+retry without the prompt would guess and hide what the server answered.
 
 ### Why the language hint is part of the engine key
 

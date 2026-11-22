@@ -38,6 +38,7 @@ import {
   resolveGuestServedFile,
   toPublicGuest,
 } from './catalog.js';
+import { readInstallFolders, readUploadFolders, registerGuestAvailabilityRoutes } from './availability-routes.js';
 import { guestMarks, mayGuestShowMarks } from './marks.js';
 import { createGuestPackageWatch } from './package-watch.js';
 import { runGuestFileOperation } from './files.js';
@@ -80,7 +81,6 @@ import {
   getServiceStatus,
   proxyGuestServiceRequest,
   setServiceSocketOverride,
-  setGuestEnabled,
   stopGuestService,
 } from './service.js';
 
@@ -140,10 +140,6 @@ const socketOverrideBodySchema = z.object({
     z.literal(''),
     z.null(),
   ]).optional(),
-});
-
-const enabledBodySchema = z.object({
-  enabled: z.boolean(),
 });
 
 const updateCheckBodySchema = z.object({
@@ -433,7 +429,9 @@ export const registerGuestRoutes = (app: Application, {
         const hasUrl = isRecord(req.body) && isString(req.body.url);
         return res.status(400).json({ error: hasUrl ? 'invalid-url' : 'invalid-path' });
       }
-      const result = await installGuest(request, persistPath, installOptions());
+      const folders = readInstallFolders(isRecord(req.body) ? req.body.folders : undefined);
+      if (folders === null) return res.status(400).json({ error: 'invalid-folders' });
+      const result = await installGuest(request, persistPath, { ...installOptions(), folders });
       if (result.ok) await packageChanged(result.guest.id);
       sendInstallResult(res, result);
     } catch (error) {
@@ -444,12 +442,14 @@ export const registerGuestRoutes = (app: Application, {
 
   app.post('/api/guests/upload', async (req, res) => {
     try {
+      const folders = readUploadFolders(req.query?.folders);
+      if (folders === null) return res.status(400).json({ error: 'invalid-folders' });
       const body = await readGuestUploadBody(req, guestUploadMaxBytes());
       if (!body.ok) {
         return res.status(body.status).json({ error: body.error });
       }
       const replace = req.query?.replace === 'true';
-      const result = await installGuestFromZipBuffer(body.buffer, persistPath, { openchamberVersion, replace });
+      const result = await installGuestFromZipBuffer(body.buffer, persistPath, { openchamberVersion, replace, folders });
       if (result.ok) await packageChanged(result.guest.id);
       sendInstallResult(res, result);
     } catch (error) {
@@ -967,32 +967,7 @@ export const registerGuestRoutes = (app: Application, {
     }
   });
 
-  app.put('/api/guests/:id/enabled', json16, async (req, res) => {
-    try {
-      const guest = await loadGuest(req.params.id);
-      if (!guest) {
-        return res.status(404).json({ error: 'not-found' });
-      }
-      const parsed = enabledBodySchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ error: 'invalid-request' });
-      }
-      await setGuestEnabled(guest.id, persistPath, parsed.data.enabled);
-      if (parsed.data.enabled) {
-        await activated(guest.id);
-      } else {
-        await deactivated({ guestId: guest.id, guestName: guest.name });
-      }
-      const next = await loadGuest(guest.id);
-      if (!next) {
-        return res.status(404).json({ error: 'not-found' });
-      }
-      res.json({ guest: toPublicGuest(next) });
-    } catch (error) {
-      console.error('Failed to update guest enabled state:', error);
-      res.status(500).json({ error: 'Failed to update guest enabled state' });
-    }
-  });
+  registerGuestAvailabilityRoutes(app, { persistPath, loadGuest, activated, deactivated, announce });
 
   app.put('/api/guests/:id/service/sockets', json16, async (req, res) => {
     try {

@@ -33,36 +33,35 @@ export type TimelineRow =
 type TurnRowFields = {
     entry: TurnEntry;
     underFold: boolean;
+    keepText: boolean;
     finalMessageId: string | undefined;
     gapBelow: boolean;
 };
 
-type TimelineRowsOptions = {
+export type TimelineRowsOptions = {
+ activeStreamingMessageId?: string | null;
+ keepActivityText?: boolean;
  collapsedActivity: boolean;
  expandedTurns: ReadonlyMap<string, boolean>;
  showReasoningTraces: boolean;
 };
 
-const isMessageCompleted = (message: ChatMessageEntry): boolean => (
- message.role === 'assistant'
-);
-
 const PARTS_PER_ROW = 24;
 
-const messageCuts = (message: ChatMessageEntry, showReasoningTraces: boolean): TextCut[] => {
- const completed = isMessageCompleted(message);
+const messageCuts = (message: ChatMessageEntry, showReasoningTraces: boolean, streaming: boolean): TextCut[] => {
+
  const cuts: TextCut[] = [];
  let partsInRow = 0;
  for (const part of filterVisibleParts(message.parts, { includeReasoning: showReasoningTraces })) {
   if (isEmptyTextPart(part)) continue;
-  const partId = ('partId' in part && typeof part.partId === 'string') ? part.partId : (part as { id?: string }).id ?? '';
+  const partId = part.partId;
   if (partsInRow === PARTS_PER_ROW) {
    cuts.push({ partId, offset: 0 });
    partsInRow = 0;
   }
   partsInRow += 1;
   const text = 'content' in part && typeof part.content === 'string' ? part.content : ('text' in part && typeof part.text === 'string' ? part.text : '');
-  if (!completed || part.type !== 'text' || !text) continue;
+  if (streaming || part.type !== 'text' || !text) continue;
   const textCuts = answerChunkCuts(text);
   for (const offset of textCuts) cuts.push({ partId, offset });
   if (textCuts.length > 0) partsInRow = 1;
@@ -77,11 +76,12 @@ const turnRows = (entry: TurnEntry, options: TimelineRowsOptions): TimelineRow[]
  const underFold = options.collapsedActivity && hasLiveActivity(turn, options.showReasoningTraces);
  const finalMessage = underFold ? getLiveFinalMessage(turn.assistantMessages) : undefined;
  const finalMessageId = finalMessage?.messageId;
- const fields = { entry, underFold, finalMessageId, gapBelow: false };
+ const keepText = underFold && options.keepActivityText === true && options.expandedTurns.get(turn.turnId) !== true;
+ const fields = { entry, underFold, keepText, finalMessageId, gapBelow: false };
  const rows: TimelineRow[] = [{ kind: 'turn-head', key: entry.key, ...fields }];
  const addMessage = (message: ChatMessageEntry, final = false) => {
   const messageId = message.messageId;
-  const cuts = messageCuts(message, options.showReasoningTraces);
+  const cuts = messageCuts(message, options.showReasoningTraces, message.messageId === options.activeStreamingMessageId);
   if (cuts.length === 0) {
    rows.push({ kind: 'turn-message', key: `step:${messageId}`, ...fields, messageId, slice: null, final });
    return;
@@ -139,7 +139,7 @@ const isSameSlice = (previous: MessageSlice | null, next: MessageSlice | null): 
 const isSameRow = (previous: TimelineRow, next: TimelineRow): boolean => {
  if (previous.kind !== next.kind || previous.entry !== next.entry) return false;
  if (previous.kind === 'ungrouped' || next.kind === 'ungrouped') return true;
- if (previous.gapBelow !== next.gapBelow || previous.underFold !== next.underFold || previous.finalMessageId !== next.finalMessageId) return false;
+ if (previous.gapBelow !== next.gapBelow || previous.underFold !== next.underFold || previous.keepText !== next.keepText || previous.finalMessageId !== next.finalMessageId) return false;
  if (previous.kind === 'turn-message' && next.kind === 'turn-message') {
   return previous.messageId === next.messageId && previous.final === next.final && isSameSlice(previous.slice, next.slice);
  }

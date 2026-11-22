@@ -19,11 +19,15 @@ export const getFallbackProjectDirectory = (): string | null => {
 };
 export const getProjectDefaultsForConfigDirectory = (directory: string | null | undefined) => {
     const configDirectory = normalizeConfigPath(directory);
+    const session = useSessionUIStore.getState();
+    if (!session.currentSessionId && session.newSessionDraft?.open && session.newSessionDraft.target === 'chat'
+        && (!configDirectory || toDirectoryKey(configDirectory) === useConfigStore.getState().activeDirectoryKey)) {
+        const config = useConfigStore.getState();
+        return { projectDefaultModel: config.chatsDefaultModel, projectDefaultVariant: config.chatsDefaultVariant };
+    }
     if (!configDirectory) {
         return {};
     }
-    const session = useSessionUIStore.getState();
-    if (!session.currentSessionId && session.newSessionDraft?.open && session.newSessionDraft.target === 'chat' && toDirectoryKey(configDirectory) === useConfigStore.getState().activeDirectoryKey) return {};
     const projectDirectory = resolveProjectDirectory(configDirectory);
     const project = useProjectsStore.getState().projects.find(entry => normalizeConfigPath(entry.path) === projectDirectory);
     return {

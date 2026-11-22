@@ -70,6 +70,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SyncProvider } from '@/sync/sync-context';
 
 import { SyncAppEffects } from './AppEffects';
+import type { MobileChangesInitialDiff } from '@/hooks/useMobileChangesNavigation';
 import { BusyDots } from '@/components/chat/message/parts/BusyDots';
 import { MobileConnectionWelcome, type MobileConnectionNotice } from './MobileConnectionWelcome';
 import { MobileHeader } from './MobileHeader';
@@ -87,7 +88,7 @@ import { connectMobileSettingsNavigation, MOBILE_SETTINGS_PAGES } from './mobile
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, suppressAutoConnectUntilManualConnect, type AutoConnectOutcome } from './mobileConnections';
 import { subscribeActiveRelayTunnelStatus } from '@/lib/relay/runtime-tunnel';
 import { isRelayLimitReached } from '@/lib/relay/tunnel-client';
-import { isCapacitorMobileApp, useMobileWebBackButton, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
+import { isCapacitorMobileApp, useMobileWebBackButton, useMobileBackHandlers, useAndroidParentSessionBack, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
 import { retryNativeResumeConnection } from './mobileResumeRetry';
 import { useAppFontEffects } from './useAppFontEffects';
@@ -258,7 +259,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     });
   }), [closeSurface, isTabletLayout, openFilesSurface, t]);
 
-  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean; scope?: 'turn' } | null = null) => {
+  const openChangesSurface = React.useCallback((diff: MobileChangesInitialDiff | null = null) => {
     setChangesRequest(diff ? { diff } : null);
     setWorkspaceTab('changes');
     setWorkspaceOpen(true);
@@ -312,8 +313,8 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
 
   const mobileActions = React.useMemo<MobileAppActions>(
     () => ({
-      openChanges: ({ diffPath, staged, scope } = {}) => {
-        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, scope } : null);
+      openChanges: ({ diffPath, staged, scope, turnId, sessionId, directory } = {}) => {
+        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, scope, turnId, sessionId, directory } : null);
       },
       openFiles: () => openFilesSurface(),
       openPlan: setOpenPlan,
@@ -363,19 +364,12 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     onRightEdgeSwipe: () => setWorkspaceOpen(true),
   });
 
-  const settingsBackRef = React.useRef<(() => boolean) | null>(null);
-  const previewBackRef = React.useRef<(() => boolean) | null>(null);
-  const registerSettingsBackHandler = React.useCallback((handler: (() => boolean) | null) => {
-    settingsBackRef.current = handler;
-  }, []);
+  const { settingsBackRef, previewBackRef, parentSessionBackRef, registerSettingsBackHandler, registerPreviewBackHandler, registerParentSessionBack } = useMobileBackHandlers();
   const workspaceBackRef = React.useRef<(() => boolean) | null>(null);
   const registerWorkspaceBackHandler = React.useCallback((handler: (() => boolean) | null) => {
     workspaceBackRef.current = handler;
   }, []);
 
-  const registerPreviewBackHandler = React.useCallback((handler: (() => boolean) | null) => {
-    previewBackRef.current = handler;
-  }, []);
 
   const handleNativeBack = React.useCallback(() => {
     if (closeTopmostBackLayer()) {
@@ -401,6 +395,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
       return true;
     }
     if (workspaceOpen) {
+      if (previewBackRef.current?.()) return true;
       if (workspaceBackRef.current?.()) return true;
       closeWorkspace();
       return true;
@@ -410,9 +405,9 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
       return true;
     }
     return false;
-  }, [activeSurface, closeGuestPage, closeSurface, closeWorkspace, guestPage, openPlan, openReceivedPage, sessionsSheetOpen, workspaceOpen]);
+  }, [activeSurface, closeGuestPage, closeSurface, closeWorkspace, guestPage, openPlan, openReceivedPage, sessionsSheetOpen, workspaceOpen, settingsBackRef, previewBackRef]);
 
-  useNativeAndroidBackButton(handleNativeBack);
+  useAndroidParentSessionBack(handleNativeBack, parentSessionBackRef);
 
   useMobileWebBackButton(handleNativeBack, Boolean(openPlan || openReceivedPage || guestPage || activeSurface || workspaceOpen || sessionsSheetOpen));
 
@@ -538,7 +533,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
           <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
             <div className="h-full w-full">
               <ErrorBoundary>
-                <ChatView />
+                <ChatView registerParentSessionBack={registerParentSessionBack} />
               </ErrorBoundary>
             </div>
             <ErrorBoundary><RunOverview /></ErrorBoundary>

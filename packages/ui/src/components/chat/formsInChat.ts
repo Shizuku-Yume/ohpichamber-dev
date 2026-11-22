@@ -9,6 +9,8 @@ export const resolveFormDockMode = (formsInChat: boolean, readingHistory: boolea
     return readingHistory ? 'reading' : 'dock';
 };
 
+export const formWaitingBlockId = (form: { questionId: string; sessionId: string }): string => `${form.sessionId}/${form.questionId}`;
+
 export const resolveFormsInChat = ({ questionsInChat, pinned, transcriptShown }: {
     questionsInChat: boolean;
     pinned: boolean;

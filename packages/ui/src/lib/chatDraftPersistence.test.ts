@@ -4,8 +4,12 @@ import {
   clearChatDraft,
   createChatDraftIdentity,
   getChatDraftIdentityKey,
+  keepWorkDraftOwnSlot,
   readChatDraft,
+  readChatDraftClaimingFolderDraft,
   subscribeChatDraftDeletion,
+  workDraftComposerKey,
+  workDraftKeepsOwnSlot,
   writeChatDraft,
 } from './chatDraftPersistence';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
@@ -15,6 +19,28 @@ const storage = getDeferredSafeStorage();
 describe('chatDraftPersistence', () => {
   beforeEach(() => {
     storage.removeItem('openchamber.chatDrafts.v2');
+  });
+
+  test('an explicitly owned work draft does not claim its folder input', () => {
+    const folder = createChatDraftIdentity('own-slot-runtime', '/repo', null)!;
+    const draft = createChatDraftIdentity('own-slot-runtime', '/repo', workDraftComposerKey('share-draft'))!;
+    writeChatDraft(folder, 'keep folder input', []);
+    keepWorkDraftOwnSlot('share-draft', folder.runtimeKey);
+    expect(readChatDraftClaimingFolderDraft(draft).text).toBe('');
+    expect(readChatDraft(folder).text).toBe('keep folder input');
+    expect(readChatDraftClaimingFolderDraft(null).text).toBe('');
+  });
+
+  test('own-slot intent is scoped to the originating runtime', () => {
+    const first = createChatDraftIdentity('own-a', '/repo', null)!;
+    const second = createChatDraftIdentity('own-b', '/repo', null)!;
+    keepWorkDraftOwnSlot('same-id', first.runtimeKey);
+    writeChatDraft(first, 'first host', []);
+    writeChatDraft(second, 'second host', []);
+    expect(workDraftKeepsOwnSlot('same-id', first.runtimeKey)).toBe(true);
+    expect(workDraftKeepsOwnSlot('same-id', second.runtimeKey)).toBe(false);
+    expect(readChatDraftClaimingFolderDraft({ ...second, sessionId: workDraftComposerKey('same-id') }).text).toBe('second host');
+    expect(readChatDraft(first).text).toBe('first host');
   });
 
   test('never writes a share link\'s key to storage', () => {

@@ -365,6 +365,8 @@ describe('useConfigStore provider persistence', () => {
       selectedProviderId: '',
       currentAgentName: undefined,
       settingsDefaultModel: undefined,
+      chatsDefaultModel: undefined,
+      chatsDefaultVariant: undefined,
       settingsDefaultReasoningEffort: undefined,
 
       agentModelSelections: {},
@@ -2675,6 +2677,50 @@ describe('useConfigStore provider persistence', () => {
     expect(useConfigStore.getState()).not.toHaveProperty('agents');
   });
 
+  test('Chats defaults select native model and effort without promoting a subagent to the root', () => {
+    useSessionUIStore.setState({ currentSessionId: null, newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, open: true, target: 'chat' } });
+    useConfigStore.setState({ providers: [provider('chats', 'reasoner', ['high'])], selectionSource: 'auto', currentVariantSelection: { override: undefined, inherited: undefined } });
+    useConfigStore.getState().setChatsDefaultModel('chats/reasoner');
+    useConfigStore.getState().setChatsDefaultVariant('high');
+    expect(useConfigStore.getState()).toMatchObject({ currentProviderId: 'chats', currentModelId: 'reasoner', currentVariant: 'high', currentAgentName: undefined });
+  });
+
+  test('editing Chats defaults preserves a manual composer selection', () => {
+    useSessionUIStore.setState({ currentSessionId: null, newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, open: true, target: 'chat' } });
+    useConfigStore.setState({ currentProviderId: 'manual', currentModelId: 'chosen', currentVariant: 'low', selectionSource: 'manual', currentVariantSelection: { override: 'low', inherited: undefined } });
+    useConfigStore.getState().setChatsDefaultModel('chats/reasoner');
+    useConfigStore.getState().setChatsDefaultVariant('high');
+    expect(useConfigStore.getState()).toMatchObject({ currentProviderId: 'manual', currentModelId: 'chosen', currentVariant: 'low' });
+  });
+
+  test('empty Chats defaults fall back to the native catalog default', () => {
+    useSessionUIStore.setState({ currentSessionId: null, newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, open: true, target: 'chat' } });
+    useConfigStore.setState({ providers: [provider('native', 'normal')], settingsDefaultModel: 'native/normal', selectionSource: 'auto', currentVariantSelection: { override: undefined, inherited: undefined } });
+    useConfigStore.getState().setChatsDefaultModel(undefined);
+    expect(useConfigStore.getState()).toMatchObject({ currentProviderId: 'native', currentModelId: 'normal', currentVariant: undefined });
+  });
+
+  test('a failed Host settings read preserves the last Chats defaults', async () => {
+    useConfigStore.getState().setChatsDefaultModel('chats/remembered');
+    useConfigStore.getState().setChatsDefaultVariant('high');
+    loadSettingsImpl = async () => null;
+    expect(await useConfigStore.getState().loadSessionDefaults()).toBe(false);
+    expect(useConfigStore.getState()).toMatchObject({ chatsDefaultModel: 'chats/remembered', chatsDefaultVariant: 'high' });
+  });
+
+  test('a delayed Host settings read cannot overwrite newly edited Chats defaults', async () => {
+    useConfigStore.getState().setChatsDefaultModel(undefined);
+    let release!: (settings: DesktopSettings) => void;
+    const pending = new Promise<DesktopSettings>((resolve) => { release = resolve; });
+    loadSettingsImpl = () => pending;
+    const loading = useConfigStore.getState().loadSessionDefaults();
+    useConfigStore.getState().setChatsDefaultModel('chats/new');
+    useConfigStore.getState().setChatsDefaultVariant('high');
+    release({ chatsDefaultModel: 'chats/old', chatsDefaultVariant: 'low' });
+    expect(await loading).toBe(true);
+    expect(useConfigStore.getState()).toMatchObject({ chatsDefaultModel: 'chats/new', chatsDefaultVariant: 'high' });
+  });
+
   test('defaults to disabled until the user enables it', () => {
     expect(useConfigStore.getState().ttsChunkedMode).toBe(false);
   });
@@ -2726,7 +2772,7 @@ describe('stale Auto selection', () => {
 });
 
 describe('getModelMetadata limits', () => {
-  test('the running OpenCode limits override the models.dev catalog', () => {
+  test('the Canonical catalog limits override the models.dev catalog', () => {
     const live = provider('openai', 'gpt-6-astra');
     live.models[0].contextWindow = 400_000;
     live.models[0].maxOutputTokens = 128_000;

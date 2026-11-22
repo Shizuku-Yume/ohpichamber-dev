@@ -1,5 +1,5 @@
 import React, { act } from 'react';
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, jest, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
 // React detects input-event support when its DOM renderer is first imported.
@@ -148,9 +148,10 @@ mock.module('@/stores/useGitStore', () => ({
   useGitLoadingBranches: () => false,
   useGitStore: selectGitState,
 }));
+let validatedNames: Array<{ branchName: string; worktreeName: string }> = [];
 mock.module('@/lib/worktrees/worktreeManager', () => ({
   ...actualWorktreeManager,
-  validateWorktreeCreate: async () => ({ ok: true, errors: [] }),
+  validateWorktreeCreate: async (_directory: string, names: { branchName: string; worktreeName: string }) => { validatedNames.push({ branchName: names.branchName, worktreeName: names.worktreeName }); return { ok: true, errors: [] }; },
 }));
 mock.module('@/lib/worktrees/worktreeCreate', () => ({ createWorktreeWithDefaults: async (_project: { id: string; path: string }, args: { setupCommands?: string[]; branchName?: string; worktreeName?: string }) => {
   worktreeCreations += 1;
@@ -502,6 +503,28 @@ describe('NewWorktreeDialog behavior', () => {
     } finally {
       await act(async () => root.unmount());
       dom.restore();
+    }
+  });
+
+  test('checks the names once after a field loses focus', async () => {
+    jest.useFakeTimers();
+    const dom = installDom();
+    const root = createRoot(dom.container);
+    validatedNames = [];
+    try {
+      await act(async () => root.render(<I18nProvider><NewWorktreeDialog open onOpenChange={() => undefined} /></I18nProvider>));
+      const branchInput = dom.container.querySelector<HTMLInputElement>('input[placeholder="feature/my-awesome-feature"]');
+      if (!branchInput) throw new Error('Missing branch field');
+      await act(async () => { branchInput.dispatchEvent(new Event('focusout', { bubbles: true })); });
+      // The check is debounced by 300 ms; let several of those windows pass and render.
+      for (let i = 0; i < 4; i += 1) {
+        await act(async () => { jest.advanceTimersByTime(350); });
+      }
+      expect(validatedNames).toEqual([{ branchName: 'draft-name', worktreeName: 'draft-name' }]);
+    } finally {
+      await act(async () => root.unmount());
+      dom.restore();
+      jest.useRealTimers();
     }
   });
 

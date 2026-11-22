@@ -519,6 +519,7 @@ export const TurnBlock = React.memo(({
     // header in the collapsed activity mode, the pages a turn without an answer
     // showed, and its messages. Every row kind has a renderer here; the list
     // entry keeps the turn's identity for navigation and scroll.
+    const keepActivityText = useUIStore((state) => state.activityRenderMode === 'text');
     const rows = React.useMemo(() => buildTimelineRows(
         [{
             kind: 'turn',
@@ -530,6 +531,8 @@ export const TurnBlock = React.memo(({
         }],
         {
             collapsedActivity: chatRenderMode === 'live' && !defaultActivityExpanded,
+            keepActivityText,
+            activeStreamingMessageId,
             expandedTurns: new Map([[renderableTurn.turnId, turnUiState.isLiveExpanded === true]]),
             showReasoningTraces,
         },
@@ -543,6 +546,8 @@ export const TurnBlock = React.memo(({
         renderableTurn,
         showReasoningTraces,
         turnUiState.isLiveExpanded,
+        keepActivityText,
+        activeStreamingMessageId,
     ]);
 
     const sticky = stickyUserHeader && turnHeaderCanStick;
@@ -599,6 +604,7 @@ const TurnRowView = React.memo(({
                     hasLaterAssistant={hasLaterAssistant}
                     expanded={expanded}
                     finalMessageId={row.finalMessageId}
+                    keepText={row.keepText}
                     onToggle={onToggleActivity}
                     renderMessage={renderMessage}
                 />
@@ -608,7 +614,7 @@ const TurnRowView = React.memo(({
     if (row.kind === 'turn-pages') {
         return (
             <div className={cn('relative w-full', row.gapBelow && 'pb-2')} data-turn-row={turn.turnId}>
-                <TurnPagesRow turn={turn} />
+                <TurnPagesRow turn={turn} keepText={row.keepText} />
             </div>
         );
     }
@@ -637,7 +643,7 @@ const TurnMessageRow = React.memo(({
     expanded: boolean;
     renderMessage: (message: ChatMessageEntry) => React.ReactNode;
 }) => {
-    const foldContexts = useTurnFoldContexts(turn, hasLaterAssistant, expanded, row.finalMessageId);
+    const foldContexts = useTurnFoldContexts(turn, hasLaterAssistant, expanded, row.finalMessageId, row.keepText);
     const message = turn.assistantMessages.find((candidate) => candidate.messageId === row.messageId);
     if (!message) return null;
     const content = (

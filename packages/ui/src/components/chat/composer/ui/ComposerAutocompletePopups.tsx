@@ -1,5 +1,6 @@
 
 import React from 'react';
+import type { GuestMention } from '@/lib/guests/mentions';
 import { AnimatePresence } from 'motion/react';
 
 import { EmojiAutocomplete, type EmojiAutocompleteHandle } from '@/components/emoji/EmojiAutocomplete';
@@ -52,6 +53,7 @@ interface ComposerAutocompletePopupsProps {
  onCommandSelect: (command: CommandInfo) => void;
  onSkillSelect: (skillName: string) => void;
  onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
+ onExtensionMentionSelect?: (mention: GuestMention) => void;
  onEmojiSelect: (emoji: string) => void;
  onClose: () => void;
 }
@@ -100,6 +102,7 @@ function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: Auto
      ref={props.mentionRef}
      searchQuery={query}
      onFileSelect={props.onFileSelect}
+     onExtensionMentionSelect={props.onExtensionMentionSelect}
      onClose={onClose}
      style={style}
     />

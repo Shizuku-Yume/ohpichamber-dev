@@ -874,7 +874,7 @@ export const createFeatureRoutesRuntime = () => {
       managedChatsRoot,
       environmentRuntime,
     });
-    registerEnvironmentRoutes(app, { store: environmentStore, runtime: environmentRuntime, listProjects: listConfiguredProjects });
+    registerEnvironmentRoutes(app, { store: environmentStore, runtime: environmentRuntime, listProjects: listConfiguredProjects, readClaudeConfigDir: () => environmentRuntime.forClaudeQuota().CLAUDE_CONFIG_DIR, onClaudeConfigChanged: () => announceChange('openchamber:quota-credentials-changed') });
   };
 
   return {

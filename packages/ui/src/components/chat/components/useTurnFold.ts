@@ -11,7 +11,7 @@ export const finalActivityContentId = (turnId: string) => `turn-final-activity-$
  * once opened), the pages a turn without an answer showed, and the final
  * answer, whose own non-text parts fold with the rest.
  */
-const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
+const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined, keepText = false) => {
  // Named by the rows (`timelineRows.ts`), which are built from the turn's
  // record: a live turn's newest parts may already finish an answer the
  // record does not have yet, and the answer has no row of its own until it does.
@@ -25,16 +25,16 @@ const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boo
  // above the answer once one arrives, and stays there in a turn that ended
  // without one.
  // The final answer's own text is the answer, so it is never hoisted.
- const pages = React.useMemo(() => getShownPages(turn.assistantMessages, finalMessage), [turn.assistantMessages, finalMessage]);
+ const pages = React.useMemo(() => getShownPages(turn.assistantMessages, finalMessage, keepText), [turn.assistantMessages, finalMessage, keepText]);
  return { finalMessage, activityMessages, settled, isExpanded: !settled || expanded, pages };
 };
 
-export const useTurnFoldContexts = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
- const { finalMessage, isExpanded, pages } = useTurnFold(turn, hasLaterAssistant, expanded, finalMessageId);
+export const useTurnFoldContexts = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined, keepText = false) => {
+ const { finalMessage, isExpanded, pages } = useTurnFold(turn, hasLaterAssistant, expanded, finalMessageId, keepText);
  const hoistedPages = React.useMemo(() => new Set(pages.map((part) => part.partId)), [pages]);
  const shownFinalMessageId = finalMessage?.messageId;
  const finalContext = React.useMemo(() => shownFinalMessageId ? {
-  messageId: shownFinalMessageId, expanded: isExpanded, contentId: finalActivityContentId(turn.turnId), pages,
- } : null, [shownFinalMessageId, isExpanded, pages, turn.turnId]);
+  messageId: shownFinalMessageId, expanded: isExpanded, contentId: finalActivityContentId(turn.turnId), pages, keepText,
+ } : null, [shownFinalMessageId, isExpanded, pages, turn.turnId, keepText]);
  return { hoistedPages, finalContext };
 };

@@ -4,6 +4,8 @@ import type { Model, ModelCatalogInfo, ModelInfoSource, ProviderConfigurationRea
 import type { I18nKey } from '@/lib/i18n';
 import type { CustomProviderIcon } from '@/lib/customProviderIcons';
 
+export { storedProviderEntrySchema, type StoredProviderSource } from './stored-provider-entry';
+
 export const CUSTOM_PROVIDER_ID = '__custom_provider__';
 export const CUSTOM_PROVIDER_PROTOCOLS = ['chat-completions', 'responses', 'messages', 'generate-content'] as const;
 

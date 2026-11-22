@@ -67,7 +67,16 @@ const { updateBrowserURL } = await import('@/lib/router');
 const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { SettingsView } = await import('@/components/views/SettingsView');
-const { useMobileWebBackButton } = await import('./mobileNativeChrome');
+const { handleAndroidParentBack, useMobileWebBackButton } = await import('./mobileNativeChrome');
+
+test('Android Back does not navigate a chat covered by the run overview', () => {
+  const returnToParent = mock(() => {});
+  expect(handleAndroidParentBack(true, returnToParent)).toBe(false);
+  expect(returnToParent).not.toHaveBeenCalled();
+  expect(handleAndroidParentBack(false, returnToParent)).toBe(true);
+  expect(returnToParent).toHaveBeenCalledTimes(1);
+  expect(handleAndroidParentBack(false, null)).toBe(false);
+});
 
 type EntryState = { route?: AppRouteState; __openchamberBackGuard?: boolean } | null;
 type Entry = { state: EntryState; url: string };

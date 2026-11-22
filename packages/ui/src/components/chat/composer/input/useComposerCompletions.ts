@@ -11,6 +11,7 @@ import type { ComposerSendHandlers } from './composerSendHandlers';
 import type { GuestMention } from '@/lib/guests/mentions';
 import type { CommandInfo } from '../../CommandAutocomplete';
 import type { Session } from '@openchamber/agent-contract';
+import { captureRuntimeInstance } from '@/lib/runtime-switch';
 import { resolveGuestMention } from '@/lib/guests/mentions';
 import { withoutSnippetToken } from '@/lib/snippetNames';
 import { toast } from '@/components/ui';
@@ -121,12 +122,14 @@ export function useComposerCompletions({
         closeAutocomplete();
         editor?.focus();
         const pickedIn = JSON.stringify(currentChatDraftIdentityRef.current);
+        const isCurrent = captureRuntimeInstance();
         void resolveGuestMention(mention).then((item) => {
+            if (!isCurrent() || JSON.stringify(currentChatDraftIdentityRef.current) !== pickedIn) return;
             if (!item) {
                 toast.error(t('chat.composer.extensionMention.failed', { title: mention.title, extension: mention.label }));
                 return;
             }
-            if (JSON.stringify(currentChatDraftIdentityRef.current) === pickedIn) handleGuestAttach(item);
+            handleGuestAttach(item);
         });
     });
 

@@ -1,3 +1,4 @@
+import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import React from 'react';
 
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -22,7 +23,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { TerminalTabRenameDialog } from '@/components/terminal/TerminalTabRenameDialog';
 import { Icon } from "@/components/icon/Icon";

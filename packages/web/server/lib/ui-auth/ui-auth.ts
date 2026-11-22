@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Request, Response, NextFunction, RequestHandler } from '../shared/http-contracts.js';
+import { rateLimitKey } from '../security/client-address.js';
+import { sourceControlProviderDescriptors } from '../source-control/provider-descriptors.js';
 import type { BearerRequest, ClientInput, CreatedClient, RemoteClient } from '../client-auth/contracts.js';
 import type { PasskeyOptions } from './ui-passkeys.js';
 
@@ -120,22 +122,7 @@ let rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 const rateLimitLocks = new Map<string, Promise<boolean>>();
 
-const getClientIp = (req: Request) => {
-  const ip = req.ip || req.socket?.remoteAddress;
-  if (ip) {
-    if (ip.startsWith('::ffff:')) {
-      return ip.substring(7);
-    }
-    return ip;
-  }
-  return null;
-};
-
-const getRateLimitKey = (req: Request) => {
-  const ip = getClientIp(req);
-  if (ip) return ip;
-  return 'rate-limit:no-ip';
-};
+const getRateLimitKey = (req: Request) => rateLimitKey(req, 'rate-limit:no-ip');
 
 const getRateLimitConfig = (key: string) => {
   if (key === 'rate-limit:no-ip') {
@@ -402,6 +389,7 @@ const isUrlAuthReadableHttpPath = (pathname: string) => {
     || pathname === '/api/openchamber/realtime-proxy/sse'
     || pathname === '/api/notifications/stream'
     || pathname === '/api/fs/raw'
+    || sourceControlProviderDescriptors.list().some((provider) => provider.capabilities.uploads && pathname.startsWith(`/api/source-control/${provider.id}/uploads/`))
     || pathname.startsWith('/api/preview/proxy/')
     || /^\/api\/projects\/[^/]+\/icon$/.test(pathname)
     || pathname === '/api/guests'

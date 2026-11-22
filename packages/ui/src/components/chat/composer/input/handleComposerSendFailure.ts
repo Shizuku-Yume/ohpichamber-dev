@@ -2,6 +2,7 @@ import type { AttachedFile } from '@/stores/types/sessionTypes';
 import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import type { useI18n } from '@/lib/i18n';
 import { useInputStore } from '@/sync/input-store';
+import { AttachmentPathSaveError } from '@/sync/model-attachment-paths';
 import { problemMessage } from '@/lib/problemMessage';
 
 type SendFailureContext = {
@@ -72,6 +73,12 @@ export function handleComposerSendFailure(error: unknown, {
                 return;
             }
 
+            const unsaved = error instanceof AttachmentPathSaveError ? error
+                : error instanceof Error && error.cause instanceof AttachmentPathSaveError ? error.cause : null;
+            if (unsaved) {
+                notifyError(t('chat.chatInput.toast.textModelImageSaveFailed', { files: unsaved.filenames.join(', ') }));
+                return;
+            }
             notifyError(problemMessage(error, rawMessage || t('chat.chatInput.toast.messageSendFailed')));
 
 }

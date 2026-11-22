@@ -51,6 +51,7 @@ interface GoMeter {
 }
 
 interface GoAuthFields {
+  label?: unknown;
   key?: unknown;
   token?: unknown;
   type?: unknown;
@@ -117,7 +118,7 @@ export const fetchOpenCodeGoUsage = async (apiKey, fetchImpl = fetch) => {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (response.status === 401 || response.status === 403) {
-    throw new Error('OpenCode Go authentication failed');
+    throw new Error(KEY_AUTH_FAILED);
   }
   if (!response.ok) throw new Error(`OpenCode Go usage API returned HTTP ${response.status}`);
   const windows = parseOpenCodeGoUsage(await response.json().catch(() => null));

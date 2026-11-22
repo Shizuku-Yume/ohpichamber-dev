@@ -99,7 +99,7 @@ describe('getDictationStartOptions', () => {
 
 describe('dictation scope preparation', () => {
   test('waits for scope, forwards it and retires canceled pending starts', async () => {
-    const start = spyOn(dictationClient, 'startDictationStream').mockResolvedValue(undefined);
+    const start = spyOn(dictationClient, 'startDictationStream').mockResolvedValue({ ackSeq: -1 });
     try {
       const scope = Promise.withResolvers<{ workspaceId: string }>();
       const sender = new DictationStreamSender({ client: dictationClient, getStartOptions: () => scope.promise, createDictationId: () => 'dictation' });

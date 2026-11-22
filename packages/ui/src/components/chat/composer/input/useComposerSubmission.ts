@@ -21,6 +21,7 @@ import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerDraftHistory } from './useComposerDraftHistory';
 import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
+import type { useComposerLargePasteState } from './useComposerLargePasteState';
 import type { ComposerSendHandlers } from './composerSendHandlers';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import type { ChatInputProps } from './chatInputProps';
@@ -41,17 +42,19 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { postTrackerSessionStarted } from '@/lib/trackers/sessionStatus';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { createChatDraftIdentity } from '@/lib/chatDraftPersistence';
+import { useLinkedReferenceDrafts } from '../../composer/linkedReferenceDrafts';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useInputStore } from '@/sync/input-store';
 import * as sessionActions from '@/sync/session-actions';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
+import { attachedFilesForModel, AttachmentPathSaveError } from '@/sync/model-attachment-paths';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { createChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import { useBtwStore } from '@/stores/useBtwStore';
 import { toast } from '@/components/ui';
-import { composerReferenceKey, toContextReference } from '../../composer/composerReferences';
+import { withComposerReferences, composerReferenceKey, toContextReference } from '../../composer/composerReferences';
 import { runGuestCommand } from '@/lib/guests/run-command';
 import { routeGuestSlashCommand } from '../../composer/submit/guestCommands';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
@@ -65,10 +68,12 @@ import { buildChatInputHistorySubmissions } from '../../inputHistory';
 import { collectInlineSkillMentions } from './composerMentionTokens';
 import { recordLinkedReferences } from './recordLinkedReferences';
 import { createComposerSubmitErrorMessage } from './createComposerSubmitErrorMessage';
+import { saveAttachmentsHeldForSend } from './saveAttachmentsHeldForSend';
 
 type Dependencies = {
     i18n: Pick<ReturnType<typeof useI18n>, 't'>;
     attachmentWork: Pick<ReturnType<typeof useComposerAttachmentWork>, 'waitForPendingAttachments'>;
+    largePasteState: Pick<ReturnType<typeof useComposerLargePasteState>, 'largeTextPasteOffer'>;
     draftText: Pick<ReturnType<typeof useComposerDraftText>, 'confirmedMentionsRef' | 'setMessage' | 'currentChatDraftIdentityRef' | 'composerText'>;
     historySearchState: Pick<ReturnType<typeof useComposerHistorySearchState>, 'setPromptHistorySearch'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
@@ -94,11 +99,15 @@ type Dependencies = {
 };
 
 export function useComposerSubmission({
-    i18n, draftText, editorState, column, sending, inlineContext,
+    i18n, attachmentWork, largePasteState, sendHandlers, draftText, editorState, column, sending, inlineContext,
     sendAvailability, sessionScope, parallelRun, sessionLifecycle, queueState, selection,
     language, preferences, expansion, runtime, draftHistory, queueActions, props,
     mentionAttachments, referenceDrafts,
 }: Dependencies) {
+    const { waitForPendingAttachments } = attachmentWork;
+    const { largeTextPasteOffer } = largePasteState;
+    const { handleSubmitRef } = sendHandlers;
+    const { attachmentsToSend } = inlineContext;
     const { t } = i18n;
     const { confirmedMentionsRef, setMessage } = draftText;
     const { composerRef } = editorState;
@@ -120,7 +129,7 @@ export function useComposerSubmission({
         currentProviderId, currentModelId, currentVariant,
         mailboxTarget, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
     const {
-        readSessionMentionsBeforeSend, guestCommands, linkedReferences,
+        readSessionMentionsBeforeSend, guestCommands, linkedReferences, referenceLinksIn,
         sessionMentionsIn, loadCommands} = language;
     const { isMobile } = preferences;
     const { setExpandedInput } = expansion;
@@ -140,6 +149,12 @@ export function useComposerSubmission({
         // Comment mode's only submit is attach; every other send path must be
         // inert while it is open.
         if (isMobileCommentOpen()) return;
+        if (!options?.queuedOnly) {
+            if (largeTextPasteOffer) return;
+            const held = await saveAttachmentsHeldForSend(chatDraftIdentity, currentDirectory ?? undefined, attachmentsToSend(options?.presetText ?? getCurrentInputSnapshot().message), t, waitForPendingAttachments);
+            if (held === 'stopped') return;
+            if (held === 'saved') { void handleSubmitRef.current(options); return; }
+        }
         // "Run in parallel" launches the run instead of sending a message.
         if (parallel.isActive && !options?.queuedOnly) {
             if (parallel.runCount >= 2) void parallel.launch();
@@ -225,10 +240,12 @@ export function useComposerSubmission({
         // auth, network, server, anything. Losing a long prompt to a toast is
         // the one outcome this handler must never produce. The mentions are
         // snapshotted here because sending clears them before it can fail.
+        let admittedTarget: { sessionId: string; directory: string | null } | null = null;
         const confirmedMentionsSnapshot = new Set(confirmedMentionsRef.current);
         const restoreComposerText = () => {
             if (queuedOnly || !inputSnapshot.message) return;
-            restoreDraft(chatDraftIdentity, inputSnapshot.message, confirmedMentionsSnapshot);
+            const owner = admittedTarget ? createChatDraftIdentity(submitRuntimeKey, admittedTarget.directory ?? currentDirectory ?? '', admittedTarget.sessionId) : chatDraftIdentity;
+            restoreDraft(owner, inputSnapshot.message, confirmedMentionsSnapshot);
         };
 
         // An extension command never reaches the model: the extension turns
@@ -517,6 +534,7 @@ export function useComposerSubmission({
             return;
         }
 
+        const referencesToSend = withComposerReferences(linkedReferences, !queuedOnly && inputSnapshot.hasContent ? referenceLinksIn(inputSnapshot.message) : []);
         const outgoing = buildOutgoingMessage({
             queued: [],
             composerText: !queuedOnly && inputSnapshot.hasContent ? inputSnapshot.message : null,
@@ -525,7 +543,7 @@ export function useComposerSubmission({
             syntheticTexts: [
                 ...(syntheticParts?.map((part) => part.text) ?? []),
             ],
-            references: isBtwActive ? [] : linkedReferences.map(toContextReference).concat(
+            references: isBtwActive ? [] : referencesToSend.map(toContextReference).concat(
                 !queuedOnly && inputSnapshot.hasContent ? sessionMentionsIn(inputSnapshot.message) : [],
             ),
         }, {
@@ -539,7 +557,21 @@ export function useComposerSubmission({
         });
 
         const primaryText = outgoing.primaryText;
-        const { primaryAttachments, additionalParts, skillNames } = outgoing;
+        const { skillNames } = outgoing;
+        let { primaryAttachments, additionalParts } = outgoing;
+        const isAttachmentOwnerCurrent = () => getRuntimeKey() === submitRuntimeKey && getRuntimeSwitchRevision() === submitRuntimeRevision;
+        try {
+            const model = { providerID: providerIdToSend, modelID: modelIdToSend };
+            primaryAttachments = await attachedFilesForModel(model, primaryAttachments, capturedTarget?.directory ?? currentSessionDirectoryForSync ?? currentDirectory ?? undefined, isAttachmentOwnerCurrent);
+            additionalParts = await Promise.all(additionalParts.map(async (part) => ({ ...part, attachments: part.attachments ? await attachedFilesForModel(model, part.attachments, capturedTarget?.directory ?? currentSessionDirectoryForSync ?? currentDirectory ?? undefined, isAttachmentOwnerCurrent) : undefined })));
+            if (!isAttachmentOwnerCurrent()) { restoreConsumedDrafts(); return; }
+        } catch (error) {
+            restoreConsumedDrafts();
+            if (isAttachmentOwnerCurrent()) toast.error(error instanceof AttachmentPathSaveError
+                ? t('chat.chatInput.toast.textModelImageSaveFailed', { files: error.filenames.join(', ') })
+                : getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
+            return;
+        }
         if (outgoing.primaryFileResourcesExpanded) sendMessageOptions = { ...sendMessageOptions, fileResourcesExpanded: true };
 
         if (outgoing.isEmpty) return;
@@ -701,6 +733,10 @@ export function useComposerSubmission({
             return;
         }
 
+        const transferDraftReferences = () => {
+            if (!admittedTarget || !isAttachmentOwnerCurrent()) return;
+            useLinkedReferenceDrafts.getState().move(chatDraftIdentity, createChatDraftIdentity(submitRuntimeKey, admittedTarget.directory ?? currentDirectory ?? '', admittedTarget.sessionId));
+        };
         const sendPromise = sendMessage(
             primaryText,
             providerIdToSend,
@@ -711,35 +747,31 @@ export function useComposerSubmission({
             additionalParts.length > 0 ? additionalParts : undefined,
             variantToSend,
             inputMode,
-            sendMessageOptions,
+            { ...sendMessageOptions, onSessionCreated: (target) => {
+                admittedTarget = target;
+                transferDraftReferences();
+            } },
         );
         void sendPromise.then(() => {
+            if (!isAttachmentOwnerCurrent()) return;
             if (isBtwActive) return;
-            // On a draft there is no session yet in this closure: the send path
-            // creates one and makes it current before resolving, so the id is
-            // read from the store. The fallback is used only when the closure
-            // had no session at all, so a mid-send session switch cannot
-            // redirect the write to an unrelated session.
-            const sessionState = useSessionUIStore.getState();
-            const linkTargetSessionId = currentSessionId ?? sessionState.currentSessionId;
+            const linkTargetSessionId = currentSessionId ?? admittedTarget?.sessionId;
             const linkTargetDirectory = currentSessionId
                 ? currentSessionDirectoryForSync ?? currentDirectory
-                : sessionState.currentSessionDirectory
-                ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
-                ?? currentDirectory;
+                : admittedTarget?.directory ?? currentDirectory;
             if (linkTargetSessionId && getRuntimeKey() === submitRuntimeKey) {
-                void Promise.resolve().then(() => recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences)).catch((error: unknown) => {
+                void Promise.resolve().then(() => isAttachmentOwnerCurrent() ? recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, referencesToSend) : undefined).catch((error: unknown) => {
                     console.error('Session link update failed:', error);
-                    toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
+                    if (isAttachmentOwnerCurrent()) toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
                 });
-            } else if (linkedReferences.length > 0) {
+            } else if (referencesToSend.length > 0) {
                 toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
             }
             // A session that starts with a Linear issue attached reports itself
             // on that issue (the Linear card's Session comments), however it
             // was started: a draft, a worktree made from the issue.
             if (!currentSessionId && linkTargetSessionId) {
-                for (const reference of linkedReferences) {
+                for (const reference of referencesToSend) {
                     if (reference.kind !== 'tracker-item') continue;
                     void postTrackerSessionStarted(runtimeTrackers, reference.provider, {
                         sessionId: linkTargetSessionId, identifier: reference.identifier,
@@ -749,12 +781,15 @@ export function useComposerSubmission({
 
             // The sent references leave the composer; one attached while the
             // send was out stays for the next message.
-            const sentKeys = new Set(linkedReferences.map(composerReferenceKey));
-            updateLinkedReferencesFor(chatDraftIdentity, (current) => current.filter((reference) => !sentKeys.has(composerReferenceKey(reference))));
+            const sentKeys = new Set(referencesToSend.map(composerReferenceKey));
+            transferDraftReferences();
+            const referenceOwner = admittedTarget ? createChatDraftIdentity(submitRuntimeKey, admittedTarget.directory ?? currentDirectory ?? '', admittedTarget.sessionId) : chatDraftIdentity;
+            updateLinkedReferencesFor(referenceOwner, (current) => current.filter((reference) => !sentKeys.has(composerReferenceKey(reference))));
         }).catch((error: unknown) => {
+            transferDraftReferences();
             handleComposerSendFailure(error, {
                 allAttachments, chatDraftIdentity, restoreConsumedDrafts, restoreComposerText, t,
-                notifyError: (message) => toast.error(message),
+                notifyError: (message) => { if (isAttachmentOwnerCurrent()) toast.error(message); },
             });
         });
 

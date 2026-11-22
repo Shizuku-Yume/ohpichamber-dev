@@ -52,6 +52,10 @@ Startet OhPiChamber im Headless-Modus, wenn auf `true` oder `1` gesetzt. API-Rou
 
 Origins, die OhPiChamber in einem Frame auf ihrer eigenen Seite zeigen dürfen, durch Leerzeichen getrennt, zum Beispiel `https://dash.example.com`. `*` erlaubt jede Seite. Standardmäßig dürfen nur OhPiChamber selbst und seine Desktop- und Mobile-Apps es einbetten, damit keine fremde Seite seine Schaltflächen überlagern kann.
 
+### `OPENCHAMBER_TRUSTED_PROXIES`
+
+Adressen von Reverse Proxys, die auf einem anderen Rechner oder in einem anderen Container laufen, durch Kommas getrennt, etwa `192.168.1.10` oder `172.18.0.0/16`. OhPiChamber begrenzt fehlgeschlagene Anmeldeversuche pro Client und liest die Adresse des Clients nur dann aus `X-Forwarded-For`, wenn die Anfrage von diesem Rechner oder von einer hier eingetragenen Adresse kommt. Ein nicht eingetragener Proxy zählt als ein Client: Die Fehlversuche einer Person können dann alle dahinter eine Weile von der Anmeldung aussperren.
+
 ### `OPENCHAMBER_DATA_DIR`
 
 Überschreibt das OhPiChamber-Datenverzeichnis. Standard ist `~/.config/ohpichamber`.

@@ -31,15 +31,16 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { useMessageQueueStore, type FollowUpBehavior } from '@/stores/messageQueueStore';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
-import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore, type LargeTextPasteBehavior } from '@/stores/useUIStore';
+import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore, type LargeTextPasteBehavior, type DocumentAttachBehavior } from '@/stores/useUIStore';
 
 import { MessageSearchSettings } from './MessageSearchSettings';
 import { chatSettingsTabAnchors, useChatSettingsTabStore, type ChatSettingsTab } from './chatSettingsTabs';
 
 type ChipOption<T extends string> = { id: T; labelKey: I18nKey };
 
-const ACTIVITY_RENDER_MODE_OPTIONS: ChipOption<'collapsed' | 'summary'>[] = [
+const ACTIVITY_RENDER_MODE_OPTIONS: ChipOption<'collapsed' | 'text' | 'summary'>[] = [
   { id: 'collapsed', labelKey: 'settings.openchamber.visual.option.activityRenderMode.collapsed.label' },
+  { id: 'text', labelKey: 'settings.openchamber.visual.option.activityRenderMode.text.label' },
   { id: 'summary', labelKey: 'settings.openchamber.visual.option.activityRenderMode.summary.label' },
 ];
 
@@ -85,6 +86,12 @@ const LARGE_TEXT_PASTE_BEHAVIOR_OPTIONS: ChipOption<LargeTextPasteBehavior>[] = 
   { id: 'attach', labelKey: 'settings.openchamber.visual.option.largeTextPaste.attach.label' },
   { id: 'inline', labelKey: 'settings.openchamber.visual.option.largeTextPaste.inline.label' },
   { id: 'inline-double-paste', labelKey: 'settings.openchamber.visual.option.largeTextPaste.inlineDoublePaste.label' },
+];
+
+const DOCUMENT_ATTACH_BEHAVIOR_OPTIONS: ChipOption<DocumentAttachBehavior>[] = [
+  { id: 'ask', labelKey: 'settings.openchamber.visual.option.documentAttach.ask.label' },
+  { id: 'save', labelKey: 'settings.openchamber.visual.option.documentAttach.save.label' },
+  { id: 'convert', labelKey: 'settings.openchamber.visual.option.documentAttach.convert.label' },
 ];
 
 const NESTED_OPTION_CLASS = 'ps-6';
@@ -162,7 +169,7 @@ const MessagesTab: React.FC = () => {
   const diffLayoutOptions = useChipOptions(DIFF_LAYOUT_OPTIONS);
   const chatWidthOptions = useChipOptions(CHAT_WIDTH_OPTIONS);
 
-  const handleActivityRenderModeChange = (mode: 'collapsed' | 'summary') => {
+  const handleActivityRenderModeChange = (mode: 'collapsed' | 'text' | 'summary') => {
     setActivityRenderMode(mode);
     void updateDesktopSettings({ activityRenderMode: mode, chatRenderMode: 'live' });
   };
@@ -440,6 +447,8 @@ const ComposerTab: React.FC = () => {
   const setFollowUpBehavior = useMessageQueueStore((state) => state.setFollowUpBehavior);
   const largeTextPasteBehavior = useUIStore((state) => state.largeTextPasteBehavior);
   const setLargeTextPasteBehavior = useUIStore((state) => state.setLargeTextPasteBehavior);
+  const documentAttachBehavior = useUIStore((state) => state.documentAttachBehavior);
+  const setDocumentAttachBehavior = useUIStore((state) => state.setDocumentAttachBehavior);
   const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
   const setAllowPromptingSubagentSessions = useUIStore((state) => state.setAllowPromptingSubagentSessions);
   const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
@@ -542,6 +551,23 @@ const ComposerTab: React.FC = () => {
                 onSelect={() => setLargeTextPasteBehavior(option.id)}
                 label={t(option.labelKey)}
                 ariaLabel={t('settings.openchamber.visual.field.largeTextPasteOptionAria', { option: t(option.labelKey) })}
+              />
+            ))}
+          </SettingsRadioGroup>
+        </SettingsControlGroup>
+        <SettingsControlGroup
+          title={t('settings.openchamber.visual.field.documentAttach')}
+          info={t('settings.openchamber.visual.field.documentAttachHint')}
+          settingsItem="chat.document-attach"
+        >
+          <SettingsRadioGroup aria-label={t('settings.openchamber.visual.field.documentAttachAria')}>
+            {DOCUMENT_ATTACH_BEHAVIOR_OPTIONS.map((option) => (
+              <SettingsRadioOption
+                key={option.id}
+                selected={documentAttachBehavior === option.id}
+                onSelect={() => setDocumentAttachBehavior(option.id)}
+                label={t(option.labelKey)}
+                ariaLabel={t('settings.openchamber.visual.field.documentAttachOptionAria', { option: t(option.labelKey) })}
               />
             ))}
           </SettingsRadioGroup>

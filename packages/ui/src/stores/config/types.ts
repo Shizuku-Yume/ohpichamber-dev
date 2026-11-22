@@ -121,6 +121,8 @@ export interface ConfigStore {
     modelsMetadata: Map<string, ModelMetadata>;
     // OMP's resolved default model role, plus the app's own default agent.
     settingsDefaultModel: string | undefined; // format: "provider/model", from the model catalog
+    chatsDefaultModel: string | undefined;
+    chatsDefaultVariant: string | undefined;
     settingsDefaultsLoaded: boolean;
     /** OMP's configured thinking level for a new session; `auto` stays unset on the wire. */
     settingsDefaultReasoningEffort: string | undefined;
@@ -256,6 +258,8 @@ export interface ConfigStore {
     /** Replaces an `openchamber/auto` selection this server cannot honour with the default model. */
     dropStaleAutoSelection: () => void;
     setSelectedProvider: (providerId: string) => void;
+    setChatsDefaultModel: (model: string | undefined) => void;
+    setChatsDefaultVariant: (variant: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
     setSettingsGitmojiEnabled: (enabled: boolean) => void;
     setSettingsDefaultFileViewerPreview: (enabled: boolean) => void;

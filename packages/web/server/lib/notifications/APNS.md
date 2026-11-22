@@ -10,17 +10,24 @@ or direct mode is set up (see *Modes*); local and Web push are unaffected.
 
 ## How it works
 
-1. The app registers its APNs device token with **its own server** (`POST /api/push/apns-token`,
-   `useNativePushRegistration`). PWA/desktop never register — only the native Capacitor app.
-2. The server **binds the token on the relay**: it POSTs `{ token, publicKeyJwk, ts, sig }` to
+1. The app registers its APNs device token with **every saved instance**, not only the one it
+   is connected to (`useNativePushRegistration`). PWA/desktop never register — only the native
+   Capacitor app. A server the phone is paired with for the home network only answers
+   `localOnly: true` and neither stores nor binds the token; the other saved servers still do.
+2. Each server **binds the token on the relay**: it POSTs `{ token, publicKeyJwk, ts, sig }` to
    `POST /v1/push/register-token`, signed with its auto-generated ECDSA P-256 key
    (`getOrCreateRelayKeypair`, persisted in settings like the VAPID keys). The relay records
-   `token → serverId` where `serverId = SHA-256(publicKey)`.
+   `token → serverId` where `serverId = SHA-256(publicKey)`, one row per `(token, serverId)`
+   (`migrations/0012_push_token_servers.sql`), so a registration never takes the token from
+   another server. `DELETE /api/push/apns-token` removes this server's row through
+   `POST /v1/push/unregister-token`, signed over `unregister.ts.token`, when this server held
+   the token and no UI session on it holds it any more; the other servers keep theirs. A token
+   the server never stored (a home-network-only phone) never goes to the relay.
 3. On a trigger (ready/error/question/permission), the server composes **generic, content-free**
    clear text (a phone with a push key also gets the real text sealed, see *Data confidentiality*) — a fixed scenario title ("Agent response is ready" / "Agent needs your input" / "Agent
    needs permission" / "Agent hit an error") + the **session name** as the body, no model/project/
    message content — plus a **`badge`** count (see below) — and POSTs `{ tokens, title, body,
-   badge, env, data:{sessionId}, publicKeyJwk, ts, sig }` to `POST /v1/push/send`
+   badge, env, data:{sessionId, serverId}, publicKeyJwk, ts, sig }` to `POST /v1/push/send`
    (`apns-runtime.js` → `sendViaRelay`). It does **not** gate on UI visibility (see below).
 4. The **relay** verifies the signature +
    `ts` freshness, derives `serverId`, and only delivers to tokens bound to that server. It holds
@@ -146,8 +153,8 @@ The relay is deployed by whoever operates it, configured through its own deploym
 ## Security posture
 
 - The device token is a per-install secret, but no longer the *only* defence: every relay request
-  is signed by the server's private key, and the relay only delivers to a token from its bound
-  `serverId`. A leaked token alone is useless — an attacker has neither the private key nor a
+  is signed by the server's private key, and the relay only delivers to a token from a server
+  bound to it. A leaked token alone is useless — an attacker has neither the private key nor a
   matching binding.
 - `serverId` self-certifies (`SHA-256(publicKey)`), so the relay holds no secret; a relay database
   leak exposes only `token → serverId` hashes. The signed `ts` (±5 min window) blocks replay.

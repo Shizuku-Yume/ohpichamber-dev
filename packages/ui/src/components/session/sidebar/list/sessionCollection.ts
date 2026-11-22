@@ -15,6 +15,9 @@ import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { resolveSessionNestingParentId } from '@/lib/sessionWorkLineage';
 import type { GlobalSessionStructure } from '@/stores/globalSessionStructure';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
+import type { ProjectSortOrder } from '@/stores/useSessionDisplayStore';
+import { haveSameSidebarHierarchy, haveSameSidebarStructure } from './sidebarStructureKey';
+import { useSidebarReadsActivityTime } from './useSidebarReadsActivityTime';
 import type { SessionNode } from '../types';
 
 type ProjectSidebarActiveSessionsArgs = {
@@ -266,6 +269,31 @@ type UseSessionProjectCollectionArgs = {
   knownDirectories: Set<string>;
   isVSCode: boolean;
   isVisible: boolean;
+  searchActive: boolean;
+  projectSortOrder: ProjectSortOrder;
+};
+
+const useStructurallyStableSessions = (sessions: Session[], readsActivityTime: boolean): Session[] => {
+  const previousRef = React.useRef<{ sessions: Session[]; readsActivityTime: boolean } | null>(null);
+  return React.useMemo(() => {
+    const previous = previousRef.current;
+    if (previous && previous.readsActivityTime === readsActivityTime && haveSameSidebarStructure(previous.sessions, sessions, readsActivityTime)) {
+      countSyncPerformance('sidebarStructureReuses');
+      return previous.sessions;
+    }
+    previousRef.current = { sessions, readsActivityTime };
+    return sessions;
+  }, [readsActivityTime, sessions]);
+};
+
+const useStableHierarchy = (structure: GlobalSessionStructure): GlobalSessionStructure => {
+  const previousRef = React.useRef<GlobalSessionStructure | null>(null);
+  return React.useMemo(() => {
+    const previous = previousRef.current;
+    if (previous && haveSameSidebarHierarchy(previous, structure)) return previous;
+    previousRef.current = structure;
+    return structure;
+  }, [structure]);
 };
 
 // The collection owns the global-first/live-gap merge and lifecycle ordering.
@@ -291,9 +319,12 @@ export const useSessionProjectCollection = ({
   knownDirectories,
   isVSCode,
   isVisible,
+  searchActive,
+  projectSortOrder,
 }: UseSessionProjectCollectionArgs): UseSessionProjectCollectionResult => {
-  const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
-  const globalStructure = useGlobalSessionsStore((state) => state.structure);
+  const readsActivityTime = useSidebarReadsActivityTime(searchActive, projectSortOrder);
+  const globalActiveSessions = useStructurallyStableSessions(useGlobalSessionsStore((state) => state.activeSessions), readsActivityTime);
+  const globalStructure = useStableHierarchy(useGlobalSessionsStore((state) => state.structure));
   const rawArchivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
   const archivedSessions = React.useMemo(() => {
     const known = new Set([...knownDirectories].map((directory) => isVSCode ? directory.toLowerCase() : directory));
@@ -311,7 +342,7 @@ export const useSessionProjectCollection = ({
     () => new Set([...globalActiveSessions, ...rawArchivedSessions].map((session) => session.sessionId)),
     [globalActiveSessions, rawArchivedSessions],
   );
-  const liveGapSessions = useLiveSessionsExcluding(globalSessionIds);
+  const liveGapSessions = useStructurallyStableSessions(useLiveSessionsExcluding(globalSessionIds), readsActivityTime);
   const structure = React.useMemo(() => buildSidebarSessionStructure({
     globalActiveSessions,
     globalStructure,

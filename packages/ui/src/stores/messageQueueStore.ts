@@ -15,13 +15,14 @@ import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import type { AttachedFile } from './types/sessionTypes';
 import { contextPartMetadataSchema, type ContextPartMetadata } from '@/lib/messages/contextParts';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { getRuntimeKey } from '@/lib/runtime-switch';
+import { captureRuntimeInstance, getRuntimeKey } from '@/lib/runtime-switch';
 import { runtimeFetch, type RuntimeFetchOptions } from '@/lib/runtime-fetch';
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getQueuedMessagePreview } from '@/lib/messages/queuedMessagePreview';
 import { compareCounters } from '@/sync/event-reducer';
 import { canonicalClient } from '@/api/canonicalClient';
+import { prepareAttachmentsHeldForSend } from '@/sync/held-attachments';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from './useGlobalSessionsStore';
 
 const encodeAttachmentFile = async (file: Blob): Promise<string> => {
@@ -41,7 +42,10 @@ const admitAttachmentsForQueue = async (
     if (!attachments?.length) return [];
     let workspaceId: string | undefined;
     const admitted: PromptAttachment[] = [];
-    for (const attachment of attachments) {
+    const prepared = attachments.some((file) => file.saveOnSend || file.saveCopyOnSend)
+        ? await prepareAttachmentsHeldForSend(attachments, target.directory, captureRuntimeInstance())
+        : attachments;
+    for (const attachment of prepared) {
         const uri = attachment.serverPath?.startsWith('attachment://')
             ? attachment.serverPath
             : (attachment.dataUrl?.startsWith('attachment://') ? attachment.dataUrl : undefined);

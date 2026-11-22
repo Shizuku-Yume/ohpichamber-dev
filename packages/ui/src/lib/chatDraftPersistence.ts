@@ -1,5 +1,6 @@
 
 
+import { getRuntimeKey } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
 import { withoutShareLinkKeys } from '@/lib/received-pages/link';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
@@ -99,6 +100,20 @@ export const readChatDraft = (identity: ChatDraftIdentity | null): ChatDraftSnap
     : { text: '', confirmedMentions: new Set() };
 };
 
+const ownSlotWorkDrafts = new Set<string>();
+const ownSlotKey = (workDraftId: string, runtimeKey: string): string => JSON.stringify([runtimeKey, workDraftId]);
+
+export const keepWorkDraftOwnSlot = (workDraftId: string, runtimeKey = getRuntimeKey()): void => {
+  const key = ownSlotKey(workDraftId, runtimeKey);
+  ownSlotWorkDrafts.delete(key);
+  ownSlotWorkDrafts.add(key);
+  if (ownSlotWorkDrafts.size > MAX_DRAFTS) ownSlotWorkDrafts.delete(ownSlotWorkDrafts.values().next().value!);
+};
+
+export const workDraftKeepsOwnSlot = (workDraftId: string | null | undefined, runtimeKey = getRuntimeKey()): boolean => (
+  Boolean(workDraftId && ownSlotWorkDrafts.has(ownSlotKey(workDraftId, runtimeKey)))
+);
+
 
 export const writeChatDraft = (
   identity: ChatDraftIdentity | null,
@@ -139,7 +154,7 @@ export const workDraftIdOfComposerKey = (sessionId: string | null | undefined): 
 
 export const readChatDraftClaimingFolderDraft = (identity: ChatDraftIdentity | null): ChatDraftSnapshot => {
   const saved = readChatDraft(identity);
-  if (!identity || workDraftIdOfComposerKey(identity.sessionId) === null || saved.text) return saved;
+  if (!identity || workDraftIdOfComposerKey(identity.sessionId) === null || saved.text || workDraftKeepsOwnSlot(workDraftIdOfComposerKey(identity.sessionId), identity.runtimeKey)) return saved;
   const folderIdentity = { ...identity, sessionId: null };
   const folderDraft = readChatDraft(folderIdentity);
   if (!folderDraft.text) return saved;
