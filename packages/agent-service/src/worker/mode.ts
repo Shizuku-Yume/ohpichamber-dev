@@ -530,7 +530,7 @@ export class WorkerModeController {
     const reference = this.current.kind === 'plan' ? this.current.planReference : planReference(this.session.getPlanReferencePath());
     const previous: Previous = {
       tools: this.session.getEnabledToolNames().filter(name => !isMCPToolName(name)),
-      mounted: this.session.getMountedXdevToolNames().filter(name => !isMCPToolName(name)),
+      mounted: this.session.getMountedToolCommandNames().filter(name => !isMCPToolName(name)),
       registered: this.session.getAllToolNames().filter(name => !isMCPToolName(name)),
       model: this.session.model ? { provider: this.session.model.provider, id: this.session.model.id, thinkingLevel: this.session.configuredThinkingLevel() } : undefined,
     };
@@ -575,7 +575,7 @@ export class WorkerModeController {
     if (previous?.model && !restoredModel) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'The previous session model is unavailable');
     const planState = this.session.getPlanModeState();
     const planTools = this.session.getEnabledToolNames();
-    const planMounted = this.session.getMountedXdevToolNames();
+    const planMounted = this.session.getMountedToolCommandNames();
     const planModel = this.session.model;
     const planThinking = this.session.configuredThinkingLevel();
     this.session.setPlanModeState(undefined);
@@ -599,7 +599,7 @@ export class WorkerModeController {
     if (this.current.kind !== 'plan') throw new ProjectionError(409, 'INVALID_REQUEST', 'Plan mode is not active');
     const previous = this.previous ?? {
       tools: this.session.getEnabledToolNames().filter(name => !isMCPToolName(name)),
-      mounted: this.session.getMountedXdevToolNames().filter(name => !isMCPToolName(name)),
+      mounted: this.session.getMountedToolCommandNames().filter(name => !isMCPToolName(name)),
       registered: this.session.getAllToolNames().filter(name => !isMCPToolName(name)),
     };
     await this.exitPlan(false);

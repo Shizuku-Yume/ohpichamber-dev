@@ -81,7 +81,7 @@ describe('trusted execution-free first-party target inspection', () => {
   });
   test('passes only allowlisted OMP internal URL reads through to the SDK grammar', async () => {
     const cwd = await workspace();
-    for (const url of ['agent://native', 'history://native', 'local://3.log', 'local://3.log:1-2', 'local://notes.md:1-2', 'proc://job', 'skill://flow-start', 'xd://memory', 'mcp://server/resource', 'omp://help', 'issue://42', 'pr://7/diff']) {
+    for (const url of ['agent://native', 'history://native', 'local://3.log', 'local://3.log:1-2', 'local://notes.md:1-2', 'proc://job', 'skill://flow-start', 'help://memory/docs', 'mcp://server/resource', 'omp://help', 'issue://42', 'pr://7/diff']) {
       const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: url } });
       expect(descriptor?.sourcePaths).toEqual([]);
       expect(descriptor?.internalReadUrls).toEqual([url]);
@@ -119,7 +119,7 @@ describe('trusted execution-free first-party target inspection', () => {
     await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: 'agent://native\0ignored' } })).rejects.toThrow('invalid byte');
     // Only the `local://` session sandbox is writable; every other internal
     // scheme stays a read source or a device transport.
-    for (const path of ['agent://native', 'history://native', 'xd://memory', 'skill://flow-start']) {
+    for (const path of ['agent://native', 'history://native', 'help://memory/docs', 'skill://flow-start']) {
       await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path, content: 'x' } })).rejects.toThrow('separate Host capability');
     }
     await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path: 'file:///etc/passwd', content: 'x' } })).rejects.toThrow('separate Host capability');

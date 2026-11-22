@@ -1,0 +1,141 @@
+{
+  "sourceRevision": "a7135b8f31826c878734388b648f52bed8da436e",
+  "artifactSetSha256": "02c2d449031f0e44cd39f47713b063e151173706dd41ffba89aa3a14ac95a3ca",
+  "artifactSetFormula": "sha256 of the canonical JSON (sorted keys, no whitespace) of {files, registryArtifacts}",
+  "files": [
+    {
+      "source": "patches/@ark%2Fschema@0.56.2.patch",
+      "destination": "vendor/omp/a7135b8f/patches/@ark%2Fschema@0.56.2.patch",
+      "sha256": "5421df0afd80cba41063a8db9c841ac7ca0dea1635f716d5fe28c0de66f979b2",
+      "size": 1431
+    },
+    {
+      "source": "patches/puppeteer-core@25.3.0.patch",
+      "destination": "vendor/omp/a7135b8f/patches/puppeteer-core@25.3.0.patch",
+      "sha256": "6b1a58844185cd5096b7cff14012d171d01d344d4d3d2206d65975d67ed6c5d7",
+      "size": 37801
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/omp-stats/-/omp-stats-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-omp-stats-19.1.0.tgz",
+      "sha256": "34b828bccf5d482d777c78b556f606335f20a0ba8ee734b68ec90d5e25c61f10",
+      "size": 623086
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/omptype/-/omptype-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-omptype-19.1.0.tgz",
+      "sha256": "d10e334b559d89dd021f3485f863ceebaa0740a550dd38fafcd858a49d3eca30",
+      "size": 234475
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-agent-core/-/pi-agent-core-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-agent-core-19.1.0.tgz",
+      "sha256": "e121585e78e8c3ba06fa0ad0b021b26214d9ebc0c5bf99aa287fe4ded84b80fc",
+      "size": 363807
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-ai/-/pi-ai-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-ai-19.1.0.tgz",
+      "sha256": "46693fb8f252773e6e085726bf0e834cb343e85cef4e09078e92a9105d815956",
+      "size": 2360162
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-catalog/-/pi-catalog-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-catalog-19.1.0.tgz",
+      "sha256": "3460e904c3461df616c1156657d3a0436e526ef0fb4531ab4d2720aed05af393",
+      "size": 1028892
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/-/pi-coding-agent-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-coding-agent-19.1.0.tgz",
+      "sha256": "86a80ab85ce992b2420dab194a1df1caa8d1ebeb7c124589f0473936911e6bf4",
+      "size": 17929907
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-mnemopi/-/pi-mnemopi-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-mnemopi-19.1.0.tgz",
+      "sha256": "21b9324df1547d6b3a99b49582bb478eca322b6cd917c420fcfd851f12bff412",
+      "size": 240325
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-natives/-/pi-natives-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-natives-19.1.0.tgz",
+      "sha256": "d0c7bf4e370fab5a35851e46c390c15fa42de36d04164ce5d10daf8fc7121d96",
+      "size": 144763
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-tui/-/pi-tui-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-tui-19.1.0.tgz",
+      "sha256": "e82159218698cbd1b5c3532492719b1a9ca73f92ac9b450718838bc70aa422a2",
+      "size": 2970431
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-utils/-/pi-utils-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-utils-19.1.0.tgz",
+      "sha256": "258a196798df6c7686886e323174c768d4fddee756469fef518674507f718153",
+      "size": 603981
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/pi-wire/-/pi-wire-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-pi-wire-19.1.0.tgz",
+      "sha256": "ac114666f23ae6dff67effa33ba0a583d21a2043cd16c9f7af225312cc2cee49",
+      "size": 71574
+    },
+    {
+      "source": "https://registry.npmjs.org/@oh-my-pi/snapcompact/-/snapcompact-19.1.0.tgz",
+      "destination": "vendor/omp/a7135b8f/tarballs/oh-my-pi-snapcompact-19.1.0.tgz",
+      "sha256": "defadbb1bc946bcce61b54bf3860b5d0ddc420161cb030f58c89814cdea98da6",
+      "size": 57992
+    }
+  ],
+  "registryArtifacts": [
+    {
+      "name": "@oh-my-pi/pi-natives-darwin-arm64",
+      "version": "19.1.0",
+      "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives-darwin-arm64/-/pi-natives-darwin-arm64-19.1.0.tgz",
+      "integrity": "sha512-DuA/hKhr+iwu5wd+EE8T9B/QabqUJI+vY/ILaG73RLkBlnMi1q6xAYBR45ZEaauVs01flkJ/A5iPL/YpjXvbyw==",
+      "sha256": "11b7e117bcd76c2c290596f46f2b2683ccd57e8a6ce8a6943a5307b050949041",
+      "size": 50489118
+    },
+    {
+      "name": "@oh-my-pi/pi-natives-darwin-x64",
+      "version": "19.1.0",
+      "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives-darwin-x64/-/pi-natives-darwin-x64-19.1.0.tgz",
+      "integrity": "sha512-R3U+i1Cox6l0XfzLWze6hDsp0N8IshkSQ7SZy+oIf9AVuZbVjvRBhvCrN/CF+x8gbf6xqf1Ky/C1ztD6hizEvw==",
+      "sha256": "d9bdf2bff91f312c6b21b9c44e156677a3f6749d11c235825857adea180f3a16",
+      "size": 54601324
+    },
+    {
+      "name": "@oh-my-pi/pi-natives-linux-arm64",
+      "version": "19.1.0",
+      "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives-linux-arm64/-/pi-natives-linux-arm64-19.1.0.tgz",
+      "integrity": "sha512-mssNU0baMmCBa/tJ5zccWQVIsZqpSDLCyoggJJ3ulLzIyhO7MiyBp+FhJCnARRN+pZKsYd6QgCoIj7u8z45Dsg==",
+      "sha256": "a5d90cd1762c6c488adebc17e693065a5666ee68fb3a19a6fa93cf9f96343ff3",
+      "size": 53722457
+    },
+    {
+      "name": "@oh-my-pi/pi-natives-linux-x64",
+      "version": "19.1.0",
+      "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives-linux-x64/-/pi-natives-linux-x64-19.1.0.tgz",
+      "integrity": "sha512-9wgN6YGvwjkLy6VexOluf2AatpcPrvi8aa3rBHC7rDfDTpYEakl53n1q5RXd9ZX+QLwjtjV6zX+WgwWxEsLPjA==",
+      "sha256": "fd93eff05f5131005fbf9f12ce0249b27979a1e25169b818dbd1fbed08d277b9",
+      "size": 113119231
+    },
+    {
+      "name": "@oh-my-pi/pi-natives-win32-arm64",
+      "version": "19.1.0",
+      "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives-win32-arm64/-/pi-natives-win32-arm64-19.1.0.tgz",
+      "integrity": "sha512-R7yZRL8pAmo5Lpzj/pNInnWifQyGZ8SQV7e/oMu7vzVt4uCuEVU3zwELE53afQglcIZ/pBolQIyS+4LeF7tJLQ==",
+      "sha256": "535f4c60b8cdb38f124ea8daeaa73aeebee3a37a5da4c538f08ca4b07a63cac7",
+      "size": 51000195
+    },
+    {
+      "name": "@oh-my-pi/pi-natives-win32-x64",
+      "version": "19.1.0",
+      "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives-win32-x64/-/pi-natives-win32-x64-19.1.0.tgz",
+      "integrity": "sha512-LyNO1TGM90/1eolvVCeTOCX4kqktIrP/voh4j6ntkXAXXVxPLMBYzoDj8vfl+SExvMC0dIvEF3i9O3rclfim1w==",
+      "sha256": "a169878143823f3fbe610902857c5ca91852314663eea81b62f901e4cbfaac2d",
+      "size": 54092914
+    }
+  ]
+}

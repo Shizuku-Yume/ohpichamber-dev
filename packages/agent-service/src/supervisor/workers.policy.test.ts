@@ -94,7 +94,7 @@ test('The local:// write capability follows the workspace file-write grant', asy
 });
 
 test('Non-local internal URLs and removed artifact URLs stay refused for a write', async () => {
-  for (const target of ['agent://native', 'history://native', 'artifact://3', 'xd://memory', 'skill://flow-start']) {
+  for (const target of ['agent://native', 'history://native', 'artifact://3', 'help://memory/docs', 'skill://flow-start']) {
     await expect(describeAndAuthorize('write', { path: target, content: 'x' }, ['read', 'write']))
       .rejects.toThrow('separate Host capability');
   }

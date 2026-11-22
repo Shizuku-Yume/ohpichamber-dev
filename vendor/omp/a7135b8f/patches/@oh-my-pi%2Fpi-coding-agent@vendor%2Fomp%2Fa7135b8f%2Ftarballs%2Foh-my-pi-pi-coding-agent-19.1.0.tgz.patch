@@ -1,0 +1,686 @@
+diff --git a/src/async/job-manager.ts b/src/async/job-manager.ts
+index 56f1858e2b..7477e96b81 100644
+--- a/src/async/job-manager.ts
++++ b/src/async/job-manager.ts
+@@ -51,6 +51,12 @@ export const ASYNC_JOB_MANAGER_SHUTDOWN_REASON = Symbol("AsyncJobManager shutdow
+ /** Kind of work a managed job runs; drives job-row badges and delivery labels. */
+ export type AsyncJobType = "bash" | "task" | "eval";
+ 
++/** Executor observations; terminal publication still waits for the managed job promise. */
++export type BashJobEvent =
++	| { type: "started"; jobId: string; sessionKey: string }
++	| { type: "chunk"; jobId: string; chunk: string }
++	| { type: "finished"; jobId: string; exitCode: number | undefined; cancelled: boolean; timedOut: boolean };
++
+ /** Settled job-body payload: delivery text plus its parsed structured output. */
+ export interface AsyncJobRunResult {
+ 	text: string;
+@@ -371,6 +377,9 @@ export interface AsyncJobManagerApi {
+ 	readonly atCapacity: boolean;
+ 	/** Calls `listener` whenever a job settles; returns the unsubscribe. */
+ 	onJobSettled(listener: () => void): () => void;
++	observeBashJobs?(listener: (event: BashJobEvent) => void): () => void;
++	readonly hasBashJobObservers?: boolean;
++	emitBashJobEvent?(event: BashJobEvent): void;
+ 	/**
+ 	 * Calls `listener` whenever what a job view shows may have moved: a job was
+ 	 * registered, started, reported progress, settled, was promoted to the
+@@ -481,6 +490,7 @@ export class AsyncJobManager implements AsyncJobManagerApi {
+ 	/** Live widgets of this root's jobs; set by the root session when widgets are available. */
+ 	widgets: JobWidgetRegistry | undefined;
+ 	readonly #settleListeners = new Set<() => void>();
++	readonly #bashJobObservers = new Set<(event: BashJobEvent) => void>();
+ 	readonly #changeListeners = new Set<() => void>();
+ 
+ 	/**
+@@ -515,6 +525,22 @@ export class AsyncJobManager implements AsyncJobManagerApi {
+ 		}
+ 	}
+ 
++	observeBashJobs(listener: (event: BashJobEvent) => void): () => void {
++		if (this.#disposed) throw new Error("Async job manager is disposed");
++		this.#bashJobObservers.add(listener);
++		return () => {
++			this.#bashJobObservers.delete(listener);
++		};
++	}
++
++	get hasBashJobObservers(): boolean {
++		return this.#bashJobObservers.size > 0;
++	}
++
++	emitBashJobEvent(event: BashJobEvent): void {
++		for (const observer of this.#bashJobObservers) observer(event);
++	}
++
+ 	#filterJobs(jobs: Iterable<AsyncJob>, filter?: AsyncJobFilter): AsyncJob[] {
+ 		if (!filter) return Array.from(jobs);
+ 		const out: AsyncJob[] = [];
+@@ -1107,6 +1133,7 @@ export class AsyncJobManager implements AsyncJobManagerApi {
+ 		this.#consumedJobResults.clear();
+ 		this.#releasedForegroundJobs.clear();
+ 		this.#deliverySinks.clear();
++		this.#bashJobObservers.clear();
+ 		this.widgets?.dispose();
+ 		this.widgets = undefined;
+ 		return jobsSettled && drained;
+diff --git a/src/config/settings.ts b/src/config/settings.ts
+index ce1ac7ca7a..5c3908dfbd 100644
+--- a/src/config/settings.ts
++++ b/src/config/settings.ts
+@@ -3700,6 +3700,27 @@ export class Settings {
+ 
+ 		migrateKokoroSpeechSettings(raw);
+ 
++		const toolCommandRenames = {
++			xdev: "commands",
++			xdevDocs: "commandDocs",
++			xdevInlineDevices: "commandInline",
++			xdevNotices: "commandNotices",
++		};
++		const commandSettings = isRecord(raw.tools) ? raw.tools : undefined;
++		for (const [oldKey, newKey] of Object.entries(toolCommandRenames)) {
++			const oldPath = `tools.${oldKey}`;
++			const newPath = `tools.${newKey}`;
++			const legacy = commandSettings && Object.hasOwn(commandSettings, oldKey)
++				? commandSettings[oldKey]
++				: raw[oldPath];
++			if (legacy !== undefined && !Object.hasOwn(raw, newPath) && !(commandSettings && Object.hasOwn(commandSettings, newKey))) {
++				if (commandSettings) commandSettings[newKey] = legacy;
++				else raw[newPath] = legacy;
++			}
++			if (commandSettings) delete commandSettings[oldKey];
++			delete raw[oldPath];
++		}
++
+ 		// BM25 tool discovery removal: tools.discoveryMode / tools.essentialOverride /
+ 		// mcp.discoveryMode / mcp.discoveryDefaultServers are gone with no
+ 		// replacement (`tools.commands` stays at its own default). Dead keys are
+diff --git a/src/exec/tool-command-host.ts b/src/exec/tool-command-host.ts
+index 7c471f0f19..b869d9a318 100644
+--- a/src/exec/tool-command-host.ts
++++ b/src/exec/tool-command-host.ts
+@@ -89,8 +89,8 @@ export function createToolCommandHandler(options: {
+ 		};
+ 
+ 		const state = session.toolCommands;
+-		const special = commandTransportActive(session)
+-			? specialToolCommands(session).find(tool => tool.name === name)
++		const special = commandTransportActive(session) && specialToolCommands(session).some(tool => tool.name === name)
++			? state?.tools.get(name)
+ 			: undefined;
+ 		const tool = special ?? (state ? resolveMountedToolCommand(state, name) : undefined);
+ 		if (!state || !tool) {
+diff --git a/src/mcp/host/endpoint.ts b/src/mcp/host/endpoint.ts
+index b19dda5aa1..a5b4439b03 100644
+--- a/src/mcp/host/endpoint.ts
++++ b/src/mcp/host/endpoint.ts
+@@ -806,6 +806,13 @@ export class McpEndpoint implements ModuleUnit {
+ 		stage: "connect" | "receive",
+ 	): Promise<MCPTransportError> {
+ 		const failure: UpstreamFailure = normalizeMCPTransportError(error, { transport: this.#transport, stage });
++		if (this.era === "modern" && failure.rpc?.code === MCPErrorCode.UnsupportedProtocolVersion) {
++			try {
++				this.#store.clearEra(this.#publicIdentity, "modern");
++			} catch (error) {
++				logger.debug("MCP era invalidation failed", { server: this.#name, error: String(error) });
++			}
++		}
+ 		if (failure.rpc || !record) return failure;
+ 		if (!record.exit && Object.hasOwn(LOST_UPSTREAM, failure.failure) && record.peer.pid !== undefined) {
+ 			// The pipe closes before the exit is reaped; `#closed` records it first when it arrives in time.
+diff --git a/src/mcp/host/peers.ts b/src/mcp/host/peers.ts
+index 0065308cf0..af583128aa 100644
+--- a/src/mcp/host/peers.ts
++++ b/src/mcp/host/peers.ts
+@@ -9,6 +9,7 @@ import type { ManagedChild, ManagedChildState } from "../../daemon/module";
+ import { type MCPTransportKind, MCPTransportError, normalizeMCPTransportError } from "../errors";
+ import {
+ 	isModernErrorCode,
++	MCP_LEGACY_PROTOCOL_VERSION,
+ 	MCP_PROTOCOL_VERSION,
+ 	MCP_SUBSCRIPTION_ACKNOWLEDGED,
+ 	type MCPDiscoverResult,
+@@ -866,9 +867,26 @@ function outcomeOf(request: Promise<unknown>): Promise<Outcome> {
+ 	);
+ }
+ 
+-/** Whether a failed `server/discover` proves a modern server: only one answers with a 2026-07-28 error. */
+-function isModernError(error: unknown): boolean {
+-	return error instanceof MCPTransportError && error.rpc !== undefined && isModernErrorCode(error.rpc.code);
++const LEGACY_PROTOCOL_VERSIONS = new Set([MCP_LEGACY_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05"]);
++
++/**
++ * The era a failed `server/discover` names by itself: `modern` for an error
++ * only a 2026-07-28 server emits, `legacy` when the server rejects this
++ * revision while listing a handshake-era one it does speak. Undefined when the
++ * failure says nothing either way.
++ */
++function eraOfDiscoverError(error: unknown): McpEra | undefined {
++	if (!(error instanceof MCPTransportError) || error.rpc === undefined) return undefined;
++	if (error.rpc.code !== MCPErrorCode.UnsupportedProtocolVersion) {
++		return isModernErrorCode(error.rpc.code) ? "modern" : undefined;
++	}
++	// Only an explicit compatible revision warrants trying the legacy handshake.
++	const supported = isRecord(error.rpc.data) ? error.rpc.data.supported : undefined;
++	const handshake =
++		Array.isArray(supported) &&
++		supported.every(version => typeof version === "string") &&
++		supported.some(version => LEGACY_PROTOCOL_VERSIONS.has(version));
++	return handshake ? "legacy" : "modern";
+ }
+ 
+ /**
+@@ -892,7 +910,7 @@ async function probeStdio(upstream: StdioUpstream, deps: McpPeerDeps, signal: Ab
+ 	]);
+ 	if (discovered) {
+ 		if ("error" in discovered) {
+-			if (isModernError(discovered.error)) return { era: "modern" };
++			if (eraOfDiscoverError(discovered.error) === "modern") return { era: "modern" };
+ 		} else {
+ 			const result = discoverResultOf(discovered.value);
+ 			if (result) return { era: "modern", discover: result };
+@@ -920,14 +938,19 @@ async function probeHttp(spec: McpServerSpec, deps: McpPeerDeps, signal: AbortSi
+ 		const result = discoverResultOf(await modern.request("server/discover", { _meta: requestMeta() }, { signal }));
+ 		if (result) return { era: "modern", discover: result };
+ 	} catch (error) {
+-		if (isModernError(error)) return { era: "modern" };
++		const era = eraOfDiscoverError(error);
++		if (era === "modern") return { era };
+ 		// Anything but a server's own answer or one of the statuses a
+ 		// handshake-era endpoint gives an unknown POST is the caller's to see:
+ 		// an auth challenge, an outage.
+ 		if (!(error instanceof MCPTransportError)) throw error;
+-		const status = httpStatusOf(error);
+-		const refused = status === undefined ? error.failure === "json_rpc" : Object.hasOwn(LEGACY_HTTP_STATUS, status);
+-		if (!refused) throw error;
++		// A server that lists a handshake-era revision asked for the handshake, whatever status carried that.
++		if (era !== "legacy") {
++			const status = httpStatusOf(error);
++			const refused =
++				status === undefined ? error.failure === "json_rpc" : Object.hasOwn(LEGACY_HTTP_STATUS, status);
++			if (!refused) throw error;
++		}
+ 	} finally {
+ 		await modern.close();
+ 	}
+diff --git a/src/mcp/host/store.ts b/src/mcp/host/store.ts
+index 7d1e615348..2d51d2bd59 100644
+--- a/src/mcp/host/store.ts
++++ b/src/mcp/host/store.ts
+@@ -15,7 +15,7 @@ import * as path from "node:path";
+ import { isRecord, logger, stableStringifyJson } from "@oh-my-pi/pi-utils";
+ import type { McpEra } from "./contract";
+ 
+-const SCHEMA_VERSION = 1;
++const SCHEMA_VERSION = 2;
+ const DB_FILE = "cache.db";
+ /** Entries unread for this long are dropped: no session configures the server any more. */
+ const UNUSED_ENTRY_MS = 30 * 24 * 60 * 60 * 1_000;
+@@ -76,9 +76,12 @@ export function cacheParamsKey(params: Record<string, unknown> | undefined): str
+ }
+ 
+ function migrate(db: Database): void {
+-	const version = db.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version ?? 0;
+-	if (version >= SCHEMA_VERSION) return;
++	const version = db.query<{ user_version: number }, []>("PRAGMA user_version");
++	if ((version.get()?.user_version ?? 0) >= SCHEMA_VERSION) return;
+ 	db.transaction(() => {
++		// Another host may have migrated and repopulated the cache while we waited for the lock.
++		const current = version.get()?.user_version ?? 0;
++		if (current >= SCHEMA_VERSION) return;
+ 		db.run(`CREATE TABLE IF NOT EXISTS eras (
+ 			key TEXT PRIMARY KEY,
+ 			era TEXT NOT NULL,
+@@ -94,15 +97,16 @@ function migrate(db: Database): void {
+ 			used_at INTEGER NOT NULL,
+ 			PRIMARY KEY (key, method, params)
+ 		)`);
++		if (current === 1) db.run("DELETE FROM eras");
+ 		db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+-	})();
++	}).immediate();
+ }
+ 
+ function openDatabase(file: string): Database {
+ 	const db = new Database(file, { create: true });
+ 	try {
+-		db.run("PRAGMA journal_mode = WAL");
+ 		db.run(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
++		db.run("PRAGMA journal_mode = WAL");
+ 		migrate(db);
+ 		return db;
+ 	} catch (error) {
+@@ -187,9 +191,9 @@ export class McpStore {
+ 		this.#db.run("INSERT OR REPLACE INTO eras (key, era, probed_at) VALUES (?, ?, ?)", [key, era, Date.now()]);
+ 	}
+ 
+-	/** Forget a verdict that turned out wrong; the next resolve probes again. */
+-	clearEra(key: string): void {
+-		this.#db.run("DELETE FROM eras WHERE key = ?", [key]);
++	/** Forget a verdict only if it still matches the rejected era. */
++	clearEra(key: string, era: McpEra): void {
++		this.#db.run("DELETE FROM eras WHERE key = ? AND era = ?", [key, era]);
+ 	}
+ 
+ 	/** The stored result of `method` with `params` (a {@link cacheParamsKey}), fresh or not. */
+diff --git a/src/mcp/link.ts b/src/mcp/link.ts
+index 2592e84157..e0aaac733b 100644
+--- a/src/mcp/link.ts
++++ b/src/mcp/link.ts
+@@ -85,6 +85,7 @@ interface PendingRequest {
+ /** One attachment and the lines waiting for its tunnel to drain. */
+ interface Attached {
+ 	host: McpAttachment;
++	era: McpEra;
+ 	/** Unwritten lines in order; `id` names the request a line carries, so it can still be withdrawn. */
+ 	backlog: { line: string; id?: number }[];
+ 	draining: boolean;
+@@ -130,6 +131,8 @@ export class HostLink implements MCPTransport {
+ 	#retaking: Promise<void> | undefined;
+ 	/** The credential refresh under way and the generation whose credentials were refused. */
+ 	#authRefresh: { generation: number; outcome: Promise<boolean> } | undefined;
++	/** The era re-probe under way and the generation whose modern attachment was rejected. */
++	#eraRecovery: { generation: number; outcome: Promise<void> } | undefined;
+ 	/**
+ 	 * Generation attached by a credential refresh whose owner is still
+ 	 * reloading the server. A refusal of those credentials ends the recovery
+@@ -204,7 +207,7 @@ export class HostLink implements MCPTransport {
+ 	/**
+ 	 * Send one request and resolve with its result. Waiting for the link to
+ 	 * re-attach or for refreshed credentials counts against the request's own
+-	 * deadline and ends with its signal.
++	 * deadline and ends with its signal, as does re-probing a rejected era.
+ 	 *
+ 	 * @throws MCPTransportError on a server error, a host-reported failure, a deadline, a lost tunnel or params that cannot be serialized; the abort reason when `options.signal` aborts.
+ 	 */
+@@ -331,7 +334,12 @@ export class HostLink implements MCPTransport {
+ 		throw this.#closedError(this.#closed ? "Transport closed" : "MCP server connection was replaced");
+ 	}
+ 
+-	async #retarget(spec: McpServerSpec, signal: AbortSignal | undefined, recovery: boolean): Promise<void> {
++	async #retarget(
++		spec: McpServerSpec,
++		signal: AbortSignal | undefined,
++		recovery: boolean,
++		era?: McpEra,
++	): Promise<void> {
+ 		if (this.#closed) throw this.#closedError("Transport closed");
+ 		const replaced = this.#spec;
+ 		const generation = ++this.#generation;
+@@ -341,7 +349,7 @@ export class HostLink implements MCPTransport {
+ 		this.#failPending(this.#closedError("MCP server connection was replaced"));
+ 		previous?.host.tunnel.close();
+ 		previous?.host.release();
+-		await this.#retake(generation, undefined, signal, replaced, recovery);
++		await this.#retake(generation, undefined, signal, replaced, recovery, era);
+ 	}
+ 
+ 	/**
+@@ -349,7 +357,12 @@ export class HostLink implements MCPTransport {
+ 	 * refresh the credentials once; an attach that already carries refreshed
+ 	 * credentials must not.
+ 	 */
+-	async #attach(generation: number, signal: AbortSignal | undefined, mayRefresh: boolean): Promise<void> {
++	async #attach(
++		generation: number,
++		signal: AbortSignal | undefined,
++		mayRefresh: boolean,
++		resolvedEra?: McpEra,
++	): Promise<void> {
+ 		const access = this.#injectedAccess ?? (await mcpHostAccess());
+ 		// Checked before the listener is registered: a link closed meanwhile would never remove it.
+ 		this.#assertCurrent(generation);
+@@ -358,7 +371,7 @@ export class HostLink implements MCPTransport {
+ 			this.#access = access;
+ 			this.#offReconnect = access.onReconnect(() => this.#hostReplaced());
+ 		}
+-		const era = await this.#resolveEra(access, generation, signal, mayRefresh);
++		const era = resolvedEra ?? (await this.#resolveEra(access, generation, signal, mayRefresh));
+ 		this.#assertCurrent(generation);
+ 		const spec = this.#spec;
+ 		const host = await access.attach(
+@@ -370,7 +383,7 @@ export class HostLink implements MCPTransport {
+ 			host.release();
+ 			this.#assertCurrent(generation);
+ 		}
+-		const attached: Attached = { host, backlog: [], draining: false };
++		const attached: Attached = { host, era, backlog: [], draining: false };
+ 		const decoder = new JsonLineDecoder();
+ 		this.#attached = attached;
+ 		this.#everAttached = true;
+@@ -428,10 +441,11 @@ export class HostLink implements MCPTransport {
+ 		signal: AbortSignal | undefined,
+ 		replaced: McpServerSpec,
+ 		recovery: boolean,
++		era?: McpEra,
+ 	): Promise<void> {
+ 		const attempt = (async () => {
+ 			try {
+-				await this.#attach(generation, signal, !recovery);
++				await this.#attach(generation, signal, !recovery, era);
+ 			} catch (error) {
+ 				if (this.#generation === generation) {
+ 					this.#retaking = undefined;
+@@ -617,6 +631,35 @@ export class HostLink implements MCPTransport {
+ 		return outcome;
+ 	}
+ 
++	/**
++	 * Re-probe the server whose modern attachment of `generation` rejected this
++	 * revision, and move the link to its handshake-era unit when the probe
++	 * confirms one: one recovery for every request rejected on the same
++	 * attachment. It belongs to the link, not to a caller, so a request that
++	 * gives up meanwhile cannot leave the link detached. Never rejects.
++	 */
++	#recoverEra(generation: number): Promise<void> {
++		const access = this.#access;
++		if (!access || generation !== this.#generation) return Promise.resolve();
++		const running = this.#eraRecovery;
++		if (running?.generation === generation) return running.outcome;
++		const spec = this.#spec;
++		const outcome = (async () => {
++			try {
++				const { era } = await access.resolve(spec);
++				if (era !== "legacy" || generation !== this.#generation) return;
++				await this.#retarget(spec, undefined, false, era);
++			} catch (error) {
++				// Whoever was rejected still reports the server's own answer.
++				logger.debug("MCP era recovery failed", { path: `mcp:${this.#name}`, error });
++			}
++		})().finally(() => {
++			if (this.#eraRecovery?.outcome === outcome) this.#eraRecovery = undefined;
++		});
++		this.#eraRecovery = { generation, outcome };
++		return outcome;
++	}
++
+ 	/**
+ 	 * Wait for work other callers share for as long as this caller's own signal
+ 	 * and deadline allow. Giving up leaves the work running for the others.
+@@ -663,7 +706,8 @@ export class HostLink implements MCPTransport {
+ 		if (signal?.aborted) throw abortReason(signal);
+ 
+ 		const id = ++this.#lastId;
+-		ran.generation = this.#generation;
++		const generation = this.#generation;
++		ran.generation = generation;
+ 		const progressSink = options?.onProgress;
+ 		let line: string;
+ 		try {
+@@ -687,6 +731,7 @@ export class HostLink implements MCPTransport {
+ 
+ 		const { promise, resolve, reject } = Promise.withResolvers<T>();
+ 		let timer: NodeJS.Timeout | undefined;
++		let expiresAt = Number.POSITIVE_INFINITY;
+ 		let settled = false;
+ 		let sent = false;
+ 
+@@ -722,7 +767,9 @@ export class HostLink implements MCPTransport {
+ 
+ 		// Progress restarts the deadline, never past the request's hard cap.
+ 		const armTimer = (): void => {
+-			const delay = Math.min(deadline.timeoutMs, startedAt + deadline.maxTotalMs - Date.now());
++			const now = Date.now();
++			const delay = Math.min(deadline.timeoutMs, startedAt + deadline.maxTotalMs - now);
++			expiresAt = now + delay;
+ 			if (delay <= 0) return;
+ 			const limit = delay < deadline.timeoutMs ? deadline.maxTotalMs : deadline.timeoutMs;
+ 			clearTimeout(timer);
+@@ -773,6 +820,28 @@ export class HostLink implements MCPTransport {
+ 			);
+ 		}
+ 
+-		return promise;
++		try {
++			return await promise;
++		} catch (error) {
++			if (
++				attached.era !== "modern" ||
++				!(error instanceof MCPTransportError) ||
++				error.rpc?.code !== MCPErrorCode.UnsupportedProtocolVersion
++			) {
++				throw error;
++			}
++			// The request is not replayed: its caller waits only so that its next one finds the link moved.
++			const recovery = this.#recoverEra(generation);
++			const remaining = expiresAt - Date.now();
++			if (remaining > 0) {
++				try {
++					await this.#awaitShared(recovery, signal, Number.isFinite(remaining) ? remaining : 0, Date.now());
++				} catch {
++					// Out of time: the server's own answer below is still what this request came to.
++				}
++			}
++			if (signal?.aborted) throw abortReason(signal);
++			throw error;
++		}
+ 	}
+ }
+diff --git a/src/mcp/protocol.ts b/src/mcp/protocol.ts
+index a4b0afa8a4..5a4e75d3fc 100644
+--- a/src/mcp/protocol.ts
++++ b/src/mcp/protocol.ts
+@@ -40,9 +40,8 @@ export const MCPErrorCode = {
+ } as const;
+ 
+ /**
+- * Whether `code` is an error only a 2026-07-28 server emits. The era probe
+- * treats these as proof of a modern server; any other failure of
+- * `server/discover` means a handshake-era one.
++ * Whether `code` is specific to MCP 2026-07-28. The era probe also checks
++ * the advertised revisions on an unsupported-version error.
+  */
+ export function isModernErrorCode(code: unknown): boolean {
+ 	return (
+diff --git a/src/sdk.ts b/src/sdk.ts
+index d631d4ec0c..bc8227705e 100644
+--- a/src/sdk.ts
++++ b/src/sdk.ts
+@@ -39,6 +39,7 @@ import { withCredentialRedaction } from "@oh-my-pi/pi-ai/providers/transform-mes
+ import { sendsImageInputOnWire } from "@oh-my-pi/pi-ai/providers/vision-guard";
+ import { syncOpenAIResponsesHistoryTexts } from "@oh-my-pi/pi-ai/utils";
+ import { FALLBACK_DIALECT, preferredDialect } from "@oh-my-pi/pi-catalog/identity";
++import type { ModelRefreshStrategy } from "@oh-my-pi/pi-catalog/model-manager";
+ import type { Component } from "@oh-my-pi/pi-tui";
+ import { $env, isInteractiveHost } from "@oh-my-pi/pi-utils/env";
+ import { getAgentDir, getModelDbPath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+@@ -644,6 +645,12 @@ export interface CreateAgentSessionOptions {
+ 	authStorage?: AuthStorage;
+ 	/** Model registry. Default: discoverModels(authStorage, agentDir) */
+ 	modelRegistry?: ModelRegistry;
++	/**
++	 * Refresh strategy for the initial default-model discovery fallback only.
++	 * Defaults to "online-if-uncached"; later explicit discovery remains unchanged.
++	 */
++	initialModelRefreshStrategy?: ModelRefreshStrategy;
++	authorizeBashExecution?: ToolSession["authorizeBashExecution"];
+ 	/**
+ 	 * Request credential resolver. Defaults to the model registry's normal
+ 	 * session-affine resolver. Security scans use this narrow seam to keep one
+@@ -2696,6 +2703,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 			isToolActive: name => activeToolNames.has(name),
+ 			setActiveToolNames,
+ 			toolRegistry,
++			authorizeBashExecution: options.authorizeBashExecution,
+ 			hasUI: options.hasUI ?? false,
+ 			canPromptUser: options.interactivePrompts ?? options.hasUI ?? false,
+ 			advertiseHeadlessAsk: options.advertiseHeadlessAsk,
+@@ -3852,7 +3860,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 					(defaultRoleConfigured || !pick) &&
+ 					modelRegistry.getDiscoverableProviders().length > 0
+ 				) {
+-					await logger.time("resolveModelDiscoveryFallback", () => modelRegistry.refresh("online-if-uncached"));
++					await logger.time("resolveModelDiscoveryFallback", () =>
++						modelRegistry.refresh(options.initialModelRefreshStrategy ?? "online-if-uncached"),
++					);
+ 					if (!(await tryResolveDefaultRole()) && !model) {
+ 						fallbackCandidates = await resolveAllowedModels(modelRegistry, settings, modelMatchPreferences);
+ 						pick = pickDefaultAvailableModel(fallbackCandidates.filter(hasModelAuth), provider =>
+diff --git a/src/tools/bash.ts b/src/tools/bash.ts
+index 198b49a661..2fbd6f092d 100644
+--- a/src/tools/bash.ts
++++ b/src/tools/bash.ts
+@@ -1643,6 +1643,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 						onChunk: chunk => {
+ 							outputModified = Date.now();
+ 							outputTap.append(chunk);
++							if (manager.hasBashJobObservers) manager.emitBashJobEvent?.({ type: "chunk", jobId, chunk });
+ 							notifier?.poll();
+ 						},
+ 						onPreview: text => {
+@@ -1669,6 +1670,15 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 						// The result that follows carries the job's last output, matches included.
+ 						notifier?.stop();
+ 					});
++					if (manager.hasBashJobObservers) {
++						manager.emitBashJobEvent?.({
++							type: "finished",
++							jobId,
++							exitCode: result.exitCode,
++							cancelled: result.cancelled,
++							timedOut: result.timedOut === true,
++						});
++					}
+ 					if (result.artifactError) latestProgressDetails = { meta: { artifactError: result.artifactError } };
+ 					const wallTimeMs = performance.now() - wallTimeStart;
+ 					const finalResult = await this.#buildCompletedResult(result, options.timeoutSec, {
+@@ -1738,6 +1748,11 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 			},
+ 		);
+ 
++		if (manager.hasBashJobObservers) {
++			const sessionKey = options.foreground ? (options.sessionId ?? "") : `${options.sessionId ?? ""}:async:${jobId}`;
++			manager.emitBashJobEvent?.({ type: "started", jobId, sessionKey });
++		}
++
+ 		return {
+ 			jobId,
+ 			completion: completion.promise,
+@@ -1759,6 +1774,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 		onUpdate?: AgentToolUpdateCallback<BashToolDetails>,
+ 		ctx?: AgentToolContext,
+ 	): Promise<AgentToolResult<BashToolDetails>> {
++		await this.session.authorizeBashExecution?.(toolCallId, input, signal);
+ 		// The directory the command actually ran in, set once resolved. A hoisted
+ 		// `cd <dir>; …` runs only the remainder, so renderers drawing the executed
+ 		// script read the directory from here instead of re-parsing the command.
+diff --git a/src/tools/browser/relay/native-host-manifest.ts b/src/tools/browser/relay/native-host-manifest.ts
+index 7b527d3773..ef8acd2fa2 100644
+--- a/src/tools/browser/relay/native-host-manifest.ts
++++ b/src/tools/browser/relay/native-host-manifest.ts
+@@ -2,12 +2,12 @@ import * as fs from "node:fs/promises";
+ import * as path from "node:path";
+ import { getBrowserRelayInstallRegistryFile, isEnoent } from "@oh-my-pi/pi-utils";
+ import { $ } from "bun";
+-import { NATIVE_HOST } from "../../../../../browser-relay/extension/messages";
+ import { resolveCliEntryCmd } from "../../../subprocess/worker-client";
+ import { writeFileAtomically } from "../../../utils/atomic-file";
+ import { quotePosixArgv } from "../../../utils/shell-quote";
+ import { chromiumUserDataDirs } from "./chromium-profiles";
+ 
++const NATIVE_HOST = "sh.omp.browser";
+ const CHROME_REGISTRY_KEY = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${NATIVE_HOST}`;
+ 
+ /** Locations and executable used to install the host for this user. */
+diff --git a/src/tools/index.ts b/src/tools/index.ts
+index 37885f63e3..c6c6c282ec 100644
+--- a/src/tools/index.ts
++++ b/src/tools/index.ts
+@@ -420,6 +420,7 @@ export interface ToolSession {
+ 	toolRegistry?: Map<string, Tool>;
+ 	/** Tool command presentation state backed by {@link toolRegistry}: which tools run as bash commands. */
+ 	toolCommands?: ToolCommandState;
++	authorizeBashExecution?: (toolCallId: string, input: unknown, signal?: AbortSignal) => Promise<void>;
+ 	/** Agent registry for IRC routing across live sessions. */
+ 	agentRegistry?: AgentRegistryApi;
+ 	/** Idle→parked→revive lifecycle owner; lets explicit cancellation stop a non-job-backed agent registration. Default: AgentLifecycleManager.global(). */
+diff --git a/src/task/executor.ts b/src/task/executor.ts
+index a72081a0e..e7aede81b 100644
+--- a/src/task/executor.ts
++++ b/src/task/executor.ts
+@@ -458,6 +458,7 @@ export interface ExecutorOptions {
+ 	additionalDirectories?: string[];
+ 	/** Exact provider credential resolver inherited from the parent session. */
+ 	getApiKey?: CreateAgentSessionOptions["getApiKey"];
++	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
+ 	/** Parent session's manager; the child and its revived turns use this exact delivery scope. */
+ 	asyncJobManager?: AsyncJobManagerApi;
+ 	/** Parent session whose stored credential affinities seed the child session. */
+@@ -5234,6 +5235,7 @@ async function runSubprocessOnThisThread(options: ExecutorOptions): Promise<Sing
+ 					authStorage,
+ 					modelRegistry,
+ 					getApiKey: options.getApiKey,
++					authorizeBashExecution: options.authorizeBashExecution,
+ 					credentialSourceSessionId: options.credentialSourceSessionId,
+ 					oauthAccountPools: options.oauthAccountPools,
+ 					inheritedSessionAgents: options.inheritedSessionAgents,
+diff --git a/src/task/structured-subagent.ts b/src/task/structured-subagent.ts
+index 938d10a3e..302800e79 100644
+--- a/src/task/structured-subagent.ts
++++ b/src/task/structured-subagent.ts
+@@ -755,6 +755,7 @@ function buildExecutorOptions(
+ 		costGate: session.costGate,
+ 		additionalDirectories: session.additionalDirectories,
+ 		getApiKey: session.getApiKey,
++		authorizeBashExecution: session.authorizeBashExecution,
+ 		credentialSourceSessionId: session.getCredentialSourceSessionId?.(),
+ 		agent: policy.effectiveAgent,
+ 		// A stepped spawn starts on its first step prompt; the executor sends the rest.
+diff --git a/src/vibe/runtime.ts b/src/vibe/runtime.ts
+index 95854df39..53a227016 100644
+--- a/src/vibe/runtime.ts
++++ b/src/vibe/runtime.ts
+@@ -1288,6 +1288,7 @@ export class VibeSessionRegistry {
+ 		return {
+ 			cwd: session.cwd,
+ 			costGate: session.costGate,
++			authorizeBashExecution: session.authorizeBashExecution,
+ 			agent: record.agent,
+ 			task: message,
+ 			assignment: message,
+diff --git a/src/task/persisted-revive.ts b/src/task/persisted-revive.ts
+index 961dff07e..d34ffa43a 100644
+--- a/src/task/persisted-revive.ts
++++ b/src/task/persisted-revive.ts
+@@ -20,7 +20,7 @@ import type { AsyncJobManagerApi } from "../async";
+ import type { PreparedExtension } from "../extensibility/extensions/types";
+ import type { PersistedSubagentReviverFactory } from "../registry/agent-lifecycle";
+ import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+-import { createAgentSession } from "../sdk";
++import { type CreateAgentSessionOptions, createAgentSession } from "../sdk";
+ import type { AgentSession } from "../session/agent-session";
+ import type { AgentSessionHandle } from "../session/agent-session-handle";
+ import type { ArtifactManagerApi } from "../session/artifacts";
+@@ -67,6 +67,7 @@ import type { AgentDefinition } from "./types";
+  */
+ export interface PersistedSubagentReviveContext {
+ 	session: AgentSession;
++	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
+ 	authStorage: AuthStorage;
+ 	modelRegistry: ModelRegistry;
+ 	settings: Settings;
+@@ -103,6 +104,7 @@ export interface PersistedReviveSpec {
+ 	/** The root's artifact manager at revive time; a revived agent adopts it. */
+ 	readonly artifactManager: ArtifactManagerApi | undefined;
+ 	readonly preparedExtensions: readonly PreparedExtension[] | undefined;
++	readonly authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
+ 	readonly authStorage: AuthStorage;
+ 	readonly modelRegistry: ModelRegistry;
+ 	readonly settings: Settings;
+@@ -208,6 +210,7 @@ export function createPersistedSubagentReviverFactory(
+ 				asyncJobManager: ctx.session.asyncJobManager,
+ 				artifactManager: ctx.session.sessionManager.getArtifactManager() ?? undefined,
+ 				preparedExtensions: ctx.session.preparedExtensions,
++				authorizeBashExecution: ctx.authorizeBashExecution,
+ 				authStorage: ctx.authStorage,
+ 				modelRegistry: ctx.modelRegistry,
+ 				settings: ctx.settings,
+@@ -404,6 +407,7 @@ export async function revivePersistedSubagent(spec: PersistedReviveSpec, expecte
+ 		({ session } = await createAgentSession({
+ 			cwd: spec.root.sessionManager.getCwd(),
+ 			costGate: spec.costGate,
++			authorizeBashExecution: spec.authorizeBashExecution,
+ 			authStorage: spec.authStorage,
+ 			// Revived agents join the root session tree, so their observability
+ 			// frames ride the same bus the RPC/collab surfaces subscribed to.

@@ -109,7 +109,7 @@ export const OMP_SETTINGS_LAYOUT: readonly OmpLayoutTab[] = [
       {
         id: 'toolsAndModels',
         entries: [
-          'tools.xdev',
+          'tools.commands',
           'mcp.enableProjectConfig',
           'providers.autoThinkingMaxEffort',
           'task.maxConcurrency',
@@ -194,7 +194,7 @@ export const OMP_SETTINGS_LAYOUT: readonly OmpLayoutTab[] = [
       },
       {
         id: 'toolDiscovery',
-        entries: ['tools.xdevDocs', 'tools.xdevNotices'],
+        entries: ['tools.commandDocs', 'tools.commandNotices'],
       },
       {
         id: 'mcp',
