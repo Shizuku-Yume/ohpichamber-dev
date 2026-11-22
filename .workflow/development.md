@@ -17,11 +17,14 @@ terminal tunnel-auth injection and managed-chat model/effort persistence, now
 covered by focused regressions. Context-pin read/modify/write keeps concurrent
 edits through Canonical metadata revision preconditions checked in the Host's
 SQLite transaction, with bounded runtime-scoped UI retries. Focused SDK, UI,
-Host and contract checks pass. Full isolated root tests and all Web Vitest files
-have run; merge regressions in UI fixtures, quota helpers, task imports, CLI key
-migration and emitted loader packaging are repaired and rechecked. The known
-M0 PIDFD VM failures and managed-sync loopback flake persist on their required
-one-file reruns. Root production build passes. The production CLI's isolated
+Host and contract checks pass. The final isolated root run passes 6/7 workspace
+suites: UI passes 1,498/1,498 files; Web Vitest passes 629 files with nine skipped
+(10,104 tests passed). Merge regressions in UI fixtures, quota helpers, task
+imports, CLI key migration and emitted loader packaging are repaired. Only the
+scripts suite fails: 35/38 files pass, and the three known M0 PIDFD VM files still
+fail after their required one-file reruns. The managed-sync loopback case failed
+its targeted rerun but passes the final aggregate. Root production build passes.
+The production CLI's isolated
 Chrome smoke opens a saved session and settings without console errors after
 configuring a placeholder native credential in an authorized project outside
 HOME; no model request is sent. This does not certify live providers, devices
