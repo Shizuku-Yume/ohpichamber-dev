@@ -615,13 +615,15 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
           if (item.progress === 'restored') continue;
           const current = db.prepare('SELECT revision, archived_at FROM session_archive WHERE session_id = ?').get(item.sessionId);
           const expected = item.expectedArchiveRevision ?? item.originalArchiveRevision;
-          if ((current ? String(current.revision) : null) !== expected || current?.archived_at == null)
+          // A chat the user already restored on its own stays active.
+          const restoredAlone = current?.archived_at == null;
+          if (!restoredAlone && String(current.revision) !== expected)
             throw new MetadataWriteError('Restored session archive state changed');
-          if (item.originalArchivedAt === null) {
+          if (!restoredAlone && item.originalArchivedAt === null) {
             const updated = db.prepare('UPDATE session_archive SET archived_at = NULL, revision = revision + 1 WHERE session_id = ? AND revision = ? AND archived_at IS NOT NULL')
               .run(item.sessionId, expected);
             if (updated.changes !== 1) throw new MetadataWriteError('Restored session archive state changed');
-          } else if (current.archived_at !== item.originalArchivedAt) throw new MetadataWriteError('Previously archived session changed');
+          } else if (!restoredAlone && current.archived_at !== item.originalArchivedAt) throw new MetadataWriteError('Previously archived session changed');
           db.prepare(`UPDATE host_worktree_archive_sessions SET progress = 'restored', target_workspace_id = ?
             WHERE host_project_id = ? AND archive_id = ? AND session_id = ?`)
             .run(binding.targetWorkspaceId, value.hostProjectId, value.archiveId, item.sessionId);

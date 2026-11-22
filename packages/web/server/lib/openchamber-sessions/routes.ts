@@ -850,7 +850,7 @@ const createCanonicalSessionService = (dependencies) => {
         const state = await archiveStore.getState(item.sessionId);
         if (!scope || scope.projectId !== binding.projectId || scope.agentDirectoryId !== item.agentDirectoryId
           || ![item.workspaceId, binding.targetWorkspaceId].includes(scope.workspaceId)
-          || state?.archivedAt == null || state.revision !== (item.expectedArchiveRevision ?? item.originalArchiveRevision))
+          || (state?.archivedAt != null && state.revision !== (item.expectedArchiveRevision ?? item.originalArchiveRevision)))
           throw new OpenChamberControlError('Archived session scope or state changed', 409);
       }
       binding = await agentScopeStore.markWorktreeRestoreMove(owner.key, owner.claimId, rootId);
