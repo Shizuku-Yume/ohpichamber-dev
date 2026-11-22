@@ -443,7 +443,7 @@ describe('apns runtime with no relay configured', () => {
     expect(Object.values(stored.tokensBySession).flat().map((entry) => entry.deviceToken)).toEqual(['tokenA']);
     // The reason is surfaced once, not per send.
     await runtime.sendApnsToAllUiSessions({ title: 'ready', body: 'My session' });
-    expect(warn.mock.calls.map((call) => call.join(' '))).toEqual([
+    expect(warn.mock.calls.map((call) => call.join(' ')).filter(message => message.startsWith('[APNs]'))).toEqual([
       '[APNs] Remote push is unavailable: no push relay is configured. Set OPENCHAMBER_PUSH_RELAY_URL on this server to turn it on, or set OPENCHAMBER_PUSH_RELAY_DISABLED=true with OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
     ]);
   });

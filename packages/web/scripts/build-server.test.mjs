@@ -9,7 +9,7 @@ import { linkFixtureNodeModules } from './fixture-node-modules.mjs';
 
 test('emits server and CLI with declarations, inline source maps and runtime siblings only', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-server-build-'));
-  const packageRoot = path.join(directory, 'node_modules', '@openchamber', 'web');
+  const packageRoot = path.join(directory, 'node_modules', 'ohpichamber');
   const output = path.join(packageRoot, 'build');
   try {
     await buildServer(output);
@@ -50,6 +50,8 @@ test('emits server and CLI with declarations, inline source maps and runtime sib
     await fs.copyFile(new URL('../package.json', import.meta.url), path.join(packageRoot, 'package.json'));
     await fs.mkdir(path.join(packageRoot, 'bin'));
     await fs.copyFile(new URL('../bin/cli.js', import.meta.url), path.join(packageRoot, 'bin/cli.js'));
+    await fs.mkdir(path.join(packageRoot, 'scripts'));
+    await fs.copyFile(new URL('./standalone-loader.mjs', import.meta.url), path.join(packageRoot, 'scripts/standalone-loader.mjs'));
     linkFixtureNodeModules(
       fileURLToPath(new URL('../node_modules', import.meta.url)),
       path.join(packageRoot, 'node_modules'),
@@ -70,7 +72,7 @@ test('emits server and CLI with declarations, inline source maps and runtime sib
       await fs.symlink(directory, stableLink, 'dir');
       await fs.writeFile(path.join(fakeBin, 'systemctl'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
       await fs.writeFile(path.join(fakeBin, 'loginctl'), '#!/bin/sh\necho Linger=yes\n', { mode: 0o755 });
-      const stableEntry = path.join(stableLink, 'node_modules', '@openchamber', 'web', 'bin', 'cli.js');
+      const stableEntry = path.join(stableLink, 'node_modules', 'ohpichamber', 'bin', 'cli.js');
       const startup = spawnSync(process.execPath, [stableEntry, 'startup', 'enable', '--api-only', '--json'], {
         encoding: 'utf8',
         env: { HOME: home, PATH: `${fakeBin}:${process.env.PATH}`, USER: 'test' },

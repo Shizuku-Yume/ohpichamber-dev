@@ -15,6 +15,8 @@ export interface ConsoleGoCredential {
   expires: number | null;
 }
 
+const KEY_AUTH_FAILED = 'OpenCode Go authentication failed';
+
 export interface OpenCodeGoQuotaDependencies {
   readAuth?: () => LegacyAuthFile | Promise<LegacyAuthFile>;
   fetchImpl?: typeof fetch;

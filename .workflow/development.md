@@ -17,8 +17,16 @@ terminal tunnel-auth injection and managed-chat model/effort persistence, now
 covered by focused regressions. Context-pin read/modify/write keeps concurrent
 edits through Canonical metadata revision preconditions checked in the Host's
 SQLite transaction, with bounded runtime-scoped UI retries. Focused SDK, UI,
-Host and contract checks pass. This is source integration, not new provider,
-device, updater or visual certification.
+Host and contract checks pass. Full isolated root tests and all Web Vitest files
+have run; merge regressions in UI fixtures, quota helpers, task imports, CLI key
+migration and emitted loader packaging are repaired and rechecked. The known
+M0 PIDFD VM failures and managed-sync loopback flake persist on their required
+one-file reruns. Root production build passes. The production CLI's isolated
+Chrome smoke opens a saved session and settings without console errors after
+configuring a placeholder native credential in an authorized project outside
+HOME; no model request is sent. This does not certify live providers, devices
+or updaters. External evidence: `/home/ubuntu/upstream-v280-validation/` and
+`/home/ubuntu/upstream-v280-smoke.png`.
 
 The [OMP 19.1 integration](specs/omp19-1-integration.md) pins 19.1.0 at
 `a7135b8f`. The worker uses tool commands behind Host authorization, retains

@@ -783,7 +783,7 @@ describe('fs write, delete, rename and mkdir stay inside the workspace through a
       body: { path: path.join(workspace, 'link', 'newdir') },
     }, res);
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(400);
     await expect(nativeFs.lstat(path.join(outside, 'newdir'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -811,7 +811,7 @@ describe('fs write, delete, rename and mkdir stay inside the workspace through a
     await getRoute('POST', '/api/fs/mkdir')({ body: { path: alias } }, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.path).toBe(alias);
+    expect(res.body.path).toBe(workspace);
   });
 
   it('still writes a nested file, deletes it, and removes only a symlink leaf', async () => {
@@ -2628,6 +2628,9 @@ describe('fs managed chats root', () => {
       managedChatsRoot: '/srv/openchamber-chats',
       fsPromises: {
         realpath: async directory => {
+          if (directory === '/srv/openchamber-chats/day/session-a') {
+            throw Object.assign(new Error('not found'), { code: 'ENOENT' });
+          }
           if (directory === '/srv/openchamber-chats/day') {
             throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
           }

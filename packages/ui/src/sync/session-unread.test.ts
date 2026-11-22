@@ -126,7 +126,7 @@ describe('manual unread', () => {
     markSessionUnreadSeen('a');
     expect(isSessionUnread(record('a'))).toBe(true);
     expect(await pending).toBe(true);
-    expect(patch.mock.calls[0]?.[1]).toEqual({ changes: { openchamber: { workbench: { viewedAt: null } } } });
+    expect(patch.mock.calls[0]?.[1]).toEqual({ expectedRevision: '1', changes: { openchamber: { workbench: { viewedAt: null } } } });
     releaseKeptUnreadMarks();
     markSessionUnreadSeen('a');
     expect(isSessionUnread(record('a'))).toBe(false);
@@ -168,6 +168,6 @@ describe('manual unread', () => {
     spyOn(canonicalClient, 'getSessionMetadata').mockResolvedValue({ sessionId: 'a', revision: '2', metadata: { openchamber: { workbench: { lastIdleAt: 20, viewedAt: 10 } } } });
     const patch = spyOn(canonicalClient, 'patchSessionMetadata').mockResolvedValue({ sessionId: 'a', revision: '3', metadata: { openchamber: { workbench: { lastIdleAt: 20 } } } });
     expect(await markSessionUnread('a')).toBe(true);
-    expect(patch.mock.calls[0]?.[1]).toEqual({ changes: { openchamber: { workbench: { viewedAt: null } } } });
+    expect(patch.mock.calls[0]?.[1]).toEqual({ expectedRevision: '2', changes: { openchamber: { workbench: { viewedAt: null } } } });
   });
 });

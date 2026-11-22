@@ -77,7 +77,9 @@ const deferred = <T,>() => {
 };
 let response = deferred<Response>();
 const requests: Array<{ path: string; method?: string }> = [];
+const runtimeFetchModule = await import('@/lib/runtime-fetch');
 mock.module('@/lib/runtime-fetch', () => ({
+    ...runtimeFetchModule,
     runtimeFetch: (path: string, options?: RequestInit) => {
         if (options?.method !== 'POST') return Promise.resolve(Response.json({ available: true }));
         requests.push({ path, method: options.method });

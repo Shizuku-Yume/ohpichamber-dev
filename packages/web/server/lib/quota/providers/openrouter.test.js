@@ -57,7 +57,7 @@ describe('OpenRouter quota provider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(DOCUMENTED_PAYLOAD)));
 
     const result = await fetchQuota({ credential });
-    const window = result.usage.windows.monthly;
+    const cap = result.usage.windows.monthly;
 
     expect(result.ok).toBe(true);
     expect(result.providerId).toBe('openrouter');
@@ -119,6 +119,7 @@ describe('OpenRouter quota provider', () => {
     const result = await fetchQuota({ credential });
     const window = result.usage.windows.monthly;
 
+    const total = result.usage.windows.monthly_total;
     expect(result.usage.windows.monthly).toBeUndefined();
     expect(total.usedPercent).toBeNull();
     expect(total.value).toEqual({ kind: 'spend', spent: null, limit: null });
@@ -189,8 +190,8 @@ describe('OpenRouter quota provider', () => {
       }
     })));
 
-    const withoutByok = await fetchQuota({ credential });
-    const withByok = await fetchQuota({ credential });
+    const result = await fetchQuota({ credential });
+    const cap = result.usage.windows.monthly;
 
     expect(cap.valueLabel).toBe(`$${capUsed.toFixed(2)} / $30.00`);
     expect(cap.usedPercent).toBe(Math.min(100, (capUsed / 30) * 100));
@@ -290,7 +291,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: null, limit_reset: 'monthly', usage_monthly: 5, byok_usage_monthly: 2 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.monthly.usedPercent).toBeNull();
@@ -306,7 +307,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: '  ', limit_reset: 'monthly', usage_monthly: 5, byok_usage_monthly: 2 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.monthly.usedPercent).toBeNull();
@@ -318,7 +319,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: 25, limit_reset: 'monthly', usage_monthly: 'bad', byok_usage_monthly: -1 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(Object.keys(result.usage.windows)).toEqual(['monthly', 'monthly_total', 'monthly_credits', 'monthly_byok']);
@@ -333,7 +334,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: 25, limit_reset: 'monthly' }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(Object.keys(result.usage.windows)).toEqual(['monthly', 'monthly_total', 'monthly_credits', 'monthly_byok']);

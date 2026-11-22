@@ -42,7 +42,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { parseMdFile, writeMdFile, getAncestors, findWorktreeRoot } from '../host/shared.js';
-import { MAX_TASK_NAME_LENGTH } from '../projects/project-config.js';
+import { MAX_TASK_NAME_LENGTH } from '../projects/task-text-limits.js';
 import { parseModelSelector } from '@openchamber/agent-contract';
 
 const LOOP_DIR_NAME = 'loops';

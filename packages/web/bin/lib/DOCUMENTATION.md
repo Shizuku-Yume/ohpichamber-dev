@@ -81,6 +81,10 @@ Command modules implement user-facing commands and preserve output contracts acr
 
 ## Shared Helper Modules
 
+CLI settings saves and read/modify/write updates use the same in-process write
+queue. Relay key migration receives that queued updater and rereads strictly;
+it never replaces unreadable settings with an empty document.
+
 These modules hold reusable, non-presentational logic for commands.
 
 - `cli-args.js`

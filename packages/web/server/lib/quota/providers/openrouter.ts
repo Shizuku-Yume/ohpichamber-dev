@@ -1,4 +1,5 @@
 import { credentialAccessToken } from './selected-credential.js';
+import type { UsageWindow } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
@@ -51,6 +52,18 @@ export const resolveResetAt = <Period>(limitReset: Period, nowMs: number) => {
 };
 
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+
+const toAmount = z.unknown().transform((value) => (String(value).trim() === '' ? null : toNumber(value))).parse;
+const toSpendAmount = z.unknown().transform((value) => {
+  const amount = toAmount(value);
+  return amount !== null && amount >= 0 ? amount : null;
+}).parse;
+const spendWindow = (spent: number | null) => toUsageWindow({
+  usedPercent: null,
+  windowSeconds: null,
+  resetAt: null,
+  value: { kind: 'spend', spent, limit: null }
+});
 
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);

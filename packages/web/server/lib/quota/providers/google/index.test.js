@@ -52,11 +52,8 @@ const stubGoogle = (exchange, { access = 'new-access', project = 'test-project' 
 };
 
 describe('Google quota OAuth client compatibility', () => {
-  it.each([1, Date.now() + 3_600_000])('does not use plugin-owned credentials with expiry %s', async (expires) => {
-    configureOpenCodeCredentials({ list: async () => [{
-      id: 'test-google', integrationID: 'google', label: 'plugin', active: true,
-      value: { type: 'oauth', methodID: 'antigravity', access: 'placeholder', refresh: 'placeholder', expires },
-    }] });
+  it('does not read quota without a selected native credential', async () => {
+    configureLogin(null);
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
     const result = await fetchGoogleQuota();
@@ -65,10 +62,7 @@ describe('Google quota OAuth client compatibility', () => {
   });
 
   it('reads quota for a direct Gemini CLI login', async () => {
-    configureOpenCodeCredentials({ list: async () => [{
-      id: 'test-google', integrationID: 'google', label: 'gemini', active: true,
-      value: { type: 'oauth', methodID: 'gemini-cli', metadata: {}, access: 'old-access', refresh: 'test-refresh|test-project', expires: 1 },
-    }] });
+    configureLogin();
     stubGoogle(() => Response.json({ access_token: 'new-access' }));
     const result = await fetchGoogleQuota();
     expect(result.configured).toBe(true);

@@ -57,6 +57,14 @@ const ompNames = (): { builtin: string[]; hidden: string[]; renderers: string[] 
 const HOST_TOOL_NAMES = ['openchamber', 'openchamber_knowledge', 'web', 'notify', 'openchamber_render', 'openchamber_workflow'] as const;
 
 describe('OMP tool presentation coverage', () => {
+    test('historical proposal rows retain their action without inventing one for malformed details', () => {
+        const proposal = toolPresentation('propose');
+        expect(proposal.label).toBe('Propose');
+        expect(proposal.describeCall({ action: 'review', id: 'proposal' })).toBe('review');
+        expect(proposal.describeResult({ action: 'accepted' })).toBe('accepted');
+        expect(proposal.describeCall({})).toBeNull();
+        expect(proposal.describeResult({ action: 17 })).toBeNull();
+    });
     test('every OMP builtin and hidden tool has a registry entry', () => {
         const { builtin, hidden } = ompNames();
         expect(builtin.length).toBeGreaterThan(25);

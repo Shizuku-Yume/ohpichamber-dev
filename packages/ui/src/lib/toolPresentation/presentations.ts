@@ -232,6 +232,11 @@ export const TOOL_PRESENTATIONS = {
         describeCall: (input) => inputText(input, 'action', 'id'),
         describeResult: (result) => detailText(result, 'action'),
     },
+    propose: {
+        label: 'Propose', icon: 'checkbox', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'action', 'id'),
+        describeResult: (result) => detailText(result, 'action'),
+    },
     reject: {
         label: 'Resolve', icon: 'checkbox', group: 'call', outputLanguage: 'text',
         describeCall: (input) => inputText(input, 'action', 'id'),
@@ -305,6 +310,7 @@ export const TOOL_PRESENTATIONS = {
     },
     yield: plainTool('Yield', 'send-plane'),
     goal: plainTool('Goal', 'flag', ['op']),
+    report_issue: plainTool('Report issue', 'bug', ['title', 'description']),
     think: plainTool('Think', 'brain-ai-3'),
     advise: {
         label: 'Advise', icon: 'lightbulb', group: 'call', outputLanguage: 'text',
