@@ -20,6 +20,7 @@ describe('SubagentHudTray', () => {
       window: windowInstance,
       document: windowInstance.document,
       Event: windowInstance.Event,
+      KeyboardEvent: windowInstance.KeyboardEvent,
       HTMLInputElement: windowInstance.HTMLInputElement,
       HTMLElement: windowInstance.HTMLElement,
       Element: windowInstance.Element,
@@ -217,8 +218,8 @@ describe('SubagentHudTray', () => {
         expect(input).not.toBeNull();
         expect(host.querySelectorAll('form')).toHaveLength(1);
         await act(async () => {
-          Object.getOwnPropertyDescriptor(windowInstance.HTMLInputElement.prototype, 'value')?.set?.call(input, method);
-          input?.dispatchEvent(new windowInstance.Event('input', { bubbles: true }));
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, method);
+          input?.dispatchEvent(new Event('input', { bubbles: true }));
         });
         await act(async () => {
           if (method === 'click') {
@@ -226,7 +227,7 @@ describe('SubagentHudTray', () => {
             expect(send?.type).toBe('button');
             send?.click();
           } else {
-            const enter = new windowInstance.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+            const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
             input?.dispatchEvent(enter);
             expect(enter.defaultPrevented).toBe(true);
           }
