@@ -2720,9 +2720,11 @@ test('autonomous commands /loop, /omfg, /cleanse, /tan, /advisor and loop.stop r
   if ('output' in loopRes && typeof loopRes.output === 'string') {
    expect(loopRes.output).toContain('Loop mode enabled');
   }
+  expect(harness.worker.seed().loop).toMatchObject({ active: true, iteration: 1, maxIterations: 5 });
 
   const stopRes = await harness.worker.operation({ type: 'loop.stop' });
   expect(stopRes).toEqual({ type: 'loop.stop', stopped: true });
+  expect(harness.worker.seed().loop).toBeUndefined();
 
   const omfgRes = await harness.worker.operation({ type: 'command', text: '/omfg do not use any' });
   expect(omfgRes.type).toBe('command');

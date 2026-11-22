@@ -11,6 +11,11 @@ Host metadata and archive/worktree pin owners enforce their work-state policy.
 
 ## Projection validation
 
+The journal includes the worker's latest loop state in recovery snapshots, so
+reloading a client does not hide an active loop's stop control. The state can
+travel with a new branch seed from the same worker, but is not persisted or
+restored from transcript history and is cleared when the worker is unavailable.
+
 Unstamped session update/status projections reuse Canonical payload schemas,
 including revision and live-run refinements. Journal stamping adds the actual
 envelope and validates the complete event. Projection seeds reuse snapshot state

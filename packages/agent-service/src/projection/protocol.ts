@@ -1,4 +1,4 @@
-import { AdvisorYieldedEventSchema, CanonicalEventSchema, CleanseProgressEventSchema, MessageSchema, SessionRecapEventSchema, SessionSuggestionEventSchema, SessionModeSchema, SessionSnapshotStateSchema, SessionUpdatedPayloadSchema, SessionStatusPayloadSchema, SubagentUpdatedEventSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
+import { AdvisorYieldedEventSchema, CanonicalEventSchema, CleanseProgressEventSchema, LoopStateSchema, MessageSchema, SessionRecapEventSchema, SessionSuggestionEventSchema, SessionModeSchema, SessionSnapshotStateSchema, SessionUpdatedPayloadSchema, SessionStatusPayloadSchema, SubagentUpdatedEventSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 // Preserve each tuple member's payload type; Array.map widens away its fields.
@@ -51,6 +51,7 @@ export const ProjectionSeedSchema = SessionSnapshotStateSchema.extend({
   turns: z.array(TurnSchema),
   messages: z.array(MessageSchema),
   mode: SessionModeSchema,
+  loop: LoopStateSchema.optional(),
   title: z.string().min(1).optional(),
 });
 export type ProjectionSeed = z.infer<typeof ProjectionSeedSchema>;

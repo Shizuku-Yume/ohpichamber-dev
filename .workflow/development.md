@@ -9,9 +9,10 @@ plan/goal status and loop control without removing their Canonical state.
 The repair wires those rows into both shared composer layouts and keeps workflow
 children from appearing twice in Work Status. The audit compared the merge's
 first parent, its result and later main, checking moved consumers as well as
-lost files. Desktop and collapsed mobile composer DOM regressions and Work
-Status regressions cover the confirmed gaps; native-device behavior remains
-unverified.
+lost files. Browser testing also found a pre-existing recovery problem: live
+loop updates reached existing clients but new snapshots omitted them. The
+journal now projects the worker's loop state into snapshots without persisting
+the loop across worker restarts. Native-device behavior remains unverified.
 
 Archive discovery reconciliation now preserves concurrent live fields while
 merging independently newer Host archive and metadata revisions in full and
