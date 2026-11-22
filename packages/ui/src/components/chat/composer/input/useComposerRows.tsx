@@ -12,6 +12,7 @@ import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerEditorActions } from './useComposerEditorActions';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerDraftTarget } from './useComposerDraftTarget';
+import type { useComposerFooterModes } from './useComposerFooterModes';
 import React from 'react';
 import { QueuedMessagesStrip } from '../../QueuedMessagesStrip';
 import { AutoReviewStrip } from '../../AutoReviewStrip';
@@ -29,6 +30,7 @@ import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending
 import { useShownAfter } from '@/hooks/useShownAfter';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
 import { MemoMobileModelButton, MemoMobileEffortButton } from './memoComposerControls';
+import { ComposerModeSelector } from '../ui/ComposerModeSelector';
 
 const CREATING_SESSION_LINE_DELAY_MS = 300;
 
@@ -47,12 +49,13 @@ type Dependencies = {
     queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEdit' | 'handleQueuedMessageSend'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'handleOpenMobilePanel'>;
     editorActions: Pick<ReturnType<typeof useComposerEditorActions>, 'handleCycleThinking' | 'handleOpenThinkingPanel'>;
+    footerModes: Pick<ReturnType<typeof useComposerFooterModes>, 'mode' | 'draftMode' | 'draftGoalObjective' | 'runActive' | 'planRoleAvailable' | 'goalModeEnabled' | 'handleDraftModeChange'>;
 };
 
 export function useComposerRows({
     draftText, editorState, i18n, preferences, mobileShell: mobile, inlineContext, referenceActions,
     sendAvailability, sessionScope, queueState, draftTarget, queueActions, sessionLifecycle,
-    editorActions,
+    editorActions, footerModes,
 }: Dependencies) {
     const { setMessage } = draftText;
     const { composerRef } = editorState;
@@ -194,6 +197,19 @@ export function useComposerRows({
                 <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
                 <MemoMobileEffortButton onCycleThinking={handleCycleThinking} onOpenThinking={handleOpenThinkingPanel} />
             </div>
+            {!isBtwActive ? <ComposerModeSelector
+                sessionId={currentSessionId}
+                draftOpen={newSessionDraftOpen}
+                mode={footerModes.mode}
+                draftMode={footerModes.draftMode}
+                draftGoalObjective={footerModes.draftGoalObjective}
+                runActive={footerModes.runActive}
+                planRoleAvailable={footerModes.planRoleAvailable}
+                goalModeEnabled={footerModes.goalModeEnabled}
+                directory={currentSessionDirectoryForSync ?? currentDirectory}
+                isMobile
+                onDraftModeChange={footerModes.handleDraftModeChange}
+            /> : null}
         </div>
     ) : null;
 
