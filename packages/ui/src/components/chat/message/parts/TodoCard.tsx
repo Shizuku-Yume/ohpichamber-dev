@@ -76,7 +76,7 @@ export const TodoCard: React.FC<{ phases: TodoPhase[]; defaultExpanded?: boolean
                 <div id={contentId} className="mt-1 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
                     {phases.map((phase) => (
                         <section key={phase.name} className="mb-2 last:mb-0">
-                            <h4 className="typography-meta font-medium text-foreground">{phase.name}</h4>
+                            <h4 className="typography-meta font-medium text-foreground [overflow-wrap:anywhere]">{phase.name}</h4>
                             <ul className="mt-1 space-y-0.5">
                                 {phase.tasks.map((task) => (
                                     <li
@@ -86,7 +86,7 @@ export const TodoCard: React.FC<{ phases: TodoPhase[]; defaultExpanded?: boolean
                                         className="flex items-start gap-2 typography-meta text-muted-foreground"
                                     >
                                         <span aria-hidden="true" className={cn('mt-1 size-1.5 shrink-0 rounded-full', statusDotClass(task))} />
-                                        <span className={cn(isClosedTodo(task) && 'line-through opacity-70')}>{task.content}</span>
+                                        <span className={cn('min-w-0 [overflow-wrap:anywhere]', isClosedTodo(task) && 'line-through opacity-70')}>{task.content}</span>
                                     </li>
                                 ))}
                             </ul>

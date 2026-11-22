@@ -1353,7 +1353,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                         >
                             <button
                                 type="button"
-                                className="absolute inset-0 flex items-center justify-center bg-transparent p-0 border-0"
+                                className="absolute inset-0 flex !min-h-0 !min-w-0 items-center justify-center bg-transparent p-0 border-0"
                                 aria-expanded={isExpanded}
                                 aria-label={title}
                                 onClick={(event) => { event.stopPropagation(); toggleRow(); }}

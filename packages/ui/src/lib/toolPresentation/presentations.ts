@@ -84,7 +84,7 @@ const todoSummary: ToolPresentation['describeResult'] = (result) => {
     const parsed = z.array(z.object({ tasks: z.array(z.object({ status: z.string() })) })).safeParse(phases);
     if (!parsed.success) return null;
     const tasks = parsed.data.flatMap((phase) => phase.tasks);
-    const done = tasks.filter((task) => task.status === 'completed').length;
+    const done = tasks.filter((task) => task.status === 'completed' || task.status === 'abandoned').length;
     return tasks.length > 0 ? `${done}/${tasks.length}` : null;
 };
 
