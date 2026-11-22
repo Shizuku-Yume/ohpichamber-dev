@@ -64,6 +64,85 @@ afterEach(() => {
   subagents.mockRestore();
 });
 
+describe('archived Host discovery versus active snapshot upserts', () => {
+  test.each(['full', 'head'] as const)('%s discovery merges Host revisions independently while preserving live fields and deletions', async (scope) => {
+    const original = session('ses_host_fields');
+    const removed = session('ses_removed');
+    useGlobalSessionsStore.getState().applySnapshot([original, removed], []);
+    const started = deferred<void>();
+    list.mockImplementation(() => { started.resolve(); return request.promise; });
+    const loading = scope === 'full'
+      ? useGlobalSessionsStore.getState().loadSessions()
+      : useGlobalSessionsStore.getState().refreshSessionHead();
+    await started.promise;
+    const live = { ...original, runtimeStatus: 'running' as const, activeRunId: 'run_live', headSequence: '42', title: 'Live title', updatedAt: 100 };
+    useGlobalSessionsStore.getState().upsertSession(live);
+    useGlobalSessionsStore.getState().removeSessions([removed.sessionId]);
+    const incoming = { ...original, archivedAt: 10, archiveRevision: '1', metadata: { notes: 'Host' }, metadataRevision: '2' };
+    request.resolve({ items: [incoming, removed], errors: {} });
+    await loading;
+    const state = useGlobalSessionsStore.getState();
+    expect(state.entityById.get(original.sessionId)).toEqual({ ...live, archivedAt: 10, archiveRevision: '1', metadata: incoming.metadata, metadataRevision: '2' });
+    expect(ids(state.archivedSessions)).toEqual([original.sessionId]);
+    expect(state.activeSessions).toEqual([]);
+    expect(state.entityById.has(removed.sessionId)).toBe(false);
+  });
+
+  test.each(['full', 'head'] as const)('%s discovery cannot undo a concurrent newer unarchive or Host metadata update', async (scope) => {
+    const archived = session('ses_unarchived', { archivedAt: 10, archiveRevision: '1' });
+    useGlobalSessionsStore.getState().applySnapshot([], [archived]);
+    const started = deferred<void>();
+    list.mockImplementation(() => { started.resolve(); return request.promise; });
+    const loading = scope === 'full'
+      ? useGlobalSessionsStore.getState().loadSessions()
+      : useGlobalSessionsStore.getState().refreshSessionHead();
+    await started.promise;
+    const restored = { ...archived, archivedAt: undefined, archiveRevision: '2', metadata: { notes: 'newer Host update' }, metadataRevision: '3' };
+    useGlobalSessionsStore.getState().upsertSession(restored);
+    request.resolve({ items: [archived], errors: {} });
+    await loading;
+    const state = useGlobalSessionsStore.getState();
+    expect(state.entityById.get(restored.sessionId)).toEqual(restored);
+    expect(state.activeSessions).toEqual([restored]);
+    expect(state.archivedSessions).toEqual([]);
+  });
+
+  test.each([
+    ['full', 'before'], ['full', 'during'], ['full', 'after'],
+    ['head', 'before'], ['head', 'during'], ['head', 'after'],
+  ] satisfies Array<['full' | 'head', 'before' | 'during' | 'after']>)('%s discovery preserves the newer archive revision with an upsert %s the read', async (scope, timing) => {
+    const active = session('02bf3db5-8a95-4cc0-ace7-2b193b5b82bf', {
+      projectId: 'pro_4a51d581-fc6c-41f3-ab8b-a2b477947130',
+      workspaceId: 'ws_768b15a3-ff91-44bd-b502-bb8cd2950e10',
+      displayPath: '../ohpi-ios-home/host/worktree/2837b2452f2420a514c53a82bbad00d082170c8e/calm-heron',
+      runtimeStatus: 'unavailable', metadataRevision: '2', archiveRevision: '0',
+    });
+    const archived = { ...active, updatedAt: 1795336957945, archivedAt: 1795336958034, archiveRevision: '1' };
+    useGlobalSessionsStore.getState().applySnapshot([active], []);
+    registerWorkspaceDirectory(active.workspaceId, '/tmp/ohpi-ios-home/host/worktree/2837b2452f2420a514c53a82bbad00d082170c8e/calm-heron');
+    const started = deferred<void>();
+    list.mockImplementation(() => { started.resolve(); return request.promise; });
+    if (timing === 'before') useGlobalSessionsStore.getState().upsertSession(active);
+    const loading = scope === 'full'
+      ? useGlobalSessionsStore.getState().loadSessions()
+      : useGlobalSessionsStore.getState().refreshSessionHead();
+    await started.promise;
+    if (timing === 'during') useGlobalSessionsStore.getState().upsertSession(active);
+    request.resolve({ items: [archived], errors: {} });
+    await loading;
+    if (timing === 'after') useGlobalSessionsStore.getState().upsertSession(active);
+    const state = useGlobalSessionsStore.getState();
+    expect(list.mock.calls).toEqual([[]]);
+    expect(state.status).toBe('ready');
+    expect(state.discoveryErrors.size).toBe(0);
+    expect({
+      active: ids(state.activeSessions), archived: ids(state.archivedSessions),
+      archivedAt: state.entityById.get(active.sessionId)?.archivedAt,
+      archiveRevision: state.entityById.get(active.sessionId)?.archiveRevision,
+    }).toEqual({ active: [], archived: [active.sessionId], archivedAt: archived.archivedAt, archiveRevision: '1' });
+  });
+});
+
 describe('native global mutation reconciliation', () => {
   const warmup = () => new CanonicalApiError({ type: 'urn:test:warmup', title: 'Unavailable', status: 503, detail: 'The Agent Service is not ready.', code: 'SERVICE_UNAVAILABLE', retryable: true });
 

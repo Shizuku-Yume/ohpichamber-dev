@@ -4,6 +4,15 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Archive discovery reconciliation now preserves concurrent live fields while
+merging independently newer Host archive and metadata revisions in full and
+head refreshes. Membership follows the merged archive state; deletion tombstones
+and runtime-generation fences are unchanged. The scratch reproduction on
+04cdff384 failed both during-read cases (53 pass, 2 fail), while before/after
+controls passed. Coverage includes newer concurrent unarchives, Host metadata,
+live fields and deletions. Required verification is recorded with this change's
+handoff; on-device behavior remains unverified.
+
 The iOS replay on `ecf69a017` exposed the symmetric restore gap: Host session
 archive state reached revision 2 with no archived timestamp, while the client
 still retained revision 1 in Archive. Worktree restore now awaits authoritative

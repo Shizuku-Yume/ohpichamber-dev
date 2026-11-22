@@ -534,13 +534,15 @@ const overlayMutationsSince = (
 
   const currentActive = new Map(state.activeSessions.map((session) => [session.sessionId, session]));
   const currentArchived = new Map(state.archivedSessions.map((session) => [session.sessionId, session]));
+  const incoming = new Map([...activeSessions, ...archivedSessions].map((session) => [session.sessionId, session]));
   let nextActive = activeSessions.filter((session) => !affectedIds.has(session.sessionId));
   let nextArchived = archivedSessions.filter((session) => !affectedIds.has(session.sessionId));
   for (const sessionId of affectedIds) {
-    const active = currentActive.get(sessionId);
-    const archived = currentArchived.get(sessionId);
-    if (active) nextActive = upsertSessionIntoList(nextActive, active);
-    else if (archived) nextArchived = upsertSessionIntoList(nextArchived, archived);
+    const current = currentActive.get(sessionId) ?? currentArchived.get(sessionId);
+    if (!current) continue;
+    const merged = mergeSessionDirectoryMetadata(current, incoming.get(sessionId));
+    if (merged.archivedAt === undefined) nextActive = upsertSessionIntoList(nextActive, merged);
+    else nextArchived = upsertSessionIntoList(nextArchived, merged);
   }
   return { activeSessions: nextActive, archivedSessions: nextArchived };
 };
@@ -920,10 +922,12 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         set((state) => {
           const mutations: GlobalSessionMutation[] = [];
           for (const session of result.items) {
-            // A mutation this client applied after the read began wins.
-            if ((state.mutationRevisionBySessionId.get(session.sessionId) ?? 0) > baselineRevision) continue;
             const existing = state.entityById.get(session.sessionId);
-            const merged = mergeSessionDirectoryMetadata(session, existing);
+            const mutated = (state.mutationRevisionBySessionId.get(session.sessionId) ?? 0) > baselineRevision;
+            if (mutated && !existing) continue;
+            const merged = mutated && existing
+              ? mergeSessionDirectoryMetadata(existing, session)
+              : mergeSessionDirectoryMetadata(session, existing);
             if (!existing || !isSameSessionRecord(existing, merged)) mutations.push({ type: 'upsert', session: merged });
           }
           const discovered = mutations.length > 0 ? applySessionMutations(state, mutations) : state;
