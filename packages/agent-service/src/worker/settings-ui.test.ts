@@ -187,6 +187,24 @@ test('a moved row is absent from state and refused on write', async () => {
   } finally { await f.close(); }
 });
 
+test('discovery exposes only the pinned boolean controls on Commands and Skills', () => {
+  const rows = [...OMP_SETTING_EXPOSED_IDS].filter(id => id.startsWith('commands.') || id.startsWith('skills.'));
+  const types = new Map(orderedSettings().map(({ id, type }) => [id, type]));
+  expect(rows.filter(id => id.startsWith('commands.')).sort()).toEqual([
+    'commands.enableClaudeProject', 'commands.enableClaudeUser', 'commands.enableOpencodeProject', 'commands.enableOpencodeUser',
+  ]);
+  expect(rows.filter(id => OMP_SETTING_PLACEMENTS[id]?.type === 'page' && id.startsWith('skills.')).sort()).toEqual([
+    'skills.enableAgentsProject', 'skills.enableAgentsUser', 'skills.enableClaudeProject', 'skills.enableClaudeUser',
+    'skills.enableCodexUser', 'skills.enablePiProject', 'skills.enablePiUser', 'skills.enabled',
+  ]);
+  for (const id of rows) expect(types.get(id)).toBe('boolean');
+  for (const id of ['skills.customDirectories', 'skills.ignoredSkills', 'skills.manualSkills', 'skills.includeSkills']) {
+    expect(OMP_SETTING_PLACEMENTS[id]).toEqual({ type: 'config-only' });
+    expect(OMP_SETTING_EXPOSED_IDS.has(id)).toBe(false);
+  }
+  expect(OMP_SETTING_PLACEMENTS['skills.registryUrl']).toEqual({ type: 'boundary' });
+});
+
 test('Usage edits reset tuning without exposing automatic redemption', async () => {
   const f = await fixture();
   try {

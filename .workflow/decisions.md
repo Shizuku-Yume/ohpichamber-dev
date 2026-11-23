@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-23 - Keep discovery and native prompt authoring on their existing catalogs
+
+- Commands and installed Skills own their OMP discovery switches through the existing settings catalog. The four skill lists stay in `config.yml`; the registry URL stays outside the GUI write allowlist. These switches select native discovery sources; they don't write to or enable other runtime integrations.
+- Prompt Template creation uses a confined relative Markdown name for nested folders, not the legacy `openchamber.group` display metadata. Command and prompt writes preserve untouched native frontmatter and leave public response schemas unchanged. `side` stays on disk: OMP 19.1 applies its side-question behavior only in the interactive terminal.
+- Keep the existing application model and agent binding contract. Canonical prompt preparation projects it for existing app consumers; it isn't native OMP command metadata.
+- The existing Behavior route owns only `AGENTS.md`; generic workspace file editing is not a scoped settings authoring contract. A separate Behavior change should prove SDK discovery for each exact file before adding explicit allowlisted kinds and revisioned writes. In particular, OMP 19.1's `APPEND_SYSTEM.md` auto-discovery is in its CLI entrypoint, so SDK support needs verification before promising an editor. No hook or SSH writes.
+- Keep Host/client audio and native OMP voice configuration separate. No Host egress, provider, or credential changes; native voice editing requires evidence of what each setting controls in the SDK-backed app.
+
 ## 2026-11-23 - Provider credential selection: D4 resolved
 
 - **Decided:** an explicit null in `defaultCredentials` means automatic native OMP selection; an absent key preserves legacy provider pins. Selecting an account remains an explicit pin. Adding credentials or completing OAuth does not select an account. Removing the effective pinned account writes an automatic null before deletion; failed deletion restores the prior metadata, while failed metadata persistence leaves the credential untouched.

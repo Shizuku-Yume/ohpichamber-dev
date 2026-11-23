@@ -5,12 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { selectCommandsForDirectory, useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
+import { invalidateCommandsLoadCache, selectCommandsForDirectory, useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
 import { ModelSelector } from '../agents/ModelSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { useAutosave, AUTOSAVE_SAVED, AUTOSAVE_UNCHANGED, autosaveFailed, type AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
 import {
   SettingsSection,
@@ -33,6 +35,23 @@ interface CommandForm {
 export const CommandsPage: React.FC = () => {
   const { t } = useI18n();
   const directory = useSettingsDirectory();
+  const { getSectionSettings, updateSettings, saving } = useOmpPageSettings('commands');
+  const discoverySettings = getSectionSettings('catalog');
+  const discoverySection = discoverySettings.length > 0 ? (
+    <SettingsSection title={t('settings.omp.discovery.title')}>
+      {discoverySettings.map(setting => (
+        <OmpRowControl key={setting.id} setting={setting} value={setting.value} disabled={saving}
+          onChange={async value => {
+            if (!await updateSettings(() => [{ id: setting.id, value }])) {
+              toast.error(t('settings.common.status.saveFailed'));
+              return;
+            }
+            invalidateCommandsLoadCache(directory);
+            await useCommandsStore.getState().loadCommands(directory);
+          }} />
+      ))}
+    </SettingsSection>
+  ) : null;
   const selectedId = useCommandsStore(state => state.selectedCommandId);
   const selectedName = useCommandsStore(state => state.selectedCommandName);
   const commands = useCommandsStore(state => selectCommandsForDirectory(state, directory));
@@ -118,6 +137,7 @@ export const CommandsPage: React.FC = () => {
     // and a bare centred div left the pane with no title at all.
     return (
       <SettingsPageLayout title={t('settings.page.commands.title')} showSaveStatus={false}>
+        {discoverySection}
         <div className="flex items-center justify-center py-16">
           <div className="max-w-sm text-center text-muted-foreground">
             <Icon name="terminal-box" className="mx-auto mb-3 size-12 opacity-50" />
@@ -131,6 +151,7 @@ export const CommandsPage: React.FC = () => {
   return <SettingsPageLayout title={isNew ? t('settings.commands.page.title.new') : `/${selectedName}`}
     description={isNew ? t('settings.commands.page.subtitle.new') : t('settings.commands.page.subtitle.edit')}
     onBlurCapture={autosave.onBlurCapture}>
+    {discoverySection}
     <fieldset className="min-w-0">
       <SettingsSection title={t('settings.commands.page.section.identity')} divider={false}>
         {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')}>

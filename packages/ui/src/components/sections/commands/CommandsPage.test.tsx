@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Window } from 'happy-dom';
+import type { OmpSettingsState } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -54,6 +55,29 @@ plugin({
   },
 });
 const { CommandsPage } = await import('./CommandsPage');
+const { canonicalClient } = await import('@/api/canonicalClient');
+test('Commands discovery writes its native setting and refreshes the catalog', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  const state: OmpSettingsState = {
+    workspaceId: 'workspace', revision: '1', totalCount: 1,
+    settings: [{ id: 'commands.enableClaudeProject', type: 'boolean', value: true, default: true, configured: false,
+      placement: { type: 'page', page: 'commands', section: 'catalog' } }],
+  };
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state);
+  const write = spyOn(canonicalClient, 'updateOmpSettings').mockResolvedValue({
+    ...state, revision: '2', settings: [{ ...state.settings[0], value: false, configured: true }],
+  });
+  const reload = spyOn(useCommandsStore.getState(), 'loadCommands').mockResolvedValue(true);
+  try {
+    await act(async () => root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>));
+    const row = container.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableClaudeProject"]');
+    if (!row) throw new Error('Missing discovery setting');
+    await act(async () => row.click());
+    expect(write).toHaveBeenCalledWith('workspace', { expectedRevision: '1', changes: [{ id: 'commands.enableClaudeProject', value: false }] });
+    expect(reload).toHaveBeenCalledWith('/project');
+  } finally { resolve.mockRestore(); read.mockRestore(); write.mockRestore(); reload.mockRestore(); }
+});
 const { useCommandsStore } = await import('@/stores/useCommandsStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { SyncProvider } = await import('@/sync/sync-context');

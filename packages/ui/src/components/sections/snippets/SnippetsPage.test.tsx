@@ -96,3 +96,37 @@ test('the empty pane keeps the page heading so Settings can focus it', async () 
   const heading = container.querySelector('[data-settings-page-heading]');
   expect(heading?.textContent).toBe('Prompt Templates');
 });
+
+test('a new prompt uses a confined nested native name and selects the new opaque ID', async () => {
+  const created: PromptTemplateEntry = {
+    ...entries[0], templateId: 'new-template', group: 'reviews/backend', source: '(project:reviews:backend)',
+  };
+  const create = spyOn(canonicalClient.fileResources, 'createPromptTemplate').mockResolvedValue({
+    workspaceId: 'workspace', revision: '5', templates: [...entries, created],
+  });
+  try {
+    await act(async () => {
+      await useSnippetsStore.getState().loadSnippets();
+      useSnippetsStore.getState().setSnippetDraft({ name: 'deploy', scope: 'workspace', content: 'Say hello.' });
+      useSnippetsStore.getState().setSelectedSnippet('deploy');
+      root.render(<ThemeSystemProvider><I18nProvider><TooltipProvider><SnippetsPage /></TooltipProvider></I18nProvider></ThemeSystemProvider>);
+    });
+    const folder = container.querySelector<HTMLInputElement>('input[aria-label="Prompt folder"]');
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    const save = [...container.querySelectorAll('button')].find(button => button.textContent === 'Save Changes');
+    if (!folder || !setValue || !save) throw new Error('Missing prompt creation fields');
+    const enterFolder = (value: string) => act(async () => {
+      setValue.call(folder, value);
+      folder.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await enterFolder('../outside');
+    expect(save.disabled).toBe(true);
+    await enterFolder('reviews/backend');
+    expect(save.disabled).toBe(false);
+    await act(async () => save.click());
+    expect(create).toHaveBeenCalledWith('workspace', {
+      expectedRevision: '4', name: 'reviews/backend/deploy', scope: 'workspace', description: '', content: 'Say hello.',
+    });
+    expect(useSnippetsStore.getState().selectedSnippetName).toBe('new-template');
+  } finally { create.mockRestore(); }
+});
