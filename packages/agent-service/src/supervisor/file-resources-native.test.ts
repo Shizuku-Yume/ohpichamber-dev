@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
+import { once } from 'node:events';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -261,6 +262,21 @@ test('native delimiters separate metadata from the editable body', async () => {
     expect(await readFile(join(dir, `${name}.md`), 'utf8')).toBe(header + content);
     revision = updated.catalog.revision;
   }
+}, 60000);
+
+test('a native command with many leading comments and no frontmatter does not block discovery', async () => {
+  const h = await fixture();
+  await h.operation({ action: 'commands.read' });
+  const directory = join(h.cwd, '.omp', 'commands');
+  await mkdir(directory, { recursive: true });
+  const content = '<!-- Note -->\n'.repeat(1_000) + 'Say hello.\n';
+  await writeFile(join(directory, 'commented.md'), content);
+  const result = await Promise.race([
+    h.operation({ action: 'commands.read' }),
+    once(AbortSignal.timeout(3_000), 'abort').then(() => { throw new Error('Comment-only command discovery exceeded the worker watchdog'); }),
+  ]);
+  if (result.kind !== 'commands') throw new Error('Expected command catalog');
+  expect(result.catalog.commands.find(entry => entry.name === 'commented' && entry.editable)?.content).toBe(content);
 }, 60000);
 
 test('nested native prompt creation and body editing preserve the folder and native metadata', async () => {

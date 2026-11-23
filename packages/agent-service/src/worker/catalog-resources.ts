@@ -43,7 +43,15 @@ function missing(error: Error): boolean { return 'code' in error && error.code =
 function inside(root: string, path: string): boolean { const part = relative(root, path); return part !== '' && part !== '..' && !part.startsWith(`..${sep}`) && !isAbsolute(part); }
 function frontmatterBoundary(text: string) {
   // pi-utils repairs leading HTML comments, then closes at the first newline followed by "---".
-  const prefix = /^(?:\s*<!--[\s\S]*?-->)+\s*(?=---)/.exec(text)?.[0] ?? '';
+  const whitespace = /\s*/y;
+  let commentsEnd = 0;
+  while (whitespace.test(text) && text.startsWith('<!--', whitespace.lastIndex)) {
+    const close = text.indexOf('-->', whitespace.lastIndex + 4);
+    if (close === -1) break;
+    commentsEnd = close + 3;
+    whitespace.lastIndex = commentsEnd;
+  }
+  const prefix = commentsEnd > 0 && text.startsWith('---', whitespace.lastIndex) ? text.slice(0, whitespace.lastIndex) : '';
   const header = /^---[\s\S]*?(?:\r\n?|\n)---(?:[^\S\r\n]*(?:\r\n?|\n|$))?/.exec(text.slice(prefix.length))?.[0];
   return header === undefined ? { prefix: '', header: '' } : { prefix, header: prefix + header };
 }
