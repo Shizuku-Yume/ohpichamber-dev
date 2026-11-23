@@ -117,7 +117,7 @@ export function roleSelector(value: JsonValue | undefined): string {
   return typeof primary === 'string' ? (primary.split(',', 1)[0] ?? '').trim() : '';
 }
 
-function replaceFirstSelector(value: JsonValue | undefined, selector: string): string {
+export function replaceFirstSelector(value: JsonValue | undefined, selector: string): string {
   const separator = typeof value === 'string' ? value.indexOf(',') : -1;
   return separator < 0 || typeof value !== 'string' ? selector : selector + value.slice(separator);
 }

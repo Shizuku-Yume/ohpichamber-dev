@@ -14,7 +14,7 @@ import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { modelRoleChange, parseRolesRecord, replaceFirstSelector, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 
 export const MemoryPage: React.FC = () => {
   const { t } = useI18n();
@@ -49,7 +49,7 @@ export const MemoryPage: React.FC = () => {
     ? sharpshooterSetting?.value
     : ompForm['sharpshooter.model'];
   const sharpshooterSelector = typeof sharpshooterValue === 'string' ? sharpshooterValue : '';
-  const sharpshooterModel = parseModelSelector(sharpshooterSelector);
+  const sharpshooterModel = parseModelSelector(splitRoleSelector(roleSelector(sharpshooterSelector), models).model);
 
   const mnemopiKeys = [
     'mnemopi.bank',
@@ -132,7 +132,11 @@ export const MemoryPage: React.FC = () => {
                 className={SETTINGS_WIDTH_SELECT_CLASS}
                 onChange={(providerId, modelId) => {
                   if (providerId === sharpshooterModel?.providerId && modelId === sharpshooterModel.modelId) return;
-                  void updateOmpSetting(sharpshooterSetting, formatModelRef({ providerId, modelId }) || null);
+                  const selector = formatModelRef({ providerId, modelId });
+                  void updateSettings((state) => {
+                    const current = state.settings.find((setting) => setting.id === 'sharpshooter.model')?.value;
+                    return [{ id: 'sharpshooter.model', value: selector ? replaceFirstSelector(current, selector) : null }];
+                  });
                 }}
               />
             </SettingsFieldRow>
