@@ -75,3 +75,28 @@ test('an older Host without the opt-in route omits the native editor', async () 
   expect(element.textContent).not.toContain('Native behavior files');
   expect(element.querySelector('[role="alert"]')).toBeNull();
 });
+
+test('a shared catalog revision change does not discard the draft or rebase its file version', async () => {
+  resolve.mockResolvedValue(workspace);
+  read.mockResolvedValueOnce(catalog).mockResolvedValue({ ...catalog, revision: '4' });
+  write.mockRejectedValueOnce(new CanonicalApiError({
+    type: 'about:blank', title: 'Conflict', status: 409, code: 'CATALOG_CONFLICT',
+    detail: 'The catalog revision does not match the expected revision', retryable: false,
+  })).mockResolvedValue({ ...catalog, revision: '5' });
+  await render();
+  await act(async () => findButton('Project').click());
+  await act(async () => element.querySelector<HTMLButtonElement>('[aria-label="Select a file"]')!.click());
+  const choice = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent?.includes('demo.md'))!;
+  await act(async () => choice.click());
+  const body = element.querySelector<HTMLTextAreaElement>('textarea')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(body, 'Unsaved draft.');
+    body.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => findButton('Save Changes').click());
+  expect(write.mock.calls.map(([, input]) => [input.expectedRevision, input.expectedVersion, input.content])).toEqual([
+    ['3', 'a'.repeat(64), 'Unsaved draft.'],
+    ['4', 'a'.repeat(64), 'Unsaved draft.'],
+  ]);
+  expect(element.querySelector('[role="alert"]')).toBeNull();
+});

@@ -87,15 +87,27 @@ export function NativeBehaviorFiles({ directory }: { directory: string }) {
         if (Object.keys(changes).length) fields = BehaviorFileFieldsSchema.parse(changes);
       } catch { setError('fields'); return; }
     }
-    const target = { kind: draft.kind, name: draft.name, scope, expectedRevision: catalog.revision };
+    const mutate = (expectedRevision: string) => {
+      const target = { kind: draft.kind, name: draft.name, scope, expectedRevision };
+      return remove && draft.original
+        ? canonicalClient.fileResources.deleteBehaviorFile(catalog.workspaceId, { ...target, expectedVersion: draft.original.version })
+        : canonicalClient.fileResources.writeBehaviorFile(catalog.workspaceId, {
+          ...target, expectedVersion: draft.original?.version ?? null, content: draft.content, fields,
+        });
+    };
     setBusy(true);
     setError('');
     try {
-      const result = remove && draft.original
-        ? await canonicalClient.fileResources.deleteBehaviorFile(catalog.workspaceId, { ...target, expectedVersion: draft.original.version })
-        : await canonicalClient.fileResources.writeBehaviorFile(catalog.workspaceId, {
-          ...target, expectedVersion: draft.original?.version ?? null, content: draft.content, fields,
-        });
+      let result: BehaviorFileCatalog;
+      try {
+        result = await mutate(catalog.revision);
+      } catch (failure) {
+        if (!(failure instanceof CanonicalApiError) || failure.problem.code !== 'CATALOG_CONFLICT') throw failure;
+        const latest = await canonicalClient.fileResources.getBehaviorFiles(catalog.workspaceId);
+        if (latest.revision === catalog.revision) throw failure;
+        setCatalog(latest);
+        result = await mutate(latest.revision);
+      }
       setCatalog(result);
       if (remove) {
         setSelection('');
