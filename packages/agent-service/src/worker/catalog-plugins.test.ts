@@ -387,6 +387,39 @@ nativeTest('workspace overrides never overwrite a symlink or shadow a native fal
   } finally { await context.cleanup(); }
 });
 
+nativeTest('workspace overrides leave an inherited marketplace install visible to the catalog and native loader', async () => {
+  const context = await fixture();
+  try {
+    const marketplace = join(context.root, 'inherited-marketplace');
+    await mkdir(join(marketplace, '.omp-plugin'), { recursive: true });
+    await mkdir(join(marketplace, 'proof'));
+    await writeFile(join(marketplace, 'proof', 'package.json'), await readFile(join(context.packageDirectory, 'package.json')));
+    await writeFile(join(marketplace, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('inherited-proof', [{
+      name: 'proof', source: './proof', version: '1.0.0', description: 'Inherited project plugin'
+    }]));
+    await context.plugins.operation({ type: 'plugins.marketplace.manage', request: { action: 'add', expectedRevision: '0', source: marketplace } }, '1');
+    const target = { kind: 'marketplace' as const, name: 'proof', marketplace: 'inherited-proof', scope: 'project' as const };
+    await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '1', source: target } }, '2');
+    const cwd = join(context.cwd, 'nested');
+    await mkdir(cwd);
+    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    const inherited = await resolveOrDefaultProjectRegistryPath(context.cwd);
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(inherited);
+    expect((await nested.read('2')).plugins).toContainEqual(expect.objectContaining({ target }));
+    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: '@native-proof/plugin', scope: 'project' }));
+    const lifecycle = await nested.operation({ type: 'plugins.lifecycle' }, '2');
+    const save = await nested.operation({
+      type: 'plugins.configure', request: { expectedRevision: '2', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+    }, '3').catch((error: unknown) => error);
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(inherited);
+    expect((await nested.read('2')).plugins).toContainEqual(expect.objectContaining({ target }));
+    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: '@native-proof/plugin', scope: 'project' }));
+    expect(lifecycle).toMatchObject({ type: 'plugins.lifecycle', result: { projectWritable: false } });
+    expect(save).toMatchObject({ status: 403 });
+    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).exists()).toBe(false);
+  } finally { await context.cleanup(); }
+});
+
 const marketplaceCatalog = (name: string, plugins: Array<Record<string, unknown>>) => JSON.stringify({
   name, owner: { name: 'Test' }, plugins,
 });

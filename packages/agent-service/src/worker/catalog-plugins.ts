@@ -193,6 +193,12 @@ export class NativePlugins {
     if ((parentEntry && (!parentEntry.isDirectory() || await realpath(parent) !== parent)) || (entry && !entry.isFile())) {
       throw new ProjectionError(403, 'UNAUTHORIZED', 'Plugin overrides cannot use a symbolic link or non-file target');
     }
+    if (!parentEntry) {
+      const registry = await resolveOrDefaultProjectRegistryPath(cwd);
+      if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== normalizePathForComparison(directory)) {
+        throw new ProjectionError(403, 'UNAUTHORIZED', 'Creating a workspace config directory would shadow its inherited plugin registry');
+      }
+    }
     if (!entry) {
       for (const candidate of getConfigDirPaths(basename(nativePath), { user: false, cwd })) {
         if (candidate !== nativePath && await fileEntry(candidate)) {
