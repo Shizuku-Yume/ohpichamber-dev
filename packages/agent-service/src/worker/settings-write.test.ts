@@ -93,20 +93,20 @@ test('magic edit mode is neither offered nor writable through settings', async (
   } finally { await f.close(); }
 });
 
-test('a model role the project config sets is refused instead of saved where it is shadowed', async () => {
+test('a model role the project config sets is refused, and other role saves keep the shared layer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'settings-roles-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
   await mkdir(join(cwd, '.omp'), { recursive: true });
   await mkdir(agentDirectory, { recursive: true });
-  await writeFile(join(cwd, '.omp', 'config.yml'), 'modelRoles:\n  plan: fixture/project-plan\n');
-  await writeFile(join(agentDirectory, 'config.yml'), 'modelRoles:\n  smol: fixture/global-smol\n');
+  await writeFile(join(cwd, '.omp', 'config.yml'), 'modelRoles:\n  plan: fixture/project-plan\n  commit: null\n');
+  await writeFile(join(agentDirectory, 'config.yml'), 'modelRoles:\n  smol: fixture/global-smol\n  plan: fixture/global-plan\n  commit: fixture/global-commit\n');
   const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
   const native = new NativeSettings(settings, agentDirectory);
   try {
     const read = await native.read('workspace_1', '1');
     const roles = read.settings.find(setting => setting.id === 'modelRoles')?.value as Record<string, unknown>;
-    expect(roles).toMatchObject({ plan: 'fixture/project-plan', smol: 'fixture/global-smol' });
+    expect(roles).toMatchObject({ plan: 'fixture/project-plan', smol: 'fixture/global-smol', commit: 'fixture/global-commit' });
     const refused = native.write('workspace_1', '2', {
       expectedRevision: read.revision,
       changes: [{ id: 'modelRoles', value: { ...roles, plan: 'fixture/other' } }],
@@ -114,10 +114,12 @@ test('a model role the project config sets is refused instead of saved where it 
     await expect(refused).rejects.toMatchObject({ status: 409 });
     await native.write('workspace_1', '2', {
       expectedRevision: read.revision,
-      changes: [{ id: 'modelRoles', value: { ...roles, smol: 'fixture/new-smol' } }],
+      changes: [{ id: 'modelRoles', value: { ...roles, smol: 'fixture/new-smol', commit: 'fixture/new-commit' } }],
     });
     const stored = YAML.parse(await readFile(join(agentDirectory, 'config.yml'), 'utf8')) as { modelRoles: Record<string, unknown> };
-    expect(stored.modelRoles.smol).toBe('fixture/new-smol');
+    // The cleared project `commit` falls back to the shared one, so it saves;
+    // the shared `plan` keeps its own value rather than the project's.
+    expect(stored.modelRoles).toEqual({ smol: 'fixture/new-smol', plan: 'fixture/global-plan', commit: 'fixture/new-commit' });
   } finally {
     settings.cancelPendingSaves();
     await rm(root, { recursive: true, force: true });
