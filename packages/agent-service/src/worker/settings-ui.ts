@@ -204,6 +204,8 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'compaction.methodOrder': 'config-only',
   'compaction.thresholdPercent': 'sessions:compaction',
   'compaction.thresholdTokens': 'sessions:compaction',
+  'compaction.modelThresholds': 'owned-by sessions.model-compaction',
+  'compaction.modelThresholdsEnabled': 'owned-by sessions.model-compaction',
   'compaction.handoffSaveToDisk': 'sessions:compaction',
   'compaction.remoteStreamingV2Enabled': 'sessions:compaction',
   'compaction.asyncEnabled': 'sessions:compaction',

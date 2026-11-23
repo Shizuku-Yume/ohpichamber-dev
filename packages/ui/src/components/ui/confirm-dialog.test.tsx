@@ -90,3 +90,18 @@ test('confirmation layer overrides raise both the popup and backdrop without cha
   expect(results).toEqual([{ confirmed: false, checkboxChecked: false }]);
   expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
 });
+
+test('confirmation works without Promise.withResolvers on older WebViews', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(Promise, 'withResolvers');
+  Reflect.deleteProperty(Promise, 'withResolvers');
+  const results: Confirmation[] = [];
+  try {
+    await render(<Harness onResult={(result) => results.push(result)} />);
+    const confirm = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Confirm delete');
+    expect(confirm).toBeDefined();
+    await act(async () => confirm?.click());
+    expect(results).toEqual([{ confirmed: true, checkboxChecked: false }]);
+  } finally {
+    if (descriptor) Object.defineProperty(Promise, 'withResolvers', descriptor);
+  }
+});

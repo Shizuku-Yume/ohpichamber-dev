@@ -12,6 +12,17 @@ and instruction editors need a separately confined resource contract and SDK
 consumption evidence. Host voice remains separate from native OMP config.
 Isolated worker and UI tests verify discovery writes, nested creation and
 metadata preservation; existing Host tests cover Behavior and voice contracts.
+Native project overrides are read-only on the discovery pages. The overlapping
+personal Claude/OpenCode command and Claude/Codex skill opt-ins stay config-only.
+
+Sessions → Compaction exposes the native OMP 19 model threshold map and its
+enable switch. Exact selectors and wildcard prefixes keep their native token,
+fixed-trigger, or percentage values. Edits preserve other entries; native
+project overrides and explicit resets are readable but cannot replace the shared
+config. Rule updates compare against the current on-disk map before writing.
+Saving or enabling token-based rules requires acknowledging potential
+extended-context pricing.
+The remaining model-role hub, ordered fallback, and preset work is separate.
 
 Usage renders native OMP account quotas and reset-credit counts from the
 existing canonical report, without changing its schema or adding a redemption
