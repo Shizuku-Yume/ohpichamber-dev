@@ -6021,6 +6021,7 @@ const part3 = {
   "settings.mcp.page.toast.clipboardReadFailed": "לא ניתן לקרוא את הלוח",
   "settings.mcp.page.toast.configImported": "תצורת ה-MCP יובאה",
   "settings.mcp.page.import.duplicateHeaders": "שמות הכותרות חייבים להיות ייחודיים ללא הבחנה בין אותיות גדולות לקטנות.",
+  "settings.mcp.page.import.unsupportedKey": "מפתח פרטי הגישה הזה אינו נתמך.",
   "settings.mcp.page.import.invalid": "מקטע MCP לא תקין.",
   "settings.mcp.page.import.multiple": "יש לייבא שרת אחד בכל פעם.",
   "settings.mcp.page.import.transport": "יש להשתמש בפקודה יחסית או בכתובת HTTP(S) ללא פרטי גישה או פרמטרי שאילתה.",

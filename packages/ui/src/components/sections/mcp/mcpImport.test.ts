@@ -31,9 +31,33 @@ describe('parseImportedMcpSnippet', () => {
     expect(JSON.stringify(result)).not.toContain('fixture-oauth');
   });
 
-  test('preserves exact native environment keys without collisions', () => {
-    const result = parseImportedMcpSnippet(standard({ command: 'node', env: { 'foo.bar': 'one', FOO_BAR: 'two', my_token: 'three', API_KEY: 'four' } }));
-    expect(result.credentials.map(row => row.key)).toEqual(['foo.bar', 'FOO_BAR', 'my_token', 'API_KEY']);
+  test('rejects environment names that manual rows would change or reject', () => {
+    for (const env of [{ 'foo.bar': 'private-one' }, { my_token: 'private-two' }, { 'foo.bar': 'private-one', FOO_BAR: 'private-two' }, { 'API_TOKEN=': 'private-three' }, { '': 'private-four' }]) {
+      try {
+        parseImportedMcpSnippet(standard({ command: 'node', env }));
+        throw new Error('Expected rejection');
+      } catch (error) {
+        expect(error).toBeInstanceOf(McpImportError);
+        if (!(error instanceof McpImportError)) throw error;
+        expect(error.code).toBe('unsupportedKey');
+        expect(error.message).toBe('Invalid MCP import.');
+        for (const value of Object.values(env)) expect(error.message).not.toContain(value);
+      }
+    }
+  });
+
+  test('rejects header names that manual rows would change or reject', () => {
+    for (const key of ['X API Key', 'Authorization=', '']) {
+      try {
+        parseImportedMcpSnippet(standard({ url: 'https://mcp.example', headers: { [key]: 'private-header-value' } }));
+        throw new Error('Expected rejection');
+      } catch (error) {
+        expect(error).toBeInstanceOf(McpImportError);
+        if (!(error instanceof McpImportError)) throw error;
+        expect(error.code).toBe('unsupportedKey');
+        expect(error.message).not.toContain('private-header-value');
+      }
+    }
   });
 
   test('rejects case-duplicate header names without reflecting their values', () => {

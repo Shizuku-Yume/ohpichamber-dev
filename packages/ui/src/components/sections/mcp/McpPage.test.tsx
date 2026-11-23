@@ -143,7 +143,7 @@ test('standard imports prefill private rows and save only opaque credential refe
   expect(JSON.stringify(configs)).not.toContain('import-private');
 });
 
-test('imported environment credential names survive private save exactly', async () => {
+test('imported API_KEY credentials use the normal private save path', async () => {
   const configs: Array<Partial<MCPServerConfig>> = [];
   useMcpConfigStore.setState({
     selectedMcpName: 'new-env', mcpDraft: { ...server, serverId: 'new-env' },
@@ -158,7 +158,7 @@ test('imported environment credential names survive private save exactly', async
   const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
   if (!textarea || !setter) throw new Error('Missing import input');
   await act(async () => {
-    setter.call(textarea, JSON.stringify({ mcpServers: { Imported: { command: 'node', env: { 'foo.bar': 'one', FOO_BAR: 'two', my_token: 'three', API_KEY: 'four' } } } }));
+    setter.call(textarea, JSON.stringify({ mcpServers: { Imported: { command: 'node', env: { API_KEY: 'private-api-key' } } } }));
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
   });
   const confirm = [...document.querySelectorAll('button')].find(button => button.textContent === 'Import');
@@ -170,8 +170,9 @@ test('imported environment credential names survive private save exactly', async
   const save = [...container.querySelectorAll('button')].find(button => button.textContent === 'Save Changes');
   if (!save) throw new Error('Missing credential save');
   await act(async () => { save.click(); });
-  expect(secretWrites).toHaveLength(4);
-  expect(configs.at(-1)?.transport).toEqual({ type: 'stdio', command: 'node', args: [], envCredentialRefs: { 'foo.bar': 'private_ref', FOO_BAR: 'private_ref', my_token: 'private_ref', API_KEY: 'private_ref' } });
+  expect(secretWrites).toEqual([{ value: 'private-api-key', persistedRevision: '3' }]);
+  expect(configs.at(-1)?.transport).toEqual({ type: 'stdio', command: 'node', args: [], envCredentialRefs: { API_KEY: 'private_ref' } });
+  expect(JSON.stringify(configs)).not.toContain('private-api-key');
 });
 
 test('worker apply failures remain visible even though persistence succeeded', async () => {

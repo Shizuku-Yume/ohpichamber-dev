@@ -4,17 +4,18 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
-W6 import credential rows now preserve exact native environment names through
-the explicit private save, including case and dots. Canonical env-reference keys
-accept nonempty strings; the Host compares server records without rewriting keys
-and the worker assigns `env[name]` with literal policy. Manually entered rows keep
-their existing normalization. Parser-admitted header names already survive the
-header editor's normalizer unchanged; case-duplicate header names are now refused
-with typed, translated diagnostics in all 15 locales. The failing page test
-observed a dot/underscore collision and uppercase conversion before the fix.
-Worker tests pass (25), isolated importer/page/runtime/locale tests pass (4/4
-files), both package type-checks and changed-file oxlint pass. Evidence:
-`/home/ubuntu/w6-evidence/keys-before.log` and `round-*.log`.
+W6 imported credential rows use the same key path as manual rows. The importer
+shares the editor's normalization functions and refuses keys that would change
+or fail validation. This replaces the imported-only exact-spelling mode, which
+made paste replacement inconsistent and bypassed normal key editing. Typed
+unsupported-key errors and case-duplicate header errors have value-free copy in
+all 15 locales. Regressions reject dotted/lowercase env keys and the collision
+pair, while `API_KEY` imports and saves unchanged. No runtime, contract or Host
+authorization changes are needed.
+Isolated importer/page/runtime/locale tests pass (4/4 files), UI type-check and
+changed-file oxlint pass. Evidence: `/home/ubuntu/w6-evidence/unified-*.log`.
+Knip still reports the repository-wide unused-code backlog; neither shared key
+normalizer appears in its findings. No live-service or visual check was run.
 
 W6 review also reproduces an imported draft renamed before Create: the secret
 write used the created ID but the reference binding used the initial draft ID.

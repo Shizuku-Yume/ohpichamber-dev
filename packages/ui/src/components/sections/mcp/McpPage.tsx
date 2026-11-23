@@ -44,7 +44,7 @@ import { useMcpConfigStore, resolveMcpDirectory } from '@/stores/useMcpConfigSto
 import { getMcpServerStatus, isMcpServerConnected, useMcpStore } from '@/stores/useMcpStore';
 import { McpGrid } from './McpGrid';
 import { McpOAuthSignIn } from './McpOAuthSignIn';
-import { McpImportError, parseImportedMcpSnippet } from './mcpImport';
+import { McpImportError, normalizeEnvKey, normalizeHeaderKey, parseImportedMcpSnippet } from './mcpImport';
 import { mcpServerIdFrom } from './mcpServerId';
 import { problemMessage } from '@/lib/problemMessage';
 
@@ -56,16 +56,12 @@ type CredentialKind = 'environment' | 'headers';
 interface CredentialDraftRow {
   key: string;
   value: string;
-  preserveKey?: boolean;
 }
 
 const REMOTE_TRANSPORT_LABELS = {
   http: 'HTTP',
   sse: 'SSE',
 } as const satisfies Record<RemoteTransportType, string>;
-
-const normalizeEnvKey = (value: string): string => value.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
-const normalizeHeaderKey = (value: string): string => value.replace(/[^!#$%&'*+.^_`|~0-9A-Za-z-]/g, '');
 
 interface CommandTextareaProps {
   value: string[];
@@ -347,7 +343,7 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
             <div className={cn('min-w-0 @xl:flex-none', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
               <Input
                 value={row.key}
-                onChange={(event) => updateRow(index, 'key', row.preserveKey ? event.target.value : keyTransform(event.target.value))}
+                onChange={(event) => updateRow(index, 'key', keyTransform(event.target.value))}
                 placeholder={isEnv ? t('settings.mcp.page.env.keyPlaceholder') : t('settings.mcp.page.advanced.headerNamePlaceholder')}
                 aria-label={t('settings.mcp.page.env.key')}
                 className="font-mono typography-meta"
@@ -655,7 +651,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         ? draft.transport.envCredentialRefs ?? {}
         : draft.transport.headerCredentialRefs ?? {}));
       for (const row of rows) {
-        const key = draft.transport.type === 'stdio' && !row.preserveKey ? normalizeEnvKey(row.key) : row.key;
+        const key = draft.transport.type === 'stdio' ? normalizeEnvKey(row.key) : row.key;
         if (!key) continue;
         assertRuntime();
         const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, persistedServerId.current, { persistedRevision, value: row.value });
@@ -742,7 +738,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
     try {
       const imported = parseImportedMcpSnippet(snippet);
       setDraft({ ...imported.server, serverId: initial.serverId, scope: draft.scope ?? initial.scope ?? 'project' });
-      setCredentialRows(imported.credentials.map(row => ({ ...row, preserveKey: imported.server.transport.type === 'stdio' })));
+      setCredentialRows(imported.credentials);
       setBearerDraft('');
       setImportOpen(false);
       setSnippet('');

@@ -5892,6 +5892,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.mcp.page.toast.clipboardReadFailed": "클립보드를 읽을 수 없습니다",
   "settings.mcp.page.toast.configImported": "MCP 설정을 가져왔습니다",
   "settings.mcp.page.import.duplicateHeaders": "헤더 이름은 대소문자 구분 없이 고유해야 합니다.",
+  "settings.mcp.page.import.unsupportedKey": "이 자격 증명 키는 지원되지 않습니다.",
   "settings.mcp.page.import.invalid": "유효하지 않은 MCP 스니펫입니다.",
   "settings.mcp.page.import.multiple": "서버를 한 번에 하나씩 가져오세요.",
   "settings.mcp.page.import.transport": "상대 명령이나 자격 증명과 쿼리 매개변수가 없는 HTTP(S) URL을 사용하세요.",

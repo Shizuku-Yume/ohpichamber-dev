@@ -6016,6 +6016,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.mcp.page.toast.clipboardReadFailed": "تعذّرت قراءة الحافظة",
   "settings.mcp.page.toast.configImported": "استُوردت إعدادات MCP",
   "settings.mcp.page.import.duplicateHeaders": "يجب أن تكون أسماء الترويسات فريدة دون تمييز حالة الأحرف.",
+  "settings.mcp.page.import.unsupportedKey": "مفتاح بيانات الاعتماد هذا غير مدعوم.",
   "settings.mcp.page.import.invalid": "مقتطف MCP غير صالح.",
   "settings.mcp.page.import.multiple": "استورد خادمًا واحدًا في كل مرة.",
   "settings.mcp.page.import.transport": "استخدم أمرًا نسبيًا أو عنوان HTTP(S) بلا بيانات اعتماد أو معاملات استعلام.",

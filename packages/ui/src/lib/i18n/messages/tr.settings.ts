@@ -1875,6 +1875,7 @@ export const settingsDict = {
   'settings.mcp.page.toast.clipboardReadFailed': 'Pano okunamıyor',
   'settings.mcp.page.toast.configImported': 'MCP yapılandırması içe aktarıldı',
   "settings.mcp.page.import.duplicateHeaders": "Üstbilgi adları büyük/küçük harf ayrımı olmadan benzersiz olmalıdır.",
+  "settings.mcp.page.import.unsupportedKey": "Bu kimlik bilgisi anahtarı desteklenmiyor.",
   "settings.mcp.page.import.invalid": "Geçersiz MCP parçacığı.",
   "settings.mcp.page.import.multiple": "Her seferinde bir sunucu içe aktarın.",
   "settings.mcp.page.import.transport": "Göreli bir komut veya kimlik bilgileri ve sorgu parametreleri içermeyen bir HTTP(S) URL kullanın.",

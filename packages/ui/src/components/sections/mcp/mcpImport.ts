@@ -1,8 +1,11 @@
 import { MCPServerConfigSchema, MCPTransportSchema, type MCPServerConfig } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
+export const normalizeEnvKey = (value: string): string => value.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+export const normalizeHeaderKey = (value: string): string => value.replace(/[^!#$%&'*+.^_`|~0-9A-Za-z-]/g, '');
+
 export class McpImportError extends Error {
-  constructor(public readonly code: 'invalid' | 'multiple' | 'transport' | 'expression' | 'duplicateHeaders', public readonly key?: string) {
+  constructor(public readonly code: 'invalid' | 'multiple' | 'transport' | 'expression' | 'duplicateHeaders' | 'unsupportedKey', public readonly key?: string) {
     super(code === 'expression' ? `Unsupported credential expression: ${key}` : code === 'multiple' ? 'Import one server at a time.' : 'Invalid MCP import.');
   }
 }
@@ -48,7 +51,8 @@ export function parseImportedMcpSnippet(source: string): {
     if (new Set(names).size !== names.length) throw new McpImportError('duplicateHeaders');
   }
   const credentials = Object.entries((stdio ? entry.env : entry.headers) ?? {}).map(([key, value]) => {
-    if (!safeKey.test(key)) throw new McpImportError('invalid');
+    const normalized = stdio ? normalizeEnvKey(key) : normalizeHeaderKey(key);
+    if (!key.trim() || normalized !== key || !safeKey.test(key)) throw new McpImportError('unsupportedKey');
     if (value.includes('${') || value.startsWith('!')) throw new McpImportError('expression', key);
     return { key, value };
   });

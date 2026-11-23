@@ -1980,6 +1980,7 @@ export const settingsDict = {
   "settings.mcp.page.toast.clipboardReadFailed": "No se puede leer el portapapeles",
   "settings.mcp.page.toast.configImported": "Configuración MCP importada",
   "settings.mcp.page.import.duplicateHeaders": "Los nombres de cabecera deben ser únicos, sin distinguir mayúsculas de minúsculas.",
+  "settings.mcp.page.import.unsupportedKey": "Esta clave de credencial no es compatible.",
   "settings.mcp.page.import.invalid": "Fragmento MCP no válido.",
   "settings.mcp.page.import.multiple": "Importa un servidor a la vez.",
   "settings.mcp.page.import.transport": "Usa un comando relativo o una URL HTTP(S) sin credenciales ni parámetros de consulta.",

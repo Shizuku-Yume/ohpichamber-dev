@@ -2013,6 +2013,7 @@ export const settingsDict = {
   'settings.mcp.page.toast.clipboardReadFailed': 'クリップボードを読み取れません',
   'settings.mcp.page.toast.configImported': 'MCP 設定をインポートしました',
   "settings.mcp.page.import.duplicateHeaders": "ヘッダー名は大文字と小文字を区別せずに一意である必要があります。",
+  "settings.mcp.page.import.unsupportedKey": "この認証情報のキーはサポートされていません。",
   "settings.mcp.page.import.invalid": "MCP スニペットが無効です。",
   "settings.mcp.page.import.multiple": "サーバーは1つずつインポートしてください。",
   "settings.mcp.page.import.transport": "相対コマンド、または認証情報やクエリパラメーターを含まない HTTP(S) URL を使用してください。",
