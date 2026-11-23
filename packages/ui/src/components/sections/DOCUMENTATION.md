@@ -773,13 +773,6 @@ Settings lists custom agents so their files remain editable, renameable, and del
 
 Permissions are edited as the agent contract states them, not as an ordered rule list: `allowedTools` (the tools the agent may call), written through `updateAgent`. The ordered `{ action, resource, effect }` rule editor and its translator were retired with the OpenCode engine, so no editor derives rules from built-in defaults.
 
-### The legacy-format note
-
-Config reads report `legacy: true` when the entity's file still uses v1
-spellings, and mutations answer with the `path` they wrote.
-`shared/SettingsLegacyFormatNote.tsx` turns that into one quiet line at the top
-of the page; the file is never moved, so the note has no action.
-
 ## The project page
 
 `projects/ProjectSettingsPanel.tsx` is one project's page, shown by Settings →
