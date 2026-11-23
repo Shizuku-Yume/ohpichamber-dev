@@ -1,5 +1,6 @@
 import {
   JsonValueSchema,
+  type JsonValue,
   OMP_POWER_CONDITIONS,
   OmpSettingIdSchema,
   OmpSettingSchema,
@@ -65,15 +66,16 @@ function projectModelRoles(settings: Settings): string[] {
  * layer's own entries; changing one is refused, since no session in this
  * project would read it.
  */
-function sharedModelRoles(settings: Settings, value: unknown): Record<string, unknown> {
-  const next = { ...rolesRecord(value) };
+function sharedModelRoles(settings: Settings, value: JsonValue): JsonValue {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const next = { ...value };
   const current = rolesRecord(handle('modelRoles').layered(settings));
   const shared = rolesRecord(settings.getGlobalSettings().modelRoles);
   for (const role of projectModelRoles(settings)) {
     if (!isDeepStrictEqual(current[role], next[role])) {
       throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
     }
-    if (Object.hasOwn(shared, role)) next[role] = shared[role];
+    if (Object.hasOwn(shared, role)) next[role] = JsonValueSchema.parse(shared[role]);
     else delete next[role];
   }
   return next;
@@ -186,7 +188,7 @@ export class NativeSettings {
       }
     }
     const changes = request.changes.map(change => change.id === 'modelRoles' && change.value !== null
-      ? { ...change, value: JsonValueSchema.parse(sharedModelRoles(this.settings, change.value)) }
+      ? { ...change, value: sharedModelRoles(this.settings, change.value) }
       : change);
     // Validate every value against the pinned definition before changing any
     // layer. `assertWritable` runs OMP's own validate/normalize checks, so the

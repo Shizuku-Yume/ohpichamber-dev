@@ -107,6 +107,10 @@ test('a model role the project config sets is refused, and other role saves keep
     const read = await native.read('workspace_1', '1');
     const roles = read.settings.find(setting => setting.id === 'modelRoles')?.value as Record<string, unknown>;
     expect(roles).toMatchObject({ plan: 'fixture/project-plan', smol: 'fixture/global-smol', commit: 'fixture/global-commit' });
+    await expect(native.write('workspace_1', '2', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'modelRoles', value: 'fixture/not-a-record' }],
+    })).rejects.toMatchObject({ status: 400 });
     const refused = native.write('workspace_1', '2', {
       expectedRevision: read.revision,
       changes: [{ id: 'modelRoles', value: { ...roles, plan: 'fixture/other' } }],
