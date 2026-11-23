@@ -15,6 +15,7 @@ import { ProjectionError } from '../projection/journal.ts';
 import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 const byId = new Map<string, AnySetting>();
@@ -26,8 +27,10 @@ function linuxPowerBusAvailable(): boolean {
 }
 
 const RESET_POLICY_OVERRIDE = 'resetPolicyUsesSharedConfig';
+const COMPACTION_OVERRIDE = 'compactionThresholdsUseSharedConfig';
 
 function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
+  if (hasCompactionOverride(setting, settings)) return COMPACTION_OVERRIDE;
   const isPower = setting.id === 'power.sleepPrevention';
   const placement = OMP_SETTING_PLACEMENTS[setting.id];
   const isResetPolicy = placement?.type === 'page' && placement.page === 'usage' && placement.section === 'resets';
@@ -38,6 +41,16 @@ function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
   }
   if (isPower && process.platform === 'linux' && !linuxPowerBusAvailable()) return OMP_POWER_CONDITIONS.backendAvailable;
   return undefined;
+}
+
+function hasCompactionOverride(setting: AnySetting, settings: Settings): boolean {
+  if (setting.id !== 'compaction.modelThresholds' && setting.id !== 'compaction.modelThresholdsEnabled') return false;
+  const provenance = settings.getProvenance(setting);
+  if (provenance !== 'default') return provenance !== 'global';
+  // OMP reports "default" for explicit project resets as well as absent keys.
+  const project = settings.getProjectSettings().compaction;
+  const key = setting.id === 'compaction.modelThresholds' ? 'modelThresholds' : 'modelThresholdsEnabled';
+  return project === null || (typeof project === 'object' && Object.hasOwn(project, key));
 }
 
 /**
@@ -137,8 +150,14 @@ export class NativeSettings {
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     for (const change of request.changes) {
       const setting = handle(change.id);
+      if (change.expectedValue !== undefined && !isDeepStrictEqual(
+        JsonValueSchema.parse(setting.layered(this.settings) ?? null),
+        change.expectedValue,
+      )) {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native OMP setting changed on disk');
+      }
       const inactiveCondition = inactiveWriteCondition(setting, this.settings);
-      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig || inactiveCondition === RESET_POLICY_OVERRIDE) {
+      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig || inactiveCondition === RESET_POLICY_OVERRIDE || inactiveCondition === COMPACTION_OVERRIDE) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
       }
       if (inactiveCondition === OMP_POWER_CONDITIONS.backendAvailable) {

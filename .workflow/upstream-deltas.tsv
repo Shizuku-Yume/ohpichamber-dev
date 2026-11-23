@@ -3090,6 +3090,7 @@ packages/ui/src/components/sections/openchamber/ManagedSshCredentials.test.tsx	f
 packages/ui/src/components/sections/openchamber/ManagedSshCredentials.tsx	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/ui/src/components/sections/openchamber/MergedWorktreeCleanupSettings.tsx	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/ui/src/components/sections/openchamber/MobileAppSettings.tsx	fork-differs	decision	2026-11-20 - Retain runtime-equivalent source compatibility cleanup	Type-only contracts, formatting or unused imports emit the same JavaScript after the recorded package rename.
+packages/ui/src/components/sections/openchamber/ModelCompactionSettings.tsx	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/ui/src/components/sections/openchamber/NotificationSettings.test.tsx	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/ui/src/components/sections/openchamber/NotificationSettings.tsx	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/ui/src/components/sections/openchamber/OmpSettingsPage.test.tsx	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
