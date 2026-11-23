@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatModelRef } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
+import { reportSettingsSaveState } from '@/lib/persistence';
 import type { I18nKey } from '@/lib/i18n/store';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
@@ -38,10 +39,11 @@ export const ModelRolesPage: React.FC = () => {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
   }, [state]);
 
-  const setRole = React.useCallback(
-    (role: string, selector: string) => void updateSettings((state) => [modelRoleChange(state, role, selector)]),
-    [updateSettings],
-  );
+  const setRole = React.useCallback(async (role: string, selector: string) => {
+    reportSettingsSaveState('saving');
+    const saved = await updateSettings((state) => [modelRoleChange(state, role, selector)]);
+    reportSettingsSaveState(saved ? 'saved' : 'error');
+  }, [updateSettings]);
 
   const imageRole = roleSelectors.image ?? '';
   const imageOptions = React.useMemo(
@@ -74,7 +76,7 @@ export const ModelRolesPage: React.FC = () => {
           <Select
             value={imageRole || INHERIT}
             disabled={!state || saving || imageModels === undefined}
-            onValueChange={(value) => setRole('image', value === INHERIT ? '' : value)}
+            onValueChange={(value) => void setRole('image', value === INHERIT ? '' : value)}
           >
             <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={label}>
               <SelectValue>
@@ -104,7 +106,7 @@ export const ModelRolesPage: React.FC = () => {
         label={label}
         info={info}
         settingsItem={`omp.modelRoles.${role}`}
-        onChange={(selector) => setRole(role, selector)}
+        onChange={(selector) => void setRole(role, selector)}
       />
     );
   };
