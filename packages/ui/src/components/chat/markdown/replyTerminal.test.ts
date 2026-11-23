@@ -44,6 +44,18 @@ describe('replyCommandShell', () => {
 });
 
 describe('startReplyTerminal', () => {
+  test('selects a completed Host command without sending input or opening an interactive session', async () => {
+    const previous = useTerminalStore.getState().createTab('/repo');
+    const { terminal, created } = fakeTerminal(options => ({ sessionId: options.sessionId!, cols: 80, rows: 24, status: 'exited', mode: 'command' }));
+    let inputs = 0;
+    terminal.sendInput = async () => { inputs += 1; };
+    const tabId = await start(terminal, "printf 'TERMINAL_OK\\n'");
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ mode: 'command', command: "printf 'TERMINAL_OK\\n'" });
+    expect(tabId).not.toBe(previous);
+    expect(useTerminalStore.getState().getActiveTab('/repo')).toMatchObject({ id: tabId, terminalSessionId: created[0]!.sessionId, mode: 'command', lifecycle: 'exited' });
+    expect(inputs).toBe(0);
+  });
   test('empty or control-only commands do not create a shell', async () => {
     const { terminal, created } = fakeTerminal((options) => ({ sessionId: options.sessionId!, cols: 80, rows: 24, status: 'running', mode: 'command' }));
     expect(await start(terminal, '   ')).toBeNull();

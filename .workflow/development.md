@@ -4,6 +4,16 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
+`TerminalView`: completed output stays visible despite close-on-exit, a missing
+Host session cannot become an interactive shell, and command tabs cannot restart.
+The original isolated production reproduction recorded a successful command-mode
+create followed by automatic session deletion and panel closure, not lost input.
+UI type-check, lint and 106 focused tests pass. A separate headless Chromium
+profile against the isolated production CLI on port 43219 shows `TERMINAL_OK`,
+the new tab selected and the terminal input focused after command completion;
+evidence is in `/home/ubuntu/reply-terminal-fix/after-desktop.png`.
+
 OpenChamber v2.8.0 (`30c70496a5`) is integrated by the two-parent merge
 `cb5c92b26`; `8173b1275` then merges `origin/main` (`08000b159`, PR #134)
 without conflicts. Agent Service and vendored SDK content match main's OMP

@@ -60,6 +60,7 @@ const sessionUiState: SessionUiState = {
 const useSessionUIStoreMock = <T,>(selector: (state: typeof sessionUiState) => T): T => selector(sessionUiState);
 
 const uiState = {
+  terminalCloseOnExit: true,
   terminalFontSize: 14,
   terminalShell: 'zsh',
   terminalLoginShells: ['zsh'],
@@ -205,6 +206,7 @@ describe('TerminalView project action tab indicator', () => {
   let root: Root;
 
   beforeEach(() => {
+    uiState.terminalCloseOnExit = true;
     effectiveDirectory = '/repo';
     viewportAutoResize = true;
     viewportResizes.clear();
@@ -266,6 +268,65 @@ describe('TerminalView project action tab indicator', () => {
     sessionUiState.newSessionDraft = null;
     resetSpaceCreationRequests();
     useSpacesStore.getState().resetForRuntimeSwitch();
+  });
+
+  test.each(['snapshot', 'exit'] as const)('keeps reply command output and its selected tab after %s with close-on-exit enabled', async (completion) => {
+    const store = useTerminalStore.getState();
+    const tabId = store.createTab('/repo');
+    store.setTabSessionId('/repo', tabId, 'reply-command', { mode: 'command' });
+    store.setTabLifecycle('/repo', tabId, 'running');
+    store.setActiveTab('/repo', tabId);
+    let stream: TerminalHandlers | undefined;
+    connectBehavior = (_sessionId, handlers) => { stream = handlers; return { close: () => undefined }; };
+
+    await act(async () => root.render(React.createElement(TerminalView, { visible: true })));
+    const attached = stream;
+    if (!attached) throw new Error('command did not attach');
+    await act(async () => {
+      attached.onEvent({ type: 'snapshot', status: completion === 'snapshot' ? 'exited' : 'running', data: 'TERMINAL_OK\r\n', sequence: 1 });
+      if (completion === 'exit') attached.onEvent({ type: 'exit', exitCode: 0 });
+    });
+    await flushEffects();
+
+    expect(store.getActiveTab('/repo')).toMatchObject({ id: tabId, mode: 'command', lifecycle: 'exited' });
+    expect(readBufferContent('/repo', tabId)).toContain('TERMINAL_OK');
+    expect(host.querySelector('[data-terminal-viewport][data-visible="true"]')?.getAttribute('data-session-key')).toContain(tabId);
+    expect(createSessionCalls).toEqual([]);
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="terminalView.actions.restart"]')?.disabled).toBe(true);
+  });
+
+  test('a missing reply command session stays exited instead of spawning an interactive shell', async () => {
+    const store = useTerminalStore.getState();
+    const tabId = store.createTab('/repo');
+    store.setTabSessionId('/repo', tabId, 'missing-command', { mode: 'command' });
+    store.setTabLifecycle('/repo', tabId, 'running');
+    store.appendToBuffer('/repo', tabId, 'retained command output');
+    store.setActiveTab('/repo', tabId);
+    let stream: TerminalHandlers | undefined;
+    connectBehavior = (_sessionId, handlers) => { stream = handlers; return { close: () => undefined }; };
+    await act(async () => root.render(React.createElement(TerminalView, { visible: true })));
+    const attached = stream;
+    if (!attached) throw new Error('command did not attach');
+    await act(async () => attached.onError?.(Object.assign(new Error('gone'), { code: 'SESSION_NOT_FOUND' }), true));
+    await flushEffects();
+
+    expect(store.getActiveTab('/repo')).toMatchObject({ id: tabId, mode: 'command', lifecycle: 'exited', terminalSessionId: null });
+    expect(readBufferContent('/repo', tabId)).toBe('retained command output');
+    expect(createSessionCalls).toEqual([]);
+  });
+
+  test('interactive sessions still close on exit when enabled', async () => {
+    const store = useTerminalStore.getState();
+    const tabId = store.getActiveTab('/repo')!.id;
+    store.setTabSessionId('/repo', tabId, 'interactive-session');
+    store.setTabLifecycle('/repo', tabId, 'running');
+    let stream: TerminalHandlers | undefined;
+    connectBehavior = (_sessionId, handlers) => { stream = handlers; return { close: () => undefined }; };
+    await act(async () => root.render(React.createElement(TerminalView, { visible: true })));
+    const attached = stream;
+    if (!attached) throw new Error('interactive terminal did not attach');
+    await act(async () => attached.onEvent({ type: 'exit', exitCode: 0 }));
+    expect(store.getDirectoryState('/repo')?.tabs.some(tab => tab.id === tabId)).toBe(false);
   });
 
   test('a draft waiting for a new space opens no shell until the space runs, then opens it in the space', async () => {
