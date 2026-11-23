@@ -387,6 +387,29 @@ nativeTest('workspace overrides never overwrite a symlink or shadow a native fal
   } finally { await context.cleanup(); }
 });
 
+nativeTest('workspace overrides can create a config directory under a Git root without a plugin registry', async () => {
+  const context = await fixture();
+  try {
+    await mkdir(join(context.cwd, '.git'));
+    const cwd = join(context.cwd, 'nested');
+    await mkdir(cwd);
+    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+    await new PluginManager(cwd).link(context.packageDirectory);
+    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    const prospectiveRegistry = join(context.cwd, '.omp', 'plugins', 'installed_plugins.json');
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(prospectiveRegistry);
+    expect(await Bun.file(prospectiveRegistry).exists()).toBe(false);
+    const lifecycle = await nested.operation({ type: 'plugins.lifecycle' }, '0');
+    if (lifecycle.type !== 'plugins.lifecycle') throw new Error('Expected opt-in lifecycle data');
+    expect(lifecycle.result.projectWritable).toBe(true);
+    await nested.operation({
+      type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+    }, '1');
+    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).json()).toEqual({ features: { [target.name]: ['preview'] } });
+    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+  } finally { await context.cleanup(); }
+});
+
 nativeTest('workspace overrides leave an inherited marketplace install visible to the catalog and native loader', async () => {
   const context = await fixture();
   try {
@@ -403,7 +426,8 @@ nativeTest('workspace overrides leave an inherited marketplace install visible t
     const cwd = join(context.cwd, 'nested');
     await mkdir(cwd);
     const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
-    const inherited = await resolveOrDefaultProjectRegistryPath(context.cwd);
+    const inherited = join(context.cwd, '.omp', 'plugins', 'installed_plugins.json');
+    expect(await Bun.file(inherited).exists()).toBe(true);
     expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(inherited);
     expect((await nested.read('2')).plugins).toContainEqual(expect.objectContaining({ target }));
     expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: '@native-proof/plugin', scope: 'project' }));

@@ -195,7 +195,8 @@ export class NativePlugins {
     }
     if (!parentEntry) {
       const registry = await resolveOrDefaultProjectRegistryPath(cwd);
-      if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== normalizePathForComparison(directory)) {
+      if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== normalizePathForComparison(directory)
+        && await Bun.file(registry).exists()) {
         throw new ProjectionError(403, 'UNAUTHORIZED', 'Creating a workspace config directory would shadow its inherited plugin registry');
       }
     }
