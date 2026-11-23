@@ -19,6 +19,8 @@ Object.assign(globalThis, {
 const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
   if (url.pathname === '/api/config/settings') return Response.json({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  if (url.pathname === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  if (url.pathname === '/api/agent/v1/workspaces/workspace/settings') return Response.json({ workspaceId: 'workspace', revision: '0', totalCount: 0, settings: [] });
   if (url.pathname === '/api/fs/home') return Response.json({ home: '/test' });
   if (url.pathname === '/api/location') return Response.json({ data: { directory: '/test' } });
   if (url.pathname === '/api/session') return Response.json({ data: [], cursor: {} });

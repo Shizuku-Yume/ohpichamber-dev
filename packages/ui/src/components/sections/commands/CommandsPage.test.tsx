@@ -34,6 +34,8 @@ const _fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, in
   const path = new URL(request.url).pathname;
   if (path === '/api/fs/home') return Response.json({ home: '/test' });
   if (path === '/api/config/settings') return Response.json({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  if (path === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  if (path === '/api/agent/v1/workspaces/workspace/settings') return Response.json({ workspaceId: 'workspace', revision: '0', totalCount: 0, settings: [] });
   throw new Error(`Unexpected request: ${request.method} ${path}`);
 });
 
