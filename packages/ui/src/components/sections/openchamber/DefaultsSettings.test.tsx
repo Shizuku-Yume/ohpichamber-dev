@@ -447,7 +447,7 @@ describe('DefaultsSettings', () => {
   });
 
   test.each([
-    ['Save Changes', { default: ['other/original', '@slow', 'other/last'], 'other/*': ['@slow', 'openai/o3-mini:high'] }],
+    ['Save Changes', { default: ['other/original', '@slow', 'other/last'], 'other/*': ['another-provider/*', 'openai/o3-mini:high'] }],
     ['Delete', { default: ['other/original', '@slow', 'other/last'] }],
   ])('%s updates only the selected wildcard retry chain', async (action, expectedChains) => {
     const original = { default: ['other/original', '@slow', 'other/last'], 'other/*': ['@smol'] };
@@ -471,7 +471,7 @@ describe('DefaultsSettings', () => {
       if (action === 'Save Changes' && editor) {
         const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
         await act(async () => {
-          setter?.call(editor, '@slow\nopenai/o3-mini:high');
+          setter?.call(editor, 'another-provider/*\nopenai/o3-mini:high');
           editor.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
         });
       }

@@ -237,7 +237,11 @@ test('shared retry fallback chains round-trip in order and reject stale edits', 
     const before = await f.native.read('workspace_1', '0');
     const original = before.settings.find((setting) => setting.id === id);
     expect(original?.conditionActive).toBe(true);
-    const value = { default: ['@smol', 'openai/o3-mini:high'], 'openai/*': [] };
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{ id, value: { default: ['@smol'] }, expectedValue: original?.value }],
+    })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    const value = { default: ['another-provider/*', 'openai/o3-mini:high'], 'openai/*': [], judge: ['@smol'] };
     await f.native.write('workspace_1', '1', {
       expectedRevision: before.revision,
       changes: [{ id, value, expectedValue: original?.value }],

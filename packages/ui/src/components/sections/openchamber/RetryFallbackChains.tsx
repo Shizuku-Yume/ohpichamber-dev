@@ -63,7 +63,7 @@ function ChainEditor({ rule, keys, models, directory, disabled, onSave }: ChainE
       )}
       <SettingsStackedField label={selectorLabel} controlClassName="max-w-none">
         <Textarea aria-label={selectorLabel} value={selectors} onChange={(event) => setSelectors(event.target.value)}
-          placeholder={'provider/model:high\n@smol'} disabled={disabled} />
+          placeholder={'provider/model:high\nother-provider/*'} disabled={disabled} />
       </SettingsStackedField>
       <SettingsFieldRow label={t('settings.retryFallback.addModel')}>
         <ModelSelector providerId="" modelId="" directory={directory} disabled={disabled}

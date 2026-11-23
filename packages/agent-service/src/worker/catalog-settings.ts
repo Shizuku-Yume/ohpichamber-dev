@@ -11,6 +11,8 @@ import {
 } from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { lookup, type AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
+import { isKindRole } from '@oh-my-pi/pi-coding-agent/config/model-roles';
+import { parseRetryFallbackSelector } from '@oh-my-pi/pi-coding-agent/session/retry-fallback-chains';
 import { cfgRetryFallbackChains } from '@oh-my-pi/pi-coding-agent/session/settings';
 import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -43,12 +45,18 @@ function retryChainUpdates(current: unknown, next: unknown): Map<string, string[
   const updates = new Map<string, string[] | undefined>();
   for (const key of new Set([...before.keys(), ...after.keys()])) {
     const value = after.get(key);
-    if (isDeepStrictEqual(before.get(key), value)) continue;
+    const previous = before.get(key);
+    if (isDeepStrictEqual(previous, value)) continue;
     if (key === 'web') {
       throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Web search owns its fallback chain');
     }
     if (value !== undefined && (!Array.isArray(value) || value.some((selector) => typeof selector !== 'string'))) {
       throw new ProjectionError(400, 'INVALID_REQUEST', 'A retry fallback chain must be an array of selectors');
+    }
+    if (Array.isArray(value) && !isKindRole(key) && value.some((selector) =>
+      !(Array.isArray(previous) && previous.includes(selector)) && !parseRetryFallbackSelector(selector)
+    )) {
+      throw new ProjectionError(400, 'INVALID_REQUEST', 'Chat fallback entries require a provider/model selector or a provider wildcard');
     }
     updates.set(key, value as string[] | undefined);
   }
