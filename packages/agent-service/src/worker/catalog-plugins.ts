@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, realpath, stat, writeFile, rename, unlink } from 'node:fs/promises';
+import { lstat, mkdir, opendir, readFile, realpath, stat, writeFile, rename, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
@@ -98,18 +98,17 @@ async function hasAncestorGitRoot(cwd: string): Promise<boolean> {
   return false;
 }
 async function filesystemDistinguishesCase(directory: string): Promise<boolean> {
-  const parent = dirname(directory);
-  const name = basename(directory);
-  const alternate = name.replace(/[a-z]/i, letter => letter === letter.toLowerCase() ? letter.toUpperCase() : letter.toLowerCase());
-  if (name === alternate) return false;
   try {
-    const original = await lstat(directory);
-    if (!original.isDirectory() || original.dev !== (await lstat(parent)).dev) return false;
-    const alias = await fileEntry(join(parent, alternate));
-    return alias === null || alias.dev !== original.dev || alias.ino !== original.ino;
-  } catch {
-    return false;
-  }
+    const entries = await opendir(directory);
+    for await (const { name } of entries) {
+      const alternate = name.replace(/[a-z]/i, letter => letter === letter.toLowerCase() ? letter.toUpperCase() : letter.toLowerCase());
+      if (name === alternate) continue;
+      const original = await lstat(join(directory, name));
+      const alias = await fileEntry(join(directory, alternate));
+      return alias === null || alias.dev !== original.dev || alias.ino !== original.ino;
+    }
+  } catch { return false; }
+  return false;
 }
 function publicSettings(values: JsonObject, definitions: PluginSettingDefinition[]): JsonObject {
   return Object.fromEntries(definitions.filter(setting => !setting.secret && Object.hasOwn(values, setting.key))

@@ -431,8 +431,8 @@ nativeTest('workspace overrides do not create a new registry root inside a Git w
   } finally { await context.cleanup(); }
 });
 
-for (const caseInsensitive of [false, true]) {
-  nativeTest(`workspace overrides handle differently cased registry roots on case-${caseInsensitive ? 'insensitive' : 'sensitive'} filesystems`, async () => {
+for (const caseBehavior of ['case-sensitive', 'case-insensitive', 'ambiguous'] as const) {
+  nativeTest(`workspace overrides handle differently cased registry roots in a ${caseBehavior} workspace`, async () => {
     const configDir = '.OMP';
     const context = await fixture(configDir);
     try {
@@ -440,28 +440,31 @@ for (const caseInsensitive of [false, true]) {
       const cwd = join(context.cwd, 'nested');
       await mkdir(cwd);
       const root = await fs.realpath(cwd);
-      const alias = join(root, '..', 'Nested');
-      if (!caseInsensitive && existsSync(alias)) return;
+      const entry = 'local.md';
+      const alias = join(root, 'Local.md');
+      const entries = caseBehavior === 'ambiguous' ? [] : [entry];
+      if (entries.length > 0) await writeFile(join(cwd, entry), '');
+      if (caseBehavior === 'case-sensitive' && existsSync(alias)) return;
       const target = { kind: 'package' as const, name: '@native-proof/plugin' };
       await new PluginManager(cwd).link(context.packageDirectory);
       const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
       const registry = join(context.cwd, configDir, 'plugins', 'installed_plugins.json');
       expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
       const lstat = fs.lstat;
-      const probe = caseInsensitive
-        ? spyOn(fs, 'lstat').mockImplementation((path, options) => lstat(path === alias ? root : path, options))
+      const probe = caseBehavior === 'case-insensitive'
+        ? spyOn(fs, 'lstat').mockImplementation((path, options) => lstat(path === alias ? join(root, entry) : path, options))
         : null;
       try {
         const lifecycle = await nested.operation({ type: 'plugins.lifecycle' }, '0');
         const write = () => nested.operation({
           type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
         }, '1');
-        if (caseInsensitive) {
+        if (caseBehavior !== 'case-sensitive') {
           expect(lifecycle).toMatchObject({
             type: 'plugins.lifecycle', result: { projectWritable: false, projectWriteBlock: 'registry-root-change', plugins: [{ target, workspaceWritable: false }] }
           });
           await expect(write()).rejects.toMatchObject({ status: 403, details: { projectWriteBlock: 'registry-root-change' } });
-          expect(await readdir(cwd)).toEqual([]);
+          expect(await readdir(cwd)).toEqual(entries);
         } else {
           expect(lifecycle).toMatchObject({
             type: 'plugins.lifecycle', result: { projectWritable: true, plugins: [{ target, workspaceWritable: true }] }
