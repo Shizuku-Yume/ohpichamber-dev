@@ -44,7 +44,7 @@ import { useMcpConfigStore, resolveMcpDirectory } from '@/stores/useMcpConfigSto
 import { getMcpServerStatus, isMcpServerConnected, useMcpStore } from '@/stores/useMcpStore';
 import { McpGrid } from './McpGrid';
 import { McpOAuthSignIn } from './McpOAuthSignIn';
-import { parseImportedMcpSnippet } from './mcpImport';
+import { McpImportError, normalizeEnvKey, normalizeHeaderKey, parseImportedMcpSnippet } from './mcpImport';
 import { mcpServerIdFrom } from './mcpServerId';
 import { problemMessage } from '@/lib/problemMessage';
 
@@ -62,9 +62,6 @@ const REMOTE_TRANSPORT_LABELS = {
   http: 'HTTP',
   sse: 'SSE',
 } as const satisfies Record<RemoteTransportType, string>;
-
-const normalizeEnvKey = (value: string): string => value.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
-const normalizeHeaderKey = (value: string): string => value.replace(/[^!#$%&'*+.^_`|~0-9A-Za-z-]/g, '');
 
 interface CommandTextareaProps {
   value: string[];
@@ -444,6 +441,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   const [draft, setDraft] = React.useState(initial);
   const [created, setCreated] = React.useState(!isNew);
   const createdRef = React.useRef(!isNew);
+  const persistedServerId = React.useRef(initial.serverId);
   const saveTail = React.useRef(Promise.resolve());
   const baseline = React.useRef(isNew ? '' : JSON.stringify(initial));
   const mounted = React.useRef(true);
@@ -482,7 +480,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
       if (!parsed.success) return autosaveFailed(parsed.error.message);
       const runtimeKey = getRuntimeKey();
       if (getRuntimeKey() !== runtimeKey) return AUTOSAVE_UNCHANGED;
-      const result = await useMcpConfigStore.getState().updateMcp(initial.serverId, parsed.data, directory);
+      const result = await useMcpConfigStore.getState().updateMcp(persistedServerId.current, parsed.data, directory);
       if (!mounted.current || getRuntimeKey() !== runtimeKey) return AUTOSAVE_UNCHANGED;
       if (result.result) baseline.current = serialized;
       if (!result.ok) return autosaveFailed(result.error);
@@ -556,6 +554,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
       if (!mounted.current) return;
       if (result.result) {
         createdRef.current = true;
+        persistedServerId.current = parsed.data.serverId;
         baseline.current = JSON.stringify(parsed.data);
         setCreated(true);
         void useMcpStore.getState().refresh({ directory, silent: true });
@@ -655,7 +654,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         const key = draft.transport.type === 'stdio' ? normalizeEnvKey(row.key) : row.key;
         if (!key) continue;
         assertRuntime();
-        const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, draft.serverId, { persistedRevision, value: row.value });
+        const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, persistedServerId.current, { persistedRevision, value: row.value });
         assertRuntime();
         persistedRevision = credential.persistedRevision;
         refs.set(key, credential.credentialRef);
@@ -663,7 +662,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
       let bearerReference: string | undefined;
       if (bearerDraft) {
         assertRuntime();
-        const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, draft.serverId, { persistedRevision, value: bearerDraft });
+        const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, persistedServerId.current, { persistedRevision, value: bearerDraft });
         assertRuntime();
         persistedRevision = credential.persistedRevision;
         bearerReference = credential.credentialRef;
@@ -686,7 +685,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         transport = { ...draft.transport, headerCredentialRefs: nextRefs };
       }
       assertRuntime();
-      const updated = await useMcpConfigStore.getState().updateMcp(initial.serverId, { transport }, directory);
+      const updated = await useMcpConfigStore.getState().updateMcp(persistedServerId.current, { transport }, directory);
       assertRuntime();
       if (!updated.result) {
         throw new Error(!updated.ok ? problemMessage(updated.error, t('settings.mcp.page.toast.saveFailed')) : t('settings.mcp.page.toast.saveFailed'));
@@ -738,13 +737,19 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   const handleImport = () => {
     try {
       const imported = parseImportedMcpSnippet(snippet);
-      setDraft({ ...imported, serverId: initial.serverId, scope: draft.scope ?? initial.scope ?? 'project' });
+      setDraft({ ...imported.server, serverId: initial.serverId, scope: draft.scope ?? initial.scope ?? 'project' });
+      setCredentialRows(imported.credentials);
+      setBearerDraft('');
       setImportOpen(false);
       setSnippet('');
       setImportError(null);
       toast.success(t('settings.mcp.page.toast.configImported'));
+      if (imported.droppedFields.length) toast.info(t('settings.mcp.page.import.dropped', { fields: imported.droppedFields.join(', ') }));
+      if (imported.credentials.length) toast.info(t('settings.mcp.page.import.credentials'));
     } catch (failure) {
-      setImportError(failure instanceof Error ? failure.message : t('settings.mcp.page.toast.unexpectedError'));
+      setImportError(failure instanceof McpImportError
+        ? t(`settings.mcp.page.import.${failure.code}`, { key: failure.key ?? '' })
+        : t('settings.mcp.page.import.invalid'));
     }
   };
 

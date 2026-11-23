@@ -4,6 +4,66 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The W6 branch merge of main preserves both MCP and settings-placement changes.
+Worker MCP tests (25), isolated importer/page/runtime/locale tests (4/4 files),
+UI and Agent Service type-checks, root type-check including drift, and W6-file
+oxlint pass. The merge required rebuilding stale Canonical contract declarations
+with `bun run --cwd packages/agent-contract build`; no source workaround was
+needed. Evidence: `/home/ubuntu/w6-evidence/merge-*.log`.
+
+W6 imported credential rows use the same key path as manual rows. The importer
+shares the editor's normalization functions and refuses keys that would change
+or fail validation. This replaces the imported-only exact-spelling mode, which
+made paste replacement inconsistent and bypassed normal key editing. Typed
+unsupported-key errors and case-duplicate header errors have value-free copy in
+all 15 locales. Regressions reject dotted/lowercase env keys and the collision
+pair, while `API_KEY` imports and saves unchanged. No runtime, contract or Host
+authorization changes are needed.
+Isolated importer/page/runtime/locale tests pass (4/4 files), UI type-check and
+changed-file oxlint pass. Evidence: `/home/ubuntu/w6-evidence/unified-*.log`.
+Knip still reports the repository-wide unused-code backlog; neither shared key
+normalizer appears in its findings. No live-service or visual check was run.
+
+W6 review also reproduces an imported draft renamed before Create: the secret
+write used the created ID but the reference binding used the initial draft ID.
+The editor now retains the ID accepted by Create and uses it for autosave and
+private credential writes/bindings. The page regression checks both IDs;
+the isolated page/runtime tests pass (2/2 files). Evidence:
+`/home/ubuntu/w6-evidence/finding3-before.log` and `finding3-after.log`.
+
+W6 review: a force-enabled native user entry was projected disabled because the
+reader ignores `enabledServers`; a label edit then added it to the denylist.
+The failing regression observed that new denylist entry. Identity/credential-only
+edits now preserve enable-override membership, including denylist ordering.
+Explicit enable changes retain their existing behavior. The focused worker suite
+passes 25 tests; evidence is in `/home/ubuntu/w6-evidence/finding2-*.log`.
+The projection's incomplete enable-override interpretation remains unchanged.
+This is verified at the writer boundary, not as a successful end-to-end rename:
+both persist dispatch paths authorize each proposed server first, and the Host
+currently rejects a disabled projected server before reaching the writer.
+
+User-scope credential references remain workspace-bound for both manual and
+imported credential rows. The shared save function has no scope-specific branch;
+native credential provider keys include the workspace hash, while user-file
+references are global. Stateless persistence resolves every server reference,
+so a foreign-workspace reference can also block unrelated saves. This predates
+the importer and remains unfixed by request.
+
+W6 MCP remediation preserves OMP 19.1 user-file native fields when changing
+labels, enablement or credential references. Label-only
+edits no longer add an enabled field to the native entry. Standard single-server
+`mcpServers` imports now validate canonical transports, stage literal credentials
+in private rows, and report unsupported fields by name. Create precedes the
+existing explicit credential save; expressions requiring native expansion are
+refused. Import diagnostics and notices are translated in all 15 locales.
+The 24 worker tests, isolated importer/page/runtime and locale tests, package
+type-checks, changed-file oxlint and root type-check pass. Root upstream-drift
+requires no new ledger rows. Evidence: `/home/ubuntu/w6-evidence/`.
+The extra dead-code gate exits 1 with repository-wide findings (106 files,
+124 exports, 44 exported types and one duplicate); it is not a clean gate.
+No visual or live-service verification was performed; the next check is a
+maintainer review of the import/create/private-save UI flow.
+
 The OMP 19.1 settings-placement pass exposes native host sleep prevention in
 General. Native layer overrides are read-only, and Linux containers without a
 system D-Bus socket display that the feature is unavailable; no deployment

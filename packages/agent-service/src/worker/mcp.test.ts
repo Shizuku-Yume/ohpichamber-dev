@@ -378,6 +378,68 @@ describe('user-scope MCP storage in a temp HOME keeps native entries and credent
     }
   }
 
+  test('identity and credential edits preserve OMP 19.1 native fields', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      const seeded = {
+        $schema: 'https://example.test/mcp.schema.json',
+        mcpServers: {
+          local: { command: '/opt/private/bin/tool', args: ['serve'], env: { API_KEY: 'secret-123', PATH_VAR: '${FOO}', CMD: '!echo hi' }, cwd: '/home/someone/private', timeout: 45000, requestIdFormat: 'string', instructions: false },
+          remote: { type: 'http', url: 'https://mcp.example/x?team=eng&token=qtok', headers: { Authorization: 'Bearer hdr-secret' }, oauth: { clientId: 'c', clientSecret: 'oauth-secret' }, auth: { type: 'apikey', clientSecret: 'auth-secret' } },
+        },
+        enabledServers: ['local', 'remote'], disabledServers: [],
+      };
+      await writeFile(userPath, JSON.stringify(seeded), 'utf8');
+      const read = async () => {
+        const state = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+        if (!state) throw new Error('Missing configuration');
+        for (const value of ['secret-123', '${FOO}', '!echo', '/opt/private', '/home/someone', 'qtok', 'team=eng', 'hdr-secret', 'oauth-secret', 'auth-secret']) expect(JSON.stringify(state)).not.toContain(value);
+        return state;
+      };
+      let state = await read();
+      for (const operation of ['label', 'enabled', 'credentials', 'project']) {
+        state.config.servers = state.config.servers.map(server => {
+          if (operation === 'label') return { ...server, label: 'Renamed' };
+          if (operation === 'enabled') return { ...server, enabled: false };
+          if (operation === 'credentials') return { ...server, transport: server.transport.type === 'stdio'
+            ? { ...server.transport, envCredentialRefs: { EXTRA: 'credential.env' } }
+            : { ...server.transport, headerCredentialRefs: { 'X-Extra': 'credential.header' } } };
+          return server;
+        });
+        if (operation === 'project') state.config.servers.push({ serverId: 'project', label: 'Project', enabled: true, scope: 'project', transport: { type: 'stdio', command: 'node', args: [] } });
+        await writeNativeMcpConfiguration(projectPath, state, userPath);
+        const stored = JSON.parse(await readFile(userPath, 'utf8'));
+        for (const key of ['local', 'remote'] as const) {
+          const { enabled: _enabled, ...native } = stored.mcpServers[key];
+          expect(native).toEqual(seeded.mcpServers[key]);
+        }
+        expect(stored.enabledServers).toEqual(seeded.enabledServers);
+        expect(stored.$schema).toBe(seeded.$schema);
+        if (operation === 'label') expect(stored.mcpServers).toEqual(seeded.mcpServers);
+        state = await read();
+        expect(state.config.servers.filter(server => server.scope === 'user').every(server => server.label === 'Renamed')).toBe(true);
+      }
+    });
+  });
+
+  test('a label-only edit preserves native force-enable and denylist membership', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      const seeded = {
+        mcpServers: { forced: { command: 'node', args: [], enabled: false } },
+        enabledServers: ['forced'], disabledServers: ['unrelated'],
+      };
+      await writeFile(userPath, JSON.stringify(seeded), 'utf8');
+      const state = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+      if (!state) throw new Error('Missing configuration');
+      state.config.servers = state.config.servers.map(server => ({ ...server, label: 'Renamed' }));
+      await writeNativeMcpConfiguration(projectPath, state, userPath);
+      const stored = JSON.parse(await readFile(userPath, 'utf8'));
+      expect(stored.disabledServers).toEqual(seeded.disabledServers);
+      expect(stored.enabledServers).toEqual(seeded.enabledServers);
+      expect(stored.mcpServers).toEqual(seeded.mcpServers);
+      expect((await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath))?.config.servers[0]?.label).toBe('Renamed');
+    });
+  });
+
   test('a project save leaves the pre-seeded user mcp.json byte-identical', async () => {
     await withHome(async ({ userPath, projectPath }) => {
       const seeded = `${JSON.stringify({
