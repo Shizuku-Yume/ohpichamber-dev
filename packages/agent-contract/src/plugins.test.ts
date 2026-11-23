@@ -73,6 +73,8 @@ describe('native plugin contracts', () => {
     };
     const state = { workspaceId: 'workspace', revision: '1', projectWritable: true, plugins: [extended] };
     expect(PluginLifecycleStateSchema.parse(state)).toEqual(state);
+    expect(PluginLifecycleStateSchema.parse({ ...state, projectWritable: false, projectWriteBlock: 'registry-root-change' })).toHaveProperty('projectWriteBlock', 'registry-root-change');
+    expect(PluginCatalogStateSchema.safeParse({ ...catalog, projectWriteBlock: 'registry-root-change' }).success).toBe(false);
     expect(PluginCatalogStateSchema.safeParse({ ...catalog, plugins: [extended] }).success).toBe(false);
     expect(PluginLifecycleStateSchema.safeParse({ ...state, plugins: [{ ...extended, projectSettings: { token: 'private' } }] }).success).toBe(false);
     expect(PluginLifecycleStateSchema.safeParse({ ...state, plugins: [{ ...extended, projectSettings: { unknown: 'private' } }] }).success).toBe(false);

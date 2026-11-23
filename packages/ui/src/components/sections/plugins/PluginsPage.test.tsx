@@ -325,6 +325,35 @@ test('feature checkboxes and project JSON write only to the selected native scop
   expect(container.querySelector<HTMLTextAreaElement>('#native-plugin-settings')?.value).toContain('"global"');
 });
 
+test('project scope is hidden and explained when a write would change the registry root', async () => {
+  const catalog = { ...emptyCatalog, plugins: [plugin] };
+  const lifecycle: PluginLifecycleState = {
+    workspaceId, revision: catalog.revision, projectWritable: false, projectWriteBlock: 'registry-root-change',
+    plugins: [{ ...plugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }], globalFeaturesWritable: true,
+      globalFeatures: null, workspaceFeatures: null, workspaceWritable: false, projectSettings: {} }],
+  };
+  const writes: Array<Omit<PluginConfigureRequest, 'expectedRevision'>> = [];
+  usePluginsStore.setState({
+    catalog, loadedDirectory: '/repo', loadedRuntimeKey: getRuntimeKey(), loadPlugins: async () => true,
+    readPluginLifecycle: async () => lifecycle,
+    configurePlugin: async input => {
+      writes.push(input);
+      return { workspaceId, revision: catalog.revision, persistence: 'committed', status: 'no-active-workers', workers: [], catalog };
+    },
+  });
+  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+  const card = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(plugin.name) && button.textContent?.includes(plugin.version));
+  if (!card) throw new Error('Missing plugin card');
+  await act(async () => { card.click(); });
+  const feature = () => container.querySelector<HTMLElement>('[role="checkbox"][aria-label="shared"]');
+  await waitFor(() => feature() !== null);
+  expect(container.textContent).toContain('creating a configuration directory would change where OMP finds project plugins');
+  expect(Array.from(container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Project')).toBe(false);
+  expect(container.querySelector('#native-plugin-project-settings')).toBeNull();
+  await act(async () => { feature()?.click(); });
+  expect(writes).toEqual([{ target: plugin.target, settingsScope: 'global', enabledFeatures: [] }]);
+});
+
 test('a shadowed global copy offers only global features', async () => {
   const projectPlugin: InstalledPluginEntry = {
     ...plugin, id: 'project_copy', version: '2.0.0', scope: 'workspace',

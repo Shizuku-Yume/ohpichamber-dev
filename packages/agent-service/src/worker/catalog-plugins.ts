@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, realpath, writeFile, rename, unlink } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, stat, writeFile, rename, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
@@ -11,7 +11,7 @@ import {
   MarketplaceManager, buildPluginId, parsePluginId, getInstalledPluginsRegistryPath, getMarketplacesRegistryPath,
   getMarketplacesCacheDir, getPluginsCacheDir
 } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
-import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
+import { clearPluginRootsAndCaches, getProjectDiscoveryCeilings, isUserConfigRoot, resolveOrDefaultProjectRegistryPath } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capability/types';
 import { NativeExtensions } from './catalog-extensions.ts';
@@ -82,12 +82,20 @@ async function readNativePluginFile<T>(path: string, schema: z.ZodType<T>): Prom
     throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native plugin state could not be read');
   }
 }
-async function fileEntry(path: string) {
-  try { return await lstat(path); }
+async function fileEntry(path: string, inspect = lstat) {
+  try { return await inspect(path); }
   catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
     throw error;
   }
+}
+async function hasAncestorGitRoot(cwd: string): Promise<boolean> {
+  const ceilings = getProjectDiscoveryCeilings();
+  for (let dir = cwd; !ceilings.has(normalizePathForComparison(dir)); dir = dirname(dir)) {
+    if (!isUserConfigRoot(dir) && await fileEntry(join(dir, '.git'), stat)) return dir !== cwd;
+    if (dirname(dir) === dir) break;
+  }
+  return false;
 }
 function publicSettings(values: JsonObject, definitions: PluginSettingDefinition[]): JsonObject {
   return Object.fromEntries(definitions.filter(setting => !setting.secret && Object.hasOwn(values, setting.key))
@@ -196,8 +204,10 @@ export class NativePlugins {
     if (!parentEntry) {
       const registry = await resolveOrDefaultProjectRegistryPath(cwd);
       if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== normalizePathForComparison(directory)
-        && await Bun.file(registry).exists()) {
-        throw new ProjectionError(403, 'UNAUTHORIZED', 'Creating a workspace config directory would shadow its inherited plugin registry');
+        && (await Bun.file(registry).exists() || await hasAncestorGitRoot(cwd))) {
+        throw new ProjectionError(403, 'UNAUTHORIZED', 'Creating a workspace config directory would change its OMP plugin registry root', {
+          projectWriteBlock: 'registry-root-change'
+        });
       }
     }
     if (!entry) {
@@ -211,8 +221,12 @@ export class NativePlugins {
   }
 
   private async lifecycle(revision: string): Promise<PluginLifecycleState> {
-    const projectWritable = await this.confinedOverridesPath().then(() => true, error => {
-      if (error instanceof ProjectionError && error.status === 403) return false;
+    const projectCapability = await this.confinedOverridesPath().then(() => ({ projectWritable: true }), error => {
+      if (error instanceof ProjectionError && error.status === 403) {
+        return error.details?.projectWriteBlock === 'registry-root-change'
+          ? { projectWritable: false, projectWriteBlock: 'registry-root-change' as const }
+          : { projectWritable: false };
+      }
       throw error;
     });
     const managers = await this.managers();
@@ -227,11 +241,11 @@ export class NativePlugins {
         globalFeatures: state?.plugins?.[native.name]?.enabledFeatures ?? null,
         globalFeaturesWritable: await this.globalFeaturesWritable(plugin.target, native, runtime),
         workspaceFeatures: overrides.features?.[native.name] ?? null,
-        workspaceWritable: projectWritable && await this.workspacePluginWritable(managers.packages, plugin.target, native),
+        workspaceWritable: projectCapability.projectWritable && await this.workspacePluginWritable(managers.packages, plugin.target, native),
         projectSettings: publicSettings(overrides.settings?.[native.name] ?? {}, plugin.settingDefinitions)
       };
     }));
-    return { workspaceId: this.context.worker.workspaceId, revision, projectWritable, plugins };
+    return { workspaceId: this.context.worker.workspaceId, revision, ...projectCapability, plugins };
   }
 
   private async workspacePluginWritable(packages: PluginManager, target: PluginTarget, native: InstalledPlugin): Promise<boolean> {

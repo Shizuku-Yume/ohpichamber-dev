@@ -58,6 +58,7 @@ const PluginLifecycleEntrySchema = InstalledPluginEntrySchema.safeExtend({
  'Only declared nonsecret project settings are public');
 export const PluginLifecycleStateSchema = z.strictObject({
  workspaceId: EntityIdSchema, revision: CounterSchema, projectWritable: z.boolean(),
+ projectWriteBlock: z.literal('registry-root-change').optional(),
  plugins: z.array(PluginLifecycleEntrySchema),
 }).refine(state => new Set(state.plugins.map(plugin => plugin.id)).size === state.plugins.length, 'Plugin identities are unique');
 export type PluginLifecycleState = z.infer<typeof PluginLifecycleStateSchema>;

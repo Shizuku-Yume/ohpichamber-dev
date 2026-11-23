@@ -387,7 +387,7 @@ nativeTest('workspace overrides never overwrite a symlink or shadow a native fal
   } finally { await context.cleanup(); }
 });
 
-nativeTest('workspace overrides can create a config directory under a Git root without a plugin registry', async () => {
+nativeTest('workspace overrides do not create a new registry root inside a Git workspace', async () => {
   const context = await fixture();
   try {
     await mkdir(join(context.cwd, '.git'));
@@ -399,14 +399,33 @@ nativeTest('workspace overrides can create a config directory under a Git root w
     const prospectiveRegistry = join(context.cwd, '.omp', 'plugins', 'installed_plugins.json');
     expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(prospectiveRegistry);
     expect(await Bun.file(prospectiveRegistry).exists()).toBe(false);
-    const lifecycle = await nested.operation({ type: 'plugins.lifecycle' }, '0');
-    if (lifecycle.type !== 'plugins.lifecycle') throw new Error('Expected opt-in lifecycle data');
-    expect(lifecycle.result.projectWritable).toBe(true);
-    await nested.operation({
+    const write = (plugins: NativePlugins) => plugins.operation({
       type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
     }, '1');
-    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).json()).toEqual({ features: { [target.name]: ['preview'] } });
-    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+    expect(await nested.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
+      type: 'plugins.lifecycle', result: { projectWritable: false, projectWriteBlock: 'registry-root-change', plugins: [{ target, workspaceWritable: false }] }
+    });
+    await expect(write(nested)).rejects.toMatchObject({ status: 403, details: { projectWriteBlock: 'registry-root-change' } });
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(prospectiveRegistry);
+    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).exists()).toBe(false);
+
+    const expectWritable = async (path: string, plugins: NativePlugins) => {
+      expect(await plugins.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
+        type: 'plugins.lifecycle', result: { projectWritable: true, plugins: [{ target, workspaceWritable: true }] }
+      });
+      await write(plugins);
+      expect(await Bun.file(getProjectPluginOverridesPath(path)).json()).toEqual({ features: { [target.name]: ['preview'] } });
+      expect(await getEnabledPlugins(path)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+    };
+    await expectWritable(context.cwd, context.plugins);
+    await mkdir(join(cwd, '.omp'));
+    await expectWritable(cwd, nested);
+    const outsideGit = join(context.root, 'outside-git');
+    await mkdir(outsideGit);
+    await mkdir(join(context.root, '.omp'));
+    expect(await resolveOrDefaultProjectRegistryPath(outsideGit)).toBe(join(context.root, '.omp', 'plugins', 'installed_plugins.json'));
+    const independent = new NativePlugins({ cwd: outsideGit, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    await expectWritable(outsideGit, independent);
   } finally { await context.cleanup(); }
 });
 

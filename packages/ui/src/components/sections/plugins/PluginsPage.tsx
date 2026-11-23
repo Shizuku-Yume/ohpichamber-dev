@@ -408,6 +408,9 @@ const PluginConfiguration: React.FC<{
           />
         </SettingsFieldRow>
       ) : null}
+      {ready && lifecycle?.projectWriteBlock === 'registry-root-change' ? (
+        <p className="typography-meta text-muted-foreground">{t('settings.plugins.projectOverrides.registryRootChange')}</p>
+      ) : null}
       {available.length > 0 && (activeScope === 'workspace' || details?.globalFeaturesWritable) ? (
         <SettingsControlGroup title={t('settings.plugins.section.features')}>
           {available.map(feature => (
