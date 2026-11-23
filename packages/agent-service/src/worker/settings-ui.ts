@@ -166,8 +166,8 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'tools.restrictedFolders': 'config-only',
   'skills.registryUrl': 'boundary',
   'skills.enabled': 'skills:discovery',
-  'skills.enableCodexUser': 'skills:discovery',
-  'skills.enableClaudeUser': 'skills:discovery',
+  'skills.enableCodexUser': 'config-only',
+  'skills.enableClaudeUser': 'config-only',
   'skills.enableClaudeProject': 'skills:discovery',
   'skills.enablePiUser': 'skills:discovery',
   'skills.enablePiProject': 'skills:discovery',
@@ -430,9 +430,9 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'title.refreshAfterPrompts': 'sessions:title',
   'skills.enableSkillCommands': 'engine',
   // The Commands editor reads native prompt templates, not TUI command discovery.
-  'commands.enableClaudeUser': 'commands:catalog',
+  'commands.enableClaudeUser': 'config-only',
   'commands.enableClaudeProject': 'commands:catalog',
-  'commands.enableOpencodeUser': 'commands:catalog',
+  'commands.enableOpencodeUser': 'config-only',
   'commands.enableOpencodeProject': 'commands:catalog',
 
   // --- providers (41) ---

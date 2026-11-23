@@ -32,6 +32,7 @@ async function fixture() {
   return {
     root, cwd, agentDirectory, workers, operation,
     settings: () => catalogs.operation('workspace', { type: 'catalog.settings.read' }),
+    extensions: () => catalogs.operation('workspace', { type: 'extensions.read' }),
     updateSettings: (revision: string, changes: Array<{ id: string; value: boolean }>) =>
       catalogs.operation('workspace', { type: 'catalog.settings.write', request: { expectedRevision: revision, changes } }),
     reopen: async () => {
@@ -138,6 +139,45 @@ test('settings writes change native discovery without changing the resource resp
   if (after.kind !== 'commands' || skillsAfter.kind !== 'skills') throw new Error('Expected native catalogs');
   expect(CommandCatalogStateSchema.parse(after.catalog).commands.some(command => command.name === 'hello')).toBe(false);
   expect(FileResourceSkillCatalogSchema.parse(skillsAfter.catalog).skills).toEqual([]);
+}, 60000);
+
+test('foreign user discovery opt-ins can load resources independently of the config-only capability switches', async () => {
+  const h = await fixture();
+  for (const [source, name] of [['.claude', 'claude-example'], ['.config/opencode', 'opencode-example']]) {
+    const directory = join(h.root, source, 'commands');
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, `${name}.md`), 'Say hello.');
+  }
+  for (const [source, name] of [['.claude', 'claude-example'], ['.codex', 'codex-example']]) {
+    const directory = join(h.root, source, 'skills', name);
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: A hello example\n---\nSay hello.\n`);
+  }
+  const config = join(h.agentDirectory, 'config.yml');
+  const capabilitySwitches = 'commands:\n  enableClaudeUser: false\n  enableOpencodeUser: false\nskills:\n  enableClaudeUser: false\n  enableCodexUser: false\n';
+  await writeFile(config, capabilitySwitches);
+  const discover = async () => {
+    const result = await h.extensions();
+    if (result.type !== 'extensions.inventory') throw new Error('Expected extension inventory');
+    const items = result.state.extensions.items.filter(item => item.enabled && item.name.endsWith('-example'));
+    return {
+      commands: items.filter(item => item.kind === 'slash-command').map(item => item.name).sort(),
+      skills: items.filter(item => item.kind === 'skill').map(item => item.name).sort(),
+    };
+  };
+  expect(await discover()).toEqual({ commands: [], skills: [] });
+  await writeFile(config, capabilitySwitches + 'enabledProviders: [claude, opencode, codex]\n');
+  await h.settings();
+  expect(await discover()).toEqual({
+    commands: ['claude-example', 'opencode-example'],
+    skills: ['claude-example', 'codex-example'],
+  });
+  const settings = await h.settings();
+  if (settings.type !== 'catalog.settings') throw new Error('Expected OMP settings');
+  const exposed = settings.state.settings.filter(({ id }) => [
+    'commands.enableClaudeUser', 'commands.enableOpencodeUser', 'skills.enableClaudeUser', 'skills.enableCodexUser',
+  ].includes(id));
+  expect(exposed.map(({ id, value }) => ({ id, value }))).toEqual([]);
 }, 60000);
 
 test('command editing preserves native side, raw keys and unrelated metadata', async () => {
