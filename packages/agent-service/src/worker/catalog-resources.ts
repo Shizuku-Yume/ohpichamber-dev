@@ -13,6 +13,9 @@ import { loadSlashCommands, expandSlashCommand } from '@oh-my-pi/pi-coding-agent
 import { loadPromptTemplates, expandPromptTemplate } from '@oh-my-pi/pi-coding-agent/config/prompt-templates';
 import { loadCapability, type SlashCommand } from '@oh-my-pi/pi-coding-agent/discovery';
 import { slashCommandCapability } from '@oh-my-pi/pi-coding-agent/capability/slash-command';
+import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
+import { createSourceMeta, discoverRuleFromMarkdown } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
+import { TtsrManager } from '@oh-my-pi/pi-coding-agent/export/ttsr';
 import { reset as resetCapabilities } from '@oh-my-pi/pi-coding-agent/capability';
 import { loadSkills, type LoadSkillsOptions } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
 import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capability/types';
@@ -107,6 +110,17 @@ function behaviorFields(kind: 'rule' | 'instruction', text: string, path: string
   return BehaviorFileFieldsSchema.parse(fields);
 }
 function instructionFilename(name: string): boolean { return name.endsWith('.md') && ruleFilename(name); }
+function assertNewRuleUsable(text: string, path: string, scope: FileResourceScope) {
+  const rule = discoverRuleFromMarkdown(basename(path), text, path, createSourceMeta('native', path, scope === 'workspace' ? 'project' : 'user'), {
+    stripNamePattern: /\.(md|mdc)$/,
+  });
+  if (!rule) return;
+  const manager = new TtsrManager();
+  const { rulebookRules, alwaysApplyRules } = bucketRules([rule], manager);
+  if (!rulebookRules.length && !alwaysApplyRules.length && !manager.getRules().length) {
+    throw new ProjectionError(400, 'INVALID_REQUEST', 'Add a description, set alwaysApply to true, or supply a usable condition, astCondition, or question. To save an inactive rule, set enabled to false.');
+  }
+}
 
 /** Native discovery and expansion run only here; file IDs never grant arbitrary path access. */
 export class NativeFileResources {
@@ -174,6 +188,7 @@ export class NativeFileResources {
           }
           text = nextHeader + content;
         }
+        if (kind === 'rule' && current === undefined) assertNewRuleUsable(text, path, scope);
         await this.confined(scope, path, true);
         const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
         try {

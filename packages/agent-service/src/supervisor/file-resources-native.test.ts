@@ -11,6 +11,9 @@ import type { FileResourceOperation } from '../catalogs/file-resources-protocol.
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { lookupBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-commands/builtin-registry';
+import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
+import { createSourceMeta, discoverRuleFromMarkdown } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
+import { TtsrManager } from '@oh-my-pi/pi-coding-agent/export/ttsr';
 import { ALLOWED_BUILTIN_COMMANDS } from '../worker/builtin-commands.ts';
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -102,6 +105,23 @@ test('behavior file edits preserve native rule metadata, both fixed scopes, and 
   expect((await read()).files.some(file => file.scope === 'agent' && file.kind === 'system')).toBe(false);
 }, 60000);
 
+test('new enabled Behavior rules must be usable by OMP', async () => {
+  const h = await fixture();
+  const request = { kind: 'rule', scope: 'workspace' as const, name: 'new.mdc', content: 'Use a greeting.', expectedRevision: '0', expectedVersion: null };
+  const path = join(h.cwd, request.name);
+  const rule = discoverRuleFromMarkdown(request.name, request.content, path, createSourceMeta('native', path, 'project'));
+  expect(rule).not.toBeNull();
+  const manager = new TtsrManager();
+  expect(bucketRules([rule!], manager)).toEqual({ rulebookRules: [], alwaysApplyRules: [] });
+  expect(manager.getRules()).toEqual([]);
+  for (const fields of [undefined, { globs: ['*.md'] }, { condition: ['['] }]) {
+    await expect(h.operation({ action: 'behavior.write', request: { ...request, fields } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  }
+  const created = await h.operation({ action: 'behavior.write', request: { ...request, fields: { condition: ['*.md'] } } });
+  if (created.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  expect(created.catalog.files).toHaveLength(1);
+}, 60000);
+
 test('behavior file targets refuse escapes, executable hooks, SSH, symlinks and stale writes', async () => {
   const h = await fixture();
   const outside = join(h.root, 'outside.md');
@@ -117,7 +137,7 @@ test('behavior file targets refuse escapes, executable hooks, SSH, symlinks and 
     await expect(h.operation({ action: 'behavior.write', request: { ...request, kind, name } })).rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
   }
   expect(await readFile(outside, 'utf8')).toBe('Do not replace.\n');
-  const created = await h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: 'local.md' } });
+  const created = await h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: 'local.md', fields: { alwaysApply: true } } });
   if (created.kind !== 'behavior') throw new Error('Expected Behavior catalog');
   expect(created.catalog.files.map(file => file.name)).toEqual(['local.md']);
   const entry = created.catalog.files[0];

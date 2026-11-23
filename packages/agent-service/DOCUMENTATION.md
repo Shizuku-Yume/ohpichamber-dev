@@ -235,6 +235,8 @@ New sessions resolve enabled native plugin paths and authored extension paths in
 
 OMP 19.1 loads scoped rules through the SDK and searches its nearest project config directory for a sticky `RULES.md` and a literal `SYSTEM.md`; a project system override precedes the user one. The worker's Extensions inventory loads the native instruction capability and its `applyTo` metadata; it does not inject those files into session prompts. `APPEND_SYSTEM.md` is CLI-discovered and is not writable through this catalog. Hooks and SSH are not in the write allowlist.
 
+A new enabled rule must qualify for OMP's rulebook, always-apply, or trigger bucket. An explicitly disabled rule can be saved without an activation field.
+
 `WorkspaceRoutes` exposes workspace command and prompt-template CRUD and expansion through namespaced `fileResources` worker envelopes. `NativeFileResources` loads slash commands with `loadSlashCommands`, templates with `loadPromptTemplates`, and skills with `loadSkills`; expansions use the native slash/template functions and skill prompt builder. Listing and expansion never create a conversation or invoke a model.
 
 `POST .../commands/expand-text` prepares raw input through the native command-then-template pipeline once and returns an authoritative `command`, `template`, or `text` match kind. Bindings belong to the top-level invocation, not a slash-looking generated body. No-match text is unchanged. UI and scheduled senders use this same worker owner before capturing a canonical prompt; session dispatch deliberately keeps automatic SDK expansion disabled, preventing a second expansion of prepared text.
