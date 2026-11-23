@@ -419,7 +419,7 @@ export const GeneralPowerSettings: React.FC = () => {
           />
           {setting.writeBlock ? (
             <p className="typography-meta text-muted-foreground">
-              {t('settings.omp.power.overridden')}
+              {t(setting.writeBlock === 'layer-override' ? 'settings.omp.power.overridden' : 'settings.omp.power.unavailable')}
             </p>
           ) : null}
         </React.Fragment>

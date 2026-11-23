@@ -111,7 +111,7 @@ export const OmpSettingSchema = z.strictObject({
   condition: z.string().min(1).optional(),
   /** Whether that condition holds in the snapshot that carried this row. */
   conditionActive: z.boolean().optional(),
-  writeBlock: z.enum(['layer-override']).optional(),
+  writeBlock: z.enum(['layer-override', 'host-power-unavailable']).optional(),
 }).refine(
   (setting) => setting.condition === undefined || setting.conditionActive !== undefined,
   'A conditional setting reports whether its condition holds',

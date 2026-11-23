@@ -191,14 +191,25 @@ test('General power uses the native OMP sleep-prevention setting', async () => {
   const f = await fixture();
   try {
     const before = await f.native.read('workspace_1', '0');
-    expect(before.settings.find(({ id }) => id === 'power.sleepPrevention')).toMatchObject({
+    const power = before.settings.find(({ id }) => id === 'power.sleepPrevention');
+    expect(power).toMatchObject({
       placement: { type: 'page', page: 'general', section: 'power' },
       value: 'idle',
     });
-    await f.native.write('workspace_1', '1', {
+    const write = f.native.write('workspace_1', '1', {
       expectedRevision: before.revision,
       changes: [{ id: 'power.sleepPrevention', value: 'off' }],
     });
+    const missingLinuxBus = process.platform === 'linux' && !process.env.DBUS_SYSTEM_BUS_ADDRESS
+      && !statSync('/var/run/dbus/system_bus_socket', { throwIfNoEntry: false })?.isSocket();
+    if (missingLinuxBus) {
+      expect(power?.writeBlock).toBe('host-power-unavailable');
+      await expect(write).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' });
+      expect((await f.native.read('workspace_1', '0')).settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('idle');
+      return;
+    }
+    expect(power?.writeBlock).toBeUndefined();
+    await write;
     const after = await f.native.read('workspace_1', '1');
     expect(after.settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('off');
   } finally { await f.close(); }

@@ -13,14 +13,22 @@ import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { OMP_SETTING_EXPOSED_IDS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
+import { statSync } from 'node:fs';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 const byId = new Map<string, AnySetting>();
+
+function linuxPowerBusAvailable(): boolean {
+  if (process.env.DBUS_SYSTEM_BUS_ADDRESS) return true;
+  try { return statSync('/var/run/dbus/system_bus_socket').isSocket(); }
+  catch { return false; }
+}
 
 function writeBlock(setting: AnySetting, settings: Settings): OmpSetting['writeBlock'] {
   if (setting.id !== 'power.sleepPrevention') return undefined;
   const provenance = settings.getProvenance(setting);
   if (provenance !== 'global' && provenance !== 'default') return 'layer-override';
+  if (process.platform === 'linux' && !linuxPowerBusAvailable()) return 'host-power-unavailable';
   return undefined;
 }
 
@@ -121,6 +129,9 @@ export class NativeSettings {
       const blocked = writeBlock(setting, this.settings);
       if (blocked === 'layer-override') {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared sleep setting');
+      }
+      if (blocked === 'host-power-unavailable') {
+        throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Host sleep prevention is unavailable');
       }
       if (change.value === null) continue;
       if (change.id === 'edit.mode' && change.value === 'magic') {
