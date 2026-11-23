@@ -14,14 +14,19 @@ import { lookupBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-comma
 import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
 import { createSourceMeta, discoverRuleFromMarkdown } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
 import { TtsrManager } from '@oh-my-pi/pi-coding-agent/export/ttsr';
+import { loadCapability } from '@oh-my-pi/pi-coding-agent/discovery';
+import { reset as resetCapabilities } from '@oh-my-pi/pi-coding-agent/capability';
+import { ruleCapability, type Rule } from '@oh-my-pi/pi-coding-agent/capability/rule';
+import { systemPromptCapability, type SystemPrompt } from '@oh-my-pi/pi-coding-agent/capability/system-prompt';
 import { ALLOWED_BUILTIN_COMMANDS } from '../worker/builtin-commands.ts';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); });
-async function fixture() {
+async function fixture(nested = false) {
   const root = await mkdtemp(join(tmpdir(), 'native-file-resources-'));
-  const cwd = join(root, 'workspace'); const agentDirectory = join(root, 'agent');
-  await mkdir(cwd); await mkdir(agentDirectory);
+  const project = join(root, 'workspace');
+  const cwd = nested ? join(project, 'nested') : project; const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true }); await mkdir(agentDirectory);
   const workers = new WorkerRegistry({ workerEntrypoint: fileURLToPath(new URL('../worker/index.ts', import.meta.url)), startupTimeoutMs: 30000, policyCheck: async () => ({ allowed: true }) });
   cleanups.push(async () => { await workers.close(); await rm(root, { recursive: true, force: true }); });
   const stateDirectory = join(root, 'service');
@@ -120,6 +125,29 @@ test('new enabled Behavior rules must be usable by OMP', async () => {
   const created = await h.operation({ action: 'behavior.write', request: { ...request, fields: { condition: ['*.md'] } } });
   if (created.kind !== 'behavior') throw new Error('Expected Behavior catalog');
   expect(created.catalog.files).toHaveLength(1);
+}, 60000);
+
+test('scoped Behavior writes do not shadow inherited OMP system and sticky rules', async () => {
+  const h = await fixture(true);
+  const parent = join(h.root, 'workspace', '.omp');
+  await mkdir(parent);
+  await writeFile(join(parent, 'SYSTEM.md'), 'Inherited system.');
+  await writeFile(join(parent, 'RULES.md'), 'Inherited rules.');
+  const checkInherited = async () => {
+    resetCapabilities();
+    const options = { cwd: h.cwd, agentDir: h.agentDirectory };
+    const systems = await loadCapability<SystemPrompt>(systemPromptCapability.id, options);
+    const rules = await loadCapability<Rule>(ruleCapability.id, options);
+    expect(systems.items.find(item => item.level === 'project')?.path).toBe(join(parent, 'SYSTEM.md'));
+    expect(rules.items.find(item => item.name === 'RULES@project')?._source?.path).toBe(join(parent, 'RULES.md'));
+  };
+  await checkInherited();
+  const request = { scope: 'workspace' as const, content: 'Use a greeting.', expectedRevision: '0', expectedVersion: null };
+  const outcome = await h.operation({ action: 'behavior.write', request: { ...request, kind: 'instruction', name: 'new.md' } }).catch(error => error as unknown);
+  await checkInherited();
+  expect(outcome).toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: 'new.mdc', fields: { alwaysApply: true } } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  expect(await readdir(h.cwd)).not.toContain('.omp');
 }, 60000);
 
 test('behavior file targets refuse escapes, executable hooks, SSH, symlinks and stale writes', async () => {

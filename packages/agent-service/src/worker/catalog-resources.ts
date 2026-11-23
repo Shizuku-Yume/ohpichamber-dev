@@ -14,6 +14,8 @@ import { loadPromptTemplates, expandPromptTemplate } from '@oh-my-pi/pi-coding-a
 import { loadCapability, type SlashCommand } from '@oh-my-pi/pi-coding-agent/discovery';
 import { slashCommandCapability } from '@oh-my-pi/pi-coding-agent/capability/slash-command';
 import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
+import { ruleCapability, type Rule } from '@oh-my-pi/pi-coding-agent/capability/rule';
+import { systemPromptCapability, type SystemPrompt } from '@oh-my-pi/pi-coding-agent/capability/system-prompt';
 import { createSourceMeta, discoverRuleFromMarkdown } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
 import { TtsrManager } from '@oh-my-pi/pi-coding-agent/export/ttsr';
 import { reset as resetCapabilities } from '@oh-my-pi/pi-coding-agent/capability';
@@ -142,6 +144,23 @@ export class NativeFileResources {
       throw error;
     }
   }
+  private async assertBehaviorWriteKeepsInheritance() {
+    const root = this.root('workspace', '');
+    try {
+      await this.confined('workspace', root, false);
+      if ((await readdir(root)).length > 0) return;
+    } catch (error) {
+      if (!(error instanceof Error) || !missing(error)) throw error;
+    }
+    resetCapabilities();
+    const systems = await loadCapability<SystemPrompt>(systemPromptCapability.id, { cwd: this.context.cwd });
+    const rules = await loadCapability<Rule>(ruleCapability.id, { cwd: this.context.cwd, agentDir: this.context.agentDirectory });
+    const inheritedSystem = systems.items.some(item => item.level === 'project' && item._source.provider === 'native' && !inside(root, item.path));
+    const inheritedRules = rules.items.some(item => item.name === 'RULES@project' && item._source?.provider === 'native' && !inside(root, item._source.path));
+    if (inheritedSystem || inheritedRules) {
+      throw new ProjectionError(400, 'INVALID_REQUEST', 'Saving here would hide inherited OMP system prompts or sticky rules. Open the parent project as the workspace, or save in Global scope.');
+    }
+  }
   private async behavior(
     operation: Extract<FileResourceOperation, { action: 'behavior.read' | 'behavior.write' | 'behavior.delete' }>,
     workspaceId: string, revision: string,
@@ -189,6 +208,7 @@ export class NativeFileResources {
           text = nextHeader + content;
         }
         if (kind === 'rule' && current === undefined) assertNewRuleUsable(text, path, scope);
+        if (scope === 'workspace' && current === undefined) await this.assertBehaviorWriteKeepsInheritance();
         await this.confined(scope, path, true);
         const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
         try {

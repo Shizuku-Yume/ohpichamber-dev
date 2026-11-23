@@ -237,6 +237,8 @@ OMP 19.1 loads scoped rules through the SDK and searches its nearest project con
 
 A new enabled rule must qualify for OMP's rulebook, always-apply, or trigger bucket. An explicitly disabled rule can be saved without an activation field.
 
+The editor refuses to populate a local `.omp` when doing so would hide an inherited native system prompt or sticky rule. Open the parent as the workspace or write to the selected agent directory instead.
+
 `WorkspaceRoutes` exposes workspace command and prompt-template CRUD and expansion through namespaced `fileResources` worker envelopes. `NativeFileResources` loads slash commands with `loadSlashCommands`, templates with `loadPromptTemplates`, and skills with `loadSkills`; expansions use the native slash/template functions and skill prompt builder. Listing and expansion never create a conversation or invoke a model.
 
 `POST .../commands/expand-text` prepares raw input through the native command-then-template pipeline once and returns an authoritative `command`, `template`, or `text` match kind. Bindings belong to the top-level invocation, not a slash-looking generated body. No-match text is unchanged. UI and scheduled senders use this same worker owner before capturing a canonical prompt; session dispatch deliberately keeps automatic SDK expansion disabled, preventing a second expansion of prepared text.
