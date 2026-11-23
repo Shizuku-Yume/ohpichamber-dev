@@ -142,6 +142,10 @@ interface SortableProjectItemProps extends ProjectIdentityProps {
   onProjectSelect?: (projectId: string) => void;
 }
 
+const NewSessionMenu: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="absolute inset-e-0.5 top-1/2 z-10 -translate-y-1/2">{children}</div>
+);
+
 export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   id,
   disabled = false,
@@ -481,7 +485,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               </div>
 
               {showCreateButtons && onNewSession ? (
-                <div className="absolute inset-e-0.5 top-1/2 z-10 -translate-y-1/2">
+                <NewSessionMenu>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -507,7 +511,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                         : t('sessions.sidebar.project.actions.newSession')}</p>
                     </TooltipContent>
                   </Tooltip>
-                </div>
+                </NewSessionMenu>
               ) : null}
             </div>
             </ContextMenuTrigger>
@@ -522,4 +526,3 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
     </div>
   );
 };
-

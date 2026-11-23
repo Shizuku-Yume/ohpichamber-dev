@@ -36,7 +36,6 @@ Object.defineProperty(globalThis, 'window', {
   configurable: true,
   writable: true,
   value: {
-    // The OpenCode client the store imports subscribes to runtime switches.
     addEventListener: () => {},
     removeEventListener: () => {},
     __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
@@ -73,7 +72,7 @@ test('a desktop-dropped file carries its on-disk path while the chip label stays
 
 for (const [label, name, bytes] of [
   ['over the inline limit', 'dump.log', 15 * 1024 * 1024],
-  ['over the OpenCode attachment limit', 'book.pdf', 25 * 1024 * 1024],
+  ['over the attachment limit', 'book.pdf', 25 * 1024 * 1024],
 ] as const) {
   test(`a desktop file ${label} goes as a note naming its path, never as its bytes`, async () => {
     const { useInputStore } = await import('./input-store');
@@ -261,6 +260,24 @@ test('a HEIC the decoder cannot read still goes as a note naming its path on des
   }
 });
 
+test('a document attached as is keeps its bytes for Send even when the selected Host cannot read the local path', async () => {
+  const { useInputStore } = await import('./input-store');
+  const workspaceAttachments = await import('@/lib/workspace-attachments');
+  const write = spyOn(workspaceAttachments, 'saveWorkspaceAttachments');
+  useInputStore.getState().clearAttachedFiles();
+  try {
+    expect(
+      await useInputStore.getState().addAttachedFile(new File(['docx'], 'report.docx'), undefined, undefined, { saveOnSend: 'reference' }),
+    ).toBe(true);
+    const [file] = useInputStore.getState().attachedFiles;
+    expect(file?.saveOnSend).toBe(true);
+    expect(file?.agentPath).toBeUndefined();
+    expect(write).not.toHaveBeenCalled();
+  } finally {
+    write.mockRestore();
+  }
+});
+
 test('each of two attaches running at once is told its own file', async () => {
   const { useInputStore } = await import('./input-store');
   const store = useInputStore.getState();
@@ -274,4 +291,22 @@ test('each of two attaches running at once is told its own file', async () => {
   )));
 
   expect(landed).toEqual({ 'first.txt': 'first.txt', 'second.txt': 'second.txt' });
+});
+
+test('holding a reference for Send saves sanitized HAR bytes, never the source document', async () => {
+  const { useInputStore } = await import('./input-store');
+  const workspaceAttachments = await import('@/lib/workspace-attachments');
+  const write = spyOn(workspaceAttachments, 'saveWorkspaceAttachments');
+  useInputStore.getState().clearAttachedFiles();
+  try {
+    const har = JSON.stringify({ log: { entries: [{ request: { headers: [{ name: 'authorization', value: 'Bearer private-value' }] } }] } });
+    expect(await useInputStore.getState().addAttachedFile(new File([har], 'capture.har', { type: 'application/json' }), undefined, undefined, { saveOnSend: 'reference' })).toBe(true);
+    const [file] = useInputStore.getState().attachedFiles;
+    expect(file.saveOnSend).toBe(true);
+    expect(file.agentPath).toBeUndefined();
+    expect(await file.file.text()).not.toContain('Bearer private-value');
+    expect(write).not.toHaveBeenCalled();
+  } finally {
+    write.mockRestore();
+  }
 });

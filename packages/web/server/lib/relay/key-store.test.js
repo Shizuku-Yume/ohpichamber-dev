@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 import { createRelayKeyStore } from './key-store.js';
+import { createSettingsWriteQueue } from '../settings/settings-write-queue.js';
 
 const makePair = () => {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -40,7 +41,7 @@ const makeStore = ({ writeSettingsToDisk } = {}) => {
     dataDir,
     readSettingsFromDiskMigrated: async () => readSettingsStrict().catch(() => ({})),
     readSettingsStrict,
-    writeSettingsToDisk: writeSettingsToDisk ?? (async (next) => writeJson(settingsPath(), next)),
+    ...createSettingsWriteQueue(readSettingsStrict, writeSettingsToDisk ?? (async (next) => writeJson(settingsPath(), next))),
     logger: { warn: () => {} },
   });
 };

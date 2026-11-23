@@ -4,6 +4,12 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+Session defaults keep native OMP model roles authoritative. The managed-chat
+model/effort row is a Host-persisted override for chats outside projects, uses the
+shared model effort picker, and remains disabled until preferences are loaded.
+OpenCode plugin banners, source-file provider editors and separate quota
+credential forms are excluded; Canonical provider credentials remain selected.
+
 Voice playback renders its voice-picker row only when the selected provider
 can render a picker: local voice options exist, OpenAI speech is available,
 system speech has voices, or Browser has voices with a language. The label and
@@ -239,6 +245,28 @@ accepted, because OpenCode resolves a relative path beside its config file
 while discovery runs elsewhere, so the same path would read two different
 files. The server keeps a certificate the form never read
 (`packages/web/server/lib/opencode/DOCUMENTATION.md`, `providers.js`).
+
+"Model defaults from" sets the provider's `canonical`: OpenCode then gives each
+model whose ID that catalog provider also lists its limits, capabilities, costs
+and reasoning levels, under whatever the model row sets itself. The choices are
+every provider in the running OpenCode's integration list, connected or not,
+without MCP sign-ins, web search and well-known logins, which are keyed by their
+origin URL rather than a provider ID (`listCanonicalProviders`), passed in by the
+Providers page, which has already read that list. OpenCode copies the source
+provider's settings, headers and body into this one, so the server refuses a
+source whose config entry sets any of them: a gateway's TLS certificate or
+headers would otherwise go to this provider's endpoint. OpenCode copies from its own
+provider registry, and the models.dev feed OpenChamber fetches is older and
+misses providers OpenCode has, so that feed is not the source. The list has
+a few hundred entries, so `CanonicalProviderPicker` is searchable and mounts rows
+in steps as its end scrolls into view, with a sheet on the phone; None leads the
+unfiltered list. A saved value the list lacks stays as an option, and a list that
+fails to load shows a note and keeps the saved value. None sends null to clear
+it; a stored entry the page could not read sends nothing, so the server keeps it.
+OpenCode cannot unset `canonical` from a higher config layer, so None only removes
+the edited layer's value: when a lower layer sets one (`inheritedCanonical` from
+the source route, carried on the edit form's initial state), the field says which
+provider still applies and in which file, ahead of the note about a list that failed.
 
 Model rows render collapsed (name, id, limits, non-text inputs) so a provider
 with dozens of models stays scannable; a row added by hand opens, and a row
@@ -964,6 +992,7 @@ the browser, and a second meaning there confuses both.
 - Message-search status reads continue beyond an initially settled answer after a switch because the debounced save can start indexing later.
 - Voice keys stay on the server. Dictation cleanup starts off because it sends text to the small-model provider, and without that model the server retains the transcription. Voice pickers share install state and list installed models plus the default; dictation displays the server's choice when no saved model is available.
 - Usage panels show only their provider's error, so Console budgets survive a failed Go usage read. Balance-only windows omit percentage bars and used captions because they report no usage share.
+- Settings names the Go credential next to its meters and the Console workspace next to its budgets. The two reads can use different accounts when the Go reader falls back to a key.
 - About separates app, connected-server and OpenCode updates. A latest-version toast waits for every relevant check; failed checks keep prior status, and authoritative running versions replace temporary installed-but-not-running state.
 - About offers upgrade commands only for package-manager installations. Update notes cover the offered release range; a stable release offered to Canary has only that release's notes.
 

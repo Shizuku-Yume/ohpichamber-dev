@@ -112,6 +112,7 @@ export const SessionMetadataStateSchema = z.strictObject({
 });
 export type SessionMetadataState = z.infer<typeof SessionMetadataStateSchema>;
 export const SessionMetadataPatchSchema = z.strictObject({
+  expectedRevision: CounterSchema.optional(),
   changes: z.strictObject({
     folder: z.string().nullable().optional(), isPinned: z.boolean().nullable().optional(),
     color: z.string().nullable().optional(), icon: z.string().nullable().optional(), notes: z.string().nullable().optional(),

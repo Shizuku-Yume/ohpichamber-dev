@@ -48,6 +48,9 @@ export async function buildServer(outputDirectory = path.join(webRoot, 'build'))
   };
   await copyAssets('server');
   await copyAssets('bin');
+  await fs.mkdir(path.join(outputDirectory, 'scripts'), { recursive: true });
+  await fs.copyFile(path.join(webRoot, 'scripts/standalone-loader.mjs'), path.join(outputDirectory, 'scripts/standalone-loader.mjs'));
+  runtimeModules.add('scripts/standalone-loader.mjs');
   const verified = await assertServerRuntimeClosure(outputDirectory, runtimeModules);
   await fs.chmod(path.join(outputDirectory, 'bin', 'cli.js'), 0o755);
   console.log(`Server runtime closure verified: ${verified} files`);

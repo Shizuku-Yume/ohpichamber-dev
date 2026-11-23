@@ -25,7 +25,7 @@ const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 
 type ReasoningVariant = 'thinking' | 'justification';
 
-const SUMMARY_MAX_CHARS = 80;
+const SUMMARY_MAX_CHARS = 400;
 const SUMMARY_SOURCE_CHARS = 4000;
 const EXPANDED_CONTENT_UNMOUNT_DELAY_MS = 200;
 const EXPANDED_CONTENT_TRANSITION = { duration: 0.2, ease: 'easeOut' as const };
@@ -486,7 +486,7 @@ const ReasoningPart = React.memo(({
 
     // While genuinely streaming, keep the block mounted even before any text
     // arrives, so the busy header appears immediately.
-    if (part.type !== 'reasoning' || (!isStreaming && (!throttledText || throttledText.trim().length === 0))) {
+    if (part.type !== 'reasoning' || (!isStreaming && isInvisibleText(throttledText))) {
         return null;
     }
 

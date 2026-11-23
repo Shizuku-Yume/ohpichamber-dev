@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message, Part } from '@openchamber/agent-contract';
-import { getLiveFinalMessage, getTurnsWithLaterAssistant, hasLiveActivity } from './liveActivity';
+import { getLiveFinalMessage, getTurnsWithLaterAssistant, hasLiveActivity, getShownPages } from './liveActivity';
 import { projectTurnRecords } from './projectTurnRecords';
 import { summarizeLiveActivity } from './liveActivitySummary';
 import type { ChatMessageEntry } from './types';
@@ -75,4 +75,14 @@ describe('live activity projection', () => {
     const summary = summarizeLiveActivity([assistant('assistant-1', [{ type: 'tool_result', partId: 'result-1', toolCallId: 'tool-1', toolName: 'bash', isError: false, output: { content: [{ type: 'text', text: 'done' }], details: { exitCode: 0 } } }])]);
     expect(summary.commands).toBe(1);
   });
+});
+
+
+test('Notes keeps ordinary intermediate Canonical text without duplicating the final answer', () => {
+  const intermediate = assistant('notes', [text('Checking the cache')]);
+  const final = assistant('answer', [text('Done')]);
+  expect(getShownPages([intermediate, final], final)).toEqual([]);
+  expect(getShownPages([intermediate, final], final, true)).toEqual(intermediate.parts);
+  expect(getShownPages([], undefined, true)).toEqual([]);
+  expect(getShownPages([assistant('blank', [text('  ')])], undefined, true)).toEqual([]);
 });

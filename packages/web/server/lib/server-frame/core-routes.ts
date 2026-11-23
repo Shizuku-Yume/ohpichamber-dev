@@ -1,4 +1,5 @@
 import { getBearerTokenFromRequest } from "../ui-auth/ui-auth.js";
+import { isRouteGatedApiRequest } from './api-auth-gate.js';
 import { candidateUrlType, isLocalOnlyCandidateSet, isLoopbackCandidateUrl, normalizeCandidateUrl } from "../client-auth/pairing-candidates.js";
 import { isBoolean, isString } from "../shared/object-guards.js";
 import { hasLegacyOpenCodeData } from '../host/legacy-data.js';
@@ -965,6 +966,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   });
 
   app.use("/api", async (req, res, next) => {
+    if (isRouteGatedApiRequest(req)) return next();
     try {
       await requireApiAuth(req, res, next);
     } catch (err) {

@@ -27,6 +27,11 @@ const jsonResponse = (body) => ({
   json: async () => body,
 });
 
+const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+const hangingFetch = () => vi.fn((_url, init) => new Promise((_resolve, reject) => {
+  init.signal.addEventListener('abort', () => reject(init.signal.reason));
+}));
+
 const errorResponse = (status, headers = {}) => ({
   ok: false,
   status,
@@ -168,5 +173,24 @@ describe('Claude quota provider', () => {
     expect(result.ok).toBe(false);
     expect(result.usage).toBeNull();
     expect(result.error).toBe('Request failed');
+  });
+  it('gives up on a usage request Anthropic never answers, and the next refresh asks again', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => realTimeout(5));
+    const fetchMock = hangingFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const result = await fetchQuota();
+
+      expect(timeout).toHaveBeenCalledWith(15_000);
+      expect(result.ok).toBe(false);
+      expect(result.configured).toBe(true);
+      expect(result.error).toBe('Request timed out');
+
+      await fetchQuota();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

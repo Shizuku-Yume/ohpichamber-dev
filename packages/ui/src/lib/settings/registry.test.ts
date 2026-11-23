@@ -25,6 +25,7 @@ import {
   parseSettingsDocument,
   readAutoSaveSnapshot,
 } from './registry';
+import { STT_PROMPT_MAX_LENGTH, readTranscriptionPrompt, setTranscriptionPrompt } from '@/stores/useTranscriptionPromptStore';
 
 describe('settings registry', () => {
   test('terminal reading is a parsed Host-writable preference, not a local-only flag', () => {
@@ -136,7 +137,7 @@ describe('settings registry', () => {
     }
   });
 
-  test('round-trips all large text paste modes through settings and local persistence', async () => {
+  test('round-trips all large text paste and office document modes through settings and local persistence', async () => {
     const options = useUIStore.persist.getOptions();
     const original = useUIStore.getState();
     let saved: Parameters<NonNullable<typeof options.storage>['setItem']>[1] = { state: original, version: options.version };
@@ -157,6 +158,21 @@ describe('settings registry', () => {
         useUIStore.persist.setOptions({ storage: { getItem: () => saved, setItem: (_name, value) => { saved = value; }, removeItem: () => undefined } });
       }
       expect(parseSettingsDocument({ largeTextPasteBehavior: 'invalid' })).toEqual({});
+      for (const mode of ['ask', 'save', 'convert']) {
+        const parsed = parseSettingsDocument(JSON.parse(JSON.stringify({ documentAttachBehavior: mode })));
+        expect(parsed).toEqual({ documentAttachBehavior: mode });
+        if (!parsed) throw new Error('Expected valid mode');
+        applySettingsToStores(parsed);
+        expect(useUIStore.getState().documentAttachBehavior).toBe(mode);
+        expect(readAutoSaveSnapshot().documentAttachBehavior).toBe(mode);
+        const persisted = saved;
+        useUIStore.persist.setOptions({ storage: { getItem: () => persisted, setItem: () => undefined, removeItem: () => undefined } });
+        useUIStore.getState().setDocumentAttachBehavior('ask');
+        await useUIStore.persist.rehydrate();
+        expect(useUIStore.getState().documentAttachBehavior).toBe(mode);
+        useUIStore.persist.setOptions({ storage: { getItem: () => saved, setItem: (_name, value) => { saved = value; }, removeItem: () => undefined } });
+      }
+      expect(parseSettingsDocument({ documentAttachBehavior: 'attach' })).toEqual({});
     } finally {
       useUIStore.persist.setOptions(options);
       useUIStore.setState(original, true);
@@ -689,5 +705,23 @@ describe('settings registry effects', () => {
       }
     }
     expect(mismatches).toEqual([]);
+  });
+});
+
+describe('transcription prompt setting', () => {
+  test('is a profile setting that keeps multiline Unicode text as typed and treats a missing key as unset', () => {
+    expect(SETTINGS_REGISTRY.sttPrompt.scope).toBe('profile');
+    const typed = 'Español e inglés.\nTérminos: 東京, OpenChamber\n';
+    expect(parseSettingsDocument({ sttPrompt: typed })).toEqual({ sttPrompt: typed });
+    expect(parseSettingsDocument({ sttPrompt: 'x'.repeat(STT_PROMPT_MAX_LENGTH + 1) })).toEqual({});
+    expect(parseSettingsDocument({ sttLanguage: 'es' })).toEqual({ sttLanguage: 'es' });
+  });
+
+  test('applies a synced prompt to the store the dictation reads', () => {
+    applySettingsToStores({ sttPrompt: 'Español e inglés.\n' });
+    expect(readTranscriptionPrompt()).toBe('Español e inglés.\n');
+    applySettingsToStores({});
+    expect(readTranscriptionPrompt()).toBe('Español e inglés.\n');
+    setTranscriptionPrompt('');
   });
 });

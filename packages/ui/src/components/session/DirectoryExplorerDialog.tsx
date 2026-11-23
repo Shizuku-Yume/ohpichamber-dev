@@ -1,3 +1,4 @@
+import { useHighlightAlignment } from './useHighlightAlignment';
 import { trimTrailingSeparators } from './directoryExplorerStart';
 import { isFilesystemRoot } from '@/lib/pathNormalization';
 import React from 'react';
@@ -38,7 +39,7 @@ import { Input } from '@/components/ui/input';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { getDirectoryPickerLabelKey } from './directoryExplorerLabels';
-import { initialBrowseQuery } from './directoryExplorerStart';
+import { browseListMemory, initialBrowseQuery } from './directoryExplorerStart';
 import { formatShortcutForDisplay } from '@/lib/shortcuts';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
@@ -195,7 +196,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const rowRefs = React.useRef(new Map<string, HTMLElement>());
   const [dialogHomeDirectory, setDialogHomeDirectory] = React.useState('');
   const [query, setQuery] = React.useState('~/');
-  const [entries, setEntries] = React.useState<BrowseEntry[]>([]);
+  const [listing, setListing] = React.useState<{ directory: string; entries: BrowseEntry[] }>({ directory: '', entries: [] });
   const [isLoading, setIsLoading] = React.useState(false);
   const [isBrowseDirectoryMissing, setIsBrowseDirectoryMissing] = React.useState(false);
   const [browseErrorReason, setBrowseErrorReason] = React.useState<FilesystemErrorReason | null>(null);
@@ -222,7 +223,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   React.useEffect(() => {
     if (!open) return;
     setQuery('~/');
-    setEntries([]);
+    setListing({ directory: '', entries: [] });
     setHighlightedIndex(0);
     setIsConfirming(false);
     setIsOpeningFinder(false);
@@ -277,7 +278,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 
   React.useEffect(() => {
     if (!open || !browseDirectoryAbsolutePath) {
-      setEntries([]);
+      setListing({ directory: '', entries: [] });
       setBrowseErrorReason(null);
       return;
     }
@@ -298,11 +299,11 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             path: normalizeSeparators(entry.path),
           }))
           .sort((left, right) => left.name.localeCompare(right.name));
-        setEntries(nextEntries);
+        setListing({ directory: browseDirectoryAbsolutePath, entries: nextEntries });
       })
       .catch((error) => {
         if (!cancelled) {
-          setEntries([]);
+          setListing({ directory: browseDirectoryAbsolutePath, entries: [] });
           const reason = isFilesystemError(error) ? error.reason : 'unknown';
           setBrowseErrorReason(reason);
           setIsBrowseDirectoryMissing(reason === 'not-found');
@@ -320,10 +321,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const filteredEntries = React.useMemo(() => {
     const lowerFilter = browseFilterQuery.toLowerCase();
     const includeHidden = showHidden || browseFilterQuery.startsWith('.');
-    return entries.filter((entry) => (
+    return listing.entries.filter((entry) => (
       entry.name.toLowerCase().startsWith(lowerFilter) && (includeHidden || !entry.name.startsWith('.'))
     ));
-  }, [browseFilterQuery, entries, showHidden]);
+  }, [browseFilterQuery, listing.entries, showHidden]);
 
   const rows = React.useMemo<BrowseRow[]>(() => {
     const nextRows: BrowseRow[] = [];
@@ -501,11 +502,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     focusPathInput(inputRef.current);
   }, [open]);
 
-  React.useLayoutEffect(() => {
-    const row = rows[highlightedIndex];
-    if (!row) return;
-    rowRefs.current.get(row.value)?.scrollIntoView({ block: 'nearest' });
-  }, [highlightedIndex, rows]);
+  useHighlightAlignment(highlightedIndex, rows, rowRefs);
 
   const handleClose = React.useCallback(() => {
     cloneController.current?.abort();
@@ -818,9 +815,11 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     </div>
   );
 
+  const browseMemory = browseListMemory({ runtimeKey, openCodeView: false, browseDirectory: browseDirectoryAbsolutePath,
+    filter: browseFilterQuery, showHidden, listedDirectory: listing.directory, loading: isLoading, failed: Boolean(browseErrorReason) });
   const resultsSection = (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-[var(--surface-elevated)] shadow-sm">
-      <ScrollableOverlay outerClassName="max-h-[min(28rem,58vh)]" className="p-2">
+      <ScrollableOverlay memoryKey={browseMemory.key} memoryReady={browseMemory.ready} outerClassName="max-h-[min(28rem,58vh)]" className="p-2">
         <div className="px-2 pb-1 pt-0.5 typography-meta font-medium uppercase tracking-wide text-muted-foreground/80">
           {t('directoryExplorerDialog.browse.directories')}
         </div>

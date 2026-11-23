@@ -45,6 +45,7 @@ import { useSessionRowMenus } from './useSessionRowMenus';
 import { useSessionRowPlace } from './useSessionRowPlace';
 import { useSessionRowRename } from './useSessionRowRename';
 import { useSessionRowWork } from './useSessionRowWork';
+import { useLiveSessionNode } from './useLiveSessionNode';
 
 export type { SessionNodeItemProps } from './sessionNodeItemProps';
 
@@ -52,7 +53,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   streamPerfCount('ui.sidebar_session_node.render');
   const { t } = useI18n();
   const {
-    node,
+    node: structuralNode,
     depth = 0,
     ownsWork,
     groupDirectory,
@@ -93,6 +94,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   } = props;
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const rowTooltip = useScrollDismissedTooltip();
+  const node = useLiveSessionNode(structuralNode);
   const session = node.session;
   const { isOneLineTimelineRow, isTwoLineRow, isTimelineRow, isZoneRow } = resolveSessionRowLines(renderContext, detailed);
   const hidePinnedMarker = rowKey !== undefined && isPinnedZoneRowKey(rowKey);
@@ -254,7 +256,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     ? <SessionLeadToggle expanded={isExpanded} alwaysShowActions={alwaysShowActions} onToggle={toggleSubsessions} />
     : null;
   const leadIconClassName = alwaysShowActions ? 'opacity-0' : 'group-hover:opacity-0 group-has-[:focus-visible]:opacity-0';
-  const treeSlot = isTwoLineRow ? null : treeChevron ?? <span aria-hidden className="h-3.5 w-3.5 flex-shrink-0" />;
+  const treeSlot = isTwoLineRow
+    ? null
+    : treeChevron ?? <span aria-hidden className="h-3.5 w-3.5 flex-shrink-0" />;
 
   const streamingIndicator = isZombie
     ? <Icon name="error-warning" className="h-4 w-4 text-status-warning" />
@@ -312,7 +316,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       prBadge={timelinePrBadge}
       zombieIndicator={isTimelineRow ? streamingIndicator : null}
       goal={goalMark}
-      marks={guestMarks.length > 0 ? <GuestRowMarks marks={guestMarks} onOpen={openGuestMark} /> : null}
+      marks={guestMarks.length > 0 ? <>
+        {guestMarks.length > 0 ? <GuestRowMarks marks={guestMarks} onOpen={openGuestMark} /> : null}
+      </> : null}
       badges={rowBadges}
       doneHint={showDoneHint ? <DoneHintMark /> : null}
       metaPaddingClass={isTimelineRow && alwaysShowActions

@@ -28,6 +28,16 @@ const mockUsage = (rateLimit) => {
   }));
 };
 
+const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+
+// Settles only when the request's deadline fires, the way a stalled connection does.
+const untilDeadline = (signal) => new Promise((_resolve, reject) => {
+  signal.addEventListener('abort', () => reject(signal.reason));
+});
+
+// Headers arrive, then the body never does.
+const stalledBody = (status, signal) => ({ ok: status === 200, status, json: () => untilDeadline(signal) });
+
 describe('Codex quota windows', () => {
   it.each([
     { balance: 62500, unlimited: false, expected: '62500' },
@@ -170,6 +180,26 @@ describe('Codex usage through the Codex CLI sign-in', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('OpenAI shows usage for Sign in with ChatGPT only at chatgpt.com/settings/usage. The legacy Codex sign-ins show it here.');
+  });
+
+  it.each([
+    ['before headers', (signal) => untilDeadline(signal)],
+    ['after headers', (signal) => Promise.resolve(stalledBody(200, signal))],
+  ])('reports a CLI request that stalls %s as a timeout', async (_when, stall) => {
+    signInCli();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => realTimeout(5));
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => init.headers.Authorization === 'Bearer test-token'
+      ? Response.json(REFUSED, { status: 401 })
+      : stall(init.signal)));
+
+    try {
+      const result = await fetchQuota();
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('Request timed out');
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   it('keeps the usage-page message without a CLI sign-in', async () => {

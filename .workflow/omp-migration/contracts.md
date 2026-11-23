@@ -53,6 +53,12 @@ All agent endpoints reside under the canonical prefix `/api/agent/v1`.
 
 Clients reach this API through the Host Gateway (Node.js/Electron), which authenticates and authorizes the session/workspace before dispatch. The Host handles metadata and queue routes locally, including their durable writes and HTTP responses; it never forwards those operations to the Agent Service. Session list/detail responses are Host-composed runtime records plus separately revisioned Host metadata. Health/readiness/capabilities are Host-composed. Prompt commands pass through the Host delivery owner before internal dispatch. Only remaining Agent-owned operations are proxied over private loopback using internal credentials; the Agent Service is never externally exposed. Both response paths use the same canonical JSON/Problem Details contract.
 
+Canonical metadata merge patches accept an optional decimal-string
+`expectedRevision`. The Host checks it atomically with the write and rejects a
+stale revision with `409 METADATA_CONFLICT`, without mutation or publication.
+Read/modify/write clients re-read and recompute their changes after a conflict;
+omitting the precondition preserves unconditional merge-patch semantics.
+
 ### Endpoints
 
 | Method | Path | Summary | Auth | Idempotent | Mode |

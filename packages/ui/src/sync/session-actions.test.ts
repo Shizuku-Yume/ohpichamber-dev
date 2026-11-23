@@ -932,7 +932,7 @@ describe("native metadata publication", () => {
       delete next.notes
       return { ...next, openchamber: { ...next.openchamber, work: { state: "done" } } }
     })
-    expect(write).toHaveBeenCalledWith("session-a", { changes: { notes: null, openchamber: { work: { state: "done" } } } })
+    expect(write).toHaveBeenCalledWith("session-a", { expectedRevision: "1", changes: { notes: null, openchamber: { work: { state: "done" } } } })
     expect(store.getState().session[0].title).toBe("Before")
   })
 
@@ -940,7 +940,49 @@ describe("native metadata publication", () => {
     seed()
     const write = spyOn(canonicalClient, "patchSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "2", metadata: { openchamber: { work: { state: "open" } } } })
     await setSessionWorkState("session-a", directory, "open")
-    expect(write).toHaveBeenCalledWith("session-a", { changes: { openchamber: { work: { state: "open", openedAt: expect.any(Number), openedBy: "user" } } } })
+    expect(write).toHaveBeenCalledWith("session-a", { expectedRevision: "0", changes: { openchamber: { work: { state: "open", openedAt: expect.any(Number), openedBy: "user" } } } })
+  })
+
+  test("metadata conflicts re-read the Host and preserve a concurrent edit", async () => {
+    seed()
+    spyOn(canonicalClient, "getSessionMetadata")
+      .mockResolvedValueOnce({ sessionId: "session-a", revision: "1", metadata: { notes: "before" } })
+      .mockResolvedValueOnce({ sessionId: "session-a", revision: "2", metadata: { notes: "before", folder: "concurrent" } })
+    const conflict = new CanonicalApiError({ type: "urn:ohpichamber:problem:METADATA_CONFLICT", title: "Conflict", status: 409, detail: "Metadata changed", code: "METADATA_CONFLICT", retryable: true })
+    const write = spyOn(canonicalClient, "patchSessionMetadata")
+      .mockRejectedValueOnce(conflict)
+      .mockResolvedValueOnce({ sessionId: "session-a", revision: "3", metadata: { notes: "after", folder: "concurrent" } })
+    const result = await patchSessionMetadata("session-a", directory, metadata => ({ ...metadata, notes: "after" }))
+    expect(write.mock.calls.map(([, patch]) => patch)).toEqual([
+      { expectedRevision: "1", changes: { notes: "after" } },
+      { expectedRevision: "2", changes: { notes: "after" } },
+    ])
+    expect(result.metadata).toEqual({ notes: "after", folder: "concurrent" })
+  })
+
+  test("metadata retries stop after repeated conflicts and never retry a failed read", async () => {
+    seed()
+    const read = spyOn(canonicalClient, "getSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "0", metadata: null })
+    const conflict = new CanonicalApiError({ type: "urn:ohpichamber:problem:METADATA_CONFLICT", title: "Conflict", status: 409, detail: "Metadata changed", code: "METADATA_CONFLICT", retryable: true })
+    const write = spyOn(canonicalClient, "patchSessionMetadata").mockRejectedValue(conflict)
+    await expect(patchSessionMetadata("session-a", directory, () => ({ notes: "after" }))).rejects.toEqual(conflict)
+    expect(write).toHaveBeenCalledTimes(3)
+    write.mockClear()
+    read.mockRejectedValue(new Error("Host unavailable"))
+    await expect(patchSessionMetadata("session-a", directory, () => ({}))).rejects.toThrow("Host unavailable")
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  test("metadata conflict retries cannot cross a runtime switch", async () => {
+    seed()
+    const read = spyOn(canonicalClient, "getSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "0", metadata: null })
+    const write = spyOn(canonicalClient, "patchSessionMetadata").mockImplementation(async () => {
+      changeRuntime()
+      throw new CanonicalApiError({ type: "urn:ohpichamber:problem:METADATA_CONFLICT", title: "Conflict", status: 409, detail: "Metadata changed", code: "METADATA_CONFLICT", retryable: true })
+    })
+    await expect(patchSessionMetadata("session-a", directory, () => ({}))).rejects.toThrow("runtime changed")
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(write).toHaveBeenCalledTimes(1)
   })
 
   test("a stale metadata read never writes to the replacement runtime", async () => {

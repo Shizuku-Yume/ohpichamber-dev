@@ -51,7 +51,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const UPSTREAM = 'cf18602cc77146f35e26e103dbee1ab8e218b663';
+export const UPSTREAM = '30c70496a5ca0105e04e60a783964576973edc8f';
 export const DELTAS_FILE = '.workflow/upstream-deltas.tsv';
 export const LANES_FILE = '.workflow/research/ux-v270-omp-alignment/merge-lanes.tsv';
 export const SLICES_FILE = '.workflow/research/ux-v270-omp-alignment/repair-slices.tsv';

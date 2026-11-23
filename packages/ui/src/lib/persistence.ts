@@ -653,8 +653,7 @@ async function _flushSettingsUpdate({ keepalive = false }: { keepalive?: boolean
       const runtimeSettings = getRuntimeSettingsAPI();
       if (runtimeSettings) {
         try {
-          const payload = await runtimeSettings.save(changes);
-          const updated = sanitizeWebSettings(payload);
+          const updated = sanitizeWebSettings(await runtimeSettings.save(changes, { keepalive }));
           if (!isSettingsRuntimeContextCurrent(context)) return;
           if (updated) {
             settings = updated;

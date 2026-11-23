@@ -88,14 +88,14 @@ holds every navigation, and the guard marks where the page's part of it starts.
 
 What the shells do with a push (sealed text, clearing handled notifications, see the server's `packages/web/server/lib/notifications/DOCUMENTATION.md`) can be checked locally, within limits:
 
-- **iOS Simulator.** `xcrun simctl push <udid> com.openchamber.app payload.json` delivers visible pushes, but it refuses a background push ("no user visible content") and does not run the notification service extension. Call the background handler through lldb instead: `[(id)[[UIApplication sharedApplication] delegate] application:... didReceiveRemoteNotification:@{...} fetchCompletionHandler:^(unsigned long r){}]`, and read `getDeliveredNotificationsWithCompletionHandler:` the same way. A simulator build has no `aps-environment`, so the push plugin's own calls fail; the notification permission prompt comes from `PushNotifications.requestPermissions()` evaluated in the WebView. The extension's path needs a device.
+- **iOS Simulator.** `xcrun simctl push <udid> dev.ohpichamber.app payload.json` delivers visible pushes, but it refuses a background push ("no user visible content") and does not run the notification service extension. Call the background handler through lldb instead: `[(id)[[UIApplication sharedApplication] delegate] application:... didReceiveRemoteNotification:@{...} fetchCompletionHandler:^(unsigned long r){}]`, and read `getDeliveredNotificationsWithCompletionHandler:` the same way. A simulator build has no `aps-environment`, so the push plugin's own calls fail; the notification permission prompt comes from `PushNotifications.requestPermissions()` evaluated in the WebView. The extension's path needs a device.
 - **Android emulator.** `am startservice` cannot hand a message to the messaging service: Firebase takes messages from its own queue, which only Google Play services fills. A temporary `Instrumentation` class (declared in the manifest, run with `am instrument -w`) can build a `RemoteMessage` from a `Bundle` and call `onMessageReceived` on the service in the app's process. `notify` and `cancel` reach the system asynchronously, so wait before reading `getActiveNotifications()`. A debug build cannot replace an installed release build; use a separate AVD.
 
 # Android home-screen widgets
 
 ## Ownership
 
-`WidgetRenderer` and the two `AppWidgetProvider`s under `android/app/src/main/java/com/openchamber/app/` draw the Sessions and Usage widgets with `RemoteViews`. They read only snapshots in app-private preferences. `packages/ui/src/apps/useNativeWidgetSync.ts` writes those snapshots through the `WidgetBridge` plugin. Sessions come from `buildMobileWidgetSnapshot` (`mobileWidgetSnapshot.ts`, the snapshot the iOS widgets read too); usage comes from `createWidgetUsageSnapshot` over the quota store.
+`WidgetRenderer` and the two `AppWidgetProvider`s under `android/app/src/main/java/dev/ohpichamber/app/` draw the Sessions and Usage widgets with `RemoteViews`. They read only snapshots in app-private preferences. `packages/ui/src/apps/useNativeWidgetSync.ts` writes those snapshots through the `WidgetBridge` plugin. Sessions come from `buildMobileWidgetSnapshot` (`mobileWidgetSnapshot.ts`, the snapshot the iOS widgets read too); usage comes from `createWidgetUsageSnapshot` over the quota store.
 
 ## Invariants
 

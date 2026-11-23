@@ -13,6 +13,8 @@ export const providerId = "codex";
 export const providerName = "Codex";
 
 const CHATGPT_MESSAGE = "OpenAI shows usage for Sign in with ChatGPT only at chatgpt.com/settings/usage. The legacy Codex sign-ins show it here.";
+const REQUEST_TIMEOUT_MS = 15_000;
+const isTimeout = (error) => error instanceof DOMException && error.name === 'TimeoutError';
 
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential) || readCodexCliLogin());
 
@@ -73,9 +75,9 @@ const usageFromCodexCli = async (fetchImpl) => {
       "Content-Type": "application/json",
       ...(login.accountId ? { "ChatGPT-Account-Id": login.accountId } : {})
     };
-    const response = await fetchImpl("https://chatgpt.com/backend-api/wham/usage", { method: "GET", headers });
+    const response = await fetchImpl("https://chatgpt.com/backend-api/wham/usage", { method: "GET", headers, redirect: 'error', signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     if (!response?.ok) return null;
-    const payload = await response.json().catch(() => null);
+    const payload = await response.json().catch((error) => { if (isTimeout(error)) throw error; return null; });
     if (!payload?.rate_limit) return null;
     const windows = parseWindows(payload);
     const accountLabel = asNonEmptyString(payload?.email) ?? signInEmailOf(login.accessToken);
@@ -87,7 +89,8 @@ const usageFromCodexCli = async (fetchImpl) => {
       usage: { windows },
       accountLabel: accountLabel ?? undefined,
     });
-  } catch {
+  } catch (error) {
+    if (isTimeout(error)) throw error;
     return null;
   }
 };
@@ -116,7 +119,9 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
     };
     const response = await fetchImpl("https://chatgpt.com/backend-api/wham/usage", {
       method: "GET",
-      headers
+      headers,
+      redirect: 'error',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
     if (response.status === 401) {
@@ -157,7 +162,7 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
       providerName,
       ok: false,
       configured: true,
-      error: "Request failed"
+      error: isTimeout(error) ? 'Request timed out' : "Request failed"
     });
   }
 };

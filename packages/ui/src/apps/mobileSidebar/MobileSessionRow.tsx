@@ -52,6 +52,8 @@ type SessionRowModel = Extract<SessionSidebarRow, { kind: 'session' }>;
 
 const collectDescendantIds = (node: SessionNode): string[] => node.children.flatMap((child) => [child.session.sessionId, ...collectDescendantIds(child)]);
 
+
+
 export const MobileSessionRow: React.FC<{
   row: SessionRowModel;
   geometry: MobileTreeGeometry;
@@ -143,7 +145,7 @@ export const MobileSessionRow: React.FC<{
     selectMobileSession(session, row.projectId, actions.close);
   };
   const stopRename = () => useMobileSidebarRowsStore.getState().stopRename();
-  const guestActions = guestSessionActions(useGuestActions());
+  const guestActions = guestSessionActions(useGuestActions([directory, projectRoot]));
   const loadRecords = useSessionMessageRecordsForExport();
   const runGuestAction = (entry: GuestActionEntry) => {
     void runGuestSessionAction({

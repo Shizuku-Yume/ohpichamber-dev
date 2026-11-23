@@ -1047,7 +1047,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                         </div>
                     ) : null}
 
-                    {writeContent ? (
+                    {writeContent && !hasVisualDiffEntry ? (
                         <div className="my-1">
                             {renderScrollableBlock(
                                 <WritePreview content={writeContent} filePath={writePath} />,

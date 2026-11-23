@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSelectedTurnDiff } from '@/hooks/useSelectedTurnDiff';
 import type { DiffViewProps, DiffScope, FileEntry } from './diffView/types';
 import { ChangeRequestReviewContext } from '@/components/review/useChangeRequestReview';
 import { ReviewFlowDialog } from '@/components/session/ReviewFlowDialog';
@@ -70,13 +71,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const rootDirectory = targetDirectory ?? panelDirectory;
     const runtimeKey = useGitStore((state) => state.runtimeKey);
     const {
-        gitDirectory: nestedGitDirectory, rootIsGitRepo, repositoryOptions, repositoriesKnown,
+        gitDirectory: nestedGitDirectory, rootIsGitRepo, nestedRepos, repositoryOptions, repositoriesKnown,
         unreadable,
     } = useNestedGitDirectory(rootDirectory ?? null, { enabled: visible, recheckOnOpen: true });
     const effectiveDirectory = nestedGitDirectory ?? rootDirectory;
     const isGitRepo = useIsGitRepo(effectiveDirectory ?? null);
     const binding = useRepositoryBinding(effectiveDirectory, sourceControl, isGitRepo === true);
-    const openContextSurface = useUIStore((state) => state.openContextSurface);
     const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const requestWalkthroughTarget = useWalkthroughStore((state) => state.requestTarget);
     const { screenWidth, isMobile } = useDeviceInfo();
@@ -122,6 +122,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const openContextFileAtLine = useUIStore((state) => state.openContextFileAtLine);
     const panelSessionId = useSessionUIStore((state) => state.currentSessionId);
     const currentSessionId = foreign ? null : panelSessionId;
+    const { turnId, reset: resetSelectedTurn } = useSelectedTurnDiff({
+        visible, isTurnScope: activeDiffScope === 'turn', currentSessionId, request: pendingTurnDiffFile,
+    });
     const diffWrapLines = diffWrapLinesStore;
     const forcedStaged = activeDiffScope === 'staged' ? true : activeDiffScope === 'working' ? false : null;
     const activeDiffStaged = forcedStaged ?? displayFileStaged;
@@ -175,7 +178,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         branchFilesError, fetchComparisonDiffEntry, loadFullComparisonDiff, comparisonDiffData, branchFileCount,
         changedFiles, changedFilePathsKey } = useDiffViewComparisons({ visible,
         activeDiffScope, status, effectiveDirectory, binding, setActiveDiffScope, onDiffScopeChange, fetchBranches, git,
-        isGitRepo, diffScope, expandedFiles, t,
+        isGitRepo, diffScope, turnId, expandedFiles, t,
     });
     const {
         registerSectionRef, handleStackedEntryExpandedChange, handleExpandOrCollapseAll, getLayoutForFile,
@@ -192,10 +195,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
     useDiffViewTurnNavigation({
         visible, activeDiffScope, setActiveDiffScope, setDisplayFile, setDisplayFileStaged,
         shouldPinAfterAlignRef, pendingScrollTargetRef, expandStackedFile, setScrollRequestNonce,
-        pendingTurnDiffFile, diffScope, currentSessionId, setPendingTurnDiffFile, turnDiffSettled, rootDirectory,
+        pendingTurnDiffFile, diffScope, panelSessionId: currentSessionId, setPendingTurnDiffFile, turnDiffSettled, rootDirectory,
         lastTurnDiffs, onDiffScopeChange,
-        effectiveDirectory, repositoriesKnown, rootIsGitRepo, repositoryOptions, selectNestedRepo, fetchStatus, git,
-        changedFiles,
+        effectiveDirectory, repositoriesKnown, rootIsGitRepo, nestedRepos, repositoryOptions, selectNestedRepo, fetchStatus, git,
+        changedFiles, files,
     });
     React.useEffect(() => {
         if (!displayFile) {
@@ -457,7 +460,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             ? { source: selectedPr, context: pullRequestContext }
             : localSource);
         if (foreign && panelDirectory) openContextPanelTab(panelDirectory, { mode: 'walkthrough', targetDirectory: rootDirectory });
-        else openContextSurface(rootDirectory ?? directory, 'walkthrough');
+        else openContextPanelTab(rootDirectory ?? directory, { mode: 'walkthrough', targetDirectory: null });
     };
     return (
         <ChangeRequestReviewContext.Provider value={changeRequestReview}>
@@ -491,6 +494,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         activeDiffScope !== 'all' ? (
                             <ChangeScopeSelector
                                 scope={activeDiffScope}
+                                historicalTurn={turnId ? { count: turnFileCount } : null}
                                 workingCount={workingFileCount}
                                 stagedCount={stagedFileCount}
                                 turnCount={turnFileCount}
@@ -501,6 +505,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                 showBranchOption={showBranchOption}
                                 changeRequestTerm={prChangeRequestTerm}
                                 onScopeChange={(scope) => {
+                                    resetSelectedTurn();
+                                    setPendingTurnDiffFile(null);
                                     setActiveDiffScope(scope);
                                     onDiffScopeChange?.(scope);
                                 }}

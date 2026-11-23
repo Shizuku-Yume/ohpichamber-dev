@@ -1,5 +1,6 @@
 import { registerNotificationEmitRoutes } from '../notifications/emit-route.js';
 import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
+import { createApiAuthGate } from './api-auth-gate.js';
 
 export const createBootstrapRuntime = (dependencies) => {
   const {
@@ -45,7 +46,7 @@ export const createBootstrapRuntime = (dependencies) => {
       ensureGlobalWatcherStarted,
       getOrCreateVapidKeys,
       getUiSessionTokenFromRequest,
-      writeSettingsToDisk,
+      updateSettingsFromDisk,
       addOrUpdatePushSubscription,
       removePushSubscription,
       addOrUpdateApnsToken,
@@ -125,7 +126,7 @@ export const createBootstrapRuntime = (dependencies) => {
       normalizeTunnelSessionTtlMs,
     });
 
-    notificationEmitRoutes.registerApiRoute();
+    notificationEmitRoutes.registerApiRoute(createApiAuthGate({ tunnelAuthController, uiAuthController }));
 
     registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTtsSelection });
 
@@ -135,8 +136,7 @@ export const createBootstrapRuntime = (dependencies) => {
       ensureGlobalWatcherStarted,
       getOrCreateVapidKeys,
       getUiSessionTokenFromRequest,
-      readSettingsFromDiskMigrated,
-      writeSettingsToDisk,
+      updateSettingsFromDisk,
       addOrUpdatePushSubscription,
       removePushSubscription,
       addOrUpdateApnsToken,

@@ -2,7 +2,7 @@
 
 ## Ownership
 
-Electron owns native windows, privileged IPC, desktop host credentials, browser-panel sessions, SSH and tunnel lifecycle, the in-process server's startup and shutdown, and the OpenCode server the app ships ([opencode-server/DOCUMENTATION.md](opencode-server/DOCUMENTATION.md)), which the in-process server starts. Shared UI and runtime selection belong to `packages/ui`; the server and relay tunnel client belong to `packages/web`. Build and release constraints live in [scripts/DOCUMENTATION.md](scripts/DOCUMENTATION.md). Commands and platform setup live in [README.md](README.md).
+Electron owns native windows, privileged IPC, desktop host credentials, browser-panel sessions, SSH and tunnel lifecycle, the in-process Host Gateway's startup and shutdown, and the staged Bun Agent Service it supervises. Shared UI and runtime selection belong to `packages/ui`; the server and relay tunnel client belong to `packages/web`. Build and release constraints live in [scripts/DOCUMENTATION.md](scripts/DOCUMENTATION.md). Commands and platform setup live in [README.md](README.md).
 
 ## Invariants
 
@@ -27,7 +27,7 @@ Electron owns native windows, privileged IPC, desktop host credentials, browser-
 - Settings writes use atomic replacement and main-process read-modify-write operations are serialized across awaits. A rejected mutator leaves the queue usable. Only newly created settings directories receive tightened permissions; existing administrator permissions and ACLs survive.
 - Theme intent takes precedence over the last resolved variant. System mode continues following the OS. Desktop-scoped preferences override base preferences, which override legacy settings. Stored splash colours are validated again when read because they enter a trusted page's CSS, including values persisted before validation existed.
 - Splash defaults match the web loading page and the native frame uses the opening theme's background, so startup does not flash a different appearance. Persisted nested splash colours retain the legacy flat-key fallback.
-- The backend's working directory represents a workspace. Using Electron userData makes managed OpenCode appear to have an empty, separate workspace.
+- The backend's working directory represents a workspace. Using Electron userData would select an unrelated, empty Agent Service workspace.
 - Compile-cache failure cannot prevent startup. Cache pruning is confined to the known userData cache root and proceeds only when Node's active directory is its direct child. The cache environment never leaks into user tools. Cache flushing runs off the startup path because it writes synchronously.
 
 ### Windows and navigation
@@ -75,6 +75,7 @@ Electron owns native windows, privileged IPC, desktop host credentials, browser-
 - Panel driver scripts and annotation bindings run in isolated worlds, including cross-origin frames. Only the top overlay's own world holds the microphone binding, so page scripts cannot call it. Annotation cancellation can precede session creation; cleanup from the previous session can still be running when the next starts.
 - Dialog handling stays available while Page.enable is pending because a dialog can block that command's response. Actions return when they open a dialog, and agent tabs answer dialogs immediately with the action's chosen response to avoid blocking the whole app window. Recorded dialog history is bounded because a page can loop on alerts.
 - Pointer input uses the debugger session that owns the target frame and coordinates relative to that session. Sending cross-origin input to the top page makes hidden-panel hit testing depend on app layout. HTML-draggable elements use scripted drag events because native HTML drag starts a system session the guest cannot intercept.
+- Browser press maps Shift with US digit and punctuation keys to the shifted character. The unmodified text remains the base character, and Control, Meta, and Alt chords insert no text.
 - Focus emulation keeps agent pages' controls and clipboard usable without taking the user's keyboard focus. It is reapplied before focusing actions because navigation replaces page state. Colour-scheme emulation is per page; changing `nativeTheme.themeSource` would change the app too. A white base canvas prevents transparent pages from showing the app behind them or capturing black.
 - Only shell-staged upload files enter a page. Each file has its own folder and a single-segment filename so duplicate names survive and paths cannot escape staging. Files remain for a day because a form can read them later; age-based cleanup preserves files another app instance still uses.
 - Favicons are fetched with the page's own session and returned as bounded data URLs. This preserves login cookies and avoids third-party requests from the app origin. Space views receive no shell-fetched favicon because that request could reach the user's resources on the space's behalf.
@@ -84,7 +85,7 @@ Electron owns native windows, privileged IPC, desktop host credentials, browser-
 ### Shutdown, updates, and SSH
 
 - Every exit path flushes renderer caches, session cookies, and Chromium storage before `app.exit()`, which skips unload handlers. Signals use the same backend teardown as confirmed quit so managed children are not orphaned.
-- The in-process server gets its bounded stop before the detached OpenCode killer is considered. It owns terminals and other services too; external OpenCode remains externally owned. Update installation bounds all cleanup, including SSH, while preserving the backend's own grace period.
+- The in-process Host Gateway gets its bounded stop and supervises the separate Bun Agent Service. It owns terminals and other services too. Update installation bounds all cleanup, including SSH, while preserving the backend's own grace period.
 - One pending update installation owns exit until handoff or failure. Duplicate restart clicks join it. Quit/install flags are set only after backend shutdown succeeds, so closing a window cannot bypass unfinished installation. The IPC result remains pending until quit or an installer error; failure after shutdown relaunches the current version because the embedded server cannot restart in place.
 - The installer error grace period starts after cleanup. Linux package installation detaches the updater error listener because an unrelated check failure during an administrator prompt must not relaunch beneath the running install. Ordinary relaunch defers until its IPC reply can flush; the dev launcher owns dev relaunches and keeps HMR alive.
 - Checks preserve downloaded state for the same version and preserve pending state on feed failure. Only authoritative no-update clears it. The pending record is assigned before fetching notes because download completion can arrive during that await. Cached download completion is authoritative even without an event; an older download never marks a newer record ready.
@@ -102,6 +103,13 @@ Electron owns native windows, privileged IPC, desktop host credentials, browser-
 - Unpackaged Dock branch badges take precedence over unread counts so worktree copies remain distinguishable. The window's development tape ignores pointer input and is reapplied on document readiness because inserted CSS lasts only until reload.
 
 ## Decisions
+
+### When macOS updates use Squirrel's direct-Contents mode
+
+Squirrel.Mac asks for an administrator when the app bundle or its parent folder is not writable. Its `SquirrelMacEnableDirectContentsWrite` user default needs only the bundle: ShipIt renames `<App>.app/Contents` instead of the whole bundle ([pinned implementation for Electron 45](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLUpdater.m#L413-L419), [installer](https://github.com/Squirrel/Squirrel.Mac/blob/fffea30e4a339a7f7d69a3391314b72548d209bd/Squirrel/SQRLInstaller.m#L590-L615)).
+
+- The packaged app sets it to `true` at startup only while the key is unset, the bundle and its `Contents` are writable with plain permissions (no ACL entry, file flag or sticky bit that could still refuse the `Contents` rename), and the parent folder is not: the one case where the mode removes a prompt. A fresh install, an install in a writable folder and a root-owned copy keep Squirrel's usual path; a root-owned copy still prompts until its permissions are repaired.
+- A stored boolean is never overwritten. `false` is the user's opt-out (`defaults write <bundle id> SquirrelMacEnableDirectContentsWrite -bool false`). Electron reads a missing key and a stored empty string alike, so a non-boolean empty string counts as unset; Squirrel documents only booleans for this key. An enabled value is kept when the install or its permissions change later, because ShipIt reads the same key when it resumes or rolls back an interrupted install; with an unwritable bundle Squirrel still takes the privileged path, and with a writable parent the Contents rename works as well as the whole-bundle move.
 
 ### Why manual proxy rules and not a PAC script
 

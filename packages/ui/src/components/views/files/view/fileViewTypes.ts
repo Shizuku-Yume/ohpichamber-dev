@@ -17,14 +17,12 @@ export type SelectedLineRange = {
 };
 
 export interface FilesViewProps {
+  mode?: 'full' | 'editor-only';
   fileTabCloseGuard?: React.RefObject<FileTabCloseGuard | null>;
   fileTabSelectionGuard?: React.RefObject<FileTabSelectionGuard | null>;
   visible?: boolean;
-  mode?: 'full' | 'editor-only';
   onCloseFile?: (path: string) => void;
 }
 
 export type TextViewMode = 'view' | 'edit';
 export type PreviewViewMode = 'preview' | 'edit';
-
-export type FilesViewOptions = Required<Pick<FilesViewProps, 'mode' | 'visible'>> & Pick<FilesViewProps, 'onCloseFile'>;

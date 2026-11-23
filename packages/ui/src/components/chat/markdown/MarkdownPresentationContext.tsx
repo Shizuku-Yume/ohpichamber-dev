@@ -28,6 +28,7 @@ export interface MarkdownPresentation {
   disableLinkSafety?: boolean;
   /** Names the document whose tables keep the column widths the user sets; absent, columns have no grips. */
   tableWidthScope?: string;
+  chatTableExpansion: boolean;
   theme: Theme;
   mermaidControls: MermaidControls;
   onShowPopup?: (content: ToolPopupContent) => void;

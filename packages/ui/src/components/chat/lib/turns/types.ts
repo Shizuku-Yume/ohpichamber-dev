@@ -113,6 +113,7 @@ export type Turn = Pick<TurnRecord, 'turnId' | 'userMessage' | 'assistantMessage
 export interface TurnGroupingContext {
     turnId: string;
     activityOwnerMessageId?: string;
+    snapshotTurnId?: string;
     isFirstAssistantInTurn: boolean;
     isLastAssistantInTurn: boolean;
     hasEarlierAssistantText?: boolean;

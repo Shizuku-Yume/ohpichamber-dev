@@ -14,6 +14,7 @@ const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
 const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
 const MAX_COOLDOWN_MS = 60 * 60 * 1000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 let cachedUsage: { fingerprint: string; usage: ProviderUsage; planLabel: string | null } | null = null;
 let cooldownUntil = 0;
@@ -78,9 +79,11 @@ const fetchQuotaUncoalesced = async ({ credential: selectedCredential } = {}) =>
       headers: {
         Authorization: `Bearer ${credential.accessToken}`,
         'anthropic-beta': OAUTH_BETA_HEADER
-      }
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') return failure('Request timed out');
     return failure('Request failed');
   }
 
@@ -105,7 +108,8 @@ const fetchQuotaUncoalesced = async ({ credential: selectedCredential } = {}) =>
   let payload: unknown;
   try {
     payload = await response.json();
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') return failure('Request timed out');
     return failure('Unexpected response from Anthropic');
   }
 

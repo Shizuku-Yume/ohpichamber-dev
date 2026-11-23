@@ -1,5 +1,6 @@
 
 import { z } from 'zod';
+import type { UpdateSettingsFromDisk } from '../settings/settings-write-queue.js';
 
 const SLOTS = Object.freeze({
   signing: { field: 'signingKey', legacySettingsKey: 'relaySigningKey' } as const,
@@ -29,7 +30,7 @@ type RelayLegacyKeyFields = Pick<RelayLegacySettings, typeof SLOTS[RelayKeySlot]
 export interface RelaySettingsAccess<MigratedSettings = RelayLegacySettings> {
   readSettingsFromDiskMigrated: () => Promise<MigratedSettings>;
   readSettingsStrict: () => Promise<RelayLegacyKeyFields>;
-  writeSettingsToDisk: (settings: RelayLegacySettings) => Promise<void>;
+  updateSettingsFromDisk: UpdateSettingsFromDisk;
 }
 
 const isJwkPair = (value: unknown): value is z.infer<typeof jwkPairSchema> => jwkPairSchema.safeParse(value).success;
@@ -46,9 +47,8 @@ export const createRelayKeyStore = <MigratedSettings>({
   fsPromises,
   path,
   dataDir,
-  readSettingsFromDiskMigrated,
   readSettingsStrict,
-  writeSettingsToDisk,
+  updateSettingsFromDisk,
   logger = console,
 }: RelayKeyStoreDependencies<MigratedSettings>) => {
   const filePath = path.join(dataDir, 'relay-identity.json');
@@ -94,16 +94,21 @@ export const createRelayKeyStore = <MigratedSettings>({
     }
   };
 
+  const removeLegacySettings = (keys: string[]) => updateSettingsFromDisk(async (current) => {
+    const raw = await readSettingsStrict();
+    if (!keys.some((key) => Object.hasOwn(raw, key))) return current;
+    const next: typeof current = { ...current, ...raw };
+    for (const key of keys) delete next[key];
+    return next;
+  });
+
   const scrubLegacySettings = async (store: WritableIdentity) => {
     try {
-      const raw = await readSettingsStrict();
       const stale = Object.values(SLOTS)
-        .filter(({ field, legacySettingsKey }) => isJwkPair(store[field]) && Object.hasOwn(raw, legacySettingsKey))
+        .filter(({ field }) => isJwkPair(store[field]))
         .map(({ legacySettingsKey }) => legacySettingsKey);
       if (stale.length === 0) return;
-      const next = { ...(await readSettingsFromDiskMigrated()), ...raw };
-      for (const key of stale) delete next[key];
-      await writeSettingsToDisk(next);
+      await removeLegacySettings(stale);
     } catch (error) {
       logger.warn('[relay-identity] Could not remove the moved relay keys from settings.json:', error);
     }
@@ -131,13 +136,7 @@ export const createRelayKeyStore = <MigratedSettings>({
   const reset = () => serialized(async () => {
     const { [SLOTS.signing.field]: _signing, [SLOTS.encryption.field]: _encryption, ...rest } = await readStore();
     await writeStore(rest);
-    const raw = await readSettingsStrict();
-    const legacyKeys = Object.values(SLOTS).map(({ legacySettingsKey }) => legacySettingsKey).filter((key) => Object.hasOwn(raw, key));
-    if (legacyKeys.length > 0) {
-      const next = { ...(await readSettingsFromDiskMigrated()), ...raw };
-      for (const key of legacyKeys) delete next[key];
-      await writeSettingsToDisk(next);
-    }
+    await removeLegacySettings(Object.values(SLOTS).map(({ legacySettingsKey }) => legacySettingsKey));
     generation += 1;
   });
 

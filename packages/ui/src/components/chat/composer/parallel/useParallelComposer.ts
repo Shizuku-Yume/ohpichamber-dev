@@ -1,5 +1,6 @@
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
-import { canonicalClient } from '@/api/canonicalClient';
+import { prepareParallelAttachments } from './prepareParallelAttachments';
+import { captureRuntimeInstance } from '@/lib/runtime-switch';
 import React from 'react';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
@@ -180,17 +181,25 @@ export function useParallelComposer(input: {
     if (projectId !== projects.activeProjectId) projects.setActiveProjectIdOnly(projectId);
 
     const title = runTitleFrom(variants[0].text) || t('chat.parallel.defaultTitle');
-    const attachments = attachmentsCitedIn(variants.map((variant) => variant.text).join('\n'), useInputStore.getState().attachedFiles);
-    const attachmentWorkspaceId = attachments.length > 0
-      ? (await canonicalClient.resolveWorkspace(project.path)).workspaceId
+    const isLaunchRuntime = captureRuntimeInstance();
+    const draftKey = useInputStore.getState().attachmentDraftKey;
+    const prompts = variants.map((variant) => variant.text).join('\n');
+    const cited = attachmentsCitedIn(prompts, useInputStore.getState().attachedFiles);
+    const isCurrent = () => isLaunchRuntime() && useInputStore.getState().attachmentDraftKey === draftKey;
+    const goal = useSessionGoalArmStore.getState().armed
+      ? { tokenBudget: useUIStore.getState().sessionGoalDefaultBudgetEnabled ? useUIStore.getState().sessionGoalDefaultBudget : null }
       : undefined;
-    const uploadedAttachments = attachmentWorkspaceId
-      ? await Promise.all(attachments.map((file) => canonicalClient.uploadAttachment(
-        attachmentWorkspaceId,
-        { name: file.filename, mediaType: file.mimeType, size: file.size },
-        file.dataUrl,
-      )))
-      : [];
+    setIsLaunching(true);
+    try {
+    const unsaved = await useInputStore.getState().saveAttachmentsHeldForSend(null, project.path, new Set(cited.map((file) => file.id)));
+    if (!isCurrent()) return;
+    if (unsaved.length > 0) {
+      toast.error(t('chat.chatInput.toast.imageCopySaveFailed', { files: unsaved.join(', ') }));
+      return;
+    }
+    const attachments = attachmentsCitedIn(prompts, useInputStore.getState().attachedFiles);
+    const { files: uploadedAttachments, workspaceId: attachmentWorkspaceId } = await prepareParallelAttachments(attachments, project.path, isCurrent);
+    if (!isCurrent()) return;
     const params: CreateMultiRunParams = {
       name: title,
       title,
@@ -211,14 +220,11 @@ export function useParallelComposer(input: {
       autoFusion: current.fuse
         ? { providerId: current.fuse.providerId, modelId: current.fuse.modelId, variant: current.fuse.variant }
         : undefined,
-      goal: useSessionGoalArmStore.getState().armed
-        ? { tokenBudget: useUIStore.getState().sessionGoalDefaultBudgetEnabled ? useUIStore.getState().sessionGoalDefaultBudget : null }
-        : undefined,
+      goal,
     };
 
-    setIsLaunching(true);
-    try {
       const result = await useMultiRunStore.getState().createMultiRun(params);
+      if (!isCurrent()) return;
       if (!result) {
         toast.error(useMultiRunStore.getState().error ?? t('chat.parallel.toast.failed'));
         return;
@@ -229,6 +235,8 @@ export function useParallelComposer(input: {
       setState(null);
       if (params.goal) useSessionGoalArmStore.getState().setArmed(false);
       useUIStore.getState().setRunOverviewKey(result.groupKey);
+    } catch (error) {
+      if (isCurrent()) toast.error(error instanceof Error ? error.message : t('chat.parallel.toast.failed'));
     } finally {
       setIsLaunching(false);
     }

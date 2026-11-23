@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import * as sessionActions from '@/sync/session-actions';
 import { deliverQuestionAnswer, type QuestionAnswerPayload } from './questionRequest';
 import { problemMessage } from '@/lib/problemMessage';
+import { captureRuntimeInstance } from '@/lib/runtime-switch';
 
 /**
  * Submits one native question or plan review reply and cancels the request.
@@ -26,7 +27,7 @@ export function useQuestionResponse(form: QuestionRequest) {
         respondingRef.current = false;
         setIsResponding(false);
         setHasResponded(false);
-    }, [form.questionId]);
+    }, [form.questionId, form.sessionId]);
 
     const recoverPending = React.useCallback(() => {
         void sessionActions.refetchSessionMessages(form.sessionId).catch(() => {
@@ -36,8 +37,9 @@ export function useQuestionResponse(form: QuestionRequest) {
 
     const update = React.useCallback((payload: QuestionAnswerPayload) => {
         if (respondingRef.current || hasResponded) return;
-        updatesRef.current = updatesRef.current.catch(() => {}).then(() => sessionActions.updateForm(form.sessionId, form.questionId, payload));
-        void updatesRef.current.catch(recoverPending);
+        const isCurrentRuntime = captureRuntimeInstance();
+        updatesRef.current = updatesRef.current.catch(() => {}).then(() => isCurrentRuntime() ? sessionActions.updateForm(form.sessionId, form.questionId, payload) : undefined);
+        void updatesRef.current.catch(() => { if (isCurrentRuntime()) recoverPending(); });
     }, [form.questionId, form.sessionId, hasResponded, recoverPending]);
 
     const answer = React.useCallback(async (payload: QuestionAnswerPayload): Promise<boolean> => {
@@ -46,15 +48,17 @@ export function useQuestionResponse(form: QuestionRequest) {
         if (respondingRef.current || hasResponded) return false;
         respondingRef.current = true;
         setIsResponding(true);
+        const isCurrentRuntime = captureRuntimeInstance();
         try {
             await updatesRef.current.catch(() => {});
+            if (!isCurrentRuntime()) return false;
             const accepted = await deliverQuestionAnswer({
                 reply: (next) => sessionActions.replyToForm(form.sessionId, form.questionId, next),
-                recover: recoverPending,
-                failed: (error) => toast.error(problemMessage(error, t('chat.questionCard.submitFailed')), { description: t('chat.formCard.tryAgain') }),
+                recover: () => { if (isCurrentRuntime()) recoverPending(); },
+                failed: (error) => { if (isCurrentRuntime()) toast.error(problemMessage(error, t('chat.questionCard.submitFailed')), { description: t('chat.formCard.tryAgain') }); },
             }, payload);
-            if (accepted) setHasResponded(true);
-            return accepted;
+            if (accepted && isCurrentRuntime()) setHasResponded(true);
+            return accepted && isCurrentRuntime();
         } finally {
             respondingRef.current = false;
             setIsResponding(false);
@@ -65,14 +69,19 @@ export function useQuestionResponse(form: QuestionRequest) {
         if (respondingRef.current || hasResponded) return false;
         respondingRef.current = true;
         setIsResponding(true);
+        const isCurrentRuntime = captureRuntimeInstance();
         try {
             await updatesRef.current.catch(() => {});
+            if (!isCurrentRuntime()) return false;
             await sessionActions.cancelForm(form.sessionId, form.questionId);
+            if (!isCurrentRuntime()) return false;
             setHasResponded(true);
             return true;
         } catch (error) {
-            toast.error(problemMessage(error, t('chat.questionCard.dismissFailed')), { description: t('chat.formCard.tryAgain') });
-            recoverPending();
+            if (isCurrentRuntime()) {
+                toast.error(problemMessage(error, t('chat.questionCard.dismissFailed')), { description: t('chat.formCard.tryAgain') });
+                recoverPending();
+            }
             return false;
         } finally {
             respondingRef.current = false;

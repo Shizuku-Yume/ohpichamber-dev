@@ -169,6 +169,7 @@ describe('DefaultsSettings', () => {
 
     const defaultModelRow = host.querySelector('[data-settings-item="sessions.default-model"]');
     expect(defaultModelRow).not.toBeNull();
+    expect(host.querySelector('[data-settings-item="sessions.chats-default-model"]')).not.toBeNull();
 
     const defaultModeRow = host.querySelector('[data-settings-item="sessions.default-mode"]');
     expect(defaultModeRow).not.toBeNull();

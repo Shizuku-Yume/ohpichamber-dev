@@ -16,6 +16,10 @@ import { useScopedBlockingForms, useSessions } from '@/sync/sync-context';
 import { useRequestReveal } from '@/sync/request-reveal';
 import { useChatSessionSelection } from './chatColumnSession';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { FormDockModeContext, formWaitingBlockId } from './formsInChat';
+import { dropFormDraft, formDraftScope, loadFormDraft, saveFormDraft } from './formDrafts';
+import { revealWaitingPage } from '@/sync/request-reveal';
 import { AskCountdown } from './AskCountdown';
 import { FormFieldControl } from './FormFieldControl';
 import { PlanReviewCard } from './PlanReviewCard';
@@ -35,6 +39,7 @@ import {
     serializeAskQuestionsMarkdown,
 } from './questionRequest';
 import { useQuestionResponse } from './useQuestionResponse';
+import { useFormDockFold } from './useFormDockFold';
 
 
 interface FormDockProps {
@@ -43,43 +48,61 @@ interface FormDockProps {
     hidden: boolean;
 }
 
+const questionKey = (form: QuestionRequest, directory: string | undefined, runtimeKey: string): string =>
+    JSON.stringify([runtimeKey, directory, form.sessionId, form.questionId]);
+
 const FormDockView: React.FC<FormDockProps> = ({ sessionId, directory, hidden }) => {
     const forms = useScopedBlockingForms(sessionId, directory);
     const form = forms[0];
-    // Keyed on the request id so a different request starts clean and the
-    // panels cross-fade instead of swapping content in place.
+    const mode = React.useContext(FormDockModeContext);
+    const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+    if (hidden || !form) return null;
+    if (mode === 'in-chat') return <FormDockPointer sessionId={sessionId} form={form} waitingForms={forms} />;
     return (
         <AnimatePresence>
-            {hidden || !form ? null : parsePlanReview(form.schema) ? (
-                <PlanReviewCard key={form.questionId} form={form} docked forms={forms} />
-            ) : <FormDockPanel key={form.questionId} form={form} forms={forms} />}
+            {parsePlanReview(form.schema)
+                ? <PlanReviewCard key={questionKey(form, directory, runtimeKey)} form={form} docked forms={forms} directory={directory} />
+                : <QuestionFormPanel key={questionKey(form, directory, runtimeKey)} form={form} forms={forms} directory={directory} />}
         </AnimatePresence>
     );
 };
 
-type FormDraft = { signature: string; answers: AskAnswerState[]; step: number };
-
-// Answers in progress outlive the panel: switching sessions unmounts it, and
-// coming back must find the request where it was left. Kept in memory only and
-// dropped once the request is answered or dismissed.
-const formDrafts = new Map<string, FormDraft>();
-const MAX_FORM_DRAFTS = 50;
-
-const saveFormDraft = (questionId: string, draft: FormDraft) => {
-    formDrafts.delete(questionId);
-    formDrafts.set(questionId, draft);
-    if (formDrafts.size > MAX_FORM_DRAFTS) {
-        const oldest = formDrafts.keys().next().value;
-        if (oldest !== undefined) formDrafts.delete(oldest);
-    }
+const FormDockPointer: React.FC<{ sessionId: string | null; form: QuestionRequest; waitingForms: QuestionRequest[] }> = ({ sessionId, form, waitingForms }) => {
+    const { t } = useI18n();
+    const revealCard = React.useCallback((target: QuestionRequest) => {
+        if (sessionId) revealWaitingPage(sessionId, formWaitingBlockId(target));
+    }, [sessionId]);
+    useRequestReveal(waitingForms.map((item) => item.questionId), React.useCallback((id: string) => {
+        const target = waitingForms.find((item) => item.questionId === id);
+        if (target) revealCard(target);
+    }, [revealCard, waitingForms]));
+    const title = t('chat.formCard.inputNeeded');
+    return <ComposerFloatingPanel role="region" ariaLabel={title} compact header={<>
+        <button type="button" onClick={() => revealCard(form)} aria-label={t('chat.formDock.showInChatAria')} className="flex min-w-0 flex-1 items-center gap-2 text-start text-muted-foreground transition-colors hover:text-foreground">
+            <Icon name="question" className="size-3.5 shrink-0 text-primary" />
+            <Icon name="arrow-up-s" className="size-4 shrink-0" />
+            <span className="typography-ui-label min-w-0 truncate text-foreground">{title}</span>
+        </button>
+        {waitingForms.length > 1 ? <span className="typography-micro shrink-0 text-muted-foreground">{t('chat.formDock.waiting', { count: String(waitingForms.length - 1) })}</span> : null}
+    </>} />;
 };
 
-const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] }> = ({ form, forms }) => {
+function QuestionFrame({ inline, header, children, ariaLabel, ...props }: React.ComponentProps<typeof ComposerFloatingPanel> & { inline: boolean }) {
+    return inline ? <div role="region" aria-label={ariaLabel} className="my-2 overflow-hidden rounded-xl border border-border/60 bg-[var(--surface-elevated)]">
+        <div className="flex items-center gap-2 border-b border-border/60 px-3 py-1.5">{header}</div>
+        {children}
+    </div> : <ComposerFloatingPanel {...props} header={header} ariaLabel={ariaLabel}>{children}</ComposerFloatingPanel>;
+}
+
+export const QuestionFormPanel: React.FC<{ form: QuestionRequest; forms: readonly QuestionRequest[]; directory?: string; inline?: boolean }> = ({ form, forms, directory: requestDirectory, inline = false }) => {
     const { t } = useI18n();
     const isMobile = useUIStore((state) => state.isMobile);
     // The sessions of the chat this dock belongs to, which may be a chat of
     // another project pinned in the side panel.
-    const { sessionId: currentSessionId, directory } = useChatSessionSelection();
+    const { sessionId: currentSessionId, directory: selectedDirectory } = useChatSessionSelection();
+    const directory = requestDirectory ?? selectedDirectory ?? undefined;
+    const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+    const scope = React.useMemo(() => formDraftScope({ sessionId: form.sessionId, questionId: form.questionId }, directory, runtimeKey), [directory, form.sessionId, form.questionId, runtimeKey]);
     const sessions = useSessions(directory ?? undefined);
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -87,12 +110,12 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
     const timeoutMs = React.useMemo(() => parseAskTimeout(form.schema), [form.schema]);
     const signature = React.useMemo(() => askSchemaSignature(form.schema), [form.schema]);
     const [restored] = React.useState(() => {
-        const draft = formDrafts.get(form.questionId);
-        return draft?.signature === signature ? draft : null;
+        const draft = loadFormDraft(scope);
+        return draft?.kind === 'question' && draft.fieldsSignature === signature ? draft : null;
     });
     const [answers, setAnswers] = React.useState<AskAnswerState[]>(() => restored?.answers ?? initialAskAnswers(questions));
     const [step, setStep] = React.useState(restored?.step ?? 0);
-    const [collapsed, setCollapsed] = React.useState(false);
+    const [collapsed, setCollapsed] = useFormDockFold(!inline);
     const [showErrors, setShowErrors] = React.useState(false);
     const { isResponding, hasResponded, answer, cancel, update } = useQuestionResponse(form);
     const waiting = forms.length - 1;
@@ -100,7 +123,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
     // "Open session" on a question's toast expands the dock, including for a
     // question queued behind the one shown.
     const formIds = React.useMemo(() => forms.map((item) => item.questionId), [forms]);
-    useRequestReveal(formIds, React.useCallback(() => setCollapsed(false), []));
+    useRequestReveal(formIds, React.useCallback(() => setCollapsed(false), [setCollapsed]));
 
     const appliedSignatureRef = React.useRef(signature);
     React.useEffect(() => {
@@ -113,8 +136,8 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
 
     React.useEffect(() => {
         if (appliedSignatureRef.current !== signature || hasResponded) return;
-        saveFormDraft(form.questionId, { signature, answers, step });
-    }, [answers, form.questionId, hasResponded, signature, step]);
+        saveFormDraft(scope, { kind: 'question', fieldsSignature: signature, answers, step });
+    }, [answers, scope, hasResponded, signature, step]);
 
     const isFromSubagent = React.useMemo(() => {
         if (!currentSessionId || form.sessionId === currentSessionId) return false;
@@ -148,12 +171,12 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
             if (firstMissing !== undefined) setStep(firstMissing);
             return;
         }
-        if (await answer(buildAskAnswer(questions, answers))) formDrafts.delete(form.questionId);
-    }, [answer, answers, canSubmit, form.questionId, missing, questions]);
+        if (await answer(buildAskAnswer(questions, answers))) dropFormDraft(scope);
+    }, [answer, answers, canSubmit, scope, missing, questions]);
 
     const handleDismiss = React.useCallback(async () => {
-        if (await cancel()) formDrafts.delete(form.questionId);
-    }, [cancel, form.questionId]);
+        if (await cancel()) dropFormDraft(scope);
+    }, [cancel, scope]);
 
     const goNext = React.useCallback(() => {
         setStep(Math.min(currentStep + 1, lastStep));
@@ -203,7 +226,8 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
     if (hasResponded || form.status !== 'pending') return null;
 
     return (
-        <ComposerFloatingPanel
+        <QuestionFrame
+            inline={inline}
             role="dialog"
             ariaLabel={title}
             compact={collapsed}
@@ -337,7 +361,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
                     </div>
                 </div>
             ) : null}
-        </ComposerFloatingPanel>
+        </QuestionFrame>
     );
 };
 

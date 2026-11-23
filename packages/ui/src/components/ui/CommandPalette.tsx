@@ -20,6 +20,7 @@ import { rankConversationMetadata } from '@/lib/search/conversationSearch';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { Button } from './button';
 import React from 'react';
+import { appearanceCommands } from './commandPaletteAppearance';
 import {
   Command,
   CommandEmpty,
@@ -59,7 +60,7 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import type { Session } from '@openchamber/agent-contract';
 import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
-import { formatShortcutForDisplay, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { SETTINGS_PAGE_METADATA, type SettingsRuntimeContext } from '@/lib/settings/metadata';
@@ -238,7 +239,7 @@ export const CommandPalette: React.FC = () => {
 
   const close = React.useCallback(() => setCommandPaletteOpen(false), [setCommandPaletteOpen]);
   const run = React.useCallback(
-    (fn: () => void | Promise<void>) => () => {
+    (fn: () => void | boolean | Promise<void>) => () => {
       close();
       void fn();
     },
@@ -325,17 +326,7 @@ export const CommandPalette: React.FC = () => {
           if (currentDirectory) openContextOverview(currentDirectory);
         }),
       },
-      {
-        id: 'cycle-theme',
-        secondary: true,
-        title: t('commandPalette.item.cycleTheme'),
-        icon: <Icon name="palette" className="me-2 h-4 w-4" />,
-        shortcutId: 'cycle_theme',
-        searchText: t('commandPalette.item.cycleTheme'),
-        onSelect: run(() => {
-          shortcutRegistry.invoke('cycle_theme');
-        }),
-      },
+      ...appearanceCommands(t, run),
       {
         id: 'open-status',
         secondary: true,

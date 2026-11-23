@@ -12,6 +12,7 @@ import {
   pinCurrentSession,
   reloadUi,
   showContextUsage,
+  toggleReasoningTraces,
   toggleWorkCurrentSession,
 } from '@/lib/paletteCommands';
 
@@ -23,6 +24,7 @@ export function usePaletteShortcuts(): void {
     show_context_usage: showContextUsage,
     open_overview: openOverview,
     reload_ui: reloadUi,
+    toggle_reasoning_traces: toggleReasoningTraces,
     open_archive: openArchive,
     open_notes: openNotes,
     open_todos: openTodos,

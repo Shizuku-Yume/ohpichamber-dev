@@ -86,7 +86,7 @@ for (const scenario of [
   const initialSessionUI = useSessionUIStore.getState();
   const initialUI = useUIStore.getState();
   useSessionUIStore.setState({ currentSessionId: scenario.sessionId, currentSessionDirectory: '/chats' });
-  useUIStore.setState({ pendingTurnDiffFile: scenario.intent ? { sessionId: scenario.sessionId, file: '/chats/file.txt' } : null });
+  useUIStore.setState({ pendingTurnDiffFile: scenario.intent ? { sessionId: scenario.sessionId, panelSessionId: scenario.sessionId, file: '/chats/file.txt' } : null });
   const scopeChanges: string[] = [];
   const container = document.createElement('div');
   document.body.append(container);

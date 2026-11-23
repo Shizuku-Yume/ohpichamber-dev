@@ -40,6 +40,8 @@ test('quota cards follow Host catalog invalidations and reconnects without losin
   const { createRoot } = await import('react-dom/client');
   const { useQuotaStore } = await import('@/stores/useQuotaStore');
   const { useQuotaProviderSync } = await import('./useQuotaProviderSync');
+  const refreshAfterCredentialChange = useQuotaStore.getState().refreshAfterCredentialChange;
+  const refresh = spyOn(useQuotaStore.getState(), 'refreshAfterCredentialChange').mockResolvedValue();
   const root = createRoot(document.body.appendChild(document.createElement('div')));
   function Probe() { useQuotaProviderSync(); return null; }
   const ids = () => useQuotaStore.getState().extensionProviders.map((provider) => provider.id);
@@ -62,12 +64,17 @@ test('quota cards follow Host catalog invalidations and reconnects without losin
     await act(async () => source.emit('openchamber:event-stream-ready'));
     expect(reads).toBe(3);
     expect(ids()).toEqual([]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => source.emit('openchamber:quota-credentials-changed'));
+    expect(refresh).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
     source.emit('openchamber:guests-changed');
     expect(reads).toBe(3);
   } finally {
     await act(async () => root.unmount());
     useQuotaStore.getState().resetForRuntimeSwitch();
+    refresh.mockRestore();
+    useQuotaStore.setState({ refreshAfterCredentialChange });
     fetch.mockRestore();
     warn.mockRestore();
     for (const [name, descriptor] of originals) {

@@ -2800,7 +2800,7 @@ const AssistantMessageBody = React.memo(({
                             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                                 <TurnChangedFilePills
                                     files={turnGroupingContext?.changedFiles}
-                                    isInteractive={turnGroupingContext?.isLatestTurn === true}
+                                    isInteractive={isMessageCompleted}
                                 />
                             </div>
                         ) : null}

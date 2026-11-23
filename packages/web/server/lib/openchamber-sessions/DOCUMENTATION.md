@@ -10,6 +10,11 @@ checkout creation, bootstrap and removal.
 
 ## Persistence
 
+- Canonical metadata patches may include `expectedRevision`. The Host compares
+  it inside the same SQLite transaction as the update and returns
+  `409 METADATA_CONFLICT` without changing or announcing stale writes. Omission
+  retains unconditional merge-patch behavior for non-read/modify/write callers.
+
 - `host/session-state.js` composes the stores with one explicit SQLite
   connection and lifecycle. Shutdown fences new admissions, drains accepted
   work, then closes the shared connection.

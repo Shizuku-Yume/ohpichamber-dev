@@ -24,6 +24,9 @@ export interface AttachedFile {
  /** Shared ID linking entries extracted from the same document (PPTX, DOCX, etc.).
   *  Removing any entry with this ID cascades to all entries in the group. */
  sourceDocumentId?: string;
+ saveOnSend?: boolean;
+ saveCopyOnSend?: boolean;
+ original?: { mimeType: string; dataUrl: string; saveOnSend?: boolean };
 }
 
 export type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';

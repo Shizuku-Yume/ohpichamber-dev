@@ -1,3 +1,4 @@
+import { guestNavigationEffects } from '@/lib/guests/navigation';
 import { formatModelRef } from '@openchamber/agent-contract';
 import { openGuestSurface } from '@/lib/guests/open-surface';
 import React from 'react';
@@ -53,14 +54,15 @@ import { guestMay, isGuestActive } from '@/lib/guests/capabilities';
 import { guestFileOperation } from '@/lib/guests/files';
 import { guestGenerate } from '@/lib/guests/generate';
 import { guestGenerateResults, lateGenerateResult, type GenerateOwner } from '@/lib/guests/generate-results';
-import { useConfigStore } from '@/stores/useConfigStore';
+import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { frameSessionFields, sameFrameSessionFields, selectFrameContextReading, sameFrameContextReading, frameContextLimit, frameContext } from '@/lib/guests/session-usage';
 import { openGuestCommit, readCurrentBranch } from '@/lib/guests/open-commit';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { registerGuestResolver, type GuestResolveOutcome } from '@/lib/guests/resolve';
 import type { GuestBackgroundAction } from '@/lib/guests/run-action';
 import { useGuestFrameUrl } from '@/lib/guests/useGuestFrameUrl';
-import { useGuestItemStore } from '@/lib/guests/item-store';
+import { usePanelItem } from './usePanelItem';
 import { isGuestFileMessage, type GuestFileChannel } from '@/lib/guests/file-editor-channel';
 import { isLegacyGuestSdkMessage } from '@/lib/guests/legacy-guest-sdk';
 import { fetchHostLinearIssueGet } from '@/lib/guests/host-linear-request';
@@ -96,7 +98,8 @@ import { DockedPanelSurfaceContext, usePageColors } from '@/hooks/usePageColors'
 import { useInputStore } from '@/sync/input-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
-import { useSessionSelector, useSessionStatus } from '@/sync/sync-context';
+import { useChildStoreManager, useSessionSelector, useSessionStatus, useSessionMessagesSelector } from '@/sync/sync-context';
+import { normalizePath } from '@/lib/pathNormalization';
 import type { Session } from '@openchamber/agent-contract';
 import { GuestPopover } from './GuestPopover';
 
@@ -104,6 +107,7 @@ type PluginPaneProps = {
   mode: PluginContextPanelMode;
   surface?: GuestHostSurface;
   item?: GuestItem | null;
+  panelOpen?: boolean;
   headless?: boolean;
   backgroundAction?: GuestBackgroundAction;
   onDismiss?: () => void;
@@ -150,25 +154,26 @@ const readCssVar = (name: string, fallback: string): string => {
 };
 
 export const PluginPane: React.FC<PluginPaneProps> = ({
- mode,
- surface = 'panel',
- item: itemProp,
- headless = false,
- backgroundAction,
- onDismiss,
- onAttach,
- onSessionStarted,
- block,
- onResize,
- onStatusControls,
- statusDirectory,
- fileEditor,
- pinnedDirectory,
- popover,
- popoverHost,
- isActive,
- onPopoverClosed,
- onPopoverActivity,
+  mode,
+  surface = 'panel',
+  item: itemProp,
+  panelOpen = true,
+  headless = false,
+  backgroundAction,
+  onDismiss,
+  onAttach,
+  onSessionStarted,
+  block,
+  onResize,
+  onStatusControls,
+  statusDirectory,
+  fileEditor,
+  pinnedDirectory,
+  popover,
+  popoverHost,
+  isActive,
+  onPopoverClosed,
+  onPopoverActivity,
 }) => {
  const { t, locale } = useI18n();
  const { currentTheme } = useThemeSystem();
@@ -182,6 +187,23 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  const actionItem = backgroundAction?.item ?? null;
  const actionTitle = actionItem && 'sessionTitle' in actionItem ? actionItem.sessionTitle : undefined;
  const currentSessionId = actionItem && 'sessionId' in actionItem ? actionItem.sessionId : selectedSessionId;
+ const childStores = useChildStoreManager();
+ const fieldsCache = React.useRef<ReturnType<typeof frameSessionFields> | null>(null);
+ const readFields = React.useCallback(() => {
+  const state = directory ? childStores.getChild(directory)?.getState() : undefined;
+  const snapshot = currentSessionId ? state?.snapshot[currentSessionId] : undefined;
+  const session = state?.session.find((entry) => entry.sessionId === currentSessionId) ?? snapshot?.session;
+  const next = frameSessionFields(session, snapshot);
+  if (!fieldsCache.current || !sameFrameSessionFields(fieldsCache.current, next)) fieldsCache.current = next;
+  return fieldsCache.current;
+ }, [childStores, currentSessionId, directory]);
+ const subscribeFields = React.useCallback((notify: () => void) => childStores.subscribeAllSelected(
+  (state) => state.path.directory === normalizePath(directory) ? state : undefined, notify,
+ ), [childStores, directory]);
+ const fields = React.useSyncExternalStore(subscribeFields, readFields, readFields);
+ const contextReading = useSessionMessagesSelector(currentSessionId ?? '', directory || undefined, selectFrameContextReading, sameFrameContextReading);
+ const contextLimit = useConfigStore((state) => frameContextLimit(contextReading, selectProvidersForDirectory(state, directory || undefined)));
+ const context = React.useMemo(() => frameContext(contextReading, contextLimit), [contextReading, contextLimit]);
  const sessionTitle = useSessionSelector(
   currentSessionId,
   directory || undefined,
@@ -225,16 +247,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   () => (trackerProvider ? trackerGuestConnection(trackerStatus) : oauthStatus?.connection ?? EMPTY_GUEST_CONNECTION),
   [oauthStatus?.connection, trackerProvider, trackerStatus],
  );
- // A chip click parks the item under this guest's id; take it (clearing the
- // slot) so a later mount of the same pane starts without a stale item.
- const pendingItem = useGuestItemStore((state) => state.pendingItemByGuest[guestId]);
- const takePendingItem = useGuestItemStore((state) => state.takePendingItem);
- const [railItem, setRailItem] = React.useState<GuestItem | null>(null);
- React.useEffect(() => {
-  if (surface !== 'panel' || headless || itemProp !== undefined || !pendingItem) return;
-  const taken = takePendingItem(guestId);
-  if (taken) setRailItem(taken);
- }, [guestId, headless, itemProp, pendingItem, surface, takePendingItem]);
+ const railItem = usePanelItem({ guestId, surface, headless, itemProp, panelOpen });
  const item = headless ? null : itemProp !== undefined ? itemProp : railItem;
  // The user opened this guest's panel: whatever it counted is seen.
  const clearBadge = useGuestBadgeStore((state) => state.clearBadge);
@@ -245,20 +258,12 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  const lifecyclePhase = sessionStatus === undefined ? null
   : sessionBusy ? 'started'
    : sessionStatus === 'idle' ? 'completed' : 'failure';
- const sessionSnapshot = React.useMemo(
-  () => toGuestSessionSnapshot(
-   currentSessionId
-    ? {
-     id: currentSessionId,
-     title: sessionTitle ?? actionTitle,
-     busy: sessionBusy,
-     model: sessionModel,
-     agent: sessionAgent,
-    }
-    : null,
-  ),
-  [actionTitle, currentSessionId, sessionAgent, sessionBusy, sessionModel, sessionTitle],
- );
+ const baseSessionSnapshot = React.useMemo(() => toGuestSessionSnapshot(currentSessionId ? {
+  id: currentSessionId, title: sessionTitle ?? actionTitle, busy: sessionBusy, model: fields.model ?? sessionModel, agent: sessionAgent,
+ } : null), [currentSessionId, sessionTitle, actionTitle, sessionBusy, fields.model, sessionModel, sessionAgent]);
+ const sessionSnapshot = React.useMemo(() => baseSessionSnapshot ? {
+  ...baseSessionSnapshot, ...(fields.tokens ? { tokens: fields.tokens } : {}), ...(context ? { context } : {}),
+ } : null, [baseSessionSnapshot, fields.tokens, context]);
 
  const pageColors = usePageColors();
  const readableColors = React.useMemo(() => getReadableThemeColors(currentTheme), [currentTheme]);
@@ -314,7 +319,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    },
    locale,
    directory: directory || null,
-   session: sessionSnapshot,
+   session: baseSessionSnapshot,
    surface: headless && guest?.backgroundEntry ? 'background' : surface,
    connection,
    settings: oauthStatus?.settings ?? {},
@@ -326,7 +331,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    payload.block = block.call;
   }
   return payload;
- }, [block, connection, currentTheme, pageColors, readableColors, directory, guest?.backgroundEntry, guest?.storageId, headless, item, locale, oauthStatus, onStatusControls, popover, popoverHost, sessionSnapshot, surface]);
+ }, [block, connection, currentTheme, pageColors, readableColors, directory, guest?.backgroundEntry, guest?.storageId, headless, item, locale, oauthStatus, onStatusControls, popover, popoverHost, baseSessionSnapshot, surface]);
 
   const fileEditorEntry = surface === 'file' && fileEditor
     ? guest?.fileEditors?.find((editor) => editor.id === fileEditor.editorId)?.entry ?? null
@@ -359,7 +364,9 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  const retryFrame = (frameUrl as { retry?: () => void }).retry ?? recoverExpiredNavigation;
 
  const readyRef = React.useRef(ready);
- readyRef.current = ready;
+ readyRef.current = { ...ready, session: sessionSnapshot };
+ const sentSessionRef = React.useRef(sessionSnapshot);
+ const pushedReadyRef = React.useRef<{ ready: HostReadyContext; directory: typeof directory } | null>(null);
  const directoryRef = React.useRef(directory);
  directoryRef.current = directory;
  const sessionIdRef = React.useRef(currentSessionId);
@@ -505,6 +512,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   postToGuest(buildReadyMessage(readyRef.current));
   postToGuest(buildDirectoryMessage(directoryRef.current || null));
   postToGuest(buildSessionMessage(readyRef.current.session));
+  sentSessionRef.current = readyRef.current.session;
   postToGuest(buildConnectionMessage(readyRef.current.connection));
   postToGuest(buildSettingsMessage(readyRef.current.settings));
   postToGuest(buildItemMessage(readyRef.current.item));
@@ -747,6 +755,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
      showGuestToast(request, guestIdRef.current);
     },
     openUrl: openExternalUrl,
+    openWalkthrough: guestNavigationEffects(() => directoryRef.current || null).openWalkthrough,
     openSurface: (surfaceMode) => openGuestSurface({
      mode: surfaceMode,
      directory: directoryRef.current || null,
@@ -1137,8 +1146,15 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  React.useEffect(() => () => stopOauthPoll(), [frameKey, stopOauthPoll]);
 
  React.useEffect(() => {
-  pushHostState();
- }, [pushHostState, ready, directory]);
+  const pushed = pushedReadyRef.current;
+  if (pushed?.ready !== ready || pushed.directory !== directory) {
+   pushedReadyRef.current = { ready, directory };
+   pushHostState();
+  } else if (sentSessionRef.current !== sessionSnapshot) {
+   sentSessionRef.current = sessionSnapshot;
+   postToGuest(buildSessionMessage(sessionSnapshot));
+  }
+ }, [pushHostState, postToGuest, ready, directory, sessionSnapshot]);
 
  React.useEffect(() => {
   // A Work Status section or a file editor is not a rail tab and may be the package's only frame.

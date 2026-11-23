@@ -1,5 +1,3 @@
-declare var __openchamberHmrState: import('./lib/opencode/hmr-state-runtime.js').HmrState | undefined;
-
 declare module 'compression' {
   type Request = import('./lib/shared/http-contracts.js').Request;
   type Response = import('./lib/shared/http-contracts.js').Response;

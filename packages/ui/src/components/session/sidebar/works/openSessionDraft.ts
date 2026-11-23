@@ -18,6 +18,8 @@ export async function openSessionDraft(draft: SessionDraft): Promise<boolean> {
   useSessionUIStore.getState().openNewSessionDraft({
     selectedProjectId: draft.projectId ?? undefined,
     directoryOverride: draft.directory,
+    workDraftId: draft.id,
+    targetFolderId: draft.targetFolderId,
   });
   if (hasUnsyncedSessionDraft(draft.id)) return true;
   const target = createChatDraftIdentity(getRuntimeKey(), draft.directory, null);

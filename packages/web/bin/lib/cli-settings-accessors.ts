@@ -2,6 +2,7 @@ import type { promises as FsPromises } from 'node:fs';
 import type Path from 'node:path';
 import type { JsonValue } from '../../server/lib/shared/json-values.js';
 import type { RelayLegacySettings } from '../../server/lib/relay/key-store.js';
+import { createSettingsWriteQueue } from '../../server/lib/settings/settings-write-queue.js';
 
 export interface SettingsAccessorsDependencies {
   fsPromises: Pick<typeof FsPromises, 'readFile' | 'mkdir' | 'rename' | 'copyFile' | 'rm' | 'writeFile' | 'chmod'>;
@@ -14,7 +15,7 @@ function hasSettingsErrorCode(value: unknown): value is { code?: unknown } {
   return Boolean(value) && typeof value === 'object';
 }
 
-function isSettingsObject(value: unknown): value is object {
+function isSettingsObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
@@ -88,7 +89,7 @@ export const createSettingsAccessors = ({ fsPromises, path, dataDir, settingsFil
     await fsPromises.rm(tmp, { force: true });
   };
 
-  const writeSettingsToDisk = async (settings: JsonValue | RelayLegacySettings) => {
+  const persistSettingsToDisk = async (settings: JsonValue | RelayLegacySettings) => {
     await fsPromises.mkdir(path.dirname(settingsPath), { recursive: true });
     const tmp = `${settingsPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await fsPromises.writeFile(tmp, JSON.stringify(settings, null, 2), { encoding: 'utf8', mode: 0o600 });
@@ -101,5 +102,7 @@ export const createSettingsAccessors = ({ fsPromises, path, dataDir, settingsFil
     }
   };
 
-  return { readSettingsFromDiskMigrated, readSettingsStrict, writeSettingsToDisk };
+  const { enqueue, updateSettingsFromDisk } = createSettingsWriteQueue(readSettingsStrict, persistSettingsToDisk);
+  const writeSettingsToDisk = (settings: JsonValue | RelayLegacySettings) => enqueue(() => persistSettingsToDisk(settings));
+  return { readSettingsFromDiskMigrated, readSettingsStrict, writeSettingsToDisk, updateSettingsFromDisk };
 };

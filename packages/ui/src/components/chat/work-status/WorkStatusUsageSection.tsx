@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { QuotaProviderLogo } from './QuotaProviderLogo';
 import { preloadProviderLogos } from '@/hooks/useProviderLogo';
 import { formatQuotaResetLabel, formatQuotaWindowValueLabel, isExtensionQuotaProviderId } from '@/lib/quota';
+import { compactQuotaValueLabel, formatQuotaResetShort } from '@/lib/quota/utils';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useUsageProviderGroups } from '@/components/usage/usageGroups';
@@ -157,11 +158,17 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
               ? row.window.remainingPercent
               : row.window.usedPercent;
             const metricLabel = formatQuotaWindowValueLabel(row.window, displayPercent, t);
-            const resetLabel = formatQuotaResetLabel(
-              row.window.resetAt,
-              row.window.resetAfterFormatted ?? row.window.resetAtFormatted,
-              timeFormatPreference,
-            );
+            const shownMetric = compactQuotaValueLabel(metricLabel);
+            const resetFallback = row.window.resetAfterFormatted ?? row.window.resetAtFormatted;
+            const { providerId } = group;
+            const { resetAt } = row.window;
+            const resetLabel = formatQuotaResetShort(resetAt, resetFallback, timeFormatPreference, { providerId });
+            const resetFull = formatQuotaResetLabel(resetAt, resetFallback, timeFormatPreference, providerId);
+            const rowLabel = row.subtitle ? `${row.subtitle} · ${row.label}` : row.label;
+            const tooltipLines = [
+              shownMetric !== metricLabel ? `${rowLabel}: ${metricLabel}` : null,
+              resetFull && resetFull !== resetLabel ? resetFull : null,
+            ].filter((line): line is string => line !== null);
             return (
               <WorkStatusRow
                 key={`${group.providerId}-${row.key}`}
@@ -178,9 +185,10 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
                 value={metricLabel === '-' ? undefined : (
                   <span className="inline-flex items-center gap-1">
                     <UsageGiftResetButton window={row.window} providerId={group.providerId} />
-                    <WorkStatusValue tone={windowTone(row.window)}>{metricLabel}</WorkStatusValue>
+                    <WorkStatusValue tone={windowTone(row.window)}>{shownMetric}</WorkStatusValue>
                   </span>
                 )}
+                tooltip={tooltipLines.length > 0 ? tooltipLines.join('\n') : undefined}
               />
             );
           })}

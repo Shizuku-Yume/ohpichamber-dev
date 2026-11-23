@@ -115,6 +115,66 @@ describe('ChatSettings', () => {
     expect(fourth.getAttribute('aria-checked')).toBe('true');
   });
 
+  test('search reaches the office document radios and each choice persists', async () => {
+    const result = buildSettingsSearchResults({ query: 'docx', runtimeCtx, t: (key) => key, getPageTitle: (page) => page })
+      .find((item) => item.id === 'chat.document-attach');
+    expect(result?.page).toBe('chat');
+    const tab = chatSettingsTabForSearchTarget(result!.id);
+    expect(tab).toBe('composer');
+    useChatSettingsTabStore.setState({ tab: tab! });
+    useUIStore.getState().setDocumentAttachBehavior('ask');
+    try {
+      await act(async () => root.render(<I18nProvider><ChatSettings /></I18nProvider>));
+      const group = host.querySelector('[data-settings-item="chat.document-attach"]');
+      const radios = [...(group?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+      expect(radios.map((radio) => radio.getAttribute('aria-label'))).toEqual([
+        'Office documents: Ask each time',
+        'Office documents: Attach as is',
+        'Office documents: Convert to text',
+      ]);
+      expect(radios[0]?.getAttribute('aria-checked')).toBe('true');
+      const partialize = useUIStore.persist.getOptions().partialize;
+      if (!partialize) throw new Error('Missing persisted slice');
+      for (const [index, behavior] of (['ask', 'save', 'convert'] as const).entries()) {
+        await act(async () => radios[index]?.click());
+        expect(useUIStore.getState().documentAttachBehavior).toBe(behavior);
+        expect(radios[index]?.getAttribute('aria-checked')).toBe('true');
+        expect(z.object({ documentAttachBehavior: z.string() }).parse(partialize(useUIStore.getState())).documentAttachBehavior).toBe(behavior);
+      }
+    } finally {
+      await act(async () => useUIStore.getState().setDocumentAttachBehavior('ask'));
+    }
+  });
+
+  test.each([false, true])('search reaches the pasted-image checkbox and persists toggles from %s', async (initial) => {
+    const previous = useUIStore.getState().savePastedImagesAsFiles;
+    useUIStore.getState().setSavePastedImagesAsFiles(initial);
+    try {
+      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
+        const result = buildSettingsSearchResults({ query: 'screenshot', runtimeCtx: context, t: (key) => key, getPageTitle: (page) => page })
+          .find((item) => item.id === 'chat.save-pasted-images');
+        expect(result?.page).toBe('chat');
+        expect(chatSettingsTabForSearchTarget(result!.id)).toBe('composer');
+      }
+      useChatSettingsTabStore.setState({ tab: 'composer' });
+      await act(async () => root.render(<I18nProvider><ChatSettings /></I18nProvider>));
+      const checkbox = host.querySelector<HTMLElement>('[data-settings-item="chat.save-pasted-images"] [role="checkbox"]');
+      if (!checkbox) throw new Error('Missing pasted-image checkbox');
+      expect(checkbox.getAttribute('aria-label')).toBe('Save pasted images as files');
+      expect(checkbox.getAttribute('aria-checked')).toBe(String(initial));
+      const partialize = useUIStore.persist.getOptions().partialize;
+      if (!partialize) throw new Error('Missing persisted slice');
+      for (const value of [!initial, initial]) {
+        await act(async () => checkbox.click());
+        expect(checkbox.getAttribute('aria-checked')).toBe(String(value));
+        expect(useUIStore.getState().savePastedImagesAsFiles).toBe(value);
+        expect(z.object({ savePastedImagesAsFiles: z.boolean() }).parse(partialize(useUIStore.getState())).savePastedImagesAsFiles).toBe(value);
+      }
+    } finally {
+      await act(async () => useUIStore.getState().setSavePastedImagesAsFiles(previous));
+    }
+  });
+
   test('the Questions chips on the Composer tab switch questions into the chat and the choice persists', async () => {
     useChatSettingsTabStore.setState({ tab: 'composer' });
     useUIStore.setState({ questionsInChat: false });

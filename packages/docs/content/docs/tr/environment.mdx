@@ -48,6 +48,10 @@ Güvendiğiniz bir cihazda oturumun kaç gün geçerli kalacağı. Varsayılan `
 
 OhPiChamber'ı kendi sayfalarındaki bir çerçevede gösterebilecek origin'ler, boşlukla ayrılmış, örneğin `https://dash.example.com`. `*` her siteye izin verir. Varsayılan olarak yalnızca OhPiChamber'ın kendisi ve masaüstü ile mobil uygulamaları onu gömebilir; böylece başka siteler düğmelerinin üstüne bir şey yerleştiremez.
 
+### `OPENCHAMBER_TRUSTED_PROXIES`
+
+Başka bir makinede veya başka bir konteynerde çalışan ters proxy'lerin adresleri, virgülle ayrılmış olarak; örneğin `192.168.1.10` veya `172.18.0.0/16`. OhPiChamber başarısız giriş denemelerini istemci başına sınırlar ve istemcinin adresini `X-Forwarded-For` başlığından yalnızca istek bu makineden ya da burada listelenen bir adresten geldiğinde okur. Listede olmayan bir proxy tek bir istemci sayılır; bu yüzden bir kişinin başarısız denemeleri, arkasındaki herkesin bir süre giriş yapamamasına yol açabilir.
+
 ### `OPENCHAMBER_DATA_DIR`
 
 OhPiChamber veri dizinini geçersiz kılar. Varsayılan `~/.config/ohpichamber`.
@@ -115,4 +119,3 @@ Daemon süreçleri başlatılırken OhPiChamber'ın kullanması gereken Bun yür
 ### `BUN_INSTALL`
 
 Bun kurulum kökü. OhPiChamber bunu daemon başlangıcı ve güncellemeleri için `bin/bun` bulmakta kullanır.
-

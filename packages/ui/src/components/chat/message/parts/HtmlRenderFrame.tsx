@@ -199,11 +199,9 @@ function HtmlRenderDocument({
                     pendingRevealRef.current = anchor;
                 }
             },
-            // The page drops its own selection (which does not echo it back),
-            // and the page's selection menu, told it is gone, closes.
-            clearSelection: () => {
+            clearSelection: (dismiss = true) => {
                 frame.contentWindow?.postMessage(htmlRenderClearSelectionMessage(), '*');
-                dispatchFrameSelection(frame, { text: '', rect: NO_RECT, dismiss: true });
+                dispatchFrameSelection(frame, { text: '', rect: NO_RECT, dismiss });
             },
         };
         handleRef.current = handle;
@@ -250,11 +248,9 @@ function HtmlRenderDocument({
             if (message?.kind === 'decline-placed') submitRef.current.onDeclinePlaced?.(message.placed);
             if (message?.kind === 'selection') {
                 const handle = handleRef.current;
-                if (message.text) {
-                    // The menu follows one selection: the app's own highlight
-                    // goes, and so does the one in any other page.
+                if (message.text || message.dismiss) {
                     window.getSelection()?.removeAllRanges();
-                    if (handle) clearOtherPageSelections(handle);
+                    if (handle) clearOtherPageSelections(handle, Boolean(message.text));
                 }
                 dispatchFrameSelection(frame, {
                     text: message.text,

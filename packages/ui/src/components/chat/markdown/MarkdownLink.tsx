@@ -9,6 +9,8 @@ import { sessionLinkKey } from '@/lib/sessionLinks';
 import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
+import { ReferenceLinkChipsContext } from '../message/parts/referenceLinkChips';
+import { ReferenceLinkChipButton } from '../message/parts/ReferenceLinkChipButton';
 import { SessionMentionChipsContext } from '../message/parts/sessionMentionChips';
 import { SessionMentionChipButton } from '../message/parts/SessionMentionChipButton';
 import { useUIStore } from '@/stores/useUIStore';
@@ -167,6 +169,8 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
   const attachment = parseAttachmentHref(href);
   const session = parseSessionLink(href, appOwnOrigins());
   // A session or message the user's message mentioned draws as its chip.
+  const referenceChips = React.useContext(ReferenceLinkChipsContext);
+  const linkedReference = referenceChips.get(href);
   const mentionChips = React.useContext(SessionMentionChipsContext);
   const mentionChip = session ? mentionChips.get(sessionLinkKey(session)) : undefined;
   const app = isAppLinkUrl(href);
@@ -246,6 +250,7 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
       </span>
     );
   }
+  if (linkedReference) return <ReferenceLinkChipButton chip={linkedReference.chip} url={linkedReference.url} />;
   if (session && mentionChip) {
     return <SessionMentionChipButton chip={mentionChip} target={session} />;
   }

@@ -108,8 +108,12 @@ import { useRightSlotStore } from '@/components/layout/rightSlot';
 import { resolveChatPromptReadOnly } from './chatPromptReadOnly';
 import { PermissionDock } from './PermissionDock';
 import { FormDock } from './FormDock';
+import { TranscriptForms } from './TranscriptForms';
+import { FormDockModeContext, resolveFormDockMode, resolveFormsInChat } from './formsInChat';
+import { useDropSettledFormDrafts } from '@/hooks/useDropSettledFormDrafts';
+import { useParentSessionBack } from '@/hooks/useParentSessionBack';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { ensureSpaceArchives, useSpaceArchiveOf } from '@/lib/spaces/space-archives';
-import { getRuntimeKey } from '@/lib/runtime-switch';
 import { createFirstVisibleSessionPerformanceTracker } from '@/sync/session-load-performance';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 
@@ -367,9 +371,10 @@ const ChatViewport = React.memo(({
   </div>
  ), [isLoadingOlder, onLoadOlder, showLoadOlderButton, t]);
 
+ const formsInChat = React.useContext(FormDockModeContext) === 'in-chat';
  const listFooter = React.useMemo(() => (
   <>
-   {/* Permissions and forms dock above the composer (`PermissionDock`, `FormDock`). */}
+   {formsInChat ? <TranscriptForms sessionId={currentSessionId} directory={directory} /> : null}
    <LiveCompactionDivider sessionId={currentSessionId} directory={directory} className="chat-message-column" />
    <CleanseTimelineBoard sessionId={currentSessionId} directory={directory} />
    <AdvisorTimelineCard sessionId={currentSessionId} directory={directory} />
@@ -395,7 +400,7 @@ const ChatViewport = React.memo(({
     aria-hidden="true"
    />
   </>
- ), [currentSessionId, directory, floatingComposer, isMobile]);
+ ), [currentSessionId, directory, floatingComposer, isMobile, formsInChat]);
 
  // Opening a session paints the timeline as one finished picture: the root
  // stays invisible only until the viewport is in place (the scroll hook's
@@ -717,6 +722,7 @@ type ChatContainerProps = {
     autoOpenDraft?: boolean;
     readOnly?: boolean;
     pinnedSession?: { sessionId: string; directory: string | null };
+    registerParentSessionBack?: (handler: (() => void) | null) => void;
 };
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({
@@ -724,6 +730,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  autoOpenDraft: autoOpenDraftProp = true,
  readOnly = false,
  pinnedSession,
+ registerParentSessionBack,
 }) => {
  const pinned = pinnedSession !== undefined;
  const autoOpenDraft = autoOpenDraftProp && !pinned;
@@ -925,6 +932,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  // the directory.
  const sessionPermissions = useScopedBlockingPermissions(currentSessionId, effectiveSessionDirectory);
  const sessionForms = useScopedBlockingForms(currentSessionId, effectiveSessionDirectory);
+ const formRuntimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+ useDropSettledFormDrafts({ sessionId: currentSessionId ?? '', directory: effectiveSessionDirectory ?? '' }, sessionForms, formRuntimeKey);
+ const questionsInChat = useUIStore((state) => state.questionsInChat);
 
  const hasUnreconciledFormTool = React.useMemo(
   () => !sessionForms.some((form) => form.sessionId === currentSessionId)
@@ -1056,10 +1066,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  const hideReturnToParent = pinned && currentSessionId === pinnedOrigin?.sessionId;
 
  const openColumnSession = columnActions.openSession;
- const handleReturnToParentSession = React.useCallback(() => {
-  if (!parentSession) return;
-  openColumnSession(parentSession.sessionId, parentDirectory ?? null);
- }, [openColumnSession, parentDirectory, parentSession]);
+ const handleReturnToParentSession = useParentSessionBack(parentSession ? { sessionId: parentSession.sessionId, displayPath: parentDirectory ?? parentSession.displayPath } : null, hideReturnToParent, openColumnSession, registerParentSessionBack);
 
  const returnToParentButton = parentSession && !hideReturnToParent ? (
   <Button
@@ -1754,7 +1761,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   );
  })();
 
+ const formsInChat = resolveFormsInChat({ questionsInChat, pinned, transcriptShown: hasRenderableSessionSnapshot && sessionMessageLoadState.status === 'ready' });
  return (
+  <FormDockModeContext.Provider value={resolveFormDockMode(formsInChat, userOwnsScroll)}>
   <div
    ref={attachColumnRoot}
    // App-wide handlers (double Escape to stop) find the pinned
@@ -1966,5 +1975,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     workStatusHost,
    ) : null}
   </div>
+  </FormDockModeContext.Provider>
  );
 };

@@ -31,15 +31,17 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { useMessageQueueStore, type FollowUpBehavior } from '@/stores/messageQueueStore';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
-import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore, type LargeTextPasteBehavior } from '@/stores/useUIStore';
+import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore } from '@/stores/useUIStore';
 
 import { MessageSearchSettings } from './MessageSearchSettings';
 import { chatSettingsTabAnchors, useChatSettingsTabStore, type ChatSettingsTab } from './chatSettingsTabs';
+import { DOCUMENT_ATTACH_BEHAVIOR_OPTIONS, LARGE_TEXT_PASTE_BEHAVIOR_OPTIONS } from './chatAttachmentOptions';
 
 type ChipOption<T extends string> = { id: T; labelKey: I18nKey };
 
-const ACTIVITY_RENDER_MODE_OPTIONS: ChipOption<'collapsed' | 'summary'>[] = [
+const ACTIVITY_RENDER_MODE_OPTIONS: ChipOption<'collapsed' | 'text' | 'summary'>[] = [
   { id: 'collapsed', labelKey: 'settings.openchamber.visual.option.activityRenderMode.collapsed.label' },
+  { id: 'text', labelKey: 'settings.openchamber.visual.option.activityRenderMode.text.label' },
   { id: 'summary', labelKey: 'settings.openchamber.visual.option.activityRenderMode.summary.label' },
 ];
 
@@ -78,13 +80,6 @@ const QUESTIONS_PLACEMENT_OPTIONS: ChipOption<'popup' | 'chat'>[] = [
 const INPUT_HISTORY_SCOPE_OPTIONS: ChipOption<InputHistoryScope>[] = [
   { id: 'global', labelKey: 'settings.openchamber.visual.option.inputHistoryScope.global.label' },
   { id: 'session', labelKey: 'settings.openchamber.visual.option.inputHistoryScope.session.label' },
-];
-
-const LARGE_TEXT_PASTE_BEHAVIOR_OPTIONS: ChipOption<LargeTextPasteBehavior>[] = [
-  { id: 'ask', labelKey: 'settings.openchamber.visual.option.largeTextPaste.ask.label' },
-  { id: 'attach', labelKey: 'settings.openchamber.visual.option.largeTextPaste.attach.label' },
-  { id: 'inline', labelKey: 'settings.openchamber.visual.option.largeTextPaste.inline.label' },
-  { id: 'inline-double-paste', labelKey: 'settings.openchamber.visual.option.largeTextPaste.inlineDoublePaste.label' },
 ];
 
 const NESTED_OPTION_CLASS = 'ps-6';
@@ -162,7 +157,7 @@ const MessagesTab: React.FC = () => {
   const diffLayoutOptions = useChipOptions(DIFF_LAYOUT_OPTIONS);
   const chatWidthOptions = useChipOptions(CHAT_WIDTH_OPTIONS);
 
-  const handleActivityRenderModeChange = (mode: 'collapsed' | 'summary') => {
+  const handleActivityRenderModeChange = (mode: 'collapsed' | 'text' | 'summary') => {
     setActivityRenderMode(mode);
     void updateDesktopSettings({ activityRenderMode: mode, chatRenderMode: 'live' });
   };
@@ -440,6 +435,10 @@ const ComposerTab: React.FC = () => {
   const setFollowUpBehavior = useMessageQueueStore((state) => state.setFollowUpBehavior);
   const largeTextPasteBehavior = useUIStore((state) => state.largeTextPasteBehavior);
   const setLargeTextPasteBehavior = useUIStore((state) => state.setLargeTextPasteBehavior);
+  const documentAttachBehavior = useUIStore((state) => state.documentAttachBehavior);
+  const setDocumentAttachBehavior = useUIStore((state) => state.setDocumentAttachBehavior);
+  const savePastedImagesAsFiles = useUIStore((state) => state.savePastedImagesAsFiles);
+  const setSavePastedImagesAsFiles = useUIStore((state) => state.setSavePastedImagesAsFiles);
   const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
   const setAllowPromptingSubagentSessions = useUIStore((state) => state.setAllowPromptingSubagentSessions);
   const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
@@ -546,6 +545,23 @@ const ComposerTab: React.FC = () => {
             ))}
           </SettingsRadioGroup>
         </SettingsControlGroup>
+        <SettingsControlGroup
+          title={t('settings.openchamber.visual.field.documentAttach')}
+          info={t('settings.openchamber.visual.field.documentAttachHint')}
+          settingsItem="chat.document-attach"
+        >
+          <SettingsRadioGroup aria-label={t('settings.openchamber.visual.field.documentAttachAria')}>
+            {DOCUMENT_ATTACH_BEHAVIOR_OPTIONS.map((option) => (
+              <SettingsRadioOption
+                key={option.id}
+                selected={documentAttachBehavior === option.id}
+                onSelect={() => setDocumentAttachBehavior(option.id)}
+                label={t(option.labelKey)}
+                ariaLabel={t('settings.openchamber.visual.field.documentAttachOptionAria', { option: t(option.labelKey) })}
+              />
+            ))}
+          </SettingsRadioGroup>
+        </SettingsControlGroup>
         <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
           <SettingsCheckboxRow
             checked={allowPromptingSubagentSessions}
@@ -553,6 +569,14 @@ const ComposerTab: React.FC = () => {
             label={t('settings.openchamber.visual.field.allowPromptingSubagentSessions')}
             ariaLabel={t('settings.openchamber.visual.field.allowPromptingSubagentSessionsAria')}
             settingsItem="chat.subagent-read-only-banner"
+          />
+          <SettingsCheckboxRow
+            checked={savePastedImagesAsFiles}
+            onChange={setSavePastedImagesAsFiles}
+            label={t('settings.openchamber.visual.field.savePastedImagesAsFiles')}
+            ariaLabel={t('settings.openchamber.visual.field.savePastedImagesAsFiles')}
+            info={t('settings.openchamber.visual.field.savePastedImagesAsFilesInfo')}
+            settingsItem="chat.save-pasted-images"
           />
         </div>
       </SettingsSection>

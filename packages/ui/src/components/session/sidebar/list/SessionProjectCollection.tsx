@@ -181,7 +181,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const addSessionToFolder = useSessionFoldersStore((state) => state.addSessionToFolder);
   const projectView = view.projectView;
   const { toggleGroup, toggleWork, toggleProject, setCollapsedActivities } = projectViewActions;
-  const collection = useSessionProjectCollection({ knownDirectories: topology.knownDirectories, isVSCode: false, isVisible: true });
+  const collection = useSessionProjectCollection({ knownDirectories: topology.knownDirectories, isVSCode: false, isVisible: true, searchActive: view.isVisible && view.hasSessionSearchQuery, projectSortOrder: view.projectSortOrder });
   const spaceList = useSidebarSpaces();
   const spaceLabelById = React.useMemo(() => new Map(spaceList.map((space) => [space.id, space.name])), [spaceList]);
   const spacesJourney = useSpacesStore((state) => state.journey);

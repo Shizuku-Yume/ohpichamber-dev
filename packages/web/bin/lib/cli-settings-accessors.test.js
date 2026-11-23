@@ -167,6 +167,28 @@ describe('cli settings accessors', () => {
     });
   });
 
+  it('serializes asynchronous settings mutations and preserves each caller update', async () => {
+    await withTempDir(async (dir) => {
+      const accessors = makeAccessors(dir);
+      await accessors.writeSettingsToDisk({ retained: true });
+      await Promise.all([
+        accessors.updateSettingsFromDisk(async current => {
+          await new Promise(resolve => setTimeout(resolve, 15));
+          return { ...current, first: true };
+        }),
+        accessors.updateSettingsFromDisk(current => ({ ...current, second: true })),
+      ]);
+      expect(await accessors.readSettingsStrict()).toEqual({ retained: true, first: true, second: true });
+      await accessors.updateSettingsFromDisk(current => current);
+      expect(await accessors.readSettingsStrict()).toEqual({ retained: true, first: true, second: true });
+      fs.writeFileSync(path.join(dir, 'settings.json'), '{bad');
+      let called = false;
+      await expect(accessors.updateSettingsFromDisk(current => { called = true; return current; })).rejects.toThrow();
+      expect(called).toBe(false);
+      expect(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).toBe('{bad');
+    });
+  });
+
   it('does not regenerate the relay identity off a corrupt settings file', async () => {
     await withTempDir(async (dir) => {
       const accessors = makeAccessors(dir);

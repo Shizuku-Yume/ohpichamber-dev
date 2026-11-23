@@ -14,6 +14,8 @@ import { runtimeFetch } from "@/lib/runtime-fetch"
 import type { PermissionMode } from "@/stores/utils/permissionAutoAccept"
 import { toast } from "sonner"
 import { canonicalClient } from "@/api/canonicalClient"
+import { prepareAttachmentsHeldForSend } from "./held-attachments"
+import { draftSessionMetadata } from "./draft-session-metadata"
 import { problemMessage } from "@/lib/problemMessage"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
@@ -300,7 +302,10 @@ const admitPromptAttachments = async (
   if (!attachments?.length) return undefined
   let workspaceId: string | undefined
   const admitted: PromptAttachment[] = []
-  for (const attachment of attachments) {
+  const prepared = attachments.some((file) => file.saveOnSend || file.saveCopyOnSend)
+    ? await prepareAttachmentsHeldForSend(attachments, directory, () => runtimeKey === getRuntimeKey() && runtimeRevision === getRuntimeSwitchRevision())
+    : attachments
+  for (const attachment of prepared) {
     assertSendRuntime(runtimeKey, runtimeRevision)
     const uri = attachment.serverPath?.startsWith('attachment://')
       ? attachment.serverPath
@@ -368,6 +373,7 @@ type CapturedSendTarget = {
 }
 
 type SendMessageOptions = {
+  onSessionCreated?: (target: { sessionId: string; directory: string | null }) => void
   target?: CapturedSendTarget
   runtimeRevision?: number
   sessionId?: string
@@ -727,8 +733,8 @@ const applyDraftTargetSelectionDefaults = (
       ? useProjectsStore.getState().projects.find((project) => normalizePath(project.path) === normalizePath(selectedProject.path))
       : undefined
     useConfigStore.getState().applyDefaultModelAgentSelection({
-      projectDefaultModel: currentProject?.defaultModel,
-      projectDefaultVariant: currentProject?.defaultVariant,
+      projectDefaultModel: draft.target === 'chat' ? useConfigStore.getState().chatsDefaultModel : currentProject?.defaultModel,
+      projectDefaultVariant: draft.target === 'chat' ? useConfigStore.getState().chatsDefaultVariant : currentProject?.defaultVariant,
     })
   }
   const activation = activateConfigForDirectory(configDirectory, { preserveManualModel: !projectChanged && draft.target === 'project' })
@@ -1083,14 +1089,11 @@ export async function materializeOpenDraftSession(selection: {
   assertSendRuntime(runtimeKey, runtimeRevision)
   pendingPreparationByDraft.delete(draft.draftId)
 
-  const draftPins = draft.projectContextPins ?? { notes: [], plans: [] }
   // Native admission and the first prompt use the same captured selection.
   const created = await createSessionWithDraftLifecycle(
     draft.title,
     draftDirectoryOverride,
-    draftPins.notes.length > 0 || draftPins.plans.length > 0
-      ? { openchamber: { project_context_pins: draftPins } }
-      : undefined,
+    draftSessionMetadata(draft),
     "submitted-draft",
     {
       model: { providerId: selection.providerId, modelId: selection.modelId },
@@ -1901,6 +1904,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         if (!created) throw new Error("Failed to create session")
         sessionId = created.sessionId
         directory = created.directory
+        options?.onSessionCreated?.({ sessionId, directory })
         if (created.syntheticParts?.length) {
           parts = [...(parts ?? []), ...created.syntheticParts]
         }

@@ -216,6 +216,7 @@ export const areRelevantTurnGroupingContextsEqual = (
   }
 
   if (left.turnId !== right.turnId) return false;
+  if (left.snapshotTurnId !== right.snapshotTurnId) return false;
   if (left.isFirstAssistantInTurn !== right.isFirstAssistantInTurn) return false;
   if (left.hasEarlierAssistantText !== right.hasEarlierAssistantText) return false;
   if (left.isLastAssistantInTurn !== right.isLastAssistantInTurn) return false;

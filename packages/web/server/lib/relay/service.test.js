@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import crypto from 'node:crypto';
 import express from 'express';
+import { createServer } from 'node:http';
 import request from 'supertest';
 
 import { createRelayService } from './service.js';
@@ -37,7 +38,7 @@ const makeService = (options = {}) => {
   const service = createRelayService({
     crypto,
     readSettingsFromDiskMigrated: async () => settings,
-    writeSettingsToDisk: async (next) => { settings = next; },
+    updateSettingsFromDisk: async (mutate) => { settings = await mutate(settings); return settings; },
     relayKeyStore,
     getLocalPort: () => 0,
     hasRelayDemand: options.hasRelayDemand ?? (async () => true),
@@ -202,7 +203,7 @@ describe('relay service without a configured relay URL', () => {
     delete process.env.OPENCHAMBER_RELAY_URL;
     const { service, getSettings } = makeService({ settings: { privateRelay: undefined } });
     const app = express();
-    service.registerRoutes(app);
+    service.registerRoutes(app, createServer(app));
     try {
       const missingRes = await request(app).post('/api/openchamber/relay/enable').send({});
       expect(missingRes.status).toBe(400);

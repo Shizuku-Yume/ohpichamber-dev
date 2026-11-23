@@ -15,6 +15,7 @@ import { checkoutHoldsDirectory, checkoutHoldsSubfolder } from '@/lib/worktrees/
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useUIStore } from '@/stores/useUIStore';
+import { computeGuestSessionTokens } from './session-tokens';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 export const guestProject = (projectId: string) => {
@@ -133,6 +134,7 @@ const projectSession = (session: CanonicalSession, directory: string, projectId:
     unread: isSessionUnread(session),
     tool: liveTool && activity === 'running' ? { name: liveTool.name, target: liveTool.path ? toolTarget(liveTool.path, directory) : null } : null,
     context: reading?.state === 'measured' ? { tokens: reading.tokens, limit: contextLimit > 0 ? contextLimit : null } : null,
+    tokens: computeGuestSessionTokens(child?.message[id], child?.snapshot[id]?.window),
   };
 };
 
@@ -207,6 +209,8 @@ export const observeGuestWorkspace = (query: GuestWorkspaceQuery, guestId: strin
       unsubs.push(
         useGlobalSessionsStore.subscribe((state, previous) => { if (state.activeSessions !== previous.activeSessions || state.archivedSessions !== previous.archivedSessions || state.status !== previous.status) update(); }),
         useGlobalSessionStatusStore.subscribe(update),
+        manager.subscribeAllSelected((state) => state.message, update),
+        manager.subscribeAllSelected((state) => state.snapshot, update),
         useConfigStore.subscribe((state, previous) => { if (state.isConnected !== previous.isConnected || state.providers !== previous.providers) update(); }),
         useSessionLiveWorkStore.subscribe(update),
         useUIStore.subscribe((state, previous) => { if (state.sessionWorkEnabled !== previous.sessionWorkEnabled) update(); }),

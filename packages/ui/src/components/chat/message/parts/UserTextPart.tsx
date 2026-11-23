@@ -1,8 +1,11 @@
 import React from 'react';
+import { useSessionSelector } from '@/sync/sync-context';
+import { useChatSessionSelection } from '../../chatColumnSession';
+import { ReferenceLinkChipsContext, useSessionReferenceLinkChips, withReferenceLinkChips } from './referenceLinkChips';
 import { cn } from '@/lib/utils';
 import { isInvisibleText } from '@/lib/invisibleText';
 import { Icon } from '@/components/icon/Icon';
-import type { Part } from '@openchamber/agent-contract';
+import type { Part, Session } from '@openchamber/agent-contract';
 
 type AttachmentFile = { mime?: string; url?: string; filename?: string; mimeType?: string };
 import {
@@ -105,6 +108,10 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     const skills = useSkillsStore((state) => state.skills);
     const openContextFile = useUIStore((state) => state.openContextFile);
     const effectiveDirectory = useEffectiveDirectory();
+    const { sessionId } = useChatSessionSelection();
+    const selectLinkedItems = React.useCallback((session: Session | undefined) => session?.metadata?.openchamber?.linked_issues, []);
+    const linkedItems = useSessionSelector(sessionId ?? '', effectiveDirectory, selectLinkedItems);
+    const referenceChips = useSessionReferenceLinkChips(textContent, linkedItems);
     const { t } = useI18n();
     const normalizedRenderingMode = normalizeUserMessageRenderingMode(userMessageRenderingMode);
     const isCollapsed = collapsibleUserMessages && !messageExpanded;
@@ -345,8 +352,9 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     }, [agentMention, openSkill, skillByName, textContent]);
 
     // Attachment citations and mentioned sessions become chips in the plain-text path too.
+    const plainTextNodesWithReferences = React.useMemo(() => plainTextNodes.flatMap((node, index) => typeof node === 'string' ? withReferenceLinkChips(node, referenceChips, `reference-${index}`) : [node]), [plainTextNodes, referenceChips]);
     const plainTextContent = React.useMemo(() => glueChipPunctuation(
-        attachmentFilenames.length === 0 && sessionMentionChips.size === 0 ? plainTextNodes : plainTextNodes.flatMap((node, nodeIndex) => (
+        attachmentFilenames.length === 0 && sessionMentionChips.size === 0 ? plainTextNodesWithReferences : plainTextNodesWithReferences.flatMap((node, nodeIndex) => (
             React.isValidElement<unknown>(node)
                 ? node
                 : withSessionMentionChips(node, sessionMentionChips, `session-${nodeIndex}`).flatMap((run, runIndex) => (
@@ -356,7 +364,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
                 ))
         )),
         'chip-glue',
-    ), [attachmentFilenames, isOpenableAttachment, plainTextNodes, sessionMentionChips]);
+    ), [attachmentFilenames, isOpenableAttachment, plainTextNodesWithReferences, sessionMentionChips]);
 
     if (contextPayload) {
         return (
@@ -388,7 +396,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
                 onKeyDown={handleKeyDown}
             >
                 {normalizedRenderingMode === 'markdown' ? (
-                    <SessionMentionChipsContext.Provider value={sessionMentionChips}>
+                    <ReferenceLinkChipsContext.Provider value={referenceChips}><SessionMentionChipsContext.Provider value={sessionMentionChips}>
                         <SimpleMarkdownRenderer
                             singleTilde={false}
                             content={processedMarkdownContent}
@@ -397,7 +405,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
                             disableLinkSafety
                             enableFileReferences={false}
                         />
-                    </SessionMentionChipsContext.Provider>
+                    </SessionMentionChipsContext.Provider></ReferenceLinkChipsContext.Provider>
                 ) : (
                     plainTextContent
                 )}
