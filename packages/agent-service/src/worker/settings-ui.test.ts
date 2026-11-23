@@ -203,12 +203,12 @@ test('General power uses the native OMP sleep-prevention setting', async () => {
     const missingLinuxBus = process.platform === 'linux' && !process.env.DBUS_SYSTEM_BUS_ADDRESS
       && !statSync('/var/run/dbus/system_bus_socket', { throwIfNoEntry: false })?.isSocket();
     if (missingLinuxBus) {
-      expect(power?.writeBlock).toBe('host-power-unavailable');
+      expect(power).toMatchObject({ condition: contract.OMP_POWER_CONDITIONS.backendAvailable, conditionActive: false });
       await expect(write).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' });
       expect((await f.native.read('workspace_1', '0')).settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('idle');
       return;
     }
-    expect(power?.writeBlock).toBeUndefined();
+    expect(power?.conditionActive).toBeUndefined();
     await write;
     const after = await f.native.read('workspace_1', '1');
     expect(after.settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('off');
@@ -226,7 +226,8 @@ test('a project power override is readable but cannot change the global config',
     const before = await f.native.read('workspace_1', '0');
     expect(before.settings.find(({ id }) => id === 'power.sleepPrevention')).toMatchObject({
       value: 'display',
-      writeBlock: 'layer-override',
+      condition: contract.OMP_POWER_CONDITIONS.usesSharedConfig,
+      conditionActive: false,
     });
     await expect(f.native.write('workspace_1', '1', {
       expectedRevision: before.revision,

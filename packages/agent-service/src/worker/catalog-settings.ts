@@ -1,5 +1,6 @@
 import {
   JsonValueSchema,
+  OMP_POWER_CONDITIONS,
   OmpSettingIdSchema,
   OmpSettingSchema,
   OmpSettingsStateSchema,
@@ -24,11 +25,11 @@ function linuxPowerBusAvailable(): boolean {
   catch { return false; }
 }
 
-function writeBlock(setting: AnySetting, settings: Settings): OmpSetting['writeBlock'] {
+function inactivePowerCondition(setting: AnySetting, settings: Settings) {
   if (setting.id !== 'power.sleepPrevention') return undefined;
   const provenance = settings.getProvenance(setting);
-  if (provenance !== 'global' && provenance !== 'default') return 'layer-override';
-  if (process.platform === 'linux' && !linuxPowerBusAvailable()) return 'host-power-unavailable';
+  if (provenance !== 'global' && provenance !== 'default') return OMP_POWER_CONDITIONS.usesSharedConfig;
+  if (process.platform === 'linux' && !linuxPowerBusAvailable()) return OMP_POWER_CONDITIONS.backendAvailable;
   return undefined;
 }
 
@@ -77,8 +78,11 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (ui?.description !== undefined) descriptor.description = ui.description;
   if (ui?.group !== undefined) descriptor.group = ui.group;
   if (ui?.tab !== undefined) descriptor.tab = ui.tab;
-  const blocked = writeBlock(setting, settings);
-  if (blocked !== undefined) descriptor.writeBlock = blocked;
+  const inactiveCondition = inactivePowerCondition(setting, settings);
+  if (inactiveCondition !== undefined) {
+    descriptor.condition = inactiveCondition;
+    descriptor.conditionActive = false;
+  }
   return OmpSettingSchema.parse(descriptor);
 }
 
@@ -126,11 +130,11 @@ export class NativeSettings {
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     for (const change of request.changes) {
       const setting = handle(change.id);
-      const blocked = writeBlock(setting, this.settings);
-      if (blocked === 'layer-override') {
+      const inactiveCondition = inactivePowerCondition(setting, this.settings);
+      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared sleep setting');
       }
-      if (blocked === 'host-power-unavailable') {
+      if (inactiveCondition === OMP_POWER_CONDITIONS.backendAvailable) {
         throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Host sleep prevention is unavailable');
       }
       if (change.value === null) continue;

@@ -90,6 +90,11 @@ export type OmpSettingOption = z.infer<typeof OmpSettingOptionSchema>;
 export const OmpSettingValueSchema = JsonValueSchema.nullable();
 export type OmpSettingValue = z.infer<typeof OmpSettingValueSchema>;
 
+export const OMP_POWER_CONDITIONS = {
+  usesSharedConfig: 'powerUsesSharedConfig',
+  backendAvailable: 'powerBackendAvailable',
+} as const;
+
 export const OmpSettingSchema = z.strictObject({
   id: OmpSettingIdSchema,
   type: OmpSettingTypeSchema,
@@ -107,11 +112,10 @@ export const OmpSettingSchema = z.strictObject({
   tab: z.string().min(1).optional(),
   /** Placement of this setting across GUI surfaces. */
   placement: OmpSettingPlacementSchema,
-  /** OMP's `ui.condition` name, when the pinned definition declares one. */
+  /** OMP's `ui.condition` name or an availability condition applied by the host. */
   condition: z.string().min(1).optional(),
   /** Whether that condition holds in the snapshot that carried this row. */
   conditionActive: z.boolean().optional(),
-  writeBlock: z.enum(['layer-override', 'host-power-unavailable']).optional(),
 }).refine(
   (setting) => setting.condition === undefined || setting.conditionActive !== undefined,
   'A conditional setting reports whether its condition holds',

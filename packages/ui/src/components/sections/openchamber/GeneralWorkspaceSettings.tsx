@@ -1,4 +1,5 @@
 import React from 'react';
+import { OMP_POWER_CONDITIONS } from '@openchamber/agent-contract';
 
 import { NumberInput } from '@/components/ui/number-input';
 import { Textarea } from '@/components/ui/textarea';
@@ -414,12 +415,13 @@ export const GeneralPowerSettings: React.FC = () => {
           <OmpRowControl
             setting={setting}
             value={form[setting.id] ?? setting.value}
-            disabled={saving || setting.writeBlock !== undefined}
+            disabled={saving || setting.conditionActive === false}
             onChange={(value) => void updateSetting(setting, value)}
           />
-          {setting.writeBlock ? (
+          {setting.conditionActive === false ? (
             <p className="typography-meta text-muted-foreground">
-              {t(setting.writeBlock === 'layer-override' ? 'settings.omp.power.overridden' : 'settings.omp.power.unavailable')}
+              {t(setting.condition === OMP_POWER_CONDITIONS.usesSharedConfig
+                ? 'settings.omp.power.overridden' : 'settings.omp.power.unavailable')}
             </p>
           ) : null}
         </React.Fragment>
