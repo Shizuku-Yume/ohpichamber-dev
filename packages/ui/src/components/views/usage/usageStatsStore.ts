@@ -49,6 +49,8 @@ type UsageStatsStore = {
   entries: Record<string, UsageStatsEntry>;
   selectedProvider: string | null;
   setSelectedProvider: (provider: string | null) => void;
+  settingsRefreshRequest: number;
+  refreshSettingsReport: () => void;
   /**
    * Loads a report for the request under the current runtime. Without `force`
    * this only reads a key that has no report, no error and no read running,
@@ -113,6 +115,8 @@ export function createUsageStatsStore(
       toolsRequested: false,
       selectedProvider: null,
       setSelectedProvider: (provider) => set({ selectedProvider: provider }),
+      settingsRefreshRequest: 0,
+      refreshSettingsReport: () => set((state) => ({ settingsRefreshRequest: state.settingsRefreshRequest + 1 })),
       load: async (request, options) => {
         const runtime = runtimeKey();
         const key = usageStatsKey(runtime, request);

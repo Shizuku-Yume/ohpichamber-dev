@@ -36,6 +36,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const results = useQuotaStore((state) => state.results);
   const selectedProvider = useUsageStatsStore((state) => state.selectedProvider);
   const setSelectedProvider = useUsageStatsStore((state) => state.setSelectedProvider);
+  const refreshSettingsReport = useUsageStatsStore((state) => state.refreshSettingsReport);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const quotaPhase = useQuotaStore((state) => state.phase);
@@ -87,7 +88,10 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
             <Button size="sm"
               variant="ghost"
               className="h-7 w-7 px-0 text-muted-foreground"
-              onClick={() => fetchAllQuotas()}
+              onClick={() => {
+                refreshSettingsReport();
+                void fetchAllQuotas();
+              }}
               aria-label={t('settings.usage.sidebar.actions.refreshAria')}
               title={t('settings.usage.sidebar.actions.refreshTitle')}
               disabled={isLoading}

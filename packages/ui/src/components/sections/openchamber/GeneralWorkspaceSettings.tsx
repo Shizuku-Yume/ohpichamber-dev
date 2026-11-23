@@ -421,7 +421,7 @@ export const GeneralPowerSettings: React.FC = () => {
           {setting.conditionActive === false ? (
             <p className="typography-meta text-muted-foreground">
               {t(setting.condition === OMP_POWER_CONDITIONS.usesSharedConfig
-                ? 'settings.omp.power.overridden' : 'settings.omp.power.unavailable')}
+                ? 'settings.omp.sharedConfig.overridden' : 'settings.omp.power.unavailable')}
             </p>
           ) : null}
         </React.Fragment>

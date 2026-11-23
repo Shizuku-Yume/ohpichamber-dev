@@ -13,6 +13,14 @@ Saving or enabling token-based rules requires acknowledging potential
 extended-context pricing.
 The remaining model-role hub, ordered fallback, and preset work is separate.
 
+Usage renders native OMP account quotas and reset-credit counts from the
+existing canonical report, without changing its schema or adding a redemption
+route. The Usage page edits six reset-policy numbers; the switches that enable
+automatic redemption remain outside the GUI write allowlist. Matching
+provider-wide windows are shown once; Guest SDK quotas, uncovered windows and
+Work Status remain on the Host quota path. Removing built-in Host scrapers still
+requires replacing those consumers and preserving their provider coverage.
+
 The OMP 19 settings-control follow-up restores native thinking choices and a
 searchable Sharpshooter model picker, clarifies allowed subagents and shadowed
 extensions, and replaces Plugins Apply with next-session guidance when no

@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import type { I18nKey } from '@/lib/i18n';
-import type { UsageModel, UsageProvider, UsageStats } from '@openchamber/agent-contract';
+import type { UsageAccounts, UsageModel, UsageProvider, UsageStats } from '@openchamber/agent-contract';
 import { formatDateTimeForPreference, formatTimeForPreference } from '@/lib/timeFormat';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -61,7 +61,7 @@ const RANGE_LABEL_KEYS = {
   all: 'usageStats.range.all',
 } as const satisfies Record<UsageRange, I18nKey>;
 
-function useUsageStats(range: UsageRange, projectDirectory: string | null) {
+function useUsageStats(range: UsageRange, projectDirectory: string | null, settingsReport: boolean) {
   const selectedProvider = useUsageStatsStore((store) => store.selectedProvider);
   const request = React.useMemo(() => ({ range, projectDirectory, providerId: selectedProvider ?? undefined }), [range, projectDirectory, selectedProvider]);
   const entry = useUsageStatsStore((store) => selectUsageStatsEntry(store, request));
@@ -75,6 +75,12 @@ function useUsageStats(range: UsageRange, projectDirectory: string | null) {
   useTodayRollover(range === '1d', reload);
 
   const refresh = React.useCallback(() => void load(request, { force: true }), [load, request]);
+  React.useLayoutEffect(() => {
+    if (!settingsReport) return;
+    return useUsageStatsStore.subscribe((state, previous) => {
+      if (state.settingsRefreshRequest !== previous.settingsRefreshRequest) refresh();
+    });
+  }, [refresh, settingsReport]);
 
   const toolsEntry = useUsageStatsStore((store) => selectUsageToolsEntry(store, request));
   const toolsRequested = useUsageStatsStore((store) => store.toolsRequested);
@@ -100,14 +106,16 @@ export function UsageStatsView({ className }: { className?: string }): React.Rea
  * The token report itself, without a scroll container: the standalone Stats
  * surface wraps it, and the Usage page places it above the quota cards.
  */
-export function UsageStatsReport(): React.ReactNode {
+export function UsageStatsReport({ renderReport }: {
+  renderReport?: (report: React.ReactNode, accounts: UsageAccounts | undefined) => React.ReactNode;
+} = {}): React.ReactNode {
   const { t } = useI18n();
   const intlLocale = getCurrentIntlLocale();
   const projects = useProjectsInSidebarOrder(useProjectsStore((store) => store.projects));
   const [range, setRange] = React.useState<UsageRange>('30d');
   const [projectChoice, setProjectChoice] = React.useState<string>(ALL_PROJECTS);
   const selectedProject = projects.find((project) => project.id === projectChoice) ?? null;
-  const { entry, refresh, tools } = useUsageStats(range, selectedProject?.path ?? null);
+  const { entry, refresh, tools } = useUsageStats(range, selectedProject?.path ?? null, Boolean(renderReport));
   const timeFormatPreference = useUIStore((store) => store.timeFormatPreference);
   const stats = entry?.stats ?? null;
   const loading = entry?.loading ?? true;
@@ -127,7 +135,7 @@ export function UsageStatsReport(): React.ReactNode {
     };
   }, [intlLocale]);
 
-  return (
+  const report = (
     <div className="@container">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 @xl:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -211,6 +219,7 @@ export function UsageStatsReport(): React.ReactNode {
       </div>
     </div>
   );
+  return renderReport ? renderReport(report, stats?.accounts) : report;
 }
 
 function formatUpdatedAt(timestamp: number, preference: TimeFormatPreference): string {
