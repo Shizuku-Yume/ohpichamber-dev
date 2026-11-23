@@ -1,11 +1,11 @@
 import React from 'react';
 import type { AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
 import type { Agent, AgentThinkingLevel, ToolCatalogEntry } from '@openchamber/agent-contract';
-import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
-import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
+import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
+import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -91,8 +91,7 @@ export const AgentsPage: React.FC = () => {
     updateAgent: state.updateAgent, loadAgents: state.loadAgents,
     agentDraft: state.agentDraft, setAgentDraft: state.setAgentDraft, setSelectedAgent: state.setSelectedAgent,
   })));
-  const models = useSettingsModels(settingsDirectory);
-  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading } = useOmpPageSettings('agents');
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('agents');
   const subagentSettings = getSectionSettings('subagents');
   const prewalkSettings = getSectionSettings('prewalk');
   const advisorSettings = getSectionSettings('advisor');
@@ -104,10 +103,6 @@ export const AgentsPage: React.FC = () => {
     [rolesMap],
   );
 
-  const handleRoleChange = React.useCallback(
-    (role: 'task' | 'advisor', selector: string) => void updateSettings((state) => [modelRoleChange(state, role, selector)]),
-    [updateSettings],
-  );
   const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
   const revision = useAgentsStore((state) => state.revisionsByDirectory[directoryKey]);
   const catalogError = useAgentsStore((state) => state.errorsByDirectory[directoryKey]);
@@ -312,16 +307,12 @@ export const AgentsPage: React.FC = () => {
           settingsItem="agents.section.subagents"
         >
           <div className={SETTINGS_SPACE_ROW_CLASS}>
-            <ModelRoleEditor
-              role="task"
-              roles={roleSelectors}
-              models={models}
-              directory={settingsDirectory ?? undefined}
-              disabled={ompLoading}
+            <ModelRoleLinkRow
               label={t('settings.omp.modelRoles.role.task.label')}
               info={t('settings.omp.modelRoles.role.task.desc')}
-              settingsItem="omp.modelRoles.task"
-              onChange={(selector) => void handleRoleChange('task', selector)}
+              value={roleSelectors.task || t('settings.omp.modelRoles.inheritFallback')}
+              linkLabel={t('settings.omp.modelRoles.link.hub')}
+              onOpen={() => openModelRoleEditor('task')}
             />
             {subagentSettings.map((s) => (
               <OmpRowControl
@@ -361,16 +352,12 @@ export const AgentsPage: React.FC = () => {
           settingsItem="agents.section.advisor"
         >
           <div className={SETTINGS_SPACE_ROW_CLASS}>
-            <ModelRoleEditor
-              role="advisor"
-              roles={roleSelectors}
-              models={models}
-              directory={settingsDirectory ?? undefined}
-              disabled={ompLoading}
+            <ModelRoleLinkRow
               label={t('settings.omp.modelRoles.role.advisor.label')}
               info={t('settings.omp.modelRoles.role.advisor.desc')}
-              settingsItem="omp.modelRoles.advisor"
-              onChange={(selector) => void handleRoleChange('advisor', selector)}
+              value={roleSelectors.advisor || t('settings.omp.modelRoles.inheritFallback')}
+              linkLabel={t('settings.omp.modelRoles.link.hub')}
+              onOpen={() => openModelRoleEditor('advisor')}
             />
             {advisorSettings.map((s) => (
               <OmpRowControl

@@ -1,6 +1,7 @@
 import {
   JsonObjectSchema,
   JsonValueSchema,
+  type JsonValue,
   OMP_POWER_CONDITIONS,
   OmpSettingIdSchema,
   OmpSettingSchema,
@@ -86,6 +87,44 @@ function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
   }
   if (isPower && process.platform === 'linux' && !linuxPowerBusAvailable()) return OMP_POWER_CONDITIONS.backendAvailable;
   return undefined;
+}
+
+/**
+ * Roles the project's own config sets shadow the shared ones, and the route
+ * writes the shared layer. OMP merges only an entry that names a model (a
+ * string or string list); a cleared `null` entry falls back to the shared one.
+ */
+function projectModelRoles(settings: Settings): string[] {
+  const project = rolesRecord(settings.getProjectSettings().modelRoles);
+  return Object.keys(project).filter(role => {
+    const value = project[role];
+    return typeof value === 'string' || (Array.isArray(value) && value.every(entry => typeof entry === 'string'));
+  });
+}
+
+/**
+ * The shared record to save for a requested `modelRoles` value. The value the
+ * route reads is the merged record, so project roles are put back to the shared
+ * layer's own entries; changing one is refused, since no session in this
+ * project would read it.
+ */
+function sharedModelRoles(settings: Settings, value: JsonValue): JsonValue {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const next = { ...value };
+  const current = rolesRecord(handle('modelRoles').layered(settings));
+  const shared = rolesRecord(settings.getGlobalSettings().modelRoles);
+  for (const role of projectModelRoles(settings)) {
+    if (!isDeepStrictEqual(current[role], next[role])) {
+      throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
+    }
+    if (Object.hasOwn(shared, role)) next[role] = JsonValueSchema.parse(shared[role]);
+    else delete next[role];
+  }
+  return next;
+}
+
+function rolesRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function hasCompactionOverride(setting: AnySetting, settings: Settings): boolean {
@@ -193,11 +232,14 @@ export class NativeSettings {
         throw new ProjectionError(400, 'INVALID_REQUEST', `OMP setting ${change.id} is not exposed`);
       }
     }
+    const changes = request.changes.map(change => change.id === 'modelRoles' && change.value !== null
+      ? { ...change, value: sharedModelRoles(this.settings, change.value) }
+      : change);
     // Validate every value against the pinned definition before changing any
     // layer. `assertWritable` runs OMP's own validate/normalize checks, so the
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     let retryUpdates: Map<string, string[] | undefined> | undefined;
-    for (const change of request.changes) {
+    for (const change of changes) {
       const setting = handle(change.id);
       const current = JsonValueSchema.parse(setting.layered(this.settings) ?? null);
       const isRetryChains = setting.id === cfgRetryFallbackChains.id;
@@ -225,7 +267,7 @@ export class NativeSettings {
       if (isRetryChains) retryUpdates = retryChainUpdates(current, change.value);
     }
     try {
-      for (const change of request.changes) {
+      for (const change of changes) {
         const setting = handle(change.id);
         if (setting.id === cfgRetryFallbackChains.id && retryUpdates) {
           for (const [key, value] of retryUpdates) cfgRetryFallbackChains.setEntry(this.settings, key, value);

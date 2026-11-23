@@ -30,6 +30,7 @@ import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { WebSearchPage } from '@/components/sections/websearch/WebSearchPage';
 import { ToolsPage } from '@/components/sections/tools/ToolsPage';
 import { MemoryPage } from '@/components/sections/memory/MemoryPage';
+import { ModelRolesPage } from '@/components/sections/model-roles/ModelRolesPage';
 import { OmpSettingsPage } from '@/components/sections/openchamber/OmpSettingsPage';
 import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
@@ -142,6 +143,7 @@ const pageOrder: SettingsPageSlug[] = [
   'web-search',
   'tools',
   'memory',
+  'model-roles',
   'omp',
   'behavior',
   'agents',
@@ -664,6 +666,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <ToolsPage />;
       case 'memory':
         return <MemoryPage />;
+      case 'model-roles':
+        return <ModelRolesPage />;
       case 'routing':
         return <RoutingPage />;
       case 'extensions':

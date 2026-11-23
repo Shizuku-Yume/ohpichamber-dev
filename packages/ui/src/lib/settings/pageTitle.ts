@@ -10,6 +10,7 @@ const SETTINGS_PAGE_TITLE_KEYS = {
   'web-search': 'settings.page.webSearch.title',
   tools: 'settings.page.tools.title',
   memory: 'settings.page.memory.title',
+  'model-roles': 'settings.page.modelRoles.title',
   omp: 'settings.page.omp.title',
   behavior: 'settings.page.behavior.title',
   usage: 'settings.page.usage.title',

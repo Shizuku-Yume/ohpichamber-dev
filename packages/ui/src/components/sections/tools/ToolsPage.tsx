@@ -19,7 +19,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
+import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
 import { isElectronShell } from '@/lib/desktop';
 
 export const ToolsPage: React.FC = () => {
@@ -50,7 +52,7 @@ export const ToolsPage: React.FC = () => {
   const setAgentWorkflowToolEnabled = useUIStore((state) => state.setAgentWorkflowToolEnabled);
 
   // OMP tools state
-  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading, saving: ompSaving } = useOmpPageSettings('tools');
+  const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('tools');
 
   React.useEffect(() => {
     void loadGuestCatalog();
@@ -105,10 +107,6 @@ export const ToolsPage: React.FC = () => {
   );
   const selectedImage = imageOptions.find((option) => option.value === imageRole);
 
-  const handleImageRoleChange = React.useCallback(
-    (selector: string) => void updateSettings((state) => [modelRoleChange(state, 'image', selector)]),
-    [updateSettings],
-  );
 
   const availableSettings = getSectionSettings('available');
   const availableById = React.useMemo(() => {
@@ -289,30 +287,13 @@ export const ToolsPage: React.FC = () => {
               />
               {ompForm['generate_image.enabled'] !== false ? (
                 <div className="ps-6">
-                  <SettingsFieldRow
+                  <ModelRoleLinkRow
                     label={t('settings.omp.modelRoles.role.image.label')}
                     info={t('settings.omp.modelRoles.role.image.desc')}
-                    settingsItem="omp.modelRoles.image"
-                  >
-                    <Select
-                      value={imageRole || '__inherit__'}
-                      disabled={!ompState || ompSaving || imageModels === undefined}
-                      onValueChange={(value) => handleImageRoleChange(value === '__inherit__' ? '' : value)}
-                    >
-                      <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('settings.omp.modelRoles.role.image.label')}>
-                        <SelectValue>
-                          {selectedImage?.label ?? (imageRole || t('settings.omp.modelRoles.inheritFallback'))}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__inherit__">{t('settings.omp.modelRoles.inheritFallback')}</SelectItem>
-                        {imageRole && !selectedImage && <SelectItem value={imageRole} disabled>{imageRole}</SelectItem>}
-                        {imageOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </SettingsFieldRow>
+                    value={selectedImage?.label ?? (imageRole || t('settings.omp.modelRoles.inheritFallback'))}
+                    linkLabel={t('settings.omp.modelRoles.link.hub')}
+                    onOpen={() => openModelRoleEditor('image')}
+                  />
                 </div>
               ) : null}
             </>

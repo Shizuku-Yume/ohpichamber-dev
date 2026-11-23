@@ -84,29 +84,25 @@ describe('retained Host tool settings', () => {
     expect(host.querySelector('[data-settings-item="sessions.agent-terminal-tool"]')).not.toBeNull();
   });
 
-  test('the image role offers enabled image models, not disabled or chat models', async () => {
-    const modelCatalog = spyOn(models, 'useSettingsImageModels').mockReturnValue([
-      { provider: 'provider', modelId: 'image-one', name: 'Image generator' },
-      { provider: 'provider', modelId: 'image-two', name: 'Disabled image generator', enabled: false },
-    ]);
+  test('the image role shows its model and opens the Model roles page to change it', async () => {
     const imageEnabled: OmpSetting = {
       id: 'generate_image.enabled', type: 'boolean', default: true, value: true,
       configured: false, placement: { type: 'page', page: 'tools', section: 'image-generation' },
     };
     const state = { workspaceId: 'workspace_1', revision: '1', totalCount: 1, settings: [imageEnabled] };
     const settings = spyOn(omp, 'useOmpPageSettings').mockReturnValue({
-      state, form: { 'generate_image.enabled': true }, loading: false, saving: false,
+      state, form: { 'generate_image.enabled': true, modelRoles: { image: 'provider/image-one' } }, loading: false, saving: false,
       pageSettings: [imageEnabled], getSectionSettings: () => [imageEnabled],
       updateSetting: async () => {}, updateSettings: async () => true,
     });
-    restore.push(() => modelCatalog.mockRestore(), () => settings.mockRestore());
+    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump').mockImplementation(() => {});
+    restore.push(() => settings.mockRestore(), () => jump.mockRestore());
     await act(async () => root.render(<I18nProvider><ToolsPage /></I18nProvider>));
-    const trigger = host.querySelector('[data-settings-item="omp.modelRoles.image"] [role="combobox"]');
-    expect(trigger).not.toBeNull();
-    await act(async () => trigger?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 })));
-    const options = Array.from(document.querySelectorAll('[role="option"]'), (option) => option.textContent);
-    expect(options).toContain('Image generator (provider)');
-    expect(options).not.toContain('Disabled image generator (provider)');
-    expect(options).toHaveLength(2);
+    expect(host.querySelector('[data-settings-item="omp.modelRoles.image"] [role="combobox"]') === null).toBe(true);
+    expect(host.textContent).toContain('provider/image-one');
+    const link = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set in Model roles');
+    expect(link).toBeDefined();
+    await act(async () => link?.click());
+    expect(jump).toHaveBeenCalledWith('model-roles', 'omp.modelRoles.image');
   });
 });
