@@ -145,6 +145,15 @@ x-custom: { value: "first\t<!-- literal -->" }
     expect(thinkingLevel).toBe('xhigh');
     await agents.update({ expectedRevision: '1', agent: updated }, '2');
     expect((await agents.definition('local-reviewer')).thinkingLevel).toBeUndefined();
+    const legacy = join(directory, 'legacy.md');
+    const legacyContent = `${prefix}---\nname: legacy\ndescription: Unquoted: legacy title\n---\nPrompt\n`;
+    await writeFile(legacy, legacyContent);
+    const catalog = await agents.read('workspace_1', '2');
+    expect(catalog.agents.map(agent => agent.agentId)).toContain('local-reviewer');
+    const legacyProfile = await agents.profile('legacy');
+    expect(legacyProfile.description).toBe('Unquoted: legacy title');
+    await expect(agents.update({ expectedRevision: '2', agent: { ...legacyProfile, description: 'Changed' } }, '3')).rejects.toThrow();
+    expect(await readFile(legacy, 'utf8')).toBe(legacyContent);
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();

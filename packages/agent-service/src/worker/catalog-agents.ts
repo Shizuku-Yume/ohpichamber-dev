@@ -39,12 +39,10 @@ const LegacyOpenChamberMetadataSchema = z.object({
 const ProfileMetadataSchema = z.object({
   openchamber: LegacyOpenChamberMetadataSchema.optional(),
 });
-const FRONTMATTER_HEADER = /^((?:\s*<!--(?:(?!-->)[\s\S])*-->\s*)*)---(?=\r?\n)[\s\S]*?\r?\n---/;
+const FRONTMATTER_HEADER = /^((?:\s*<!--(?:(?!-->)[\s\S])*-->\s*)*)---((?=\r?\n)[\s\S]*?)\r?\n---/;
 
-function profileFrontmatter(header: RegExpMatchArray, path: string): Record<string, unknown> {
-  return parseFrontmatter(header[0].slice(header[1].length), {
-    source: path, level: 'fatal', rawKeys: true, repair: false,
-  }).frontmatter;
+function profileFrontmatter(header: RegExpMatchArray): Record<string, unknown> {
+  return z.record(z.string(), z.unknown()).parse(YAML.parse(header[2]) ?? {});
 }
 
 function profilePath(cwd: string, agentId: string): string {
@@ -117,7 +115,14 @@ export class NativeAgents {
       try {
         const content = await readFile(definition.filePath, 'utf8');
         const header = content.match(FRONTMATTER_HEADER);
-        if (header) metadata = ProfileMetadataSchema.parse(profileFrontmatter(header, definition.filePath));
+        if (header) {
+          let fields: Record<string, unknown>;
+          try { fields = profileFrontmatter(header); }
+          catch {
+            fields = parseFrontmatter(content, { source: definition.filePath, level: 'off', rawKeys: true }).frontmatter;
+          }
+          metadata = ProfileMetadataSchema.parse(fields);
+        }
       } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile metadata could not be read'); }
     }
     const selector = this.effectiveModelSelectors(definition)?.[0];
@@ -231,7 +236,7 @@ export class NativeAgents {
     const content = (() => {
       try {
         if (previousContent !== null && !header) throw new Error('Agent frontmatter cannot be preserved');
-        const fields = header ? profileFrontmatter(header, path) : {};
+        const fields = header ? profileFrontmatter(header) : {};
         const set = (key: string, value: Agent[keyof Agent] | undefined) => {
           if (value === undefined) delete fields[key]; else fields[key] = value;
         };
