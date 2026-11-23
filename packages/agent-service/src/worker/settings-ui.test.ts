@@ -303,6 +303,26 @@ test('project model compaction rules are readable without writing them to shared
   } finally { await f.close(); }
 });
 
+test('project resets cannot expose hidden shared model compaction rules to replacement', async () => {
+  const f = await fixture();
+  try {
+    const globalPath = join(f.agentDirectory, 'config.yml');
+    const globalConfig = 'compaction:\n  modelThresholds:\n    example/*: 90000\n  modelThresholdsEnabled: false\n';
+    await writeFile(globalPath, globalConfig);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'compaction:\n  modelThresholds: null\n  modelThresholdsEnabled: null\n');
+    const before = await f.native.read('workspace_1', '0');
+    for (const setting of before.settings.filter(({ id }) => id.startsWith('compaction.modelThresholds'))) {
+      expect(setting.conditionActive).toBe(false);
+      await expect(f.native.write('workspace_1', '1', {
+        expectedRevision: before.revision,
+        changes: [{ id: setting.id, value: setting.default, expectedValue: setting.value }],
+      })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    }
+    expect(readFileSync(globalPath, 'utf8')).toBe(globalConfig);
+  } finally { await f.close(); }
+});
+
 test('the auto thinking ceiling reports its condition against defaultThinkingLevel', async () => {
   const f = await fixture();
   try {

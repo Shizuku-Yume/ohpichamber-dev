@@ -37,7 +37,11 @@ function inactivePowerCondition(setting: AnySetting, settings: Settings) {
 function hasCompactionOverride(setting: AnySetting, settings: Settings): boolean {
   if (setting.id !== 'compaction.modelThresholds' && setting.id !== 'compaction.modelThresholdsEnabled') return false;
   const provenance = settings.getProvenance(setting);
-  return provenance !== 'global' && provenance !== 'default';
+  if (provenance !== 'default') return provenance !== 'global';
+  // OMP reports "default" for explicit project resets as well as absent keys.
+  const project = settings.getProjectSettings().compaction;
+  const key = setting.id === 'compaction.modelThresholds' ? 'modelThresholds' : 'modelThresholdsEnabled';
+  return project === null || (typeof project === 'object' && Object.hasOwn(project, key));
 }
 
 /**
