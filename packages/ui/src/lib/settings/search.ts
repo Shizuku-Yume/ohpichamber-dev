@@ -54,6 +54,12 @@ const ompLayoutSearchItems = (): SettingsSearchItem[] => ompLayoutSettingIds().m
  */
 export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
+    id: 'omp.power.sleepPrevention',
+    page: 'general',
+    titleKey: 'settings.omp.items.power.sleepPrevention.label',
+    descriptionKey: 'settings.omp.items.power.sleepPrevention.description',
+  },
+  {
     id: 'omp.configFile',
     page: 'omp',
     titleKey: 'settings.omp.configFile.title',

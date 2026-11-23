@@ -1,4 +1,5 @@
 import React from 'react';
+import { OMP_POWER_CONDITIONS } from '@openchamber/agent-contract';
 
 import { NumberInput } from '@/components/ui/number-input';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,6 +31,8 @@ import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { setDirectoryShowHidden, useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useI18n } from '@/lib/i18n';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { formatShortcutForDisplay } from '@/lib/shortcuts';
@@ -397,6 +400,33 @@ export const GeneralInterfaceSettings: React.FC = () => {
       <PanelsAndLinksSection />
       {isMobile ? <MobileWorkspaceTabsSettings /> : null}
     </>
+  );
+};
+
+export const GeneralPowerSettings: React.FC = () => {
+  const { t } = useI18n();
+  const { form, getSectionSettings, updateSetting, saving } = useOmpPageSettings('general');
+  const rows = getSectionSettings('power');
+  if (rows.length === 0) return null;
+  return (
+    <SettingsSection title={t('settings.omp.group.power')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+      {rows.map((setting) => (
+        <React.Fragment key={setting.id}>
+          <OmpRowControl
+            setting={setting}
+            value={form[setting.id] ?? setting.value}
+            disabled={saving || setting.conditionActive === false}
+            onChange={(value) => void updateSetting(setting, value)}
+          />
+          {setting.conditionActive === false ? (
+            <p className="typography-meta text-muted-foreground">
+              {t(setting.condition === OMP_POWER_CONDITIONS.usesSharedConfig
+                ? 'settings.omp.power.overridden' : 'settings.omp.power.unavailable')}
+            </p>
+          ) : null}
+        </React.Fragment>
+      ))}
+    </SettingsSection>
   );
 };
 
