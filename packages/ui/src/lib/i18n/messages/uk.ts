@@ -5891,6 +5891,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.mcp.page.deleteDialog.descriptionSuffix": "OpenCode потрібно буде перезавантажити.",
   "settings.mcp.page.toast.clipboardReadFailed": "Не вдається прочитати буфер обміну",
   "settings.mcp.page.toast.configImported": "Конфігурацію MCP імпортовано",
+  "settings.mcp.page.import.duplicateHeaders": "Назви заголовків мають бути унікальними незалежно від регістру.",
   "settings.mcp.page.import.invalid": "Недійсний фрагмент MCP.",
   "settings.mcp.page.import.multiple": "Імпортуйте по одному серверу.",
   "settings.mcp.page.import.transport": "Використовуйте відносну команду або URL HTTP(S) без облікових даних і параметрів запиту.",

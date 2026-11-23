@@ -2012,6 +2012,7 @@ export const settingsDict = {
   'settings.mcp.page.deleteDialog.descriptionSuffix': 'OpenCode will need to reload.',
   'settings.mcp.page.toast.clipboardReadFailed': 'Cannot read clipboard',
   'settings.mcp.page.toast.configImported': 'MCP configuration imported',
+  "settings.mcp.page.import.duplicateHeaders": "Header names must be unique, ignoring case.",
   "settings.mcp.page.import.invalid": "Invalid MCP snippet.",
   "settings.mcp.page.import.multiple": "Import one server at a time.",
   "settings.mcp.page.import.transport": "Use a relative command or an HTTP(S) URL without credentials or query parameters.",

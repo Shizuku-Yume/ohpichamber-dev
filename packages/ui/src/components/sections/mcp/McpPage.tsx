@@ -56,6 +56,7 @@ type CredentialKind = 'environment' | 'headers';
 interface CredentialDraftRow {
   key: string;
   value: string;
+  preserveKey?: boolean;
 }
 
 const REMOTE_TRANSPORT_LABELS = {
@@ -346,7 +347,7 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
             <div className={cn('min-w-0 @xl:flex-none', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
               <Input
                 value={row.key}
-                onChange={(event) => updateRow(index, 'key', keyTransform(event.target.value))}
+                onChange={(event) => updateRow(index, 'key', row.preserveKey ? event.target.value : keyTransform(event.target.value))}
                 placeholder={isEnv ? t('settings.mcp.page.env.keyPlaceholder') : t('settings.mcp.page.advanced.headerNamePlaceholder')}
                 aria-label={t('settings.mcp.page.env.key')}
                 className="font-mono typography-meta"
@@ -654,7 +655,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         ? draft.transport.envCredentialRefs ?? {}
         : draft.transport.headerCredentialRefs ?? {}));
       for (const row of rows) {
-        const key = draft.transport.type === 'stdio' ? normalizeEnvKey(row.key) : row.key;
+        const key = draft.transport.type === 'stdio' && !row.preserveKey ? normalizeEnvKey(row.key) : row.key;
         if (!key) continue;
         assertRuntime();
         const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, persistedServerId.current, { persistedRevision, value: row.value });
@@ -741,7 +742,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
     try {
       const imported = parseImportedMcpSnippet(snippet);
       setDraft({ ...imported.server, serverId: initial.serverId, scope: draft.scope ?? initial.scope ?? 'project' });
-      setCredentialRows(imported.credentials);
+      setCredentialRows(imported.credentials.map(row => ({ ...row, preserveKey: imported.server.transport.type === 'stdio' })));
       setBearerDraft('');
       setImportOpen(false);
       setSnippet('');

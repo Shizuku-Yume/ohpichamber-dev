@@ -5882,6 +5882,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.mcp.page.deleteDialog.descriptionSuffix": "OpenCode necesitará recarregar.",
   "settings.mcp.page.toast.clipboardReadFailed": "Não é possível ler a área de transferência",
   "settings.mcp.page.toast.configImported": "Configuração MCP importada",
+  "settings.mcp.page.import.duplicateHeaders": "Os nomes dos cabeçalhos devem ser únicos, sem diferenciar maiúsculas de minúsculas.",
   "settings.mcp.page.import.invalid": "Trecho MCP inválido.",
   "settings.mcp.page.import.multiple": "Importe um servidor por vez.",
   "settings.mcp.page.import.transport": "Use um comando relativo ou uma URL HTTP(S) sem credenciais nem parâmetros de consulta.",

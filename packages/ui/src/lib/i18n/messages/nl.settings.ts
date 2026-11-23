@@ -2013,6 +2013,7 @@ export const settingsDict = {
   'settings.mcp.page.deleteDialog.descriptionSuffix': 'OpenCode moet opnieuw worden geladen.',
   'settings.mcp.page.toast.clipboardReadFailed': 'Kan het klembord niet lezen',
   'settings.mcp.page.toast.configImported': 'MCP-configuratie geïmporteerd',
+  "settings.mcp.page.import.duplicateHeaders": "Headernamen moeten uniek zijn, ongeacht hoofdletters.",
   "settings.mcp.page.import.invalid": "Ongeldig MCP-fragment.",
   "settings.mcp.page.import.multiple": "Importeer één server tegelijk.",
   "settings.mcp.page.import.transport": "Gebruik een relatieve opdracht of een HTTP(S)-URL zonder inloggegevens of queryparameters.",

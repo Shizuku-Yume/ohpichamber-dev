@@ -5882,6 +5882,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.mcp.page.deleteDialog.descriptionSuffix": "OpenCode 需要重新加载。",
   "settings.mcp.page.toast.clipboardReadFailed": "无法读取剪贴板",
   "settings.mcp.page.toast.configImported": "MCP 配置已导入",
+  "settings.mcp.page.import.duplicateHeaders": "标头名称必须唯一，不区分大小写。",
   "settings.mcp.page.import.invalid": "MCP 片段无效。",
   "settings.mcp.page.import.multiple": "请一次导入一个服务器。",
   "settings.mcp.page.import.transport": "请使用相对命令或不含凭据和查询参数的 HTTP(S) URL。",

@@ -5864,6 +5864,7 @@ export const dict = {
   "settings.mcp.page.deleteDialog.descriptionSuffix": "OpenCode muss neu geladen werden.",
   "settings.mcp.page.toast.clipboardReadFailed": "Kann Zwischenablage nicht lesen",
   "settings.mcp.page.toast.configImported": "MCP-Konfiguration importiert",
+  "settings.mcp.page.import.duplicateHeaders": "Headernamen müssen unabhängig von der Groß- und Kleinschreibung eindeutig sein.",
   "settings.mcp.page.import.invalid": "Ungültiger MCP-Ausschnitt.",
   "settings.mcp.page.import.multiple": "Importiere jeweils einen Server.",
   "settings.mcp.page.import.transport": "Verwende einen relativen Befehl oder eine HTTP(S)-URL ohne Zugangsdaten oder Abfrageparameter.",

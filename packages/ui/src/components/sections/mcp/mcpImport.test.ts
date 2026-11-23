@@ -31,6 +31,24 @@ describe('parseImportedMcpSnippet', () => {
     expect(JSON.stringify(result)).not.toContain('fixture-oauth');
   });
 
+  test('preserves exact native environment keys without collisions', () => {
+    const result = parseImportedMcpSnippet(standard({ command: 'node', env: { 'foo.bar': 'one', FOO_BAR: 'two', my_token: 'three', API_KEY: 'four' } }));
+    expect(result.credentials.map(row => row.key)).toEqual(['foo.bar', 'FOO_BAR', 'my_token', 'API_KEY']);
+  });
+
+  test('rejects case-duplicate header names without reflecting their values', () => {
+    try {
+      parseImportedMcpSnippet(standard({ url: 'https://mcp.example', headers: { Authorization: 'first-private', authorization: 'second-private' } }));
+      throw new Error('Expected rejection');
+    } catch (error) {
+      expect(error).toBeInstanceOf(McpImportError);
+      if (!(error instanceof McpImportError)) throw error;
+      expect(error.code).toBe('duplicateHeaders');
+      expect(error.message).not.toContain('first-private');
+      expect(error.message).not.toContain('second-private');
+    }
+  });
+
   test('rejects unsafe and ambiguous snippets without reflecting values', () => {
     const cases = [
       { entry: { url: 'https://mcp.linear.app/sse?team=eng' }, code: 'transport' },

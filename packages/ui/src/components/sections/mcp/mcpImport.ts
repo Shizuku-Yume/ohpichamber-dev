@@ -2,7 +2,7 @@ import { MCPServerConfigSchema, MCPTransportSchema, type MCPServerConfig } from 
 import { z } from 'zod';
 
 export class McpImportError extends Error {
-  constructor(public readonly code: 'invalid' | 'multiple' | 'transport' | 'expression', public readonly key?: string) {
+  constructor(public readonly code: 'invalid' | 'multiple' | 'transport' | 'expression' | 'duplicateHeaders', public readonly key?: string) {
     super(code === 'expression' ? `Unsupported credential expression: ${key}` : code === 'multiple' ? 'Import one server at a time.' : 'Invalid MCP import.');
   }
 }
@@ -43,6 +43,10 @@ export function parseImportedMcpSnippet(source: string): {
     ? { type: 'stdio', command: entry.command, args: entry.args ?? [] }
     : { type: entry.type === 'sse' ? 'sse' : 'http', url: entry.url });
   if (!transport.success) throw new McpImportError('transport');
+  if (!stdio && entry.headers) {
+    const names = Object.keys(entry.headers).map(name => name.toLowerCase());
+    if (new Set(names).size !== names.length) throw new McpImportError('duplicateHeaders');
+  }
   const credentials = Object.entries((stdio ? entry.env : entry.headers) ?? {}).map(([key, value]) => {
     if (!safeKey.test(key)) throw new McpImportError('invalid');
     if (value.includes('${') || value.startsWith('!')) throw new McpImportError('expression', key);

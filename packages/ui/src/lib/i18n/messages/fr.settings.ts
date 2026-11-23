@@ -1882,6 +1882,7 @@ export const settingsDict = {
   'settings.mcp.page.deleteDialog.descriptionSuffix': 'OpenCode devra recharger.',
   'settings.mcp.page.toast.clipboardReadFailed': 'Impossible de lire le presse-papier',
   'settings.mcp.page.toast.configImported': 'Configuration MCP importée',
+  "settings.mcp.page.import.duplicateHeaders": "Les noms des en-têtes doivent être uniques, sans distinction de casse.",
   "settings.mcp.page.import.invalid": "Extrait MCP invalide.",
   "settings.mcp.page.import.multiple": "Importez un serveur à la fois.",
   "settings.mcp.page.import.transport": "Utilisez une commande relative ou une URL HTTP(S) sans identifiants ni paramètres de requête.",

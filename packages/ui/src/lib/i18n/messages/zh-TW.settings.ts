@@ -1857,6 +1857,7 @@ export const settingsDict = {
   'settings.mcp.page.deleteDialog.descriptionSuffix': 'OpenCode 需要重新載入。',
   'settings.mcp.page.toast.clipboardReadFailed': '無法讀取剪貼簿',
   'settings.mcp.page.toast.configImported': 'MCP 設定已匯入',
+  "settings.mcp.page.import.duplicateHeaders": "標頭名稱必須唯一，不區分大小寫。",
   "settings.mcp.page.import.invalid": "MCP 片段無效。",
   "settings.mcp.page.import.multiple": "請一次匯入一個伺服器。",
   "settings.mcp.page.import.transport": "請使用相對命令或不含憑證和查詢參數的 HTTP(S) URL。",

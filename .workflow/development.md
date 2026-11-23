@@ -4,6 +4,18 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+W6 import credential rows now preserve exact native environment names through
+the explicit private save, including case and dots. Canonical env-reference keys
+accept nonempty strings; the Host compares server records without rewriting keys
+and the worker assigns `env[name]` with literal policy. Manually entered rows keep
+their existing normalization. Parser-admitted header names already survive the
+header editor's normalizer unchanged; case-duplicate header names are now refused
+with typed, translated diagnostics in all 15 locales. The failing page test
+observed a dot/underscore collision and uppercase conversion before the fix.
+Worker tests pass (25), isolated importer/page/runtime/locale tests pass (4/4
+files), both package type-checks and changed-file oxlint pass. Evidence:
+`/home/ubuntu/w6-evidence/keys-before.log` and `round-*.log`.
+
 W6 review also reproduces an imported draft renamed before Create: the secret
 write used the created ID but the reference binding used the initial draft ID.
 The editor now retains the ID accepted by Create and uses it for autosave and
@@ -18,6 +30,16 @@ edits now preserve enable-override membership, including denylist ordering.
 Explicit enable changes retain their existing behavior. The focused worker suite
 passes 25 tests; evidence is in `/home/ubuntu/w6-evidence/finding2-*.log`.
 The projection's incomplete enable-override interpretation remains unchanged.
+This is verified at the writer boundary, not as a successful end-to-end rename:
+both persist dispatch paths authorize each proposed server first, and the Host
+currently rejects a disabled projected server before reaching the writer.
+
+User-scope credential references remain workspace-bound for both manual and
+imported credential rows. The shared save function has no scope-specific branch;
+native credential provider keys include the workspace hash, while user-file
+references are global. Stateless persistence resolves every server reference,
+so a foreign-workspace reference can also block unrelated saves. This predates
+the importer and remains unfixed by request.
 
 W6 MCP remediation preserves OMP 19.1 user-file native fields when changing
 labels, enablement or credential references. Label-only

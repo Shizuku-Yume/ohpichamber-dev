@@ -143,6 +143,37 @@ test('standard imports prefill private rows and save only opaque credential refe
   expect(JSON.stringify(configs)).not.toContain('import-private');
 });
 
+test('imported environment credential names survive private save exactly', async () => {
+  const configs: Array<Partial<MCPServerConfig>> = [];
+  useMcpConfigStore.setState({
+    selectedMcpName: 'new-env', mcpDraft: { ...server, serverId: 'new-env' },
+    createMcp: async config => { configs.push(config); return { ok: true, result: applyResult([config]), outcome: 'applied' }; },
+    updateMcp: async (_serverId, config) => { configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]), outcome: 'applied' }; },
+  });
+  await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+  const open = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Import from JSON snippet'));
+  if (!open) throw new Error('Missing import control');
+  await act(async () => { open.click(); });
+  const textarea = document.querySelector('textarea');
+  const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
+  if (!textarea || !setter) throw new Error('Missing import input');
+  await act(async () => {
+    setter.call(textarea, JSON.stringify({ mcpServers: { Imported: { command: 'node', env: { 'foo.bar': 'one', FOO_BAR: 'two', my_token: 'three', API_KEY: 'four' } } } }));
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const confirm = [...document.querySelectorAll('button')].find(button => button.textContent === 'Import');
+  if (!confirm) throw new Error('Missing import confirmation');
+  await act(async () => { confirm.click(); });
+  const create = [...container.querySelectorAll('button')].find(button => button.textContent === 'Create');
+  if (!create) throw new Error('Missing create control');
+  await act(async () => { create.click(); });
+  const save = [...container.querySelectorAll('button')].find(button => button.textContent === 'Save Changes');
+  if (!save) throw new Error('Missing credential save');
+  await act(async () => { save.click(); });
+  expect(secretWrites).toHaveLength(4);
+  expect(configs.at(-1)?.transport).toEqual({ type: 'stdio', command: 'node', args: [], envCredentialRefs: { 'foo.bar': 'private_ref', FOO_BAR: 'private_ref', my_token: 'private_ref', API_KEY: 'private_ref' } });
+});
+
 test('worker apply failures remain visible even though persistence succeeded', async () => {
   const result: MCPApplyResult = { ...applyResult([server]), status: 'failed', outcome: 'saved-not-connected', workers: [{ worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, outcome: 'failed', revisions: { runtimeStatus: 'unavailable', appliedRevision: null, catalogRevision: '0' }, error: { code: 'MCP_APPLY_FAILED', detail: 'The worker could not connect.', retryable: true } }] };
   useMcpConfigStore.setState({ applyResultsByDirectory: { '/repo': result }, errorsByDirectory: { '/repo': 'Runtime application incomplete.' } });

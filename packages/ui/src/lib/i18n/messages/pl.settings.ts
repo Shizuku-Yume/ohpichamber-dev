@@ -581,6 +581,7 @@ export const settingsDict = {
   'settings.mcp.page.toast.completeAuthorizationInBrowser': 'Zakończ proces autoryzacji MCP w swojej przeglądarce',
   'settings.mcp.page.toast.completeAuthorizationInBrowserWithPaste': 'Zakończ proces autoryzacji MCP w przeglądarce, a następnie wklej zwrócony kod lub URL callback tutaj',
   'settings.mcp.page.toast.configImported': 'Konfiguracja MCP została zaimportowana',
+  "settings.mcp.page.import.duplicateHeaders": "Nazwy nagłówków muszą być unikalne niezależnie od wielkości liter.",
   "settings.mcp.page.import.invalid": "Nieprawidłowy fragment MCP.",
   "settings.mcp.page.import.multiple": "Importuj po jednym serwerze.",
   "settings.mcp.page.import.transport": "Użyj polecenia względnego lub adresu HTTP(S) bez danych logowania i parametrów zapytania.",
