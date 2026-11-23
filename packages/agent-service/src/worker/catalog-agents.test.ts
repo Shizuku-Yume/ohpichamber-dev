@@ -101,7 +101,8 @@ test('a description edit preserves native agent settings, selectors and prompt b
   await Promise.all([directory, agentDirectory].map(path => mkdir(path, { recursive: true })));
   const file = join(directory, 'local-reviewer.md');
   const body = '\nUse exact output.\n\n  Indented line.  \n\n';
-  await writeFile(file, `---
+  const prefix = '<!-- native agent profile -->\n\n';
+  await writeFile(file, `${prefix}---
 name: local-reviewer
 description: Original
 model: ["@smol", "anthropic/claude-haiku-4-5:high"]
@@ -110,7 +111,7 @@ autoloadSkills: [git]
 prewalk: true
 structured: true
 readSummarize: false
-thinking: inherit
+thinking-level: xhigh
 x-custom: { value: 1 }
 ---
 ${body}`);
@@ -126,6 +127,7 @@ ${body}`);
     const profile = await agents.profile('local-reviewer');
     await agents.update({ expectedRevision: '0', agent: { ...profile, description: 'Updated' } }, '1');
     const stored = await readFile(file, 'utf8');
+    expect(stored.startsWith(prefix)).toBe(true);
     expect(stored.endsWith(`---\n${body}`)).toBe(true);
     expect(parseFrontmatter(stored, { rawKeys: true }).frontmatter).toMatchObject({
       description: 'Updated',
@@ -135,11 +137,15 @@ ${body}`);
       prewalk: true,
       structured: true,
       readSummarize: false,
-      thinking: 'inherit',
+      'thinking-level': 'xhigh',
       'x-custom': { value: 1 },
     });
     expect(cfgTaskAgentModelOverrides.get(runtime.settings)).toEqual(overrides);
     expect((await agents.definition('local-reviewer')).model).toEqual(['@task', '@slow']);
+    const { thinkingLevel, ...updated } = await agents.profile('local-reviewer');
+    expect(thinkingLevel).toBe('xhigh');
+    await agents.update({ expectedRevision: '1', agent: updated }, '2');
+    expect((await agents.definition('local-reviewer')).thinkingLevel).toBeUndefined();
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();
