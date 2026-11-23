@@ -217,31 +217,43 @@ export class NativeFileResources {
     }
     const previousText = current ? await readFile(current.path, 'utf8') : '';
     const { prefix, header } = frontmatterBoundary(previousText);
-    const frontmatter = JsonObjectSchema.parse(parseFrontmatter(previousText, { source: path, level: 'fatal', rawKeys: true }).frontmatter);
-    const metadata = { ...frontmatter };
-    if (request.description !== undefined && request.description !== current?.entry.description) metadata.description = request.description;
-    if (request.argumentHint !== undefined && request.argumentHint !== this.metadata(previousText, path).argumentHint) {
-      delete metadata.argumentHint;
-      delete metadata['argument-hint'];
-      if (request.argumentHint) metadata['argument-hint'] = request.argumentHint;
+    const { description, group } = request;
+    const descriptionChanged = description !== undefined && description !== current?.entry.description;
+    const argumentHintChanged = request.argumentHint !== undefined && request.argumentHint !== this.metadata(previousText, path).argumentHint;
+    const modelChanged = (request.modelSelection !== undefined || kind === 'commands') && !isDeepStrictEqual(request.modelSelection, current?.entry.modelSelection);
+    const agentChanged = request.agentId !== undefined && (request.agentId ?? undefined) !== current?.entry.agentId;
+    const groupChanged = group !== undefined && group !== current?.entry.group;
+    let editedMetadata: z.infer<typeof JsonObjectSchema> | undefined;
+    if (descriptionChanged || argumentHintChanged || modelChanged || agentChanged || groupChanged) {
+      const frontmatter = JsonObjectSchema.parse(parseFrontmatter(header.slice(prefix.length), {
+        source: path, level: 'fatal', repair: false, rawKeys: true,
+      }).frontmatter);
+      const metadata = { ...frontmatter };
+      if (descriptionChanged) metadata.description = description;
+      if (argumentHintChanged) {
+        delete metadata.argumentHint;
+        delete metadata['argument-hint'];
+        if (request.argumentHint) metadata['argument-hint'] = request.argumentHint;
+      }
+      const bindings = JsonObjectSchema.safeParse(frontmatter.openchamber);
+      const openchamber = bindings.success ? { ...bindings.data } : {};
+      if (modelChanged) {
+        delete openchamber['model-selection'];
+        if (request.modelSelection) openchamber.modelSelection = request.modelSelection;
+        else delete openchamber.modelSelection;
+      }
+      if (agentChanged) {
+        delete openchamber['agent-id'];
+        if (request.agentId) openchamber.agentId = request.agentId;
+        else delete openchamber.agentId;
+      }
+      if (groupChanged) openchamber.group = group;
+      if (bindings.success || Object.keys(openchamber).length) metadata.openchamber = openchamber;
+      if (!isDeepStrictEqual(frontmatter, metadata)) editedMetadata = metadata;
     }
-    const bindings = JsonObjectSchema.safeParse(frontmatter.openchamber);
-    const openchamber = bindings.success ? { ...bindings.data } : {};
-    if ((request.modelSelection !== undefined || kind === 'commands') && !isDeepStrictEqual(request.modelSelection, current?.entry.modelSelection)) {
-      delete openchamber['model-selection'];
-      if (request.modelSelection) openchamber.modelSelection = request.modelSelection;
-      else delete openchamber.modelSelection;
-    }
-    if (request.agentId !== undefined && (request.agentId ?? undefined) !== current?.entry.agentId) {
-      delete openchamber['agent-id'];
-      if (request.agentId) openchamber.agentId = request.agentId;
-      else delete openchamber.agentId;
-    }
-    if (request.group !== undefined && request.group !== current?.entry.group) openchamber.group = request.group;
-    if (bindings.success || Object.keys(openchamber).length) metadata.openchamber = openchamber;
-    const nextHeader = isDeepStrictEqual(frontmatter, metadata) && (header || !request.content.startsWith('---') && !frontmatterBoundary(request.content).header)
+    const nextHeader = editedMetadata === undefined && (header || !request.content.startsWith('---') && !frontmatterBoundary(request.content).header)
       ? header && header === previousText && !/[\r\n]$/.test(header) && request.content ? `${header}\n` : header
-      : `${prefix}---\n${YAML.stringify(metadata).trimEnd()}\n---\n`;
+      : `${prefix}---\n${YAML.stringify(editedMetadata ?? {}).trimEnd()}\n---\n`;
     const text = nextHeader + request.content;
     const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
     try {

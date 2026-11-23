@@ -210,6 +210,30 @@ test('command editing preserves native side, raw keys and unrelated metadata', a
   });
 }, 60000);
 
+test('description edits preserve literal native metadata without OMP repair', async () => {
+  const h = await fixture();
+  const directory = join(h.cwd, '.omp', 'commands');
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, 'hello.md');
+  const nativeValue = 'keep <!-- literal -->\tand a tab';
+  const content = 'Say hello.\n';
+  await writeFile(path, `<!-- Header note -->\n---\ndescription: Original\nnative-key: "${nativeValue}"\n---\n${content}`);
+  const read = await h.operation({ action: 'commands.read' });
+  if (read.kind !== 'commands') throw new Error('Expected command catalog');
+  const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
+  if (!command) throw new Error('Expected authored command');
+  await h.operation({ action: 'commands.update', request: {
+    expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
+    description: 'Edited', content,
+  } });
+  const text = await readFile(path, 'utf8');
+  const prefix = '<!-- Header note -->\n';
+  expect(text.startsWith(prefix)).toBe(true);
+  expect(parseFrontmatter(text.slice(prefix.length), { repair: false, rawKeys: true }).frontmatter).toEqual({
+    description: 'Edited', 'native-key': nativeValue,
+  });
+}, 60000);
+
 test('native delimiters separate metadata from the editable body', async () => {
   const h = await fixture();
   const dir = join(h.cwd, '.omp', 'commands');
