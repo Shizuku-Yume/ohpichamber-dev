@@ -3,6 +3,7 @@
 /** Compaction settings strings (Settings > Sessions), merged into each locale's main dictionary. */
 export const compactionSettingsI18n = {
   en: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Token-based rules can open a larger context window even when Extended Context is off. Longer requests may cost more.",
     'settings.openchamber.defaults.compaction.modelRules': "Per-model compaction",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Set when a model compacts. Use an exact model or a provider prefix ending in *. Enter a token count (90000), a fixed trigger (f90000), or a percentage (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Add model rule",
@@ -25,6 +26,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': "As a session nears compaction, OpenCode writes the summary ahead of time and swaps it in when compaction is due, so the session doesn't pause for it. A summary that ends up unused still costs tokens.",
   },
   de: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Tokenbasierte Regeln können ein größeres Kontextfenster öffnen, auch wenn der erweiterte Kontext deaktiviert ist. Längere Anfragen können mehr kosten.",
     'settings.openchamber.defaults.compaction.modelRules': "Komprimierung pro Modell",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Lege fest, wann ein Modell komprimiert. Verwende ein genaues Modell oder ein Anbieterpräfix mit *. Gib eine Tokenanzahl (90000), einen festen Schwellenwert (f90000) oder einen Prozentsatz (80%) ein.",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Modellregel hinzufügen",
@@ -47,6 +49,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Nähert sich eine Sitzung der Komprimierung, schreibt OpenCode die Zusammenfassung vorab und setzt sie ein, wenn es so weit ist, sodass die Sitzung nicht darauf wartet. Eine ungenutzte Zusammenfassung kostet trotzdem Tokens.',
   },
   fr: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Les règles basées sur le nombre de tokens peuvent ouvrir une fenêtre de contexte plus grande, même si le contexte étendu est désactivé. Les requêtes plus longues peuvent coûter plus cher.",
     'settings.openchamber.defaults.compaction.modelRules': "Compactage par modèle",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Choisissez quand un modèle compacte. Indiquez un modèle exact ou un préfixe de fournisseur terminé par *. Saisissez un nombre de tokens (90000), un seuil fixe (f90000) ou un pourcentage (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Ajouter une règle de modèle",
@@ -69,6 +72,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': "Quand une session approche de la compaction, OpenCode rédige le résumé à l'avance et le met en place au moment voulu, sans faire attendre la session. Un résumé jamais utilisé coûte quand même des tokens.",
   },
   nl: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Regels op basis van tokens kunnen een groter contextvenster openen, zelfs als uitgebreide context uitstaat. Langere verzoeken kunnen meer kosten.",
     'settings.openchamber.defaults.compaction.modelRules': "Compactie per model",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Stel in wanneer een model compacteert. Gebruik een exact model of een providerprefix dat eindigt op *. Voer een aantal tokens (90000), een vaste drempel (f90000) of een percentage (80%) in.",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Modelregel toevoegen",
@@ -91,6 +95,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Als een sessie bijna gecompacteerd moet worden, schrijft OpenCode de samenvatting alvast en zet die in wanneer het zover is, zodat de sessie er niet op wacht. Een ongebruikte samenvatting kost toch tokens.',
   },
   es: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Las reglas basadas en tokens pueden abrir una ventana de contexto mayor aunque el contexto ampliado esté desactivado. Las solicitudes más largas pueden costar más.",
     'settings.openchamber.defaults.compaction.modelRules': "Compactación por modelo",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Define cuándo compacta un modelo. Usa un modelo exacto o un prefijo de proveedor terminado en *. Introduce un número de tokens (90000), un umbral fijo (f90000) o un porcentaje (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Añadir regla de modelo",
@@ -113,6 +118,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Cuando una sesión se acerca a la compactación, OpenCode escribe el resumen por adelantado y lo aplica cuando toca, así la sesión no se detiene a esperarlo. Un resumen que no llega a usarse igualmente cuesta tokens.',
   },
   ja: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "トークン数に基づくルールは、拡張コンテキストが無効でも、より大きなコンテキストウィンドウを開く場合があります。長いリクエストは料金が高くなることがあります。",
     'settings.openchamber.defaults.compaction.modelRules': "モデルごとの圧縮",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "モデルが圧縮を開始する条件を設定します。モデルを直接指定するか、末尾が * のプロバイダー接頭辞を指定します。トークン数 (90000)、固定しきい値 (f90000)、割合 (80%) を入力できます。",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "モデルルールを追加",
@@ -135,6 +141,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'セッションがコンパクションに近づくと、OpenCode が前もって要約を書き、必要になった時点で差し替えるため、セッションは要約を待たずに進みます。使われなかった要約にもトークンの費用がかかります。',
   },
   'pt-BR': {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Regras baseadas em tokens podem abrir uma janela de contexto maior mesmo com o contexto estendido desativado. Solicitações mais longas podem custar mais.",
     'settings.openchamber.defaults.compaction.modelRules': "Compactação por modelo",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Defina quando um modelo compacta. Use um modelo exato ou um prefixo de provedor terminado em *. Informe uma contagem de tokens (90000), um limite fixo (f90000) ou uma porcentagem (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Adicionar regra de modelo",
@@ -157,6 +164,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Quando uma sessão se aproxima da compactação, o OpenCode escreve o resumo antes e o aplica na hora certa, sem a sessão parar para esperar. Um resumo que acaba não sendo usado ainda custa tokens.',
   },
   uk: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Правила на основі кількості токенів можуть відкривати більше вікно контексту, навіть якщо розширений контекст вимкнено. Довші запити можуть коштувати дорожче.",
     'settings.openchamber.defaults.compaction.modelRules': "Стиснення за моделлю",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Виберіть, коли модель стискає контекст. Вкажіть точну модель або префікс провайдера із * наприкінці. Введіть кількість токенів (90000), фіксований поріг (f90000) або відсоток (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Додати правило моделі",
@@ -179,6 +187,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Коли сесія наближається до стискання, OpenCode заздалегідь пише підсумок і підставляє його, коли настає час, тож сесія на нього не чекає. Підсумок, який так і не знадобився, однаково коштує токенів.',
   },
   ko: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "토큰 수를 기준으로 하는 규칙은 확장 컨텍스트가 꺼져 있어도 더 큰 컨텍스트 창을 열 수 있습니다. 긴 요청에는 더 많은 비용이 들 수 있습니다.",
     'settings.openchamber.defaults.compaction.modelRules': "모델별 압축",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "모델이 압축을 시작할 시점을 설정합니다. 정확한 모델이나 *로 끝나는 제공업체 접두사를 사용하세요. 토큰 수(90000), 고정 임계값(f90000) 또는 비율(80%)을 입력하세요.",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "모델 규칙 추가",
@@ -201,6 +210,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': '세션이 압축에 가까워지면 OpenCode가 요약을 미리 작성해 두었다가 압축할 때 바꿔 넣으므로 세션이 요약을 기다리며 멈추지 않습니다. 쓰이지 않은 요약에도 토큰 비용이 듭니다.',
   },
   pl: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Reguły oparte na liczbie tokenów mogą otworzyć większe okno kontekstu nawet po wyłączeniu rozszerzonego kontekstu. Dłuższe żądania mogą kosztować więcej.",
     'settings.openchamber.defaults.compaction.modelRules': "Kompakcja według modelu",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Ustaw, kiedy model kompaktuje kontekst. Wskaż konkretny model lub prefiks dostawcy zakończony *. Wpisz liczbę tokenów (90000), stały próg (f90000) lub procent (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Dodaj regułę modelu",
@@ -223,6 +233,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Gdy sesja zbliża się do kompaktowania, OpenCode pisze podsumowanie z wyprzedzeniem i podmienia je, gdy przychodzi pora, więc sesja na nie nie czeka. Podsumowanie, które nie zostanie użyte, i tak kosztuje tokeny.',
   },
   'zh-CN': {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "即使关闭扩展上下文，按 token 数设置的规则也可能启用更大的上下文窗口。较长的请求可能产生更高费用。",
     'settings.openchamber.defaults.compaction.modelRules': "按模型压缩",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "设置模型何时压缩上下文。指定完整模型或以 * 结尾的服务商前缀，再输入 token 数 (90000)、固定阈值 (f90000) 或百分比 (80%)。",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "添加模型规则",
@@ -245,6 +256,7 @@ export const compactionSettingsI18n = {
   'settings.openchamber.defaults.compaction.backgroundInfo': '会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 Token。'
 },
   'zh-TW': {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "即使關閉擴充上下文，以 token 數量設定的規則仍可能啟用更大的上下文視窗。較長的請求可能產生更高費用。",
     'settings.openchamber.defaults.compaction.modelRules': "依模型壓縮",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "設定模型何時壓縮上下文。指定完整模型或以 * 結尾的供應商前綴，再輸入 token 數 (90000)、固定閾值 (f90000) 或百分比 (80%)。",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "新增模型規則",
@@ -267,6 +279,7 @@ export const compactionSettingsI18n = {
   'settings.openchamber.defaults.compaction.backgroundInfo': '工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 Token。'
 },
   tr: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "Belirteç sayısına dayalı kurallar, genişletilmiş bağlam kapalı olsa bile daha büyük bir bağlam penceresi açabilir. Daha uzun istekler daha pahalı olabilir.",
     'settings.openchamber.defaults.compaction.modelRules': "Modele göre sıkıştırma",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "Modelin ne zaman sıkıştıracağını ayarla. Bir modelin tam adını veya * ile biten sağlayıcı önekini kullan. Belirteç sayısı (90000), sabit eşik (f90000) veya yüzde (80%) gir.",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "Model kuralı ekle",
@@ -289,6 +302,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Bir oturum sıkıştırmaya yaklaştığında OpenCode özeti önceden yazar ve sırası gelince yerine koyar, böylece oturum onu beklemez. Kullanılmayan bir özet de token harcar.',
   },
   ar: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "قد تفتح القواعد المستندة إلى عدد الرموز نافذة سياق أكبر حتى عند إيقاف السياق الموسّع. وقد تكون الطلبات الأطول أعلى تكلفة.",
     'settings.openchamber.defaults.compaction.modelRules': "الضغط حسب النموذج",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "حدّد متى يضغط النموذج السياق. استخدم نموذجًا محددًا أو بادئة مزوّد تنتهي بعلامة *. أدخل عدد الرموز (90000) أو حدًا ثابتًا (f90000) أو نسبة مئوية (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "إضافة قاعدة نموذج",
@@ -311,6 +325,7 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'عندما تقترب الجلسة من الضغط، يكتب OpenCode الملخص مسبقًا ويضعه مكانه عند حلول وقت الضغط، فلا تتوقف الجلسة بانتظاره. الملخص الذي لا يُستخدم يكلّف رموزًا أيضًا.',
   },
   he: {
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "כללים המבוססים על מספר אסימונים יכולים לפתוח חלון הקשר גדול יותר גם כשהקשר מורחב כבוי. בקשות ארוכות יותר עשויות לעלות יותר.",
     'settings.openchamber.defaults.compaction.modelRules': "דחיסה לפי מודל",
     'settings.openchamber.defaults.compaction.modelRulesInfo': "קובעים מתי המודל דוחס את ההקשר. אפשר לציין מודל מדויק או קידומת ספק המסתיימת ב־*. יש להזין מספר אסימונים (90000), סף קבוע (f90000) או אחוז (80%).",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "הוספת כלל למודל",

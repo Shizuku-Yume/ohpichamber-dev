@@ -7,7 +7,10 @@ Read this record before implementation, together with the [agent guide](../AGENT
 Sessions → Compaction exposes the native OMP 19 model threshold map and its
 enable switch. Exact selectors and wildcard prefixes keep their native token,
 fixed-trigger, or percentage values. Edits preserve other entries; native
-project overrides are readable but cannot be copied into the shared config.
+project overrides and explicit resets are readable but cannot replace the shared
+config. Rule updates compare against the current on-disk map before writing.
+Saving or enabling token-based rules requires acknowledging potential
+extended-context pricing.
 The remaining model-role hub, ordered fallback, and preset work is separate.
 
 The OMP 19 settings-control follow-up restores native thinking choices and a

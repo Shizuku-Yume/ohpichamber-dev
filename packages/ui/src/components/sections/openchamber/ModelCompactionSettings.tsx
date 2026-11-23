@@ -1,6 +1,7 @@
 import React from 'react';
 import type { OmpSettingsState, OmpSettingValue } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
+import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -18,12 +19,16 @@ function modelThresholds(value: OmpSettingValue | undefined) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function isTokenThreshold(value: OmpSettingValue | undefined): boolean {
+  return typeof value === 'number' || (typeof value === 'string' && /^f\d+$/i.test(value));
+}
+
 interface ThresholdEditorProps {
   selector?: string;
   value?: string | number;
   selectors: readonly string[];
   disabled: boolean;
-  onSave: (key: string, value: string | number | undefined) => Promise<boolean>;
+  onSave: (key: string, value: string | number | undefined) => Promise<boolean | undefined>;
 }
 
 function ThresholdEditor({ selector, value, selectors, disabled, onSave }: ThresholdEditorProps) {
@@ -39,7 +44,8 @@ function ThresholdEditor({ selector, value, selectors, disabled, onSave }: Thres
   const canSave = !disabled && Boolean(enteredKey && enteredValue) && !duplicate && enteredValue !== value?.toString();
 
   const save = async (nextValue: string | number | undefined) => {
-    setFailed(!(await onSave(enteredKey, nextValue)));
+    const saved = await onSave(enteredKey, nextValue);
+    if (saved !== undefined) setFailed(!saved);
   };
 
   return (
@@ -81,6 +87,7 @@ function ThresholdEditor({ selector, value, selectors, disabled, onSave }: Thres
 
 export function ModelCompactionSettings({ state, saving, updateSettings }: Pick<UseOmpPageSettingsResult, 'state' | 'saving' | 'updateSettings'>) {
   const { t } = useI18n();
+  const { confirm, dialog } = useConfirmDialog();
   const [editing, setEditing] = React.useState<{ selector?: string } | null>(null);
   const [toggleFailed, setToggleFailed] = React.useState(false);
   const mapSetting = state?.settings.find((setting) => setting.id === MODEL_THRESHOLDS);
@@ -97,8 +104,14 @@ export function ModelCompactionSettings({ state, saving, updateSettings }: Pick<
   const title = t('settings.openchamber.defaults.compaction.modelRules');
   const info = t('settings.openchamber.defaults.compaction.modelRulesInfo');
   const overrideNote = t('settings.openchamber.defaults.compaction.modelRulesOverridden');
+  const confirmTokenRules = () => confirm({
+    title,
+    message: t('settings.openchamber.defaults.compaction.modelRuleCostWarning'),
+    action: t('settings.common.actions.saveChanges'),
+  });
 
   const saveThreshold = async (selector: string, value: string | number | undefined) => {
+    if (isTokenThreshold(value) && !(await confirmTokenRules())) return undefined;
     const previous = Object.hasOwn(entries, selector) ? entries[selector] : undefined;
     const saved = await updateSettings((latest: OmpSettingsState) => {
       const setting = latest.settings.find(({ id }) => id === MODEL_THRESHOLDS);
@@ -116,6 +129,7 @@ export function ModelCompactionSettings({ state, saving, updateSettings }: Pick<
   };
 
   const toggle = async (value: boolean) => {
+    if (value && rules.some(([, threshold]) => isTokenThreshold(threshold)) && !(await confirmTokenRules())) return;
     setToggleFailed(!(await updateSettings(() => [{ id: 'compaction.modelThresholdsEnabled', value }])));
   };
   const canEdit = enabled && !overridden;
@@ -150,6 +164,7 @@ export function ModelCompactionSettings({ state, saving, updateSettings }: Pick<
           <ThresholdEditor selectors={selectors} disabled={saving} onSave={saveThreshold} />
         </SettingsDisclosure>
       )}
+      {dialog}
     </div>
   );
 }

@@ -479,7 +479,11 @@ describe('DefaultsSettings', () => {
     }
   });
 
-  test('adding a model compaction rule preserves other native rules', async () => {
+  test.each([
+    ['75%', '75%', false],
+    ['84000', 84000, true],
+    ['f84000', 'f84000', true],
+  ])('adding a %s compaction rule preserves other native rules', async (input, thresholdValue, needsConfirmation) => {
     const existing = { 'example/*': '80%', 'other/model': 'f90000' };
     const snapshot = {
       ...mockOmpSettings,
@@ -506,14 +510,27 @@ describe('DefaultsSettings', () => {
       await act(async () => {
         setValue.call(selector, 'example/model');
         selector?.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
-        setValue.call(threshold, '84000');
+        setValue.call(threshold, input);
         threshold?.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
       });
       const save = threshold?.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
       expect(save?.disabled).toBe(false);
       await act(async () => save?.click());
+      if (needsConfirmation) {
+        expect(write).not.toHaveBeenCalled();
+        expect(document.body.textContent).toContain('Longer requests may cost more.');
+        const cancel = Array.from(document.body.querySelectorAll('button')).find((button) => button.textContent === 'Cancel');
+        expect(cancel).toBeDefined();
+        await act(async () => cancel?.click());
+        expect(write).not.toHaveBeenCalled();
+        await act(async () => save?.click());
+        const confirm = Array.from(document.body.querySelectorAll('button')).find((button) =>
+          button !== save && button.textContent?.toLowerCase() === 'save changes');
+        expect(confirm).toBeDefined();
+        await act(async () => confirm?.click());
+      }
       expect(write.mock.calls[0]?.[1].changes).toEqual([
-        { id: 'compaction.modelThresholds', value: { ...existing, 'example/model': 84000 }, expectedValue: existing },
+        { id: 'compaction.modelThresholds', value: { ...existing, 'example/model': thresholdValue }, expectedValue: existing },
       ]);
     } finally {
       read.mockRestore();
