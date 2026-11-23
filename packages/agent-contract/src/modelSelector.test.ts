@@ -243,8 +243,15 @@ describe('role chains', () => {
     expect(isRoleConfigured('commit', { commit: [' ', ', '] })).toBe(false);
   });
 
-  test('a preserved object or mixed array uses the default like OMP settings', () => {
-    const roles = { commit: { selector: 'chosen/haiku' }, smol: ['chosen/haiku', null], default: 'other/model' };
+  test('a primary selector remains readable alongside preserved legacy entries', () => {
+    const roles = { commit: { selector: '@smol', fallback: ['other/spare'] }, smol: ['chosen/haiku', null], default: 'other/model' };
+    expect(isRoleConfigured('commit', roles)).toBe(true);
+    expect(resolveRoleSelector('commit', roles)).toBe('chosen/haiku');
+    expect(resolveRoleSelector('smol', roles)).toBe('chosen/haiku');
+  });
+
+  test('saved values without a string selector fall back to default', () => {
+    const roles = { commit: { selector: false }, smol: [null], default: 'other/model' };
     expect(isRoleConfigured('commit', roles)).toBe(false);
     expect(resolveRoleSelector('commit', roles)).toBe('other/model');
     expect(resolveRoleSelector('smol', roles)).toBe('other/model');

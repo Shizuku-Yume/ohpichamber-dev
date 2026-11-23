@@ -66,10 +66,13 @@ describe('canonical utility generation', () => {
       .toEqual({ providerId: 'chosen', modelId: 'large' });
   });
 
-  test('Git generation uses the default if OMP does not recognize the saved commit role value', async () => {
-    ompSettingsRoles = { commit: { selector: 'chosen/large', fallback: ['other/haiku'] }, default: 'other/haiku' };
+  test.each([
+    ['mixed fallback list', ['chosen/large', { selector: 'other/haiku' }]],
+    ['legacy object', { selector: 'chosen/large', fallback: ['other/haiku'] }],
+  ])('Git generation uses the saved primary commit model in a %s', async (_shape, commit) => {
+    ompSettingsRoles = { commit, default: 'other/haiku' };
     expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection)
-      .toEqual({ providerId: 'other', modelId: 'haiku' });
+      .toEqual({ providerId: 'chosen', modelId: 'large' });
   });
 
   test('a role selector variant travels with the completion request', async () => {

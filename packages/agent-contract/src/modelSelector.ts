@@ -350,17 +350,17 @@ export const DEFAULT_MODEL_ROLE = 'default';
 export const DEFAULT_MODEL_ROLE_ALIAS = '*';
 
 /**
- * The persisted `modelRoles` record. OMP 19.1 resolves strings and lists of
- * strings; other saved values are preserved by editors but not resolved.
+ * The persisted `modelRoles` record. Utility generation reads the primary
+ * selector shown in Settings, without rewriting its saved fallback entries.
  */
 export type ModelRoleValues = Readonly<JsonObject>;
 
-/** The first nonblank selector in a native array or comma-separated chain. */
+/** The first nonblank string selector, including legacy object values. */
 function roleValue(value: JsonValue | undefined): string | undefined {
-  const entries = typeof value === 'string' ? [value]
-    : Array.isArray(value) && value.every((entry) => typeof entry === 'string') ? value
-    : [];
+  const entries = Array.isArray(value) ? value
+    : [value && typeof value === 'object' ? value.selector : value];
   for (const entry of entries) {
+    if (typeof entry !== 'string') continue;
     const selector = entry.split(',').map((part) => part.trim()).find(Boolean);
     if (selector) return selector;
   }
