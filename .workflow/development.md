@@ -4,6 +4,21 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+W6 MCP remediation preserves OMP 19.1 user-file native fields when changing
+labels, enablement or credential references. Label-only
+edits no longer add an enabled field to the native entry. Standard single-server
+`mcpServers` imports now validate canonical transports, stage literal credentials
+in private rows, and report unsupported fields by name. Create precedes the
+existing explicit credential save; expressions requiring native expansion are
+refused. Import diagnostics and notices are translated in all 15 locales.
+The 24 worker tests, isolated importer/page/runtime and locale tests, package
+type-checks, changed-file oxlint and root type-check pass. Root upstream-drift
+requires no new ledger rows. Evidence: `/home/ubuntu/w6-evidence/`.
+The extra dead-code gate exits 1 with repository-wide findings (106 files,
+124 exports, 44 exported types and one duplicate); it is not a clean gate.
+No visual or live-service verification was performed; the next check is a
+maintainer review of the import/create/private-save UI flow.
+
 The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
 `TerminalView`: completed output stays visible despite close-on-exit, a missing
 Host session cannot become an interactive shell, and command tabs cannot restart.

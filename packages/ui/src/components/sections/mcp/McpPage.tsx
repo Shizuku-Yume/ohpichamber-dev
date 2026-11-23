@@ -44,7 +44,7 @@ import { useMcpConfigStore, resolveMcpDirectory } from '@/stores/useMcpConfigSto
 import { getMcpServerStatus, isMcpServerConnected, useMcpStore } from '@/stores/useMcpStore';
 import { McpGrid } from './McpGrid';
 import { McpOAuthSignIn } from './McpOAuthSignIn';
-import { parseImportedMcpSnippet } from './mcpImport';
+import { McpImportError, parseImportedMcpSnippet } from './mcpImport';
 import { mcpServerIdFrom } from './mcpServerId';
 import { problemMessage } from '@/lib/problemMessage';
 
@@ -738,13 +738,19 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   const handleImport = () => {
     try {
       const imported = parseImportedMcpSnippet(snippet);
-      setDraft({ ...imported, serverId: initial.serverId, scope: draft.scope ?? initial.scope ?? 'project' });
+      setDraft({ ...imported.server, serverId: initial.serverId, scope: draft.scope ?? initial.scope ?? 'project' });
+      setCredentialRows(imported.credentials);
+      setBearerDraft('');
       setImportOpen(false);
       setSnippet('');
       setImportError(null);
       toast.success(t('settings.mcp.page.toast.configImported'));
+      if (imported.droppedFields.length) toast.info(t('settings.mcp.page.import.dropped', { fields: imported.droppedFields.join(', ') }));
+      if (imported.credentials.length) toast.info(t('settings.mcp.page.import.credentials'));
     } catch (failure) {
-      setImportError(failure instanceof Error ? failure.message : t('settings.mcp.page.toast.unexpectedError'));
+      setImportError(failure instanceof McpImportError
+        ? t(`settings.mcp.page.import.${failure.code}`, { key: failure.key ?? '' })
+        : t('settings.mcp.page.import.invalid'));
     }
   };
 

@@ -924,7 +924,7 @@ the browser, and a second meaning there confuses both.
 
 ### MCP and source control
 
-- MCP saves carry OAuth fields without editors unchanged because the store rebuilds the entire block. Snippet import accepts v1 and v2 and emits v2; a v1 timeout becomes execution timeout, while startup applies only to local servers.
+- MCP snippet import accepts a canonical server record or exactly one standard `mcpServers` entry. Standard stdio and HTTP/SSE entries use the canonical transport validation: absolute command paths, URL credentials and query strings are refused. Native options without a managed-container representation are listed by field name and omitted, not silently converted. Literal environment/header values populate private credential drafts, never server configuration. Create the server first, then use Save Changes in the credential section to write secrets and bind opaque references. Expressions requiring native environment expansion or command execution are refused with key-only diagnostics.
 - Command import uses paste events because direct clipboard reads can be denied. Only a whole-field single-command paste is split into arguments; partial pastes remain ordinary editing.
 - MCP integration matching uses source and server name because OpenCode owns its registration hash. Lookup retries cover registration completing after the first list read.
 - Runtime MCP status outranks store diagnostics. Policy-blocked servers use the page's blocked state because earlier runtime status is stale.

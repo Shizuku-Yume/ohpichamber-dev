@@ -43,7 +43,7 @@ beforeEach(() => {
   secretWrites.length = 0;
   root = createRoot(container);
   useMcpStore.getState().resetForRuntimeSwitch();
-  useMcpConfigStore.setState({ selectedMcpName: 'tools', serversByDirectory: { '/repo': [server] }, configurationsByDirectory: { '/repo': applyResult([server]).configuration } });
+  useMcpConfigStore.setState({ selectedMcpName: 'tools', mcpDraft: null, serversByDirectory: { '/repo': [server] }, configurationsByDirectory: { '/repo': applyResult([server]).configuration } });
 });
 afterEach(async () => { await act(async () => root.unmount()); });
 const edit = async (field: HTMLInputElement, value: string, blur = true) => {
@@ -95,6 +95,42 @@ test('header values are written privately and only opaque references reach confi
   expect(configs[0].transport).toEqual({ type: 'http', url: 'https://initial.test', headerCredentialRefs: { 'X-Api-Key': 'private_ref' } });
   expect(JSON.stringify(configs)).not.toContain('never-in-config');
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Value"]')).toBeNull();
+});
+
+test('standard imports prefill private rows and save only opaque credential references', async () => {
+  const configs: Array<Partial<MCPServerConfig>> = [];
+  useMcpConfigStore.setState({
+    selectedMcpName: 'new-tools', mcpDraft: { ...server, serverId: 'new-tools' },
+    createMcp: async config => { configs.push(config); return { ok: true, result: applyResult([config]), outcome: 'applied' }; },
+    updateMcp: async (_serverId, config) => { configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]), outcome: 'applied' }; },
+  });
+  await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+  const open = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Import from JSON snippet'));
+  if (!open) throw new Error('Missing import control');
+  await act(async () => { open.click(); });
+  const textarea = document.querySelector('textarea');
+  const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
+  if (!textarea || !setter) throw new Error('Missing import input');
+  await act(async () => {
+    setter.call(textarea, JSON.stringify({ mcpServers: { Imported: { url: 'https://imported.test', headers: { 'X-Api-Key': 'import-private' }, timeout: 45000 } } }));
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const confirm = [...document.querySelectorAll('button')].find(button => button.textContent === 'Import');
+  if (!confirm) throw new Error('Missing import confirmation');
+  await act(async () => { confirm.click(); });
+  expect(container.querySelector<HTMLInputElement>('input[aria-label="Value"]')?.value).toBe('import-private');
+  expect(secretWrites).toEqual([]);
+  expect(container.querySelector<HTMLInputElement>('input[aria-label="Value"]')?.disabled).toBe(true);
+  const create = [...container.querySelectorAll('button')].find(button => button.textContent === 'Create');
+  if (!create) throw new Error('Missing create control');
+  await act(async () => { create.click(); });
+  expect(secretWrites).toEqual([]);
+  const save = [...container.querySelectorAll('button')].find(button => button.textContent === 'Save Changes');
+  if (!save) throw new Error('Missing credential save');
+  await act(async () => { save.click(); });
+  expect(secretWrites).toEqual([{ value: 'import-private', persistedRevision: '3' }]);
+  expect(configs.at(-1)?.transport).toEqual({ type: 'http', url: 'https://imported.test', headerCredentialRefs: { 'X-Api-Key': 'private_ref' } });
+  expect(JSON.stringify(configs)).not.toContain('import-private');
 });
 
 test('worker apply failures remain visible even though persistence succeeded', async () => {

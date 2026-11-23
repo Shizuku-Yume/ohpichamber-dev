@@ -365,6 +365,7 @@ async function writeUserServers(
         const before = priorById.get(server.serverId);
         return !(before !== undefined
           && before.enabled === server.enabled
+          && before.label === server.label
           && JSON.stringify(nativeTransport(before.transport)) === JSON.stringify(nativeTransport(server.transport))
           && JSON.stringify(credentialMapping(before)) === JSON.stringify(credentialMapping(server)));
       });
@@ -395,7 +396,7 @@ async function writeUserServers(
         } else if (!before || JSON.stringify(nativeTransport(before.transport)) !== JSON.stringify(nativeTransport(server.transport))) {
           const native = Object.fromEntries(Object.entries(existing).filter(([name]) => !TRANSPORT_KEYS.includes(name)));
           servers[key] = { ...native, ...definition(server) };
-        } else {
+        } else if (before.enabled !== server.enabled) {
           servers[key] = { ...existing, enabled: server.enabled };
         }
         if (server.enabled) {
