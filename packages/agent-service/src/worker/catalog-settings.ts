@@ -26,8 +26,17 @@ function linuxPowerBusAvailable(): boolean {
 }
 
 const RESET_POLICY_OVERRIDE = 'resetPolicyUsesSharedConfig';
+const RETRY_CHAINS_OVERRIDE = 'retryChainsUseSharedConfig';
 
 function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
+  if (setting.id === 'retry.fallbackChains') {
+    const provenance = settings.getProvenance(setting);
+    const retry = settings.getProjectSettings().retry;
+    if (
+      (provenance !== 'default' && provenance !== 'global') ||
+      (retry && typeof retry === 'object' && Object.hasOwn(retry, 'fallbackChains'))
+    ) return RETRY_CHAINS_OVERRIDE;
+  }
   const isPower = setting.id === 'power.sleepPrevention';
   const placement = OMP_SETTING_PLACEMENTS[setting.id];
   const isResetPolicy = placement?.type === 'page' && placement.page === 'usage' && placement.section === 'resets';
@@ -89,6 +98,9 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (inactiveCondition !== undefined) {
     descriptor.condition = inactiveCondition;
     descriptor.conditionActive = false;
+  } else if (setting.id === 'retry.fallbackChains') {
+    descriptor.condition = RETRY_CHAINS_OVERRIDE;
+    descriptor.conditionActive = true;
   }
   return OmpSettingSchema.parse(descriptor);
 }
@@ -138,7 +150,11 @@ export class NativeSettings {
     for (const change of request.changes) {
       const setting = handle(change.id);
       const inactiveCondition = inactiveWriteCondition(setting, this.settings);
-      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig || inactiveCondition === RESET_POLICY_OVERRIDE) {
+      if (
+        inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig ||
+        inactiveCondition === RESET_POLICY_OVERRIDE ||
+        inactiveCondition === RETRY_CHAINS_OVERRIDE
+      ) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
       }
       if (inactiveCondition === OMP_POWER_CONDITIONS.backendAvailable) {

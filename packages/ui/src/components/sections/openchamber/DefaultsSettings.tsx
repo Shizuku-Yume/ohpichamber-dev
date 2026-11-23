@@ -21,6 +21,7 @@ import { levelLabel, modelRoleChange, formatRoleSelector, modelForSelector, pars
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { SessionWarmingField } from './SessionWarmingField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
+import { RetryFallbackChains } from './RetryFallbackChains';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -54,7 +55,7 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const defaultSessionMode = useUIStore((state) => state.defaultSessionMode);
   const setDefaultSessionMode = useUIStore((state) => state.setDefaultSessionMode);
-  const { state: ompState, form: ompForm, loading, saving: isSavingOmp, updateSettings, updateSetting: handleOmpChange, getSectionSettings } = useOmpPageSettings('sessions');
+  const { state: ompState, form: ompForm, loading, saving: isSavingOmp, updateSettings, updateSetting: handleOmpChange, getSectionSettings: getSectionRows } = useOmpPageSettings('sessions');
   const ompStateFailed = Boolean(directory && !loading && !ompState);
   // The catalog loader already read this directory's models; a second fetch
   // here duplicated the slowest request the Settings page made.
@@ -144,68 +145,12 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
   const [walkthroughChoice, setWalkthroughChoice] = React.useState<string | undefined>(undefined);
   const usesOwnWalkthroughModel = Boolean(roleSelectors.slow) || walkthroughChoice !== undefined;
 
-  /**
-   * The native retry fallback chain for the `default` selector, which is what
-   * actually continues a session when a usage limit stops it. Writing
-   * `retry.fallbackChains` keeps every other chain and wildcard entry intact.
-   */
-  const chains = parseRolesRecord(ompState?.settings.find((setting) => setting.id === 'retry.fallbackChains')?.value);
-  const defaultChain = Array.isArray(chains.default) ? chains.default : [];
-  const fallback = typeof defaultChain[0] === 'string' ? defaultChain[0] : '';
-
-  const updateFallbackChain = (selector: string) => updateSettings((state) => {
-    const latestChains = parseRolesRecord(state.settings.find((setting) => setting.id === 'retry.fallbackChains')?.value);
-    const tail = Array.isArray(latestChains.default) ? latestChains.default.slice(1) : [];
-    if (selector) latestChains.default = [selector, ...tail];
-    else delete latestChains.default;
-    return selector
-      ? [{ id: 'retry.fallbackChains', value: latestChains }, { id: 'retry.modelFallback', value: true }]
-      : [{ id: 'retry.fallbackChains', value: latestChains }];
-  });
-
-  const fallbackSelect = (): React.ReactNode => (
-    <Select
-      value={fallback || '__none__'}
-      onValueChange={(val) => void updateFallbackChain(val === '__none__' ? '' : val)}
-      disabled={isSavingOmp || !ompState}
-    >
-      <SelectTrigger
-        className={SETTINGS_WIDTH_SELECT_CLASS}
-        aria-label={t('settings.openchamber.defaults.field.fallbackModel')}
-      >
-        <SelectValue placeholder={t('settings.openchamber.defaults.field.fallbackModelNone')}>
-          {fallback ? selectorLabel(fallback) : t('settings.openchamber.defaults.field.fallbackModelNone')}
-          {defaultChain.length > 1 && <span title={defaultChain.slice(1).join(', ')}> +{defaultChain.length - 1}</span>}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="__none__">{t('settings.openchamber.defaults.field.fallbackModelNone')}</SelectItem>
-        {models.map((m) => {
-          const id = formatModelRef(m);
-          return (
-            <SelectItem key={id} value={id}>
-              {m.name || m.modelId} ({m.provider})
-            </SelectItem>
-          );
-        })}
-        {fallback && !models.some((m) => formatModelRef(m) === fallback) && (
-          <SelectItem value={fallback}>
-            {fallback} ({t('settings.omp.modelRoles.customModel')})
-          </SelectItem>
-        )}
-      </SelectContent>
-    </Select>
-  );
-
   const planModeAllowAgents = useUIStore((state) => state.planModeAllowAgents);
   const setPlanModeAllowAgents = useUIStore((state) => state.setPlanModeAllowAgents);
   const sessionGoalDefaultBudgetEnabled = useUIStore((state) => state.sessionGoalDefaultBudgetEnabled);
   const setSessionGoalDefaultBudgetEnabled = useUIStore((state) => state.setSessionGoalDefaultBudgetEnabled);
   const sessionGoalDefaultBudget = useUIStore((state) => state.sessionGoalDefaultBudget);
   const setSessionGoalDefaultBudget = useUIStore((state) => state.setSessionGoalDefaultBudget);
-
-  const getSectionRows = (section: string) => getSectionSettings(section)
-    .filter((setting) => setting.id !== 'retry.fallbackChains');
 
   return (
     <>
@@ -311,13 +256,6 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             </Select>
           </SettingsFieldRow>
 
-          <SettingsFieldRow
-            settingsItem="sessions.fallback-model"
-            label={t('settings.openchamber.defaults.field.fallbackModel')}
-            info={t('settings.openchamber.defaults.field.fallbackModelInfo')}
-          >
-            {fallbackSelect()}
-          </SettingsFieldRow>
         </div>
       </SettingsSection>
 
@@ -575,6 +513,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
+          <RetryFallbackChains state={ompState} saving={isSavingOmp} updateSettings={updateSettings}
+            directory={directory ?? undefined} models={models} />
         </div>
       </SettingsSection>
 

@@ -230,6 +230,27 @@ test('a project reset policy is readable without allowing edits to shared config
   } finally { await f.close(); }
 });
 
+test.each([
+  'retry:\n  fallbackChains:\n    plan: [project/model:high]\n',
+  'retry:\n  fallbackChains: null\n',
+])('project fallback chains or resets cannot replace the shared record', async (projectConfig) => {
+  const f = await fixture();
+  try {
+    const sharedPath = join(f.agentDirectory, 'config.yml');
+    const sharedConfig = 'retry:\n  fallbackChains:\n    default: [shared/model]\n';
+    await writeFile(sharedPath, sharedConfig);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), projectConfig);
+    const state = await f.native.read('workspace_1', '0');
+    expect(state.settings.find(({ id }) => id === 'retry.fallbackChains')).toMatchObject({ conditionActive: false });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{ id: 'retry.fallbackChains', value: { default: ['replacement/model'] } }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(sharedPath, 'utf8')).toBe(sharedConfig);
+  } finally { await f.close(); }
+});
+
 test('General power uses the native OMP sleep-prevention setting', async () => {
   const f = await fixture();
   try {
