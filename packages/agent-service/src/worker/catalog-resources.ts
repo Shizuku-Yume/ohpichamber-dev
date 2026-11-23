@@ -7,7 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { isDeepStrictEqual } from 'node:util';
 import { YAML } from 'bun';
 import { z } from 'zod';
-import { parseFrontmatter } from '@oh-my-pi/pi-utils';
+import { normalizeFrontmatterKeys, parseFrontmatter } from '@oh-my-pi/pi-utils';
 import { loadSlashCommands, expandSlashCommand } from '@oh-my-pi/pi-coding-agent/extensibility/slash-commands';
 import { loadPromptTemplates, expandPromptTemplate } from '@oh-my-pi/pi-coding-agent/config/prompt-templates';
 import { loadCapability, type SlashCommand } from '@oh-my-pi/pi-coding-agent/discovery';
@@ -17,7 +17,7 @@ import { loadSkills, type LoadSkillsOptions } from '@oh-my-pi/pi-coding-agent/ex
 import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capability/types';
 import {
   CommandEntrySchema, PromptTemplateEntrySchema, ModelSelectionSchema, EntityIdSchema,
-  FileResourceNameSchema, FileResourcePathSchema, CounterSchema, JsonObjectSchema,
+  FileResourceNameSchema, FileResourcePathSchema, CounterSchema,
   type CommandEntry, type PromptTemplateEntry, type FileResourceScope, type FileResourceSkillEntry,
 } from '@openchamber/agent-contract';
 import type { FileResourceOperation, FileResourceResult } from '../catalogs/file-resources-protocol.ts';
@@ -37,6 +37,7 @@ const MetadataSchema = z.object({
   openchamber: z.object({ modelSelection: ModelSelectionSchema.optional(), agentId: EntityIdSchema.optional(), group: z.string().optional() }).optional(),
   'argument-hint': z.string().optional(), argumentHint: z.string().optional(),
 });
+const NativeFrontmatterSchema = z.record(z.string(), z.unknown());
 interface OwnedFile { path: string; name: string; scope: FileResourceScope; text: string; editable: boolean; }
 interface ResourceLocation { path: string; scope: FileResourceScope; }
 function missing(error: Error): boolean { return 'code' in error && error.code === 'ENOENT'; }
@@ -52,8 +53,39 @@ function frontmatterBoundary(text: string) {
     whitespace.lastIndex = commentsEnd;
   }
   const prefix = commentsEnd > 0 && text.startsWith('---', whitespace.lastIndex) ? text.slice(0, whitespace.lastIndex) : '';
-  const header = /^---[\s\S]*?(?:\r\n?|\n)---(?:[^\S\r\n]*(?:\r\n?|\n|$))?/.exec(text.slice(prefix.length))?.[0];
-  return header === undefined ? { prefix: '', header: '' } : { prefix, header: prefix + header };
+  const match = /^---([\s\S]*?)(?:\r\n?|\n)---(?:[^\S\r\n]*(?:\r\n?|\n|$))?/.exec(text.slice(prefix.length));
+  return match === null
+    ? { prefix: '', header: '', yaml: '' }
+    : { prefix, header: prefix + match[0], yaml: match[1] };
+}
+function editableFrontmatter(header: string, yaml: string, path: string): Record<string, unknown> {
+  const repaired = parseFrontmatter(header, { source: path, level: 'fatal', rawKeys: true }).frontmatter;
+  // Keep literal values when the original YAML is valid without OMP's repairs.
+  try {
+    const raw = NativeFrontmatterSchema.safeParse(YAML.parse(yaml.replace(/\r\n?/g, '\n').slice(1)));
+    if (raw.success && MetadataSchema.safeParse(normalizeFrontmatterKeys(raw.data)).success) return raw.data;
+  } catch {
+    // A header admitted by OMP can still require repair before it is valid YAML.
+  }
+  return repaired;
+}
+function serializeFrontmatter(prefix: string, metadata: Record<string, unknown>, path: string): string {
+  const verify = (yaml: string) => {
+    const header = `${prefix}---\n${yaml}\n---\n`;
+    try {
+      const { frontmatter } = parseFrontmatter(header, { source: path, level: 'fatal', rawKeys: true });
+      if (isDeepStrictEqual(frontmatter, metadata) && MetadataSchema.safeParse(normalizeFrontmatterKeys(frontmatter)).success) return header;
+    } catch {
+      // Try the protected encoding before rejecting the edit.
+    }
+  };
+  const yaml = YAML.stringify(metadata).trimEnd();
+  const plain = yaml.includes('<!--') ? undefined : verify(yaml);
+  if (plain !== undefined) return plain;
+  // JSON is valid YAML flow syntax. Escape the comment opener before OMP can strip it.
+  const quoted = verify(JSON.stringify(metadata, null, 2).replaceAll('<!--', '\\u003c!--'));
+  if (quoted !== undefined) return quoted;
+  throw new ProjectionError(400, 'INVALID_REQUEST', 'Cannot save frontmatter without changing values when OMP reloads it');
 }
 function identity(kind: string, path: string): string { return `${kind}_${createHash('sha256').update(path).digest('hex')}`; }
 function denied(): never { throw new ProjectionError(403, 'UNAUTHORIZED', 'Resource is outside an authorable native directory'); }
@@ -224,18 +256,16 @@ export class NativeFileResources {
       catch (error) { if (!(error instanceof Error && missing(error))) throw error; }
     }
     const previousText = current ? await readFile(current.path, 'utf8') : '';
-    const { prefix, header } = frontmatterBoundary(previousText);
+    const { prefix, header, yaml } = frontmatterBoundary(previousText);
     const { description, group } = request;
     const descriptionChanged = description !== undefined && description !== current?.entry.description;
     const argumentHintChanged = request.argumentHint !== undefined && request.argumentHint !== this.metadata(previousText, path).argumentHint;
     const modelChanged = (request.modelSelection !== undefined || kind === 'commands') && !isDeepStrictEqual(request.modelSelection, current?.entry.modelSelection);
     const agentChanged = request.agentId !== undefined && (request.agentId ?? undefined) !== current?.entry.agentId;
     const groupChanged = group !== undefined && group !== current?.entry.group;
-    let editedMetadata: z.infer<typeof JsonObjectSchema> | undefined;
+    let editedMetadata: Record<string, unknown> | undefined;
     if (descriptionChanged || argumentHintChanged || modelChanged || agentChanged || groupChanged) {
-      const frontmatter = JsonObjectSchema.parse(parseFrontmatter(header.slice(prefix.length), {
-        source: path, level: 'fatal', repair: false, rawKeys: true,
-      }).frontmatter);
+      const frontmatter = editableFrontmatter(header, yaml, path);
       const metadata = { ...frontmatter };
       if (descriptionChanged) metadata.description = description;
       if (argumentHintChanged) {
@@ -243,7 +273,7 @@ export class NativeFileResources {
         delete metadata['argument-hint'];
         if (request.argumentHint) metadata['argument-hint'] = request.argumentHint;
       }
-      const bindings = JsonObjectSchema.safeParse(frontmatter.openchamber);
+      const bindings = NativeFrontmatterSchema.safeParse(frontmatter.openchamber);
       const openchamber = bindings.success ? { ...bindings.data } : {};
       if (modelChanged) {
         delete openchamber['model-selection'];
@@ -261,7 +291,7 @@ export class NativeFileResources {
     }
     const nextHeader = editedMetadata === undefined && (header || !request.content.startsWith('---') && !frontmatterBoundary(request.content).header)
       ? header && header === previousText && !/[\r\n]$/.test(header) && request.content ? `${header}\n` : header
-      : `${prefix}---\n${YAML.stringify(editedMetadata ?? {}).trimEnd()}\n---\n`;
+      : serializeFrontmatter(prefix, editedMetadata ?? {}, path);
     const text = nextHeader + request.content;
     const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
     try {

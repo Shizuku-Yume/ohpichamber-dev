@@ -235,6 +235,32 @@ test('description edits preserve literal native metadata without OMP repair', as
   });
 }, 60000);
 
+test.each([
+  ['HTML comment scalar', 'native-key: "true <!-- x -->"\n', 'true <!-- x -->', 'Edited <!-- y -->'],
+  ['repairable colon scalar', 'native-key: before: after\n', 'before: after', 'Edited'],
+])('description edits round-trip a %s through OMP discovery', async (_name, metadata, nativeValue, description) => {
+  const h = await fixture();
+  const directory = join(h.cwd, '.omp', 'commands');
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, 'hello.md');
+  const content = 'Say hello.\n';
+  await writeFile(path, `---\ndescription: Original\n${metadata}---\n${content}`);
+  const read = await h.operation({ action: 'commands.read' });
+  if (read.kind !== 'commands') throw new Error('Expected command catalog');
+  const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
+  if (!command) throw new Error('Expected authored command');
+  await h.operation({ action: 'commands.update', request: {
+    expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
+    description, content,
+  } });
+  const reloaded = await h.operation({ action: 'commands.read' });
+  if (reloaded.kind !== 'commands') throw new Error('Expected command catalog');
+  expect(parseFrontmatter(await readFile(path, 'utf8'), { level: 'fatal', rawKeys: true }).frontmatter).toEqual({
+    description, 'native-key': nativeValue,
+  });
+  expect(reloaded.catalog.commands.find(entry => entry.commandId === command.commandId)).toMatchObject({ description, content });
+}, 60000);
+
 test('native delimiters separate metadata from the editable body', async () => {
   const h = await fixture();
   const dir = join(h.cwd, '.omp', 'commands');
