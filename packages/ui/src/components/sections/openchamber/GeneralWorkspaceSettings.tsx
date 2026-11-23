@@ -30,6 +30,8 @@ import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { setDirectoryShowHidden, useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useI18n } from '@/lib/i18n';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { formatShortcutForDisplay } from '@/lib/shortcuts';
@@ -397,6 +399,26 @@ export const GeneralInterfaceSettings: React.FC = () => {
       <PanelsAndLinksSection />
       {isMobile ? <MobileWorkspaceTabsSettings /> : null}
     </>
+  );
+};
+
+export const GeneralPowerSettings: React.FC = () => {
+  const { t } = useI18n();
+  const { form, getSectionSettings, updateSetting, saving } = useOmpPageSettings('general');
+  const rows = getSectionSettings('power');
+  if (rows.length === 0) return null;
+  return (
+    <SettingsSection title={t('settings.omp.group.power')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+      {rows.map((setting) => (
+        <OmpRowControl
+          key={setting.id}
+          setting={setting}
+          value={form[setting.id] ?? setting.value}
+          disabled={saving}
+          onChange={(value) => void updateSetting(setting, value)}
+        />
+      ))}
+    </SettingsSection>
   );
 };
 

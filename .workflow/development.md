@@ -4,6 +4,12 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The OMP 19.1 settings-placement pass exposes native host sleep prevention in
+General. It adds a registry guard against missing SDK IDs and unrendered page
+placements, leaving terminal-only controls and existing Web Search catalog
+writes with their respective owners. Provider protocol/tier, usage, and voice
+controls still need their owner-specific work.
+
 The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
 `TerminalView`: completed output stays visible despite close-on-exit, a missing
 Host session cannot become an interactive shell, and command tabs cannot restart.

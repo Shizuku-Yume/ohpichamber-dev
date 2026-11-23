@@ -173,7 +173,9 @@ test('a moved row is absent from state and refused on write', async () => {
     const moved = [
       'read.renderMarkdown', 'read.toolResultPreview', 'mcp.renderMarkdownResults',
       'async.printWake', 'extensionRenderers.assistantText',
-      'dev.autoqa', 'spotlight.experiment.enabled',
+      'dev.autoqa', 'spotlight.experiment.enabled', 'secrets.enabled', 'providers.fetch',
+      'git.enabled', 'completion.notify', 'error.notify', 'ask.notify',
+      'exa.enabled', 'exa.searchDelayMs', 'providers.webSearchTimeoutSeconds',
     ];
     for (const id of moved) {
       expect(byId.has(id), id).toBe(false);
@@ -182,6 +184,23 @@ test('a moved row is absent from state and refused on write', async () => {
         changes: [{ id, value: true }],
       }), id).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     }
+  } finally { await f.close(); }
+});
+
+test('General power uses the native OMP sleep-prevention setting', async () => {
+  const f = await fixture();
+  try {
+    const before = await f.native.read('workspace_1', '0');
+    expect(before.settings.find(({ id }) => id === 'power.sleepPrevention')).toMatchObject({
+      placement: { type: 'page', page: 'general', section: 'power' },
+      value: 'idle',
+    });
+    await f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{ id: 'power.sleepPrevention', value: 'off' }],
+    });
+    const after = await f.native.read('workspace_1', '1');
+    expect(after.settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('off');
   } finally { await f.close(); }
 });
 
@@ -237,6 +256,16 @@ test('every exposed page row is drawn by the section a GUI owner renders', () =>
   }
   expect(unread).toEqual([]);
   expect(unwritten).toEqual([]);
+});
+
+test('the placement table contains only live IDs and never silently drops a page row', () => {
+  const registered = new Set(orderedSettings().map((setting) => setting.id));
+  registered.add('suggestion.generator');
+  const placements = Object.entries(OMP_SETTING_PLACEMENTS);
+  expect(placements.filter(([id]) => !registered.has(id)).map(([id]) => id)).toEqual([]);
+  expect(placements
+    .filter(([id, placement]) => placement.type === 'page' && !OMP_SETTING_EXPOSED_IDS.has(id))
+    .map(([id]) => id)).toEqual([]);
 });
 
 test('a value no generic row can draw is owned by the control that writes it, or config-only', () => {

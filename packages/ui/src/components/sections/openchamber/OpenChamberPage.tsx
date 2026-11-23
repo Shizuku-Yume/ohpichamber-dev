@@ -14,7 +14,7 @@ import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
-import { GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
+import { GeneralFilesAndTerminalSettings, GeneralInterfaceSettings, GeneralPowerSettings } from './GeneralWorkspaceSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from '@/lib/desktop';
@@ -121,6 +121,7 @@ const GeneralSectionContent: React.FC = () => {
             {isLocalDesktop && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <GeneralInterfaceSettings />
+            <GeneralPowerSettings />
             {isLocalDesktop && <DesktopQuickAccessSettings />}
             {/* Remounts on a runtime switch: the names come from that server. */}
             <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
