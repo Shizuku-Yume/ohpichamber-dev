@@ -61,9 +61,13 @@ const { canonicalClient } = await import('@/api/canonicalClient');
 test('Commands discovery writes its native setting and refreshes the catalog', async () => {
   useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   const state: OmpSettingsState = {
-    workspaceId: 'workspace', revision: '1', totalCount: 1,
+    workspaceId: 'workspace', revision: '1', totalCount: 2,
     settings: [{ id: 'commands.enableClaudeProject', type: 'boolean', value: true, default: true, configured: false,
-      placement: { type: 'page', page: 'commands', section: 'catalog' } }],
+      placement: { type: 'page', page: 'commands', section: 'catalog' } }, {
+      id: 'commands.enableOpencodeProject', type: 'boolean', value: false, default: true, configured: true,
+      condition: 'discoveryUsesSharedConfig', conditionActive: false,
+      placement: { type: 'page', page: 'commands', section: 'catalog' },
+    }],
   };
   const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
   const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state);
@@ -75,6 +79,11 @@ test('Commands discovery writes its native setting and refreshes the catalog', a
     await act(async () => root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>));
     const row = container.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableClaudeProject"]');
     if (!row) throw new Error('Missing discovery setting');
+    const overridden = container.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableOpencodeProject"]');
+    expect(overridden?.getAttribute('aria-disabled')).toBe('true');
+    expect(container.textContent).toContain('Editing the shared setting would not change this project.');
+    await act(async () => overridden?.click());
+    expect(write).not.toHaveBeenCalled();
     await act(async () => row.click());
     expect(write).toHaveBeenCalledWith('workspace', { expectedRevision: '1', changes: [{ id: 'commands.enableClaudeProject', value: false }] });
     expect(reload).toHaveBeenCalledWith('/project');

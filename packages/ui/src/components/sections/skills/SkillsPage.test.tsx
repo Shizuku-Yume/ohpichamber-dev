@@ -40,9 +40,13 @@ test('Skills discovery writes its native setting and refreshes the catalog', asy
   useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   useSkillsStore.setState({ selectedSkillName: null, selectedAuthoredSkill: null, skillDraft: null });
   const state: OmpSettingsState = {
-    workspaceId: 'workspace', revision: '1', totalCount: 1,
+    workspaceId: 'workspace', revision: '1', totalCount: 2,
     settings: [{ id: 'skills.enabled', type: 'boolean', value: true, default: true, configured: false,
-      placement: { type: 'page', page: 'skills', section: 'discovery' } }],
+      placement: { type: 'page', page: 'skills', section: 'discovery' } }, {
+      id: 'skills.enablePiProject', type: 'boolean', value: false, default: true, configured: true,
+      condition: 'discoveryUsesSharedConfig', conditionActive: false,
+      placement: { type: 'page', page: 'skills', section: 'discovery' },
+    }],
   };
   const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
   const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state);
@@ -54,6 +58,11 @@ test('Skills discovery writes its native setting and refreshes the catalog', asy
     await act(async () => root.render(<ThemeSystemContext.Provider value={themeContext}><I18nProvider><SkillsPage /></I18nProvider></ThemeSystemContext.Provider>));
     const row = container.querySelector<HTMLElement>('[data-settings-item="omp.skills.enabled"]');
     if (!row) throw new Error('Missing discovery setting');
+    const overridden = container.querySelector<HTMLElement>('[data-settings-item="omp.skills.enablePiProject"]');
+    expect(overridden?.getAttribute('aria-disabled')).toBe('true');
+    expect(container.textContent).toContain('Editing the shared setting would not change this project.');
+    await act(async () => overridden?.click());
+    expect(write).not.toHaveBeenCalled();
     await act(async () => row.click());
     expect(write).toHaveBeenCalledWith('workspace', { expectedRevision: '1', changes: [{ id: 'skills.enabled', value: false }] });
     expect(reload).toHaveBeenCalledWith('/project');

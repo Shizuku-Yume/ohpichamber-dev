@@ -72,15 +72,20 @@ const SkillsInstalledPage: React.FC = () => {
   const discoverySection = discoverySettings.length > 0 ? (
     <SettingsSection title={t('settings.omp.discovery.title')}>
       {discoverySettings.map(setting => (
-        <OmpRowControl key={setting.id} setting={setting} value={setting.value} disabled={saving}
-          onChange={async value => {
-            if (!await updateSettings(() => [{ id: setting.id, value }])) {
-              toast.error(t('settings.common.status.saveFailed'));
-              return;
-            }
-            invalidateSkillsLoadCache(directory);
-            await useSkillsStore.getState().loadSkills(directory);
-          }} />
+        <React.Fragment key={setting.id}>
+          <OmpRowControl setting={setting} value={setting.value} disabled={saving || setting.conditionActive === false}
+            onChange={async value => {
+              if (!await updateSettings(() => [{ id: setting.id, value }])) {
+                toast.error(t('settings.common.status.saveFailed'));
+                return;
+              }
+              invalidateSkillsLoadCache(directory);
+              await useSkillsStore.getState().loadSkills(directory);
+            }} />
+          {setting.conditionActive === false && (
+            <p className="typography-meta text-muted-foreground">{t('settings.omp.sharedConfig.overridden')}</p>
+          )}
+        </React.Fragment>
       ))}
     </SettingsSection>
   ) : null;

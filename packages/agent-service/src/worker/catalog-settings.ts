@@ -26,15 +26,18 @@ function linuxPowerBusAvailable(): boolean {
 }
 
 const RESET_POLICY_OVERRIDE = 'resetPolicyUsesSharedConfig';
+const DISCOVERY_OVERRIDE = 'discoveryUsesSharedConfig';
 
 function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
   const isPower = setting.id === 'power.sleepPrevention';
   const placement = OMP_SETTING_PLACEMENTS[setting.id];
   const isResetPolicy = placement?.type === 'page' && placement.page === 'usage' && placement.section === 'resets';
-  if (!isPower && !isResetPolicy) return undefined;
+  const isDiscovery = placement?.type === 'page' && (placement.page === 'commands' || placement.page === 'skills');
+  if (!isPower && !isResetPolicy && !isDiscovery) return undefined;
   const provenance = settings.getProvenance(setting);
   if (provenance !== 'global' && provenance !== 'default') {
-    return isPower ? OMP_POWER_CONDITIONS.usesSharedConfig : RESET_POLICY_OVERRIDE;
+    if (isPower) return OMP_POWER_CONDITIONS.usesSharedConfig;
+    return isResetPolicy ? RESET_POLICY_OVERRIDE : DISCOVERY_OVERRIDE;
   }
   if (isPower && process.platform === 'linux' && !linuxPowerBusAvailable()) return OMP_POWER_CONDITIONS.backendAvailable;
   return undefined;
@@ -138,11 +141,11 @@ export class NativeSettings {
     for (const change of request.changes) {
       const setting = handle(change.id);
       const inactiveCondition = inactiveWriteCondition(setting, this.settings);
-      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig || inactiveCondition === RESET_POLICY_OVERRIDE) {
-        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
-      }
       if (inactiveCondition === OMP_POWER_CONDITIONS.backendAvailable) {
         throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Host sleep prevention is unavailable');
+      }
+      if (inactiveCondition !== undefined) {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
       }
       if (change.value === null) continue;
       if (change.id === 'edit.mode' && change.value === 'magic') {

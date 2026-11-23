@@ -248,6 +248,27 @@ test('a project reset policy is readable without allowing edits to shared config
   } finally { await f.close(); }
 });
 
+test('project discovery overrides cannot change shared settings', async () => {
+  const f = await fixture();
+  try {
+    const config = 'commands:\n  enableClaudeProject: false\nskills:\n  enabled: false\n';
+    const sharedPath = join(f.agentDirectory, 'config.yml');
+    const projectPath = join(f.cwd, '.omp', 'config.yml');
+    await writeFile(sharedPath, config);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(projectPath, config);
+    const state = await f.native.read('workspace_1', '0');
+    for (const id of ['commands.enableClaudeProject', 'skills.enabled']) {
+      await expect(f.native.write('workspace_1', '1', {
+        expectedRevision: state.revision, changes: [{ id, value: true }],
+      })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+      expect(state.settings.find(setting => setting.id === id)).toMatchObject({ value: false, conditionActive: false });
+    }
+    expect(readFileSync(sharedPath, 'utf8')).toBe(config);
+    expect(readFileSync(projectPath, 'utf8')).toBe(config);
+  } finally { await f.close(); }
+});
+
 test('General power uses the native OMP sleep-prevention setting', async () => {
   const f = await fixture();
   try {
