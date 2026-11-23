@@ -303,7 +303,9 @@ test('the project fallback reset cannot clear the hidden shared web chain', asyn
   const sharedConfig = 'retry:\n  fallbackChains:\n    web: [web/exa]\n';
   await writeFile(configPath, sharedConfig);
   await mkdir(join(bootstrap.cwd, '.omp'));
-  await writeFile(join(bootstrap.cwd, '.omp', 'config.yml'), 'retry:\n  fallbackChains: null\n');
+  const projectPath = join(bootstrap.cwd, '.omp', 'config.yml');
+  const projectConfig = 'retry:\n  fallbackChains: null\n';
+  await writeFile(projectPath, projectConfig);
   const runtime = await openNativeRuntime(bootstrap);
   try {
     const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
@@ -315,11 +317,17 @@ test('the project fallback reset cannot clear the hidden shared web chain', asyn
     const read = await search.operation({ type: 'read' });
     if (read.type !== 'state') throw new Error('Expected native search state');
     const { fallbackProviderIds, providers } = read.state;
-    const selectedProviderId = providers.find(provider => !fallbackProviderIds.includes(provider.providerId))?.providerId;
-    expect(selectedProviderId).toBeDefined();
+    const [defaultProvider] = fallbackProviderIds;
+    const outsideDefaults = providers.find(provider => !fallbackProviderIds.includes(provider.providerId))?.providerId;
+    expect(defaultProvider).toBeDefined();
+    expect(outsideDefaults).toBeDefined();
     expect(await search.operation({
-      type: 'update', request: { expectedRevision: '0', enabled: true, selectedProviderId, fallbackProviderIds },
-    })).toMatchObject({ result: { status: 'applied', state: { selectedProviderId } } });
+      type: 'update', request: { expectedRevision: '0', selectedProviderId: defaultProvider, fallbackProviderIds: fallbackProviderIds.slice(1) },
+    })).toMatchObject({ result: { status: 'applied', state: { revision: '1', selectedProviderId: defaultProvider, fallbackProviderIds: fallbackProviderIds.slice(1) } } });
+    expect(await search.operation({
+      type: 'update', request: { expectedRevision: '1', selectedProviderId: outsideDefaults, fallbackProviderIds: fallbackProviderIds.slice(1) },
+    })).toMatchObject({ result: { status: 'applied', state: { revision: '2', selectedProviderId: outsideDefaults, fallbackProviderIds } } });
+    expect(await readFile(projectPath, 'utf8')).toBe(projectConfig);
     expect(runtime.settings.getGlobalSettings().retry).toEqual({ fallbackChains: { web: ['web/exa'] } });
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });

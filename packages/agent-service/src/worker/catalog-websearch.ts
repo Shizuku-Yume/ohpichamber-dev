@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { withFileLock } from '@oh-my-pi/pi-utils/file-lock';
 import { modelKind } from '@oh-my-pi/pi-catalog/types';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { getRoleInfo, roleCandidatePool } from '@oh-my-pi/pi-coding-agent/config/model-roles';
 import { getGroundedSearchProvider, getSearchProvider, type SearchProvider } from '@oh-my-pi/pi-coding-agent/web/search/provider';
-import { resolveModelRoleValue, resolveRoleChain, rolePriorityDefaults, formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { resolveModelRoleValue, resolveRoleChain, formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { cfgProvidersWebSearchTimeoutSeconds, cfgRetryFallbackChains } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { cfgExaEnabled, cfgExaSearchDelayMs, cfgSearxngCategories, cfgSearxngEndpoint, cfgSearxngEngines, cfgSearxngLanguage, cfgSearxngSafesearch } from '@oh-my-pi/pi-coding-agent/web/settings';
@@ -197,8 +198,8 @@ export class NativeWebSearch {
           (projectRetry && typeof projectRetry === 'object' && Object.hasOwn(projectRetry, 'fallbackChains'));
         const requestedFallbacks = request.fallbackProviderIds;
         const echoesBlockedFallbacks = fallbacksBlocked && request.selectedProviderId !== undefined &&
-          Array.isArray(requestedFallbacks) && requestedFallbacks.length === before.fallbackProviderIds.length &&
-          requestedFallbacks.every((id, i) => id === before.fallbackProviderIds[i]);
+          Array.isArray(requestedFallbacks) && isDeepStrictEqual(requestedFallbacks,
+            before.fallbackProviderIds.filter(id => id !== request.selectedProviderId));
         writeFallbacks = requestedFallbacks !== undefined && !echoesBlockedFallbacks;
         if ((request.enabled !== undefined && blockedSources.includes(cfgWebSearchEnabled.provenance(this.runtime.settings)))
           || (request.timeoutSeconds !== undefined && blockedSources.includes(cfgProvidersWebSearchTimeoutSeconds.provenance(this.runtime.settings)))
@@ -224,16 +225,16 @@ export class NativeWebSearch {
         const selectorPool = new Set(pool.map(candidate => selector(candidate)));
         const configuredChain = cfgRetryFallbackChains.get(this.runtime.settings).web;
         const configuredPrimary = this.runtime.settings.getModelRole('web');
-        if (echoesBlockedFallbacks && request.selectedProviderId !== undefined && request.selectedProviderId !== configuredPrimary) {
+        if (echoesBlockedFallbacks && configuredChain && request.selectedProviderId !== undefined && request.selectedProviderId !== configuredPrimary) {
           const nextRoles = webPrimaryRoleLookup(this.runtime.settings, request.selectedProviderId);
           const resolveNext = (value: string) => resolveWebSelector(value, this.runtime.settings, pool, nextRoles);
           const primary = request.selectedProviderId;
           const projected = projectFallbackProviders(
-            configuredChain ?? [primary ?? '@web', ...rolePriorityDefaults('web')],
+            configuredChain,
             primary === null ? null : resolveNext(primary) ?? primary,
             resolveNext,
           );
-          if (projected.length !== fallbacks.length || projected.some((id, i) => id !== fallbacks[i])) {
+          if (!isDeepStrictEqual(projected, fallbacks)) {
             throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Changing the primary would change a read-only native fallback chain');
           }
         }
