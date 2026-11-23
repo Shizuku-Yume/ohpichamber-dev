@@ -97,6 +97,20 @@ async function hasAncestorGitRoot(cwd: string): Promise<boolean> {
   }
   return false;
 }
+async function filesystemDistinguishesCase(directory: string): Promise<boolean> {
+  const parent = dirname(directory);
+  const name = basename(directory);
+  const alternate = name.replace(/[a-z]/i, letter => letter === letter.toLowerCase() ? letter.toUpperCase() : letter.toLowerCase());
+  if (name === alternate) return false;
+  try {
+    const original = await lstat(directory);
+    if (!original.isDirectory() || original.dev !== (await lstat(parent)).dev) return false;
+    const alias = await fileEntry(join(parent, alternate));
+    return alias === null || alias.dev !== original.dev || alias.ino !== original.ino;
+  } catch {
+    return false;
+  }
+}
 function publicSettings(values: JsonObject, definitions: PluginSettingDefinition[]): JsonObject {
   return Object.fromEntries(definitions.filter(setting => !setting.secret && Object.hasOwn(values, setting.key))
     .map(setting => [setting.key, values[setting.key]!]));
@@ -201,11 +215,13 @@ export class NativePlugins {
     if ((parentEntry && (!parentEntry.isDirectory() || await realpath(parent) !== parent)) || (entry && !entry.isFile())) {
       throw new ProjectionError(403, 'UNAUTHORIZED', 'Plugin overrides cannot use a symbolic link or non-file target');
     }
-    const registryDirectory = normalizePathForComparison(join(cwd, getConfigDirName()));
-    if (!parentEntry && normalizePathForComparison(directory).toLowerCase() === registryDirectory.toLowerCase()) {
+    const registryPath = join(cwd, getConfigDirName());
+    if (!parentEntry && directory.toLowerCase() === registryPath.toLowerCase()) {
+      const registryDirectory = normalizePathForComparison(registryPath);
       const registry = await resolveOrDefaultProjectRegistryPath(cwd);
       if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== registryDirectory
-        && (await Bun.file(registry).exists() || await hasAncestorGitRoot(cwd))) {
+        && (await Bun.file(registry).exists() || await hasAncestorGitRoot(cwd))
+        && (directory === registryPath || !await filesystemDistinguishesCase(root))) {
         throw new ProjectionError(403, 'UNAUTHORIZED', 'Creating a workspace config directory would change its OMP plugin registry root', {
           projectWriteBlock: 'registry-root-change'
         });

@@ -1,4 +1,6 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import * as fs from 'node:fs/promises';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -429,28 +431,50 @@ nativeTest('workspace overrides do not create a new registry root inside a Git w
   } finally { await context.cleanup(); }
 });
 
-nativeTest('workspace overrides refuse a registry directory name that differs only by case', async () => {
-  const configDir = '.OMP';
-  const context = await fixture(configDir);
-  try {
-    await mkdir(join(context.cwd, '.git'));
-    const cwd = join(context.cwd, 'nested');
-    await mkdir(cwd);
-    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
-    await new PluginManager(cwd).link(context.packageDirectory);
-    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
-    const registry = join(context.cwd, configDir, 'plugins', 'installed_plugins.json');
-    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
-    expect(await nested.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
-      type: 'plugins.lifecycle', result: { projectWritable: false, projectWriteBlock: 'registry-root-change', plugins: [{ target, workspaceWritable: false }] }
-    });
-    await expect(nested.operation({
-      type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
-    }, '1')).rejects.toMatchObject({ status: 403, details: { projectWriteBlock: 'registry-root-change' } });
-    expect(await readdir(cwd)).toEqual([]);
-    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
-  } finally { await context.cleanup(); }
-});
+for (const caseInsensitive of [false, true]) {
+  nativeTest(`workspace overrides handle differently cased registry roots on case-${caseInsensitive ? 'insensitive' : 'sensitive'} filesystems`, async () => {
+    const configDir = '.OMP';
+    const context = await fixture(configDir);
+    try {
+      await mkdir(join(context.cwd, '.git'));
+      const cwd = join(context.cwd, 'nested');
+      await mkdir(cwd);
+      const root = await fs.realpath(cwd);
+      const alias = join(root, '..', 'Nested');
+      if (!caseInsensitive && existsSync(alias)) return;
+      const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+      await new PluginManager(cwd).link(context.packageDirectory);
+      const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+      const registry = join(context.cwd, configDir, 'plugins', 'installed_plugins.json');
+      expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+      const lstat = fs.lstat;
+      const probe = caseInsensitive
+        ? spyOn(fs, 'lstat').mockImplementation((path, options) => lstat(path === alias ? root : path, options))
+        : null;
+      try {
+        const lifecycle = await nested.operation({ type: 'plugins.lifecycle' }, '0');
+        const write = () => nested.operation({
+          type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+        }, '1');
+        if (caseInsensitive) {
+          expect(lifecycle).toMatchObject({
+            type: 'plugins.lifecycle', result: { projectWritable: false, projectWriteBlock: 'registry-root-change', plugins: [{ target, workspaceWritable: false }] }
+          });
+          await expect(write()).rejects.toMatchObject({ status: 403, details: { projectWriteBlock: 'registry-root-change' } });
+          expect(await readdir(cwd)).toEqual([]);
+        } else {
+          expect(lifecycle).toMatchObject({
+            type: 'plugins.lifecycle', result: { projectWritable: true, plugins: [{ target, workspaceWritable: true }] }
+          });
+          await write();
+          expect(await Bun.file(getProjectPluginOverridesPath(cwd)).json()).toEqual({ features: { [target.name]: ['preview'] } });
+          expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+        }
+        expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+      } finally { probe?.mockRestore(); }
+    } finally { await context.cleanup(); }
+  });
+}
 
 nativeTest('workspace overrides do not change registry discovery under a custom native config directory', async () => {
   const configDir = '.custom-omp';
