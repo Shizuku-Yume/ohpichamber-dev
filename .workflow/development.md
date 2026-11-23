@@ -1717,6 +1717,12 @@ The current W1-W10 matrix keeps W1-W6 on their existing M0/M1/M2 receipts. W7 la
 
 ## Reusable findings
 
+### OMP 19.1 plugin lifecycle
+
+W9 adds native feature and workspace settings controls without expanding the default Canonical plugin responses. The opt-in lifecycle route and legacy mutation shape are covered by contract, native worker, Host authorization and settings component tests using local fixtures. Installed Capacitor binaries and visual presentation remain unverified. Local directory linking stays CLI-only; the authorization gap is recorded in [decisions](decisions.md#2026-11-23---keep-native-plugin-lifecycle-opt-in).
+
+The pinned SDK treats a newly created workspace config directory as a project discovery anchor. Workspace override writes therefore stay unavailable if creating that directory would hide an inherited marketplace registry or make a nested Git workspace stop discovering future installs at its current project root. An override is keyed by native package name, so only the active copy can edit workspace options when a project and global install share that name.
+
 ### Inherited guidance is not the target architecture
 
 The upstream guide required OpenCode SDK and VS Code support. Those requirements are not the final OMP target, but upstream runtime code may be inherited during the approved baseline refresh. Apply final engine retirement to the later cutover, not as a reason to keep the prerequisite update on 1.x. Preserve fork safety, workflow routing, and engineering rules throughout.

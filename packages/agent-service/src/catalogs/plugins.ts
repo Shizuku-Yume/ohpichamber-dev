@@ -6,7 +6,7 @@ import {
   PluginWorkerApplyOutcomeSchema, PluginMutationResultSchema, PluginMarketplaceManageRequestSchema,
   PluginPreviewUpgradeRequestSchema, PluginUpgradeAllRequestSchema, PluginUpgradeRequestSchema,
   PluginUpdateCheckResultSchema, PluginUpgradePreviewResultSchema, PluginMarketplaceSourcesSchema,
-  ExtensionInventoryStateSchema, ExtensionToggleRequestSchema,
+  ExtensionInventoryStateSchema, ExtensionToggleRequestSchema, PluginLifecycleStateSchema,
 } from '@openchamber/agent-contract';
 
 /**
@@ -29,6 +29,7 @@ export type NativeExtensionResult = z.infer<typeof NativeExtensionResultSchema>;
 
 export const NativePluginOperationSchemas = [
   z.strictObject({ type: z.literal('plugins.read') }),
+  z.strictObject({ type: z.literal('plugins.lifecycle') }),
   z.strictObject({ type: z.literal('plugins.owner') }),
   z.strictObject({ type: z.literal('plugins.doctor') }),
   // Cached marketplace catalog, sources and update list: no network access on read.
@@ -50,7 +51,9 @@ export const NativePluginOperationSchema = z.discriminatedUnion('type', NativePl
 export type NativePluginOperation = z.infer<typeof NativePluginOperationSchema>;
 export const NativePluginResultSchemas = [
   z.strictObject({ type: z.literal('plugins.catalog'), catalog: PluginCatalogStateSchema }),
-  z.strictObject({ type: z.literal('plugins.owner'), rootPath: z.string().min(1), localSourcePath: z.string().min(1), projectRegistryPath: z.string().min(1).nullable() }),
+  z.strictObject({ type: z.literal('plugins.lifecycle'), result: PluginLifecycleStateSchema }),
+  z.strictObject({ type: z.literal('plugins.owner'), rootPath: z.string().min(1), localSourcePath: z.string().min(1),
+    projectRegistryPath: z.string().min(1).nullable(), overridesPath: z.string().min(1) }),
   z.strictObject({ type: z.literal('plugins.mutated'), result: PluginMutationResultSchema }),
   z.strictObject({ type: z.literal('plugins.doctor'), result: PluginDoctorResultSchema }),
   z.strictObject({ type: z.literal('plugins.marketplace'), result: PluginMarketplaceStateSchema }),

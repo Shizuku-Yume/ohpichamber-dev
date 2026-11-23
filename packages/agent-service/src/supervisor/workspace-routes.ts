@@ -110,6 +110,7 @@ export class WorkspaceRoutes {
       const action = plugins[2] ?? '';
       let operation: NativePluginOperation;
       if (request.method === 'GET' && action === '') operation = { type: 'plugins.read' };
+      else if (request.method === 'GET' && action === 'lifecycle') operation = { type: 'plugins.lifecycle' };
       else if (request.method === 'GET' && action === 'doctor') operation = { type: 'plugins.doctor' };
       else if (request.method === 'GET' && action === 'marketplace') operation = { type: 'plugins.marketplace' };
       else if (request.method === 'GET' && action === 'marketplace/updates') operation = { type: 'plugins.marketplace.checkUpdates' };
@@ -162,7 +163,7 @@ export class WorkspaceRoutes {
           }
         };
       }
-      if (result.type === 'plugins.mutated' || result.type === 'plugins.local' || result.type === 'plugins.doctor'
+      if (result.type === 'plugins.mutated' || result.type === 'plugins.lifecycle' || result.type === 'plugins.local' || result.type === 'plugins.doctor'
         || result.type === 'plugins.marketplace' || result.type === 'plugins.updateCheck' || result.type === 'plugins.upgradePreview') {
         return { status: 200, body: result.result };
       }

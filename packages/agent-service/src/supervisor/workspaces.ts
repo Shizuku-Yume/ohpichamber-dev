@@ -25,7 +25,8 @@ const OwnerSchema = z.strictObject({ agentDirectoryId: EntityIdSchema, agentDire
 const PluginOwnerSchema = z.strictObject({ rootPath: z.string().min(1).refine(isAbsolute), revision: CounterSchema });
 const PluginBindingSchema = PluginOwnerSchema.omit({ revision: true }).extend({
   workspaceId: EntityIdSchema,
-  localSourcePath: z.string().min(1).refine(isAbsolute), projectRegistryPath: z.string().min(1).refine(isAbsolute).nullable()
+  localSourcePath: z.string().min(1).refine(isAbsolute), projectRegistryPath: z.string().min(1).refine(isAbsolute).nullable(),
+  overridesPath: z.string().min(1).refine(isAbsolute).optional()
 });
 const StateSchema = z.strictObject({
   workspaces: z.array(WorkspaceSchema), owners: z.array(OwnerSchema),
@@ -292,7 +293,8 @@ export class WorkspaceCatalogs {
   private async readPluginOwner(rootSessionId: string, workerGeneration?: string) {
     const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } }, workerGeneration);
     if (result.type !== 'catalog' || result.result.type !== 'plugins.owner'
-      || !isAbsolute(result.result.rootPath) || !isAbsolute(result.result.localSourcePath) || (result.result.projectRegistryPath !== null && !isAbsolute(result.result.projectRegistryPath))) {
+      || !isAbsolute(result.result.rootPath) || !isAbsolute(result.result.localSourcePath) || !isAbsolute(result.result.overridesPath)
+      || (result.result.projectRegistryPath !== null && !isAbsolute(result.result.projectRegistryPath))) {
       throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The native cache warming configuration could not be written');
     }
     return result.result;
@@ -304,9 +306,11 @@ export class WorkspaceCatalogs {
     await this.stateMutation(async () => {
       const previous = this.pluginBindings.get(workspaceId);
       const existingOwner = this.pluginOwners.get(identity.rootPath);
-      if (existingOwner && previous?.rootPath === identity.rootPath && previous.localSourcePath === identity.localSourcePath && previous.projectRegistryPath === identity.projectRegistryPath) return;
+      if (existingOwner && previous?.rootPath === identity.rootPath && previous.localSourcePath === identity.localSourcePath
+        && previous.projectRegistryPath === identity.projectRegistryPath && previous.overridesPath === identity.overridesPath) return;
       if (!existingOwner) this.pluginOwners.set(identity.rootPath, { rootPath: identity.rootPath, revision: '0' });
-      this.pluginBindings.set(workspaceId, { workspaceId, rootPath: identity.rootPath, localSourcePath: identity.localSourcePath, projectRegistryPath: identity.projectRegistryPath });
+      this.pluginBindings.set(workspaceId, { workspaceId, rootPath: identity.rootPath, localSourcePath: identity.localSourcePath,
+        projectRegistryPath: identity.projectRegistryPath, overridesPath: identity.overridesPath });
       try { await this.persist(); }
       catch (error) {
         if (!existingOwner) this.pluginOwners.delete(identity.rootPath);
@@ -340,12 +344,16 @@ export class WorkspaceCatalogs {
         const nativeOwner = await this.readPluginOwner(binding.rootSessionId);
         if (nativeOwner.rootPath !== binding.identity.rootPath) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The relocated native owner still points at a different root path');
         const revision = expectedRevision === undefined ? binding.owner.revision : CounterSchema.parse((BigInt(binding.owner.revision) + 1n).toString());
+        const configure = operation.type === 'plugins.configure' ? operation.request : undefined;
+        const scopedWrite = configure && (configure.settings !== undefined || configure.enabledFeatures !== undefined);
+        const overrides = scopedWrite && configure.settingsScope === 'workspace';
         const global = operation.type === 'plugins.marketplace.manage'
           || operation.type === 'plugins.marketplace.upgradeAll'
-          || (operation.type === 'plugins.configure' && operation.request.settings !== undefined)
+          || (scopedWrite && configure.settingsScope === 'global')
+          || (configure?.enabled !== undefined && (configure.target.kind === 'package' || configure.target.scope === 'user'))
           || (operation.type === 'plugins.update' && operation.request.target.kind === 'marketplace')
           || (operation.type === 'plugins.install' ? operation.request.source.kind === 'package' || operation.request.source.scope === 'user'
-            : operation.type === 'plugins.uninstall' || operation.type === 'plugins.configure' || operation.type === 'plugins.update'
+            : operation.type === 'plugins.uninstall' || operation.type === 'plugins.update'
               ? operation.request.target.kind === 'package' || operation.request.target.scope === 'user' : false);
         const project = operation.type === 'plugins.install' ? operation.request.source.kind === 'marketplace' && operation.request.source.scope === 'project'
           : operation.type === 'plugins.configure' ? operation.request.enabled !== undefined && operation.request.target.kind === 'marketplace' && operation.request.target.scope === 'project'
@@ -356,13 +364,15 @@ export class WorkspaceCatalogs {
         if (expectedRevision !== undefined) {
           for (const known of this.pluginBindings.values()) {
             if ((project && known.projectRegistryPath !== null && known.projectRegistryPath === nativeOwner.projectRegistryPath)
-              || (!global && !project && known.localSourcePath === nativeOwner.localSourcePath)) affectedRootPaths.add(known.rootPath);
+              || (overrides && known.overridesPath === nativeOwner.overridesPath)
+              || (!global && !project && !overrides && known.localSourcePath === nativeOwner.localSourcePath)) affectedRootPaths.add(known.rootPath);
           }
           for (const worker of await coordinator.pluginTargets()) {
             const identity = await this.readPluginOwner(worker.rootSessionId, worker.workerGeneration);
             if ((global && identity.rootPath === binding.identity.rootPath)
               || (project && identity.projectRegistryPath !== null && identity.projectRegistryPath === nativeOwner.projectRegistryPath)
-              || (!global && !project && identity.localSourcePath === nativeOwner.localSourcePath)) {
+              || (overrides && identity.overridesPath === nativeOwner.overridesPath)
+              || (!global && !project && !overrides && identity.localSourcePath === nativeOwner.localSourcePath)) {
               targets.push(worker);
               affectedRootPaths.add(identity.rootPath);
             }
@@ -395,7 +405,7 @@ export class WorkspaceCatalogs {
           }
           this.pluginBindings.set(workspaceId, {
             workspaceId, rootPath: committedIdentity.rootPath,
-            localSourcePath: committedIdentity.localSourcePath, projectRegistryPath: committedIdentity.projectRegistryPath
+            localSourcePath: committedIdentity.localSourcePath, projectRegistryPath: committedIdentity.projectRegistryPath, overridesPath: committedIdentity.overridesPath
           });
           try { await this.persist(); }
           catch (error) {

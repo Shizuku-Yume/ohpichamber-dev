@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type {
   ExtensionInventory, ExtensionInventoryState, LocalExtensionSource, PluginCatalogState, PluginConfigureRequest, PluginDoctorResult,
-  MarketplaceSource, PluginInstallRequest, PluginMutationResult, PluginTarget, PluginUpgradePreviewEntry,
+  MarketplaceSource, PluginInstallRequest, PluginLifecycleState, PluginMutationResult, PluginTarget, PluginUpgradePreviewEntry,
   PluginUpdateCheckEntry,
 } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -35,6 +35,7 @@ interface PluginsStore {
   installPlugin: (source: PluginInstallRequest['source']) => Promise<PluginMutationResult>;
   uninstallPlugin: (target: PluginTarget) => Promise<PluginMutationResult>;
   configurePlugin: (input: Omit<PluginConfigureRequest, 'expectedRevision'>) => Promise<PluginMutationResult>;
+  readPluginLifecycle: () => Promise<PluginLifecycleState>;
   updatePlugin: (target: PluginTarget) => Promise<PluginMutationResult>;
   upgradeAllPlugins: () => Promise<PluginMutationResult>;
   previewUpgrade: (target?: PluginTarget) => Promise<PluginUpgradePreviewEntry[]>;
@@ -243,6 +244,12 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
     installPlugin: source => mutate(catalog => canonicalClient.plugins.install(catalog.workspaceId, { expectedRevision: catalog.revision, source })),
     uninstallPlugin: target => mutate(catalog => canonicalClient.plugins.uninstall(catalog.workspaceId, { expectedRevision: catalog.revision, target })),
     configurePlugin: input => mutate(catalog => canonicalClient.plugins.configure(catalog.workspaceId, { ...input, expectedRevision: catalog.revision })),
+    readPluginLifecycle: async () => {
+      const { catalog, scope } = owner();
+      const result = await canonicalClient.plugins.lifecycle(catalog.workspaceId);
+      if (!current(scope)) throw new Error('The selected plugin workspace changed.');
+      return result;
+    },
     updatePlugin: target => mutate(catalog => canonicalClient.plugins.update(catalog.workspaceId, { expectedRevision: catalog.revision, target })),
     upgradeAllPlugins: () => mutate(catalog => canonicalClient.plugins.upgradeAll(catalog.workspaceId, { expectedRevision: catalog.revision })),
     previewUpgrade: async target => {

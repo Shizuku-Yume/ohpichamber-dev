@@ -20,6 +20,12 @@
 - **Mine:** yes (maintainer-settled W8 design).
 - **Revisit when:** OMP exposes different selection semantics or Host provider-use admission changes. Live-provider rotation remains unverified.
 
+## 2026-11-23 - Keep native plugin lifecycle opt-in
+
+- **Decided:** OMP plugin settings and features use the pinned native global and workspace configuration paths. PluginsPage exposes the controls from a separate Canonical lifecycle read. The original plugin list and mutation responses keep their strict shapes and meanings for installed Capacitor clients.
+- **Not included:** OMP `PluginManager.link` replaces the plugin name's existing entry and links a mutable directory into the profile-global executable plugin root. The existing authenticated workspace routes are shared with paired remote clients; workspace confinement and a folder picker prove neither local operator intent nor permission for profile-global executable replacement. Native linking remains a local OMP CLI action until there is a dedicated Host local-capability and authorization lane for it.
+- **Consequences:** Global feature selection uses a registered package runtime record; project marketplace installs have separate native lockfiles and no equivalent safe registry-targeted global feature setter. Marketplace features can be selected by workspace override without altering installation or enterprise policy.
+
 ## 2026-11-22 - Keep OMP 19.1 commands and MCP behind the Host boundary
 
 - **Decided:** retain OMP's native Bash command transport while authorizing both Bash and the dispatched tool, and keep MCP hosts local to the worker. Keep magic edit mode out of the Canonical settings and authorization surface.
