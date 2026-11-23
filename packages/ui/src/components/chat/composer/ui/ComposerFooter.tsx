@@ -291,7 +291,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
                     </div>
                     <div className={cn('flex items-center flex-1 justify-end', isVSCode ? cn(footerGapClass, 'md:gap-x-3') : 'gap-x-2')} data-dictation-chain="true">
                         {waitingForAgent ? <AgentStartupNote className="flex-shrink-0" /> : null}
-                        {parallelRun ? <div className="flex-1" /> : pinnedSelection ? <ModelControls className={cn('flex-1 min-w-0 justify-end')} sessionId={currentSessionId} selection={pinnedSelection} agentSelectable /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
+                        {parallelRun ? <div className="flex-1" /> : pinnedSelection ? <ModelControls className={cn('flex-1 min-w-0 justify-end')} sessionId={currentSessionId} selection={pinnedSelection} /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
                         {!isBtw && !dictationActive ? <ComposerModeSelector
                             sessionId={currentSessionId}
                             draftOpen={newSessionDraftOpen}

@@ -1411,7 +1411,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.previous_project.label': 'المشروع السابق',
   'settings.openchamber.keyboardShortcuts.action.next_project.label': 'المشروع التالي',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'التبديل بين السمات',
-  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'التبديل بين الوكلاء',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'النموذج المفضل التالي',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': 'النموذج المفضل السابق',
   'settings.openchamber.keyboardShortcuts.action.open_model_selector.label': 'فتح محدد النموذج',

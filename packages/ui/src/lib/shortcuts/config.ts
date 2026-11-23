@@ -209,12 +209,6 @@ const SHORTCUT_GROUPS = {
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.cycle_thinking_variant.label',
     },
     {
-      id: 'cycle_agent',
-      defaultBinding: 'tab',
-      customizable: true,
-      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.cycle_agent.label',
-    },
-    {
       id: 'cycle_favorite_model_forward',
       defaultBinding: 'ctrl+alt+]',
       customizable: true,

@@ -1374,7 +1374,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.previous_project.label': 'Önceki Proje',
   'settings.openchamber.keyboardShortcuts.action.next_project.label': 'Sonraki Proje',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Temalar arasında geçiş yap',
-  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent\'lar arasında geçiş yap',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'Sonraki favori modele geç',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': 'Önceki favori modele geç',
   'settings.openchamber.keyboardShortcuts.action.open_model_selector.label': 'Model seçiciyi aç',

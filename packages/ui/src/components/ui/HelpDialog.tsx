@@ -77,12 +77,6 @@ export const HelpDialog: React.FC = () => {
           keys: '',
         },
         {
-          id: 'cycle_agent',
-          keys: '',
-          descriptionKey: "helpDialog.item.cycleAgent",
-          icon: "ai-agent",
-        },
-        {
           id: 'search_prompt_history',
           keys: '',
           descriptionKey: 'helpDialog.item.searchPromptHistory',

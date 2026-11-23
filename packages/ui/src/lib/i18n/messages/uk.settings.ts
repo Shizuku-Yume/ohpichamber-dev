@@ -1378,7 +1378,6 @@ export const settingsDict = {
   "settings.openchamber.keyboardShortcuts.action.previous_project.label": "Попередній проєкт",
   "settings.openchamber.keyboardShortcuts.action.next_project.label": "Наступний проєкт",
   "settings.openchamber.keyboardShortcuts.action.cycle_theme.label": "Перемкнути тему",
-  "settings.openchamber.keyboardShortcuts.action.cycle_agent.label": "Перемкнути агента",
   "settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label": "Перемкнути улюблену модель вперед",
   "settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label": "Перемкнути улюблену модель назад",
   "settings.openchamber.keyboardShortcuts.action.open_model_selector.label": "Відкрити вибір моделі",
