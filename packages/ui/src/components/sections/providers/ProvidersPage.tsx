@@ -5,6 +5,7 @@ import type {
   Provider,
   ProviderAccounts as Accounts,
   ProviderAccountMutationRequest,
+  ProviderAccountSelection,
   ProviderConfigurationRead,
   ProviderOAuthMethods as Methods,
   ProviderMutationResult,
@@ -46,6 +47,7 @@ import { listConnectableProviders, listProvidersAcceptingKey } from './connectab
 import {
   getProviderEnvironment,
   oauthMethodsForProvider,
+  providerAccountName,
   requiresProviderAuth,
   shouldAutoOpenAuthPanel,
 } from './providerAuth';
@@ -58,7 +60,7 @@ import type { CustomProviderLogoPlan } from './custom-provider-form';
 const ADD_PROVIDER_ID = '__add_provider__';
 const CLASSIFICATION_PAGE_ID = '__classification__';
 
-type Detail = { accounts: Accounts; configuration: ProviderConfigurationRead | null };
+type Detail = { accounts: Accounts; selection: ProviderAccountSelection | null; configuration: ProviderConfigurationRead | null };
 
 const formatTokens = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) return null;
@@ -148,9 +150,10 @@ function ProviderDetail({
     });
     void Promise.all([
       canonicalClient.providerAccounts(workspaceId, provider.providerId),
+      canonicalClient.providerAccountSelection(workspaceId, provider.providerId),
       configuration,
-    ]).then(([accounts, config]) => {
-      if (active && runtime === getRuntimeKey()) setDetail({ accounts, configuration: config });
+    ]).then(([accounts, selection, config]) => {
+      if (active && runtime === getRuntimeKey()) setDetail({ accounts, selection, configuration: config });
     }).catch(() => {
       if (active && runtime === getRuntimeKey()) setFailed(true);
     });
@@ -189,16 +192,22 @@ function ProviderDetail({
 
   const mutateAccount = async (request: ProviderAccountMutationRequest) => {
     if (busy || disconnectBusy || accountBusyId !== null) return;
-    const previous = detail?.accounts.accounts.find((account) => account.credentialRef === request.credentialRef);
-    setAccountBusyId(request.credentialRef);
+    const previousIndex = request.action === 'automatic' ? -1
+      : detail?.accounts.accounts.findIndex((account) => account.credentialRef === request.credentialRef) ?? -1;
+    const previous = detail?.accounts.accounts[previousIndex];
+    setAccountBusyId(request.action === 'automatic' ? 'automatic' : request.credentialRef);
     setAccountError(null);
     try {
       const next = await canonicalClient.mutateProviderAccount(workspaceId, provider.providerId, request);
+      const selection = await canonicalClient.providerAccountSelection(workspaceId, provider.providerId);
       if (!current()) return;
-      setDetail((value) => value ? { ...value, accounts: next } : value);
-      if (request.action === 'select') {
+      setDetail((value) => value ? { ...value, accounts: next, selection } : value);
+      if (request.action === 'automatic') {
+        toast.success(t('settings.providers.accounts.selection.enabled'));
+        await onRefresh();
+      } else if (request.action === 'select') {
         toast.success(t('settings.providers.accounts.toast.switched', {
-          account: previous?.label || previous?.email || previous?.accountId || request.credentialRef,
+          account: previous ? providerAccountName(previous, previousIndex, t) : '',
         }));
         await onRefresh();
       } else if (request.action === 'remove') {
@@ -210,7 +219,7 @@ function ProviderDetail({
       if (current()) {
         setAccountError(problemMessage(error, t(request.action === 'label'
           ? 'settings.providers.accounts.toast.renameFailed'
-          : request.action === 'select'
+          : request.action === 'select' || request.action === 'automatic'
             ? 'settings.providers.accounts.toast.switchFailed'
             : 'settings.providers.accounts.toast.removeFailed')));
       }
@@ -370,6 +379,7 @@ function ProviderDetail({
         {accounts.length > 0 ? (
           <ProviderAccounts
             roster={detail.accounts}
+            selection={detail.selection}
             busyId={accountBusyId}
             disabled={busy || disconnectBusy}
             onMutate={(request) => { void mutateAccount(request); }}

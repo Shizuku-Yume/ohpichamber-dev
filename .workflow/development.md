@@ -13,6 +13,35 @@ persisted Extra high choice, persisted model selection, zero-worker guidance,
 and allowed-subagent help. The background session-list refresh remained
 unverified after an error; this is not multi-platform certification.
 
+W8 adds persisted automatic account selection without resetting legacy
+pins: an explicit null default ref suppresses legacy fallback, while an absent
+key preserves it. Legacy rosters retain their exact strict shape and projected
+stored-credential active fallback; the opt-in account-selection route carries
+explicit pin state and overriding source. Native ModelRegistry owns automatic
+selection and backoff; Host provider/model/endpoint admission and private
+quota/TTS/routing credential refs remain independent. Providers settings uses
+shared selection controls for Automatic or an enabled account, explicit Pinned
+badges, native-backoff copy and localized override notices that disable account
+selection. Automatic mutations have separate success feedback and do not carry
+a credential ref. Focused contract, worker, Host and session-ordering tests pass.
+The D4 decision records persistence and admission semantics; the dated research
+plan remains historical. New clients fall back to the pre-W8 Use/Active UI only
+for the older Host's 404 NOT_IMPLEMENTED unknown-route response; other selection
+errors use the existing load/mutation error path. Selection refetches after account
+mutations. Removing an effective pin clears it transactionally before deletion.
+Unbound resolution releases old explicit native OAuth session pins through the
+19.1 `sessions.release` API, including persisted and inherited pins, without
+clearing native automatic warm affinity. Explicit A-to-B selection replaces the
+native pin; no parallel session-pin map or rotation policy is added.
+On supported Hosts the account chip group is the only selection control;
+unavailable pins select no chip, while an existing pinned row retains its badge.
+The section retains its account help separately from automatic-mode copy.
+Pin feedback shares the chip/row account-name formatter, including localized
+method-and-position fallbacks, rather than displaying opaque credential refs.
+Local tests cover legacy strict parsing, selection capability fallback, supported
+selection states and pin-removal rollback. No visual or live-provider rotation
+certification is included.
+
 The W6 branch merge of main preserves both MCP and settings-placement changes.
 Worker MCP tests (25), isolated importer/page/runtime/locale tests (4/4 files),
 UI and Agent Service type-checks, root type-check including drift, and W6-file

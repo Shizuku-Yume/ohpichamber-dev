@@ -44,7 +44,7 @@ function isReadOnlyOperation(operation: WorkerOperation): boolean {
   switch (operation.operation.type) {
     case 'catalog.models.read': case 'catalog.providers.read': case 'catalog.agents.read':
     case 'catalog.settings.read': case 'catalog.warming.read': case 'skills.read': case 'skills.expand':
-    case 'catalog.provider.accounts.read': case 'catalog.provider.oauth.methods':
+    case 'catalog.provider.accounts.read': case 'catalog.provider.account-selection.read': case 'catalog.provider.oauth.methods':
     case 'catalog.provider.models.enrich':
     case 'catalog.provider.configuration.read':
       return true;
