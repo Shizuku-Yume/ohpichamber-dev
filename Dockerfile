@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM oven/bun:1.4.4 AS base
+FROM oven/bun:1.4.5 AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -15,16 +15,22 @@ COPY packages/mobile/package.json ./packages/mobile/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/agent-contract/package.json ./packages/agent-contract/
 COPY packages/agent-service/package.json ./packages/agent-service/
+COPY packages/sdk/examples/agent-desk/package.json ./packages/sdk/examples/agent-desk/
 COPY packages/sdk/examples/browser-provider-stub/package.json ./packages/sdk/examples/browser-provider-stub/
 COPY packages/sdk/examples/checklist-editor/package.json ./packages/sdk/examples/checklist-editor/
 COPY packages/sdk/examples/config-editor/package.json ./packages/sdk/examples/config-editor/
 COPY packages/sdk/examples/git-graph-status/package.json ./packages/sdk/examples/git-graph-status/
 COPY packages/sdk/examples/github-token/package.json ./packages/sdk/examples/github-token/
 COPY packages/sdk/examples/hello-kit/package.json ./packages/sdk/examples/hello-kit/
+COPY packages/sdk/examples/notification-webhook/package.json ./packages/sdk/examples/notification-webhook/
+COPY packages/sdk/examples/quota-provider/package.json ./packages/sdk/examples/quota-provider/
 COPY packages/sdk/examples/service-echo/package.json ./packages/sdk/examples/service-echo/
+COPY packages/sdk/examples/session-events-log/package.json ./packages/sdk/examples/session-events-log/
 COPY packages/sdk/examples/source-control-provider/package.json ./packages/sdk/examples/source-control-provider/
 COPY packages/sdk/examples/tasks-demo/package.json ./packages/sdk/examples/tasks-demo/
 COPY packages/sdk/examples/tools-only/package.json ./packages/sdk/examples/tools-only/
+COPY packages/sdk/examples/tracker-provider/package.json ./packages/sdk/examples/tracker-provider/
+COPY packages/sdk/examples/wait-kit/package.json ./packages/sdk/examples/wait-kit/
 RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
@@ -38,7 +44,7 @@ RUN bun run --cwd packages/agent-contract build
 RUN bun run --cwd packages/agent-service build
 RUN bun run build:web
 
-FROM oven/bun:1.4.4 AS runtime
+FROM oven/bun:1.4.5 AS runtime
 WORKDIR /home/ohpichamber
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -88,8 +94,10 @@ COPY --from=builder /app/packages/agent-contract/package.json ./packages/agent-c
 COPY --from=builder /app/packages/agent-contract/dist ./packages/agent-contract/dist
 COPY --from=builder /app/packages/agent-service/package.json ./packages/agent-service/package.json
 COPY --from=builder /app/packages/agent-service/dist ./packages/agent-service/dist
-COPY --from=builder /app/packages/web/bin ./packages/web/bin
-COPY --from=builder /app/packages/web/server ./packages/web/server
+COPY --from=builder /app/packages/agent-service/node_modules ./packages/agent-service/node_modules
+COPY --from=builder /app/packages/web/build/bin ./packages/web/bin
+COPY --from=builder /app/packages/web/build/server ./packages/web/server
+COPY --from=builder /app/packages/web/build/scripts ./packages/web/scripts
 COPY --from=builder /app/packages/web/dist ./packages/web/dist
 # Release notes shipped with the Host; Settings > About reads them offline.
 COPY --from=builder /app/packages/web/resources/changelog ./packages/web/resources/changelog
