@@ -399,11 +399,13 @@ async function writeUserServers(
         } else if (before.enabled !== server.enabled) {
           servers[key] = { ...existing, enabled: server.enabled };
         }
-        if (server.enabled) {
-          disabled.delete(id);
-          for (const name of keysFor(id)) disabled.delete(name);
-        } else {
-          disabled.add(id);
+        if (!before || before.enabled !== server.enabled) {
+          if (server.enabled) {
+            disabled.delete(id);
+            for (const name of keysFor(id)) disabled.delete(name);
+          } else {
+            disabled.add(id);
+          }
         }
         const mapping = credentialMapping(server);
         if (mapping) credentials[id] = mapping;
@@ -412,7 +414,7 @@ async function writeUserServers(
       }
 
       const file: UserFile = { ...raw, mcpServers: servers };
-      if (disabled.size > 0 || raw.disabledServers !== undefined) file.disabledServers = [...disabled].sort();
+      if (JSON.stringify([...disabled]) !== JSON.stringify(raw.disabledServers ?? [])) file.disabledServers = [...disabled].sort();
       if (Object.keys(credentials).length > 0 || Object.keys(identities).length > 0) {
         file.openchamber = {
           ...(Object.keys(credentials).length > 0 ? { credentials } : {}),

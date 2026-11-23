@@ -421,6 +421,25 @@ describe('user-scope MCP storage in a temp HOME keeps native entries and credent
     });
   });
 
+  test('a label-only edit preserves native force-enable and denylist membership', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      const seeded = {
+        mcpServers: { forced: { command: 'node', args: [], enabled: false } },
+        enabledServers: ['forced'], disabledServers: ['unrelated'],
+      };
+      await writeFile(userPath, JSON.stringify(seeded), 'utf8');
+      const state = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+      if (!state) throw new Error('Missing configuration');
+      state.config.servers = state.config.servers.map(server => ({ ...server, label: 'Renamed' }));
+      await writeNativeMcpConfiguration(projectPath, state, userPath);
+      const stored = JSON.parse(await readFile(userPath, 'utf8'));
+      expect(stored.disabledServers).toEqual(seeded.disabledServers);
+      expect(stored.enabledServers).toEqual(seeded.enabledServers);
+      expect(stored.mcpServers).toEqual(seeded.mcpServers);
+      expect((await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath))?.config.servers[0]?.label).toBe('Renamed');
+    });
+  });
+
   test('a project save leaves the pre-seeded user mcp.json byte-identical', async () => {
     await withHome(async ({ userPath, projectPath }) => {
       const seeded = `${JSON.stringify({

@@ -4,6 +4,14 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+W6 review: a force-enabled native user entry was projected disabled because the
+reader ignores `enabledServers`; a label edit then added it to the denylist.
+The failing regression observed that new denylist entry. Identity/credential-only
+edits now preserve enable-override membership, including denylist ordering.
+Explicit enable changes retain their existing behavior. The focused worker suite
+passes 25 tests; evidence is in `/home/ubuntu/w6-evidence/finding2-*.log`.
+The projection's incomplete enable-override interpretation remains unchanged.
+
 W6 MCP remediation preserves OMP 19.1 user-file native fields when changing
 labels, enablement or credential references. Label-only
 edits no longer add an enabled field to the native entry. Standard single-server
