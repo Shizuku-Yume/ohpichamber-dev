@@ -104,6 +104,19 @@ const waitFor = async (predicate: () => boolean) => {
   }
 };
 
+test('offline plugin settings say when changes will apply instead of disabling a restart button', async () => {
+  usePluginsStore.setState({
+    catalog: { ...emptyCatalog, plugins: [plugin] },
+    loadedDirectory: '/repo',
+    loadedRuntimeKey: getRuntimeKey(),
+    isLoading: false,
+    loadPlugins: async () => true,
+  });
+  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+  expect(container.textContent).toContain('Plugin changes take effect when a new session starts.');
+  expect(container.textContent).not.toContain('Restart idle sessions to apply');
+});
+
 test('applying plugin changes only calls the native apply after the confirmation dialog is accepted', async () => {
   let applies = 0;
   const applied: PluginMutationResult = {

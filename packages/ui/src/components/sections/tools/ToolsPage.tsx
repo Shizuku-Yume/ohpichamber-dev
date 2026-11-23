@@ -122,7 +122,6 @@ export const ToolsPage: React.FC = () => {
   const grepOptions = getSectionSettings('grep');
   const computerOptions = getSectionSettings('computer');
   const githubOptions = getSectionSettings('github');
-  const idaOptions = getSectionSettings('ida');
 
   return (
     <SettingsPageLayout
@@ -378,7 +377,7 @@ export const ToolsPage: React.FC = () => {
         settingsItem="tools.section.specialized"
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
-          {['web_search.enabled', 'fetch.enabled', 'github.enabled', 'computer.enabled', 'ratchet.enabled', 'archive.enabled', 'checkpoint.enabled', 'vault.enabled', 'security.enabled', 'ask.enabled', 'out.enabled', 'speechgen.enabled', 'ida.enabled'].map((id) => {
+          {['web_search.enabled', 'fetch.enabled', 'github.enabled', 'computer.enabled', 'ratchet.enabled', 'archive.enabled', 'checkpoint.enabled', 'vault.enabled', 'security.enabled', 'ask.enabled', 'out.enabled', 'speechgen.enabled'].map((id) => {
             const s = availableById.get(id);
             if (!s) return null;
             return (
@@ -405,19 +404,6 @@ export const ToolsPage: React.FC = () => {
                 {id === 'github.enabled' && ompForm['github.enabled'] !== false && githubOptions.length > 0 ? (
                   <div className={`ps-6 ${SETTINGS_SPACE_ROW_CLASS}`}>
                     {githubOptions.map((opt) => (
-                      <OmpRowControl
-                        key={opt.id}
-                        setting={opt}
-                        value={ompForm[opt.id] !== undefined ? ompForm[opt.id] : opt.value}
-                        disabled={ompLoading}
-                        onChange={(val) => void updateOmpSetting(opt.id, val)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                {id === 'ida.enabled' && ompForm['ida.enabled'] !== false && idaOptions.length > 0 ? (
-                  <div className={`ps-6 ${SETTINGS_SPACE_ROW_CLASS}`}>
-                    {idaOptions.map((opt) => (
                       <OmpRowControl
                         key={opt.id}
                         setting={opt}

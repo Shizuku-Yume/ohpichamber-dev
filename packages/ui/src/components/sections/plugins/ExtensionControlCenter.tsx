@@ -74,7 +74,7 @@ const StatusPill: React.FC<{ item: ExtensionItem }> = ({ item }) => {
  return (
   <SettingsCardPill tone={status === 'active' ? 'success' : 'neutral'}>
    {status === 'shadowed'
-    ? t('settings.openchamber.tunnel.state.inactive')
+    ? t('settings.extensions.status.shadowed')
     : t(status === 'active' ? 'settings.extensions.status.enabled' : 'settings.extensions.status.disabled')}
   </SettingsCardPill>
  );
