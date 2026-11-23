@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { withFileLock } from '@oh-my-pi/pi-utils/file-lock';
 import { modelKind } from '@oh-my-pi/pi-catalog/types';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
@@ -79,6 +80,82 @@ function providerFor(model: SearchModel): Promise<SearchProvider | undefined> {
   return model.webSearch ? getGroundedSearchProvider(model.webSearch) : Promise.resolve(undefined);
 }
 
+function webPrimaryRoleLookup(settings: Settings, primary: string | null) {
+  return { getModelRole: (role: string) => role === 'web' ? primary ?? undefined : settings.getModelRole(role) };
+}
+
+function resolveWebSelector(
+  value: string, settings: Settings, pool: SearchModel[], roleLookup?: ReturnType<typeof webPrimaryRoleLookup>,
+): string | undefined {
+  const model = resolveModelRoleValue(value, pool, { settings, roleLookup }).model;
+  return model ? selector(model) : undefined;
+}
+
+function projectFallbackProviders(
+  chain: string[], primary: string | null, resolve: (value: string) => string | undefined,
+): string[] {
+  const ids = new Set<string>();
+  for (const value of chain) {
+    const id = resolve(value);
+    if (id !== undefined && id !== primary) ids.add(id);
+  }
+  return [...ids];
+}
+
+// The client edits projected provider IDs. Move their native selectors, not
+// canonical IDs, and leave selectors with no editable row in the chain.
+function editFallbackSelectors(
+  chain: string[] | undefined, visible: string[], requested: string[], resolve: (value: string) => string | undefined,
+): string[] {
+  if (!chain) return requested;
+  if (visible.length === requested.length && visible.every((id, i) => id === requested[i])) return chain;
+  const editable = new Set([...visible, ...requested]);
+  const groups = new Map<string, string[]>();
+  const ids = chain.map(value => {
+    const id = resolve(value);
+    if (!id || !editable.has(id)) return undefined;
+    const group = groups.get(id);
+    if (group) group.push(value);
+    else groups.set(id, [value]);
+    return id;
+  });
+  const replacements = requested.map(id => groups.get(id) ?? [id]);
+  const seen = new Set<string>();
+  const result = chain.flatMap((value, i) => {
+    const id = ids[i];
+    if (!id) return [value];
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return replacements.shift() ?? [];
+  });
+  return result.concat(replacements.flat());
+}
+
+function preserveFallbacksAcrossPrimaryChange(
+  chain: string[], requested: Set<string>, nextPrimary: string | null, settings: Settings, pool: SearchModel[],
+): string[] {
+  const nextRoles = webPrimaryRoleLookup(settings, nextPrimary);
+  return chain.map(value => {
+    const current = resolveModelRoleValue(value, pool, { settings });
+    if (!current.model) return value;
+    const id = selector(current.model);
+    if (!requested.has(id)) return value;
+    if (resolveWebSelector(value, settings, pool, nextRoles) === id) return value;
+    const pinned = current.explicitThinkingLevel && current.thinkingLevel ? `${id}:${current.thinkingLevel}` : id;
+    const patterns = value.split(',');
+    const match = patterns.findIndex(pattern => resolveWebSelector(pattern, settings, pool) === id);
+    if (match < 0) return value;
+    const earlier = patterns.slice(0, match).findIndex(pattern => resolveWebSelector(pattern, settings, pool, nextRoles) !== undefined);
+    if (earlier >= 0) {
+      patterns.splice(match, 1);
+      patterns.splice(earlier, 0, pinned);
+      return patterns.map(pattern => pattern.trim()).join(', ');
+    }
+    patterns[match] = patterns[match].replace(patterns[match].trim(), () => pinned);
+    return patterns.join(',');
+  });
+}
+
 /** Durable revision and native global settings share their actual agent-directory owner. */
 export class NativeWebSearch {
   private readonly revisionPath: string;
@@ -111,13 +188,23 @@ export class NativeWebSearch {
       const before = await this.readCurrent(this.runtime.settings);
       if (before.revision !== operation.request.expectedRevision) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Web search configuration revision changed');
       const options: WebSearchProviderOptions = operation.type === 'update' ? operation.request.providerOptions ?? {} : {};
+      let fallbackSelectors: string[] | undefined;
+      let writeFallbacks = false;
       if (operation.type === 'update') {
         const request = operation.request;
         const blockedSources = ['project', 'overlay', 'env', 'runtime'];
+        const projectRetry = this.runtime.settings.getProjectSettings().retry;
+        const fallbacksBlocked = blockedSources.includes(cfgRetryFallbackChains.provenance(this.runtime.settings)) ||
+          (projectRetry && typeof projectRetry === 'object' && Object.hasOwn(projectRetry, 'fallbackChains'));
+        const requestedFallbacks = request.fallbackProviderIds;
+        const echoesBlockedFallbacks = fallbacksBlocked && request.selectedProviderId !== undefined &&
+          Array.isArray(requestedFallbacks) && isDeepStrictEqual(requestedFallbacks,
+            before.fallbackProviderIds.filter(id => id !== request.selectedProviderId));
+        writeFallbacks = requestedFallbacks !== undefined && !echoesBlockedFallbacks;
         if ((request.enabled !== undefined && blockedSources.includes(cfgWebSearchEnabled.provenance(this.runtime.settings)))
           || (request.timeoutSeconds !== undefined && blockedSources.includes(cfgProvidersWebSearchTimeoutSeconds.provenance(this.runtime.settings)))
           || (request.selectedProviderId !== undefined && blockedSources.includes(this.runtime.settings.getModelRoleProvenance('web')))
-          || (request.fallbackProviderIds !== undefined && blockedSources.includes(cfgRetryFallbackChains.provenance(this.runtime.settings)))
+          || (writeFallbacks && fallbacksBlocked)
           || (request.providerSearchDelayMs !== undefined && blockedSources.includes(cfgExaSearchDelayMs.provenance(this.runtime.settings)))
           || (request.providerEndpoint !== undefined && blockedSources.includes(cfgSearxngEndpoint.provenance(this.runtime.settings)))
           || (request.providerCategories !== undefined && blockedSources.includes(cfgSearxngCategories.provenance(this.runtime.settings)))
@@ -128,20 +215,46 @@ export class NativeWebSearch {
           throw new ProjectionError(409, 'CATALOG_CONFLICT', 'A higher-priority native settings source owns the requested value');
         }
         const selected = request.selectedProviderId === undefined ? before.selectedProviderId : request.selectedProviderId;
-        const fallbacks = request.fallbackProviderIds ?? before.fallbackProviderIds;
+        const fallbacks = request.fallbackProviderIds === null ? [] : request.fallbackProviderIds ?? before.fallbackProviderIds;
         if (selected && fallbacks.includes(selected)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Primary search model cannot also be a fallback');
         // Native execution still accepts grounded chat transports, and a legacy
         // setting may name one even though the catalog exposes search engines
         // only. Validate against the native web-role pool plus the authoritative
         // current chain so non-selection updates preserve those settings.
-        const selectorPool = new Set(roleCandidatePool('web', this.runtime.settings, this.runtime.modelRegistry).map(candidate => selector(candidate)));
+        const pool = roleCandidatePool('web', this.runtime.settings, this.runtime.modelRegistry);
+        const selectorPool = new Set(pool.map(candidate => selector(candidate)));
+        const configuredChain = cfgRetryFallbackChains.get(this.runtime.settings).web;
         const configuredPrimary = this.runtime.settings.getModelRole('web');
+        if (echoesBlockedFallbacks && configuredChain && request.selectedProviderId !== undefined && request.selectedProviderId !== configuredPrimary) {
+          const nextRoles = webPrimaryRoleLookup(this.runtime.settings, request.selectedProviderId);
+          const resolveNext = (value: string) => resolveWebSelector(value, this.runtime.settings, pool, nextRoles);
+          const primary = request.selectedProviderId;
+          const projected = projectFallbackProviders(
+            configuredChain,
+            primary === null ? null : resolveNext(primary) ?? primary,
+            resolveNext,
+          );
+          // The previous primary was hidden from the old projection and can
+          // reappear without changing any of the visible fallback choices.
+          if (!isDeepStrictEqual(projected.filter(id => id !== before.selectedProviderId), fallbacks)) {
+            throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Changing the primary would change a read-only native fallback chain');
+          }
+        }
         if (configuredPrimary) selectorPool.add(configuredPrimary);
-        for (const id of cfgRetryFallbackChains.get(this.runtime.settings).web ?? []) selectorPool.add(id);
+        for (const id of configuredChain ?? []) selectorPool.add(id);
         if (before.selectedProviderId) selectorPool.add(before.selectedProviderId);
         for (const id of before.fallbackProviderIds) selectorPool.add(id);
         for (const id of [...(selected ? [selected] : []), ...fallbacks]) {
           if (!selectorPool.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Unknown native web search model selector');
+        }
+        if (writeFallbacks && Array.isArray(requestedFallbacks)) {
+          // A retained fallback can depend on @web (possibly through another
+          // role). Pin only selectors that would follow the new primary.
+          const chain = configuredChain && request.selectedProviderId !== undefined && request.selectedProviderId !== configuredPrimary
+            ? preserveFallbacksAcrossPrimaryChange(configuredChain, new Set(fallbacks), request.selectedProviderId, this.runtime.settings, pool)
+            : configuredChain;
+          fallbackSelectors = editFallbackSelectors(chain, before.fallbackProviderIds, fallbacks,
+            value => resolveWebSelector(value, this.runtime.settings, pool));
         }
         for (const providerId of Object.keys(options)) {
           if (!before.providers.some(provider => provider.providerId === `web/${providerId}`)) throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Provider options require an available native provider');
@@ -161,7 +274,7 @@ export class NativeWebSearch {
           if (request.enabled !== undefined) cfgWebSearchEnabled.set(this.runtime.settings, request.enabled);
           if (request.timeoutSeconds !== undefined) cfgProvidersWebSearchTimeoutSeconds.set(this.runtime.settings, request.timeoutSeconds);
           if (request.selectedProviderId !== undefined) this.runtime.settings.setModelRole('web', request.selectedProviderId ?? undefined);
-          if (request.fallbackProviderIds !== undefined) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', request.fallbackProviderIds);
+          if (writeFallbacks) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', fallbackSelectors);
           if (request.providerSearchDelayMs !== undefined) {
             if (request.providerSearchDelayMs === null) cfgExaSearchDelayMs.unset(this.runtime.settings);
             else cfgExaSearchDelayMs.set(this.runtime.settings, request.providerSearchDelayMs);
@@ -238,10 +351,7 @@ export class NativeWebSearch {
     // primary is selected) jump back in front of a reordered list, so a saved
     // reorder looked like it did nothing.
     const pool = roleCandidatePool('web', settings, this.runtime.modelRegistry);
-    const resolveSelector = (value: string): string | undefined => {
-      const model = resolveModelRoleValue(value, pool, { settings }).model;
-      return model ? selector(model) : undefined;
-    };
+    const resolveSelector = (value: string) => resolveWebSelector(value, settings, pool);
     const configuredPrimary = settings.getModelRole('web')?.trim() || null;
     // A configured primary that resolves to no model stays named as configured:
     // the page then reports it as missing instead of promoting a fallback.
@@ -250,11 +360,7 @@ export class NativeWebSearch {
     const ordered = Array.isArray(configuredChain)
       ? configuredChain
       : resolveRoleChain('web', settings, pool).map(candidate => selector(candidate.model));
-    const fallback = ordered.reduce<string[]>((ids, value) => {
-      const resolved = resolveSelector(value);
-      if (resolved !== undefined && resolved !== primary && !ids.includes(resolved)) ids.push(resolved);
-      return ids;
-    }, []);
+    const fallback = projectFallbackProviders(ordered, primary, resolveSelector);
     return WebSearchConfigStateSchema.parse({ workspaceId: this.workspaceId, revision: await this.revision(), enabled: cfgWebSearchEnabled.get(settings), selectedProviderId: primary,
       fallbackProviderIds: fallback, timeoutSeconds: cfgProvidersWebSearchTimeoutSeconds.get(settings), providers });
   }

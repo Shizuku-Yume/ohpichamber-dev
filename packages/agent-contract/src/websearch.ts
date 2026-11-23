@@ -38,7 +38,7 @@ export const WebSearchConfigStateSchema = z.strictObject({
 export type WebSearchConfigState = z.infer<typeof WebSearchConfigStateSchema>;
 export const WebSearchUpdateRequestSchema = z.strictObject({
   expectedRevision: CounterSchema, enabled: z.boolean().optional(), selectedProviderId: z.string().min(1).nullable().optional(),
-  fallbackProviderIds: ProviderIdsSchema.optional(), timeoutSeconds: z.number().finite().positive().max(300).optional(),
+  fallbackProviderIds: ProviderIdsSchema.nullable().optional(), timeoutSeconds: z.number().finite().positive().max(300).optional(),
   providerEndpoint: ProviderEndpointSchema.nullable().optional(), providerSearchDelayMs: z.number().finite().nonnegative().nullable().optional(),
   providerCategories: z.string().nullable().optional(), providerEngines: z.string().nullable().optional(), providerOptions: WebSearchProviderOptionsSchema.optional(),
 }).superRefine((request, context) => {

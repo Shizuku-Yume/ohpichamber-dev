@@ -1,4 +1,5 @@
 import {
+  JsonObjectSchema,
   JsonValueSchema,
   OMP_POWER_CONDITIONS,
   OmpSettingIdSchema,
@@ -10,6 +11,9 @@ import {
 } from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { lookup, type AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
+import { isKindRole } from '@oh-my-pi/pi-coding-agent/config/model-roles';
+import { parseRetryFallbackSelector } from '@oh-my-pi/pi-coding-agent/session/retry-fallback-chains';
+import { cfgRetryFallbackChains } from '@oh-my-pi/pi-coding-agent/session/settings';
 import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
@@ -27,11 +31,49 @@ function linuxPowerBusAvailable(): boolean {
 }
 
 const RESET_POLICY_OVERRIDE = 'resetPolicyUsesSharedConfig';
+const RETRY_CHAINS_OVERRIDE = 'retryChainsUseSharedConfig';
 const DISCOVERY_OVERRIDE = 'discoveryUsesSharedConfig';
 const COMPACTION_OVERRIDE = 'compactionThresholdsUseSharedConfig';
 
+function recordEntries(value: unknown): [string, unknown][] {
+  const record = JsonObjectSchema.safeParse(value);
+  return record.success ? Object.entries(record.data) : [];
+}
+
+function retryChainUpdates(current: unknown, next: unknown): Map<string, string[] | undefined> {
+  const before = new Map(recordEntries(current));
+  const after = new Map(recordEntries(next));
+  const updates = new Map<string, string[] | undefined>();
+  for (const key of new Set([...before.keys(), ...after.keys()])) {
+    const value = after.get(key);
+    const previous = before.get(key);
+    if (isDeepStrictEqual(previous, value)) continue;
+    if (key === 'web') {
+      throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Web search owns its fallback chain');
+    }
+    if (value !== undefined && (!Array.isArray(value) || value.some((selector) => typeof selector !== 'string'))) {
+      throw new ProjectionError(400, 'INVALID_REQUEST', 'A retry fallback chain must be an array of selectors');
+    }
+    if (Array.isArray(value) && !isKindRole(key) && value.some((selector) =>
+      !(Array.isArray(previous) && previous.includes(selector)) && !parseRetryFallbackSelector(selector)
+    )) {
+      throw new ProjectionError(400, 'INVALID_REQUEST', 'Chat fallback entries require a provider/model selector or a provider wildcard');
+    }
+    updates.set(key, value as string[] | undefined);
+  }
+  return updates;
+}
+
 function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
   if (hasCompactionOverride(setting, settings)) return COMPACTION_OVERRIDE;
+  if (setting.id === 'retry.fallbackChains') {
+    const provenance = settings.getProvenance(setting);
+    const retry = settings.getProjectSettings().retry;
+    if (
+      (provenance !== 'default' && provenance !== 'global') ||
+      (retry && typeof retry === 'object' && Object.hasOwn(retry, 'fallbackChains'))
+    ) return RETRY_CHAINS_OVERRIDE;
+  }
   const isPower = setting.id === 'power.sleepPrevention';
   const placement = OMP_SETTING_PLACEMENTS[setting.id];
   const isResetPolicy = placement?.type === 'page' && placement.page === 'usage' && placement.section === 'resets';
@@ -105,6 +147,9 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (inactiveCondition !== undefined) {
     descriptor.condition = inactiveCondition;
     descriptor.conditionActive = false;
+  } else if (setting.id === 'retry.fallbackChains') {
+    descriptor.condition = RETRY_CHAINS_OVERRIDE;
+    descriptor.conditionActive = true;
   }
   return OmpSettingSchema.parse(descriptor);
 }
@@ -151,12 +196,14 @@ export class NativeSettings {
     // Validate every value against the pinned definition before changing any
     // layer. `assertWritable` runs OMP's own validate/normalize checks, so the
     // route cannot invent a looser schema for numbers, enums, records or arrays.
+    let retryUpdates: Map<string, string[] | undefined> | undefined;
     for (const change of request.changes) {
       const setting = handle(change.id);
-      if (change.expectedValue !== undefined && !isDeepStrictEqual(
-        JsonValueSchema.parse(setting.layered(this.settings) ?? null),
-        change.expectedValue,
-      )) {
+      const current = JsonValueSchema.parse(setting.layered(this.settings) ?? null);
+      const isRetryChains = setting.id === cfgRetryFallbackChains.id;
+      // OMP uses insertion order to break ties between matching model keys.
+      if (change.expectedValue !== undefined && (!isDeepStrictEqual(current, change.expectedValue) ||
+          (isRetryChains && !isDeepStrictEqual(recordEntries(current), recordEntries(change.expectedValue))))) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native OMP setting changed on disk');
       }
       const inactiveCondition = inactiveWriteCondition(setting, this.settings);
@@ -166,19 +213,23 @@ export class NativeSettings {
       if (inactiveCondition !== undefined) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
       }
-      if (change.value === null) continue;
-      if (change.id === 'edit.mode' && change.value === 'magic') {
-        throw new ProjectionError(400, 'INVALID_REQUEST', 'Magic edit mode is not supported');
+      if (change.value !== null) {
+        if (change.id === 'edit.mode' && change.value === 'magic') {
+          throw new ProjectionError(400, 'INVALID_REQUEST', 'Magic edit mode is not supported');
+        }
+        try { setting.assertWritable(change.value); }
+        catch (error) {
+          throw new ProjectionError(400, 'INVALID_REQUEST', error instanceof Error ? error.message : `Invalid value for ${change.id}`);
+        }
       }
-      try { setting.assertWritable(change.value); }
-      catch (error) {
-        throw new ProjectionError(400, 'INVALID_REQUEST', error instanceof Error ? error.message : `Invalid value for ${change.id}`);
-      }
+      if (isRetryChains) retryUpdates = retryChainUpdates(current, change.value);
     }
     try {
       for (const change of request.changes) {
         const setting = handle(change.id);
-        if (change.value === null) setting.unset(this.settings);
+        if (setting.id === cfgRetryFallbackChains.id && retryUpdates) {
+          for (const [key, value] of retryUpdates) cfgRetryFallbackChains.setEntry(this.settings, key, value);
+        } else if (change.value === null) setting.unset(this.settings);
         else setting.set(this.settings, change.value);
       }
     } catch (error) {
