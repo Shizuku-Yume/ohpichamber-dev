@@ -235,4 +235,17 @@ describe('settings search', () => {
     expect(results.some((result) => result.id === 'integrations.guests')).toBe(true);
   });
 
+  test('finds native host sleep prevention on General', () => {
+    const results = buildSettingsSearchResults({
+      query: '防止主机休眠',
+      runtimeCtx,
+      t: (key: I18nKey) => zhCnDict[key] ?? t(key),
+      getPageTitle: (page) => page,
+    });
+    expect(results).toContainEqual(expect.objectContaining({
+      id: 'omp.power.sleepPrevention',
+      page: 'general',
+    }));
+  });
+
 });

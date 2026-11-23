@@ -1,5 +1,6 @@
 import {
   JsonValueSchema,
+  OMP_POWER_CONDITIONS,
   OmpSettingIdSchema,
   OmpSettingSchema,
   OmpSettingsStateSchema,
@@ -13,9 +14,24 @@ import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { OMP_SETTING_EXPOSED_IDS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
+import { statSync } from 'node:fs';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 const byId = new Map<string, AnySetting>();
+
+function linuxPowerBusAvailable(): boolean {
+  if (process.env.DBUS_SYSTEM_BUS_ADDRESS) return true;
+  try { return statSync('/var/run/dbus/system_bus_socket').isSocket(); }
+  catch { return false; }
+}
+
+function inactivePowerCondition(setting: AnySetting, settings: Settings) {
+  if (setting.id !== 'power.sleepPrevention') return undefined;
+  const provenance = settings.getProvenance(setting);
+  if (provenance !== 'global' && provenance !== 'default') return OMP_POWER_CONDITIONS.usesSharedConfig;
+  if (process.platform === 'linux' && !linuxPowerBusAvailable()) return OMP_POWER_CONDITIONS.backendAvailable;
+  return undefined;
+}
 
 /**
  * The settings route is a view over OMP's own registry. It never
@@ -62,6 +78,11 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (ui?.description !== undefined) descriptor.description = ui.description;
   if (ui?.group !== undefined) descriptor.group = ui.group;
   if (ui?.tab !== undefined) descriptor.tab = ui.tab;
+  const inactiveCondition = inactivePowerCondition(setting, settings);
+  if (inactiveCondition !== undefined) {
+    descriptor.condition = inactiveCondition;
+    descriptor.conditionActive = false;
+  }
   return OmpSettingSchema.parse(descriptor);
 }
 
@@ -109,6 +130,13 @@ export class NativeSettings {
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     for (const change of request.changes) {
       const setting = handle(change.id);
+      const inactiveCondition = inactivePowerCondition(setting, this.settings);
+      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig) {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared sleep setting');
+      }
+      if (inactiveCondition === OMP_POWER_CONDITIONS.backendAvailable) {
+        throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Host sleep prevention is unavailable');
+      }
       if (change.value === null) continue;
       if (change.id === 'edit.mode' && change.value === 'magic') {
         throw new ProjectionError(400, 'INVALID_REQUEST', 'Magic edit mode is not supported');
