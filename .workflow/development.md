@@ -4,6 +4,12 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The Docker runtime image uses the built Web CLI and server, including the
+loader they import, and ships Agent Service workspace dependencies. The previous
+source-only copy built successfully but failed before the CLI could start.
+Linux x64 Docker startup verified the production page, its JS bundle, the
+workspace auth gate, and OMP readiness. This is not full M7 release evidence.
+
 W11 exposes OMP 19.1 command and skill discovery on their existing pages and
 creates grouped native prompts through the existing catalog. Command and prompt
 edits preserve unowned native metadata without evolving Capacitor response

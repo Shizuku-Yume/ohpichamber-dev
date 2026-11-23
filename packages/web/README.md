@@ -165,7 +165,7 @@ network policy still applies.
 </details>
 
 <details>
-<summary>Docker & Docker Compose setup (OMP 19.0.0)</summary>
+<summary>Docker & Docker Compose setup</summary>
 
 Run OhPiChamber with the supervised OMP Agent Service inside Docker:
 
@@ -210,7 +210,10 @@ environment:
 
 Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must use a container path under `/home/ohpichamber/...`. If the config file references `credentials-file`, ensure that JSON path is also mounted and reachable inside the container.
 
-> **Note on Container Verification:** Docker is unavailable in the current development environment. Dockerfile, compose, and entrypoint manifests are statically verified; live container runtime execution and verification are explicitly deferred to milestone M7 (`m7-release-verification`).
+After startup, `curl --fail http://localhost:3000/health` checks the Web Host.
+`curl --fail http://localhost:3000/api/agent/v1/ready` checks the supervised
+OMP Agent Service. Check both before testing a chat; a successful image build
+does not verify either process.
 
 </details>
 
