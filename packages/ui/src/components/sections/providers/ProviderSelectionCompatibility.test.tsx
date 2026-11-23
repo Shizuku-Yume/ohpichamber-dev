@@ -21,6 +21,7 @@ const directoryHook = await import('@/hooks/useSettingsDirectory');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { I18nProvider } = await import('@/lib/i18n');
 const { ProvidersPage } = await import('./ProvidersPage');
+const { toast } = await import('@/components/ui');
 startupFetch.mockRestore();
 const container = document.createElement('div');
 document.body.appendChild(container);
@@ -56,6 +57,7 @@ beforeEach(() => {
     spyOn(transport, 'runtimeFetch').mockImplementation(async (path) => {
       if (String(path).endsWith('/account-selection')) {
         selectionReads += 1;
+        if (selectionStatus === 200) return Response.json({ revision: '7', providerId: 'openai', selectionMode: 'automatic', pinnedCredentialRef: null, selectionOverriddenBy: null });
         const code = selectionStatus === 404 ? 'NOT_IMPLEMENTED' : 'SERVICE_UNAVAILABLE';
         return Response.json({ type: `urn:ohpichamber:problem:${code}`, title: 'Request refused', status: selectionStatus,
           code, detail: selectionStatus === 404 ? 'No canonical operation matches this route.' : 'Selection service unavailable.', retryable: selectionStatus >= 500 }, { status: selectionStatus });
@@ -96,4 +98,19 @@ test('non-404 selection failure renders the existing load-error path rather than
   expect(container.querySelector('[aria-label="Use Second"]')).toBeNull();
   expect(container.textContent).not.toContain('Automatic');
   expect(mutations).toEqual([]);
+});
+
+test('pin feedback uses the same unlabeled API-key name as the account chip and row', async () => {
+  selectionStatus = 200;
+  const roster = { ...accounts, accounts: accounts.accounts.map((account) => ({ ...account, label: undefined, credentialRef: `credential_${account.credentialRef}` })) };
+  restores.push(spyOn(canonicalClient, 'providerAccounts').mockResolvedValue(roster));
+  const feedback = spyOn(toast, 'success');
+  restores.push(feedback);
+  await render();
+  const chip = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.trim() === 'API key 2');
+  expect(chip).toBeDefined();
+  expect(container.textContent?.match(/API key 2/g)).toHaveLength(2);
+  await act(async () => chip!.click());
+  expect(mutations).toEqual([{ action: 'select', expectedRevision: '7', credentialRef: 'credential_second' }]);
+  expect(feedback).toHaveBeenCalledWith('Switched to API key 2');
 });

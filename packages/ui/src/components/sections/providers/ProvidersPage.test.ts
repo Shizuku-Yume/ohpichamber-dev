@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import type { Provider, ProviderOAuthMethods } from '@openchamber/agent-contract';
+import type { Provider, ProviderAccounts, ProviderOAuthMethods } from '@openchamber/agent-contract';
 import {
   getProviderCardStatus,
   getProviderEnvironment,
   oauthMethodsForProvider,
+  providerAccountName,
   requiresProviderAuth,
   shouldAutoOpenAuthPanel,
 } from './providerAuth';
@@ -26,6 +27,15 @@ const provider = (overrides: Partial<Provider> = {}): Provider => ({
 });
 
 describe('native provider management UI contracts', () => {
+  test('account names prefer visible identity fields and otherwise use a localized method and roster position', () => {
+    const account: ProviderAccounts['accounts'][number] = { credentialRef: 'credential_opaque', method: 'api-key', active: false, disabled: false };
+    const t = (key: string) => key.endsWith('.oauth') ? 'OAuth' : 'API key';
+    expect(providerAccountName(account, 1, t)).toBe('API key 2');
+    expect(providerAccountName({ ...account, method: 'oauth', label: '', email: '', accountId: '' }, 2, t)).toBe('OAuth 3');
+    expect(providerAccountName({ ...account, accountId: 'account-name' }, 1, t)).toBe('account-name');
+    expect(providerAccountName({ ...account, email: 'email-name', accountId: 'account-name' }, 1, t)).toBe('email-name');
+    expect(providerAccountName({ ...account, label: 'Work', email: 'email-name', accountId: 'account-name' }, 1, t)).toBe('Work');
+  });
   test('keeps OAuth method identity separate from stored provider identity', () => {
     expect(oauthMethodsForProvider(methods, 'openai')).toEqual([methods[0]]);
     expect(oauthMethodsForProvider(methods, 'console-login')).toEqual([]);

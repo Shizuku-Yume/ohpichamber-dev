@@ -47,6 +47,7 @@ import { listConnectableProviders, listProvidersAcceptingKey } from './connectab
 import {
   getProviderEnvironment,
   oauthMethodsForProvider,
+  providerAccountName,
   requiresProviderAuth,
   shouldAutoOpenAuthPanel,
 } from './providerAuth';
@@ -191,8 +192,9 @@ function ProviderDetail({
 
   const mutateAccount = async (request: ProviderAccountMutationRequest) => {
     if (busy || disconnectBusy || accountBusyId !== null) return;
-    const previous = request.action === 'automatic' ? undefined
-      : detail?.accounts.accounts.find((account) => account.credentialRef === request.credentialRef);
+    const previousIndex = request.action === 'automatic' ? -1
+      : detail?.accounts.accounts.findIndex((account) => account.credentialRef === request.credentialRef) ?? -1;
+    const previous = detail?.accounts.accounts[previousIndex];
     setAccountBusyId(request.action === 'automatic' ? 'automatic' : request.credentialRef);
     setAccountError(null);
     try {
@@ -205,7 +207,7 @@ function ProviderDetail({
         await onRefresh();
       } else if (request.action === 'select') {
         toast.success(t('settings.providers.accounts.toast.switched', {
-          account: previous?.label || previous?.email || previous?.accountId || request.credentialRef,
+          account: previous ? providerAccountName(previous, previousIndex, t) : '',
         }));
         await onRefresh();
       } else if (request.action === 'remove') {

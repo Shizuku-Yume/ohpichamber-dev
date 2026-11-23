@@ -13,6 +13,7 @@ import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { providerAccountName } from './providerAuth';
 
 interface ProviderAccountsProps {
   roster: Accounts;
@@ -90,11 +91,7 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   const pinnedAccount = enabledAccounts.find((account) => account.credentialRef === selection?.pinnedCredentialRef);
   const canSwitch = enabledAccounts.length > 1;
   const selectionDisabled = busyId !== null || disabled || selection?.selectionOverriddenBy != null;
-  const accountName = (account: Accounts['accounts'][number]) => {
-    const index = roster.accounts.indexOf(account);
-    const method = t(account.method === 'oauth' ? 'settings.providers.accounts.method.oauth' : 'settings.providers.accounts.method.key');
-    return account.label || account.email || account.accountId || `${method} ${index + 1}`;
-  };
+  const accountName = (account: Accounts['accounts'][number]) => providerAccountName(account, roster.accounts.indexOf(account), t);
   const overrideKeys = {
     'stored-credential': 'settings.providers.accounts.selection.override.stored',
     'managed-environment': 'settings.providers.accounts.selection.override.managed',

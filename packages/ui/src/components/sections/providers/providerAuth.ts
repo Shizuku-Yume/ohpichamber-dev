@@ -1,6 +1,12 @@
 
 
-import type { Provider, ProviderOAuthMethods } from '@openchamber/agent-contract';
+import type { Provider, ProviderAccounts, ProviderOAuthMethods } from '@openchamber/agent-contract';
+import type { I18nKey } from '@/lib/i18n';
+
+export function providerAccountName(account: ProviderAccounts['accounts'][number], index: number, t: (key: I18nKey) => string): string {
+  const method = t(account.method === 'oauth' ? 'settings.providers.accounts.method.oauth' : 'settings.providers.accounts.method.key');
+  return account.label || account.email || account.accountId || `${method} ${index + 1}`;
+}
 
 /** Login method identity is not necessarily its stored provider identity. */
 export function oauthMethodsForProvider(methods: ProviderOAuthMethods['methods'], providerId: string) {

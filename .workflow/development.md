@@ -27,6 +27,8 @@ native pin; no parallel session-pin map or rotation policy is added.
 On supported Hosts the account chip group is the only selection control;
 unavailable pins select no chip, while an existing pinned row retains its badge.
 The section retains its account help separately from automatic-mode copy.
+Pin feedback shares the chip/row account-name formatter, including localized
+method-and-position fallbacks, rather than displaying opaque credential refs.
 Local tests cover legacy strict parsing, selection capability fallback, supported
 selection states and pin-removal rollback. No visual or live-provider rotation
 certification is included.
