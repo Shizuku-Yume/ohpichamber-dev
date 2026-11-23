@@ -24,7 +24,7 @@ import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { ModelCompactionSettings } from './ModelCompactionSettings';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
-import { updateDesktopSettings } from '@/lib/persistence';
+import { reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -100,7 +100,9 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
 
   const setRole = React.useCallback(
     async (role: string, selector: string, also: OmpSettingsChange[] = []) => {
+      reportSettingsSaveState('saving');
       const saved = await updateSettings((state) => [modelRoleChange(state, role, selector), ...also]);
+      reportSettingsSaveState(saved ? 'saved' : 'error');
       if (saved) refreshDirectoryCatalogs();
     },
     [updateSettings],
