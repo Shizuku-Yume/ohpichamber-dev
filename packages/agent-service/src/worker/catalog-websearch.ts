@@ -113,6 +113,21 @@ function editFallbackSelectors(
   return result.concat(replacements.flat());
 }
 
+function preserveFallbacksAcrossPrimaryChange(
+  chain: string[], requested: Set<string>, nextPrimary: string | null, settings: Settings, pool: SearchModel[],
+): string[] {
+  const nextRoles = { getModelRole: (role: string) => role === 'web' ? nextPrimary ?? undefined : settings.getModelRole(role) };
+  return chain.map(value => {
+    const current = resolveModelRoleValue(value, pool, { settings });
+    if (!current.model) return value;
+    const id = selector(current.model);
+    if (!requested.has(id)) return value;
+    const next = resolveModelRoleValue(value, pool, { settings, roleLookup: nextRoles });
+    if (next.model && selector(next.model) === id) return value;
+    return current.explicitThinkingLevel && current.thinkingLevel ? `${id}:${current.thinkingLevel}` : id;
+  });
+}
+
 /** Durable revision and native global settings share their actual agent-directory owner. */
 export class NativeWebSearch {
   private readonly revisionPath: string;
@@ -185,7 +200,12 @@ export class NativeWebSearch {
           if (!selectorPool.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Unknown native web search model selector');
         }
         if (Array.isArray(request.fallbackProviderIds)) {
-          fallbackSelectors = editFallbackSelectors(configuredChain, before.fallbackProviderIds, fallbacks,
+          // A retained fallback can depend on @web (possibly through another
+          // role). Pin only selectors that would follow the new primary.
+          const chain = configuredChain && request.selectedProviderId !== undefined && request.selectedProviderId !== configuredPrimary
+            ? preserveFallbacksAcrossPrimaryChange(configuredChain, new Set(fallbacks), request.selectedProviderId, this.runtime.settings, pool)
+            : configuredChain;
+          fallbackSelectors = editFallbackSelectors(chain, before.fallbackProviderIds, fallbacks,
             value => resolveWebSelector(value, this.runtime.settings, pool));
         }
         for (const providerId of Object.keys(options)) {
