@@ -51,6 +51,8 @@ describe('native web search wire boundaries', () => {
   test('rejects invalid fallback order and transport timeout', () => {
     expect(WebSearchUpdateRequestSchema.safeParse({ expectedRevision: '0', fallbackProviderIds: ['web/tavily', 'web/tavily'] }).success).toBe(false);
     expect(WebSearchUpdateRequestSchema.safeParse({ expectedRevision: '0', selectedProviderId: 'web/tavily', fallbackProviderIds: ['web/tavily'] }).success).toBe(false);
+    expect(WebSearchUpdateRequestSchema.parse({ expectedRevision: '0', fallbackProviderIds: null }).fallbackProviderIds).toBeNull();
+    expect(WebSearchConfigStateSchema.safeParse({ ...state, fallbackProviderIds: null }).success).toBe(false);
     for (const timeoutSeconds of [0, -1, 301, Infinity]) {
       expect(WebSearchUpdateRequestSchema.safeParse({ expectedRevision: '0', timeoutSeconds }).success).toBe(false);
     }

@@ -85,7 +85,9 @@ const mockOmpSettings = {
       value: {},
       default: {},
       configured: false,
-      placement: { type: 'page' as const, page: 'sessions', section: 'retry' },
+      placement: { type: 'owned-by' as const, owner: 'sessions.fallback-model' },
+      condition: 'retryChainsUseSharedConfig',
+      conditionActive: true,
     },
   ],
 };
@@ -253,7 +255,7 @@ describe('DefaultsSettings', () => {
     expect(updatedDesktopSettingsPayload).toEqual({ sidebarShowChatsSection: false });
   });
 
-  test('the retry section draws real rows and skips the fallback-chain record', async () => {
+  test('the retry section draws the native rows and the dedicated fallback-chain editor', async () => {
     await act(async () => {
       root.render(
         <I18nProvider>
@@ -263,8 +265,6 @@ describe('DefaultsSettings', () => {
     });
     await settle();
 
-    // A record has no option list, so the generic row would render an empty
-    // chip group: the fallback selector above is the control that writes it.
     expect(host.querySelector('[data-settings-item="omp.retry.maxRetries"]')).not.toBeNull();
     expect(host.querySelector('[data-settings-item="omp.retry.fallbackChains"]')).toBeNull();
     expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')).not.toBeNull();
@@ -447,13 +447,14 @@ describe('DefaultsSettings', () => {
   });
 
   test.each([
-    ['o3-mini (openai)', { default: ['openai/o3-mini', '@slow', 'other/last'], 'other/original': ['@smol'] }],
-    ['None', { 'other/original': ['@smol'] }],
-  ])('selecting %s updates only the default retry chain', async (optionLabel, expectedChains) => {
+    ['Save Changes', { default: ['other/original', '@slow', 'other/last'], 'other/*': ['another-provider/*', 'openai/o3-mini:high'] }],
+    ['Delete', { default: ['other/original', '@slow', 'other/last'] }],
+  ])('%s updates only the selected wildcard retry chain', async (action, expectedChains) => {
+    const original = { default: ['other/original', '@slow', 'other/last'], 'other/*': ['@smol'] };
     const snapshot = {
       ...mockOmpSettings,
       settings: mockOmpSettings.settings.map((setting) => setting.id === 'retry.fallbackChains'
-        ? { ...setting, value: { default: ['other/original', '@slow', 'other/last'], 'other/original': ['@smol'] } }
+        ? { ...setting, value: original }
         : setting),
     };
     const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot as OmpSettingsState);
@@ -461,21 +462,55 @@ describe('DefaultsSettings', () => {
     try {
       await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
       await settle();
-      const trigger = Array.from(host.querySelectorAll('[role="combobox"]'))
-        .find((element) => element.textContent?.includes('other/original'));
+      const trigger = [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')]
+        .find((button) => button.textContent?.startsWith('other/*'));
       expect(trigger).toBeDefined();
-      await act(async () => trigger?.dispatchEvent(new browser.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }) as unknown as Event));
-      const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
-        .find((element) => element.textContent === optionLabel);
-      expect(option).toBeDefined();
-      await act(async () => option?.click());
+      await act(async () => trigger?.click());
+      const editor = host.querySelector<HTMLTextAreaElement>('textarea[aria-label^="Fallbacks in order"]');
+      expect(editor?.value).toBe('@smol');
+      if (action === 'Save Changes' && editor) {
+        const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
+        await act(async () => {
+          setter?.call(editor, 'another-provider/*\nopenai/o3-mini:high');
+          editor.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
+        });
+      }
+      const button = [...host.querySelectorAll<HTMLButtonElement>('form button')].find((entry) => entry.textContent === action);
+      expect(button).toBeDefined();
+      await act(async () => button?.click());
       expect(save.mock.calls[0]?.[1].changes[0]).toEqual({
         id: 'retry.fallbackChains',
         value: expectedChains,
+        expectedValue: original,
       });
     } finally {
       read.mockRestore();
       save.mockRestore();
+    }
+  });
+
+  test('the web retry chain links to Web Search rather than opening a second editor', async () => {
+    const snapshot = {
+      ...mockOmpSettings,
+      settings: mockOmpSettings.settings.map((setting) => setting.id === 'retry.fallbackChains'
+        ? { ...setting, value: { web: ['web/exa'] } }
+        : setting),
+    } as OmpSettingsState;
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot);
+    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump');
+    try {
+      await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
+      await settle();
+      const group = host.querySelector('[data-settings-item="sessions.fallback-model"]');
+      expect(group?.textContent).toContain('web/exa');
+      const link = [...group?.querySelectorAll('button') ?? []].find((button) => button.textContent === 'Web search');
+      expect(link).toBeDefined();
+      await act(async () => link?.click());
+      expect(jump).toHaveBeenCalledWith('web-search', 'web-search.fallbacks');
+      expect(group?.querySelector('textarea')).toBeNull();
+    } finally {
+      read.mockRestore();
+      jump.mockRestore();
     }
   });
 

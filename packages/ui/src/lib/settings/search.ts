@@ -842,12 +842,10 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['compaction', 'model', 'context limit', 'threshold', 'tokens'],
   },
   {
-    // The fallback chain is an OMP record the generic row cannot draw; this
-    // selector writes it, so a search for the chain lands on the real control.
     id: 'sessions.fallback-model',
     page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.field.fallbackModel',
-    descriptionKey: 'settings.openchamber.defaults.field.fallbackModelInfo',
+    titleKey: 'settings.omp.items.retry.fallbackChains.label',
+    descriptionKey: 'settings.omp.items.retry.fallbackChains.description',
     keywords: ['fallback', 'retry', 'chain', 'model'],
   },
   {

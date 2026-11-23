@@ -33,6 +33,13 @@ provider-wide windows are shown once; Guest SDK quotas, uncovered windows and
 Work Status remain on the Host quota path. Removing built-in Host scrapers still
 requires replacing those consumers and preserving their provider coverage.
 
+Sessions → Retry & Fallback shows native retry chains by role, model or
+provider wildcard. The web chain links to its editor in Web Search. Edits
+preserve other chains and rule precedence, reject concurrent changes to the
+edited chain, and leave the fallback switch independent. Order, effort
+suffixes and explicit empty chains survive round-trip. Project overrides
+are read-only in this shared-config editor.
+
 The OMP 19 settings-control follow-up restores native thinking choices and a
 searchable Sharpshooter model picker, clarifies allowed subagents and shadowed
 extensions, and replaces Plugins Apply with next-session guidance when no

@@ -24,7 +24,10 @@ const fixture = () => {
     client: {
       resolveWorkspace: async () => workspace,
       getWebSearch: () => read(),
-      updateWebSearch: async (_workspaceId, changes) => { state = { ...state, ...changes, revision: String(Number(state.revision) + 1) }; return mutate(); },
+      updateWebSearch: async (_workspaceId, changes) => {
+        state = { ...state, ...changes, fallbackProviderIds: changes.fallbackProviderIds ?? state.fallbackProviderIds, revision: String(Number(state.revision) + 1) };
+        return mutate();
+      },
       writeWebSearchCredential: () => mutate(), deleteWebSearchCredential: () => mutate(),
     },
   });

@@ -1,6 +1,7 @@
 /** Web search strings (chat result cards, consent card, Settings page) — merged into each locale's main dictionary. */
 export const webSearchI18n = {
   en: {
+    'settings.webSearch.native.resetFallbacks': 'Restore default fallbacks',
     'settings.webSearch.provider.hosted': 'Session model',
     'settings.webSearch.native.enterprise': 'Enterprise policy blocks search requests and adding or replacing keys. You can change settings or remove saved keys.',
     'settings.webSearch.native.info': 'Search settings belong to the selected agent directory, are shared across workspaces, and are persisted by the Agent Service worker.',
@@ -84,6 +85,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Example: {example}',
   },
   nl: {
+    'settings.webSearch.native.resetFallbacks': 'Standaardreserveproviders herstellen',
     'settings.webSearch.provider.hosted': 'Sessiemodel',
     'settings.webSearch.native.enterprise': 'Het bedrijfsbeleid blokkeert zoekopdrachten en het toevoegen of vervangen van sleutels. U kunt instellingen wijzigen of opgeslagen sleutels verwijderen.',
     'settings.webSearch.native.info': 'Zoekinstellingen behoren toe aan de geselecteerde agentmap, worden gedeeld over werkruimten en worden opgeslagen door de Agent Service-worker.',
@@ -167,6 +169,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Voorbeeld: {example}',
   },
   de: {
+    'settings.webSearch.native.resetFallbacks': 'Standard-Ersatzanbieter wiederherstellen',
     'settings.webSearch.provider.hosted': 'Sitzungsmodell',
     'settings.webSearch.native.enterprise': 'Die Unternehmensrichtlinie blockiert Suchanfragen sowie das Hinzufügen oder Ersetzen von Schlüsseln. Einstellungen und das Entfernen gespeicherter Schlüssel bleiben möglich.',
     'settings.webSearch.native.info': 'Sucheinstellungen gehören zum ausgewählten Agenten-Verzeichnis, werden über Arbeitsbereiche hinweg geteilt und vom Agent-Service-Worker gespeichert.',
@@ -250,6 +253,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Beispiel: {example}',
   },
   es: {
+    'settings.webSearch.native.resetFallbacks': 'Restaurar proveedores alternativos predeterminados',
     'settings.webSearch.provider.hosted': 'Modelo de sesión',
     'settings.webSearch.native.enterprise': 'La política empresarial bloquea las búsquedas y añadir o sustituir claves. Puedes cambiar ajustes o eliminar claves guardadas.',
     'settings.webSearch.native.info': 'La configuración de búsqueda pertenece al directorio de agentes seleccionado, se comparte entre espacios de trabajo y la conserva el worker del Agent Service.',
@@ -333,6 +337,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Ejemplo: {example}',
   },
   fr: {
+    'settings.webSearch.native.resetFallbacks': 'Rétablir les fournisseurs de secours par défaut',
     'settings.webSearch.provider.hosted': 'Modèle de session',
     'settings.webSearch.native.enterprise': 'La politique d’entreprise bloque les requêtes de recherche ainsi que l’ajout ou le remplacement de clés. Vous pouvez modifier les paramètres ou supprimer les clés enregistrées.',
     'settings.webSearch.native.info': 'Les paramètres de recherche appartiennent au répertoire d’agents sélectionné, sont partagés entre les espaces de travail et sont conservés par le worker de l’Agent Service.',
@@ -416,6 +421,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Exemple : {example}',
   },
   ja: {
+    'settings.webSearch.native.resetFallbacks': '既定の代替プロバイダーに戻す',
     'settings.webSearch.provider.hosted': 'セッションモデル',
     'settings.webSearch.native.enterprise': '企業ポリシーにより検索リクエストおよびキーの追加や変更はブロックされます。設定の変更や保存済みキーの削除は可能です。',
     'settings.webSearch.native.info': '検索設定は選択されたエージェントディレクトリに属し、ワークスペース間で共有され、Agent Service のワーカーによって保持されます。',
@@ -499,6 +505,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': '例: {example}',
   },
   ko: {
+    'settings.webSearch.native.resetFallbacks': '기본 대체 공급자 복원',
     'settings.webSearch.provider.hosted': '세션 모델',
     'settings.webSearch.native.enterprise': '기업 정책에 따라 검색 요청과 키 추가 또는 교체가 차단됩니다. 설정 변경과 저장된 키 삭제는 가능합니다.',
     'settings.webSearch.native.info': '검색 설정은 선택한 에이전트 디렉터리에 속하며 작업 공간 간에 공유되고 Agent Service 작업자가 유지합니다.',
@@ -582,6 +589,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': '예: {example}',
   },
   pl: {
+    'settings.webSearch.native.resetFallbacks': 'Przywróć domyślnych dostawców zapasowych',
     'settings.webSearch.provider.hosted': 'Model sesji',
     'settings.webSearch.native.enterprise': 'Polityka firmowa blokuje zapytania wyszukiwania oraz dodawanie lub zastępowanie kluczy. Możesz zmieniać ustawienia lub usuwać zapisane klucze.',
     'settings.webSearch.native.info': 'Ustawienia wyszukiwania należą do wybranego katalogu agenta, są współdzielone między obszarami roboczymi i utrwalane przez proces Agent Service.',
@@ -665,6 +673,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Przykład: {example}',
   },
   'pt-BR': {
+    'settings.webSearch.native.resetFallbacks': 'Restaurar provedores alternativos padrão',
     'settings.webSearch.provider.hosted': 'Modelo da sessão',
     'settings.webSearch.native.enterprise': 'A política corporativa bloqueia solicitações de pesquisa e adição ou substituição de chaves. Você pode alterar configurações ou remover chaves salvas.',
     'settings.webSearch.native.info': 'As configurações de pesquisa pertencem ao diretório de agentes selecionado, são compartilhadas entre espaços de trabalho e persistidas pelo worker do Agent Service.',
@@ -748,6 +757,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Exemplo: {example}',
   },
   tr: {
+    'settings.webSearch.native.resetFallbacks': 'Varsayılan yedek sağlayıcıları geri yükle',
     'settings.webSearch.provider.hosted': 'Oturum modeli',
     'settings.webSearch.native.enterprise': 'Kurumsal ilke, arama isteklerini ve anahtar ekleme veya değiştirmeyi engeller. Ayarları değiştirebilir veya kayıtlı anahtarları silebilirsiniz.',
     'settings.webSearch.native.info': 'Arama ayarları seçilen ajan dizinine aittir, çalışma alanları arasında paylaşılır ve Agent Service çalışanı tarafından kalıcı olarak saklanır.',
@@ -831,6 +841,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Örnek: {example}',
   },
   uk: {
+    'settings.webSearch.native.resetFallbacks': 'Відновити типових резервних постачальників',
     'settings.webSearch.provider.hosted': 'Модель сесії',
     'settings.webSearch.native.enterprise': 'Корпоративна політика блокує пошукові запити та додавання чи заміну ключів. Можна змінювати налаштування або вилучати збережені ключі.',
     'settings.webSearch.native.info': 'Налаштування пошуку належать до вибраного каталогу агентів, є спільними для різних робочих просторів і зберігаються процесом Agent Service.',
@@ -914,6 +925,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': 'Приклад: {example}',
   },
   'zh-CN': {
+    'settings.webSearch.native.resetFallbacks': '恢复默认备用提供商',
     'settings.webSearch.provider.hosted': '会话模型',
     'settings.webSearch.native.enterprise': '企业策略阻止搜索请求以及添加或替换密钥。你可以更改设置或移除已保存的密钥。',
     'settings.webSearch.native.info': '搜索设置归属于所选智能体目录，在各工作区之间共享，并由 Agent Service 工作进程持久化保存。',
@@ -997,6 +1009,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': '示例：{example}',
   },
   'zh-TW': {
+    'settings.webSearch.native.resetFallbacks': '還原預設備用供應商',
     'settings.webSearch.provider.hosted': '工作階段模型',
     'settings.webSearch.native.enterprise': '企業原則封鎖搜尋請求以及新增或取代金鑰。你可以變更設定或移除已儲存的金鑰。',
     'settings.webSearch.native.info': '搜尋設定歸屬於所選代理目錄，在各工作區之間共用，並由 Agent Service 工作程序保存。',
@@ -1080,6 +1093,7 @@ export const webSearchI18n = {
     'settings.webSearch.keys.fieldExample': '範例：{example}',
   },
   ar: {
+    'settings.webSearch.native.resetFallbacks': 'استعادة موفري البحث الاحتياطيين الافتراضيين',
     'settings.webSearch.provider.hosted': 'نموذج الجلسة',
     "chat.webSearch.noResults": "لم يُعثر على نتائج.",
     "chat.webSearch.provider": "تم البحث باستخدام {provider}",
@@ -1155,6 +1169,7 @@ export const webSearchI18n = {
     "settings.webSearch.toast.keyRemoveFailed": "تعذّرت إزالة المفتاح.",
   },
   he: {
+    'settings.webSearch.native.resetFallbacks': 'שחזור ספקי הגיבוי המוגדרים כברירת מחדל',
     'settings.webSearch.provider.hosted': 'מודל הפעלה',
     "chat.webSearch.noResults": "לא נמצאו תוצאות.",
     "chat.webSearch.provider": "החיפוש בוצע עם {provider}",
