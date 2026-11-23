@@ -17,7 +17,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 
-const CHAINS = 'retry.fallbackChains';
 const WEB_CHAIN = 'web';
 
 function isChain(value: JsonValue): value is string[] {
@@ -109,7 +108,7 @@ export function RetryFallbackChains({
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = React.useState<{ key?: string } | null>(null);
-  const setting = state?.settings.find(({ id }) => id === CHAINS);
+  const setting = state?.settings.find(({ id }) => id === 'retry.fallbackChains');
   if (!setting) return null;
 
   const entries = parseRolesRecord(setting.value);
@@ -117,7 +116,7 @@ export function RetryFallbackChains({
   const writable = setting.conditionActive === true;
   const save: ChainEditorProps['onSave'] = async (key, previous, next) => {
     const saved = await updateSettings((latest) => {
-      const current = latest.settings.find(({ id }) => id === CHAINS);
+      const current = latest.settings.find(({ id }) => id === 'retry.fallbackChains');
       const chains = parseRolesRecord(current?.value);
       if (!current?.conditionActive ||
           JSON.stringify(Object.hasOwn(chains, key) ? chains[key] : undefined) !== JSON.stringify(previous)) {
@@ -125,7 +124,7 @@ export function RetryFallbackChains({
       }
       const value = next === undefined ? chains : { ...chains, [key]: next };
       if (next === undefined) delete value[key];
-      return [{ id: CHAINS, value, expectedValue: current.value }];
+      return [{ id: 'retry.fallbackChains', value, expectedValue: current.value }];
     });
     if (saved) setEditing(null);
     return saved;
