@@ -166,6 +166,35 @@ test('command editing preserves native side, raw keys and unrelated metadata', a
   });
 }, 60000);
 
+test('native delimiters separate metadata from the editable body', async () => {
+  const h = await fixture();
+  const dir = join(h.cwd, '.omp', 'commands');
+  await mkdir(dir, { recursive: true });
+  const fixtures = [
+    { name: 'commented', header: '--- # metadata\r\nside: true\r\n---\r\n', body: 'Say hello.\r\n' },
+    { name: 'repaired', header: '<!-- Note -->\r  ---\rside: true\r---', body: ' # Native body starts here\r' },
+  ];
+  for (const { name, header, body } of fixtures) {
+    expect(parseFrontmatter(header + body)).toEqual({ frontmatter: { side: true }, body: body.trim() });
+    await writeFile(join(dir, `${name}.md`), header + body);
+  }
+  const read = await h.operation({ action: 'commands.read' });
+  if (read.kind !== 'commands') throw new Error('Expected command catalog');
+  let revision = read.catalog.revision;
+  for (const { name, header, body } of fixtures) {
+    const command = read.catalog.commands.find(entry => entry.name === name && entry.editable);
+    if (!command) throw new Error('Expected authored command');
+    expect(command.content).toBe(body);
+    const content = body.replace(/hello|starts/, 'again');
+    const updated = await h.operation({ action: 'commands.update', request: {
+      expectedRevision: revision, commandId: command.commandId, name, scope: 'workspace', content,
+    } });
+    if (updated.kind !== 'commands') throw new Error('Expected updated command catalog');
+    expect(await readFile(join(dir, `${name}.md`), 'utf8')).toBe(header + content);
+    revision = updated.catalog.revision;
+  }
+}, 60000);
+
 test('nested native prompt creation and body editing preserve the folder and native metadata', async () => {
   const h = await fixture();
   const created = await h.operation({ action: 'templates.create', request: {

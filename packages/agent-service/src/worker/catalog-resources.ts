@@ -41,8 +41,11 @@ interface OwnedFile { path: string; name: string; scope: FileResourceScope; text
 interface ResourceLocation { path: string; scope: FileResourceScope; }
 function missing(error: Error): boolean { return 'code' in error && error.code === 'ENOENT'; }
 function inside(root: string, path: string): boolean { const part = relative(root, path); return part !== '' && part !== '..' && !part.startsWith(`..${sep}`) && !isAbsolute(part); }
-function rawHeader(text: string): string {
-  return /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/.exec(text)?.[0] ?? '';
+function frontmatterBoundary(text: string) {
+  // pi-utils repairs leading HTML comments, then closes at the first newline followed by "---".
+  const prefix = /^(?:\s*<!--[\s\S]*?-->)+\s*(?=---)/.exec(text)?.[0] ?? '';
+  const header = /^---[\s\S]*?(?:\r\n?|\n)---(?:[^\S\r\n]*(?:\r\n?|\n|$))?/.exec(text.slice(prefix.length))?.[0];
+  return header === undefined ? { prefix: '', header: '' } : { prefix, header: prefix + header };
 }
 function identity(kind: string, path: string): string { return `${kind}_${createHash('sha256').update(path).digest('hex')}`; }
 function denied(): never { throw new ProjectionError(403, 'UNAUTHORIZED', 'Resource is outside an authorable native directory'); }
@@ -114,9 +117,9 @@ export class NativeFileResources {
     return files;
   }
   private metadata(text: string, path: string) {
-    const parsed = parseFrontmatter(text, { source: path, level: 'fatal', repair: false });
+    const parsed = parseFrontmatter(text, { source: path, level: 'fatal' });
     const metadata = MetadataSchema.parse(parsed.frontmatter);
-    return { content: text.slice(rawHeader(text).length), description: metadata.description, argumentHint: metadata['argument-hint'] ?? metadata.argumentHint, ...metadata.openchamber };
+    return { content: text.slice(frontmatterBoundary(text).header.length), description: metadata.description, argumentHint: metadata['argument-hint'] ?? metadata.argumentHint, ...metadata.openchamber };
   }
   private async commands() {
     resetCapabilities();
@@ -213,8 +216,8 @@ export class NativeFileResources {
       catch (error) { if (!(error instanceof Error && missing(error))) throw error; }
     }
     const previousText = current ? await readFile(current.path, 'utf8') : '';
-    const header = rawHeader(previousText);
-    const frontmatter = JsonObjectSchema.parse(parseFrontmatter(header, { source: path, level: 'fatal', repair: false, rawKeys: true }).frontmatter);
+    const { prefix, header } = frontmatterBoundary(previousText);
+    const frontmatter = JsonObjectSchema.parse(parseFrontmatter(previousText, { source: path, level: 'fatal', rawKeys: true }).frontmatter);
     const metadata = { ...frontmatter };
     if (request.description !== undefined && request.description !== current?.entry.description) metadata.description = request.description;
     if (request.argumentHint !== undefined && request.argumentHint !== this.metadata(previousText, path).argumentHint) {
@@ -236,9 +239,9 @@ export class NativeFileResources {
     }
     if (request.group !== undefined && request.group !== current?.entry.group) openchamber.group = request.group;
     if (bindings.success || Object.keys(openchamber).length) metadata.openchamber = openchamber;
-    const nextHeader = isDeepStrictEqual(frontmatter, metadata) && (header || !request.content.startsWith('---'))
-      ? header && !header.endsWith('\n') && request.content ? `${header}\n` : header
-      : `---\n${YAML.stringify(metadata).trimEnd()}\n---\n`;
+    const nextHeader = isDeepStrictEqual(frontmatter, metadata) && (header || !request.content.startsWith('---') && !frontmatterBoundary(request.content).header)
+      ? header && header === previousText && !/[\r\n]$/.test(header) && request.content ? `${header}\n` : header
+      : `${prefix}---\n${YAML.stringify(metadata).trimEnd()}\n---\n`;
     const text = nextHeader + request.content;
     const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
     try {
