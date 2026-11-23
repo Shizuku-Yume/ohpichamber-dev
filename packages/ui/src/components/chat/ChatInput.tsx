@@ -140,7 +140,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     useComposerExternalSubmits({ draftText, column, sendHandlers: sending, sendAvailability, sessionScope, submission: sending, sendActions, selection });
     const editorActions = useComposerEditorActions({
         preferences, expansion, largePasteScope, autocompleteState, draftText, editorState, dropState,
-        column, i18n, largePasteState, sessionScope, sessionLifecycle, selection, language,
+        i18n, largePasteState, sessionScope, sessionLifecycle, language,
         referenceDrafts,
     });
     const fileIntake = useComposerFileIntake({
@@ -192,7 +192,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     });
     const keyHandler = createComposerKeyHandler({
         largePasteState, editorState, draftText, autocompleteState, preferences, expansion,
-        mobileActions, sessionScope, sessionLifecycle, editorActions, queueState, queueActions: sending,
+        mobileActions, sessionScope, sessionLifecycle, queueState, queueActions: sending,
         draftHistory, sendAvailability, submission: sending,
     });
     const editorHandlers = useComposerEditorHandlers({

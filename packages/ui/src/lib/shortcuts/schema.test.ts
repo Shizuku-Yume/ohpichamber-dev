@@ -69,6 +69,11 @@ describe('shortcut schema', () => {
     expect(getShortcutAction('focus_input')?.category).toBe('session');
   });
 
+  test('offers no root agent cycling shortcut, since root prompts always run the main agent', () => {
+    expect(getShortcutAction('cycle_agent')).toBeUndefined();
+    expect(SHORTCUT_SCHEMA.some((action) => action.defaultBinding === 'tab')).toBe(false);
+  });
+
   test('exposes prompt history search as a customizable session shortcut', () => {
     const action = getShortcutAction('search_prompt_history');
 

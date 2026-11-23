@@ -1412,7 +1412,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.previous_project.label': 'Vorig project',
   'settings.openchamber.keyboardShortcuts.action.next_project.label': 'Volgend project',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Thema doorlopen',
-  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent doorlopen',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'Favoriet model vooruit doorlopen',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': 'Favoriet model achteruit doorlopen',
   'settings.openchamber.keyboardShortcuts.action.open_model_selector.label': 'Modelkiezer openen',

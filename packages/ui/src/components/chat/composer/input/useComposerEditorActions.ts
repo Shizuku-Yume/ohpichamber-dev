@@ -2,7 +2,6 @@ import { useComposerTextValue } from '../../composer/state/composerText';
 import type { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
-import type { useComposerSelection } from './useComposerSelection';
 import type { useComposerReferenceDrafts } from './useComposerReferenceDrafts';
 import type { useComposerPreferences } from './useComposerPreferences';
 import type { useComposerLargePasteState } from './useComposerLargePasteState';
@@ -12,14 +11,10 @@ import type { useComposerExpansion } from './useComposerExpansion';
 import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDropState } from './useComposerDropState';
 import type { useComposerDraftText } from './useComposerDraftText';
-import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAutocompleteState } from './useComposerAutocompleteState';
 import React from 'react';
-import { useUIStore } from '@/stores/useUIStore';
 import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { getCycledAgentId } from '../../mobileControlsUtils';
-import { isAutoModel } from '@/lib/routing/autoModel';
 import { composerReferenceKey, withComposerReferences } from '../../composer/composerReferences';
 import type { FileMentionAutocompleteInputSource } from '../../fileMentionAutocompleteState';
 import { resolveAutocompleteTrigger } from '../../composer/language/triggers';
@@ -40,19 +35,17 @@ type Dependencies = {
     draftText: Pick<ReturnType<typeof useComposerDraftText>, 'composerText' | 'setMessage' | 'setEditorValueRevision' | 'setInputMode'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef' | 'shellTriggerNormalizationRef'>;
     dropState: Pick<ReturnType<typeof useComposerDropState>, 'dropZoneRef' | 'suppressNextFileDropTextInsertRef' | 'pendingDroppedAbsolutePathsRef' | 'suppressNextFileDropTextInsertTimeoutRef' | 'suppressNextFileMentionPasteRef' | 'suppressNextFileMentionPasteTimeoutRef'>;
-    column: Pick<ReturnType<typeof useComposerColumn>, 'columnPinned'>;
     i18n: Pick<ReturnType<typeof useI18n>, 't'>;
     largePasteState: Pick<ReturnType<typeof useComposerLargePasteState>, 'largeTextPasteGesture'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'clearAbortPrompt' | 'isBtwActive' | 'btwSessionId' | 'currentSessionId' | 'abortCurrentOperation' | 'pickSessionAgent' | 'inputMode'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'clearAbortPrompt' | 'isBtwActive' | 'btwSessionId' | 'currentSessionId' | 'abortCurrentOperation' | 'inputMode'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'handleOpenMobilePanel'>;
-    selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'agents' | 'currentAgentName' | 'setAgent'>;
     language: Pick<ReturnType<typeof useComposerLanguage>, 'pastedSessionIds' | 'linkPastedSessionId' | 'setOpenSharedPageKey'>;
     referenceDrafts: Pick<ReturnType<typeof useComposerReferenceDrafts>, 'receivedPageBases' | 'updateLinkedReferences'>;
 };
 
 export function useComposerEditorActions({
     preferences, expansion, largePasteScope, autocompleteState, draftText, editorState, dropState,
-    column, i18n, largePasteState, sessionScope, sessionLifecycle, selection, language, referenceDrafts,
+    i18n, largePasteState, sessionScope, sessionLifecycle, language, referenceDrafts,
 }: Dependencies) {
     const { isMobile, largeTextPasteBehavior } = preferences;
     const { isComposerExpanded } = expansion;
@@ -68,15 +61,13 @@ export function useComposerEditorActions({
         suppressNextFileDropTextInsertTimeoutRef, suppressNextFileMentionPasteRef,
         suppressNextFileMentionPasteTimeoutRef,
     } = dropState;
-    const { columnPinned } = column;
     const { t } = i18n;
     const { largeTextPasteGesture } = largePasteState;
     const {
         clearAbortPrompt, isBtwActive, btwSessionId, currentSessionId, abortCurrentOperation,
-        pickSessionAgent, inputMode,
+        inputMode,
     } = sessionScope;
     const { handleOpenMobilePanel } = sessionLifecycle;
-    const { currentProviderId, currentModelId, agents, currentAgentName, setAgent } = selection;
     const { pastedSessionIds, linkPastedSessionId, setOpenSharedPageKey } = language;
     const { receivedPageBases, updateLinkedReferences } = referenceDrafts;
 
@@ -104,18 +95,6 @@ export function useComposerEditorActions({
     }, [currentSessionId]);
 
     const handleOpenThinkingPanel = React.useCallback(() => handleOpenMobilePanel('variant'), [handleOpenMobilePanel]);
-
-    const handleCycleAgent = React.useCallback((direction: 1 | -1 = 1) => {
-        if (isAutoModel(currentProviderId, currentModelId)) return;
-        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
-        if (!nextAgentName) return;
-
-        if (currentSessionId) {
-            pickSessionAgent(currentSessionId, nextAgentName);
-        }
-
-        if (!columnPinned) setAgent(nextAgentName);
-    }, [agents, columnPinned, currentAgentName, currentModelId, currentProviderId, currentSessionId, setAgent, pickSessionAgent]);
 
     const dictationHeightHostRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -297,7 +276,7 @@ export function useComposerEditorActions({
     }, [clearDropTextSuppression, clearFileMentionPasteSuppression]);
 
     return {
-        handleCycleAgent, insertTextAtSelection, updateAutocompleteState, markFileMentionPasteSuppression,
+        insertTextAtSelection, updateAutocompleteState, markFileMentionPasteSuppression,
         clearDropTextSuppression, scheduleDropTextSuppressionExpiry, handleCycleThinking,
         handleOpenThinkingPanel, handleComposerChange, updateAutocompleteOverlayPosition, handleAbort,
         autocompleteOverlayPosition, dictationHeightHostRef, dictationContentHeight, dictationHeightLimit,
