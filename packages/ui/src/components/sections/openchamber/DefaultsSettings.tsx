@@ -24,6 +24,7 @@ import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { ModelCompactionSettings } from './ModelCompactionSettings';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
+import { toast } from '@/components/ui';
 import { reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -104,8 +105,9 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
       const saved = await updateSettings((state) => [modelRoleChange(state, role, selector), ...also]);
       reportSettingsSaveState(saved ? 'saved' : 'error');
       if (saved) refreshDirectoryCatalogs();
+      else toast.error(t('settings.omp.modelRoles.saveFailed'));
     },
-    [updateSettings],
+    [t, updateSettings],
   );
 
   const handleDefaultModelChange = (selector: string) => void setRole('default', selector);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatModelRef } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/components/ui';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import type { I18nKey } from '@/lib/i18n/store';
 import { useUIStore } from '@/stores/useUIStore';
@@ -43,7 +44,8 @@ export const ModelRolesPage: React.FC = () => {
     reportSettingsSaveState('saving');
     const saved = await updateSettings((state) => [modelRoleChange(state, role, selector)]);
     reportSettingsSaveState(saved ? 'saved' : 'error');
-  }, [updateSettings]);
+    if (!saved) toast.error(t('settings.omp.modelRoles.saveFailed'));
+  }, [t, updateSettings]);
 
   const imageRole = roleSelectors.image ?? '';
   const imageOptions = React.useMemo(
