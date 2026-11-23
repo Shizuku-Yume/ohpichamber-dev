@@ -227,16 +227,37 @@ test('an empty native web-role pool reports no selection and rejects new selecto
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('reset restores the native web fallbacks without changing other chains', async () => {
+  const { directory, bootstrap } = await fixture();
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    cfgRetryFallbackChains.setEntry(runtime.settings, 'default', ['openai/o3-mini:high']);
+    await runtime.settings.flush();
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    const before = await search.operation({ type: 'read' });
+    if (before.type !== 'state') throw new Error('Expected native search state');
+    expect(before.state.fallbackProviderIds.length).toBeGreaterThan(0);
+    expect(await search.operation({ type: 'update', request: { expectedRevision: '0', fallbackProviderIds: [] } }))
+      .toMatchObject({ result: { state: { fallbackProviderIds: [] } } });
+    expect(cfgRetryFallbackChains.get(runtime.settings).web).toEqual([]);
+    expect(await search.operation({ type: 'update', request: { expectedRevision: '1', fallbackProviderIds: null } }))
+      .toMatchObject({ result: { status: 'applied', state: { fallbackProviderIds: before.state.fallbackProviderIds } } });
+    expect(cfgRetryFallbackChains.get(runtime.settings)).toEqual({ default: ['openai/o3-mini:high'] });
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('project settings remain authoritative when native search updates would override them', async () => {
   const { directory, bootstrap } = await fixture();
   await mkdir(join(bootstrap.cwd, '.omp'), { recursive: true });
-  await writeFile(join(bootstrap.cwd, '.omp', 'config.yml'), 'exa:\n  enabled: true\n');
+  await writeFile(join(bootstrap.cwd, '.omp', 'config.yml'), 'exa:\n  enabled: true\nretry:\n  fallbackChains:\n    web: [web/exa]\n');
   const worker = await StatelessWorker.open(bootstrap, async () => {});
   try {
     const read = await worker.operation({ type: 'web-search', operation: { type: 'read' } });
     if (read.type !== 'web-search' || read.result.type !== 'state') throw new Error('Expected native search state');
     expect(read.result.state.providers.find(provider => provider.providerId === 'web/exa')?.options).toEqual({ exa: { enabled: true } });
     await expect(worker.operation({ type: 'web-search', operation: { type: 'update', request: { expectedRevision: '0', providerOptions: { exa: { enabled: false } } } } }))
+      .rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+    await expect(worker.operation({ type: 'web-search', operation: { type: 'update', request: { expectedRevision: '0', fallbackProviderIds: null } } }))
       .rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
     expect(await readFile(join(bootstrap.agentDirectory, 'openchamber-web-search-revision'), 'utf8').catch(() => null)).toBeNull();
   } finally { await worker.close(); await rm(directory, { recursive: true, force: true }); }

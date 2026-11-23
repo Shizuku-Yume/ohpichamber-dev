@@ -337,6 +337,9 @@ const FallbacksSection: React.FC<{
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button variant="ghost" size="xs" disabled={busy} onClick={() => void commit({ fallbackProviderIds: null })}>
+            {t('settings.webSearch.native.resetFallbacks')}
+          </Button>
           {addable.length === 0 && rows.length > 0 ? (
             <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.addFallbackNone')}</p>
           ) : null}

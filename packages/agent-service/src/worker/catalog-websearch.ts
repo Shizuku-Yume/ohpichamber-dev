@@ -163,7 +163,7 @@ export class NativeWebSearch {
           throw new ProjectionError(409, 'CATALOG_CONFLICT', 'A higher-priority native settings source owns the requested value');
         }
         const selected = request.selectedProviderId === undefined ? before.selectedProviderId : request.selectedProviderId;
-        const fallbacks = request.fallbackProviderIds ?? before.fallbackProviderIds;
+        const fallbacks = request.fallbackProviderIds === null ? [] : request.fallbackProviderIds ?? before.fallbackProviderIds;
         if (selected && fallbacks.includes(selected)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Primary search model cannot also be a fallback');
         // Native execution still accepts grounded chat transports, and a legacy
         // setting may name one even though the catalog exposes search engines
@@ -180,8 +180,8 @@ export class NativeWebSearch {
         for (const id of [...(selected ? [selected] : []), ...fallbacks]) {
           if (!selectorPool.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Unknown native web search model selector');
         }
-        if (request.fallbackProviderIds !== undefined) {
-          fallbackSelectors = editFallbackSelectors(configuredChain, before.fallbackProviderIds, request.fallbackProviderIds,
+        if (Array.isArray(request.fallbackProviderIds)) {
+          fallbackSelectors = editFallbackSelectors(configuredChain, before.fallbackProviderIds, fallbacks,
             value => resolveWebSelector(value, this.runtime.settings, pool));
         }
         for (const providerId of Object.keys(options)) {
@@ -202,7 +202,7 @@ export class NativeWebSearch {
           if (request.enabled !== undefined) cfgWebSearchEnabled.set(this.runtime.settings, request.enabled);
           if (request.timeoutSeconds !== undefined) cfgProvidersWebSearchTimeoutSeconds.set(this.runtime.settings, request.timeoutSeconds);
           if (request.selectedProviderId !== undefined) this.runtime.settings.setModelRole('web', request.selectedProviderId ?? undefined);
-          if (fallbackSelectors !== undefined) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', fallbackSelectors);
+          if (request.fallbackProviderIds !== undefined) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', fallbackSelectors);
           if (request.providerSearchDelayMs !== undefined) {
             if (request.providerSearchDelayMs === null) cfgExaSearchDelayMs.unset(this.runtime.settings);
             else cfgExaSearchDelayMs.set(this.runtime.settings, request.providerSearchDelayMs);

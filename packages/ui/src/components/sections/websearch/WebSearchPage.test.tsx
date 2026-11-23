@@ -220,7 +220,7 @@ describe('WebSearchPage', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    const saved: string[][] = [];
+    const saved: (string[] | null)[] = [];
     let snapshot = initial;
     useWebSearchStore.setState({
       state: { kind: 'ready', snapshot },
@@ -229,7 +229,7 @@ describe('WebSearchPage', () => {
       busy: false,
       load: async () => { },
       update: async (changes) => {
-        if (changes.fallbackProviderIds) saved.push(changes.fallbackProviderIds);
+        if (changes.fallbackProviderIds !== undefined) saved.push(changes.fallbackProviderIds);
         snapshot = { ...snapshot, ...changes, fallbackProviderIds: changes.fallbackProviderIds ?? snapshot.fallbackProviderIds };
         useWebSearchStore.setState({ state: { kind: 'ready', snapshot } });
         return true;
@@ -266,8 +266,15 @@ describe('WebSearchPage', () => {
     return { section, saved, handles, rows, rowNames, rowOrdinals, rowPillCounts, helperLines, addButton };
   };
 
-  // An empty chain says so in one line and offers only the add action; there is
-  // no row chrome and no always-"configured" pill to suggest otherwise.
+  test('resetting the fallbacks clears the override rather than saving an empty chain', async () => {
+    const page = await renderWithSnapshot(fallbackSnapshot([]));
+    const reset = Array.from(page.section.querySelectorAll('button'))
+      .find(button => button.textContent === en['settings.webSearch.native.resetFallbacks']);
+    expect(reset).toBeDefined();
+    await act(async () => reset?.click());
+    expect(page.saved).toEqual([null]);
+  });
+
   test('an empty fallback chain shows one helper line and the add action', async () => {
     const page = await renderWithSnapshot(fallbackSnapshot([]));
 
