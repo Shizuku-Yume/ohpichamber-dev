@@ -44,7 +44,7 @@ import { ShellCoordinator } from './shell.ts';
 import type { PermissionMode } from './host-authorization-protocol.ts';
 import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostSessionPermissionModeSchema, HostSessionForkAckSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema, HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
-import type { CommandCatalogState, PromptTemplateCatalogState, FileResourceSkillCatalog, FileResourceExpandResult, FileResourcePromptInputResult, SkillSourceRevisions } from '@openchamber/agent-contract';
+import type { BehaviorFileCatalog, CommandCatalogState, PromptTemplateCatalogState, FileResourceSkillCatalog, FileResourceExpandResult, FileResourcePromptInputResult, SkillSourceRevisions } from '@openchamber/agent-contract';
 import { HostSkillSourceCommitSchema, HostSkillSourceResultSchema, type HostSkillSourceOperation, type HostSkillSourceResult } from './file-resources-host-protocol.ts';
 const SessionForkRequestSchema = z.strictObject({ sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']), forkTicketId: EntityIdSchema.optional() }).refine(input => input.mode === 'full' || input.entryId !== null, { message: 'Selected forks require an entry identity', path: ['entryId'] });
 const SessionReopenRequestSchema = HostSessionBootstrapSchema.omit({ sessionFile: true });
@@ -106,7 +106,7 @@ type ServiceResponse =
   | { sessionId: string; permissionMode: PermissionMode }
   | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse | ImageGenerateResult | ImageModelMutationResult
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
-  | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
+  | BehaviorFileCatalog | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
   | { sources: SkillSourceRevisions }
   | WorktreeLeaseAcquireResult
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult

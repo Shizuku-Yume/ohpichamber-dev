@@ -4,6 +4,36 @@ import { ModelSelectionSchema, SkillSourceRevisionsSchema } from './catalogs.ts'
 
 export const FileResourceScopeSchema = z.enum(['workspace', 'agent']);
 export type FileResourceScope = z.infer<typeof FileResourceScopeSchema>;
+const ruleList = z.union([z.string(), z.array(z.string())]);
+export const BehaviorRuleFieldsSchema = z.strictObject({
+  description: z.string().nullable().optional(),
+  enabled: z.boolean().nullable().optional(),
+  alwaysApply: z.boolean().nullable().optional(),
+  globs: ruleList.nullable().optional(),
+  condition: ruleList.nullable().optional(),
+  astCondition: ruleList.nullable().optional(),
+  question: z.string().nullable().optional(),
+  scope: ruleList.nullable().optional(),
+  agents: ruleList.nullable().optional(),
+  interruptMode: z.enum(['never', 'prose-only', 'tool-only', 'always']).nullable().optional(),
+  repeatMode: z.enum(['once', 'after-gap', 'always']).nullable().optional(),
+});
+export const BehaviorFileFieldsSchema = BehaviorRuleFieldsSchema.extend({ applyTo: z.string().nullable().optional() });
+export const BehaviorFileKindSchema = z.enum(['rule', 'sticky-rules', 'system', 'instruction']);
+const behaviorFile = { kind: BehaviorFileKindSchema, scope: FileResourceScopeSchema, name: z.string().min(1).max(255) };
+const fileVersion = z.string().regex(/^[0-9a-f]{64}$/);
+export const BehaviorFileEntrySchema = z.strictObject({ ...behaviorFile, version: fileVersion, content: z.string(), fields: BehaviorFileFieldsSchema });
+export const BehaviorFileCatalogSchema = z.strictObject({ workspaceId: EntityIdSchema, revision: CounterSchema, scopes: z.array(FileResourceScopeSchema), files: z.array(BehaviorFileEntrySchema) });
+const behaviorTarget = { ...behaviorFile, kind: z.string().min(1).max(40) };
+export const BehaviorFileWriteSchema = z.strictObject({
+  ...behaviorTarget, expectedRevision: CounterSchema, expectedVersion: fileVersion.nullable(), content: z.string(), fields: BehaviorFileFieldsSchema.optional(),
+});
+export const BehaviorFileDeleteSchema = z.strictObject({ ...behaviorTarget, expectedRevision: CounterSchema, expectedVersion: fileVersion });
+export type BehaviorFileFields = z.infer<typeof BehaviorFileFieldsSchema>;
+export type BehaviorFileEntry = z.infer<typeof BehaviorFileEntrySchema>;
+export type BehaviorFileCatalog = z.infer<typeof BehaviorFileCatalogSchema>;
+export type BehaviorFileWrite = z.infer<typeof BehaviorFileWriteSchema>;
+export type BehaviorFileDelete = z.infer<typeof BehaviorFileDeleteSchema>;
 const hasControlCharacter = (value: string): boolean => {
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;

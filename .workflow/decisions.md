@@ -1,11 +1,17 @@
 # Decisions
 
+## 2026-11-23 - Keep Behavior authoring within native OMP file scopes
+
+- Add an opt-in Behavior file catalog; leave the existing AGENTS.md route and all legacy response shapes unchanged. Author only flat native rules and instructions and the fixed `RULES.md` and `SYSTEM.md` in the selected workspace's `.omp` or selected agent directory. Native ancestor and foreign-provider discoveries confer no write capability. Keep hooks and SSH out of the route.
+- Native rules are loaded by the SDK, and the nearest project `SYSTEM.md` takes precedence over the user's. OMP's instruction capability loads `applyTo` into the Extensions inventory but the SDK does not auto-inject those instruction files into a session. `APPEND_SYSTEM.md` auto-discovery is CLI-only; do not add an editor or a second prompt assembly path for it.
+- Check both the catalog revision and the selected file's content version. Preserve the original header on body-only writes, and verify rewritten frontmatter through OMP's parser before replacing the file.
+
 ## 2026-11-23 - Keep discovery and native prompt authoring on their existing catalogs
 
 - Commands and installed Skills own their OMP discovery switches through the existing settings catalog. Native overrides are read-only on these pages. Personal Claude command and Claude/Codex skill switches stay in `config.yml` because the Extensions provider user-source opt-in can enable discovery independently. The personal OpenCode command switch stays visible with that interaction explained. The four skill lists stay in `config.yml`; the registry URL stays outside the GUI write allowlist.
 - Prompt Template creation uses a confined relative Markdown name for nested folders, not the legacy `openchamber.group` display metadata. Command and prompt writes preserve untouched native frontmatter and leave public response schemas unchanged. `side` stays on disk: OMP 19.1 applies its side-question behavior only in the interactive terminal.
 - Keep the existing application model and agent binding contract. Canonical prompt preparation projects it for existing app consumers; it isn't native OMP command metadata.
-- The existing Behavior route owns only `AGENTS.md`; generic workspace file editing is not a scoped settings authoring contract. A separate Behavior change should prove SDK discovery for each exact file before adding explicit allowlisted kinds and revisioned writes. In particular, OMP 19.1's `APPEND_SYSTEM.md` auto-discovery is in its CLI entrypoint, so SDK support needs verification before promising an editor. No hook or SSH writes.
+- The existing Behavior route owns only `AGENTS.md`; generic workspace file editing is not a scoped settings authoring contract. Additional native files use the separate Behavior file catalog above.
 - Keep Host/client audio and native OMP voice configuration separate. No Host egress, provider, or credential changes; native voice editing requires evidence of what each setting controls in the SDK-backed app.
 
 ## 2026-11-23 - Provider credential selection: D4 resolved

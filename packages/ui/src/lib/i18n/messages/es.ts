@@ -82,6 +82,7 @@ import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
+import { behaviorFilesI18n } from './behavior-files.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
@@ -3972,6 +3973,7 @@ export const dict: Record<I18nKey, string> = {
   ...btwI18n.es,
   ...subagentHudI18n['es'],
   ...ompSettingsI18n.es,
+  ...behaviorFilesI18n['es'],
   ...pluginsMarketplaceI18n.es,
   "settings.sourceControl.ssh.title": "Claves SSH",
   "settings.sourceControl.ssh.load": "Mostrar claves",

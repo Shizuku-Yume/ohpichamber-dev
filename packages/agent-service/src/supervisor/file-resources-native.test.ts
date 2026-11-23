@@ -44,6 +44,89 @@ async function fixture() {
   };
 }
 
+test('behavior file edits preserve native rule metadata, both fixed scopes, and strict legacy catalogs', async () => {
+  const h = await fixture();
+  const root = join(h.cwd, '.omp');
+  const rule = join(root, 'rules', 'greeting.mdc');
+  const header = '---\r\nenabled: false\r\ncondition: "hello"\r\nfuture: "true <!-- note -->"\r\n---\r\n';
+  await mkdir(join(root, 'rules'), { recursive: true });
+  await writeFile(rule, header + 'Old.\r\n');
+  const legacy = await h.operation({ action: 'commands.read' });
+  if (legacy.kind !== 'commands') throw new Error('Expected command catalog');
+  expect(Object.keys(legacy.catalog).sort()).toEqual(['builtinCommands', 'commands', 'revision', 'workspaceId']);
+  const read = async () => {
+    const result = await h.operation({ action: 'behavior.read' });
+    if (result.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+    return result.catalog;
+  };
+  const initial = await read();
+  const entry = initial.files[0];
+  expect(entry).toMatchObject({ scope: 'workspace', name: 'greeting.mdc', content: 'Old.\r\n', fields: { enabled: false, condition: 'hello' } });
+  const bodyOnly = await h.operation({ action: 'behavior.write', request: {
+    kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: entry.version, expectedRevision: initial.revision, content: 'New.\r\n',
+  } });
+  expect(await readFile(rule, 'utf8')).toBe(header + 'New.\r\n');
+  if (bodyOnly.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  await h.operation({ action: 'behavior.write', request: {
+    kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: bodyOnly.catalog.files[0].version,
+    expectedRevision: bodyOnly.catalog.revision, content: 'New.\r\n',
+    fields: { enabled: null, description: 'A note <!-- literal -->', astCondition: ['return $VALUE;'], scope: ['tool:edit(**/*.ts)'], repeatMode: 'after-gap' },
+  } });
+  expect(parseFrontmatter(await readFile(rule, 'utf8'), { level: 'fatal' }).frontmatter).toEqual({
+    condition: 'hello', future: 'true <!-- note -->', description: 'A note <!-- literal -->',
+    astCondition: ['return $VALUE;'], scope: ['tool:edit(**/*.ts)'], repeatMode: 'after-gap',
+  });
+  for (const scope of ['agent', 'workspace'] as const) {
+    const base = scope === 'workspace' ? root : h.agentDirectory;
+    for (const [kind, name] of [['system', 'SYSTEM.md'], ['sticky-rules', 'RULES.md']] as const) {
+      const { revision } = await read();
+      const content = `# ${scope} ${name}\n`;
+      await h.operation({ action: 'behavior.write', request: { kind, scope, name, content, expectedVersion: null, expectedRevision: revision } });
+      expect(await readFile(join(base, name), 'utf8')).toBe(content);
+    }
+    const { revision } = await read();
+    const content = 'Use a greeting.\n';
+    await h.operation({ action: 'behavior.write', request: {
+      kind: 'instruction', scope, name: 'greeting.instructions.md', content, expectedVersion: null, expectedRevision: revision, fields: { applyTo: '**/*.ts' },
+    } });
+    expect(parseFrontmatter(await readFile(join(base, 'instructions', 'greeting.instructions.md'), 'utf8'))).toEqual({
+      body: 'Use a greeting.', frontmatter: { applyTo: '**/*.ts' },
+    });
+  }
+  const inventory = await h.extensions();
+  if (inventory.type !== 'extensions.inventory') throw new Error('Expected native Extensions inventory');
+  expect(inventory.state.extensions.items.filter(entry => entry.kind === 'instruction' && entry.name === 'greeting').map(entry => entry.scope).sort()).toEqual(['project', 'user']);
+  const catalog = await read();
+  const target = catalog.files.find(file => file.scope === 'agent' && file.kind === 'system')!;
+  await h.operation({ action: 'behavior.delete', request: { kind: target.kind, scope: target.scope, name: target.name, expectedVersion: target.version, expectedRevision: catalog.revision } });
+  expect((await read()).files.some(file => file.scope === 'agent' && file.kind === 'system')).toBe(false);
+}, 60000);
+
+test('behavior file targets refuse escapes, executable hooks, SSH, symlinks and stale writes', async () => {
+  const h = await fixture();
+  const outside = join(h.root, 'outside.md');
+  await writeFile(outside, 'Do not replace.\n');
+  const root = join(h.cwd, '.omp');
+  await mkdir(join(root, 'rules'), { recursive: true });
+  await symlink(outside, join(root, 'rules', 'escape.md'));
+  const request = { scope: 'workspace' as const, content: 'Benign.\n', expectedRevision: '0', expectedVersion: null };
+  for (const [kind, name] of [
+    ['rule', '../outside.md'], ['rule', outside], ['rule', 'C:\\outside.md'], ['rule', 'escape.md'],
+    ['hook', 'hook.md'], ['ssh', 'ssh.json'], ['system', 'APPEND_SYSTEM.md'], ['rule', 'ssh.json'],
+  ]) {
+    await expect(h.operation({ action: 'behavior.write', request: { ...request, kind, name } })).rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
+  }
+  expect(await readFile(outside, 'utf8')).toBe('Do not replace.\n');
+  const created = await h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: 'local.md' } });
+  if (created.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  expect(created.catalog.files.map(file => file.name)).toEqual(['local.md']);
+  const entry = created.catalog.files[0];
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: entry.name, expectedVersion: entry.version } })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+  await writeFile(join(root, 'rules', entry.name), 'Outside edit.\n');
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: entry.name, expectedRevision: created.catalog.revision, expectedVersion: entry.version } })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+  expect(await readFile(join(root, 'rules', entry.name), 'utf8')).toBe('Outside edit.\n');
+}, 60000);
+
 test('native command CRUD preserves Markdown, metadata, quoted arguments and durable CAS without a session', async () => {
   const h = await fixture();
   const body = 'Review $1 and $2.\n\n{{arguments}}\n';
