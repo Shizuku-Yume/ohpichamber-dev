@@ -6,10 +6,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 type ConfirmCheckbox = { label: string; defaultChecked?: boolean };
 type ConfirmResponse = { confirmed: boolean; checkboxChecked: boolean };
-type PromiseWithResolversConstructor = PromiseConstructor & {
-  withResolvers<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void };
-};
-
 type ConfirmRequest = {
   title: string;
   message: string;
@@ -42,10 +38,10 @@ export function useConfirmDialog({ layerClassName, backdropProps }: Pick<React.C
     // A second question while one is open answers the first with "no" first.
     pending.current?.({ confirmed: false, checkboxChecked: false });
     setCheckboxChecked(next.checkbox?.defaultChecked ?? false);
-    const response = (Promise as PromiseWithResolversConstructor).withResolvers<ConfirmResponse>();
-    pending.current = response.resolve;
-    setRequest(next);
-    return response.promise;
+    return new Promise<ConfirmResponse>((resolve) => {
+      pending.current = resolve;
+      setRequest(next);
+    });
   }, []);
 
   const confirm = React.useCallback((next: ConfirmRequest): Promise<boolean> => (
