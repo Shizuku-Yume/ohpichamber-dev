@@ -237,8 +237,10 @@ describe('role chains', () => {
   });
 
   test('a native comma-separated role expands its primary selector and aliases', () => {
-    const roles = { commit: '@smol:high,other/backup', smol: 'chosen/haiku,other/spare' };
+    const roles = { commit: ' , @smol:high,other/backup', smol: [' ', ', chosen/haiku,other/spare'] };
+    expect(isRoleConfigured('commit', roles)).toBe(true);
     expect(resolveRoleSelector('commit', roles)).toBe('chosen/haiku:high');
+    expect(isRoleConfigured('commit', { commit: [' ', ', '] })).toBe(false);
   });
 });
 

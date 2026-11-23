@@ -355,11 +355,14 @@ export const DEFAULT_MODEL_ROLE_ALIAS = '*';
  */
 export type ModelRoleValues = Readonly<Record<string, string | readonly string[]>>;
 
-/** The first selector in a native array or comma-separated chain. */
+/** The first nonblank selector in a native array or comma-separated chain. */
 function roleValue(value: string | readonly string[] | undefined): string | undefined {
-  const first = typeof value === 'string' ? value : value?.[0];
-  const trimmed = typeof first === 'string' ? first.split(',', 1)[0]?.trim() : undefined;
-  return trimmed || undefined;
+  const entries = typeof value === 'string' ? [value] : value ?? [];
+  for (const entry of entries) {
+    const selector = entry.split(',').map((part) => part.trim()).find(Boolean);
+    if (selector) return selector;
+  }
+  return undefined;
 }
 
 /** True when the record configures this role at all, even to an unexpandable value. */

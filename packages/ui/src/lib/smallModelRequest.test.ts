@@ -61,7 +61,7 @@ describe('canonical utility generation', () => {
   });
 
   test('Git generation uses the primary model from a preserved commit fallback chain', async () => {
-    ompSettingsRoles = { commit: 'chosen/large,other/haiku' };
+    ompSettingsRoles = { commit: ' ,chosen/large,other/haiku', default: 'other/haiku' };
     expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection)
       .toEqual({ providerId: 'chosen', modelId: 'large' });
   });
