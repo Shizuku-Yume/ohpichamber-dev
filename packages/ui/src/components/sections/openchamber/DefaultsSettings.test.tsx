@@ -187,6 +187,7 @@ describe('DefaultsSettings', () => {
 
   test.each([
     { selector: 'unavailable/model', displayed: 'Auto', changedRoles: null },
+    { selector: 'nanogpt/coding-router:high', displayed: 'Auto', changedRoles: null },
     { selector: 'short-name:high,other/model', displayed: 'High', changedRoles: { default: 'short-name:xhigh,other/model' } },
   ])('the thinking picker uses native choices for $selector', async ({ selector, displayed, changedRoles }) => {
     const snapshot: OmpSettingsState = {

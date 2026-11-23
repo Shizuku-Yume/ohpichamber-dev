@@ -35,7 +35,7 @@ export function splitRoleSelector(
   models: readonly Model[],
 ): { model: string; effort: string } {
   const literal = (providerId: string | undefined, modelId: string) =>
-    providerId !== undefined && models.some((model) => model.provider === providerId && model.modelId === modelId);
+    models.some((model) => (providerId === undefined || model.provider === providerId) && model.modelId === modelId);
   const split = splitSelectorThinking(selector ?? null, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literal });
   return { model: split.model, effort: split.thinkingLevel ?? '' };
 }

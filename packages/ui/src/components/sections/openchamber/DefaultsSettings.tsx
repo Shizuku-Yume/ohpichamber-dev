@@ -93,7 +93,9 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
   const thinkingSetting = ompState?.settings.find((s) => s.id === 'defaultThinkingLevel');
   const configuredThinkingLevel = typeof thinkingSetting?.value === 'string' ? thinkingSetting.value : '';
   const thinkingOptions = thinkingSetting?.options ?? [];
-  const unresolvedThinkingLevel = selectedEffort || configuredThinkingLevel;
+  // Without a catalog match, a qualified suffix can be part of the model ID.
+  const shorthandThinkingLevel = selectedModelId.includes('/') ? '' : selectedEffort;
+  const unresolvedThinkingLevel = shorthandThinkingLevel || configuredThinkingLevel;
 
   const setRole = React.useCallback(
     async (role: string, selector: string, also: OmpSettingsChange[] = []) => {
@@ -253,7 +255,7 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
                 value={unresolvedThinkingLevel}
                 disabled={isSavingOmp || thinkingOptions.length === 0}
                 onValueChange={(value) => {
-                  if (selectedEffort) handleDefaultEffortChange(value);
+                  if (shorthandThinkingLevel) handleDefaultEffortChange(value);
                   else void handleOmpChange('defaultThinkingLevel', value);
                 }}
               >
