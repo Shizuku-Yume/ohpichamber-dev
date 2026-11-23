@@ -366,6 +366,42 @@ describe('DefaultsSettings', () => {
     }
   });
 
+  test('a newer text edit remains visible while an older settings write finishes', async () => {
+    const bank = (revision: string, value: string): OmpSettingsState => ({
+      workspaceId: 'workspace_1', revision, totalCount: 1,
+      settings: [{
+        id: 'hindsight.bank', type: 'string', value, default: '', configured: true,
+        placement: { type: 'page', page: 'memory', section: 'hindsight' },
+      }],
+    });
+    const first = Promise.withResolvers<OmpSettingsState>();
+    const second = Promise.withResolvers<OmpSettingsState>();
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(bank('1', ''));
+    const save = spyOn(canonicalClient, 'updateOmpSettings')
+      .mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+    const Harness = () => {
+      const { form, updateSetting } = useOmpPageSettings('memory');
+      const text = String(form['hindsight.bank'] ?? '');
+      return <button onClick={() => { void updateSetting('hindsight.bank', text + 'a'); }}>{text}</button>;
+    };
+    try {
+      await act(async () => root.render(<Harness />));
+      const button = host.querySelector('button');
+      await act(async () => button?.click());
+      expect(button?.textContent).toBe('a');
+      await act(async () => button?.click());
+      expect(button?.textContent).toBe('aa');
+      await act(async () => first.resolve(bank('2', 'a')));
+      expect(button?.textContent).toBe('aa');
+      expect(save.mock.calls[1]?.[1].changes).toEqual([{ id: 'hindsight.bank', value: 'aa' }]);
+      await act(async () => second.resolve(bank('3', 'aa')));
+      expect(button?.textContent).toBe('aa');
+    } finally {
+      read.mockRestore();
+      save.mockRestore();
+    }
+  });
+
   test('changing the default retry model retains the remaining selectors and other chains', async () => {
     const snapshot = {
       ...mockOmpSettings,

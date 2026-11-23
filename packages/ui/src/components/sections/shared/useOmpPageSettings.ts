@@ -27,6 +27,8 @@ type SettingsScope = {
   pending: number;
 };
 
+type PendingValue = { scope: SettingsScope; value: OmpSettingValue };
+
 /**
  * Loads, filters and updates OMP settings placed on a specific OpenChamber page.
  * Serializes writes and reapplies their intent to the latest snapshot on a CAS conflict.
@@ -35,17 +37,22 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
   const directory = useSettingsDirectory();
   const [loaded, setLoaded] = React.useState<{ directory: string; state: OmpSettingsState | null } | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [pendingValues, setPendingValues] = React.useState<Record<string, PendingValue>>({});
   const scopeRef = React.useRef<SettingsScope | null>(null);
   const state = loaded?.directory === directory ? loaded.state : null;
   const loading = Boolean(directory && loaded?.directory !== directory);
-  const form = React.useMemo(
-    () => Object.fromEntries(state?.settings.map((setting) => [setting.id, setting.value]) ?? []),
-    [state],
-  );
+  const form = React.useMemo(() => {
+    const values = Object.fromEntries(state?.settings.map((setting) => [setting.id, setting.value]) ?? []);
+    for (const [id, pending] of Object.entries(pendingValues)) {
+      if (pending.scope.directory === directory && !pending.scope.abort.signal.aborted) values[id] = pending.value;
+    }
+    return values;
+  }, [directory, pendingValues, state]);
 
   React.useEffect(() => {
     setLoaded(null);
     setSaving(false);
+    setPendingValues({});
     if (!directory) return;
     const abort = new AbortController();
     const scope: SettingsScope = { directory, abort, state: null, tail: Promise.resolve(), pending: 0 };
@@ -115,9 +122,21 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
   );
 
   const updateSetting = React.useCallback(async (settingOrId: OmpSetting | string, value: OmpSettingValue) => {
+    const scope = scopeRef.current;
+    if (!scope?.state || scope.directory !== directory) return;
     const id = typeof settingOrId === 'string' ? settingOrId : settingOrId.id;
+    const pending = { scope, value };
+    setPendingValues((values) => ({ ...values, [id]: pending }));
     await updateSettings(() => [{ id, value }]);
-  }, [updateSettings]);
+    if (!scope.abort.signal.aborted) {
+      setPendingValues((values) => {
+        if (values[id] !== pending) return values;
+        const next = { ...values };
+        delete next[id];
+        return next;
+      });
+    }
+  }, [directory, updateSettings]);
 
   const pageSettings = React.useMemo(() => {
     if (!state) return [];

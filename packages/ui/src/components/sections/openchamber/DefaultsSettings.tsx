@@ -55,7 +55,7 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const defaultSessionMode = useUIStore((state) => state.defaultSessionMode);
   const setDefaultSessionMode = useUIStore((state) => state.setDefaultSessionMode);
-  const { state: ompState, loading, saving: isSavingOmp, updateSettings, updateSetting: handleOmpChange, getSectionSettings } = useOmpPageSettings('sessions');
+  const { state: ompState, form: ompForm, loading, saving: isSavingOmp, updateSettings, updateSetting: handleOmpChange, getSectionSettings } = useOmpPageSettings('sessions');
   const ompStateFailed = Boolean(directory && !loading && !ompState);
   // The catalog loader already read this directory's models; a second fetch
   // here duplicated the slowest request the Settings page made.
@@ -396,8 +396,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -464,8 +464,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -483,8 +483,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -502,8 +502,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -521,8 +521,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -540,8 +540,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -559,8 +559,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -578,8 +578,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -597,8 +597,8 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
