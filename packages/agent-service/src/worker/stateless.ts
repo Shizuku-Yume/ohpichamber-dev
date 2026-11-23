@@ -65,7 +65,7 @@ export class StatelessWorker {
     this.settingsStore = new NativeSettings(runtime.settings, input.agentDirectory);
     this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId);
     this.fileResources = new NativeFileResources({
-      cwd: input.cwd, agentDirectory: input.agentDirectory,
+      cwd: input.cwd, agentDirectory: input.agentDirectory, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
       get skillOptions() { return nativeSkillOptions(runtime.settings); }
     });

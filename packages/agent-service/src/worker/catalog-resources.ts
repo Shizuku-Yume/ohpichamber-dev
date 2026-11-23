@@ -11,6 +11,8 @@ import { z } from 'zod';
 import { normalizeFrontmatterKeys, parseFrontmatter } from '@oh-my-pi/pi-utils';
 import { loadSlashCommands, expandSlashCommand } from '@oh-my-pi/pi-coding-agent/extensibility/slash-commands';
 import { loadPromptTemplates, expandPromptTemplate } from '@oh-my-pi/pi-coding-agent/config/prompt-templates';
+import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { cfgDisabledExtensions } from '@oh-my-pi/pi-coding-agent/extensibility/settings';
 import { loadCapability, type SlashCommand } from '@oh-my-pi/pi-coding-agent/discovery';
 import { slashCommandCapability } from '@oh-my-pi/pi-coding-agent/capability/slash-command';
 import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
@@ -37,6 +39,7 @@ import { ALLOWED_BUILTIN_COMMANDS, isAllowedBuiltinCommand } from './builtin-com
 export interface NativeFileResourcesContext {
   cwd: string;
   agentDirectory: string;
+  settings: Settings;
   extensionRoots: EffectiveExtensionRoots;
   skillOptions: LoadSkillsOptions;
 }
@@ -156,7 +159,9 @@ export class NativeFileResources {
     }
     resetCapabilities();
     const systems = await loadCapability<SystemPrompt>(systemPromptCapability.id, { cwd: this.context.cwd });
-    const rules = await loadCapability<Rule>(ruleCapability.id, { cwd: this.context.cwd, agentDir: this.context.agentDirectory });
+    const rules = await loadCapability<Rule>(ruleCapability.id, {
+      cwd: this.context.cwd, agentDir: this.context.agentDirectory, disabledExtensions: cfgDisabledExtensions.get(this.context.settings),
+    });
     const inheritedSystem = systems.items.some(item => item.level === 'project' && item._source.provider === 'native' && !inside(root, item.path));
     const inheritedRules = rules.items.some(item => item.name === 'RULES@project' && item._source?.provider === 'native' && !inside(root, item._source.path));
     if (inheritedSystem || inheritedRules) {

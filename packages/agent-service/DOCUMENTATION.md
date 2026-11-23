@@ -237,7 +237,7 @@ OMP 19.1 loads scoped rules through the SDK and searches its nearest project con
 
 A new enabled rule must qualify for OMP's rulebook, always-apply, or trigger bucket. An explicitly disabled rule can be saved without an activation field.
 
-The editor refuses to populate a local `.omp` when doing so would hide an inherited native system prompt or sticky rule. Open the parent as the workspace or write to the selected agent directory instead.
+The editor refuses to populate a local `.omp` when doing so would hide an inherited native system prompt or sticky rule. Sticky rules disabled through Extensions do not block this write. To edit inherited files, open the parent as the workspace.
 
 `WorkspaceRoutes` exposes workspace command and prompt-template CRUD and expansion through namespaced `fileResources` worker envelopes. `NativeFileResources` loads slash commands with `loadSlashCommands`, templates with `loadPromptTemplates`, and skills with `loadSkills`; expansions use the native slash/template functions and skill prompt builder. Listing and expansion never create a conversation or invoke a model.
 

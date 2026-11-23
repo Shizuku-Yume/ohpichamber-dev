@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseFrontmatter } from '@oh-my-pi/pi-utils';
-import { CommandCatalogStateSchema, FileResourceExpandResultSchema, FileResourceSkillCatalogSchema, PromptTemplateCatalogStateSchema } from '@openchamber/agent-contract';
+import { CommandCatalogStateSchema, FileResourceExpandResultSchema, FileResourceSkillCatalogSchema, PromptTemplateCatalogStateSchema, type ExtensionToggleRequest } from '@openchamber/agent-contract';
 import type { FileResourceOperation } from '../catalogs/file-resources-protocol.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
@@ -14,7 +14,8 @@ import { lookupBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-comma
 import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
 import { createSourceMeta, discoverRuleFromMarkdown } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
 import { TtsrManager } from '@oh-my-pi/pi-coding-agent/export/ttsr';
-import { loadCapability } from '@oh-my-pi/pi-coding-agent/discovery';
+import { initializeWithSettings, loadCapability } from '@oh-my-pi/pi-coding-agent/discovery';
+import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { reset as resetCapabilities } from '@oh-my-pi/pi-coding-agent/capability';
 import { ruleCapability, type Rule } from '@oh-my-pi/pi-coding-agent/capability/rule';
 import { systemPromptCapability, type SystemPrompt } from '@oh-my-pi/pi-coding-agent/capability/system-prompt';
@@ -42,6 +43,7 @@ async function fixture(nested = false) {
     root, cwd, agentDirectory, workers, operation,
     settings: () => catalogs.operation('workspace', { type: 'catalog.settings.read' }),
     extensions: () => catalogs.operation('workspace', { type: 'extensions.read' }),
+    toggleExtension: (request: ExtensionToggleRequest) => catalogs.operation('workspace', { type: 'extensions.toggle', request }),
     updateSettings: (revision: string, changes: Array<{ id: string; value: boolean }>) =>
       catalogs.operation('workspace', { type: 'catalog.settings.write', request: { expectedRevision: revision, changes } }),
     reopen: async () => {
@@ -148,6 +150,35 @@ test('scoped Behavior writes do not shadow inherited OMP system and sticky rules
   expect(outcome).toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
   await expect(h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: 'new.mdc', fields: { alwaysApply: true } } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
   expect(await readdir(h.cwd)).not.toContain('.omp');
+}, 60000);
+
+test('an inherited sticky rule disabled in Extensions does not block a local Behavior write', async () => {
+  const h = await fixture(true);
+  const parent = join(h.root, 'workspace', '.omp');
+  await mkdir(parent);
+  const path = join(parent, 'RULES.md');
+  await writeFile(path, 'Inherited rules.');
+  const initial = await h.extensions();
+  if (initial.type !== 'extensions.inventory') throw new Error('Expected Extensions inventory');
+  const sticky = initial.state.extensions.items.find(item => item.kind === 'rule' && item.name === 'RULES@project');
+  expect(sticky).toMatchObject({ enabled: true, providerId: 'native', toggleable: true });
+  const request = { kind: 'instruction', name: 'new.md', scope: 'workspace' as const, content: 'Use a greeting.', expectedVersion: null };
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, expectedRevision: initial.state.revision } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  const disabled = await h.toggleExtension({
+    providerId: sticky!.providerId, extensionId: sticky!.id, enabled: false, expectedRevision: initial.state.revision,
+  });
+  if (disabled.type !== 'extensions.inventory') throw new Error('Expected Extensions inventory');
+  expect(disabled.state.extensions.items.find(item => item.id === sticky!.id)).toMatchObject({ enabled: false, disabledReason: 'item-disabled' });
+  resetCapabilities();
+  const release = initializeWithSettings(await Settings.init({ cwd: h.cwd, agentDir: h.agentDirectory }));
+  try {
+    const rules = await loadCapability<Rule>(ruleCapability.id, { cwd: h.cwd, agentDir: h.agentDirectory });
+    expect(rules.items.find(item => item.name === 'RULES@project')).toBeUndefined();
+  } finally { release(); }
+  const result = await h.operation({ action: 'behavior.write', request: { ...request, expectedRevision: disabled.state.revision } });
+  if (result.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  expect(result.catalog.files).toMatchObject([{ name: request.name, content: request.content }]);
+  expect(await readFile(path, 'utf8')).toBe('Inherited rules.');
 }, 60000);
 
 test('clearing a Behavior condition removes the native fallback triggers', async () => {
