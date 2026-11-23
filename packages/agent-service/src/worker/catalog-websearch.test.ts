@@ -218,6 +218,24 @@ test('choosing a primary preserves requested fallbacks that followed the old imp
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('replacing a missing primary keeps a fallback ahead of a newly resolved alias', async () => {
+  const { directory, bootstrap } = await fixture();
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    runtime.settings.setModelRole('web', 'vendor/missing');
+    cfgRetryFallbackChains.setEntry(runtime.settings, 'web', ['@web, web/exa:high, web/google']);
+    await runtime.settings.flush();
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    const fallbackProviderIds = ['web/exa'];
+    expect(await search.operation({ type: 'read' })).toMatchObject({
+      state: { selectedProviderId: 'vendor/missing', fallbackProviderIds },
+    });
+    expect(await search.operation({ type: 'update', request: { expectedRevision: '0', selectedProviderId: 'web/tavily', fallbackProviderIds } }))
+      .toMatchObject({ result: { status: 'applied', state: { selectedProviderId: 'web/tavily', fallbackProviderIds } } });
+    expect(cfgRetryFallbackChains.get(runtime.settings).web).toEqual(['web/exa:high, @web, web/google']);
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('an empty native web-role pool reports no selection and rejects new selectors', async () => {
   const { directory, bootstrap } = await fixture();
   const runtime = await openNativeRuntime(bootstrap);
@@ -303,6 +321,25 @@ test('the project fallback reset cannot clear the hidden shared web chain', asyn
       type: 'update', request: { expectedRevision: '0', enabled: true, selectedProviderId, fallbackProviderIds },
     })).toMatchObject({ result: { status: 'applied', state: { selectedProviderId } } });
     expect(runtime.settings.getGlobalSettings().retry).toEqual({ fallbackChains: { web: ['web/exa'] } });
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('changing the primary cannot silently remove a project-owned alias fallback', async () => {
+  const { directory, bootstrap } = await fixture();
+  const projectConfig = 'retry:\n  fallbackChains:\n    web: ["@web", web/exa]\n';
+  const projectPath = join(bootstrap.cwd, '.omp', 'config.yml');
+  await mkdir(join(bootstrap.cwd, '.omp'));
+  await writeFile(projectPath, projectConfig);
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    const fallbackProviderIds = ['web/parallel', 'web/exa'];
+    expect(await search.operation({ type: 'read' })).toMatchObject({ state: { selectedProviderId: null, fallbackProviderIds } });
+    await expect(search.operation({
+      type: 'update', request: { expectedRevision: '0', selectedProviderId: 'web/tavily', fallbackProviderIds },
+    })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+    expect(await readFile(projectPath, 'utf8')).toBe(projectConfig);
+    expect(await search.operation({ type: 'read' })).toMatchObject({ state: { revision: '0', selectedProviderId: null, fallbackProviderIds } });
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 

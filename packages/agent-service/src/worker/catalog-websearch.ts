@@ -7,7 +7,7 @@ import { modelKind } from '@oh-my-pi/pi-catalog/types';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { getRoleInfo, roleCandidatePool } from '@oh-my-pi/pi-coding-agent/config/model-roles';
 import { getGroundedSearchProvider, getSearchProvider, type SearchProvider } from '@oh-my-pi/pi-coding-agent/web/search/provider';
-import { resolveModelRoleValue, resolveRoleChain, formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { resolveModelRoleValue, resolveRoleChain, rolePriorityDefaults, formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { cfgProvidersWebSearchTimeoutSeconds, cfgRetryFallbackChains } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { cfgExaEnabled, cfgExaSearchDelayMs, cfgSearxngCategories, cfgSearxngEndpoint, cfgSearxngEngines, cfgSearxngLanguage, cfgSearxngSafesearch } from '@oh-my-pi/pi-coding-agent/web/settings';
@@ -79,9 +79,26 @@ function providerFor(model: SearchModel): Promise<SearchProvider | undefined> {
   return model.webSearch ? getGroundedSearchProvider(model.webSearch) : Promise.resolve(undefined);
 }
 
-function resolveWebSelector(value: string, settings: Settings, pool: SearchModel[]): string | undefined {
-  const model = resolveModelRoleValue(value, pool, { settings }).model;
+function webPrimaryRoleLookup(settings: Settings, primary: string | null) {
+  return { getModelRole: (role: string) => role === 'web' ? primary ?? undefined : settings.getModelRole(role) };
+}
+
+function resolveWebSelector(
+  value: string, settings: Settings, pool: SearchModel[], roleLookup?: ReturnType<typeof webPrimaryRoleLookup>,
+): string | undefined {
+  const model = resolveModelRoleValue(value, pool, { settings, roleLookup }).model;
   return model ? selector(model) : undefined;
+}
+
+function projectFallbackProviders(
+  chain: string[], primary: string | null, resolve: (value: string) => string | undefined,
+): string[] {
+  const ids = new Set<string>();
+  for (const value of chain) {
+    const id = resolve(value);
+    if (id !== undefined && id !== primary) ids.add(id);
+  }
+  return [...ids];
 }
 
 // The client edits projected provider IDs. Move their native selectors, not
@@ -116,18 +133,23 @@ function editFallbackSelectors(
 function preserveFallbacksAcrossPrimaryChange(
   chain: string[], requested: Set<string>, nextPrimary: string | null, settings: Settings, pool: SearchModel[],
 ): string[] {
-  const nextRoles = { getModelRole: (role: string) => role === 'web' ? nextPrimary ?? undefined : settings.getModelRole(role) };
+  const nextRoles = webPrimaryRoleLookup(settings, nextPrimary);
   return chain.map(value => {
     const current = resolveModelRoleValue(value, pool, { settings });
     if (!current.model) return value;
     const id = selector(current.model);
     if (!requested.has(id)) return value;
-    const next = resolveModelRoleValue(value, pool, { settings, roleLookup: nextRoles });
-    if (next.model && selector(next.model) === id) return value;
+    if (resolveWebSelector(value, settings, pool, nextRoles) === id) return value;
     const pinned = current.explicitThinkingLevel && current.thinkingLevel ? `${id}:${current.thinkingLevel}` : id;
     const patterns = value.split(',');
     const match = patterns.findIndex(pattern => resolveWebSelector(pattern, settings, pool) === id);
     if (match < 0) return value;
+    const earlier = patterns.slice(0, match).findIndex(pattern => resolveWebSelector(pattern, settings, pool, nextRoles) !== undefined);
+    if (earlier >= 0) {
+      patterns.splice(match, 1);
+      patterns.splice(earlier, 0, pinned);
+      return patterns.map(pattern => pattern.trim()).join(', ');
+    }
     patterns[match] = patterns[match].replace(patterns[match].trim(), () => pinned);
     return patterns.join(',');
   });
@@ -202,6 +224,19 @@ export class NativeWebSearch {
         const selectorPool = new Set(pool.map(candidate => selector(candidate)));
         const configuredChain = cfgRetryFallbackChains.get(this.runtime.settings).web;
         const configuredPrimary = this.runtime.settings.getModelRole('web');
+        if (echoesBlockedFallbacks && request.selectedProviderId !== undefined && request.selectedProviderId !== configuredPrimary) {
+          const nextRoles = webPrimaryRoleLookup(this.runtime.settings, request.selectedProviderId);
+          const resolveNext = (value: string) => resolveWebSelector(value, this.runtime.settings, pool, nextRoles);
+          const primary = request.selectedProviderId;
+          const projected = projectFallbackProviders(
+            configuredChain ?? [primary ?? '@web', ...rolePriorityDefaults('web')],
+            primary === null ? null : resolveNext(primary) ?? primary,
+            resolveNext,
+          );
+          if (projected.length !== fallbacks.length || projected.some((id, i) => id !== fallbacks[i])) {
+            throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Changing the primary would change a read-only native fallback chain');
+          }
+        }
         if (configuredPrimary) selectorPool.add(configuredPrimary);
         for (const id of configuredChain ?? []) selectorPool.add(id);
         if (before.selectedProviderId) selectorPool.add(before.selectedProviderId);
@@ -322,11 +357,7 @@ export class NativeWebSearch {
     const ordered = Array.isArray(configuredChain)
       ? configuredChain
       : resolveRoleChain('web', settings, pool).map(candidate => selector(candidate.model));
-    const fallback = ordered.reduce<string[]>((ids, value) => {
-      const resolved = resolveSelector(value);
-      if (resolved !== undefined && resolved !== primary && !ids.includes(resolved)) ids.push(resolved);
-      return ids;
-    }, []);
+    const fallback = projectFallbackProviders(ordered, primary, resolveSelector);
     return WebSearchConfigStateSchema.parse({ workspaceId: this.workspaceId, revision: await this.revision(), enabled: cfgWebSearchEnabled.get(settings), selectedProviderId: primary,
       fallbackProviderIds: fallback, timeoutSeconds: cfgProvidersWebSearchTimeoutSeconds.get(settings), providers });
   }
