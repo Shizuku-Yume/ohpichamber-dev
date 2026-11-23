@@ -1,13 +1,8 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, JsonObjectSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { AgentSchema } from './session.ts';
+import { OmpProviderConfigWriteSchema, PublicEndpointSchema } from './omp-provider-config.ts';
 
-// A provider base URL may carry a query string (Azure's `?api-version=`), but
-// credentials belong in headers: userinfo and fragments stay refused.
-const PublicEndpointSchema = z.url({ protocol: /^https?$/ }).refine((endpoint) => {
-  const url = new URL(endpoint);
-  return url.username === '' && url.password === '' && url.hash === '';
-}, 'Public endpoints contain no embedded credentials or fragments');
 // MCP transports keep refusing query strings so a token cannot ride in a URL.
 const MCPTransportUrlSchema = PublicEndpointSchema.refine(
   (endpoint) => new URL(endpoint).search === '',
@@ -230,11 +225,24 @@ export type ProviderConfiguration = z.infer<typeof ProviderConfigurationSchema>;
 
 export const ProviderConfigureRequestSchema = z.strictObject({
   expectedRevision: CounterSchema,
-  configuration: ProviderConfigurationSchema,
+  configuration: ProviderConfigurationSchema.optional(),
   headers: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().regex(/^[^\r\n]*$/)).optional(),
   models: z.array(ModelSchema).optional(),
-}).refine(request => request.models === undefined || (request.models.every(model => model.provider === request.configuration.providerId)
-  && new Set(request.models.map(model => model.modelId)).size === request.models.length), 'Provider models have unique matching identities');
+  native: OmpProviderConfigWriteSchema.optional(),
+}).refine(
+  request => request.configuration !== undefined || request.native !== undefined,
+  'Provider configure request requires configuration or native payload',
+).refine(
+  request => !request.configuration || !request.native || request.configuration.providerId === request.native.providerId,
+  'Configuration and native provider identities must match',
+).refine(request => {
+  const targetProviderId = request.configuration?.providerId ?? request.native?.providerId;
+  return request.models === undefined || (
+    targetProviderId !== undefined
+    && request.models.every(model => model.provider === targetProviderId)
+    && new Set(request.models.map(model => model.modelId)).size === request.models.length
+  );
+}, 'Provider models have unique matching identities');
 export type ProviderConfigureRequest = z.infer<typeof ProviderConfigureRequestSchema>;
 
 export const ProviderDeleteRequestSchema = z.strictObject({

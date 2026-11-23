@@ -11,7 +11,7 @@ import {
   getBundledModelReferenceIndex, getBundledModels, isGeneratedProvider, resolveModelReference,
   type Model as CatalogModel,
 } from '@oh-my-pi/pi-catalog';
-import { ModelCatalogInfoSchema, type ModelCatalogInfo } from '@openchamber/agent-contract';
+import { ModelCatalogInfoSchema, OmpThinkingConfigSchema, type ModelCatalogInfo } from '@openchamber/agent-contract';
 
 // Keyed by provider id: a provider's bundled rows change only with the pinned
 // package, so one lowercase lookup per provider is built and reused.
@@ -47,6 +47,26 @@ function toCatalogInfo(model: CatalogModel): ModelCatalogInfo | undefined {
     reasoning: model.reasoning || (model.thinking?.efforts.length ?? 0) > 0,
   };
   if (model.supportsTools !== undefined) info.toolsSupported = model.supportsTools;
+  if (model.thinking !== undefined) {
+    const thinkingCandidate: {
+      mode: typeof model.thinking.mode;
+      efforts: typeof model.thinking.efforts[number][];
+      defaultLevel?: typeof model.thinking.defaultLevel;
+      effortMap?: Record<string, string>;
+      supportsDisplay?: boolean;
+      requiresEffort?: boolean;
+    } = {
+      mode: model.thinking.mode,
+      efforts: [...model.thinking.efforts],
+    };
+    if (model.thinking.defaultLevel !== undefined) thinkingCandidate.defaultLevel = model.thinking.defaultLevel;
+    if (model.thinking.effortMap !== undefined) thinkingCandidate.effortMap = { ...model.thinking.effortMap };
+    if (model.thinking.supportsDisplay !== undefined) thinkingCandidate.supportsDisplay = model.thinking.supportsDisplay;
+    if (model.thinking.requiresEffort !== undefined) thinkingCandidate.requiresEffort = model.thinking.requiresEffort;
+    const parsedThinking = OmpThinkingConfigSchema.safeParse(thinkingCandidate);
+    if (parsedThinking.success) info.thinking = parsedThinking.data;
+  }
+  if (model.imageCountBudget !== undefined) info.imageCountBudget = model.imageCountBudget;
   if (model.identity?.family !== undefined) info.family = model.identity.family;
   if (model.isBeta) info.status = 'beta';
   return ModelCatalogInfoSchema.parse(info);

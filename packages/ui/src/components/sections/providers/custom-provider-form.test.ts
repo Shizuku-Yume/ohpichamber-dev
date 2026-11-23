@@ -22,16 +22,19 @@ import {
   markModelFieldTyped,
   matchesDiscoveryFilter,
   staleModelIds,
+  duplicateModelRow,
   isCustomProviderProtocol,
   isValidProviderID,
   modelModalitiesForKind,
   normalizeModelModalities,
+  readCompatBooleanFlag,
+  readCompatMaxTokensField,
+  updateCompatJsonFlag,
   validateCustomProviderForm,
   type CustomProviderTranslator,
 } from './custom-provider-form';
 
 const translate: CustomProviderTranslator = (key) => key;
-
 test('the protocol guard admits only the native provider protocols', () => {
   expect(isCustomProviderProtocol('responses')).toBe(true);
   expect(isCustomProviderProtocol('generate-content')).toBe(true);
@@ -45,13 +48,15 @@ test('discovering only an identity does not invent model limits that can be save
   form.endpoint = 'https://models.example.edu/v1';
   form.models = [createModelRow({ modelId: 'research', name: 'Research' })];
 
-  expect(() => buildCustomProviderRequest(form, '4')).toThrow();
+  const withoutLimits = buildCustomProviderRequest(form, '4').request.native?.models?.[0];
+  expect(withoutLimits?.contextWindow).toBeUndefined();
+  expect(withoutLimits?.maxTokens).toBeUndefined();
 
-  // The user reviews and supplies the missing native execution limits before saving.
+  // The user reviews and supplies limits before saving.
   form.models[0]!.contextWindow = '32768';
   form.models[0]!.maxOutputTokens = '4096';
-  expect(buildCustomProviderRequest(form, '4').request.models?.[0]).toMatchObject({
-    modelId: 'research', contextWindow: 32768, maxOutputTokens: 4096,
+  expect(buildCustomProviderRequest(form, '4').request.native?.models?.[0]).toMatchObject({
+    id: 'research', contextWindow: 32768, maxTokens: 4096,
   });
 });
 
@@ -78,8 +83,17 @@ test('editing provider connection settings preserves reviewed canonical model ca
   form.endpoint = 'https://models.example.edu/v2';
 
   const saved = buildCustomProviderRequest(form, '4');
-  expect(saved.request.configuration.endpoint).toBe(form.endpoint);
-  expect(saved.request.models).toEqual([model]);
+  expect(saved.request.configuration?.endpoint).toBe(form.endpoint);
+  expect(saved.request.native?.models?.[0]).toMatchObject({
+    id: 'research',
+    name: 'Research',
+    input: ['text', 'image'],
+    contextWindow: 32768,
+    maxTokens: 4096,
+    reasoning: true,
+    supportsTools: false,
+    cost: { input: 1, output: 3, cacheRead: 0.1, cacheWrite: 0 },
+  });
 });
 
 test('model controls update only the edited native fields', () => {
@@ -103,11 +117,11 @@ test('model controls update only the edited native fields', () => {
   form.models[0]!.modalities = ['text', 'image'];
   form.models[0]!.toolsSupported = true;
 
-  expect(buildCustomProviderRequest(form, '4').request.models?.[0]).toMatchObject({
-    modalities: ['text', 'image'],
-    toolsSupported: true,
-    reasoningOptions: model.reasoningOptions,
-    pricing: model.pricing,
+  expect(buildCustomProviderRequest(form, '4').request.native?.models?.[0]).toMatchObject({
+    input: ['text', 'image'],
+    supportsTools: true,
+    reasoning: true,
+    cost: { input: 1, output: 3, cacheRead: 0.1, cacheWrite: 0 },
   });
 });
 
@@ -159,7 +173,7 @@ test('the request builder keeps a gateway query string unchanged', () => {
   form.models[0]!.maxOutputTokens = '4096';
 
   expect(validateCustomProviderForm(form, new Set(), false, translate).fields.endpoint).toBeUndefined();
-  expect(buildCustomProviderRequest(form, '4').request.configuration.endpoint)
+  expect(buildCustomProviderRequest(form, '4').request.configuration?.endpoint)
     .toBe('https://res.openai.azure.com/openai/v1?api-version=2024-10-21');
 });
 
@@ -189,7 +203,7 @@ test('audio and embedding chips follow the native kind the writer accepts', () =
   expect(normalizeModelModalities('tts', ['audio'])).toEqual(['text', 'audio']);
 });
 
-test('a tts row keeps audio in the built request', () => {
+test('a tts row keeps its native kind in the built request', () => {
   const form = createEmptyCustomProviderForm();
   form.providerId = 'speech';
   form.name = 'Speech';
@@ -198,10 +212,15 @@ test('a tts row keeps audio in the built request', () => {
   form.models[0]!.name = 'Voice';
   form.models[0]!.contextWindow = '4096';
   form.models[0]!.maxOutputTokens = '1024';
+  form.models[0]!.kind = 'tts';
   form.models[0]!.nativeKind = 'tts';
   form.models[0]!.modalities = ['text', 'audio'];
 
-  expect(buildCustomProviderRequest(form, '4').request.models?.[0]?.modalities).toEqual(['text', 'audio']);
+  expect(buildCustomProviderRequest(form, '4').request.native?.models?.[0]).toMatchObject({
+    id: 'voice',
+    kind: 'tts',
+    input: ['text'],
+  });
 });
 
 test('a row carries the native kind a saved model implies', () => {
@@ -279,19 +298,19 @@ test('a filled value may be refilled, and the label follows the later source', (
   expect(second.models[0]!.filledFrom.maxOutputTokens).toBe('openrouter');
 });
 
-test('new catalog-filled reasoning rows defer selectable levels to the native model', () => {
+test('new catalog-filled reasoning rows preserve reasoning boolean in the native payload', () => {
   const form = createEmptyCustomProviderForm();
   form.providerId = 'campus';
   form.name = 'Campus';
   form.endpoint = 'https://models.example.edu/v1';
   form.models = [createDiscoveredModelRow({ modelId: 'research', name: 'Research', catalog: catalog() })];
-  expect(buildCustomProviderRequest(form, '4').request.models?.[0]).toMatchObject({
-    reasoningEffortSupported: true, reasoningOptions: [], variants: [],
+  expect(buildCustomProviderRequest(form, '4').request.native?.models?.[0]).toMatchObject({
+    reasoning: true,
   });
   const plain = applyModelCatalogInfo([createModelRow({ modelId: 'plain', name: 'Plain' })], new Map([['plain', catalog({ reasoning: false })]]));
   form.models = plain.models;
-  expect(buildCustomProviderRequest(form, '4').request.models?.[0]).toMatchObject({
-    reasoningEffortSupported: false, reasoningOptions: [],
+  expect(buildCustomProviderRequest(form, '4').request.native?.models?.[0]).toMatchObject({
+    reasoning: false,
   });
 });
 
@@ -508,4 +527,57 @@ test('the capped id list hands its remainder to a translated sentence', () => {
   expect(formatAutoFillNoticeModels([], more)).toBe('');
   const ids = Array.from({ length: 13 }, (_, index) => `m${index + 1}`);
   expect(formatAutoFillNoticeModels(ids, more)).toBe(`${ids.slice(0, 10).join(', ')} and 3 more`);
+});
+test('duplicateModelRow copies settings while clearing identity and headers', () => {
+  const source = {
+    ...createModelRow(),
+    modelId: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    api: 'anthropic-messages' as const,
+    baseUrl: 'https://proxy.example/v1',
+    contextWindow: '200000',
+    maxOutputTokens: '16384',
+    thinkingMode: 'anthropic-adaptive' as const,
+    thinkingEfforts: ['low', 'medium', 'high'] as Array<'low' | 'medium' | 'high'>,
+    headerNames: ['X-Secret'],
+    headers: [{ row: 'h1', name: 'X-Custom', value: 'secret' }],
+    compatJson: '{"supportsStore":true}',
+  };
+  const copy = duplicateModelRow(source);
+  expect(copy.row).not.toBe(source.row);
+  expect(copy.modelId).toBe('');
+  expect(copy.name).toBe('');
+  expect(copy.api).toBe('anthropic-messages');
+  expect(copy.baseUrl).toBe('https://proxy.example/v1');
+  expect(copy.contextWindow).toBe('200000');
+  expect(copy.thinkingEfforts).toEqual(['low', 'medium', 'high']);
+  expect(copy.compatJson).toBe('{"supportsStore":true}');
+  expect(copy.headerNames).toEqual([]);
+  expect(copy.headers).toEqual([]);
+  expect(copy.base).toBeUndefined();
+});
+
+test('compat flag helpers round-trip known flags while preserving unknown keys', () => {
+  const initial = '{"customVendorFlag":42,"supportsStore":true}';
+  expect(readCompatBooleanFlag(initial, 'supportsStore')).toBe('true');
+  expect(readCompatBooleanFlag(initial, 'requiresThinkingAsText')).toBe('default');
+  expect(readCompatMaxTokensField(initial)).toBe('');
+
+  const withThinking = updateCompatJsonFlag(initial, 'requiresThinkingAsText', 'false');
+  const withMaxField = updateCompatJsonFlag(withThinking, 'maxTokensField', 'max_tokens');
+  expect(readCompatBooleanFlag(withMaxField, 'requiresThinkingAsText')).toBe('false');
+  expect(readCompatMaxTokensField(withMaxField)).toBe('max_tokens');
+  expect(JSON.parse(withMaxField)).toEqual({
+    customVendorFlag: 42,
+    supportsStore: true,
+    requiresThinkingAsText: false,
+    maxTokensField: 'max_tokens',
+  });
+
+  const cleared = updateCompatJsonFlag(withMaxField, 'supportsStore', 'default');
+  expect(JSON.parse(cleared)).toEqual({
+    customVendorFlag: 42,
+    requiresThinkingAsText: false,
+    maxTokensField: 'max_tokens',
+  });
 });

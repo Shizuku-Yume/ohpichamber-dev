@@ -246,35 +246,9 @@ while discovery runs elsewhere, so the same path would read two different
 files. The server keeps a certificate the form never read
 (`packages/web/server/lib/opencode/DOCUMENTATION.md`, `providers.js`).
 
-"Model defaults from" sets the provider's `canonical`: OpenCode then gives each
-model whose ID that catalog provider also lists its limits, capabilities, costs
-and reasoning levels, under whatever the model row sets itself. The choices are
-every provider in the running OpenCode's integration list, connected or not,
-without MCP sign-ins, web search and well-known logins, which are keyed by their
-origin URL rather than a provider ID (`listCanonicalProviders`), passed in by the
-Providers page, which has already read that list. OpenCode copies the source
-provider's settings, headers and body into this one, so the server refuses a
-source whose config entry sets any of them: a gateway's TLS certificate or
-headers would otherwise go to this provider's endpoint. OpenCode copies from its own
-provider registry, and the models.dev feed OpenChamber fetches is older and
-misses providers OpenCode has, so that feed is not the source. The list has
-a few hundred entries, so `CanonicalProviderPicker` is searchable and mounts rows
-in steps as its end scrolls into view, with a sheet on the phone; None leads the
-unfiltered list. A saved value the list lacks stays as an option, and a list that
-fails to load shows a note and keeps the saved value. None sends null to clear
-it; a stored entry the page could not read sends nothing, so the server keeps it.
-OpenCode cannot unset `canonical` from a higher config layer, so None only removes
-the edited layer's value: when a lower layer sets one (`inheritedCanonical` from
-the source route, carried on the edit form's initial state), the field says which
-provider still applies and in which file, ahead of the note about a list that failed.
+Model rows render collapsed (name, id, explicit or inherited API badge, kind badge, host cue from per-model `baseUrl`, limits, thinking summary, non-text inputs, and Duplicate / Remove actions) so a multi-protocol provider with dozens of models stays scannable. When six or more models are configured, a search input and per-API protocol filter chips appear above the list. A row added by hand or duplicated opens immediately, and a row with a validation error opens on submit. A capability is written only when it is known (a saved model, a catalog answer, or the user's edit); an unknown tool-support value is left out of the request so a save never replaces what the native runner knows with a text-only default.
 
-Model rows render collapsed (name, id, limits, non-text inputs) so a provider
-with dozens of models stays scannable; a row added by hand opens, and a row
-with a validation error opens on submit. A capability is written only when it
-is known (a saved model, a catalog answer, or the user's edit); an unknown
-tool-support value is left out of the request so a save never replaces what
-the native runner knows with a text-only default.
-
+All custom providers and built-in provider overrides edit OMP 19.1 `models.yml` directly through `ProviderConfigureRequest.native`: provider-level `api` is optional (`Per-model (no provider default)` allows mixing protocols such as `openai-responses`, `anthropic-messages`, and `google-generative-ai` under one gateway), `auth` / `authHeader` / `apiKey` status (env/command/literal without leaking secrets) and non-destructive header patching preserve existing `models.yml` secrets, and built-in providers open in `Provider overrides` mode (with `modelOverrides`, endpoint/header/discovery/compat overrides, and `Reset overrides` confirmation) instead of copying their catalog. Per-model advanced settings include structured OpenAI/Bedrock `compat` flags (`supportsStore`, `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsUsageInStreaming`, `requiresThinkingAsText`, `maxTokensField`) synchronized with the raw JSON editor so unknown compat keys are preserved.
 Custom-provider icons are OhPiChamber profile preferences, keyed by provider
 ID. They are not written into OpenCode config because OpenCode has no provider
 icon field. "Default" stores nothing, so the provider's own logo (or the

@@ -221,3 +221,68 @@ test('server refuses toggling shadowed rows and leaves native settings unchanged
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('multiple SSH hosts in a single ssh.json produce unique identities and preserve metadata', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-extensions-ssh-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(join(cwd, '.git'), { recursive: true });
+  await mkdir(join(cwd, '.omp'), { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  await writeFile(join(cwd, '.omp', 'ssh.json'), JSON.stringify({
+    hosts: {
+      alpha: { host: 'alpha.example.test', username: 'deploy', port: 2222, description: 'Alpha box' },
+      beta: { host: 'beta.example.test', username: 'ops', port: 2200, description: 'Beta box' },
+    },
+  }, null, 2));
+
+  const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  try {
+    const inventory = await new NativeExtensions({
+      cwd, agentDirectory, worker, settings, extensionRoots: nativeExtensionRoots(settings),
+    }).readInventory();
+    const sshRows = inventory.items.filter(item => item.kind === 'ssh' && item.providerId === 'ssh-json');
+    expect(sshRows.map(row => row.name).sort()).toEqual(['alpha', 'beta']);
+    expect(new Set(sshRows.map(row => row.id)).size).toBe(2);
+    expect(sshRows.every(row => row.toggleable === false)).toBe(true);
+    expect(sshRows.find(row => row.name === 'alpha')?.metadata).toEqual({
+      host: 'alpha.example.test', username: 'deploy', port: 2222,
+    });
+    expect(sshRows.find(row => row.name === 'beta')?.metadata).toEqual({
+      host: 'beta.example.test', username: 'ops', port: 2200,
+    });
+  } finally {
+    settings.cancelPendingSaves();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('same-path duplicates across user/project scopes and settings.json entries keep unique identities', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-extensions-same-path-'));
+  const cwd = join(root, 'workspace');
+  // Point agentDirectory at <cwd>/.omp so builtin discovery emits the same file at both project and user scope.
+  const agentDirectory = join(cwd, '.omp');
+  await mkdir(join(cwd, '.git'), { recursive: true });
+  await mkdir(join(agentDirectory, 'extensions'), { recursive: true });
+  await writeFile(join(agentDirectory, 'extensions', 'dup.ts'), 'export default function () {}\n');
+  const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  try {
+    // Write settings.json after Settings.loadIsolated (which migrates/removes it) to exercise exact-duplicate emissions.
+    await writeFile(join(agentDirectory, 'settings.json'), JSON.stringify({
+      extensions: ['.omp/extensions/dup.ts'],
+    }, null, 2));
+    const inventory = await new NativeExtensions({
+      cwd, agentDirectory, worker, settings, extensionRoots: nativeExtensionRoots(settings),
+    }).readInventory();
+    const dupRows = inventory.items.filter(item => item.kind === 'extension-module' && item.name === 'dup');
+    expect(dupRows.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(dupRows.map(row => row.id)).size).toBe(dupRows.length);
+    expect(dupRows.filter(row => !row.shadowed)).toHaveLength(1);
+    const shadowed = dupRows.filter(row => row.shadowed);
+    expect(shadowed.length).toBeGreaterThanOrEqual(2);
+    expect(shadowed.every(row => row.enabled === false && row.shadowedBy !== undefined)).toBe(true);
+  } finally {
+    settings.cancelPendingSaves();
+    await rm(root, { recursive: true, force: true });
+  }
+});

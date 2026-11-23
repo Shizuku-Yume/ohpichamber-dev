@@ -36,10 +36,12 @@ const responseRecorder = () => {
   const headers = new Map();
   return { setHeader: (name, value) => headers.set(name.toLowerCase(), value), headers };
 };
-const capabilities = { version: '1.0.0', engine: 'omp', capabilities: {
-  streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false,
-  attachments: false, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true,
-} };
+const capabilities = {
+  version: '1.0.0', engine: 'omp', capabilities: {
+    streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false,
+    attachments: false, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true,
+  }
+};
 let auth;
 let clients;
 let tunnel;
@@ -190,6 +192,15 @@ describe('canonical Host authenticated real-service boundary', () => {
     }
     assertProblem(await request(app).post('/api/agent/v1/workspaces/workspace_1/providers/discover').set('Authorization', `Bearer ${token}`)
       .send({ endpoint: 'https://provider.invalid/v1', protocol: 'responses' }), 403, 'enterprise_mode');
+    assertProblem(await request(app).put('/api/agent/v1/workspaces/workspace_1/providers/CLIProxyAPI/config').set('Authorization', `Bearer ${token}`)
+      .send({
+        expectedRevision: '0',
+        native: {
+          providerId: 'CLIProxyAPI',
+          baseUrl: 'https://proxy.example/v1',
+          models: [{ id: 'gpt-5', api: 'openai-responses' }],
+        },
+      }), 403, 'enterprise_mode');
     expect(requests).toHaveLength(0);
     for (const action of ['status', 'cancel']) await request(app).post(oauth).set('Authorization', `Bearer ${token}`).send({ action, ...identity }).expect(200);
     for (const action of ['select', 'remove', 'label']) await request(app).post('/api/agent/v1/workspaces/workspace_1/providers/stored-provider/accounts')
@@ -248,9 +259,11 @@ describe('canonical Host authenticated real-service boundary', () => {
   });
   it('forwards historical usage only through Host-authorized canonical scopes and rejects path-shaped queries', async () => {
     servicePhase = 'ready';
-    const stats = { range: { from: 1, to: 2 }, sessions: 0, subagents: 0, prompts: 0, steps: 0,
+    const stats = {
+      range: { from: 1, to: 2 }, sessions: 0, subagents: 0, prompts: 0, steps: 0,
       tokens: { input: 0, output: 0, reasoning: null, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0,
-      tools: { mode: 'none' }, activeDays: 0, streak: 0, activity: [], providers: [], models: [], partial: false };
+      tools: { mode: 'none' }, activeDays: 0, streak: 0, activity: [], providers: [], models: [], partial: false
+    };
     requestService = async (url, init) => {
       expect(url).toBe('/internal/usage');
       expect(init.method).toBe('POST');
@@ -298,31 +311,45 @@ describe('canonical Host authenticated real-service boundary', () => {
       const rows = [
         { type: 'session', version: 3, id: `native-${name}`, cwd: privateDir, timestamp: new Date(timestamp).toISOString() },
         { type: 'message', id: userId, parentId: null, timestamp: new Date(timestamp).toISOString(), message: { role: 'user', content: 'Question', timestamp } },
-        { type: 'message', id: assistantId, parentId: userId, timestamp: new Date(timestamp).toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: 'Answer' }], api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason: 'stop', timestamp,
-          usage: { input, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: input + 1, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } } },
+        {
+          type: 'message', id: assistantId, parentId: userId, timestamp: new Date(timestamp).toISOString(), message: {
+            role: 'assistant', content: [{ type: 'text', text: 'Answer' }], api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason: 'stop', timestamp,
+            usage: { input, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: input + 1, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
+          }
+        },
       ];
       fs.writeFileSync(file, rows.map(row => JSON.stringify(row)).join('\n') + '\n');
       return file;
     };
-    const reference = (id, workspaceId, projectId, input) => ({ rootSessionId: id, workspaceId, projectId, cwd: privateDir, agentDirectory,
-      agentDirectoryId: 'usage-agent', sessionsDirectory: sessionDirectory, sessionFile: transcript(id, input), displayPath: '.', createdAt: timestamp, updatedAt: timestamp });
+    const reference = (id, workspaceId, projectId, input) => ({
+      rootSessionId: id, workspaceId, projectId, cwd: privateDir, agentDirectory,
+      agentDirectoryId: 'usage-agent', sessionsDirectory: sessionDirectory, sessionFile: transcript(id, input), displayPath: '.', createdAt: timestamp, updatedAt: timestamp
+    });
     const references = {
       first: reference('first', 'workspace_1', 'project_1', 10), second: reference('second', 'workspace_2', 'project_1', 20),
       foreign: reference('foreign', 'workspace_foreign', 'project_foreign', 900),
     };
     transcript('unregistered', 800);
     const childFile = transcript('native-child', 30);
-    fs.writeFileSync(path.join(state, 'session-references.json'), JSON.stringify({ references, relocations: {}, subagents: {
-      first: [{ subagentId: 'subagent_1', parentSessionId: 'first', childSessionId: 'canonical_child', rootSessionId: 'first',
-        workspaceId: 'workspace_1', projectId: 'project_1', role: 'fixture', status: 'completed', sessionFile: childFile }],
-    } }));
-    const service = createAgentServiceSupervisor({ entrypoint: new URL('../../../../agent-service/src/index.ts', import.meta.url).pathname,
-      dataDir: privateDir, env: { HOME: privateDir, XDG_CONFIG_HOME: path.join(privateDir, 'config'), XDG_DATA_HOME: path.join(privateDir, 'data') }, startupTimeoutMs: 30_000 });
+    fs.writeFileSync(path.join(state, 'session-references.json'), JSON.stringify({
+      references, relocations: {}, subagents: {
+        first: [{
+          subagentId: 'subagent_1', parentSessionId: 'first', childSessionId: 'canonical_child', rootSessionId: 'first',
+          workspaceId: 'workspace_1', projectId: 'project_1', role: 'fixture', status: 'completed', sessionFile: childFile
+        }],
+      }
+    }));
+    const service = createAgentServiceSupervisor({
+      entrypoint: new URL('../../../../agent-service/src/index.ts', import.meta.url).pathname,
+      dataDir: privateDir, env: { HOME: privateDir, XDG_CONFIG_HOME: path.join(privateDir, 'config'), XDG_DATA_HOME: path.join(privateDir, 'data') }, startupTimeoutMs: 30_000
+    });
     try {
       await service.start();
       for (const [workspaceId, projectId] of [['workspace_1', 'project_1'], ['workspace_2', 'project_1'], ['workspace_foreign', 'project_foreign']]) {
-        const registered = await service.request(`/internal/workspaces/${workspaceId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId, cwd: privateDir, agentDirectory, agentDirectoryId: 'usage-agent', env: { HOME: privateDir } }) });
+        const registered = await service.request(`/internal/workspaces/${workspaceId}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, cwd: privateDir, agentDirectory, agentDirectoryId: 'usage-agent', env: { HOME: privateDir } })
+        });
         expect(registered.status).toBe(201);
       }
       servicePhase = 'ready';
@@ -348,11 +375,15 @@ describe('canonical Host authenticated real-service boundary', () => {
         assertProblem(rejected, 400, 'INVALID_REQUEST');
         expect(rejected.text).not.toContain(privateDir);
       }
-      const rejectedScope = await service.request('/internal/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: { ...query, workspaceId: 'workspace_foreign' }, authorizedScopes: [{ workspaceId: 'workspace_1', projectId: 'project_1' }] }) });
+      const rejectedScope = await service.request('/internal/usage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: { ...query, workspaceId: 'workspace_foreign' }, authorizedScopes: [{ workspaceId: 'workspace_1', projectId: 'project_1' }] })
+      });
       expect(rejectedScope.status).toBe(403);
-      const rejectedPath = await service.request('/internal/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: { ...query, path: '~/.omp/stats.db' }, authorizedScopes: [{ workspaceId: 'workspace_1', projectId: 'project_1' }] }) });
+      const rejectedPath = await service.request('/internal/usage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: { ...query, path: '~/.omp/stats.db' }, authorizedScopes: [{ workspaceId: 'workspace_1', projectId: 'project_1' }] })
+      });
       expect(rejectedPath.status).toBe(400);
       expect(await rejectedPath.text()).not.toContain('~/.omp/stats.db');
       fs.writeFileSync(files.second, 'malformed\n');
@@ -449,9 +480,9 @@ describe('canonical Host authenticated real-service boundary', () => {
   it('parses explicit consent and refuses absolute file paths, extra secrets and oversized bodies', async () => {
     servicePhase = 'ready';
     const invalidBodies = [{ ...intent(), consent: false }, { ...intent(), selections: [] }, { ...intent(), intent: 'import-all' },
-      { ...intent(), secret: 'private-marker' }, intent([{ providerId: '/private/auth.json', source: 'stored-credential', credentialType: 'key' }]),
-      intent([{ ...intent().selections[0], key: 'private-marker' }]),
-      intent([{ providerId: 'custom-proxy', source: 'selected-file', credentialType: 'key', file: { path: '/private/auth.json' } }])];
+    { ...intent(), secret: 'private-marker' }, intent([{ providerId: '/private/auth.json', source: 'stored-credential', credentialType: 'key' }]),
+    intent([{ ...intent().selections[0], key: 'private-marker' }]),
+    intent([{ providerId: 'custom-proxy', source: 'selected-file', credentialType: 'key', file: { path: '/private/auth.json' } }])];
     for (const body of invalidBodies) {
       const response = await pairedPreflight(body);
       assertProblem(response, 400, 'INVALID_REQUEST');
@@ -559,8 +590,10 @@ describe('canonical Host authenticated real-service boundary', () => {
     servicePhase = 'ready';
     let markCancelled;
     const cancelled = new Promise(resolve => { markCancelled = resolve; });
-    const event = { type: 'session.status', sessionId: 'session_1', epoch: 'epoch_1', sequence: '1',
-      timestamp: 1, runtimeStatus: 'idle', activeRunId: null };
+    const event = {
+      type: 'session.status', sessionId: 'session_1', epoch: 'epoch_1', sequence: '1',
+      timestamp: 1, runtimeStatus: 'idle', activeRunId: null
+    };
     const wire = `id: epoch_1:1\nevent: session.status\ndata: ${JSON.stringify(event)}\n\n`;
     requestService = async (url, init) => {
       expect(url).toBe('/api/agent/v1/sessions/session_1/events?cursor=epoch_1%3A0');
