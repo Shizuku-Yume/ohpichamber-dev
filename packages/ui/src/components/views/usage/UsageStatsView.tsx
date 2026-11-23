@@ -61,7 +61,7 @@ const RANGE_LABEL_KEYS = {
   all: 'usageStats.range.all',
 } as const satisfies Record<UsageRange, I18nKey>;
 
-function useUsageStats(range: UsageRange, projectDirectory: string | null) {
+function useUsageStats(range: UsageRange, projectDirectory: string | null, settingsReport: boolean) {
   const selectedProvider = useUsageStatsStore((store) => store.selectedProvider);
   const request = React.useMemo(() => ({ range, projectDirectory, providerId: selectedProvider ?? undefined }), [range, projectDirectory, selectedProvider]);
   const entry = useUsageStatsStore((store) => selectUsageStatsEntry(store, request));
@@ -75,6 +75,12 @@ function useUsageStats(range: UsageRange, projectDirectory: string | null) {
   useTodayRollover(range === '1d', reload);
 
   const refresh = React.useCallback(() => void load(request, { force: true }), [load, request]);
+  React.useLayoutEffect(() => {
+    if (!settingsReport) return;
+    return useUsageStatsStore.subscribe((state, previous) => {
+      if (state.settingsRefreshRequest !== previous.settingsRefreshRequest) refresh();
+    });
+  }, [refresh, settingsReport]);
 
   const toolsEntry = useUsageStatsStore((store) => selectUsageToolsEntry(store, request));
   const toolsRequested = useUsageStatsStore((store) => store.toolsRequested);
@@ -109,7 +115,7 @@ export function UsageStatsReport({ renderReport }: {
   const [range, setRange] = React.useState<UsageRange>('30d');
   const [projectChoice, setProjectChoice] = React.useState<string>(ALL_PROJECTS);
   const selectedProject = projects.find((project) => project.id === projectChoice) ?? null;
-  const { entry, refresh, tools } = useUsageStats(range, selectedProject?.path ?? null);
+  const { entry, refresh, tools } = useUsageStats(range, selectedProject?.path ?? null, Boolean(renderReport));
   const timeFormatPreference = useUIStore((store) => store.timeFormatPreference);
   const stats = entry?.stats ?? null;
   const loading = entry?.loading ?? true;
