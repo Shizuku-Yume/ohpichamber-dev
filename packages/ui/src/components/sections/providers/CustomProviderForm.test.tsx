@@ -45,8 +45,8 @@ const formProps = {
   workspaceId: 'ws_test',
   revision: '0',
   existingProviderIDs: new Set<string>(),
-  onSubmit: async () => {},
-  onCancel: () => {},
+  onSubmit: async () => { },
+  onCancel: () => { },
 };
 
 const cleanups: Array<() => void> = [];
@@ -118,4 +118,103 @@ test('found models are reviewed once and added as collapsed rows next to the sav
   expect(added.getAttribute('aria-expanded')).toBe('false');
   expect(added.textContent).toContain('200K');
   expect(buttonByText(container, 'tiny').getAttribute('aria-expanded')).toBe('false');
+});
+test('multi-protocol custom provider shows API badges, protocol filter chips, and duplicates rows', async () => {
+  const multiProvider: ProviderConfigurationRead = {
+    revision: '1',
+    configuration: {
+      providerId: 'CLIProxyAPI',
+      name: 'CLIProxyAPI',
+      endpoint: 'https://proxy.example/v1',
+      protocol: 'chat-completions',
+      credentialRef: null,
+    },
+    native: {
+      providerId: 'CLIProxyAPI',
+      isBuiltIn: false,
+      hasNativeEntry: true,
+      effectiveBaseUrl: 'https://proxy.example/v1',
+      effectiveApi: 'openai-completions',
+      name: 'CLIProxyAPI',
+      baseUrl: 'https://proxy.example/v1',
+      configApiKey: { configured: false },
+      headerNames: [],
+      disableStrictTools: false,
+      models: [
+        { id: 'gpt-5', name: 'GPT-5', api: 'openai-responses', input: ['text'], headerNames: [] },
+        { id: 'claude-4', name: 'Claude 4', api: 'anthropic-messages', input: ['text'], headerNames: [] },
+        { id: 'gemini-3', name: 'Gemini 3', api: 'google-generative-ai', input: ['text'], headerNames: [] },
+        { id: 'qwen-3', name: 'Qwen 3', api: 'openai-completions', input: ['text'], headerNames: [] },
+        { id: 'deepseek-4', name: 'DeepSeek 4', input: ['text'], headerNames: [] },
+        { id: 'kimi-k2', name: 'Kimi K2', input: ['text'], headerNames: [] },
+      ],
+      modelOverrides: {},
+    },
+    models: [],
+    headerNames: [],
+    imageModels: [],
+  };
+
+  const container = await render(
+    <CustomProviderForm {...formProps} initial={multiProvider} />,
+  );
+
+  expect(container.querySelector('input[aria-label="Filter configured models..."]')).not.toBeNull();
+  const anthropicChip = buttonByText(container, 'anthropic-messages (1)');
+  await act(async () => anthropicChip.click());
+  expect(container.textContent).toContain('Claude 4');
+  expect(container.textContent).not.toContain('GPT-5');
+
+  await act(async () => buttonByText(container, 'All (6)').click());
+  expect(container.textContent).toContain('GPT-5');
+
+  const duplicateButtons = container.querySelectorAll('button[aria-label="Duplicate model"]');
+  expect(duplicateButtons.length).toBe(6);
+  await act(async () => (duplicateButtons[0] as HTMLButtonElement).click());
+  expect(container.textContent).toContain('New model');
+});
+
+test('built-in provider renders overrides mode with reset overrides action', async () => {
+  let resetCalled = 0;
+  const builtInProvider: ProviderConfigurationRead = {
+    revision: '2',
+    configuration: null,
+    native: {
+      providerId: 'openai',
+      isBuiltIn: true,
+      hasNativeEntry: true,
+      effectiveBaseUrl: 'https://api.openai.com/v1',
+      effectiveApi: 'openai-responses',
+      baseUrl: 'https://proxy.openai.example/v1',
+      configApiKey: { configured: true, source: 'env', envVar: 'OPENAI_PROXY_KEY' },
+      headerNames: [],
+      disableStrictTools: false,
+      models: [],
+      modelOverrides: {
+        'gpt-5': {
+          contextWindow: 400000,
+          headerNames: [],
+        },
+      },
+    },
+    models: [],
+    headerNames: [],
+    imageModels: [],
+  };
+
+  const container = await render(
+    <CustomProviderForm
+      {...formProps}
+      initial={builtInProvider}
+      onResetOverrides={async () => {
+        resetCalled += 1;
+      }}
+    />,
+  );
+
+  expect(container.textContent).toContain('Provider overrides');
+  expect(container.textContent).toContain('Using environment variable OPENAI_PROXY_KEY');
+  expect(container.textContent).toContain('Reset overrides');
+  expect(container.textContent).not.toContain('Delete provider');
+  expect(resetCalled).toBe(0);
 });

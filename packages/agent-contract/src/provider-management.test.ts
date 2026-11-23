@@ -1,11 +1,15 @@
 import { expect, test } from 'bun:test';
 import {
+  OMP_MODEL_APIS, OMP_PROVIDER_APIS,
+  OmpModelDefinitionReadSchema, OmpModelDefinitionWriteSchema,
+  OmpModelOverrideReadSchema, OmpProviderConfigReadSchema, OmpProviderConfigWriteSchema,
   ProviderAccountSchema, ProviderAccountsSchema, ProviderAccountMutationRequestSchema,
   ProviderOAuthMethodsSchema, ProviderOAuthRequestSchema, ProviderOAuthResultSchema,
   ProviderModelDiscoveryRequestSchema, ProviderModelDiscoveryResultSchema,
   ModelCatalogInfoSchema, ProviderModelEnrichRequestSchema, ProviderModelEnrichResultSchema,
   ProviderHeaderWriteSchema, ProviderConfigurationReadSchema,
 } from './provider-management.ts';
+import { ProviderConfigureRequestSchema } from './catalogs.ts';
 
 const account = { credentialRef: 'credential_opaque', method: 'oauth', label: 'Work', email: 'local@example.test', accountId: 'account_local', active: true, disabled: false };
 const flow = { flowId: 'flow_local', generation: 'generation_local', providerId: 'models_local', revision: '7', status: 'pending', manualInput: true, authorizationUrl: 'http://127.0.0.1:18080/authorize?state=opaque', prompt: 'Paste callback' };
@@ -135,4 +139,90 @@ test('enrichment results keep unknown ids as bare entries', () => {
   expect(ProviderModelEnrichResultSchema.parse(result)).toEqual(result);
   expect(ProviderModelEnrichResultSchema.safeParse({ models: [{ modelId: 'ok', name: 'Extra' }] }).success).toBe(false);
   expect(ProviderModelEnrichResultSchema.safeParse({ models: [{ modelId: 'ok', catalog: { ...catalog, source: 'openrouter', input: ['audio'] } }] }).success).toBe(false);
+});
+test('OMP provider and model config contracts enforce all 19.0.0 APIs, refinements, and secret redaction', () => {
+  expect(OMP_PROVIDER_APIS).toHaveLength(16);
+  expect(OMP_MODEL_APIS).toHaveLength(24);
+
+  const readNative = {
+    providerId: 'CLIProxyAPI',
+    isBuiltIn: false,
+    hasNativeEntry: true,
+    baseUrl: 'https://proxy.example/v1',
+    configApiKey: { configured: true as const, source: 'command' as const },
+    headerNames: ['X-Gateway-Secret'],
+    models: [
+      {
+        id: 'gpt-5.4',
+        api: 'openai-codex-responses' as const,
+        kind: 'chat' as const,
+        baseUrl: 'https://proxy.example/codex/v1',
+        preferWebsockets: true,
+        compat: { supportsStore: true },
+        imageCountBudget: 4,
+        contextWindow: 200000,
+        maxContextWindow: 1000000,
+        maxTokens: 32000,
+        thinking: {
+          mode: 'effort' as const,
+          efforts: ['low' as const, 'medium' as const, 'high' as const, 'xhigh' as const],
+          defaultLevel: 'high' as const,
+          supportsDisplay: true,
+        },
+        headerNames: ['X-Model-Secret'],
+      },
+    ],
+    modelOverrides: {
+      'gpt-5.4': {
+        omitMaxOutputTokens: true,
+        headerNames: ['X-Override-Secret'],
+      },
+    },
+  };
+  expect(OmpProviderConfigReadSchema.parse(readNative)).toMatchObject(readNative);
+
+  // Raw secrets stay banned from read contracts.
+  expect(OmpProviderConfigReadSchema.safeParse({ ...readNative, apiKey: 'sk-secret' }).success).toBe(false);
+  expect(OmpProviderConfigReadSchema.safeParse({ ...readNative, headers: { Authorization: 'Bearer secret' } }).success).toBe(false);
+  expect(OmpModelDefinitionReadSchema.safeParse({ ...readNative.models[0], headers: { Authorization: 'secret' } }).success).toBe(false);
+  expect(OmpModelOverrideReadSchema.safeParse({ ...readNative.modelOverrides['gpt-5.4'], headers: { Authorization: 'secret' } }).success).toBe(false);
+
+  // maxContextWindow >= contextWindow refinement
+  expect(OmpModelDefinitionWriteSchema.safeParse({ id: 'm1', contextWindow: 128000, maxContextWindow: 64000 }).success).toBe(false);
+  expect(OmpModelDefinitionWriteSchema.safeParse({ id: 'm1', contextWindow: 128000, maxContextWindow: 256000 }).success).toBe(true);
+
+  // Discovery refinements
+  expect(OmpProviderConfigWriteSchema.safeParse({
+    providerId: 'p1',
+    discovery: { type: 'ollama', injectV1: true },
+  }).success).toBe(false);
+  expect(OmpProviderConfigWriteSchema.safeParse({
+    providerId: 'p1',
+    discovery: { type: 'ollama', advertisedReasoning: true },
+  }).success).toBe(false);
+  expect(OmpProviderConfigWriteSchema.safeParse({
+    providerId: 'p1',
+    discovery: { type: 'openai-models-list', injectV1: true, advertisedReasoning: true },
+  }).success).toBe(true);
+
+  // ProviderConfigureRequest accepts native-only and rejects mismatched IDs or empty requests.
+  expect(ProviderConfigureRequestSchema.safeParse({
+    expectedRevision: '1',
+    native: { providerId: 'CLIProxyAPI', baseUrl: 'https://proxy.example/v1' },
+  }).success).toBe(true);
+  expect(ProviderConfigureRequestSchema.safeParse({ expectedRevision: '1' }).success).toBe(false);
+  expect(ProviderConfigureRequestSchema.safeParse({
+    expectedRevision: '1',
+    configuration: { providerId: 'p1', name: 'P1', endpoint: 'https://p1.example/v1', protocol: 'chat-completions', credentialRef: null },
+    native: { providerId: 'p2' },
+  }).success).toBe(false);
+
+  // Discovery supports nativeApi without legacy protocol.
+  expect(ProviderModelDiscoveryRequestSchema.safeParse({
+    endpoint: 'https://proxy.example/v1',
+    nativeApi: 'anthropic-messages',
+  }).success).toBe(true);
+  expect(ProviderModelDiscoveryRequestSchema.safeParse({
+    endpoint: 'https://proxy.example/v1',
+  }).success).toBe(false);
 });

@@ -1023,7 +1023,9 @@ test('bundled catalog metadata fills a known model id from the provider rows', a
       catalog: {
         source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1050000, maxTokens: 128000,
         cost: { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
-        reasoning: true, family: 'gpt',
+        reasoning: true,
+        thinking: { mode: 'effort', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+        family: 'gpt',
       },
     }]);
   } finally { await fixture.close(); }
@@ -1038,7 +1040,9 @@ test('proxy reference matching resolves a bracket-affixed model id', async () =>
       catalog: {
         source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1000000, maxTokens: 128000,
         cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-        reasoning: true, family: 'opus',
+        reasoning: true,
+        thinking: { mode: 'anthropic-adaptive', efforts: ['low', 'medium', 'high', 'max'] },
+        family: 'opus',
       },
     }]);
   } finally { await fixture.close(); }
@@ -1284,5 +1288,249 @@ test('unrefreshed ModelRegistry hydrates credential-scoped SQLite model cache on
     unrefreshedAuth.close();
     unrefreshedSettings.cancelPendingSaves();
     await rm(root, { recursive: true, force: true });
+  }
+});
+test('lossless OMP 19.0.0 native provider round-trip preserves multi-protocol models, secrets, overrides, and built-in overrides', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    process.env.OHPICHAMBER_TEST_GATEWAY_KEY = 'env-secret-value';
+    const rawModelsYaml = [
+      'providers:',
+      '  CLIProxyAPI:',
+      '    baseUrl: https://proxy.example/v1',
+      '    apiKey: OHPICHAMBER_TEST_GATEWAY_KEY',
+      '    authHeader: true',
+      '    headers:',
+      '      X-Gateway-Token: "!echo gateway-cmd-token"',
+      '    discovery:',
+      '      type: proxy',
+      '      timeoutMs: 8000',
+      '      advertisedReasoning: true',
+      '    compat:',
+      '      supportsStore: true',
+      '      maxTokensField: max_completion_tokens',
+      '    disableStrictTools: true',
+      '    guardrailIdentifier: gr-123',
+      '    guardrailVersion: DRAFT',
+      '    guardrailTrace: enabled',
+      '    requestMetadata:',
+      '      team: core',
+      '    remoteCompaction:',
+      '      enabled: true',
+      '      api: openai-responses',
+      '      endpoint: https://compact.example/v1/compact',
+      '    transport: pi-native',
+      '    models:',
+      '      - id: gpt-5.4',
+      '        name: GPT 5.4',
+      '        api: openai-codex-responses',
+      '        kind: chat',
+      '        baseUrl: https://proxy.example/codex',
+      '        preferWebsockets: true',
+      '        compat:',
+      '          supportsStore: false',
+      '        imageCountBudget: 4',
+      '        contextWindow: 200000',
+      '        maxContextWindow: 1000000',
+      '        maxTokens: 32000',
+      '        supportsTools: true',
+      '        reasoning: true',
+      '        thinking:',
+      '          mode: effort',
+      '          efforts:',
+      '            - low',
+      '            - medium',
+      '            - high',
+      '            - xhigh',
+      '          defaultLevel: high',
+      '          supportsDisplay: true',
+      '        cost:',
+      '          input: 2.5',
+      '          output: 10',
+      '          cacheRead: 0.25',
+      '          cacheWrite: 1.25',
+      '        headers:',
+      '          X-Model-Auth: secret-model-header',
+      '      - id: claude-sonnet-4-6',
+      '        api: anthropic-messages',
+      '        thinking:',
+      '          mode: anthropic-adaptive',
+      '          efforts:',
+      '            - low',
+      '            - high',
+      '            - max',
+      '          supportsDisplay: true',
+      '      - id: gpt-image-1.5',
+      '        api: openai-images',
+      '        kind: image',
+      '        supportsTools: false',
+      '      - id: deepseek-r1',
+      '        api: openai-completions',
+      '        thinking:',
+      '          mode: effort',
+      '          efforts:',
+      '            - low',
+      '            - high',
+      '          effortMap:',
+      '            low: low',
+      '            high: high',
+      '          requiresEffort: true',
+      '    modelOverrides:',
+      '      gpt-5.4:',
+      '        omitMaxOutputTokens: true',
+      '        headers:',
+      '          X-Override-Key: secret-override-header',
+      '  openai:',
+      '    modelOverrides:',
+      '      gpt-5.6:',
+      '        contextWindow: 400000',
+      '        maxContextWindow: 1000000',
+      '  bedrock-custom:',
+      '    api: bedrock-converse-stream',
+      '    baseUrl: https://bedrock-runtime.example',
+      '    auth: none',
+      '    guardrailIdentifier: gr-bedrock',
+      '    models:',
+      '      - id: anthropic.claude-sonnet',
+      '  typesafe-custom:',
+      '    api: typesafe',
+      '    baseUrl: https://typesafe.example/v1',
+      '    auth: none',
+      '    models:',
+      '      - id: judge-model',
+      '',
+    ].join('\n');
+    await writeFile(fixture.writer.modelsPath, rawModelsYaml, 'utf8');
+
+    // Read multi-protocol provider with omitted provider-level api without failing.
+    const readGateway = await fixture.reader.models.readProviderConfiguration('CLIProxyAPI', '1');
+    expect(readGateway.configuration).toMatchObject({ providerId: 'CLIProxyAPI', endpoint: 'https://proxy.example/v1' });
+    // Read provider whose protocol is outside the legacy 4-protocol enum (configuration is null, native succeeds).
+    const readBedrock = await fixture.reader.models.readProviderConfiguration('bedrock-custom', '1');
+    expect(readBedrock.native).toMatchObject({
+      providerId: 'bedrock-custom',
+      api: 'bedrock-converse-stream',
+      guardrailIdentifier: 'gr-bedrock',
+    });
+    const readTypesafe = await fixture.reader.models.readProviderConfiguration('typesafe-custom', '1');
+    expect(readTypesafe.configuration).toBeNull();
+    expect(readTypesafe.native).toMatchObject({
+      providerId: 'typesafe-custom',
+      api: 'typesafe',
+    });
+    expect(readGateway.native?.providerId).toBe('CLIProxyAPI');
+    expect(readGateway.native?.isBuiltIn).toBe(false);
+    expect(readGateway.native?.configApiKey).toEqual({ configured: true, source: 'env', envVar: 'OHPICHAMBER_TEST_GATEWAY_KEY' });
+    expect(readGateway.native?.headerNames).toEqual(['X-Gateway-Token']);
+    expect(readGateway.native?.models).toHaveLength(4);
+    expect(readGateway.native?.models[0]).toMatchObject({
+      id: 'gpt-5.4',
+      api: 'openai-codex-responses',
+      baseUrl: 'https://proxy.example/codex',
+      preferWebsockets: true,
+      compat: { supportsStore: false },
+      imageCountBudget: 4,
+      maxContextWindow: 1000000,
+      headerNames: ['X-Model-Auth'],
+    });
+    expect(readGateway.native?.models[2]).toMatchObject({ id: 'gpt-image-1.5', api: 'openai-images', kind: 'image', supportsTools: false });
+    expect(readGateway.native?.modelOverrides['gpt-5.4']).toMatchObject({
+      omitMaxOutputTokens: true,
+      headerNames: ['X-Override-Key'],
+    });
+    expect(JSON.stringify(readGateway)).not.toContain('gateway-cmd-token');
+    expect(JSON.stringify(readGateway)).not.toContain('secret-model-header');
+    expect(JSON.stringify(readGateway)).not.toContain('secret-override-header');
+    expect(JSON.stringify(readGateway)).not.toContain('env-secret-value');
+
+    // Save via native payload without touching apiKey or model/override headers -> preserves all secrets and fields.
+    await fixture.writer.models.configureProvider({
+      expectedRevision: '1',
+      native: {
+        providerId: 'CLIProxyAPI',
+        name: 'CLI Proxy Gateway',
+        baseUrl: 'https://proxy.example/v1',
+        headersPatch: { set: { 'X-Extra-Header': 'enabled' } },
+        models: [
+          {
+            id: 'gpt-5.4',
+            name: 'GPT 5.4',
+            api: 'openai-codex-responses',
+            kind: 'chat',
+            baseUrl: 'https://proxy.example/codex',
+            preferWebsockets: true,
+            compat: { supportsStore: false },
+            imageCountBudget: 4,
+            contextWindow: 200000,
+            maxContextWindow: 1000000,
+            maxTokens: 32000,
+            supportsTools: true,
+            reasoning: true,
+            thinking: { mode: 'effort', efforts: ['low', 'medium', 'high', 'xhigh'], defaultLevel: 'high', supportsDisplay: true },
+            cost: { input: 2.5, output: 10, cacheRead: 0.25, cacheWrite: 1.25 },
+          },
+          {
+            id: 'claude-sonnet-4-6',
+            api: 'anthropic-messages',
+            thinking: { mode: 'anthropic-adaptive', efforts: ['low', 'high', 'max'], supportsDisplay: true },
+          },
+          { id: 'gpt-image-1.5', api: 'openai-images', kind: 'image', supportsTools: false },
+          {
+            id: 'deepseek-r1',
+            api: 'openai-completions',
+            thinking: { mode: 'effort', efforts: ['low', 'high'], effortMap: { low: 'low', high: 'high' }, requiresEffort: true },
+          },
+        ],
+        modelOverrides: {
+          'gpt-5.4': { omitMaxOutputTokens: true },
+        },
+      },
+    }, '2');
+
+    const persistedYaml = YAML.parse(await readFile(fixture.writer.modelsPath, 'utf8'));
+    expect(persistedYaml.providers.CLIProxyAPI.apiKey).toBe('OHPICHAMBER_TEST_GATEWAY_KEY');
+    expect(persistedYaml.providers.CLIProxyAPI.headers).toEqual({
+      'X-Gateway-Token': '!echo gateway-cmd-token',
+      'X-Extra-Header': 'enabled',
+    });
+    expect(persistedYaml.providers.CLIProxyAPI.discovery).toEqual({
+      type: 'proxy',
+      timeoutMs: 8000,
+      advertisedReasoning: true,
+    });
+    expect(persistedYaml.providers.CLIProxyAPI.guardrailIdentifier).toBe('gr-123');
+    expect(persistedYaml.providers.CLIProxyAPI.remoteCompaction).toEqual({
+      enabled: true,
+      api: 'openai-responses',
+      endpoint: 'https://compact.example/v1/compact',
+    });
+    expect(persistedYaml.providers.CLIProxyAPI.transport).toBe('pi-native');
+    expect(persistedYaml.providers.CLIProxyAPI.models[0].headers).toEqual({ 'X-Model-Auth': 'secret-model-header' });
+    expect(persistedYaml.providers.CLIProxyAPI.models[0].api).toBe('openai-codex-responses');
+    expect(persistedYaml.providers.CLIProxyAPI.models[0].baseUrl).toBe('https://proxy.example/codex');
+    expect(persistedYaml.providers.CLIProxyAPI.models[0].preferWebsockets).toBe(true);
+    expect(persistedYaml.providers.CLIProxyAPI.models[2].kind).toBe('image');
+    expect(persistedYaml.providers.CLIProxyAPI.modelOverrides['gpt-5.4'].headers).toEqual({ 'X-Override-Key': 'secret-override-header' });
+    expect(persistedYaml.providers.openai.modelOverrides['gpt-5.6']).toEqual({ contextWindow: 400000, maxContextWindow: 1000000 });
+
+    // Built-in override-only provider reads cleanly without dumping bundled models and clears cleanly when emptied.
+    const readOpenAi = await fixture.reader.models.readProviderConfiguration('openai', '2');
+    expect(readOpenAi.native?.isBuiltIn).toBe(true);
+    expect(readOpenAi.native?.hasNativeEntry).toBe(true);
+    expect(readOpenAi.native?.models).toEqual([]);
+    expect(readOpenAi.native?.modelOverrides['gpt-5.6']).toMatchObject({ contextWindow: 400000, maxContextWindow: 1000000 });
+
+    await fixture.writer.models.configureProvider({
+      expectedRevision: '2',
+      native: {
+        providerId: 'openai',
+        modelOverrides: {},
+      },
+    }, '3');
+    const afterClearYaml = YAML.parse(await readFile(fixture.writer.modelsPath, 'utf8'));
+    expect(afterClearYaml.providers.openai).toBeUndefined();
+  } finally {
+    delete process.env.OHPICHAMBER_TEST_GATEWAY_KEY;
+    await fixture.close();
   }
 });

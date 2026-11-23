@@ -83,6 +83,8 @@ interface ProviderDetailProps {
   authFailureHint: string | null;
   onRefresh: () => Promise<void>;
   onSave: (plan: CustomProviderPersistPlan) => Promise<void>;
+  onDeleteProvider: (providerId: string) => Promise<void>;
+  onResetOverrides: (providerId: string) => Promise<void>;
   onClearAuthFailure: () => void;
   applyLogoPlan: (providerId: string, plan: CustomProviderLogoPlan) => Promise<void>;
   logoBusyId: string | null;
@@ -103,6 +105,8 @@ function ProviderDetail({
   authFailureHint,
   onRefresh,
   onSave,
+  onDeleteProvider,
+  onResetOverrides,
   onClearAuthFailure,
   applyLogoPlan,
   logoBusyId,
@@ -272,7 +276,8 @@ function ProviderDetail({
   if (!detail) {
     return <p role="status" className="typography-meta text-muted-foreground">{t('settings.providers.page.state.loading')}</p>;
   }
-  if (editing && detail.configuration && !enterprise) {
+  const canEditConfiguration = Boolean((detail.configuration?.native || detail.configuration?.configuration) && !enterprise);
+  if (editing && detail.configuration && canEditConfiguration) {
     return (
       <CustomProviderForm
         key={`${provider.providerId}:${detail.configuration.revision}`}
@@ -289,6 +294,14 @@ function ProviderDetail({
           setEditing(false);
         }}
         onDisconnect={accounts.length > 0 ? () => void disconnectCredentials() : undefined}
+        onDeleteProvider={!detail.configuration.native?.isBuiltIn ? async () => {
+          await onDeleteProvider(provider.providerId);
+          setEditing(false);
+        } : undefined}
+        onResetOverrides={detail.configuration.native?.isBuiltIn && detail.configuration.native?.hasNativeEntry ? async () => {
+          await onResetOverrides(provider.providerId);
+          setEditing(false);
+        } : undefined}
       />
     );
   }
@@ -312,7 +325,7 @@ function ProviderDetail({
         divider={false}
         headerAction={(
           <div className="flex items-center gap-1">
-            {detail.configuration && !enterprise ? (
+            {canEditConfiguration ? (
               <Button
                 variant="outline"
                 size="xs"
@@ -722,7 +735,7 @@ export const ProvidersPage: React.FC = () => {
     if (!state.workspaceId || !current || enterprise || busy) throw new Error('Provider settings are not writable');
     const workspaceId = state.workspaceId;
     const runtime = getRuntimeKey();
-    const providerId = plan.request.configuration.providerId;
+    const providerId = plan.providerId;
     setBusy(true);
     try {
       let result: ProviderMutationResult;
@@ -771,7 +784,65 @@ export const ProvidersPage: React.FC = () => {
       if (runtime !== getRuntimeKey() || store.getState().workspaceId !== workspaceId) return;
       setSelected(result.providerId);
       if (keyFailed) toast.error(t('settings.providers.page.custom.authFailure.keyAfterConfig'));
-      else toast.success(t('settings.providers.page.toast.customProviderSaved', { provider: plan.request.configuration.name }));
+      else toast.success(t('settings.providers.page.toast.customProviderSaved', { provider: plan.providerName }));
+    } finally {
+      if (runtime === getRuntimeKey()) setBusy(false);
+    }
+  };
+
+  const deleteCustomProvider = async (providerId: string) => {
+    if (!state.workspaceId || !current || enterprise || busy) throw new Error('Provider settings are not writable');
+    const workspaceId = state.workspaceId;
+    const runtime = getRuntimeKey();
+    const expectedRevision = state.providers?.revision ?? '0';
+    setBusy(true);
+    try {
+      await canonicalClient.deleteProvider(workspaceId, providerId, {
+        expectedRevision,
+        providerId,
+      });
+      if (runtime !== getRuntimeKey() || store.getState().workspaceId !== workspaceId) return;
+      setPartialProvider(null);
+      setCandidate('');
+      setSelected('');
+      await store.getState().refresh();
+    } finally {
+      if (runtime === getRuntimeKey()) setBusy(false);
+    }
+  };
+
+  const resetBuiltInOverrides = async (providerId: string) => {
+    if (!state.workspaceId || !current || enterprise || busy) throw new Error('Provider settings are not writable');
+    const workspaceId = state.workspaceId;
+    const runtime = getRuntimeKey();
+    const expectedRevision = state.providers?.revision ?? '0';
+    setBusy(true);
+    try {
+      await canonicalClient.configureProvider(workspaceId, providerId, {
+        expectedRevision,
+        native: {
+          providerId,
+          baseUrl: null,
+          api: null,
+          configApiKey: null,
+          auth: null,
+          authHeader: null,
+          headers: {},
+          compat: null,
+          disableStrictTools: null,
+          transport: null,
+          guardrailIdentifier: null,
+          guardrailVersion: null,
+          guardrailTrace: null,
+          requestMetadata: null,
+          discovery: null,
+          remoteCompaction: null,
+          models: [],
+          modelOverrides: {},
+        },
+      });
+      if (runtime !== getRuntimeKey() || store.getState().workspaceId !== workspaceId) return;
+      await store.getState().refresh();
     } finally {
       if (runtime === getRuntimeKey()) setBusy(false);
     }
@@ -976,6 +1047,8 @@ export const ProvidersPage: React.FC = () => {
             : null}
           onRefresh={state.refresh}
           onSave={saveCustomProvider}
+          onDeleteProvider={deleteCustomProvider}
+          onResetOverrides={resetBuiltInOverrides}
           onClearAuthFailure={() => setPartialProvider(null)}
           applyLogoPlan={applyLogoPlan}
           logoBusyId={logoBusyId}

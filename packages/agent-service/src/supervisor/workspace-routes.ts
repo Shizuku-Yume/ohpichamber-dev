@@ -392,7 +392,12 @@ export class WorkspaceRoutes {
       } else return null;
     } else if (route[2] === 'providers' && entity !== undefined) {
       if (route[4] === 'config' && item === undefined && request.method === 'PUT') {
-        const body = await readBody(request, ProviderConfigureRequestSchema); match(body.configuration.providerId, entity);
+        const body = await readBody(request, ProviderConfigureRequestSchema);
+        const targetProviderId = body.native?.providerId ?? body.configuration?.providerId;
+        if (!targetProviderId) {
+          throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The provider configuration is missing a provider identity');
+        }
+        match(targetProviderId, entity);
         operation = { type: 'catalog.provider.configure', request: body };
       } else if (route[4] === undefined && request.method === 'DELETE') {
         const body = await readBody(request, ProviderDeleteRequestSchema); match(body.providerId, entity);

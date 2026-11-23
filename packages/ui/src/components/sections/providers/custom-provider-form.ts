@@ -1,25 +1,142 @@
-
-import { ModelSchema, ProviderConfigureRequestSchema, ProviderModelDiscoveryRequestSchema } from '@openchamber/agent-contract';
-import type { Model, ModelCatalogInfo, ModelInfoSource, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
+import {
+  JsonObjectSchema,
+  OMP_BEDROCK_GUARDRAIL_TRACES,
+  OMP_DISCOVERY_TYPES,
+  OMP_MODEL_APIS,
+  OMP_MODEL_KINDS,
+  OMP_MODEL_TOKENIZERS,
+  OMP_PROVIDER_APIS,
+  OMP_PROVIDER_AUTH_MODES,
+  OMP_THINKING_EFFORTS,
+  OMP_THINKING_MODES,
+  OmpModelDefinitionWriteSchema,
+  OmpModelOverrideWriteSchema,
+  OmpProviderConfigWriteSchema,
+  ProviderConfigureRequestSchema,
+  ProviderModelDiscoveryRequestSchema,
+  type JsonObject,
+  type Model,
+  type ModelCatalogInfo,
+  type ModelInfoSource,
+  type OmpBedrockGuardrailTrace,
+  type OmpConfigApiKeyStatus,
+  type OmpDiscoveryType,
+  type OmpHeadersPatch,
+  type OmpModelApi,
+  type OmpModelDefinitionRead,
+  type OmpModelDefinitionWrite,
+  type OmpModelKind,
+  type OmpModelOverrideRead,
+  type OmpModelOverrideWrite,
+  type OmpModelTokenizer,
+  type OmpProviderApi,
+  type OmpProviderAuthMode,
+  type OmpThinkingConfig,
+  type OmpThinkingEffort,
+  type OmpThinkingMode,
+  type ProviderConfigurationRead,
+  type ProviderConfigureRequest,
+  type ProviderModelDiscoveryRequest,
+  type ProviderModelDiscoveryResult,
+} from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import type { CustomProviderIcon } from '@/lib/customProviderIcons';
 
+export {
+  OMP_BEDROCK_GUARDRAIL_TRACES,
+  OMP_DISCOVERY_TYPES,
+  OMP_MODEL_APIS,
+  OMP_MODEL_KINDS,
+  OMP_MODEL_TOKENIZERS,
+  OMP_PROVIDER_APIS,
+  OMP_PROVIDER_AUTH_MODES,
+  OMP_THINKING_EFFORTS,
+  OMP_THINKING_MODES,
+};
+
 export const CUSTOM_PROVIDER_ID = '__custom_provider__';
-export const CUSTOM_PROVIDER_PROTOCOLS = ['chat-completions', 'responses', 'messages', 'generate-content'] as const;
+const CUSTOM_PROVIDER_PROTOCOLS = ['chat-completions', 'responses', 'messages', 'generate-content'] as const;
 
 export type CustomProviderProtocol = (typeof CUSTOM_PROVIDER_PROTOCOLS)[number];
+export type TriState = 'default' | 'true' | 'false';
+export type ConfigApiKeyAction = 'keep' | 'set' | 'clear';
 
 export const isCustomProviderProtocol = (value: string): value is CustomProviderProtocol =>
   CUSTOM_PROVIDER_PROTOCOLS.some((protocol) => protocol === value);
 
-/** The fields auto-fill may write, and the only ones whose provenance it tracks. */
-export type ModelAutoFillField = 'contextWindow' | 'maxOutputTokens' | 'modalities' | 'toolsSupported' | 'reasoning' | 'pricing';
+function nativeApiFromProtocol(protocol: CustomProviderProtocol): OmpProviderApi {
+  switch (protocol) {
+    case 'chat-completions':
+      return 'openai-completions';
+    case 'responses':
+      return 'openai-responses';
+    case 'messages':
+      return 'anthropic-messages';
+    case 'generate-content':
+      return 'google-generative-ai';
+  }
+}
+
+export function legacyProtocolForApi(api: string | undefined | null): CustomProviderProtocol | undefined {
+  switch (api) {
+    case 'openai-completions':
+      return 'chat-completions';
+    case 'openai-responses':
+    case 'openai-codex-responses':
+    case 'azure-openai-responses':
+      return 'responses';
+    case 'anthropic-messages':
+    case 'bedrock-converse-stream':
+      return 'messages';
+    case 'google-generative-ai':
+    case 'google-gemini-cli':
+    case 'google-vertex':
+      return 'generate-content';
+    default:
+      return undefined;
+  }
+}
+
+function toTriState(value: boolean | undefined): TriState {
+  if (value === true) return 'true';
+  if (value === false) return 'false';
+  return 'default';
+}
+
+function fromTriState(value: TriState, includeNull: boolean): boolean | null | undefined {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return includeNull ? null : undefined;
+}
+
+function fromTriStateOptional(value: TriState): boolean | undefined {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+/** The fields auto-fill may write, and the ones whose provenance it tracks. */
+export type ModelAutoFillField =
+  | 'contextWindow'
+  | 'maxOutputTokens'
+  | 'modalities'
+  | 'toolsSupported'
+  | 'reasoning'
+  | 'pricing'
+  | 'thinking'
+  | 'imageCountBudget';
+
+export interface HeaderRow { row: string; name: string; value: string }
 
 export interface ModelRow {
   row: string;
   modelId: string;
   name: string;
+  api: '' | OmpModelApi;
+  kind: '' | OmpModelKind;
+  baseUrl: string;
   contextWindow: string;
+  maxContextWindow: string;
   maxOutputTokens: string;
   modalities: Model['modalities'];
   /**
@@ -29,11 +146,42 @@ export interface ModelRow {
    */
   nativeKind: NativeModelKind;
   toolsSupported?: boolean;
-  /** Canonical fields the controls do not edit (reasoning, pricing, status, enabled). */
+  reasoning?: boolean;
+  thinkingMode: '' | OmpThinkingMode;
+  thinkingEfforts: OmpThinkingEffort[];
+  thinkingDefaultLevel: '' | OmpThinkingEffort;
+  thinkingSupportsDisplay: TriState;
+  thinkingRequiresEffort: TriState;
+  thinkingEffortMapJson: string;
+  costInput: string;
+  costOutput: string;
+  costCacheRead: string;
+  costCacheWrite: string;
+  promptCacheShort: string;
+  promptCacheLong: string;
+  premiumMultiplier: string;
+  imageCountBudget: string;
+  imageInputDecoder: '' | 'stb';
+  tokenizer: '' | OmpModelTokenizer;
+  omitMaxOutputTokens: TriState;
+  preferWebsockets: TriState;
+  compatJson: string;
+  contextPromotionTarget: string;
+  compactionModel: string;
+  remoteCompactionEnabled: TriState;
+  remoteCompactionApi: '' | OmpProviderApi;
+  remoteCompactionEndpoint: string;
+  remoteCompactionModel: string;
+  remoteCompactionV2StreamingEnabled: TriState;
+  remoteCompactionV2Endpoint: string;
+  remoteCompactionStreamingEndpoint: string;
+  headerNames: string[];
+  headersPatchRemove: string[];
+  headers: HeaderRow[];
+  replaceHeaders: boolean;
+  /** Canonical fields kept for legacy fallback or display metadata. */
   base?: Model;
-  /** Auto-filled reasoning support, overriding `base`; absent when no catalog answered. */
   reasoningEffortSupported?: boolean;
-  /** Auto-filled pricing, overriding `base`; absent when no catalog answered. */
   pricing?: Model['pricing'];
   /**
    * Fields the user set (typed or saved). Auto-fill may refill its own values
@@ -45,7 +193,7 @@ export interface ModelRow {
   /** Catalog family, when a catalog read named one; the dialog groups by it. */
   family?: string;
 }
-export interface HeaderRow { row: string; name: string; value: string }
+
 /** What Save does with the uploaded logo image. */
 export type CustomProviderLogoPlan =
   | { kind: 'keep' }
@@ -53,21 +201,56 @@ export type CustomProviderLogoPlan =
   | { kind: 'upload'; file: File };
 
 export interface CustomProviderFormState {
+  isEdit: boolean;
+  isBuiltIn: boolean;
+  hasNativeEntry: boolean;
+  effectiveBaseUrl: string;
+  effectiveApi: string;
   providerId: string;
   name: string;
   endpoint: string;
   protocol: CustomProviderProtocol;
+  api: '' | OmpProviderApi;
+  auth: '' | OmpProviderAuthMode;
+  authHeader: TriState;
+  configApiKeyStatus: OmpConfigApiKeyStatus;
+  configApiKeyAction: ConfigApiKeyAction;
+  configApiKeyValue: string;
   credentialRef: string | null;
   apiKey: string;
   replaceHeaders: boolean;
   headerNames: string[];
+  headersPatchRemove: string[];
   headers: HeaderRow[];
+  discoveryEnabled: boolean;
+  discoveryType: OmpDiscoveryType;
+  discoveryTimeoutMs: string;
+  discoveryInjectV1: TriState;
+  discoveryAdvertisedReasoning: TriState;
+  compatJson: string;
+  disableStrictTools: TriState;
+  transportPiNative: boolean;
+  guardrailIdentifier: string;
+  guardrailVersion: string;
+  guardrailTrace: '' | OmpBedrockGuardrailTrace;
+  requestMetadata: HeaderRow[];
+  remoteCompactionEnabled: TriState;
+  remoteCompactionApi: '' | OmpProviderApi;
+  remoteCompactionEndpoint: string;
+  remoteCompactionModel: string;
+  remoteCompactionV2StreamingEnabled: TriState;
+  remoteCompactionV2Endpoint: string;
+  remoteCompactionStreamingEndpoint: string;
   models: ModelRow[];
+  modelOverrides: ModelRow[];
   icon: CustomProviderIcon | null;
   logo: File | 'removed' | null;
 }
+
 export interface CustomProviderPersistPlan {
   request: ProviderConfigureRequest;
+  providerId: string;
+  providerName: string;
   apiKey: string;
   icon: CustomProviderIcon | null;
   logo: CustomProviderLogoPlan;
@@ -79,21 +262,45 @@ export interface CustomProviderFieldErrors {
   providerId?: string;
   name?: string;
   endpoint?: string;
+  discoveryTimeoutMs?: string;
+  compatJson?: string;
+  remoteCompactionEndpoint?: string;
+  remoteCompactionV2Endpoint?: string;
+  remoteCompactionStreamingEndpoint?: string;
 }
+
 export interface ModelFieldErrors {
   modelId?: string;
   name?: string;
+  baseUrl?: string;
   contextWindow?: string;
+  maxContextWindow?: string;
   maxOutputTokens?: string;
+  thinkingEfforts?: string;
+  thinkingEffortMapJson?: string;
+  cost?: string;
+  promptCacheShort?: string;
+  promptCacheLong?: string;
+  premiumMultiplier?: string;
+  imageCountBudget?: string;
+  compatJson?: string;
+  remoteCompactionEndpoint?: string;
+  remoteCompactionV2Endpoint?: string;
+  remoteCompactionStreamingEndpoint?: string;
+  headers?: HeaderFieldErrors[];
 }
+
 export interface HeaderFieldErrors {
   name?: string;
   value?: string;
 }
+
 export interface CustomProviderValidation {
   fields: CustomProviderFieldErrors;
   models: ModelFieldErrors[];
+  modelOverrides: ModelFieldErrors[];
   headers: HeaderFieldErrors[];
+  requestMetadata: HeaderFieldErrors[];
   valid: boolean;
 }
 
@@ -132,30 +339,108 @@ const positiveInteger = (value: string): boolean => {
   return /^[0-9]+$/.test(value.trim()) && Number.isSafeInteger(parsed) && parsed > 0;
 };
 
+const nonNegativeNumber = (value: string): boolean => {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0;
+};
+
+function parseJsonObjectText(raw: string): { ok: true; value: JsonObject } | { ok: false } {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const checked = JsonObjectSchema.safeParse(parsed);
+    return checked.success ? { ok: true, value: checked.data } : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export const COMPAT_BOOLEAN_FLAGS = [
+  'supportsStore',
+  'supportsDeveloperRole',
+  'supportsReasoningEffort',
+  'supportsUsageInStreaming',
+  'requiresThinkingAsText',
+] as const;
+export type CompatBooleanFlag = (typeof COMPAT_BOOLEAN_FLAGS)[number];
+export const COMPAT_MAX_TOKENS_FIELDS = ['max_completion_tokens', 'max_tokens'] as const;
+
+export function readCompatBooleanFlag(compatJson: string, flag: CompatBooleanFlag): TriState {
+  const trimmed = compatJson.trim();
+  if (!trimmed) return 'default';
+  const parsed = parseJsonObjectText(trimmed);
+  if (!parsed.ok) return 'default';
+  const value = parsed.value[flag];
+  if (value === true) return 'true';
+  if (value === false) return 'false';
+  return 'default';
+}
+
+export function readCompatMaxTokensField(compatJson: string): string {
+  const trimmed = compatJson.trim();
+  if (!trimmed) return '';
+  const parsed = parseJsonObjectText(trimmed);
+  if (!parsed.ok) return '';
+  const value = parsed.value.maxTokensField;
+  return typeof value === 'string' ? value : '';
+}
+
+export function updateCompatJsonFlag(
+  compatJson: string,
+  key: CompatBooleanFlag | 'maxTokensField',
+  nextValue: TriState | string,
+): string {
+  const trimmed = compatJson.trim();
+  const base: JsonObject = trimmed ? (() => {
+    const parsed = parseJsonObjectText(trimmed);
+    return parsed.ok ? { ...parsed.value } : {};
+  })() : {};
+  if (key === 'maxTokensField') {
+    const field = typeof nextValue === 'string' ? nextValue.trim() : '';
+    if (!field) delete base.maxTokensField;
+    else base.maxTokensField = field;
+  } else if (nextValue === 'true') {
+    base[key] = true;
+  } else if (nextValue === 'false') {
+    base[key] = false;
+  } else {
+    delete base[key];
+  }
+  return Object.keys(base).length > 0 ? JSON.stringify(base, null, 2) : '';
+}
+
+export function duplicateModelRow(source: ModelRow): ModelRow {
+  return {
+    ...source,
+    row: crypto.randomUUID(),
+    modelId: '',
+    name: '',
+    modalities: [...source.modalities],
+    thinkingEfforts: [...source.thinkingEfforts],
+    headerNames: [],
+    headersPatchRemove: [],
+    headers: [],
+    replaceHeaders: false,
+    typed: new Set(source.typed),
+    filledFrom: {},
+    base: undefined,
+  };
+}
+
 /**
- * The native runner kinds whose modality chips differ. A canonical `Model`
- * carries no kind, so a tts or stt model is only recognizable by its `audio`
- * modality; both allow the same chips, so they collapse into one kind here.
+ * The native runner kinds whose modality chips differ.
  */
-export type NativeModelKind = 'chat' | 'tts' | 'stt' | 'embedding';
+export type NativeModelKind = 'chat' | 'tts' | 'stt' | 'embedding' | 'image' | 'tiny' | 'rerank' | 'video' | 'judge';
 
 const BASE_MODALITIES = ['text', 'image'] as const;
 
-/**
- * Which input chips a model of this kind can actually save. OpenChamber's
- * writer keeps `audio` only for tts/stt runners and `embedding` only for an
- * embedding runner; on any other kind it rejects the request with 422.
- */
 export function modelModalitiesForKind(kind: NativeModelKind): readonly Model['modalities'][number][] {
   if (kind === 'tts' || kind === 'stt') return [...BASE_MODALITIES, 'audio'];
   if (kind === 'embedding') return [...BASE_MODALITIES, 'embedding'];
   return BASE_MODALITIES;
 }
 
-/**
- * Drops a modality the kind cannot save and keeps text or image, which the
- * writer requires even from a tts or embedding runner.
- */
 export function normalizeModelModalities(
   kind: NativeModelKind,
   modalities: readonly Model['modalities'][number][],
@@ -166,24 +451,17 @@ export function normalizeModelModalities(
   return kept;
 }
 
-/**
- * A catalog's text/image inputs in the editor's order: text first. The writer
- * and the pickers read the list as-is, so an OpenRouter answer that lists
- * `image` before `text` must not produce a row that reads image-first.
- */
 export function catalogInputs(input: readonly ('text' | 'image')[]): Array<'text' | 'image'> {
   return (['text', 'image'] as const).filter((modality) => input.includes(modality));
 }
 
-/** A canonical model's kind as far as the editor can tell; absent kinds are chat. */
-function nativeKindOf(modalities: readonly Model['modalities'][number][]): NativeModelKind {
+function nativeKindOf(modalities: readonly Model['modalities'][number][], explicitKind?: OmpModelKind): NativeModelKind {
+  if (explicitKind) return explicitKind;
   if (modalities.includes('embedding')) return 'embedding';
   if (modalities.includes('audio')) return 'tts';
   return 'chat';
 }
 
-/** A query string is part of a gateway endpoint (`?api-version=` on Azure);
- *  embedded credentials and fragments are not. */
 const isHttpEndpoint = (value: string): boolean => {
   try {
     const endpoint = new URL(value);
@@ -197,10 +475,59 @@ const isHttpEndpoint = (value: string): boolean => {
 const isCanonicalModel = (model: Model | ProviderModelDiscoveryResult['models'][number] | undefined): model is Model =>
   model !== undefined && 'modalities' in model;
 
-/**
- * A row from a saved model knows every field it carries was set by a person,
- * so auto-fill leaves all of them alone. A new row starts with nothing typed.
- */
+function emptyModelRowFields(overrides: Partial<ModelRow> = {}): ModelRow {
+  return {
+    row: crypto.randomUUID(),
+    modelId: '',
+    name: '',
+    api: '',
+    kind: '',
+    baseUrl: '',
+    contextWindow: '',
+    maxContextWindow: '',
+    maxOutputTokens: '',
+    modalities: ['text'],
+    nativeKind: 'chat',
+    toolsSupported: undefined,
+    reasoning: undefined,
+    thinkingMode: '',
+    thinkingEfforts: [],
+    thinkingDefaultLevel: '',
+    thinkingSupportsDisplay: 'default',
+    thinkingRequiresEffort: 'default',
+    thinkingEffortMapJson: '',
+    costInput: '',
+    costOutput: '',
+    costCacheRead: '',
+    costCacheWrite: '',
+    promptCacheShort: '',
+    promptCacheLong: '',
+    premiumMultiplier: '',
+    imageCountBudget: '',
+    imageInputDecoder: '',
+    tokenizer: '',
+    omitMaxOutputTokens: 'default',
+    preferWebsockets: 'default',
+    compatJson: '',
+    contextPromotionTarget: '',
+    compactionModel: '',
+    remoteCompactionEnabled: 'default',
+    remoteCompactionApi: '',
+    remoteCompactionEndpoint: '',
+    remoteCompactionModel: '',
+    remoteCompactionV2StreamingEnabled: 'default',
+    remoteCompactionV2Endpoint: '',
+    remoteCompactionStreamingEndpoint: '',
+    headerNames: [],
+    headersPatchRemove: [],
+    headers: [],
+    replaceHeaders: false,
+    typed: new Set(),
+    filledFrom: {},
+    ...overrides,
+  };
+}
+
 export function createModelRow(model?: Model | ProviderModelDiscoveryResult['models'][number]): ModelRow {
   const canonical = isCanonicalModel(model) ? { ...model } : undefined;
   const { modelId = '', name = '', contextWindow, maxOutputTokens } = model ?? {};
@@ -208,8 +535,7 @@ export function createModelRow(model?: Model | ProviderModelDiscoveryResult['mod
   const nativeKind = nativeKindOf(modalities);
   const typed: ModelAutoFillField[] = canonical ? ['contextWindow', 'maxOutputTokens', 'modalities', 'reasoning', 'pricing'] : [];
   if (canonical?.toolsSupported !== undefined) typed.push('toolsSupported');
-  return {
-    row: crypto.randomUUID(),
+  return emptyModelRowFields({
     modelId,
     name,
     contextWindow: contextWindow === undefined ? '' : String(contextWindow),
@@ -217,42 +543,201 @@ export function createModelRow(model?: Model | ProviderModelDiscoveryResult['mod
     modalities: normalizeModelModalities(nativeKind, modalities),
     nativeKind,
     toolsSupported: canonical?.toolsSupported,
+    reasoning: canonical ? canonical.reasoningEffortSupported : undefined,
+    costInput: canonical?.pricing ? String(canonical.pricing.inputPerMillionTokens) : '',
+    costOutput: canonical?.pricing ? String(canonical.pricing.outputPerMillionTokens) : '',
+    costCacheRead: canonical?.pricing?.cacheReadPerMillionTokens !== undefined && canonical.pricing.cacheReadPerMillionTokens !== null
+      ? String(canonical.pricing.cacheReadPerMillionTokens)
+      : '',
+    costCacheWrite: canonical?.pricing?.cacheWritePerMillionTokens !== undefined && canonical.pricing.cacheWritePerMillionTokens !== null
+      ? String(canonical.pricing.cacheWritePerMillionTokens)
+      : '',
     base: canonical,
+    reasoningEffortSupported: canonical?.reasoningEffortSupported,
+    pricing: canonical?.pricing,
     typed: new Set(typed),
-    filledFrom: {},
-  };
+  });
 }
 
-export function createHeaderRow(): HeaderRow {
-  return { row: crypto.randomUUID(), name: '', value: '' };
+function createModelRowFromNative(model: OmpModelDefinitionRead | OmpModelOverrideRead, modelId: string, baseUrl?: string): ModelRow {
+  const modalities: Model['modalities'] = model.input ? [...model.input] : ['text'];
+  const nativeKind = nativeKindOf(modalities, model.kind);
+  const typed: ModelAutoFillField[] = [];
+  if (model.contextWindow !== undefined) typed.push('contextWindow');
+  if (model.maxTokens !== undefined) typed.push('maxOutputTokens');
+  if (model.input !== undefined) typed.push('modalities');
+  if (model.supportsTools !== undefined) typed.push('toolsSupported');
+  if (model.reasoning !== undefined) typed.push('reasoning');
+  if (model.cost !== undefined) typed.push('pricing');
+  if (model.thinking !== undefined) typed.push('thinking');
+  if (model.imageCountBudget !== undefined) typed.push('imageCountBudget');
+
+  const rcApi = OMP_PROVIDER_APIS.find((entry) => entry === model.remoteCompaction?.api) ?? '';
+  return emptyModelRowFields({
+    modelId,
+    name: model.name ?? '',
+    api: model.api ?? '',
+    kind: model.kind ?? '',
+    baseUrl: baseUrl ?? '',
+    contextWindow: model.contextWindow !== undefined ? String(model.contextWindow) : '',
+    maxContextWindow: model.maxContextWindow !== undefined ? String(model.maxContextWindow) : '',
+    maxOutputTokens: model.maxTokens !== undefined ? String(model.maxTokens) : '',
+    modalities: normalizeModelModalities(nativeKind, modalities),
+    nativeKind,
+    toolsSupported: model.supportsTools,
+    reasoning: model.reasoning,
+    thinkingMode: model.thinking?.mode ?? '',
+    thinkingEfforts: model.thinking?.efforts ? [...model.thinking.efforts] : [],
+    thinkingDefaultLevel: model.thinking?.defaultLevel ?? '',
+    thinkingSupportsDisplay: toTriState(model.thinking?.supportsDisplay),
+    thinkingRequiresEffort: toTriState(model.thinking?.requiresEffort),
+    thinkingEffortMapJson: model.thinking?.effortMap ? JSON.stringify(model.thinking.effortMap, null, 2) : '',
+    costInput: model.cost?.input !== undefined ? String(model.cost.input) : '',
+    costOutput: model.cost?.output !== undefined ? String(model.cost.output) : '',
+    costCacheRead: model.cost?.cacheRead !== undefined ? String(model.cost.cacheRead) : '',
+    costCacheWrite: model.cost?.cacheWrite !== undefined ? String(model.cost.cacheWrite) : '',
+    promptCacheShort: model.promptCache?.short !== undefined ? String(model.promptCache.short) : '',
+    promptCacheLong: model.promptCache?.long !== undefined ? String(model.promptCache.long) : '',
+    premiumMultiplier: model.premiumMultiplier !== undefined ? String(model.premiumMultiplier) : '',
+    imageCountBudget: model.imageCountBudget !== undefined ? String(model.imageCountBudget) : '',
+    imageInputDecoder: model.imageInputDecoder ?? '',
+    tokenizer: model.tokenizer ?? '',
+    omitMaxOutputTokens: toTriState(model.omitMaxOutputTokens),
+    preferWebsockets: toTriState(model.preferWebsockets),
+    compatJson: model.compat ? JSON.stringify(model.compat, null, 2) : '',
+    contextPromotionTarget: model.contextPromotionTarget ?? '',
+    compactionModel: model.compactionModel ?? '',
+    remoteCompactionEnabled: toTriState(model.remoteCompaction?.enabled),
+    remoteCompactionApi: rcApi,
+    remoteCompactionEndpoint: model.remoteCompaction?.endpoint ?? '',
+    remoteCompactionModel: model.remoteCompaction?.model ?? '',
+    remoteCompactionV2StreamingEnabled: toTriState(model.remoteCompaction?.v2StreamingEnabled),
+    remoteCompactionV2Endpoint: model.remoteCompaction?.v2Endpoint ?? '',
+    remoteCompactionStreamingEndpoint: model.remoteCompaction?.streamingEndpoint ?? '',
+    headerNames: [...model.headerNames],
+    headersPatchRemove: [],
+    headers: [],
+    replaceHeaders: false,
+    typed: new Set(typed),
+  });
+}
+
+export function createHeaderRow(name = '', value = ''): HeaderRow {
+  return { row: crypto.randomUUID(), name, value };
 }
 
 export function createEmptyCustomProviderForm(
   initial?: ProviderConfigurationRead,
   icon: CustomProviderIcon | null = null,
 ): CustomProviderFormState {
+  if (initial?.native) {
+    const native = initial.native;
+    const mergedHeaderNames = [...new Set([...native.headerNames, ...initial.headerNames])];
+    const resolvedApi = native.api ?? '';
+    const resolvedProtocol = legacyProtocolForApi(native.api ?? native.effectiveApi) ?? initial.configuration?.protocol ?? 'chat-completions';
+    const rcApi = OMP_PROVIDER_APIS.find((entry) => entry === native.remoteCompaction?.api) ?? '';
+    return {
+      isEdit: true,
+      isBuiltIn: native.isBuiltIn,
+      hasNativeEntry: native.hasNativeEntry,
+      effectiveBaseUrl: native.effectiveBaseUrl ?? '',
+      effectiveApi: native.effectiveApi ?? '',
+      providerId: native.providerId,
+      name: native.name ?? initial.configuration?.name ?? '',
+      endpoint: native.baseUrl ?? '',
+      protocol: resolvedProtocol,
+      api: resolvedApi,
+      auth: native.auth ?? '',
+      authHeader: toTriState(native.authHeader),
+      configApiKeyStatus: native.configApiKey ?? { configured: false },
+      configApiKeyAction: 'keep',
+      configApiKeyValue: '',
+      credentialRef: initial.configuration?.credentialRef ?? null,
+      apiKey: '',
+      replaceHeaders: false,
+      headerNames: mergedHeaderNames,
+      headersPatchRemove: [],
+      headers: [],
+      discoveryEnabled: Boolean(native.discovery),
+      discoveryType: native.discovery?.type ?? 'openai-models-list',
+      discoveryTimeoutMs: native.discovery?.timeoutMs !== undefined ? String(native.discovery.timeoutMs) : '',
+      discoveryInjectV1: toTriState(native.discovery?.injectV1),
+      discoveryAdvertisedReasoning: toTriState(native.discovery?.advertisedReasoning),
+      compatJson: native.compat ? JSON.stringify(native.compat, null, 2) : '',
+      disableStrictTools: toTriState(native.disableStrictTools),
+      transportPiNative: native.transport === 'pi-native',
+      guardrailIdentifier: native.guardrailIdentifier ?? '',
+      guardrailVersion: native.guardrailVersion ?? '',
+      guardrailTrace: native.guardrailTrace ?? '',
+      requestMetadata: Object.entries(native.requestMetadata ?? {}).map(([key, value]) => createHeaderRow(key, value)),
+      remoteCompactionEnabled: toTriState(native.remoteCompaction?.enabled),
+      remoteCompactionApi: rcApi,
+      remoteCompactionEndpoint: native.remoteCompaction?.endpoint ?? '',
+      remoteCompactionModel: native.remoteCompaction?.model ?? '',
+      remoteCompactionV2StreamingEnabled: toTriState(native.remoteCompaction?.v2StreamingEnabled),
+      remoteCompactionV2Endpoint: native.remoteCompaction?.v2Endpoint ?? '',
+      remoteCompactionStreamingEndpoint: native.remoteCompaction?.streamingEndpoint ?? '',
+      models: native.models.map((model) => createModelRowFromNative(model, model.id, model.baseUrl)),
+      modelOverrides: Object.entries(native.modelOverrides).map(([modelId, override]) => createModelRowFromNative(override, modelId)),
+      icon,
+      logo: null,
+    };
+  }
+
+  const legacyProtocol = initial?.configuration?.protocol ?? 'chat-completions';
+  const legacyApi = initial?.configuration ? nativeApiFromProtocol(legacyProtocol) : 'openai-completions';
   return {
-    providerId: initial?.configuration.providerId ?? '',
-    name: initial?.configuration.name ?? '',
-    endpoint: initial?.configuration.endpoint ?? '',
-    protocol: initial?.configuration.protocol ?? 'chat-completions',
-    credentialRef: initial?.configuration.credentialRef ?? null,
+    isEdit: Boolean(initial),
+    isBuiltIn: false,
+    hasNativeEntry: Boolean(initial),
+    effectiveBaseUrl: initial?.configuration?.endpoint ?? '',
+    effectiveApi: legacyApi,
+    providerId: initial?.configuration?.providerId ?? '',
+    name: initial?.configuration?.name ?? '',
+    endpoint: initial?.configuration?.endpoint ?? '',
+    protocol: legacyProtocol,
+    api: legacyApi,
+    auth: '',
+    authHeader: 'default',
+    configApiKeyStatus: { configured: false },
+    configApiKeyAction: 'keep',
+    configApiKeyValue: '',
+    credentialRef: initial?.configuration?.credentialRef ?? null,
     apiKey: '',
     replaceHeaders: !initial,
     headerNames: initial?.headerNames ?? [],
+    headersPatchRemove: [],
     headers: initial ? [] : [createHeaderRow()],
+    discoveryEnabled: false,
+    discoveryType: 'openai-models-list',
+    discoveryTimeoutMs: '',
+    discoveryInjectV1: 'default',
+    discoveryAdvertisedReasoning: 'default',
+    compatJson: '',
+    disableStrictTools: 'default',
+    transportPiNative: false,
+    guardrailIdentifier: '',
+    guardrailVersion: '',
+    guardrailTrace: '',
+    requestMetadata: [],
+    remoteCompactionEnabled: 'default',
+    remoteCompactionApi: '',
+    remoteCompactionEndpoint: '',
+    remoteCompactionModel: '',
+    remoteCompactionV2StreamingEnabled: 'default',
+    remoteCompactionV2Endpoint: '',
+    remoteCompactionStreamingEndpoint: '',
     models: initial ? initial.models.map(createModelRow) : [createModelRow()],
+    modelOverrides: [],
     icon,
     logo: null,
   };
 }
 
-/** Omission preserves stored headers; an explicitly empty replacement removes them. */
-export function providerHeaderWrite(form: CustomProviderFormState): Record<string, string> | undefined {
-  if (!form.replaceHeaders) return undefined;
+function collectHeaderMap(rows: readonly HeaderRow[]): Record<string, string> {
   const headers: Record<string, string> = {};
   const names = new Set<string>();
-  for (const row of form.headers) {
+  for (const row of rows) {
     const name = row.name.trim();
     if (!name && !row.value) continue;
     if (!name || names.has(name.toLowerCase())) throw new Error('Invalid or duplicate header');
@@ -262,9 +747,175 @@ export function providerHeaderWrite(form: CustomProviderFormState): Record<strin
   return headers;
 }
 
+/** Omission preserves stored headers; an explicitly empty replacement removes them. */
+export function providerHeaderWrite(form: CustomProviderFormState): Record<string, string> | undefined {
+  if (!form.replaceHeaders) return undefined;
+  return collectHeaderMap(form.headers);
+}
+
+function buildHeadersPatch(
+  headerNames: readonly string[],
+  headers: readonly HeaderRow[],
+  removeList: readonly string[],
+  replaceHeaders: boolean,
+): { headers?: Record<string, string>; headersPatch?: OmpHeadersPatch } {
+  if (replaceHeaders) {
+    return { headers: collectHeaderMap(headers) };
+  }
+  const setMap = collectHeaderMap(headers);
+  const remove = removeList.filter((name) => headerNames.includes(name));
+  const hasSet = Object.keys(setMap).length > 0;
+  const hasRemove = remove.length > 0;
+  if (!hasSet && !hasRemove) return {};
+  return {
+    headersPatch: {
+      ...(hasSet ? { set: setMap } : {}),
+      ...(hasRemove ? { remove } : {}),
+    },
+  };
+}
+
+function validateHeaderRows(
+  rows: readonly HeaderRow[],
+  t: CustomProviderTranslator,
+  checkFormat = true,
+): HeaderFieldErrors[] {
+  const errors = rows.map((row): HeaderFieldErrors => {
+    const rowErrors: HeaderFieldErrors = {};
+    const name = row.name.trim();
+    if (!name && !row.value) return rowErrors;
+    if (!name) rowErrors.name = t('settings.providers.page.custom.error.required');
+    else if (checkFormat && !HEADER_NAME_PATTERN.test(name)) rowErrors.name = t('settings.providers.page.custom.error.headerName.format');
+    if (!row.value) rowErrors.value = t('settings.providers.page.custom.error.required');
+    return rowErrors;
+  });
+  const seen = new Set<string>();
+  for (const [index, row] of rows.entries()) {
+    const name = row.name.trim().toLowerCase();
+    if (!name) continue;
+    if (seen.has(name)) errors[index]!.name = t('settings.providers.page.custom.error.duplicate');
+    else seen.add(name);
+  }
+  return errors;
+}
+
+function validateModelRowList(
+  rows: readonly ModelRow[],
+  mode: 'definition' | 'override',
+  t: CustomProviderTranslator,
+): ModelFieldErrors[] {
+  const errors = rows.map((row): ModelFieldErrors => {
+    const rowError: ModelFieldErrors = {};
+    if (!row.modelId.trim()) rowError.modelId = t('settings.providers.page.custom.error.required');
+    if (mode === 'definition' && row.baseUrl.trim() && !isHttpEndpoint(row.baseUrl.trim())) {
+      rowError.baseUrl = t('settings.providers.page.custom.omp.error.urlFormat');
+    }
+    if (row.contextWindow.trim() && !positiveInteger(row.contextWindow)) {
+      rowError.contextWindow = t('settings.providers.page.custom.error.positiveInteger');
+    }
+    if (row.maxContextWindow.trim() && !positiveInteger(row.maxContextWindow)) {
+      rowError.maxContextWindow = t('settings.providers.page.custom.error.positiveInteger');
+    } else if (
+      positiveInteger(row.contextWindow)
+      && positiveInteger(row.maxContextWindow)
+      && Number(row.maxContextWindow) < Number(row.contextWindow)
+    ) {
+      rowError.maxContextWindow = t('settings.providers.page.custom.omp.error.maxContextBelowContext');
+    }
+    if (row.maxOutputTokens.trim() && !positiveInteger(row.maxOutputTokens)) {
+      rowError.maxOutputTokens = t('settings.providers.page.custom.error.positiveInteger');
+    } else if (
+      positiveInteger(row.contextWindow)
+      && positiveInteger(row.maxOutputTokens)
+      && Number(row.maxOutputTokens) > Number(row.contextWindow)
+    ) {
+      rowError.maxOutputTokens = t('settings.providers.page.custom.error.maxOutputExceedsContext');
+    }
+
+    if (row.thinkingMode && row.thinkingEfforts.length === 0) {
+      rowError.thinkingEfforts = t('settings.providers.page.custom.omp.error.thinkingEffortsRequired');
+    }
+    if (row.thinkingEffortMapJson.trim()) {
+      const parsed = parseJsonObjectText(row.thinkingEffortMapJson.trim());
+      if (!parsed.ok) rowError.thinkingEffortMapJson = t('settings.providers.page.custom.omp.error.jsonObject');
+    }
+
+    const costValues = [row.costInput.trim(), row.costOutput.trim(), row.costCacheRead.trim(), row.costCacheWrite.trim()];
+    const anyCost = costValues.some(Boolean);
+    const allCost = costValues.every(Boolean);
+    if (anyCost) {
+      if (mode === 'definition' && !allCost) {
+        rowError.cost = t('settings.providers.page.custom.omp.error.costIncomplete');
+      } else if (costValues.some((value) => value !== '' && !nonNegativeNumber(value))) {
+        rowError.cost = t('settings.providers.page.custom.omp.error.nonNegativeNumber');
+      }
+    }
+    if (row.promptCacheShort.trim() && !nonNegativeNumber(row.promptCacheShort)) {
+      rowError.promptCacheShort = t('settings.providers.page.custom.omp.error.nonNegativeNumber');
+    }
+    if (row.promptCacheLong.trim() && !nonNegativeNumber(row.promptCacheLong)) {
+      rowError.promptCacheLong = t('settings.providers.page.custom.omp.error.nonNegativeNumber');
+    }
+    if (row.premiumMultiplier.trim() && !nonNegativeNumber(row.premiumMultiplier)) {
+      rowError.premiumMultiplier = t('settings.providers.page.custom.omp.error.nonNegativeNumber');
+    }
+    if (row.imageCountBudget.trim() && !positiveInteger(row.imageCountBudget)) {
+      rowError.imageCountBudget = t('settings.providers.page.custom.error.positiveInteger');
+    }
+    if (row.compatJson.trim() && !parseJsonObjectText(row.compatJson.trim()).ok) {
+      rowError.compatJson = t('settings.providers.page.custom.omp.error.jsonObject');
+    }
+    if (row.remoteCompactionEndpoint.trim() && !isHttpEndpoint(row.remoteCompactionEndpoint.trim())) {
+      rowError.remoteCompactionEndpoint = t('settings.providers.page.custom.omp.error.urlFormat');
+    }
+    if (row.remoteCompactionV2Endpoint.trim() && !isHttpEndpoint(row.remoteCompactionV2Endpoint.trim())) {
+      rowError.remoteCompactionV2Endpoint = t('settings.providers.page.custom.omp.error.urlFormat');
+    }
+    if (row.remoteCompactionStreamingEndpoint.trim() && !isHttpEndpoint(row.remoteCompactionStreamingEndpoint.trim())) {
+      rowError.remoteCompactionStreamingEndpoint = t('settings.providers.page.custom.omp.error.urlFormat');
+    }
+    const headerRowErrors = validateHeaderRows(row.headers, t);
+    if (headerRowErrors.some((entry) => entry.name || entry.value)) {
+      rowError.headers = headerRowErrors;
+    }
+    return rowError;
+  });
+
+  const seenModelIds = new Set<string>();
+  for (const [index, row] of rows.entries()) {
+    const modelId = row.modelId.trim();
+    if (!modelId) continue;
+    if (seenModelIds.has(modelId)) errors[index]!.modelId = t('settings.providers.page.custom.error.duplicate');
+    else seenModelIds.add(modelId);
+  }
+  return errors;
+}
+
+function modelErrorsClean(errors: readonly ModelFieldErrors[]): boolean {
+  return errors.every((entry) => (
+    !entry.modelId
+    && !entry.name
+    && !entry.baseUrl
+    && !entry.contextWindow
+    && !entry.maxContextWindow
+    && !entry.maxOutputTokens
+    && !entry.thinkingEfforts
+    && !entry.thinkingEffortMapJson
+    && !entry.cost
+    && !entry.promptCacheShort
+    && !entry.promptCacheLong
+    && !entry.premiumMultiplier
+    && !entry.imageCountBudget
+    && !entry.compatJson
+    && !entry.remoteCompactionEndpoint
+    && !entry.remoteCompactionV2Endpoint
+    && !entry.remoteCompactionStreamingEndpoint
+    && (!entry.headers || entry.headers.every((h) => !h.name && !h.value))
+  ));
+}
+
 /**
- * Field-level checks the editor can point at. The canonical build still runs
- * afterwards, because model reasoning/variant invariants belong to its schema.
+ * Field-level checks the editor can point at.
  */
 export function validateCustomProviderForm(
   form: CustomProviderFormState,
@@ -274,115 +925,337 @@ export function validateCustomProviderForm(
 ): CustomProviderValidation {
   const fields: CustomProviderFieldErrors = {};
   const providerId = form.providerId.trim();
-  const name = form.name.trim();
   const endpoint = form.endpoint.trim();
 
   if (!providerId) fields.providerId = t('settings.providers.page.custom.error.providerID.required');
   else if (!isValidProviderID(providerId)) fields.providerId = t('settings.providers.page.custom.error.providerID.format');
   else if (!editing && isProviderIDTaken(providerId, existingProviderIDs)) fields.providerId = t('settings.providers.page.custom.error.providerID.exists');
 
-  if (!name) fields.name = t('settings.providers.page.custom.error.name.required');
+  if (!form.isBuiltIn && !form.hasNativeEntry && !form.name.trim()) {
+    fields.name = t('settings.providers.page.custom.error.name.required');
+  }
 
-  if (!endpoint) fields.endpoint = t('settings.providers.page.custom.error.baseURL.required');
-  else if (!isHttpEndpoint(endpoint)) fields.endpoint = t('settings.providers.page.custom.error.baseURL.format');
+  const requiresBaseUrl = form.models.length > 0 || (!form.isBuiltIn && !form.hasNativeEntry);
+  if (requiresBaseUrl && !endpoint) {
+    fields.endpoint = t('settings.providers.page.custom.error.baseURL.required');
+  } else if (endpoint && !isHttpEndpoint(endpoint)) {
+    fields.endpoint = t('settings.providers.page.custom.error.baseURL.format');
+  }
 
-  const models = form.models.map((row): ModelFieldErrors => {
-    const errors: ModelFieldErrors = {};
-    if (!row.modelId.trim()) errors.modelId = t('settings.providers.page.custom.error.required');
-    if (!row.name.trim()) errors.name = t('settings.providers.page.custom.error.required');
-    if (!row.contextWindow.trim()) errors.contextWindow = t('settings.providers.page.custom.error.required');
-    else if (!positiveInteger(row.contextWindow)) errors.contextWindow = t('settings.providers.page.custom.error.positiveInteger');
-    if (!row.maxOutputTokens.trim()) errors.maxOutputTokens = t('settings.providers.page.custom.error.required');
-    else if (!positiveInteger(row.maxOutputTokens)) errors.maxOutputTokens = t('settings.providers.page.custom.error.positiveInteger');
-    else if (positiveInteger(row.contextWindow) && Number(row.maxOutputTokens) > Number(row.contextWindow)) {
-      errors.maxOutputTokens = t('settings.providers.page.custom.error.maxOutputExceedsContext');
+  if (form.discoveryEnabled && form.discoveryTimeoutMs.trim() && !positiveInteger(form.discoveryTimeoutMs)) {
+    fields.discoveryTimeoutMs = t('settings.providers.page.custom.error.positiveInteger');
+  }
+  if (form.compatJson.trim() && !parseJsonObjectText(form.compatJson.trim()).ok) {
+    fields.compatJson = t('settings.providers.page.custom.omp.error.jsonObject');
+  }
+  if (form.remoteCompactionEndpoint.trim() && !isHttpEndpoint(form.remoteCompactionEndpoint.trim())) {
+    fields.remoteCompactionEndpoint = t('settings.providers.page.custom.omp.error.urlFormat');
+  }
+  if (form.remoteCompactionV2Endpoint.trim() && !isHttpEndpoint(form.remoteCompactionV2Endpoint.trim())) {
+    fields.remoteCompactionV2Endpoint = t('settings.providers.page.custom.omp.error.urlFormat');
+  }
+  if (form.remoteCompactionStreamingEndpoint.trim() && !isHttpEndpoint(form.remoteCompactionStreamingEndpoint.trim())) {
+    fields.remoteCompactionStreamingEndpoint = t('settings.providers.page.custom.omp.error.urlFormat');
+  }
+
+  const models = validateModelRowList(form.models, 'definition', t);
+  const modelOverrides = validateModelRowList(form.modelOverrides, 'override', t);
+  const headers = validateHeaderRows(form.headers, t, true);
+  const requestMetadata = validateHeaderRows(form.requestMetadata, t, false);
+
+  const valid = !fields.providerId
+    && !fields.name
+    && !fields.endpoint
+    && !fields.discoveryTimeoutMs
+    && !fields.compatJson
+    && !fields.remoteCompactionEndpoint
+    && !fields.remoteCompactionV2Endpoint
+    && !fields.remoteCompactionStreamingEndpoint
+    && modelErrorsClean(models)
+    && modelErrorsClean(modelOverrides)
+    && headers.every((row) => !row.name && !row.value)
+    && requestMetadata.every((row) => !row.name && !row.value);
+
+  return { fields, models, modelOverrides, headers, requestMetadata, valid };
+}
+
+function buildRemoteCompaction(fields: {
+  enabled: TriState;
+  api: '' | OmpProviderApi;
+  endpoint: string;
+  model: string;
+  v2StreamingEnabled: TriState;
+  v2Endpoint: string;
+  streamingEndpoint: string;
+}): OmpModelDefinitionWrite['remoteCompaction'] | undefined {
+  const result: NonNullable<OmpModelDefinitionWrite['remoteCompaction']> = {};
+  const enabled = fromTriStateOptional(fields.enabled);
+  const v2Streaming = fromTriStateOptional(fields.v2StreamingEnabled);
+  if (enabled !== undefined) result.enabled = enabled;
+  if (fields.api) result.api = fields.api;
+  if (fields.endpoint.trim()) result.endpoint = fields.endpoint.trim();
+  if (fields.model.trim()) result.model = fields.model.trim();
+  if (v2Streaming !== undefined) result.v2StreamingEnabled = v2Streaming;
+  if (fields.v2Endpoint.trim()) result.v2Endpoint = fields.v2Endpoint.trim();
+  if (fields.streamingEndpoint.trim()) result.streamingEndpoint = fields.streamingEndpoint.trim();
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function buildThinkingConfig(row: ModelRow): OmpThinkingConfig | undefined {
+  if (!row.thinkingMode) return undefined;
+  const result: OmpThinkingConfig = {
+    mode: row.thinkingMode,
+    efforts: [...row.thinkingEfforts],
+  };
+  if (row.thinkingDefaultLevel) result.defaultLevel = row.thinkingDefaultLevel;
+  const supportsDisplay = fromTriStateOptional(row.thinkingSupportsDisplay);
+  if (supportsDisplay !== undefined) result.supportsDisplay = supportsDisplay;
+  const requiresEffort = fromTriStateOptional(row.thinkingRequiresEffort);
+  if (requiresEffort !== undefined) result.requiresEffort = requiresEffort;
+  if (row.thinkingEffortMapJson.trim()) {
+    const parsed = parseJsonObjectText(row.thinkingEffortMapJson.trim());
+    if (!parsed.ok) throw new Error('Invalid thinking effortMap JSON');
+    const effortMap: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed.value)) {
+      if (typeof v === 'string' && v.trim()) effortMap[k] = v.trim();
     }
-    return errors;
+    if (Object.keys(effortMap).length > 0) result.effortMap = effortMap;
+  }
+  return result;
+}
+
+function buildModelWriteBase(row: ModelRow, mode: 'definition' | 'override'): Omit<OmpModelOverrideWrite, 'cost'> {
+  const common: Omit<OmpModelOverrideWrite, 'cost'> = {};
+  if (row.name.trim()) common.name = row.name.trim();
+  if (row.api) common.api = row.api;
+  if (row.kind) common.kind = row.kind;
+  if (row.reasoning !== undefined) common.reasoning = row.reasoning;
+  const thinking = buildThinkingConfig(row);
+  if (thinking) common.thinking = thinking;
+  const normalizedModalities = normalizeModelModalities(row.nativeKind, row.modalities);
+  const input = normalizedModalities.filter((entry): entry is 'text' | 'image' => entry === 'text' || entry === 'image');
+  if (input.length > 0 && (mode === 'definition' || row.typed.has('modalities'))) {
+    common.input = input;
+  }
+  if (row.imageInputDecoder) common.imageInputDecoder = row.imageInputDecoder;
+  if (row.imageCountBudget.trim()) common.imageCountBudget = Number(row.imageCountBudget.trim());
+  if (row.tokenizer) common.tokenizer = row.tokenizer;
+  if (row.toolsSupported !== undefined) common.supportsTools = row.toolsSupported;
+
+  if (row.promptCacheShort.trim() || row.promptCacheLong.trim()) {
+    common.promptCache = {
+      ...(row.promptCacheShort.trim() ? { short: Number(row.promptCacheShort.trim()) } : {}),
+      ...(row.promptCacheLong.trim() ? { long: Number(row.promptCacheLong.trim()) } : {}),
+    };
+  }
+  if (row.premiumMultiplier.trim()) common.premiumMultiplier = Number(row.premiumMultiplier.trim());
+  if (row.contextWindow.trim()) common.contextWindow = Number(row.contextWindow.trim());
+  if (row.maxContextWindow.trim()) common.maxContextWindow = Number(row.maxContextWindow.trim());
+  if (row.maxOutputTokens.trim()) common.maxTokens = Number(row.maxOutputTokens.trim());
+  const omitMax = fromTriStateOptional(row.omitMaxOutputTokens);
+  if (omitMax !== undefined) common.omitMaxOutputTokens = omitMax;
+  const preferWs = fromTriStateOptional(row.preferWebsockets);
+  if (preferWs !== undefined) common.preferWebsockets = preferWs;
+
+  if (row.compatJson.trim()) {
+    const parsed = parseJsonObjectText(row.compatJson.trim());
+    if (!parsed.ok) throw new Error('Invalid compat JSON');
+    common.compat = parsed.value;
+  }
+  if (row.contextPromotionTarget.trim()) common.contextPromotionTarget = row.contextPromotionTarget.trim();
+  if (row.compactionModel.trim()) common.compactionModel = row.compactionModel.trim();
+  const remoteCompaction = buildRemoteCompaction({
+    enabled: row.remoteCompactionEnabled,
+    api: row.remoteCompactionApi,
+    endpoint: row.remoteCompactionEndpoint,
+    model: row.remoteCompactionModel,
+    v2StreamingEnabled: row.remoteCompactionV2StreamingEnabled,
+    v2Endpoint: row.remoteCompactionV2Endpoint,
+    streamingEndpoint: row.remoteCompactionStreamingEndpoint,
   });
-  const seenModelIds = new Set<string>();
-  for (const [index, row] of form.models.entries()) {
-    const modelId = row.modelId.trim();
-    if (!modelId) continue;
-    if (seenModelIds.has(modelId)) models[index]!.modelId = t('settings.providers.page.custom.error.duplicate');
-    else seenModelIds.add(modelId);
-  }
+  if (remoteCompaction) common.remoteCompaction = remoteCompaction;
 
-  const headers = form.replaceHeaders
-    ? form.headers.map((row): HeaderFieldErrors => {
-      const errors: HeaderFieldErrors = {};
-      const headerName = row.name.trim();
-      if (!headerName && !row.value) return errors;
-      if (!headerName) errors.name = t('settings.providers.page.custom.error.required');
-      else if (!HEADER_NAME_PATTERN.test(headerName)) errors.name = t('settings.providers.page.custom.error.headerName.format');
-      if (!row.value) errors.value = t('settings.providers.page.custom.error.required');
-      return errors;
-    })
-    : [];
-  if (form.replaceHeaders) {
-    const seenHeaders = new Set<string>();
-    for (const [index, row] of form.headers.entries()) {
-      const headerName = row.name.trim().toLowerCase();
-      if (!headerName) continue;
-      if (seenHeaders.has(headerName)) headers[index]!.name = t('settings.providers.page.custom.error.duplicate');
-      else seenHeaders.add(headerName);
-    }
-  }
+  const headerFields = buildHeadersPatch(row.headerNames, row.headers, row.headersPatchRemove, row.replaceHeaders);
+  if (headerFields.headers !== undefined) common.headers = headerFields.headers;
+  if (headerFields.headersPatch !== undefined) common.headersPatch = headerFields.headersPatch;
 
-  const valid = !fields.providerId && !fields.name && !fields.endpoint
-    && models.every((errors) => !errors.modelId && !errors.name && !errors.contextWindow && !errors.maxOutputTokens)
-    && headers.every((errors) => !errors.name && !errors.value);
-  return { fields, models, headers, valid };
+  return common;
+}
+
+function buildModelDefinitionWrite(row: ModelRow): OmpModelDefinitionWrite {
+  const base = buildModelWriteBase(row, 'definition');
+  const candidate: Record<string, unknown> = {
+    id: row.modelId.trim(),
+    ...base,
+  };
+  if (row.baseUrl.trim()) candidate.baseUrl = row.baseUrl.trim();
+  const costInputs = [row.costInput.trim(), row.costOutput.trim(), row.costCacheRead.trim(), row.costCacheWrite.trim()];
+  if (costInputs.some(Boolean)) {
+    candidate.cost = {
+      input: Number(row.costInput.trim()),
+      output: Number(row.costOutput.trim()),
+      cacheRead: Number(row.costCacheRead.trim()),
+      cacheWrite: Number(row.costCacheWrite.trim()),
+    };
+  }
+  return OmpModelDefinitionWriteSchema.parse(candidate);
+}
+
+function buildModelOverrideWrite(row: ModelRow): OmpModelOverrideWrite {
+  const base = buildModelWriteBase(row, 'override');
+  const candidate: Record<string, unknown> = { ...base };
+  const cost: Record<string, number> = {};
+  if (row.costInput.trim()) cost.input = Number(row.costInput.trim());
+  if (row.costOutput.trim()) cost.output = Number(row.costOutput.trim());
+  if (row.costCacheRead.trim()) cost.cacheRead = Number(row.costCacheRead.trim());
+  if (row.costCacheWrite.trim()) cost.cacheWrite = Number(row.costCacheWrite.trim());
+  if (Object.keys(cost).length > 0) candidate.cost = cost;
+  return OmpModelOverrideWriteSchema.parse(candidate);
 }
 
 export function buildCustomProviderRequest(form: CustomProviderFormState, expectedRevision: string): CustomProviderPersistPlan {
   const providerId = form.providerId.trim();
   if (!isValidProviderID(providerId)) throw new Error('Invalid provider ID');
-  const models = form.models.map((row) => {
-    // All canonical metadata survives editing. Discovery supplies no fabricated limits.
-    const model = {
-      ...(row.base ?? { reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }),
-      provider: providerId,
-      modelId: row.modelId.trim(),
-      name: row.name.trim(),
-      contextWindow: row.contextWindow.trim() ? Number(row.contextWindow) : 0,
-      maxOutputTokens: row.maxOutputTokens.trim() ? Number(row.maxOutputTokens) : 0,
-      // A saved row can predate a kind change; the request carries only what
-      // the native runner accepts, matching the writer's own modality rule.
-      modalities: normalizeModelModalities(row.nativeKind, row.modalities),
-    };
-    // Auto-fill only ever replaces fields the user did not set, so these
-    // overrides cannot disagree with a value typed into the editor.
-    if (row.reasoningEffortSupported !== undefined) model.reasoningEffortSupported = row.reasoningEffortSupported;
-    if (row.pricing !== undefined) model.pricing = row.pricing;
-    // Omission preserves the native runner's own tool-support default.
-    if (row.toolsSupported === undefined) return ModelSchema.parse(model);
-    return ModelSchema.parse({ ...model, toolsSupported: row.toolsSupported });
+
+  const models = form.models.map(buildModelDefinitionWrite);
+  if (new Set(models.map((model) => model.id)).size !== models.length) throw new Error('Duplicate model ID');
+
+  const modelOverrides: Record<string, OmpModelOverrideWrite> = {};
+  for (const row of form.modelOverrides) {
+    const id = row.modelId.trim();
+    if (!id || PROTOTYPE_KEY_HAZARDS.has(id)) throw new Error('Invalid override model ID');
+    if (Object.hasOwn(modelOverrides, id)) throw new Error('Duplicate override model ID');
+    modelOverrides[id] = buildModelOverrideWrite(row);
+  }
+
+  const endpoint = form.endpoint.trim();
+  const nativeWrite: Record<string, unknown> = {
+    providerId,
+    models,
+    modelOverrides,
+  };
+
+  if (form.name.trim()) nativeWrite.name = form.name.trim();
+  if (endpoint) nativeWrite.baseUrl = endpoint;
+  else if (form.isEdit) nativeWrite.baseUrl = null;
+
+  if (form.api) nativeWrite.api = form.api;
+  else if (form.isEdit) nativeWrite.api = null;
+
+  if (form.auth) nativeWrite.auth = form.auth;
+  else if (form.isEdit) nativeWrite.auth = null;
+
+  const authHeader = fromTriState(form.authHeader, form.isEdit);
+  if (authHeader !== undefined) nativeWrite.authHeader = authHeader;
+
+  if (form.configApiKeyAction === 'clear') {
+    nativeWrite.configApiKey = null;
+  } else if (form.configApiKeyAction === 'set' && form.configApiKeyValue.trim()) {
+    nativeWrite.configApiKey = form.configApiKeyValue.trim();
+  }
+
+  const headerFields = buildHeadersPatch(form.headerNames, form.headers, form.headersPatchRemove, form.replaceHeaders);
+  if (headerFields.headers !== undefined) nativeWrite.headers = headerFields.headers;
+  if (headerFields.headersPatch !== undefined) nativeWrite.headersPatch = headerFields.headersPatch;
+
+  if (form.discoveryEnabled) {
+    const discovery: Record<string, unknown> = { type: form.discoveryType };
+    if (form.discoveryTimeoutMs.trim()) discovery.timeoutMs = Number(form.discoveryTimeoutMs.trim());
+    if (form.discoveryType === 'openai-models-list') {
+      const injectV1 = fromTriStateOptional(form.discoveryInjectV1);
+      if (injectV1 !== undefined) discovery.injectV1 = injectV1;
+    }
+    if (form.discoveryType === 'openai-models-list' || form.discoveryType === 'lm-studio' || form.discoveryType === 'proxy') {
+      const advertisedReasoning = fromTriStateOptional(form.discoveryAdvertisedReasoning);
+      if (advertisedReasoning !== undefined) discovery.advertisedReasoning = advertisedReasoning;
+    }
+    nativeWrite.discovery = discovery;
+  } else if (form.isEdit) {
+    nativeWrite.discovery = null;
+  }
+
+  if (form.compatJson.trim()) {
+    const parsed = parseJsonObjectText(form.compatJson.trim());
+    if (!parsed.ok) throw new Error('Invalid compat JSON');
+    nativeWrite.compat = parsed.value;
+  } else if (form.isEdit) {
+    nativeWrite.compat = null;
+  }
+
+  const disableStrictTools = fromTriState(form.disableStrictTools, form.isEdit);
+  if (disableStrictTools !== undefined) nativeWrite.disableStrictTools = disableStrictTools;
+
+  if (form.transportPiNative) nativeWrite.transport = 'pi-native';
+  else if (form.isEdit) nativeWrite.transport = null;
+
+  if (form.guardrailIdentifier.trim()) nativeWrite.guardrailIdentifier = form.guardrailIdentifier.trim();
+  else if (form.isEdit) nativeWrite.guardrailIdentifier = null;
+
+  if (form.guardrailVersion.trim()) nativeWrite.guardrailVersion = form.guardrailVersion.trim();
+  else if (form.isEdit) nativeWrite.guardrailVersion = null;
+
+  if (form.guardrailTrace) nativeWrite.guardrailTrace = form.guardrailTrace;
+  else if (form.isEdit) nativeWrite.guardrailTrace = null;
+
+  const metadataMap = collectHeaderMap(form.requestMetadata);
+  if (Object.keys(metadataMap).length > 0) nativeWrite.requestMetadata = metadataMap;
+  else if (form.isEdit) nativeWrite.requestMetadata = null;
+
+  const remoteCompaction = buildRemoteCompaction({
+    enabled: form.remoteCompactionEnabled,
+    api: form.remoteCompactionApi,
+    endpoint: form.remoteCompactionEndpoint,
+    model: form.remoteCompactionModel,
+    v2StreamingEnabled: form.remoteCompactionV2StreamingEnabled,
+    v2Endpoint: form.remoteCompactionV2Endpoint,
+    streamingEndpoint: form.remoteCompactionStreamingEndpoint,
   });
-  if (new Set(models.map((model) => model.modelId)).size !== models.length) throw new Error('Duplicate model ID');
+  if (remoteCompaction) nativeWrite.remoteCompaction = remoteCompaction;
+  else if (form.isEdit) nativeWrite.remoteCompaction = null;
+
+  const parsedNative = OmpProviderConfigWriteSchema.parse(nativeWrite);
+  const providerName = form.name.trim() || providerId;
+  const legacyProtocol = legacyProtocolForApi(form.api || form.effectiveApi);
+  const configuration = !form.isBuiltIn && endpoint && legacyProtocol
+    ? {
+      providerId,
+      name: providerName,
+      endpoint,
+      protocol: legacyProtocol,
+      credentialRef: form.credentialRef,
+    }
+    : undefined;
+
   return {
+    providerId,
+    providerName,
     apiKey: form.apiKey,
     icon: form.icon,
     logo: logoPlanOf(form.logo),
     request: ProviderConfigureRequestSchema.parse({
       expectedRevision,
-      configuration: {
-        providerId,
-        name: form.name.trim(),
-        endpoint: form.endpoint.trim(),
-        protocol: form.protocol,
-        credentialRef: form.credentialRef,
-      },
-      headers: providerHeaderWrite(form),
-      models,
+      ...(configuration ? { configuration } : {}),
+      native: parsedNative,
     }),
   };
 }
 
 export function buildProviderDiscoveryRequest(form: CustomProviderFormState, editing: boolean): ProviderModelDiscoveryRequest {
+  const endpoint = form.endpoint.trim() || form.effectiveBaseUrl.trim();
+  const effectiveApi = form.api || form.effectiveApi;
+  const legacyProtocol = legacyProtocolForApi(effectiveApi) ?? form.protocol;
+  const nativeApi = OMP_PROVIDER_APIS.find((entry) => entry === effectiveApi);
+  const headers = form.replaceHeaders
+    ? providerHeaderWrite(form)
+    : (() => {
+      const map = collectHeaderMap(form.headers);
+      return Object.keys(map).length > 0 ? map : undefined;
+    })();
   const request: ProviderModelDiscoveryRequest = {
-    endpoint: form.endpoint.trim(),
-    protocol: form.protocol,
-    headers: providerHeaderWrite(form),
+    endpoint,
+    protocol: legacyProtocol,
+    ...(nativeApi ? { nativeApi } : {}),
+    ...(headers !== undefined ? { headers } : {}),
   };
   if (editing) request.providerId = form.providerId;
   if (form.apiKey) request.apiKey = form.apiKey;
@@ -390,8 +1263,6 @@ export function buildProviderDiscoveryRequest(form: CustomProviderFormState, edi
   return ProviderModelDiscoveryRequestSchema.parse(request);
 }
 
-// Only what the user did in the field changes the stored image; an untouched
-// field keeps whatever is stored, including a logo another client just uploaded.
 function logoPlanOf(logo: CustomProviderFormState['logo']): CustomProviderLogoPlan {
   if (logo === null) return { kind: 'keep' };
   if (logo === 'removed') return { kind: 'remove' };
@@ -400,13 +1271,8 @@ function logoPlanOf(logo: CustomProviderFormState['logo']): CustomProviderLogoPl
 
 // ── Model info auto-fill and the discovery dialog ──────────────────────────
 
-/** A catalog answer keyed by model id, as both auto-fill sources return it. */
 export type ModelCatalogAnswers = ReadonlyMap<string, ModelCatalogInfo>;
 
-/**
- * Which fields a catalog answer can still write into a row. A field the user
- * set is skipped even when it is empty: "I typed it" is the user's answer.
- */
 export function autoFillFields(row: ModelRow, catalog: ModelCatalogInfo): ModelAutoFillField[] {
   const fields: ModelAutoFillField[] = [];
   if (fillableLimit(row, 'contextWindow', String(catalog.contextWindow))) fields.push('contextWindow');
@@ -416,18 +1282,16 @@ export function autoFillFields(row: ModelRow, catalog: ModelCatalogInfo): ModelA
     if (next.length > 0 && !sameModalities(next, row.modalities)) fields.push('modalities');
   }
   if (!row.typed.has('toolsSupported') && row.toolsSupported === undefined && catalog.toolsSupported !== undefined) fields.push('toolsSupported');
-  if (!row.typed.has('reasoning') && row.reasoningEffortSupported === undefined) fields.push('reasoning');
-  if (!row.typed.has('pricing') && row.pricing === undefined) fields.push('pricing');
+  if (!row.typed.has('reasoning') && row.reasoning === undefined) fields.push('reasoning');
+  if (!row.typed.has('pricing') && !row.costInput.trim() && !row.costOutput.trim()) fields.push('pricing');
+  if (!row.typed.has('thinking') && !row.thinkingMode && catalog.thinking !== undefined) fields.push('thinking');
+  if (!row.typed.has('imageCountBudget') && !row.imageCountBudget.trim() && catalog.imageCountBudget !== undefined) fields.push('imageCountBudget');
   return fields;
 }
 
 const sameModalities = (left: readonly string[], right: readonly Model['modalities'][number][]): boolean =>
   left.length === right.length && left.every((value, index) => right[index] === value);
 
-/**
- * A limit may be written when the field is empty and unset, or when nothing
- * but a previous auto-fill put the current value there. A typed value stays.
- */
 const fillableLimit = (row: ModelRow, field: 'contextWindow' | 'maxOutputTokens', value: string): boolean => {
   if (row.typed.has(field)) return false;
   const current = row[field].trim();
@@ -435,11 +1299,6 @@ const fillableLimit = (row: ModelRow, field: 'contextWindow' | 'maxOutputTokens'
   return row.filledFrom[field] !== undefined && current !== value;
 };
 
-/**
- * Applies the answers to the form's rows. Only fields the user did not set are
- * written, and each written field records its source for the label under the
- * control. A row whose id no answer names is left exactly as it was.
- */
 export function applyModelCatalogInfo(
   models: readonly ModelRow[],
   answers: ModelCatalogAnswers,
@@ -449,8 +1308,6 @@ export function applyModelCatalogInfo(
     const catalog = answers.get(row.modelId.trim());
     if (!catalog) return row;
     const fields = autoFillFields(row, catalog);
-    // A family alone groups the dialog row; it is not a value the user reads
-    // in the form, so a family-only answer counts as nothing filled.
     if (fields.length === 0) return row;
     filled += 1;
     const filledFrom = { ...row.filledFrom };
@@ -465,14 +1322,29 @@ export function applyModelCatalogInfo(
         updated.nativeKind = nativeKind;
         updated.modalities = normalizeModelModalities(nativeKind, inputs);
       } else if (field === 'toolsSupported') updated.toolsSupported = catalog.toolsSupported;
-      else if (field === 'reasoning') updated.reasoningEffortSupported = catalog.reasoning;
-      else if (field === 'pricing') {
+      else if (field === 'reasoning') {
+        updated.reasoning = catalog.reasoning;
+        updated.reasoningEffortSupported = catalog.reasoning;
+      } else if (field === 'pricing') {
+        updated.costInput = String(catalog.cost.input);
+        updated.costOutput = String(catalog.cost.output);
+        updated.costCacheRead = String(catalog.cost.cacheRead);
+        updated.costCacheWrite = String(catalog.cost.cacheWrite);
         updated.pricing = {
           inputPerMillionTokens: catalog.cost.input,
           outputPerMillionTokens: catalog.cost.output,
           cacheReadPerMillionTokens: catalog.cost.cacheRead,
           cacheWritePerMillionTokens: catalog.cost.cacheWrite,
         };
+      } else if (field === 'thinking' && catalog.thinking) {
+        updated.thinkingMode = catalog.thinking.mode;
+        updated.thinkingEfforts = [...catalog.thinking.efforts];
+        updated.thinkingDefaultLevel = catalog.thinking.defaultLevel ?? '';
+        updated.thinkingSupportsDisplay = toTriState(catalog.thinking.supportsDisplay);
+        updated.thinkingRequiresEffort = toTriState(catalog.thinking.requiresEffort);
+        updated.thinkingEffortMapJson = catalog.thinking.effortMap ? JSON.stringify(catalog.thinking.effortMap, null, 2) : '';
+      } else if (field === 'imageCountBudget' && catalog.imageCountBudget !== undefined) {
+        updated.imageCountBudget = String(catalog.imageCountBudget);
       }
     }
     if (catalog.family !== undefined) updated.family = catalog.family;
@@ -481,10 +1353,6 @@ export function applyModelCatalogInfo(
   return { models: next, filled };
 }
 
-/**
- * The ids to ask the OpenRouter route for: models the OMP catalog did not
- * answer, and only when they are not already catalogued from a previous fill.
- */
 export function idsMissingCatalog(
   models: readonly ModelRow[],
   catalogued: ModelCatalogAnswers,
@@ -500,11 +1368,9 @@ export function idsMissingCatalog(
   return ids;
 }
 
-/** Each request keeps to its own id limit: the agent contract caps 500, the Host route 200. */
 export const AUTO_FILL_ENRICH_LIMIT = 500;
 export const AUTO_FILL_OPENROUTER_LIMIT = 200;
 
-/** The distinct model ids a fill would ask about, in form order. */
 export function autoFillIds(models: readonly ModelRow[]): string[] {
   const seen = new Set<string>();
   const ids: string[] = [];
@@ -517,24 +1383,13 @@ export function autoFillIds(models: readonly ModelRow[]): string[] {
   return ids;
 }
 
-/** Why a fill has nothing more to say, when it does. */
 export type AutoFillNotice =
-  /** The OpenRouter leg was refused by enterprise policy. */
   | 'enterprise'
-  /** The OpenRouter leg failed. */
   | 'failed'
-  /** No source knew any of the ids. */
   | 'none'
-  /** Every row already had its own value. */
   | 'nothing'
-  /** Some ids stayed unknown; they are listed in the notice. */
   | 'partial';
 
-/**
- * The distinct ids no source answered for, in the order given. Ids a source
- * cap kept out of a request belong here too: nobody asked, so nobody answered,
- * and the reader is told which models stayed empty rather than left to guess.
- */
 export function unresolvedAutoFillIds(ids: readonly string[], answers: ModelCatalogAnswers): string[] {
   const seen = new Set<string>();
   const unresolved: string[] = [];
@@ -547,17 +1402,8 @@ export function unresolvedAutoFillIds(ids: readonly string[], answers: ModelCata
   return unresolved;
 }
 
-/** How many unknown ids the partial notice names before counting the rest. */
 const AUTO_FILL_NOTICE_ID_LIMIT = 10;
 
-/**
- * What the fill reports, in order of what the reader must know: a refused or
- * failed lookup first (a catalog-only result must never read as success), then
- * the case where no source answered at all, then the ids that stayed unknown,
- * and only then "nothing left to fill". Unknown ids outrank "nothing": a
- * second click, or a discovery that already prefilled the catalogued rows,
- * fills nothing while those models still have no limits.
- */
 export function autoFillNoticeFor(input: {
   lookup: 'enterprise' | 'failed' | null;
   answered: number;
@@ -571,17 +1417,11 @@ export function autoFillNoticeFor(input: {
   return null;
 }
 
-/** The ids a notice names, and how many it leaves to a count. */
 export function autoFillNoticeIds(ids: readonly string[]): { shown: string[]; hidden: number } {
   const shown = ids.slice(0, AUTO_FILL_NOTICE_ID_LIMIT);
   return { shown, hidden: Math.max(0, ids.length - shown.length) };
 }
 
-/**
- * The id list a partial notice prints. The count past the cap goes through the
- * caller's translated template, so every locale keeps its own way of saying
- * "and N more" (and its own bidi order) instead of a bare `(+N)`.
- */
 export function formatAutoFillNoticeModels(
   ids: readonly string[],
   more: (models: string, count: number) => string,
@@ -591,35 +1431,25 @@ export function formatAutoFillNoticeModels(
   return hidden > 0 ? more(list, hidden) : list;
 }
 
-/** A row imported from a discovery result, prefilled from what the catalog already knows. */
 export function createDiscoveredModelRow(model: ProviderModelDiscoveryResult['models'][number]): ModelRow {
   const row = createModelRow(model);
   if (!model.catalog) return row;
   return applyModelCatalogInfo([row], new Map([[row.modelId.trim(), model.catalog]])).models[0];
 }
 
-/**
- * Records that the user set this field by hand, so auto-fill stops touching it.
- * The typing also retires the field's provenance: a value the user wrote (or
- * cleared) came from the user, not from the catalog that filled it before.
- */
 export function markModelFieldTyped(row: ModelRow, field: ModelAutoFillField): ModelRow {
   if (row.typed.has(field) && row.filledFrom[field] === undefined) return row;
   const { [field]: _retired, ...filledFrom } = row.filledFrom;
   return { ...row, typed: new Set([...row.typed, field]), filledFrom };
 }
 
-/** A row whose id the freshly discovered list no longer carries. */
 export function staleModelIds(models: readonly ModelRow[], discovered: readonly { modelId: string }[]): string[] {
-  // Ids compare trimmed on both sides: a discovery result may pad an id that
-  // a form row already carries without the padding.
   const known = new Set(discovered.map((model) => model.modelId.trim()));
   return models
     .map((row) => row.modelId.trim())
     .filter((modelId) => modelId !== '' && !known.has(modelId));
 }
 
-/** Every discovered id the form does not hold yet, in discovery order. */
 export function idsToAdd(models: readonly ModelRow[], discovered: readonly { modelId: string }[]): string[] {
   const existing = new Set(models.map((row) => row.modelId.trim()).filter(Boolean));
   const seen = new Set<string>();
@@ -635,29 +1465,17 @@ export function idsToAdd(models: readonly ModelRow[], discovered: readonly { mod
 
 export type DiscoveryFilter = 'all' | 'stale' | 'text' | 'image' | 'embedding' | 'audio';
 
-/**
- * Every chip the dialog offers. The contract has no video modality, so there
- * is no video chip; a chip whose count is zero shows zero rather than vanish,
- * because a hidden chip would read as "this provider cannot do that".
- */
 export const discoveryFilterValues: readonly DiscoveryFilter[] = ['all', 'stale', 'text', 'image', 'embedding', 'audio'];
 
-/** One row of the dialog: a discovered model, or a form row the list lost. */
 export interface DiscoveryRow {
   kind: 'discovered' | 'stale';
   modelId: string;
   name?: string;
   catalog?: ModelCatalogInfo;
-  /** The form row this id already belongs to, when it does. */
   formRow?: ModelRow;
   family?: string;
 }
 
-/**
- * The dialog's rows: every discovered model, plus form rows the fresh list
- * does not carry (a stale row can be removed individually). A form row marks
- * the discovered model it stands for, so a row is never listed twice.
- */
 export function discoveryRows(
   discovered: readonly ProviderModelDiscoveryResult['models'][number][],
   models: readonly ModelRow[],
@@ -686,26 +1504,15 @@ export function discoveryRows(
   return rows;
 }
 
-/**
- * A row passes the chosen filter. Text and image read the catalog's input
- * modalities, or the form row's own when no catalog answered; embedding and
- * audio read the native kind, which is what OMP accepts for them.
- */
 export function matchesDiscoveryFilter(row: DiscoveryRow, filter: DiscoveryFilter): boolean {
   if (filter === 'all') return true;
   if (filter === 'stale') return row.kind === 'stale';
-  // A discovered model with no catalog and no form row still accepts text:
-  // every custom provider model can, so the chip counts it rather than hiding it.
   const inputs = row.catalog?.input ?? row.formRow?.modalities ?? ['text'];
   if (filter === 'text' || filter === 'image') return inputs.includes(filter);
   if (filter === 'embedding') return row.formRow?.nativeKind === 'embedding';
   return row.formRow?.nativeKind === 'tts' || row.formRow?.nativeKind === 'stt';
 }
 
-/**
- * Grouping by family only pays off when every visible row names one; a list
- * with a single unnamed row stays flat, since half a grouping reads worse.
- */
 export function groupDiscoveryRows(rows: readonly DiscoveryRow[]): { grouped: boolean; groups: Array<{ family: string; rows: DiscoveryRow[] }> } {
   if (rows.length === 0 || rows.some((row) => !row.family)) return { grouped: false, groups: [] };
   const groups = new Map<string, DiscoveryRow[]>();
@@ -718,7 +1525,6 @@ export function groupDiscoveryRows(rows: readonly DiscoveryRow[]): { grouped: bo
   return { grouped: true, groups: [...groups].map(([family, familyRows]) => ({ family, rows: familyRows })) };
 }
 
-/** How many rows each filter would show. A chip is always offered, count and all. */
 export function discoveryFilterCounts(rows: readonly DiscoveryRow[]): Record<DiscoveryFilter, number> {
   const counts: Record<DiscoveryFilter, number> = { all: rows.length, stale: 0, text: 0, image: 0, embedding: 0, audio: 0 };
   for (const row of rows) {

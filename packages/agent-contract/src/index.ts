@@ -19,6 +19,7 @@ export * from './plugins.ts';
 export * from './file-resources.ts';
 export * from './skill-repositories.ts';
 export * from './provider-management.ts';
+export * from './omp-provider-config.ts';
 export * from './usage.ts';
 export * from './websearch.ts';
 export * from './settings.ts';

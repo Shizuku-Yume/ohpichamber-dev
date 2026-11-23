@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema } from './primitives.ts';
 import { ModelSchema, ProviderConfigurationSchema } from './catalogs.ts';
+import {
+  OmpProviderApiSchema,
+  OmpProviderConfigReadSchema,
+  OmpThinkingConfigSchema,
+  ProviderHeaderWriteSchema,
+  PublicEndpointSchema,
+} from './omp-provider-config.ts';
+export * from './omp-provider-config.ts';
 
 export const ProviderAccountSchema = z.strictObject({
   credentialRef: EntityIdSchema, method: z.enum(['api-key', 'oauth']), label: z.string().max(128).optional(),
@@ -42,15 +50,18 @@ export const ProviderOAuthResultSchema = z.strictObject({
 export type ProviderOAuthResult = z.infer<typeof ProviderOAuthResultSchema>;
 // Discovery runs against a custom provider's base URL, which may carry a query
 // (`?api-version=`). Embedded credentials stay refused.
-const EndpointSchema = z.url({ protocol: /^https?$/ }).refine(value => {
-  const url = new URL(value); return !url.username && !url.password && !url.hash;
-});
-export const ProviderHeaderWriteSchema = z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().refine(value => !/[\r\n]/.test(value)));
 export const ProviderModelDiscoveryRequestSchema = z.strictObject({
-  providerId: EntityIdSchema.optional(), endpoint: EndpointSchema,
-  protocol: z.enum(['chat-completions', 'responses', 'messages', 'generate-content']),
-  headers: ProviderHeaderWriteSchema.optional(), apiKey: z.string().min(1).optional(), credentialRef: EntityIdSchema.optional(),
-});
+  providerId: EntityIdSchema.optional(),
+  endpoint: PublicEndpointSchema,
+  protocol: z.enum(['chat-completions', 'responses', 'messages', 'generate-content']).optional(),
+  nativeApi: OmpProviderApiSchema.optional(),
+  headers: ProviderHeaderWriteSchema.optional(),
+  apiKey: z.string().min(1).optional(),
+  credentialRef: EntityIdSchema.optional(),
+}).refine(
+  request => request.protocol !== undefined || request.nativeApi !== undefined,
+  'Discovery request requires protocol or nativeApi',
+);
 export type ProviderModelDiscoveryRequest = z.infer<typeof ProviderModelDiscoveryRequestSchema>;
 /**
  * Capability metadata the bundled OMP catalog publishes for a model id. It is
@@ -72,6 +83,8 @@ export const ModelCatalogInfoSchema = z.strictObject({
   }),
   reasoning: z.boolean(),
   toolsSupported: z.boolean().optional(),
+  thinking: OmpThinkingConfigSchema.optional(),
+  imageCountBudget: z.number().int().positive().optional(),
   family: z.string().min(1).optional(),
   status: z.enum(['active', 'alpha', 'beta', 'deprecated']).optional(),
 });
@@ -97,5 +110,12 @@ export const ProviderModelEnrichResultSchema = z.strictObject({
 });
 export type ProviderModelEnrichResult = z.infer<typeof ProviderModelEnrichResultSchema>;
 import { ImageModelSchema } from './catalogs.ts';
-export const ProviderConfigurationReadSchema = z.strictObject({ revision: CounterSchema, configuration: ProviderConfigurationSchema, headerNames: z.array(z.string()), models: z.array(ModelSchema), imageModels: z.array(ImageModelSchema).default([]) });
+export const ProviderConfigurationReadSchema = z.strictObject({
+  revision: CounterSchema,
+  configuration: ProviderConfigurationSchema.nullable(),
+  headerNames: z.array(z.string()),
+  models: z.array(ModelSchema),
+  imageModels: z.array(ImageModelSchema).default([]),
+  native: OmpProviderConfigReadSchema.optional(),
+});
 export type ProviderConfigurationRead = z.infer<typeof ProviderConfigurationReadSchema>;

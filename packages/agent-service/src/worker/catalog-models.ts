@@ -6,13 +6,15 @@ import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
 import { AUTHENTICATED_SENTINEL, getEnvApiKey, getEnvApiKeyName, listProvidersWithEnvKey, oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
 import { generateImage } from '@oh-my-pi/pi-ai/images';
-import { getModelPricingStatus, IMAGE_GENERATION_APIS, modelKind, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
+import { getModelPricingStatus, IMAGE_GENERATION_APIS, isGeneratedProvider, modelKind, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
 import { authPolicyFor } from '@oh-my-pi/pi-catalog/compat/auth';
+import { providerEntry } from '@oh-my-pi/pi-catalog/compat/providers';
 import type { CreateAgentSessionOptions } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { ModelsConfigFile, validateProviderConfiguration } from '@oh-my-pi/pi-coding-agent/config/models-config';
 import { ModelsConfigSchema, type ModelsConfig } from '@oh-my-pi/pi-coding-agent/config/models-config-schema';
+import { getModelsConfigSchemaBundle } from '@oh-my-pi/pi-coding-agent/config/models-config-schema-bundle';
 import { cfgDisabledProviders, cfgEnabledModels } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { filterAvailableModelsByEnabledPatterns, getModelMatchPreferences, pickDefaultAvailableModel, resolveAllowedModels, resolveModelRoleValue } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
@@ -21,16 +23,19 @@ import { cfgCompactionModelThresholds, cfgCompactionModelThresholdsEnabled, cfgE
 import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import { isDiscoveryBearerApiKey } from '@oh-my-pi/pi-coding-agent/config/model-provider-discovery';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
+import { stringifyYamlConfig } from '@oh-my-pi/pi-utils/yaml-config';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
  ImageGenerateRequestSchema, ImageGenerateResultSchema, ImageModelConfigureRequestSchema,
- ImageModelMutationResultSchema, ImageModelSchema, ModelSchema, ModelCatalogSchema,
+ ImageModelMutationResultSchema, ImageModelSchema, JsonObjectSchema, ModelSchema, ModelCatalogSchema,
  ModelConfigureRequestSchema, ModelDeleteRequestSchema,
  ModelMutationResultSchema, ModelSelectionSchema, ProviderSchema, ProviderCatalogSchema,
  ProviderConfigurationSchema, ProviderConfigureRequestSchema, ProviderDeleteRequestSchema,
  ProviderMutationResultSchema, PositiveCounterSchema, ProviderConfigurationReadSchema,
  ProviderModelDiscoveryRequestSchema, ProviderModelDiscoveryResultSchema,
- ProviderModelEnrichRequestSchema, ProviderModelEnrichResultSchema,
+ ProviderModelEnrichRequestSchema, ProviderModelEnrichResultSchema, PublicEndpointSchema,
+ OmpModelDefinitionReadSchema, OmpModelOverrideReadSchema, OmpProviderConfigReadSchema,
+ OmpThinkingConfigSchema,
  type ProviderConfigurationRead, type ProviderModelDiscoveryRequest, type ProviderModelDiscoveryResult,
  type ProviderModelEnrichRequest, type ProviderModelEnrichResult,
  type Model, type ModelCatalog, type ModelConfigureRequest, type ModelDeleteRequest,
@@ -38,6 +43,11 @@ import {
  type ProviderConfigureRequest, type ProviderDeleteRequest, type ProviderMutationResult,
  type CompletionRequest, type ImageGenerateRequest, type ImageGenerateResult,
  type ImageModelConfigureRequest, type ImageModelMutationResult,
+ type JsonObject, type OmpConfigApiKeyStatus, type OmpHeadersPatch,
+ type OmpModelDefinitionRead, type OmpModelDefinitionWrite,
+ type OmpModelOverrideRead, type OmpModelOverrideWrite,
+ type OmpProviderConfigWrite,
+ type OmpProviderDiscovery, type OmpRemoteCompaction, type OmpThinkingConfig,
  formatModelRef,
 } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
@@ -74,15 +84,18 @@ const MetadataSchema = z.object({
  imageModels: z.record(z.string(), ImageModelSchema).default({}),
  defaultCredentials: z.record(z.string(), z.string().nullable()).default({}),
  providerHeaders: z.record(z.string(), z.record(z.string(), z.string())).default({}),
-}).default({ providers: {}, models: {}, imageModels: {}, defaultCredentials: {}, providerHeaders: {} });
+ providerNames: z.record(z.string(), z.string()).default({}),
+}).default({ providers: {}, models: {}, imageModels: {}, defaultCredentials: {}, providerHeaders: {}, providerNames: {} });
 const FileMetadataSchema = z.object({ openchamber: MetadataSchema });
 type CatalogMetadata = z.infer<typeof MetadataSchema>;
 type ConfigState = { config: ModelsConfig; metadata: CatalogMetadata; path: string; content: string | null };
-type ModelsConfigInput = typeof ModelsConfigSchema.inferIn;
-type NativeProviderConfigInput = NonNullable<ModelsConfigInput['providers']>[string];
-type NativeModelDefinitionInput = NonNullable<NativeProviderConfigInput['models']>[number];
-type NativeThinkingEffortInput = NonNullable<NonNullable<NativeModelDefinitionInput['thinking']>['efforts']>[number];
-
+type NativeProviderConfig = NonNullable<ModelsConfig['providers']>[string];
+type NativeModelDefinition = NonNullable<NativeProviderConfig['models']>[number];
+type NativeModelOverride = NonNullable<NativeProviderConfig['modelOverrides']>[string];
+type NativeDiscovery = NonNullable<NativeProviderConfig['discovery']>;
+type NativeRemoteCompaction = NonNullable<NativeProviderConfig['remoteCompaction']>;
+type NativeThinking = NonNullable<NativeModelDefinition['thinking']>;
+type NativeThinkingEffort = NonNullable<NativeThinking['efforts']>[number];
 const WELL_KNOWN_PROVIDER_NAMES: Readonly<Record<string, string>> = Object.freeze({
  '302ai': '302.AI',
  'abacus': 'Abacus.AI',
@@ -99,6 +112,15 @@ const DESCRIPTOR_LABELS: Readonly<Record<string, string>> = Object.freeze(
    .map(d => [d.providerId, d.catalogDiscovery!.label!])
  )
 );
+
+const DESCRIPTOR_IDS: ReadonlySet<string> = new Set(PROVIDER_DESCRIPTORS.map(d => d.providerId));
+
+function isBuiltInProvider(providerId: string): boolean {
+ return isGeneratedProvider(providerId)
+  || providerEntry(providerId) !== undefined
+  || DESCRIPTOR_IDS.has(providerId)
+  || authPolicyFor(providerId) !== undefined;
+}
 
 export function resolveProviderDisplayName(providerId: string, configuredName?: string | null): string {
  if (configuredName && configuredName.trim().length > 0) return configuredName;
@@ -145,12 +167,31 @@ export function credentialReference(providerId: string, id: number): string {
  return `credential_${createHash('sha256').update(`${providerId}\0${id}`).digest('hex').slice(0, 24)}`;
 }
 
-function customProviderBaseUrl(endpoint: string, protocol: ProviderModelDiscoveryRequest['protocol']): string {
+function customProviderBaseUrl(endpoint: string, protocol: 'chat-completions' | 'responses' | 'messages' | 'generate-content'): string {
  if (protocol !== 'chat-completions' && protocol !== 'responses') return endpoint;
  const url = new URL(endpoint);
  if (url.pathname !== '/') return endpoint;
  url.pathname = '/v1';
  return url.href;
+}
+
+function discoveryProtocolFor(request: ProviderModelDiscoveryRequest): 'chat-completions' | 'responses' | 'messages' | 'generate-content' {
+ if (request.protocol !== undefined) return request.protocol;
+ switch (request.nativeApi) {
+  case 'anthropic-messages':
+  case 'bedrock-converse-stream':
+   return 'messages';
+  case 'google-generative-ai':
+  case 'google-gemini-cli':
+  case 'google-vertex':
+   return 'generate-content';
+  case 'openai-responses':
+  case 'openai-codex-responses':
+  case 'azure-openai-responses':
+   return 'responses';
+  default:
+   return 'chat-completions';
+ }
 }
 
 function sameDiscoveryEndpoint(left: string | undefined | null, right: string | undefined | null): boolean {
@@ -184,25 +225,251 @@ function nativeApi(protocol: NonNullable<Provider['protocol']>): NonNullable<Non
  }
 }
 
-function nativeProviderApi(api: string): NonNullable<NativeProviderConfigInput['api']> {
+function nativeProviderApi(api: string): NonNullable<NativeProviderConfig['api']> {
  switch (api) {
   case 'openai-completions': case 'openai-responses': case 'openai-codex-responses':
   case 'azure-openai-responses': case 'anthropic-messages': case 'bedrock-converse-stream':
   case 'google-generative-ai': case 'google-gemini-cli': case 'google-vertex':
-  case 'openrouter-decisions': case 'typesafe':
+  case 'openrouter-decisions': case 'openai-decisions': case 'google-decisions':
+  case 'workers-ai-systemone': case 'liquid-systemone': case 'nace-systemone':
+  case 'typesafe':
    return api;
   default:
    throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
  }
 }
 
-function nativeThinkingEffort(effort: string): NativeThinkingEffortInput {
+function nativeThinkingEffort(effort: string): NativeThinkingEffort {
  switch (effort) {
   case 'minimal': case 'low': case 'medium': case 'high': case 'xhigh': case 'max':
    return effort;
   default:
    throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
  }
+}
+
+const PROTOTYPE_KEY_HAZARDS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+function configApiKeyStatus(apiKey: string | undefined): OmpConfigApiKeyStatus {
+ if (!apiKey) return { configured: false };
+ if (apiKey.startsWith('!')) return { configured: true, source: 'command' };
+ if (/^[A-Z_][A-Z0-9_]*$/.test(apiKey) && process.env[apiKey] !== undefined) {
+  return { configured: true, source: 'env', envVar: apiKey };
+ }
+ return { configured: true, source: 'literal' };
+}
+
+function mergeHeaders(
+ existing: Record<string, string> | undefined,
+ replace: Record<string, string> | undefined,
+ patch: OmpHeadersPatch | undefined,
+): Record<string, string> | undefined {
+ if (replace !== undefined) {
+  return Object.keys(replace).length > 0 ? { ...replace } : undefined;
+ }
+ const next: Record<string, string> = { ...(existing ?? {}) };
+ if (patch !== undefined) {
+  for (const key of patch.remove ?? []) delete next[key];
+  for (const [key, value] of Object.entries(patch.set ?? {})) next[key] = value;
+ }
+ return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function toThinkingRead(thinking: NonNullable<NonNullable<ModelsConfig['providers']>[string]['models']>[number]['thinking'] | undefined): OmpThinkingConfig | undefined {
+ if (thinking === undefined) return undefined;
+ const candidate: OmpThinkingConfig = { mode: thinking.mode, efforts: [...thinking.efforts] };
+ if (thinking.defaultLevel !== undefined) candidate.defaultLevel = thinking.defaultLevel;
+ if (thinking.effortMap !== undefined) candidate.effortMap = { ...thinking.effortMap };
+ if (thinking.supportsDisplay !== undefined) candidate.supportsDisplay = thinking.supportsDisplay;
+ if (thinking.requiresEffort !== undefined) candidate.requiresEffort = thinking.requiresEffort;
+ return OmpThinkingConfigSchema.parse(candidate);
+}
+
+function toThinkingInput(thinking: OmpThinkingConfig): NativeThinking {
+ const result: NativeThinking = { mode: thinking.mode, efforts: [...thinking.efforts] };
+ if (thinking.defaultLevel !== undefined) result.defaultLevel = thinking.defaultLevel;
+ if (thinking.effortMap !== undefined) result.effortMap = { ...thinking.effortMap };
+ if (thinking.supportsDisplay !== undefined) result.supportsDisplay = thinking.supportsDisplay;
+ if (thinking.requiresEffort !== undefined) result.requiresEffort = thinking.requiresEffort;
+ return result;
+}
+
+function toDiscoveryInput(discovery: OmpProviderDiscovery): NativeDiscovery {
+ const result: NativeDiscovery = { type: discovery.type };
+ if (discovery.timeoutMs !== undefined) result.timeoutMs = discovery.timeoutMs;
+ if (discovery.injectV1 !== undefined) result.injectV1 = discovery.injectV1;
+ if (discovery.advertisedReasoning !== undefined) result.advertisedReasoning = discovery.advertisedReasoning;
+ return result;
+}
+
+function toRemoteCompactionInput(rc: OmpRemoteCompaction): NativeRemoteCompaction {
+ const result: NativeRemoteCompaction = {};
+ if (rc.enabled !== undefined) result.enabled = rc.enabled;
+ if (rc.api !== undefined) result.api = nativeProviderApi(rc.api);
+ if (rc.endpoint !== undefined) result.endpoint = rc.endpoint;
+ if (rc.model !== undefined) result.model = rc.model;
+ if (rc.v2StreamingEnabled !== undefined) result.v2StreamingEnabled = rc.v2StreamingEnabled;
+ if (rc.v2Endpoint !== undefined) result.v2Endpoint = rc.v2Endpoint;
+ if (rc.streamingEndpoint !== undefined) result.streamingEndpoint = rc.streamingEndpoint;
+ return result;
+}
+
+function toRemoteCompactionRead(rc: NativeRemoteCompaction | undefined): OmpRemoteCompaction | undefined {
+ if (rc === undefined) return undefined;
+ const result: OmpRemoteCompaction = {};
+ if (rc.enabled !== undefined) result.enabled = rc.enabled;
+ if (rc.api !== undefined) result.api = rc.api;
+ if (rc.endpoint !== undefined && PublicEndpointSchema.safeParse(rc.endpoint).success) result.endpoint = rc.endpoint;
+ if (rc.model !== undefined) result.model = rc.model;
+ if (rc.v2StreamingEnabled !== undefined) result.v2StreamingEnabled = rc.v2StreamingEnabled;
+ if (rc.v2Endpoint !== undefined && PublicEndpointSchema.safeParse(rc.v2Endpoint).success) result.v2Endpoint = rc.v2Endpoint;
+ if (rc.streamingEndpoint !== undefined && PublicEndpointSchema.safeParse(rc.streamingEndpoint).success) result.streamingEndpoint = rc.streamingEndpoint;
+ return result;
+}
+
+function toCompatRead(compat: NativeProviderConfig['compat'] | undefined): JsonObject | undefined {
+ if (compat === undefined) return undefined;
+ return JsonObjectSchema.parse(compat);
+}
+
+function toCompatInput(compat: JsonObject): NativeProviderConfig['compat'] {
+ return getModelsConfigSchemaBundle().ApiCompatSchema.assert(compat);
+}
+
+type NativeLoadedModel = NonNullable<NonNullable<ModelsConfig['providers']>[string]['models']>[number];
+type NativeLoadedOverride = NonNullable<NonNullable<ModelsConfig['providers']>[string]['modelOverrides']>[string];
+
+function toModelDefinitionRead(model: NativeLoadedModel): OmpModelDefinitionRead {
+ const inputModalities = model.input?.filter((entry): entry is 'text' | 'image' => entry === 'text' || entry === 'image');
+ const thinking = toThinkingRead(model.thinking);
+ const compat = toCompatRead(model.compat);
+ const remoteCompaction = toRemoteCompactionRead(model.remoteCompaction);
+ const candidate: Record<string, unknown> = {
+  id: model.id,
+  headerNames: Object.keys(model.headers ?? {}),
+ };
+ if (model.name !== undefined) candidate.name = model.name;
+ if (model.api !== undefined) candidate.api = model.api;
+ if (model.kind !== undefined) candidate.kind = model.kind;
+ if (model.baseUrl !== undefined && PublicEndpointSchema.safeParse(model.baseUrl).success) candidate.baseUrl = model.baseUrl;
+ if (model.reasoning !== undefined) candidate.reasoning = model.reasoning;
+ if (thinking !== undefined) candidate.thinking = thinking;
+ if (inputModalities !== undefined && inputModalities.length > 0) candidate.input = inputModalities;
+ if (model.imageInputDecoder !== undefined) candidate.imageInputDecoder = model.imageInputDecoder;
+ if (model.imageCountBudget !== undefined) candidate.imageCountBudget = model.imageCountBudget;
+ if (model.tokenizer !== undefined) candidate.tokenizer = model.tokenizer;
+ if (model.supportsTools !== undefined) candidate.supportsTools = model.supportsTools;
+ if (model.cost !== undefined) candidate.cost = { ...model.cost };
+ if (model.promptCache !== undefined) candidate.promptCache = { ...model.promptCache };
+ if (model.premiumMultiplier !== undefined) candidate.premiumMultiplier = model.premiumMultiplier;
+ if (model.contextWindow !== undefined) candidate.contextWindow = model.contextWindow;
+ if (model.maxContextWindow !== undefined) candidate.maxContextWindow = model.maxContextWindow;
+ if (model.maxTokens !== undefined) candidate.maxTokens = model.maxTokens;
+ if (model.omitMaxOutputTokens !== undefined) candidate.omitMaxOutputTokens = model.omitMaxOutputTokens;
+ if (model.preferWebsockets !== undefined) candidate.preferWebsockets = model.preferWebsockets;
+ if (compat !== undefined) candidate.compat = compat;
+ if (model.contextPromotionTarget !== undefined) candidate.contextPromotionTarget = model.contextPromotionTarget;
+ if (model.compactionModel !== undefined) candidate.compactionModel = model.compactionModel;
+ if (remoteCompaction !== undefined) candidate.remoteCompaction = remoteCompaction;
+ return OmpModelDefinitionReadSchema.parse(candidate);
+}
+
+function toModelOverrideRead(override: NativeLoadedOverride): OmpModelOverrideRead {
+ const inputModalities = override.input?.filter((entry): entry is 'text' | 'image' => entry === 'text' || entry === 'image');
+ const thinking = toThinkingRead(override.thinking);
+ const compat = toCompatRead(override.compat);
+ const remoteCompaction = toRemoteCompactionRead(override.remoteCompaction);
+ const candidate: Record<string, unknown> = {
+  headerNames: Object.keys(override.headers ?? {}),
+ };
+ if (override.name !== undefined) candidate.name = override.name;
+ if (override.api !== undefined) candidate.api = override.api;
+ if (override.kind !== undefined) candidate.kind = override.kind;
+ if (override.reasoning !== undefined) candidate.reasoning = override.reasoning;
+ if (thinking !== undefined) candidate.thinking = thinking;
+ if (inputModalities !== undefined && inputModalities.length > 0) candidate.input = inputModalities;
+ if (override.imageInputDecoder !== undefined) candidate.imageInputDecoder = override.imageInputDecoder;
+ if (override.imageCountBudget !== undefined) candidate.imageCountBudget = override.imageCountBudget;
+ if (override.tokenizer !== undefined) candidate.tokenizer = override.tokenizer;
+ if (override.supportsTools !== undefined) candidate.supportsTools = override.supportsTools;
+ if (override.cost !== undefined) candidate.cost = { ...override.cost };
+ if (override.promptCache !== undefined) candidate.promptCache = { ...override.promptCache };
+ if (override.premiumMultiplier !== undefined) candidate.premiumMultiplier = override.premiumMultiplier;
+ if (override.contextWindow !== undefined) candidate.contextWindow = override.contextWindow;
+ if (override.maxContextWindow !== undefined) candidate.maxContextWindow = override.maxContextWindow;
+ if (override.maxTokens !== undefined) candidate.maxTokens = override.maxTokens;
+ if (override.omitMaxOutputTokens !== undefined) candidate.omitMaxOutputTokens = override.omitMaxOutputTokens;
+ if (override.preferWebsockets !== undefined) candidate.preferWebsockets = override.preferWebsockets;
+ if (compat !== undefined) candidate.compat = compat;
+ if (override.contextPromotionTarget !== undefined) candidate.contextPromotionTarget = override.contextPromotionTarget;
+ if (override.compactionModel !== undefined) candidate.compactionModel = override.compactionModel;
+ if (remoteCompaction !== undefined) candidate.remoteCompaction = remoteCompaction;
+ return OmpModelOverrideReadSchema.parse(candidate);
+}
+
+function toModelDefinitionInput(
+ model: OmpModelDefinitionWrite,
+ existingHeaders: Record<string, string> | undefined,
+): NativeModelDefinition {
+ const result: NativeModelDefinition = { id: model.id };
+ if (model.name !== undefined) result.name = model.name;
+ if (model.api !== undefined) result.api = model.api;
+ if (model.kind !== undefined) result.kind = model.kind;
+ if (model.baseUrl !== undefined) result.baseUrl = model.baseUrl;
+ if (model.reasoning !== undefined) result.reasoning = model.reasoning;
+ if (model.thinking !== undefined) result.thinking = toThinkingInput(model.thinking);
+ if (model.input !== undefined) result.input = [...model.input];
+ if (model.imageInputDecoder !== undefined) result.imageInputDecoder = model.imageInputDecoder;
+ if (model.imageCountBudget !== undefined) result.imageCountBudget = model.imageCountBudget;
+ if (model.tokenizer !== undefined) result.tokenizer = model.tokenizer;
+ if (model.supportsTools !== undefined) result.supportsTools = model.supportsTools;
+ if (model.cost !== undefined) result.cost = { ...model.cost };
+ if (model.promptCache !== undefined) result.promptCache = { ...model.promptCache };
+ if (model.premiumMultiplier !== undefined) result.premiumMultiplier = model.premiumMultiplier;
+ if (model.contextWindow !== undefined) result.contextWindow = model.contextWindow;
+ if (model.maxContextWindow !== undefined) result.maxContextWindow = model.maxContextWindow;
+ if (model.maxTokens !== undefined) result.maxTokens = model.maxTokens;
+ if (model.omitMaxOutputTokens !== undefined) result.omitMaxOutputTokens = model.omitMaxOutputTokens;
+ if (model.preferWebsockets !== undefined) result.preferWebsockets = model.preferWebsockets;
+ const headers = mergeHeaders(existingHeaders, model.headers, model.headersPatch);
+ if (headers !== undefined) result.headers = headers;
+ if (model.compat !== undefined) result.compat = toCompatInput(model.compat);
+ if (model.contextPromotionTarget !== undefined) result.contextPromotionTarget = model.contextPromotionTarget;
+ if (model.compactionModel !== undefined) result.compactionModel = model.compactionModel;
+ if (model.remoteCompaction !== undefined) result.remoteCompaction = toRemoteCompactionInput(model.remoteCompaction);
+ return result;
+}
+
+function toModelOverrideInput(
+ override: OmpModelOverrideWrite,
+ existingHeaders: Record<string, string> | undefined,
+): NativeModelOverride {
+ const result: NativeModelOverride = {};
+ if (override.name !== undefined) result.name = override.name;
+ if (override.api !== undefined) result.api = override.api;
+ if (override.kind !== undefined) result.kind = override.kind;
+ if (override.reasoning !== undefined) result.reasoning = override.reasoning;
+ if (override.thinking !== undefined) result.thinking = toThinkingInput(override.thinking);
+ if (override.input !== undefined) result.input = [...override.input];
+ if (override.imageInputDecoder !== undefined) result.imageInputDecoder = override.imageInputDecoder;
+ if (override.imageCountBudget !== undefined) result.imageCountBudget = override.imageCountBudget;
+ if (override.tokenizer !== undefined) result.tokenizer = override.tokenizer;
+ if (override.supportsTools !== undefined) result.supportsTools = override.supportsTools;
+ if (override.cost !== undefined) result.cost = { ...override.cost };
+ if (override.promptCache !== undefined) result.promptCache = { ...override.promptCache };
+ if (override.premiumMultiplier !== undefined) result.premiumMultiplier = override.premiumMultiplier;
+ if (override.contextWindow !== undefined) result.contextWindow = override.contextWindow;
+ if (override.maxContextWindow !== undefined) result.maxContextWindow = override.maxContextWindow;
+ if (override.maxTokens !== undefined) result.maxTokens = override.maxTokens;
+ if (override.omitMaxOutputTokens !== undefined) result.omitMaxOutputTokens = override.omitMaxOutputTokens;
+ if (override.preferWebsockets !== undefined) result.preferWebsockets = override.preferWebsockets;
+ const headers = mergeHeaders(existingHeaders, override.headers, override.headersPatch);
+ if (headers !== undefined) result.headers = headers;
+ if (override.compat !== undefined) result.compat = toCompatInput(override.compat);
+ if (override.contextPromotionTarget !== undefined) result.contextPromotionTarget = override.contextPromotionTarget;
+ if (override.compactionModel !== undefined) result.compactionModel = override.compactionModel;
+ if (override.remoteCompaction !== undefined) result.remoteCompaction = toRemoteCompactionInput(override.remoteCompaction);
+ return result;
 }
 
 export function publicModel(native: NativeCatalogModel, configured?: Model, enabled?: boolean): Model {
@@ -447,7 +714,9 @@ export class NativeModels {
   if (loaded.status === 'ok') {
    try {
     content = await readFile(file.path(), 'utf8');
-    metadata = FileMetadataSchema.parse(file.path().endsWith('.json') || file.path().endsWith('.jsonc') ? JSONC.parse(content) : YAML.parse(content)).openchamber;
+    const parsedDocument = file.path().endsWith('.json') || file.path().endsWith('.jsonc') ? JSONC.parse(content) : YAML.parse(content);
+    const parsedRecord = parsedDocument && typeof parsedDocument === 'object' ? parsedDocument : {};
+    metadata = FileMetadataSchema.parse(parsedRecord).openchamber;
    } catch {
     throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native catalog metadata could not be read');
    }
@@ -555,18 +824,80 @@ export class NativeModels {
   const state = await this.load();
   await this.reloadCredentials();
   await this.syncModelPolicies();
-  const provider = this.provider(providerId);
-  const configuration = state.metadata.providers[providerId] ?? {
-   providerId, name: provider.name, endpoint: provider.endpoint, protocol: provider.protocol,
-   credentialRef: this.defaultCredentialRef(providerId),
-  };
-  if (!configuration.endpoint || !configuration.protocol) {
+  const nativeEntry = state.config.providers?.[providerId];
+  const configuredMeta = state.metadata.providers[providerId];
+  const hasRegistryModels = this.context.modelRegistry.getProviderModels(providerId).length > 0;
+  const builtIn = isBuiltInProvider(providerId);
+  if (!builtIn && !nativeEntry && !configuredMeta && !hasRegistryModels) {
    throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Provider has no configurable endpoint and protocol');
   }
+  const provider = this.provider(providerId);
+  const legacyCandidate = configuredMeta ?? {
+   providerId,
+   name: provider.name,
+   endpoint: provider.endpoint,
+   protocol: provider.protocol,
+   credentialRef: this.defaultCredentialRef(providerId),
+  };
+  const parsedLegacy = ProviderConfigurationSchema.safeParse(legacyCandidate);
+  const configuration = parsedLegacy.success ? parsedLegacy.data : null;
+
+  const rawEffectiveBaseUrl = this.context.modelRegistry.getProviderBaseUrl(providerId);
+  const effectiveBaseUrl = rawEffectiveBaseUrl && PublicEndpointSchema.safeParse(rawEffectiveBaseUrl).success
+   ? rawEffectiveBaseUrl
+   : undefined;
+  const registryFirst = this.context.modelRegistry.getProviderModels(providerId)[0];
+  const nativeApiParsed = registryFirst ? OmpModelDefinitionReadSchema.shape.api.safeParse(registryFirst.api) : undefined;
+  const effectiveApi = nativeApiParsed?.success ? nativeApiParsed.data : undefined;
+
+  const nativeBaseUrl = nativeEntry?.baseUrl && PublicEndpointSchema.safeParse(nativeEntry.baseUrl).success
+   ? nativeEntry.baseUrl
+   : undefined;
+  const customName = state.metadata.providerNames[providerId] ?? configuredMeta?.name;
+  const nativeCandidate: Record<string, unknown> = {
+   providerId,
+   isBuiltIn: builtIn,
+   hasNativeEntry: nativeEntry !== undefined,
+   configApiKey: configApiKeyStatus(nativeEntry?.apiKey),
+   headerNames: Object.keys(nativeEntry?.headers ?? {}),
+   models: (nativeEntry?.models ?? []).map(toModelDefinitionRead),
+   modelOverrides: Object.fromEntries(
+    Object.entries(nativeEntry?.modelOverrides ?? {}).map(([id, override]) => [id, toModelOverrideRead(override)]),
+   ),
+  };
+  if (customName && customName.trim().length > 0) nativeCandidate.name = customName;
+  if (effectiveBaseUrl !== undefined) nativeCandidate.effectiveBaseUrl = effectiveBaseUrl;
+  if (effectiveApi !== undefined) nativeCandidate.effectiveApi = effectiveApi;
+  if (nativeBaseUrl !== undefined) nativeCandidate.baseUrl = nativeBaseUrl;
+  if (nativeEntry?.api !== undefined) nativeCandidate.api = nativeEntry.api;
+  if (nativeEntry?.auth !== undefined) nativeCandidate.auth = nativeEntry.auth;
+  if (nativeEntry?.authHeader !== undefined) nativeCandidate.authHeader = nativeEntry.authHeader;
+  if (nativeEntry?.discovery !== undefined) {
+   const discoveryCandidate: OmpProviderDiscovery = { type: nativeEntry.discovery.type };
+   if (nativeEntry.discovery.timeoutMs !== undefined) discoveryCandidate.timeoutMs = nativeEntry.discovery.timeoutMs;
+   if (nativeEntry.discovery.injectV1 !== undefined) discoveryCandidate.injectV1 = nativeEntry.discovery.injectV1;
+   if (nativeEntry.discovery.advertisedReasoning !== undefined) discoveryCandidate.advertisedReasoning = nativeEntry.discovery.advertisedReasoning;
+   nativeCandidate.discovery = discoveryCandidate;
+  }
+  const compat = toCompatRead(nativeEntry?.compat);
+  if (compat !== undefined) nativeCandidate.compat = compat;
+  if (nativeEntry?.disableStrictTools !== undefined) nativeCandidate.disableStrictTools = nativeEntry.disableStrictTools;
+  if (nativeEntry?.guardrailIdentifier !== undefined) nativeCandidate.guardrailIdentifier = nativeEntry.guardrailIdentifier;
+  if (nativeEntry?.guardrailVersion !== undefined) nativeCandidate.guardrailVersion = nativeEntry.guardrailVersion;
+  if (nativeEntry?.guardrailTrace !== undefined) nativeCandidate.guardrailTrace = nativeEntry.guardrailTrace;
+  if (nativeEntry?.requestMetadata !== undefined) nativeCandidate.requestMetadata = { ...nativeEntry.requestMetadata };
+  const remoteCompaction = toRemoteCompactionRead(nativeEntry?.remoteCompaction);
+  if (remoteCompaction !== undefined) nativeCandidate.remoteCompaction = remoteCompaction;
+  if (nativeEntry?.transport !== undefined) nativeCandidate.transport = nativeEntry.transport;
+  const native = OmpProviderConfigReadSchema.parse(nativeCandidate);
+
   return ProviderConfigurationReadSchema.parse({
-   revision, configuration,
-   headerNames: [...new Set([...Object.keys(state.config.providers?.[providerId]?.headers ?? {}),
-   ...Object.keys(state.metadata.providerHeaders[providerId] ?? {})])],
+   revision,
+   configuration,
+   headerNames: [...new Set([
+    ...Object.keys(nativeEntry?.headers ?? {}),
+    ...Object.keys(state.metadata.providerHeaders[providerId] ?? {}),
+   ])],
    models: this.context.modelRegistry.getProviderModels(providerId)
     .filter(model => model.contextWindow !== null && model.contextWindow > 0 && model.maxTokens !== null && model.maxTokens > 0)
     .map(model => publicModel(model, state.metadata.models[modelKey({ providerId, modelId: model.id })])),
@@ -581,11 +912,13 @@ export class NativeModels {
       ...(configured?.status ? { status: configured.status } : model.isBeta ? { status: 'beta' } : {}),
      });
     }),
+   native,
   });
  }
 
  async discoverProviderModels(input: ProviderModelDiscoveryRequest): Promise<ProviderModelDiscoveryResult> {
   const request = ProviderModelDiscoveryRequestSchema.parse(input);
+  const protocol = discoveryProtocolFor(request);
   try {
    const state = await this.load();
    await this.context.authStorage.credentials.reload();
@@ -595,10 +928,10 @@ export class NativeModels {
     ?? (request.providerId ? this.context.modelRegistry.getProviderBaseUrl(request.providerId) : undefined);
    // A saved root endpoint is authoritative until its configuration is updated.
    const baseUrl = sameDiscoveryEndpoint(providerEndpoint, request.endpoint)
-    ? request.endpoint : customProviderBaseUrl(request.endpoint, request.protocol);
+    ? request.endpoint : customProviderBaseUrl(request.endpoint, protocol);
    const matchesConfigured = configured !== undefined
     && sameDiscoveryEndpoint(configured.endpoint, baseUrl)
-    && configured.protocol === request.protocol;
+    && configured.protocol === protocol;
    // Native models.yml providers have no OpenChamber metadata entry, yet OMP
    // resolves their credentials and headers against this same base URL.
    const ownsEndpoint = request.providerId !== undefined && sameDiscoveryEndpoint(providerEndpoint, baseUrl);
@@ -636,12 +969,12 @@ export class NativeModels {
     // from its literal text, an unset one stays literal.
     return (await resolveConfigValue(configKey)) === configKey ? configKey : undefined;
    })();
-   const authHeaderName = request.protocol === 'messages' ? 'x-api-key' : request.protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
+   const authHeaderName = protocol === 'messages' ? 'x-api-key' : protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
    if (apiKey) {
     if (!headers.has(authHeaderName)) headers.set(authHeaderName, authHeaderName === 'authorization' ? `Bearer ${apiKey}` : apiKey);
    }
    const hasCredential = headers.has(authHeaderName);
-   if (request.protocol === 'messages' && !headers.has('anthropic-version')) headers.set('anthropic-version', '2023-06-01');
+   if (protocol === 'messages' && !headers.has('anthropic-version')) headers.set('anthropic-version', '2023-06-01');
    // A custom base URL may carry a query (`?api-version=`); the discovery path
    // appends to the pathname, so the query has to be reattached afterwards.
    const endpoint = new URL(baseUrl);
@@ -688,7 +1021,7 @@ export class NativeModels {
      data: z.array(z.unknown()).optional(), models: z.array(z.unknown()).optional(),
      nextPageToken: z.string().optional(), has_more: z.boolean().optional(), last_id: z.string().optional()
     }).parse(await response.json());
-    const rows = request.protocol === 'generate-content' ? payload.models : payload.data;
+    const rows = protocol === 'generate-content' ? payload.models : payload.data;
     if (!rows) throw new Error('Invalid model listing');
     for (const entry of rows) {
      const row = z.object({
@@ -697,7 +1030,7 @@ export class NativeModels {
       max_output_tokens: z.number().int().positive().optional(), inputTokenLimit: z.number().int().positive().optional(),
       outputTokenLimit: z.number().int().positive().optional()
      }).parse(entry);
-     const modelId = request.protocol === 'generate-content' ? row.name?.replace(/^models\//, '') : row.id;
+     const modelId = protocol === 'generate-content' ? row.name?.replace(/^models\//, '') : row.id;
      if (!modelId) throw new Error('Invalid model identity');
      if (seen.has(modelId)) continue;
      seen.add(modelId);
@@ -715,8 +1048,8 @@ export class NativeModels {
      if (catalog) discoveredModel.catalog = catalog;
      models.push(discoveredModel);
     }
-    if (request.protocol === 'generate-content' && payload.nextPageToken) url.searchParams.set('pageToken', payload.nextPageToken);
-    else if (request.protocol === 'messages' && payload.has_more) {
+    if (protocol === 'generate-content' && payload.nextPageToken) url.searchParams.set('pageToken', payload.nextPageToken);
+    else if (protocol === 'messages' && payload.has_more) {
      if (!payload.last_id) throw new Error('Invalid discovery pagination');
      url.searchParams.set('after_id', payload.last_id);
     } else break;
@@ -803,7 +1136,7 @@ export class NativeModels {
    if (environment) auth = { ...auth, environment };
   }
   const base = {
-   providerId, name: resolveProviderDisplayName(providerId, configured?.name),
+   providerId, name: resolveProviderDisplayName(providerId, configured?.name ?? this.metadata.providerNames[providerId]),
    protocol: configured?.protocol ?? apiProtocol(first?.api), authMethods, auth,
   };
   const withEndpoint = ProviderSchema.safeParse({ ...base, endpoint: rawEndpoint });
@@ -971,15 +1304,18 @@ export class NativeModels {
   return { ...resolved, nativeCredentialSessionId };
  }
 
- private validate(config: ModelsConfigInput): ModelsConfig {
+ private validate(config: ModelsConfig): ModelsConfig {
   try {
    const parsed = ModelsConfigSchema.assert(config);
    for (const [providerId, provider] of Object.entries(parsed.providers ?? {})) {
     validateProviderConfiguration(providerId, { ...provider, models: provider.models ?? [] }, 'models-config');
    }
    return parsed;
-  } catch {
-   throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
+  } catch (error) {
+   const detail = error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : 'Native model or provider configuration is invalid';
+   throw new ProjectionError(422, 'INVALID_REQUEST', detail);
   }
  }
 
@@ -993,14 +1329,24 @@ export class NativeModels {
   } finally { await rm(staged, { force: true }); }
  }
 
+ private hasMetadata(metadata: CatalogMetadata): boolean {
+  return Object.keys(metadata.providers).length > 0
+   || Object.keys(metadata.models).length > 0
+   || Object.keys(metadata.imageModels).length > 0
+   || Object.keys(metadata.defaultCredentials).length > 0
+   || Object.keys(metadata.providerHeaders).length > 0
+   || Object.keys(metadata.providerNames).length > 0;
+ }
+
  private async commit(state: ConfigState, project: () => void,
   result: () => ModelMutationResult | ProviderMutationResult | ImageModelMutationResult) {
   const config = this.validate(state.config);
   const oldMetadata = this.metadata;
   const oldEnabled = [...cfgEnabledModels.get(this.context.settings)];
   const oldDisabled = [...cfgDisabledProviders.get(this.context.settings)];
+  const payload = this.hasMetadata(state.metadata) ? { ...config, openchamber: state.metadata } : config;
   const content = state.path.endsWith('.json') || state.path.endsWith('.jsonc')
-   ? JSON.stringify({ ...config, openchamber: state.metadata }, null, 2) : YAML.stringify({ ...config, openchamber: state.metadata });
+   ? JSON.stringify(payload, null, 2) : stringifyYamlConfig(payload);
   let published = false;
   try {
    await this.write(state.path, content);
@@ -1028,17 +1374,219 @@ export class NativeModels {
   }
  }
 
+ private configureNativeProvider(
+  state: ConfigState,
+  native: OmpProviderConfigWrite,
+  configuration: ProviderConfigureRequest['configuration'],
+ ): void {
+  const providerId = native.providerId;
+  if (providerId.includes('/') || PROTOTYPE_KEY_HAZARDS.has(providerId)) {
+   throw new ProjectionError(422, 'INVALID_REQUEST', 'Provider identity is invalid');
+  }
+  if (configuration?.credentialRef !== undefined && configuration.credentialRef !== null
+   && !this.context.authStorage.credentials.list(providerId)
+    .some(row => credentialReference(providerId, row.id) === configuration.credentialRef && row.disabledCause === null)) {
+   throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider credential reference is not available');
+  }
+  const existing = state.config.providers?.[providerId];
+  const nextProvider: NativeProviderConfig = {};
+
+  const nextBaseUrl = native.baseUrl === undefined ? existing?.baseUrl : native.baseUrl === null ? undefined : native.baseUrl;
+  if (nextBaseUrl !== undefined) nextProvider.baseUrl = nextBaseUrl;
+
+  const nextApi = native.api === undefined ? existing?.api : native.api === null ? undefined : nativeProviderApi(native.api);
+  if (nextApi !== undefined) nextProvider.api = nextApi;
+
+  const nextApiKey = native.configApiKey === undefined ? existing?.apiKey : native.configApiKey === null ? undefined : native.configApiKey;
+  if (nextApiKey !== undefined) nextProvider.apiKey = nextApiKey;
+  const nextAuthHeader = native.authHeader === undefined ? existing?.authHeader : native.authHeader === null ? undefined : native.authHeader;
+  if (nextAuthHeader !== undefined) nextProvider.authHeader = nextAuthHeader;
+
+  const existingHeaders = {
+   ...(existing?.headers ?? {}),
+   ...(state.metadata.providerHeaders[providerId] ?? {}),
+  };
+  const nextHeaders = mergeHeaders(
+   Object.keys(existingHeaders).length > 0 ? existingHeaders : undefined,
+   native.headers,
+   native.headersPatch,
+  );
+  if (nextHeaders !== undefined) nextProvider.headers = nextHeaders;
+
+  const nextDiscovery = native.discovery === undefined
+   ? existing?.discovery
+   : native.discovery === null
+    ? undefined
+    : toDiscoveryInput(native.discovery);
+  if (nextDiscovery !== undefined) nextProvider.discovery = nextDiscovery;
+
+  const nextCompat = native.compat === undefined
+   ? existing?.compat
+   : native.compat === null
+    ? undefined
+    : toCompatInput(native.compat);
+  if (nextCompat !== undefined) nextProvider.compat = nextCompat;
+
+  const nextDisableStrictTools = native.disableStrictTools === undefined
+   ? existing?.disableStrictTools
+   : native.disableStrictTools === null
+    ? undefined
+    : native.disableStrictTools;
+  if (nextDisableStrictTools !== undefined) nextProvider.disableStrictTools = nextDisableStrictTools;
+
+  const nextGuardrailId = native.guardrailIdentifier === undefined
+   ? existing?.guardrailIdentifier
+   : native.guardrailIdentifier === null
+    ? undefined
+    : native.guardrailIdentifier;
+  if (nextGuardrailId !== undefined) nextProvider.guardrailIdentifier = nextGuardrailId;
+
+  const nextGuardrailVersion = native.guardrailVersion === undefined
+   ? existing?.guardrailVersion
+   : native.guardrailVersion === null
+    ? undefined
+    : native.guardrailVersion;
+  if (nextGuardrailVersion !== undefined) nextProvider.guardrailVersion = nextGuardrailVersion;
+
+  const nextGuardrailTrace = native.guardrailTrace === undefined
+   ? existing?.guardrailTrace
+   : native.guardrailTrace === null
+    ? undefined
+    : native.guardrailTrace;
+  if (nextGuardrailTrace !== undefined) nextProvider.guardrailTrace = nextGuardrailTrace;
+
+  const nextRequestMetadata = native.requestMetadata === undefined
+   ? existing?.requestMetadata
+   : native.requestMetadata === null
+    ? undefined
+    : { ...native.requestMetadata };
+  if (nextRequestMetadata !== undefined) nextProvider.requestMetadata = nextRequestMetadata;
+
+  const nextRemoteCompaction = native.remoteCompaction === undefined
+   ? existing?.remoteCompaction
+   : native.remoteCompaction === null
+    ? undefined
+    : toRemoteCompactionInput(native.remoteCompaction);
+  if (nextRemoteCompaction !== undefined) nextProvider.remoteCompaction = nextRemoteCompaction;
+
+  const nextTransport = native.transport === undefined
+   ? existing?.transport
+   : native.transport === null
+    ? undefined
+    : native.transport;
+  if (nextTransport !== undefined) nextProvider.transport = nextTransport;
+
+  if (native.models !== undefined) {
+   const existingModelsById = new Map<string, NativeLoadedModel>();
+   for (const row of existing?.models ?? []) existingModelsById.set(row.id, row);
+   if (native.models.length > 0) {
+    nextProvider.models = native.models.map(model => toModelDefinitionInput(model, existingModelsById.get(model.id)?.headers));
+   }
+   for (const [key, metaModel] of Object.entries(state.metadata.models)) {
+    if (metaModel.provider === providerId) delete state.metadata.models[key];
+   }
+  } else if (existing?.models !== undefined) {
+   nextProvider.models = existing.models.map(row => ({ ...row }));
+  }
+
+  if (native.modelOverrides !== undefined) {
+   const existingOverrides = existing?.modelOverrides ?? {};
+   const nextOverrides: Record<string, NativeModelOverride> = {};
+   for (const [modelId, override] of Object.entries(native.modelOverrides)) {
+    if (PROTOTYPE_KEY_HAZARDS.has(modelId) || override === null) continue;
+    nextOverrides[modelId] = toModelOverrideInput(override, existingOverrides[modelId]?.headers);
+   }
+   if (Object.keys(nextOverrides).length > 0) nextProvider.modelOverrides = nextOverrides;
+  } else if (existing?.modelOverrides !== undefined) {
+   nextProvider.modelOverrides = { ...existing.modelOverrides };
+  }
+
+  let nextAuth = native.auth === undefined
+   ? existing?.auth
+   : native.auth === null
+    ? undefined
+    : native.auth;
+  if ((nextProvider.models?.length ?? 0) > 0 && !nextProvider.apiKey) {
+   if (nextAuth === undefined || (native.auth === undefined && native.configApiKey === null && nextAuth === 'apiKey')) {
+    nextAuth = 'none';
+   }
+  }
+  if (nextAuth !== undefined) nextProvider.auth = nextAuth;
+  const hasOverrideOrModels = Boolean(
+   nextProvider.baseUrl
+   || nextProvider.headers
+   || nextProvider.apiKey
+   || nextProvider.auth === 'none'
+   || nextProvider.compat
+   || nextProvider.disableStrictTools
+   || nextProvider.guardrailIdentifier
+   || nextProvider.requestMetadata
+   || nextProvider.remoteCompaction
+   || (nextProvider.modelOverrides && Object.keys(nextProvider.modelOverrides).length > 0)
+   || nextProvider.discovery
+   || (nextProvider.models && nextProvider.models.length > 0)
+  );
+
+  state.config.providers ??= {};
+  if (!hasOverrideOrModels && isBuiltInProvider(providerId)) {
+   delete state.config.providers[providerId];
+  } else {
+   state.config.providers[providerId] = nextProvider;
+  }
+
+  if (native.name === null) {
+   delete state.metadata.providerNames[providerId];
+  } else if (native.name !== undefined) {
+   state.metadata.providerNames[providerId] = native.name;
+  } else if (configuration?.name) {
+   state.metadata.providerNames[providerId] = configuration.name;
+  }
+
+  if (native.headers !== undefined || native.headersPatch !== undefined) {
+   delete state.metadata.providerHeaders[providerId];
+  }
+  if (configuration?.credentialRef !== undefined) {
+   state.metadata.defaultCredentials[providerId] = configuration.credentialRef;
+  }
+
+  const legacyName = state.metadata.providerNames[providerId] ?? configuration?.name ?? resolveProviderDisplayName(providerId);
+  const legacyProtocol = configuration?.protocol ?? apiProtocol(nextProvider.api);
+  const legacyEndpoint = nextProvider.baseUrl ?? configuration?.endpoint;
+  const legacyParsed = ProviderConfigurationSchema.safeParse({
+   providerId,
+   name: legacyName,
+   endpoint: legacyEndpoint,
+   protocol: legacyProtocol,
+   credentialRef: configuration?.credentialRef ?? this.defaultCredentialRef(providerId),
+  });
+  if (legacyParsed.success && (configuration !== undefined || state.metadata.providers[providerId] !== undefined) && (nextProvider.models?.length ?? 0) > 0) {
+   state.metadata.providers[providerId] = legacyParsed.data;
+  } else {
+   delete state.metadata.providers[providerId];
+  }
+ }
+
  async configureProvider(input: ProviderConfigureRequest, revision: string): Promise<ProviderMutationResult> {
   const request = ProviderConfigureRequestSchema.parse(input);
-  // A provider ID is the model selector's provider half; a slash would split
-  // every selector built from it, leaving the provider unselectable.
-  if (request.configuration.providerId.includes('/')) {
-   throw new ProjectionError(422, 'INVALID_REQUEST', 'Provider identity cannot contain a path separator');
+  const targetProviderId = request.native?.providerId ?? request.configuration?.providerId;
+  if (!targetProviderId || targetProviderId.includes('/') || PROTOTYPE_KEY_HAZARDS.has(targetProviderId)) {
+   throw new ProjectionError(422, 'INVALID_REQUEST', 'Provider identity is invalid');
   }
   PositiveCounterSchema.parse(revision);
   const state = await this.load();
   await this.reloadCredentials();
   await this.syncModelPolicies();
+
+  if (request.native !== undefined) {
+   this.configureNativeProvider(state, request.native, request.configuration);
+   return ProviderMutationResultSchema.parse(await this.commit(state, () => {
+    cfgDisabledProviders.set(this.context.settings, cfgDisabledProviders.get(this.context.settings).filter(id => id !== targetProviderId));
+   }, () => ProviderMutationResultSchema.parse({ revision, providerId: targetProviderId, provider: this.provider(targetProviderId) })));
+  }
+
+  if (!request.configuration) {
+   throw new ProjectionError(422, 'INVALID_REQUEST', 'Provider configuration is missing');
+  }
   const configuration = {
    ...request.configuration,
    endpoint: customProviderBaseUrl(request.configuration.endpoint, request.configuration.protocol),
@@ -1107,13 +1655,13 @@ export class NativeModels {
   delete state.metadata.providers[request.providerId];
   delete state.metadata.defaultCredentials[request.providerId];
   delete state.metadata.providerHeaders[request.providerId];
+  delete state.metadata.providerNames[request.providerId];
   for (const [key, model] of Object.entries(state.metadata.models)) if (model.provider === request.providerId) delete state.metadata.models[key];
   for (const [key, model] of Object.entries(state.metadata.imageModels)) if (model.provider === request.providerId) delete state.metadata.imageModels[key];
   return ProviderMutationResultSchema.parse(await this.commit(state, () => {
    cfgDisabledProviders.set(this.context.settings, [...new Set([...cfgDisabledProviders.get(this.context.settings), request.providerId])]);
   }, () => ProviderMutationResultSchema.parse({ revision, providerId: request.providerId, provider: null })));
  }
-
  private stageModel(state: ConfigState, model: Model): void {
   const existing = this.context.modelRegistry.find(model.provider, model.modelId);
   const providerBase = this.context.modelRegistry.getProviderBaseUrl(model.provider);
@@ -1127,7 +1675,7 @@ export class NativeModels {
   }
   const nativeInput = model.modalities.filter((modality): modality is 'text' | 'image' => modality === 'text' || modality === 'image');
   if (nativeInput.length === 0) throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model requires a supported input modality');
-  const reasoning: NativeModelDefinitionInput['thinking'] = model.reasoningOptions.length > 0
+  const reasoning: NativeModelDefinition['thinking'] = model.reasoningOptions.length > 0
    ? { mode: existing?.thinking?.mode ?? 'effort', efforts: model.reasoningOptions.map(option => nativeThinkingEffort(option.reasoningEffort)) }
    : undefined;
   const cost = model.pricing === null ? existing?.cost : {
@@ -1135,8 +1683,8 @@ export class NativeModels {
    cacheRead: model.pricing.cacheReadPerMillionTokens ?? 0, cacheWrite: model.pricing.cacheWritePerMillionTokens ?? 0,
   };
   state.config.providers ??= {};
-  const provider: NativeProviderConfigInput = { ...configuredProvider, api: nativeProviderApi(api), baseUrl };
-  const raw: NativeModelDefinitionInput = {
+  const provider: NativeProviderConfig = { ...configuredProvider, api: nativeProviderApi(api), baseUrl };
+  const raw: NativeModelDefinition = {
    id: model.modelId, name: model.name,
    input: nativeInput, reasoning: model.reasoningEffortSupported,
    contextWindow: model.contextWindow, maxTokens: model.maxOutputTokens,
@@ -1212,11 +1760,11 @@ export class NativeModels {
   if (!(IMAGE_GENERATION_APIS as readonly string[]).includes(modelApi)) {
    throw new ProjectionError(422, 'INVALID_REQUEST', 'This provider api cannot run image generation');
   }
-  const raw: NativeModelDefinitionInput = {
+  const raw: NativeModelDefinition = {
    id: model.modelId, name: model.name, api: modelApi, kind: 'image', input: ['text'],
   };
   state.config.providers ??= {};
-  const provider: NativeProviderConfigInput = {
+  const provider: NativeProviderConfig = {
    ...configuredProvider,
    ...(configuredProvider?.api ? { api: nativeProviderApi(configuredProvider.api) } : {}),
    baseUrl,

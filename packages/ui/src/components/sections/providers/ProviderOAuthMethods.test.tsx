@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import type { ProviderOAuthRequest, ProviderOAuthResult } from '@openchamber/agent-contract';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -30,25 +30,7 @@ let connected = 0;
 // Browser-dependent UI modules are intentionally loaded after the happy-dom
 // globals are installed; a static import would evaluate them too early.
 const actualClient = await import('@/api/canonicalClient');
-mock.module('@/api/canonicalClient', () => ({
-  ...actualClient,
-  canonicalClient: {
-    providerOAuth: async (_workspaceId: string, methodId: string, request: ProviderOAuthRequest): Promise<ProviderOAuthResult> => {
-      requests.push({ methodId, request });
-      if (request.action === 'start') return pending;
-      if (request.action === 'input') return ready;
-      if (request.action === 'commit') return authenticated;
-      if (request.action === 'cancel') return cancelled;
-      return pending;
-    },
-  },
-}));
 const actualUi = await import('@/components/ui');
-mock.module('@/components/ui', () => ({
-  ...actualUi,
-  toast: { success: () => undefined, error: () => undefined },
-}));
-
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
@@ -57,12 +39,28 @@ const container = document.createElement('div');
 document.body.appendChild(container);
 let root: Root;
 
+let restores: Array<{ mockRestore(): void }> = [];
 beforeEach(() => {
   requests = [];
   connected = 0;
+  restores = [
+    spyOn(actualClient.canonicalClient, 'providerOAuth').mockImplementation(
+      async (_workspaceId: string, methodId: string, request: ProviderOAuthRequest): Promise<ProviderOAuthResult> => {
+        requests.push({ methodId, request });
+        if (request.action === 'start') return pending;
+        if (request.action === 'input') return ready;
+        if (request.action === 'commit') return authenticated;
+        if (request.action === 'cancel') return cancelled;
+        return pending;
+      },
+    ),
+    spyOn(actualUi.toast, 'success').mockImplementation(() => undefined as never),
+    spyOn(actualUi.toast, 'error').mockImplementation(() => undefined as never),
+  ];
   root = createRoot(container);
 });
 afterEach(async () => {
+  while (restores.length > 0) restores.pop()?.mockRestore();
   await act(async () => root.unmount());
   container.replaceChildren();
 });
