@@ -92,15 +92,16 @@ export class NativeAgents {
     definitions.push(...loadBundledAgents());
     const seen = new Set<string>();
     const disabled = new Set(cfgTaskDisabledAgents.get(this.context.settings));
-    const overrides = cfgTaskAgentModelOverrides.get(this.context.settings);
     return definitions.filter(agent => {
       if (seen.has(agent.name)) return false;
       seen.add(agent.name);
       return includeDisabled || !disabled.has(agent.name);
-    }).map(agent => {
-      const override = overrides[agent.name];
-      return override ? { ...agent, model: Array.isArray(override) ? override : [override] } : agent;
     });
+  }
+
+  private effectiveModelSelectors(definition: AgentDefinition): AgentDefinition['model'] {
+    const override = cfgTaskAgentModelOverrides.get(this.context.settings)[definition.name];
+    return override ? Array.isArray(override) ? override : [override] : definition.model;
   }
 
   private async project(definition: AgentDefinition): Promise<Agent> {
@@ -112,7 +113,7 @@ export class NativeAgents {
         metadata = ProfileMetadataSchema.parse(frontmatter);
       } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile metadata could not be read'); }
     }
-    const selector = definition.model?.[0];
+    const selector = this.effectiveModelSelectors(definition)?.[0];
     const resolved = selector ? resolveCliModel({ cliModel: selector, modelRegistry: this.context.modelRegistry, settings: this.context.settings }).model : undefined;
     let model: Agent['model'] = resolved ? { providerId: resolved.provider, modelId: resolved.id } : null;
     if (!model && selector) {
@@ -158,9 +159,11 @@ export class NativeAgents {
     const definition = (await this.discover()).find(agent => agent.name === agentId);
     if (!definition) throw new ProjectionError(404, 'INVALID_REQUEST', 'Agent profile is unavailable');
     const publicAgent = await this.project(definition);
-    return publicAgent.systemPromptOverride === undefined
-      ? { ...definition }
-      : { ...definition, systemPrompt: publicAgent.systemPromptOverride };
+    return {
+      ...definition,
+      model: this.effectiveModelSelectors(definition),
+      systemPrompt: publicAgent.systemPromptOverride ?? definition.systemPrompt,
+    };
   }
 
   async profile(agentId: string): Promise<Agent> {

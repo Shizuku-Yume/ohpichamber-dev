@@ -176,6 +176,34 @@ test('bundled profiles expose only tools installed in the native worker', async 
   }
 });
 
+test('an inherited agent copy retains the source model selectors separately from settings overrides', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-agent-inherited-model-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  const directory = join(agentDirectory, 'agents');
+  await Promise.all([cwd, directory].map(path => mkdir(path, { recursive: true })));
+  await writeFile(join(directory, 'my-agent.md'), '---\nname: my-agent\ndescription: User profile\nmodel: ["@smol", "@slow"]\n---\n');
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const agents = new NativeAgents({
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES,
+    });
+    cfgTaskAgentModelOverrides.set(runtime.settings, { 'my-agent': '@task' });
+    await runtime.settings.flush();
+    const profile = await agents.profile('my-agent');
+    await agents.update({ expectedRevision: '0', agent: { ...profile, description: 'Workspace copy' } }, '1');
+    expect((await agents.definition('my-agent')).model).toEqual(['@task']);
+    cfgTaskAgentModelOverrides.set(runtime.settings, {});
+    await runtime.settings.flush();
+    expect((await agents.definition('my-agent')).model).toEqual(['@smol', '@slow']);
+  } finally {
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('canonical profiles distinguish inherit null, explicit none and exact arrays; raw tools:[] follows SDK append', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-agent-inherit-'));
   const cwd = join(root, 'workspace');
