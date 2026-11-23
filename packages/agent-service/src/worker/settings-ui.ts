@@ -434,7 +434,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   // The Commands editor reads native prompt templates, not TUI command discovery.
   'commands.enableClaudeUser': 'config-only',
   'commands.enableClaudeProject': 'commands:catalog',
-  'commands.enableOpencodeUser': 'config-only',
+  'commands.enableOpencodeUser': 'commands:catalog',
   'commands.enableOpencodeProject': 'commands:catalog',
 
   // --- providers (41) ---

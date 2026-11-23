@@ -141,7 +141,7 @@ test('settings writes change native discovery without changing the resource resp
   expect(FileResourceSkillCatalogSchema.parse(skillsAfter.catalog).skills).toEqual([]);
 }, 60000);
 
-test('foreign user discovery opt-ins can load resources independently of the config-only capability switches', async () => {
+test('foreign user discovery opt-ins can load resources independently of capability switches', async () => {
   const h = await fixture();
   for (const [source, name] of [['.claude', 'claude-example'], ['.config/opencode', 'opencode-example']]) {
     const directory = join(h.root, source, 'commands');
@@ -166,6 +166,10 @@ test('foreign user discovery opt-ins can load resources independently of the con
     };
   };
   expect(await discover()).toEqual({ commands: [], skills: [] });
+  await writeFile(config, capabilitySwitches.replace('enableOpencodeUser: false', 'enableOpencodeUser: true'));
+  const commands = await h.operation({ action: 'commands.read' });
+  if (commands.kind !== 'commands') throw new Error('Expected native command catalog');
+  expect(commands.catalog.commands.some(command => command.name === 'opencode-example')).toBe(true);
   await writeFile(config, capabilitySwitches + 'enabledProviders: [claude, opencode, codex]\n');
   await h.settings();
   expect(await discover()).toEqual({
@@ -177,7 +181,7 @@ test('foreign user discovery opt-ins can load resources independently of the con
   const exposed = settings.state.settings.filter(({ id }) => [
     'commands.enableClaudeUser', 'commands.enableOpencodeUser', 'skills.enableClaudeUser', 'skills.enableCodexUser',
   ].includes(id));
-  expect(exposed.map(({ id, value }) => ({ id, value }))).toEqual([]);
+  expect(exposed.map(({ id, value }) => ({ id, value }))).toEqual([{ id: 'commands.enableOpencodeUser', value: false }]);
 }, 60000);
 
 test('command editing preserves native side, raw keys and unrelated metadata', async () => {
