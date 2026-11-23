@@ -35,7 +35,7 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => 
     });
   }
   if (url.includes('/omp')) {
-    return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 }, settings: [] });
+    return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, settings: [] });
   }
   return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
 });
@@ -83,6 +83,9 @@ beforeEach(() => {
           { name: 'disabled-tool', label: 'Disabled', description: 'Disabled tool', tier: 'exec', availability: false },
         ],
       });
+    }
+    if (url.includes('/omp')) {
+      return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, settings: [] });
     }
     return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   });
@@ -358,7 +361,7 @@ test('thinking level and spawns are updated and saved to agent definition', asyn
     },
   });
   await render();
-  const spawnsInput = container.querySelector<HTMLInputElement>('input[aria-label="Subagent"]');
+  const spawnsInput = container.querySelector<HTMLInputElement>('input[aria-label="Allowed subagents"]');
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   if (!spawnsInput || !setter) throw new Error('Missing spawns input');
   await act(async () => {

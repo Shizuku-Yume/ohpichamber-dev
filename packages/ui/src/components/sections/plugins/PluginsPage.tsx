@@ -713,10 +713,15 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               <Button variant="destructive" disabled={disabled} onClick={() => requestDelete({ kind: 'plugin', plugin })}>
                 {t('settings.plugins.action.uninstall')}
               </Button>
-              <Button variant="outline" disabled={disabled || catalog.workers.length === 0} onClick={requestApply}>
-                {t('settings.plugins.action.apply')}
-              </Button>
+              {catalog.workers.length > 0 ? (
+                <Button variant="outline" disabled={disabled} onClick={requestApply}>
+                  {t('settings.plugins.action.apply')}
+                </Button>
+              ) : null}
             </div>
+            {catalog.workers.length === 0 ? (
+              <p className="typography-meta text-muted-foreground">{t('settings.plugins.apply.nextSession')}</p>
+            ) : null}
           </SettingsSection>
 
           <SettingsSection
@@ -835,6 +840,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
 
         <SettingsSection
           title={t('settings.plugins.section.installed')}
+          description={installedCount > 0 && catalog.workers.length === 0 ? t('settings.plugins.apply.nextSession') : undefined}
           divider={false}
           settingsItem="plugins.installed"
           headerAction={(
@@ -843,9 +849,11 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                 <Icon name="add" className="size-3.5" />
                 {t('settings.plugins.sidebar.actions.addTitle')}
               </Button>
-              <Button variant="ghost" size="sm" disabled={disabled || catalog.workers.length === 0} onClick={requestApply}>
-                {t('settings.plugins.action.apply')}
-              </Button>
+              {catalog.workers.length > 0 ? (
+                <Button variant="ghost" size="sm" disabled={disabled} onClick={requestApply}>
+                  {t('settings.plugins.action.apply')}
+                </Button>
+              ) : null}
             </div>
           )}
         >

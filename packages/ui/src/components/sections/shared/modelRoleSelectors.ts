@@ -19,6 +19,7 @@ import type { I18nKey } from '@/lib/i18n';
 const EFFORT_LEVELS = THINKING_LEVELS.filter((level) => level !== 'inherit');
 
 const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
+  auto: 'settings.remoteInstances.page.field.auto',
   off: 'settings.omp.modelRoles.effort.off',
   minimal: 'settings.omp.modelRoles.effort.minimal',
   low: 'settings.omp.modelRoles.effort.low',
@@ -34,7 +35,7 @@ export function splitRoleSelector(
   models: readonly Model[],
 ): { model: string; effort: string } {
   const literal = (providerId: string | undefined, modelId: string) =>
-    providerId !== undefined && models.some((model) => model.provider === providerId && model.modelId === modelId);
+    models.some((model) => (providerId === undefined || model.provider === providerId) && model.modelId === modelId);
   const split = splitSelectorThinking(selector ?? null, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literal });
   return { model: split.model, effort: split.thinkingLevel ?? '' };
 }
@@ -116,7 +117,7 @@ export function roleSelector(value: JsonValue | undefined): string {
   return typeof primary === 'string' ? (primary.split(',', 1)[0] ?? '').trim() : '';
 }
 
-function replaceFirstSelector(value: JsonValue | undefined, selector: string): string {
+export function replaceFirstSelector(value: JsonValue | undefined, selector: string): string {
   const separator = typeof value === 'string' ? value.indexOf(',') : -1;
   return separator < 0 || typeof value !== 'string' ? selector : selector + value.slice(separator);
 }

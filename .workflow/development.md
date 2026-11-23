@@ -4,6 +4,15 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The OMP 19 settings-control follow-up restores native thinking choices and a
+searchable Sharpshooter model picker, clarifies allowed subagents and shadowed
+extensions, and replaces Plugins Apply with next-session guidance when no
+workers are registered. The Tools and Chat settings pages no longer read
+obsolete controls. Isolated Linux Chrome verified the unmatched default and
+persisted Extra high choice, persisted model selection, zero-worker guidance,
+and allowed-subagent help. The background session-list refresh remained
+unverified after an error; this is not multi-platform certification.
+
 W8 adds persisted automatic account selection without resetting legacy
 pins: an explicit null default ref suppresses legacy fallback, while an absent
 key preserves it. Legacy rosters retain their exact strict shape and projected
