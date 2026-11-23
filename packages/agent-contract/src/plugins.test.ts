@@ -3,7 +3,7 @@ import {
   InstalledPluginEntrySchema, LocalExtensionEntrySchema, LocalExtensionWriteRequestSchema,
   MarketplaceEntrySchema, PluginConfigureRequestSchema, PluginInstallRequestSchema, PluginMarketplaceManageRequestSchema,
   PluginMarketplaceSourcesSchema, PluginMutationResultSchema, PluginUpdateCheckEntrySchema,
-  PluginCatalogStateSchema, type InstalledPluginEntry,
+  PluginCatalogStateSchema, PluginLifecycleStateSchema, type InstalledPluginEntry,
 } from './plugins.ts';
 
 const plugin: InstalledPluginEntry = {
@@ -63,6 +63,29 @@ describe('native plugin contracts', () => {
     expect(state.globalSettings.greeting).toBe('saved-global');
     expect(state.settings.greeting).toBe('effective-project');
     expect(state.settingDefinitions[0]?.overridden).toBe(true);
+  });
+
+  test('lifecycle data is opt-in and rejects secret or undeclared project values', () => {
+    const extended = {
+      ...plugin, availableFeatures: [{ name: 'preview', defaultEnabled: false }],
+      workspaceFeatures: null, globalFeatures: [], globalFeaturesWritable: true,
+      projectSettings: { greeting: 'effective-project' }
+    };
+    const state = { workspaceId: 'workspace', revision: '1', projectWritable: true, plugins: [extended] };
+    expect(PluginLifecycleStateSchema.parse(state)).toEqual(state);
+    expect(PluginCatalogStateSchema.safeParse({ ...catalog, plugins: [extended] }).success).toBe(false);
+    expect(PluginLifecycleStateSchema.safeParse({ ...state, plugins: [{ ...extended, projectSettings: { token: 'private' } }] }).success).toBe(false);
+    expect(PluginLifecycleStateSchema.safeParse({ ...state, plugins: [{ ...extended, projectSettings: { unknown: 'private' } }] }).success).toBe(false);
+  });
+
+  test('native feature configuration distinguishes inherited, explicitly empty and invalid lists', () => {
+    const request = { target: plugin.target, expectedRevision: '1' };
+    for (const enabledFeatures of [null, [], ['preview']]) {
+      expect(PluginConfigureRequestSchema.parse({ ...request, settingsScope: 'workspace', enabledFeatures }).enabledFeatures).toEqual(enabledFeatures);
+    }
+    expect(PluginConfigureRequestSchema.safeParse({ ...request, enabledFeatures: [] }).success).toBe(false);
+    expect(PluginConfigureRequestSchema.safeParse({ ...request, settingsScope: 'global', enabledFeatures: ['preview', 'preview'] }).success).toBe(false);
+    expect(PluginConfigureRequestSchema.safeParse({ ...request, settingsScope: 'workspace', settings: {} }).success).toBe(true);
   });
 
   test('committed configuration is distinct from active runtime application', () => {

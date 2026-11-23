@@ -98,6 +98,8 @@ export class CanonicalClient {
   readonly plugins = {
     list: (workspaceId: string): Promise<C.PluginCatalogState> =>
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins`, scoped(C.PluginCatalogStateSchema, result => result.workspaceId === workspaceId)),
+    lifecycle: (workspaceId: string): Promise<C.PluginLifecycleState> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/lifecycle`, scoped(C.PluginLifecycleStateSchema, result => result.workspaceId === workspaceId)),
     install: (workspaceId: string, input: C.PluginInstallRequest): Promise<C.PluginMutationResult> =>
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/install`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginInstallRequestSchema, input) }),
     uninstall: (workspaceId: string, input: C.PluginUninstallRequest): Promise<C.PluginMutationResult> =>

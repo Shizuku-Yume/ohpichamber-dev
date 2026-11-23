@@ -8,6 +8,7 @@ import type {
   LocalExtensionSource,
   PluginCatalogState,
   PluginConfigureRequest,
+  PluginLifecycleState,
   PluginMutationResult,
   PluginRuntimeState,
 } from '@openchamber/agent-contract';
@@ -267,6 +268,61 @@ test('a secret setting is written as a private configure value and never enters 
   expect(jsonEditor).not.toBeNull();
   expect(jsonEditor?.value ?? '').not.toContain('top-secret');
   expect(secret.value).toBe('');
+});
+
+test('feature checkboxes and project JSON write only to the selected native scope', async () => {
+  const installed = {
+    ...plugin, globalSettings: { greeting: 'global' },
+    settingDefinitions: [...plugin.settingDefinitions, {
+      key: 'greeting', description: '', type: 'string' as const, secret: false, configured: true, globalConfigured: true, overridden: true
+    }]
+  };
+  const catalog = { ...emptyCatalog, plugins: [installed] };
+  const lifecycle: PluginLifecycleState = {
+    workspaceId, revision: catalog.revision, projectWritable: true, plugins: [{
+      ...installed, availableFeatures: [{ name: 'stable', defaultEnabled: true }, { name: 'preview', defaultEnabled: false }],
+      globalFeatures: null, globalFeaturesWritable: true, workspaceFeatures: [], projectSettings: { greeting: 'project' }
+    }]
+  };
+  const writes: Array<Omit<PluginConfigureRequest, 'expectedRevision'>> = [];
+  usePluginsStore.setState({
+    catalog, loadedDirectory: '/repo', loadedRuntimeKey: getRuntimeKey(), loadPlugins: async () => true,
+    readPluginLifecycle: async () => lifecycle,
+    configurePlugin: async input => {
+      writes.push(input);
+      return { workspaceId, revision: catalog.revision, persistence: 'committed', status: 'no-active-workers', workers: [], catalog };
+    }
+  });
+  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+  const card = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(plugin.name) && button.textContent?.includes(plugin.version));
+  if (!card) throw new Error('Missing plugin card');
+  await act(async () => { card.dispatchEvent(new Event('click', { bubbles: true })); });
+  await waitFor(() => container.querySelector('[role="checkbox"]') !== null);
+  const stable = () => container.querySelector('[role="checkbox"][aria-label="stable"]');
+  expect(stable()?.getAttribute('aria-checked')).toBe('true');
+  const project = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Project');
+  if (!project) throw new Error('Missing project scope control');
+  await act(async () => { project.click(); });
+  expect(stable()?.getAttribute('aria-checked')).toBe('false');
+  await act(async () => { (stable() as HTMLElement | null)?.click(); });
+  expect(writes[0]).toEqual({ target: plugin.target, settingsScope: 'workspace', enabledFeatures: ['stable'] });
+  const editor = container.querySelector<HTMLTextAreaElement>('#native-plugin-project-settings');
+  if (!editor) throw new Error('Missing project JSON editor');
+  expect(JSON.parse(editor.value)).toEqual({ greeting: 'project' });
+  const inputWindow = editor.ownerDocument.defaultView;
+  if (!inputWindow) throw new Error('Missing textarea window');
+  const setter = Object.getOwnPropertyDescriptor(inputWindow.HTMLTextAreaElement.prototype, 'value')?.set;
+  if (!setter) throw new Error('Missing textarea setter');
+  await act(async () => {
+    setter.call(editor, '{"greeting":"edited"}');
+    editor.dispatchEvent(new inputWindow.Event('input', { bubbles: true, composed: true }));
+  });
+  await act(async () => {
+    editor.dispatchEvent(new inputWindow.FocusEvent('focusout', { bubbles: true, composed: true }));
+  });
+  await waitFor(() => writes.length === 2);
+  expect(writes[1]).toEqual({ target: plugin.target, settingsScope: 'workspace', settings: { greeting: 'edited' } });
+  expect(container.querySelector<HTMLTextAreaElement>('#native-plugin-settings')?.value).toContain('"global"');
 });
 
 test('PluginsPage mounts without infinite re-render loop when catalog is null', async () => {

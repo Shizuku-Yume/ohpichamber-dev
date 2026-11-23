@@ -3,10 +3,13 @@ import {
   JsonObjectSchema,
   JsonValueSchema,
   type InstalledPluginEntry,
+  type JsonObject,
   type LocalExtensionEntry,
   type MarketplaceEntry,
   type MarketplacePluginDetails,
   type PluginMutationResult,
+  type PluginLifecycleState,
+  type PluginScope,
   type PluginUpdateCheckEntry,
 } from '@openchamber/agent-contract';
 import { CanonicalApiError } from '@/api/canonicalClient';
@@ -23,6 +26,9 @@ import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, Settings
 import {
   SETTINGS_SELECT_TRIGGER_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
+  SettingsCheckboxRow,
+  SettingsChipGroup,
+  SettingsControlGroup,
   SettingsFieldRow,
   SETTINGS_HELPER_CLASS,
   SettingsSection,
@@ -211,25 +217,27 @@ const ScopeChip: React.FC<{ scope: InstalledPluginEntry['scope'] }> = ({ scope }
   );
 };
 
-const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: boolean }> = ({ plugin, disabled }) => {
+const PluginSettingsEditor: React.FC<{
+  plugin: InstalledPluginEntry; disabled: boolean; scope: PluginScope; values: JsonObject;
+}> = ({ plugin, disabled, scope, values }) => {
   const { t } = useI18n();
-  const baseline = React.useRef(JSON.stringify(plugin.globalSettings, null, 2));
+  const baseline = React.useRef(JSON.stringify(values, null, 2));
   const [text, setText] = React.useState(baseline.current);
   const [secrets, setSecrets] = React.useState(() => new Map<string, string>());
 
   React.useEffect(() => {
-    const next = JSON.stringify(plugin.globalSettings, null, 2);
+    const next = JSON.stringify(values, null, 2);
     const previousBaseline = baseline.current;
     setText(previous => previous === previousBaseline ? next : previous);
     baseline.current = next;
-  }, [plugin.globalSettings]);
+  }, [values]);
 
   const parsed = parseSettings(text);
   const secretKeys = parsed.success
     ? plugin.settingDefinitions.filter(setting => setting.secret && Object.hasOwn(parsed.data, setting.key)).map(setting => setting.key)
     : [];
   const invalid = !parsed.success || secretKeys.length > 0;
-  const secretDefinitions = plugin.settingDefinitions.filter(setting => setting.secret);
+  const secretDefinitions = scope === 'global' ? plugin.settingDefinitions.filter(setting => setting.secret) : [];
   const hasOverrides = plugin.settingDefinitions.some(setting => setting.overridden);
 
   const save = async (): Promise<AutosaveResult> => {
@@ -256,11 +264,11 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
 
     const submitted = text;
     const submittedSecrets = new Map(secrets);
-    const result = await usePluginsStore.getState().configurePlugin({ target: plugin.target, settingsScope: 'global', settings });
+    const result = await usePluginsStore.getState().configurePlugin({ target: plugin.target, settingsScope: scope, settings });
     const updated = result.catalog.plugins.find(entry => entry.id === plugin.id);
     if (!updated) return autosaveFailed(t('settings.plugins.error.operation'));
 
-    const normalized = JSON.stringify(updated.globalSettings, null, 2);
+    const normalized = JSON.stringify(scope === 'global' ? updated.globalSettings : settings, null, 2);
     baseline.current = normalized;
     setText(current => current === submitted ? normalized : current);
     setSecrets(current => {
@@ -278,13 +286,13 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
     <div onBlurCapture={autosave.onBlurCapture} className={SETTINGS_SPACE_ROW_CLASS}>
       <div className="space-y-1">
         <Textarea
-          id="native-plugin-settings"
+          id={scope === 'global' ? 'native-plugin-settings' : 'native-plugin-project-settings'}
           value={text}
           onChange={event => setText(event.target.value)}
           rows={12}
           className="w-full font-mono typography-meta min-h-[200px]"
           spellCheck={false}
-          aria-label={t('settings.plugins.field.globalSettings')}
+          aria-label={t(scope === 'global' ? 'settings.plugins.field.globalSettings' : 'settings.plugins.field.projectSettings')}
           aria-invalid={invalid}
           disabled={disabled}
           onKeyDown={event => {
@@ -334,7 +342,7 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
         </SettingsStackedField>
       ))}
 
-      {hasOverrides ? (
+      {hasOverrides && scope === 'global' ? (
         <SettingsStackedField
           settingsItem="plugins.effectiveSettings"
           label={t('settings.plugins.field.effectiveSettings')}
@@ -351,6 +359,80 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
             aria-label={t('settings.plugins.field.effectiveSettings')}
           />
         </SettingsStackedField>
+      ) : null}
+    </div>
+  );
+};
+
+const PluginConfiguration: React.FC<{
+  plugin: InstalledPluginEntry; revision: string; workspaceId: string; disabled: boolean;
+  run: (perform: () => Promise<PluginMutationResult>) => Promise<void>;
+}> = ({ plugin, revision, workspaceId, disabled, run }) => {
+  const { t } = useI18n();
+  const [scope, setScope] = React.useState<PluginScope>('global');
+  const [lifecycle, setLifecycle] = React.useState<PluginLifecycleState | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    void usePluginsStore.getState().readPluginLifecycle().then(result => {
+      if (active) setLifecycle(result);
+    }, () => {
+      if (active) setLifecycle(null);
+    });
+    return () => { active = false; };
+  }, [revision, workspaceId]);
+
+  const details = lifecycle?.workspaceId === workspaceId ? lifecycle.plugins.find(entry => entry.id === plugin.id) : undefined;
+  const ready = lifecycle?.revision === revision && details !== undefined;
+  const projectWritable = lifecycle?.projectWritable === true && details !== undefined;
+  const activeScope = projectWritable ? scope : 'global';
+  const selection = activeScope === 'global' ? details?.globalFeatures : details?.workspaceFeatures;
+  const available = details?.availableFeatures ?? [];
+  const selected = selection ?? (activeScope === 'workspace' ? details?.globalFeatures : null)
+    ?? available.filter(feature => feature.defaultEnabled).map(feature => feature.name);
+  const featureWrite = (enabledFeatures: string[] | null) => void run(() => usePluginsStore.getState().configurePlugin({
+    target: plugin.target, settingsScope: activeScope, enabledFeatures
+  }));
+
+  return (
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
+      {projectWritable ? (
+        <SettingsFieldRow label={t('settings.plugins.page.field.scope')}>
+          <SettingsChipGroup<PluginScope>
+            aria-label={t('settings.plugins.page.field.scope')}
+            value={activeScope}
+            onChange={setScope}
+            options={[
+              { value: 'global', label: t('settings.plugins.scope.global'), disabled },
+              { value: 'workspace', label: t('settings.plugins.scope.project'), disabled: disabled || !ready }
+            ]}
+          />
+        </SettingsFieldRow>
+      ) : null}
+      {available.length > 0 && (activeScope === 'workspace' || details?.globalFeaturesWritable) ? (
+        <SettingsControlGroup title={t('settings.plugins.section.features')}>
+          {available.map(feature => (
+            <SettingsCheckboxRow key={feature.name} label={feature.name} ariaLabel={feature.name} info={feature.description}
+              checked={selected.includes(feature.name)} disabled={disabled || !ready}
+              onChange={checked => {
+                const next = new Set(selected);
+                if (checked) next.add(feature.name);
+                else next.delete(feature.name);
+                featureWrite(available.filter(item => next.has(item.name)).map(item => item.name));
+              }}
+            />
+          ))}
+          <Button variant="outline" disabled={disabled || !ready || selection == null} onClick={() => featureWrite(null)}>
+            {t('settings.common.actions.reset')}
+          </Button>
+        </SettingsControlGroup>
+      ) : null}
+      <div hidden={activeScope !== 'global'}>
+        <PluginSettingsEditor plugin={plugin} disabled={disabled} scope="global" values={plugin.globalSettings} />
+      </div>
+      {projectWritable && details ? (
+        <div hidden={activeScope !== 'workspace'}>
+          <PluginSettingsEditor plugin={plugin} disabled={disabled || !ready} scope="workspace" values={details.projectSettings} />
+        </div>
       ) : null}
     </div>
   );
@@ -744,10 +826,11 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           {plugin.target.kind === 'marketplace' ? <MarketplaceDetailsSection entry={marketplaceEntry} /> : null}
 
           <SettingsSection
-            title={t('settings.plugins.field.globalSettings')}
+            title={t('settings.plugins.section.configuration')}
             settingsItem="plugins.settings"
           >
-            <PluginSettingsEditor key={plugin.id} plugin={plugin} disabled={disabled} />
+            <PluginConfiguration key={JSON.stringify([catalog.workspaceId, plugin.id])} plugin={plugin} revision={catalog.revision}
+              workspaceId={catalog.workspaceId} disabled={disabled} run={run} />
           </SettingsSection>
         </SettingsPageLayout>
         {dialogs}

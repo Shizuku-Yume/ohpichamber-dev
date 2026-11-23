@@ -4,6 +4,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { __resetDirsFromEnvForTests, getPluginsDir, getPluginsLockfile, getProjectPluginOverridesPath, setAgentDir } from '@oh-my-pi/pi-utils';
 import { PluginManager } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
+import { getEnabledPlugins, getPluginSettings } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/loader';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { NativePlugins } from './catalog-plugins.ts';
 import { nativeExtensionRoots } from './native-runtime.ts';
@@ -63,7 +64,7 @@ async function fixture() {
   await writeFile(join(packageDirectory, 'package.json'), JSON.stringify({
     name: '@native-proof/plugin', version: '1.0.0',
     omp: {
-      description: 'Native package proof', settings: {
+      description: 'Native package proof', features: { stable: { default: true }, preview: { description: 'Preview capability' } }, settings: {
         greeting: { type: 'string' }, retries: { type: 'number', min: 0, max: 3 }, token: { type: 'string', secret: true },
       }
     }
@@ -225,6 +226,14 @@ nativeTest('native marketplace project installs retain scoped enablement while d
     expect(await new PluginManager(context.cwd).getPluginSettings('@native-proof/plugin')).toEqual({ token: 'global secret' });
     await context.plugins.operation({ type: 'plugins.uninstall', request: { expectedRevision: '3', target } }, '4');
     expect((await context.plugins.read('4')).plugins).toEqual([]);
+    const userTarget = { ...target, scope: 'user' as const };
+    await context.plugins.operation({
+      type: 'plugins.install', request: { expectedRevision: '4', source: userTarget }
+    }, '5');
+    await context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '5', target: userTarget, settingsScope: 'global', enabledFeatures: ['preview'] }
+    }, '6');
+    expect((await getEnabledPlugins(sibling)).find(plugin => plugin.name === '@native-proof/plugin')?.enabledFeatures).toEqual(['preview']);
   } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
 });
 
@@ -289,6 +298,92 @@ nativeTest('native doctor reports real checks without exposing native profile or
     expect(result.result.checks.length).toBeGreaterThan(0);
     expect(JSON.stringify(result)).not.toContain(context.root);
     expect(JSON.stringify(result)).toContain('[native plugin location]');
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('native feature selection and workspace overrides round-trip without changing the legacy catalog shape', async () => {
+  const context = await fixture();
+  try {
+    const native = new PluginManager(context.cwd);
+    await native.link(context.packageDirectory);
+    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+    const path = getProjectPluginOverridesPath(context.cwd);
+    await mkdir(join(context.cwd, '.omp'));
+    await writeFile(path, JSON.stringify({
+      future: { kept: true }, settings: { [target.name]: { token: 'fixture-secret', undeclared: 'private' } }
+    }));
+    const configure = (request: Omit<Extract<Parameters<NativePlugins['operation']>[0], { type: 'plugins.configure' }>['request'], 'target' | 'expectedRevision'>) =>
+      context.plugins.operation({ type: 'plugins.configure', request: { ...request, target, expectedRevision: '0' } }, '1');
+    await configure({ settingsScope: 'global', enabledFeatures: ['preview'], settings: { greeting: 'global' } });
+    await configure({ settingsScope: 'workspace', enabledFeatures: [], settings: { greeting: 'project' } });
+    const global = new PluginManager(context.root);
+    expect(await global.getEnabledFeatures(target.name)).toEqual(['preview']);
+    expect((await getEnabledPlugins(context.cwd)).find(plugin => plugin.name === target.name)?.enabledFeatures).toEqual([]);
+    expect(await getPluginSettings(target.name, context.cwd)).toMatchObject({ greeting: 'project', token: 'fixture-secret' });
+    expect(await getPluginSettings(target.name, context.root)).toEqual({ greeting: 'global' });
+    const result = await context.plugins.operation({ type: 'plugins.lifecycle' }, '1');
+    if (result.type !== 'plugins.lifecycle') throw new Error('Expected opt-in lifecycle data');
+    expect(result.result.plugins[0]).toMatchObject({
+      availableFeatures: [{ name: 'stable', defaultEnabled: true }, { name: 'preview', defaultEnabled: false, description: 'Preview capability' }],
+      globalFeatures: ['preview'], workspaceFeatures: [], projectSettings: { greeting: 'project' }
+    });
+    expect(JSON.stringify(result)).not.toContain('fixture-secret');
+    expect(JSON.stringify(result)).not.toContain('undeclared');
+    expect((await context.plugins.read('1')).plugins[0]).not.toHaveProperty('projectSettings');
+    expect(await Bun.file(path).json()).toMatchObject({ future: { kept: true } });
+    await expect(configure({ settingsScope: 'workspace', settings: { token: 'blocked' } })).rejects.toMatchObject({ status: 400 });
+    await expect(configure({ settingsScope: 'global', enabledFeatures: ['unknown'] })).rejects.toMatchObject({ status: 400 });
+    await configure({ settingsScope: 'workspace', enabledFeatures: null, settings: {} });
+    expect((await getEnabledPlugins(context.cwd)).find(plugin => plugin.name === target.name)?.enabledFeatures).toEqual(['preview']);
+    expect(await getPluginSettings(target.name, context.cwd)).toMatchObject({ greeting: 'global', token: 'fixture-secret' });
+    await configure({ settingsScope: 'global', enabledFeatures: null });
+    expect(await new PluginManager(context.cwd).getEnabledFeatures(target.name)).toBeNull();
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace settings roll back a committed override and enablement if the authoritative catalog cannot be read', async () => {
+  const context = await fixture();
+  try {
+    await new PluginManager(context.cwd).link(context.packageDirectory);
+    await mkdir(join(context.cwd, '.omp'));
+    const path = getProjectPluginOverridesPath(context.cwd);
+    const nativeBefore = await readFile(getPluginsLockfile(), 'utf8');
+    const overridesBefore = '{"settings":{"@native-proof/plugin":{"greeting":"keep"}}}\n';
+    await writeFile(path, overridesBefore);
+    await symlink(context.root, join(context.cwd, '.omp', 'extensions'), 'dir');
+    await expect(context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0', target: { kind: 'package', name: '@native-proof/plugin' },
+        enabled: false, settingsScope: 'workspace', settings: { greeting: 'rollback' }
+      }
+    }, '1')).rejects.toMatchObject({ status: 403 });
+    expect(await readFile(path, 'utf8')).toBe(overridesBefore);
+    expect(await readFile(getPluginsLockfile(), 'utf8')).toBe(nativeBefore);
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace overrides never overwrite a symlink or shadow a native fallback file', async () => {
+  const context = await fixture();
+  try {
+    await new PluginManager(context.cwd).link(context.packageDirectory);
+    const path = getProjectPluginOverridesPath(context.cwd);
+    const outside = join(context.root, 'outside.json');
+    await mkdir(join(context.cwd, '.omp'));
+    await writeFile(outside, '{}');
+    await symlink(outside, path);
+    const write = () => context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0', target: { kind: 'package', name: '@native-proof/plugin' },
+        settingsScope: 'workspace', settings: { greeting: 'blocked' }
+      }
+    }, '1');
+    await expect(write()).rejects.toMatchObject({ status: 403 });
+    expect(await readFile(outside, 'utf8')).toBe('{}');
+    await rm(path);
+    await mkdir(join(context.cwd, '.claude'));
+    await writeFile(join(context.cwd, '.claude', 'plugin-overrides.json'), '{}');
+    await expect(write()).rejects.toMatchObject({ status: 403 });
+    expect(await Bun.file(path).exists()).toBe(false);
   } finally { await context.cleanup(); }
 });
 

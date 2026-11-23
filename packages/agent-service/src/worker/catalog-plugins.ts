@@ -1,9 +1,10 @@
-import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, writeFile, rename, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { getAgentDir, getConfigRootDir, getPluginsDir, getPluginsLockfile, getPluginsPackageJson, getPluginsNodeModules, getProjectPluginOverridesPath, normalizePathForComparison } from '@oh-my-pi/pi-utils';
 import { PluginManager, validateSetting } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
+import { getConfigDirPaths } from '@oh-my-pi/pi-coding-agent/config';
 import type { InstalledPlugin } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/types';
 import type { MarketplacePluginEntry } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
 import {
@@ -17,7 +18,7 @@ import { NativeExtensions } from './catalog-extensions.ts';
 import {
   MarketplacePluginDetailsSchema, JsonObjectSchema, type JsonObject, type InstalledPluginEntry, type PluginTarget, type PluginSettingDefinition,
   type CatalogWorkerIdentity, type PluginCatalogState, type MarketplaceEntry, type MarketplaceSource,
-  type PluginUpdateCheckEntry, type PluginUpgradePreviewEntry, type MarketplacePluginDetails
+  type PluginUpdateCheckEntry, type PluginUpgradePreviewEntry, type MarketplacePluginDetails, type PluginLifecycleState
 } from '@openchamber/agent-contract';
 import type { NativePluginOperation, NativePluginResult } from '../catalogs/plugins.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -38,7 +39,8 @@ const NativePluginConfigSchema = z.object({
   settings: z.record(z.string(), JsonObjectSchema).optional(),
 });
 const NativePluginPackageSchema = z.object({ dependencies: z.record(z.string(), z.string()).optional() });
-const NativePluginOverridesSchema = z.object({
+const NativePackageName = /^(?:@[a-zA-Z0-9-~][a-zA-Z0-9-._~]*\/)?[a-zA-Z0-9-~][a-zA-Z0-9-._~]*$/;
+const NativePluginOverridesSchema = z.looseObject({
   disabled: z.array(z.string()).optional(),
   features: z.record(z.string(), z.array(z.string())).optional(), settings: z.record(z.string(), JsonObjectSchema).optional()
 });
@@ -80,6 +82,17 @@ async function readNativePluginFile<T>(path: string, schema: z.ZodType<T>): Prom
     throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native plugin state could not be read');
   }
 }
+async function fileEntry(path: string) {
+  try { return await lstat(path); }
+  catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+function publicSettings(values: JsonObject, definitions: PluginSettingDefinition[]): JsonObject {
+  return Object.fromEntries(definitions.filter(setting => !setting.secret && Object.hasOwn(values, setting.key))
+    .map(setting => [setting.key, values[setting.key]!]));
+}
 
 /** Native package and marketplace state are instantiated per operation: their SDK managers cache mutable files. */
 export class NativePlugins {
@@ -109,8 +122,6 @@ export class NativePlugins {
   private async publicPlugin(native: InstalledPlugin, target: PluginTarget, manager: PluginManager,
     globalConfigured: JsonObject, projectConfigured: JsonObject): Promise<InstalledPluginEntry> {
     const configured = JsonObjectSchema.parse(await manager.getPluginSettings(native.name));
-    const settings: JsonObject = {};
-    const globalSettings: JsonObject = {};
     const settingDefinitions: PluginSettingDefinition[] = [];
     for (const [key, schema] of Object.entries(native.manifest.settings ?? {})) {
       const base = {
@@ -125,24 +136,18 @@ export class NativePlugins {
           schema.step === undefined ? {} : { step: schema.step })); break;
       }
     }
-    for (const definition of settingDefinitions) {
-      const value = configured[definition.key];
-      if (!definition.secret && value !== undefined) Object.defineProperty(settings, definition.key, { value, enumerable: true, writable: true, configurable: true });
-      const globalValue = globalConfigured[definition.key];
-      if (!definition.secret && globalValue !== undefined) Object.defineProperty(globalSettings, definition.key, { value: globalValue, enumerable: true, writable: true, configurable: true });
-    }
     return {
       id: pluginId(target), target, name: target.name, version: native.version,
       description: native.manifest.description ?? '', scope: target.kind === 'package' || target.scope === 'user' ? 'global' : 'workspace',
-      enabled: native.enabled, enabledFeatures: native.enabledFeatures, settingsScope: 'global', globalSettings, settings, settingDefinitions
+      enabled: native.enabled, enabledFeatures: native.enabledFeatures, settingsScope: 'global',
+      globalSettings: publicSettings(globalConfigured, settingDefinitions), settings: publicSettings(configured, settingDefinitions), settingDefinitions
     };
   }
 
-  async read(revision: string): Promise<PluginCatalogState> {
-    const { packages, marketplace, runtime, overrides, projectRuntime } = await this.managers();
-    const plugins: InstalledPluginEntry[] = [];
-    for (const native of await packages.list()) plugins.push(await this.publicPlugin(native, { kind: 'package', name: native.name }, packages,
-      runtime.settings?.[native.name] ?? {}, overrides.settings?.[native.name] ?? {}));
+  private async installed({ packages, marketplace, runtime, overrides, projectRuntime }: Awaited<ReturnType<NativePlugins['managers']>>) {
+    const rows: { plugin: InstalledPluginEntry; native: InstalledPlugin }[] = [];
+    for (const native of await packages.list()) rows.push({ native, plugin: await this.publicPlugin(native, { kind: 'package', name: native.name }, packages,
+      runtime.settings?.[native.name] ?? {}, overrides.settings?.[native.name] ?? {}) });
     for (const summary of await marketplace.listInstalledPlugins()) {
       const parsed = parsePluginId(summary.id);
       if (!parsed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native marketplace plugin identity is invalid');
@@ -157,8 +162,15 @@ export class NativePlugins {
         plugin.enabled = entry.enabled !== false && state?.enabled !== false && !overrides.disabled?.includes(native.name);
         plugin.enabledFeatures = overrides.features?.[native.name] ?? state?.enabledFeatures ?? null;
       } else plugin.enabled = entry.enabled !== false && native.enabled;
-      plugins.push(plugin);
+      rows.push({ native, plugin });
     }
+    return rows;
+  }
+
+  async read(revision: string): Promise<PluginCatalogState> {
+    const managers = await this.managers();
+    const { marketplace } = managers;
+    const plugins = (await this.installed(managers)).map(row => row.plugin);
     const sources = await this.marketplaceSources(marketplace);
     return {
       workspaceId: this.context.worker.workspaceId, revision, plugins, marketplace: await this.marketplaceEntries(marketplace),
@@ -168,6 +180,61 @@ export class NativePlugins {
     };
   }
 
+  private async confinedOverridesPath(): Promise<string> {
+    const cwd = resolve(this.context.cwd);
+    const nativePath = getProjectPluginOverridesPath(cwd);
+    const directory = dirname(nativePath);
+    if (dirname(directory) !== cwd) throw new ProjectionError(403, 'UNAUTHORIZED', 'Plugin overrides must be in the workspace configuration directory');
+    const root = await realpath(cwd);
+    const parent = join(root, basename(directory));
+    const target = join(parent, basename(nativePath));
+    const parentEntry = await fileEntry(parent);
+    const entry = await fileEntry(target);
+    if ((parentEntry && (!parentEntry.isDirectory() || await realpath(parent) !== parent)) || (entry && !entry.isFile())) {
+      throw new ProjectionError(403, 'UNAUTHORIZED', 'Plugin overrides cannot use a symbolic link or non-file target');
+    }
+    if (!entry) {
+      for (const candidate of getConfigDirPaths(basename(nativePath), { user: false, cwd })) {
+        if (candidate !== nativePath && await fileEntry(candidate)) {
+          throw new ProjectionError(403, 'UNAUTHORIZED', 'Native fallback plugin overrides must be migrated before editing workspace settings');
+        }
+      }
+    }
+    return target;
+  }
+
+  private async lifecycle(revision: string): Promise<PluginLifecycleState> {
+    const projectWritable = await this.confinedOverridesPath().then(() => true, error => {
+      if (error instanceof ProjectionError && error.status === 403) return false;
+      throw error;
+    });
+    const managers = await this.managers();
+    const { overrides, runtime, projectRuntime } = managers;
+    const plugins = await Promise.all((await this.installed(managers)).map(async ({ plugin, native }) => {
+      const state = plugin.target.kind === 'marketplace' && plugin.target.scope === 'project' ? projectRuntime : runtime;
+      return {
+        ...plugin,
+        availableFeatures: Object.entries(native.manifest.features ?? {}).map(([name, feature]) => ({
+          name, defaultEnabled: feature.default === true, ...(feature.description === undefined ? {} : { description: feature.description })
+        })),
+        globalFeatures: state?.plugins?.[native.name]?.enabledFeatures ?? null,
+        globalFeaturesWritable: await this.globalFeaturesWritable(plugin.target, native, runtime),
+        workspaceFeatures: overrides.features?.[native.name] ?? null,
+        projectSettings: publicSettings(overrides.settings?.[native.name] ?? {}, plugin.settingDefinitions)
+      };
+    }));
+    return { workspaceId: this.context.worker.workspaceId, revision, projectWritable, plugins };
+  }
+
+  private async globalFeaturesWritable(target: PluginTarget, native: InstalledPlugin, runtime: z.infer<typeof NativePluginConfigSchema>): Promise<boolean> {
+    if (!Object.hasOwn(runtime.plugins ?? {}, native.name) || !NativePackageName.test(native.name)) return false;
+    if (target.kind === 'package') return true;
+    if (target.scope === 'project') return false;
+    const runtimePath = join(getPluginsNodeModules(), native.name);
+    return await fileEntry(runtimePath) !== null
+      && normalizePathForComparison(await realpath(runtimePath)) === normalizePathForComparison(await realpath(native.path));
+  }
+
   async operation(operation: NativePluginOperation, revision: string): Promise<NativePluginResult> {
     const workspaceId = this.context.worker.workspaceId;
     if (operation.type === 'plugins.owner') {
@@ -175,10 +242,12 @@ export class NativePlugins {
       return {
         type: 'plugins.owner', rootPath: normalizePathForComparison(getPluginsDir()),
         localSourcePath: normalizePathForComparison(join(this.context.cwd, '.omp', 'extensions')),
-        projectRegistryPath: project === undefined ? null : normalizePathForComparison(project)
+        projectRegistryPath: project === undefined ? null : normalizePathForComparison(project),
+        overridesPath: normalizePathForComparison(getProjectPluginOverridesPath(await realpath(this.context.cwd)))
       };
     }
     if (operation.type === 'plugins.read') return { type: 'plugins.catalog', catalog: await this.read(revision) };
+    if (operation.type === 'plugins.lifecycle') return { type: 'plugins.lifecycle', result: await this.lifecycle(revision) };
     if (operation.type === 'plugins.local.read') return {
       type: 'plugins.local', result: {
         workspaceId, revision,
@@ -204,7 +273,7 @@ export class NativePlugins {
         }
       }
     };
-    const { packages, marketplace } = await this.managers();
+    const { packages, marketplace, runtime } = await this.managers();
     if (operation.type === 'plugins.doctor') {
       const privateRoots = [getPluginsDir(), getConfigRootDir(), getAgentDir(), this.context.cwd, dirname(getMarketplacesRegistryPath()), getMarketplacesCacheDir(), getPluginsCacheDir()].sort((left, right) => right.length - left.length);
       const checks = (await packages.doctor()).map(check => {
@@ -257,7 +326,7 @@ export class NativePlugins {
     try {
       if ('request' in operation && 'target' in operation.request) {
         const target = operation.request.target;
-        if (target.kind === 'package' && !/^(?:@[a-zA-Z0-9-~][a-zA-Z0-9-._~]*\/)?[a-zA-Z0-9-~][a-zA-Z0-9-._~]*$/.test(target.name)) {
+        if (target.kind === 'package' && !NativePackageName.test(target.name)) {
           throw new ProjectionError(400, 'INVALID_REQUEST', 'Native plugin package name is invalid');
         }
         if (target.kind === 'marketplace') buildPluginId(target.name, target.marketplace);
@@ -282,25 +351,54 @@ export class NativePlugins {
           break;
         }
         case 'plugins.configure': {
-          const { target, enabled, settings } = operation.request;
+          const { target, enabled, settings, enabledFeatures, settingsScope } = operation.request;
+          const workspace = settingsScope === 'workspace';
+          const overridePath = workspace && (settings !== undefined || enabledFeatures !== undefined)
+            ? await this.confinedOverridesPath() : null;
           let native: InstalledPlugin | undefined;
-          if (target.kind === 'package') native = await packages.getPlugin(target.name, { path: join(getPluginsNodeModules(), target.name) });
+          if (target.kind === 'package') {
+            native = overridePath !== null || enabledFeatures !== undefined
+              ? (await packages.list()).find(plugin => plugin.name === target.name)
+              : await packages.getPlugin(target.name, { path: join(getPluginsNodeModules(), target.name) });
+          }
           else {
             const summary = (await marketplace.listInstalledPlugins()).find(item => item.id === buildPluginId(target.name, target.marketplace) && item.scope === target.scope);
             const entry = summary?.entries[0];
             if (entry) native = await packages.getPlugin(target.name, { path: entry.installPath });
           }
           if (!native) throw new ProjectionError(404, 'INVALID_REQUEST', 'Plugin is not installed');
-          if (settings !== undefined && operation.request.settingsScope !== 'global') throw new ProjectionError(400, 'INVALID_REQUEST', 'Plugin settings writes must explicitly select global scope');
+          if (enabledFeatures !== undefined) {
+            if (!workspace && !await this.globalFeaturesWritable(target, native, runtime)) {
+              throw new ProjectionError(400, 'INVALID_REQUEST', 'The selected plugin has no matching native global feature record');
+            }
+            if (enabledFeatures?.some(name => !Object.hasOwn(native.manifest.features ?? {}, name))) {
+              throw new ProjectionError(400, 'INVALID_REQUEST', 'Plugin feature is not declared by the installed plugin');
+            }
+          }
           for (const [key, value] of Object.entries(settings ?? {})) {
             const schema = native.manifest.settings?.[key];
             if (!native.manifest.settings || !Object.hasOwn(native.manifest.settings, key) || !schema || !validateSetting(value, schema).valid) {
               throw new ProjectionError(400, 'INVALID_REQUEST', 'Plugin setting does not match its native definition');
             }
+            if (workspace && schema.secret) throw new ProjectionError(400, 'INVALID_REQUEST', 'Secret settings cannot be written to a workspace');
           }
-          const projectRegistry = await resolveOrDefaultProjectRegistryPath(this.context.cwd);
-          const paths = [getPluginsLockfile(), getProjectPluginOverridesPath(this.context.cwd), getInstalledPluginsRegistryPath(),
-          ...(projectRegistry === undefined ? [] : [projectRegistry, join(dirname(projectRegistry), 'omp-plugins.lock.json')])];
+          const paths = new Set<string>();
+          if ((!workspace && (settings !== undefined || enabledFeatures !== undefined)) || (enabled !== undefined && target.kind === 'package')) {
+            paths.add(getPluginsLockfile());
+          }
+          if (enabled !== undefined && target.kind === 'marketplace') {
+            if (target.scope === 'user') {
+              paths.add(getInstalledPluginsRegistryPath());
+              paths.add(getPluginsLockfile());
+            } else {
+              const registry = await resolveOrDefaultProjectRegistryPath(this.context.cwd);
+              if (registry !== undefined) {
+                paths.add(registry);
+                paths.add(join(dirname(registry), 'omp-plugins.lock.json'));
+              }
+            }
+          }
+          const previousOverrides = overridePath !== null && await fileEntry(overridePath) ? await readFile(overridePath, 'utf8') : null;
           const snapshots = new Map<string, string | null>();
           for (const path of paths) {
             try { snapshots.set(path, await readFile(path, 'utf8')); }
@@ -310,21 +408,45 @@ export class NativePlugins {
             }
           }
           try {
-            if (settings !== undefined) {
+            if (settings !== undefined && !workspace) {
               for (const [key, definition] of Object.entries(native.manifest.settings ?? {})) {
                 if (definition.secret !== true && !Object.hasOwn(settings, key)) await packages.deletePluginSetting(native.name, key);
               }
               for (const [key, value] of Object.entries(settings)) await packages.setPluginSetting(native.name, key, value);
             }
+            if (enabledFeatures !== undefined && !workspace) await packages.setEnabledFeatures(native.name, enabledFeatures);
             if (enabled !== undefined) {
               if (target.kind === 'package') await packages.setEnabled(native.name, enabled);
               else await marketplace.setPluginEnabled(buildPluginId(target.name, target.marketplace), enabled, target.scope);
             }
+            if (overridePath !== null) {
+              const overrides = NativePluginOverridesSchema.parse(previousOverrides === null ? {} : JSON.parse(previousOverrides));
+              if (settings !== undefined) {
+                const values = { ...overrides.settings?.[native.name] };
+                for (const [key, definition] of Object.entries(native.manifest.settings ?? {})) {
+                  if (!definition.secret) delete values[key];
+                }
+                const next = { ...overrides.settings, [native.name]: { ...values, ...settings } };
+                if (Object.keys(next[native.name]!).length === 0) delete next[native.name];
+                overrides.settings = next;
+              }
+              if (enabledFeatures !== undefined) {
+                const next = { ...overrides.features };
+                if (enabledFeatures === null) delete next[native.name];
+                else Object.defineProperty(next, native.name, { value: enabledFeatures, enumerable: true, configurable: true });
+                overrides.features = next;
+              }
+              await this.atomicOverrides(overridePath, JSON.stringify(overrides, null, 2));
+              snapshots.set(overridePath, previousOverrides);
+            }
+            clearPluginRootsAndCaches();
+            return { type: 'plugins.catalog', catalog: await this.read(revision) };
           } catch (error) {
             let rollbackFailed = false;
             for (const [path, source] of snapshots) {
               try {
-                if (source !== null) await this.atomicConfiguration(path, source);
+                if (path === overridePath && await this.confinedOverridesPath() !== path) throw new Error('Workspace changed');
+                if (source !== null) await this.atomicConfiguration(path, source, path === overridePath);
                 else try { await unlink(path); } catch (failure) { if (!(failure instanceof Error && 'code' in failure && failure.code === 'ENOENT')) throw failure; }
               } catch { rollbackFailed = true; }
             }
@@ -332,7 +454,6 @@ export class NativePlugins {
             if (rollbackFailed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native plugin configuration rollback could not restore every prior file');
             throw error;
           }
-          break;
         }
       }
     } catch (error) {
@@ -402,11 +523,17 @@ export class NativePlugins {
     return rows;
   }
 
-  private async atomicConfiguration(path: string, source: string): Promise<void> {
+  private async atomicOverrides(path: string, source: string): Promise<void> {
+    if (await this.confinedOverridesPath() !== path) throw new ProjectionError(403, 'UNAUTHORIZED', 'Workspace changed before plugin settings could be saved');
+    await this.atomicConfiguration(path, source, true);
+  }
+
+  private async atomicConfiguration(path: string, source: string, workspace = false): Promise<void> {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const temporary = `${path}.${randomUUID()}.tmp`;
     try {
       await writeFile(temporary, source, { flag: 'wx', mode: 0o600 });
+      if (workspace && await this.confinedOverridesPath() !== path) throw new ProjectionError(403, 'UNAUTHORIZED', 'Workspace changed before plugin settings could be saved');
       await rename(temporary, path);
     } finally { await removeTemporaryFile(temporary); }
   }
