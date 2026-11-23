@@ -325,7 +325,7 @@ function ProviderDetail({
     <>
       <SettingsSection
         title={t('settings.providers.accounts.title')}
-        info={t('settings.providers.accounts.selection.info')}
+        info={t('settings.providers.accounts.info')}
         divider={false}
         headerAction={(
           <div className="flex items-center gap-1">

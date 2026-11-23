@@ -15,7 +15,10 @@ badges, native-backoff copy and localized override notices that disable account
 selection. Automatic mutations have separate success feedback and do not carry
 a credential ref. Focused contract, worker, Host and session-ordering tests pass.
 The D4 decision records persistence and admission semantics; the dated research
-plan remains historical. Local verification: 7 account component tests, 11
+plan remains historical. The account chip group is the only selection control;
+unavailable pins select no chip, while an existing pinned row retains its badge.
+The section retains its account help separately from automatic-mode copy.
+Local verification: 9 account component tests, 11
 Providers page helper tests, 2 OAuth component tests and 5 Canonical provider
 client tests pass individually; 81 contract tests and 79 worker/protocol tests
 pass. Root type-check (including upstream drift) and lint pass; lint reports

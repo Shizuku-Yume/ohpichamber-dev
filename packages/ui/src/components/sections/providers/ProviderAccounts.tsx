@@ -85,6 +85,7 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   const { t } = useI18n();
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
   const enabledAccounts = roster.accounts.filter((account) => !account.disabled);
+  const pinnedAccount = enabledAccounts.find((account) => account.active);
   const canSwitch = enabledAccounts.length > 1;
   const selectionDisabled = busyId !== null || disabled || roster.selectionOverriddenBy !== null;
   const accountName = (account: Accounts['accounts'][number]) => {
@@ -104,7 +105,7 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
         <SettingsFieldRow label={t('settings.providers.accounts.selection.label')}>
           <SettingsChipGroup
             aria-label={t('settings.providers.accounts.selection.label')}
-            value={roster.selectionMode === 'automatic' ? 'automatic' : `account:${roster.accounts.find((account) => account.active)?.credentialRef ?? ''}`}
+            value={roster.selectionMode === 'automatic' ? 'automatic' : pinnedAccount ? `account:${pinnedAccount.credentialRef}` : ''}
             options={[
               { value: 'automatic', label: t('settings.providers.accounts.selection.automatic'), disabled: selectionDisabled },
               ...enabledAccounts.map((account) => ({
@@ -167,22 +168,6 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                     <div className="typography-micro text-muted-foreground">{methodLabel}</div>
                   )}
                 </div>
-                {canSwitch && !active && !account.disabled ? (
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={selectionDisabled}
-                    onClick={() => onMutate({
-                      action: 'select',
-                      expectedRevision: roster.revision,
-                      credentialRef: account.credentialRef,
-                    })}
-                    aria-label={t('settings.providers.accounts.selection.pinAria', { account: name })}
-                  >
-                    {busyId === account.credentialRef ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : null}
-                    {t('settings.providers.accounts.selection.pin')}
-                  </Button>
-                ) : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button

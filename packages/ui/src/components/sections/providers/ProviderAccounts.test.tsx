@@ -60,7 +60,8 @@ test('automatic mode has no pinned row and explains native selection and backoff
   expect(button('Automatic').getAttribute('aria-pressed')).toBe('true');
   expect(container.textContent).toContain('OMP picks among enabled accounts and handles rate-limit backoff.');
   expect(container.textContent).not.toContain('Pinned');
-  await click('Pin First');
+  expect(container.querySelector('[aria-label="Pin First"]')).toBeNull();
+  await click('First');
   expect(requests).toEqual([{ action: 'select', expectedRevision: '7', credentialRef: 'first' }]);
 });
 
@@ -90,7 +91,7 @@ test('higher-precedence sources explain the override and disable all selection c
   ] as const) {
     await render(roster({ selectionOverriddenBy: source }));
     expect(container.textContent).toContain(`${wording} takes precedence; account selection does not apply.`);
-    for (const label of ['Automatic', 'First', 'Second', 'Pin First', 'Pin Second']) {
+    for (const label of ['Automatic', 'First', 'Second']) {
       expect(button(label).disabled).toBe(true);
       await click(label);
     }
@@ -122,8 +123,25 @@ test('pending mutations and unavailable provider state disable selection', async
   for (const [busyId, disabled] of [['automatic', false], [null, true]] as const) {
     await render(roster(), busyId, disabled);
     expect(button('Automatic').disabled).toBe(true);
-    expect(button('Pin First').disabled).toBe(true);
-    await click('Pin First');
+    expect(button('First').disabled).toBe(true);
+    await click('First');
   }
   expect(requests).toEqual([]);
+});
+
+test('a disabled pin keeps its row badge but selects no enabled chip', async () => {
+  const value = roster({ selectionMode: 'pinned' });
+  value.accounts.push({ credentialRef: 'expired', label: 'Expired', method: 'oauth', active: true, disabled: true });
+  await render(value);
+  expect(container.querySelector('[aria-pressed="true"]')).toBeNull();
+  expect(container.textContent?.match(/Pinned/g)).toHaveLength(1);
+  expect(container.textContent).toContain('Sign in again');
+});
+
+test('a missing pinned account selects no chip and shows no badge', async () => {
+  await render(roster({ selectionMode: 'pinned' }));
+  expect(container.querySelector('[aria-pressed="true"]')).toBeNull();
+  expect(container.textContent).not.toContain('Pinned');
+  await click('Automatic');
+  expect(requests).toEqual([{ action: 'automatic', expectedRevision: '7' }]);
 });
