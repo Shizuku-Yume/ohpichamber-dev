@@ -187,6 +187,27 @@ test('a moved row is absent from state and refused on write', async () => {
   } finally { await f.close(); }
 });
 
+test('discovery exposes only the pinned boolean controls on Commands and Skills', () => {
+  const rows = [...OMP_SETTING_EXPOSED_IDS].filter(id => id.startsWith('commands.') || id.startsWith('skills.'));
+  const types = new Map(orderedSettings().map(({ id, type }) => [id, type]));
+  expect(rows.filter(id => id.startsWith('commands.')).sort()).toEqual([
+    'commands.enableClaudeProject', 'commands.enableOpencodeProject', 'commands.enableOpencodeUser',
+  ]);
+  expect(rows.filter(id => OMP_SETTING_PLACEMENTS[id]?.type === 'page' && id.startsWith('skills.')).sort()).toEqual([
+    'skills.enableAgentsProject', 'skills.enableAgentsUser', 'skills.enableClaudeProject', 'skills.enablePiProject',
+    'skills.enablePiUser', 'skills.enabled',
+  ]);
+  for (const id of rows) expect(types.get(id)).toBe('boolean');
+  for (const id of [
+    'skills.customDirectories', 'skills.ignoredSkills', 'skills.manualSkills', 'skills.includeSkills',
+    'commands.enableClaudeUser', 'skills.enableClaudeUser', 'skills.enableCodexUser',
+  ]) {
+    expect(OMP_SETTING_PLACEMENTS[id]).toEqual({ type: 'config-only' });
+    expect(OMP_SETTING_EXPOSED_IDS.has(id)).toBe(false);
+  }
+  expect(OMP_SETTING_PLACEMENTS['skills.registryUrl']).toEqual({ type: 'boundary' });
+});
+
 test('Usage edits reset tuning without exposing automatic redemption', async () => {
   const f = await fixture();
   try {
@@ -227,6 +248,27 @@ test('a project reset policy is readable without allowing edits to shared config
       changes: [{ id: 'codexResets.keepCredits', value: 2 }],
     })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
     expect(readFileSync(sharedPath, 'utf8')).toBe(sharedConfig);
+  } finally { await f.close(); }
+});
+
+test('project discovery overrides cannot change shared settings', async () => {
+  const f = await fixture();
+  try {
+    const config = 'commands:\n  enableClaudeProject: false\nskills:\n  enabled: false\n';
+    const sharedPath = join(f.agentDirectory, 'config.yml');
+    const projectPath = join(f.cwd, '.omp', 'config.yml');
+    await writeFile(sharedPath, config);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(projectPath, config);
+    const state = await f.native.read('workspace_1', '0');
+    for (const id of ['commands.enableClaudeProject', 'skills.enabled']) {
+      await expect(f.native.write('workspace_1', '1', {
+        expectedRevision: state.revision, changes: [{ id, value: true }],
+      })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+      expect(state.settings.find(setting => setting.id === id)).toMatchObject({ value: false, conditionActive: false });
+    }
+    expect(readFileSync(sharedPath, 'utf8')).toBe(config);
+    expect(readFileSync(projectPath, 'utf8')).toBe(config);
   } finally { await f.close(); }
 });
 

@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Window } from 'happy-dom';
+import type { OmpSettingsState } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -33,6 +34,8 @@ const _fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, in
   const path = new URL(request.url).pathname;
   if (path === '/api/fs/home') return Response.json({ home: '/test' });
   if (path === '/api/config/settings') return Response.json({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  if (path === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  if (path === '/api/agent/v1/workspaces/workspace/settings') return Response.json({ workspaceId: 'workspace', revision: '0', totalCount: 0, settings: [] });
   throw new Error(`Unexpected request: ${request.method} ${path}`);
 });
 
@@ -54,6 +57,38 @@ plugin({
   },
 });
 const { CommandsPage } = await import('./CommandsPage');
+const { canonicalClient } = await import('@/api/canonicalClient');
+test('Commands discovery writes its native setting and refreshes the catalog', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  const state: OmpSettingsState = {
+    workspaceId: 'workspace', revision: '1', totalCount: 2,
+    settings: [{ id: 'commands.enableClaudeProject', type: 'boolean', value: true, default: true, configured: false,
+      placement: { type: 'page', page: 'commands', section: 'catalog' } }, {
+      id: 'commands.enableOpencodeProject', type: 'boolean', value: false, default: true, configured: true,
+      condition: 'discoveryUsesSharedConfig', conditionActive: false,
+      placement: { type: 'page', page: 'commands', section: 'catalog' },
+    }],
+  };
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state);
+  const write = spyOn(canonicalClient, 'updateOmpSettings').mockResolvedValue({
+    ...state, revision: '2', settings: [{ ...state.settings[0], value: false, configured: true }],
+  });
+  const reload = spyOn(useCommandsStore.getState(), 'loadCommands').mockResolvedValue(true);
+  try {
+    await act(async () => root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>));
+    const row = container.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableClaudeProject"]');
+    if (!row) throw new Error('Missing discovery setting');
+    const overridden = container.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableOpencodeProject"]');
+    expect(overridden?.getAttribute('aria-disabled')).toBe('true');
+    expect(container.textContent).toContain('Editing the shared setting would not change this project.');
+    await act(async () => overridden?.click());
+    expect(write).not.toHaveBeenCalled();
+    await act(async () => row.click());
+    expect(write).toHaveBeenCalledWith('workspace', { expectedRevision: '1', changes: [{ id: 'commands.enableClaudeProject', value: false }] });
+    expect(reload).toHaveBeenCalledWith('/project');
+  } finally { resolve.mockRestore(); read.mockRestore(); write.mockRestore(); reload.mockRestore(); }
+});
 const { useCommandsStore } = await import('@/stores/useCommandsStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { SyncProvider } = await import('@/sync/sync-context');
