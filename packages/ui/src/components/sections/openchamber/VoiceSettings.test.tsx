@@ -27,7 +27,7 @@ describe('VoiceSettings endpoint paths', () => {
   let synthesis: { getVoices: () => SpeechSynthesisVoice[]; onvoiceschanged: (() => void) | null };
   let waitForVoices: ReturnType<typeof spyOn<typeof browserVoiceService, 'waitForVoices'>>;
 
-  const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'];
+  const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT', 'fetch', 'requestAnimationFrame', 'cancelAnimationFrame'];
 
   beforeEach(() => {
     windowInstance = new Window();
@@ -49,6 +49,9 @@ describe('VoiceSettings endpoint paths', () => {
       sessionStorage: windowInstance.sessionStorage,
       IS_REACT_ACT_ENVIRONMENT: true,
       fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
+      // The prompt textarea's overlay scrollbar measures on animation frames.
+      requestAnimationFrame: windowInstance.requestAnimationFrame.bind(windowInstance),
+      cancelAnimationFrame: windowInstance.cancelAnimationFrame.bind(windowInstance),
     });
     host = document.createElement('div');
     document.body.append(host);

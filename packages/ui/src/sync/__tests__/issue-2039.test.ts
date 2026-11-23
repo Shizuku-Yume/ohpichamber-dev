@@ -489,7 +489,7 @@ describe("issue 2039 draft auto-accept", () => {
     expect(applyDefaultModelAgentSelectionCalls).toHaveLength(appliedBeforeClose)
   })
 
-  test("reapplies global defaults when opening a fresh no-project draft", async () => {
+  test("reapplies the Chats scope defaults when opening a fresh no-project draft", async () => {
     useSessionUIStore.getState().openNewSessionDraft()
     await new Promise((resolve) => setTimeout(resolve, 0))
 

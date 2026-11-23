@@ -5,8 +5,11 @@ import { createStartupPipelineRuntime } from './startup-pipeline-runtime.js';
 describe('startup pipeline runtime', () => {
   it('starts only the Agent Service after Host capabilities, listener publication and signal wiring', async () => {
     const order = [];
+    const uiAuthController = {};
+    const tunnelAuthController = {};
+    const createTerminalRuntime = vi.fn(() => { order.push('terminal'); return {}; });
     const runtime = createStartupPipelineRuntime({
-      createTerminalRuntime: () => { order.push('terminal'); return {}; },
+      createTerminalRuntime,
       createDictationRuntime: () => { order.push('dictation'); return {}; },
       createMessageStreamWsRuntime: () => { order.push('events'); return {}; },
       createServerStartupRuntime: () => ({
@@ -21,6 +24,8 @@ describe('startup pipeline runtime', () => {
 
     await runtime.run({
       app: {},
+      uiAuthController,
+      tunnelAuthController,
       staticRoutesRuntime: { registerStaticRoutes: vi.fn() },
       apiOnly: false,
       tunnelRuntimeContext: {
@@ -35,5 +40,6 @@ describe('startup pipeline runtime', () => {
     });
 
     expect(order).toEqual(['terminal', 'dictation', 'events', 'listen', 'port:3901', 'git', 'handlers', 'agent']);
+    expect(createTerminalRuntime).toHaveBeenCalledWith(expect.objectContaining({ uiAuthController, tunnelAuthController }));
   });
 });

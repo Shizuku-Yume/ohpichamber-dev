@@ -5,8 +5,8 @@ import type { ExtensionQuotaProvider } from '@/lib/quota/extensionProviders';
 import { useConfigStore } from './useConfigStore';
 import { useQuotaStore } from './useQuotaStore';
 
-const TEAPOT = { id: 'ext-teapot-usage' as const, name: 'Teapot Usage', icon: 'cup', guestId: 'teapot-usage' };
-const GARBAGE = { id: 'ext-garbage-usage' as const, name: 'Garbage Usage', icon: 'flask', guestId: 'garbage-usage' };
+const TEAPOT = { id: 'ext-teapot-usage' as const, name: 'Teapot Usage', icon: 'cup', guestId: 'teapot-usage', providers: [] };
+const GARBAGE = { id: 'ext-garbage-usage' as const, name: 'Garbage Usage', icon: 'flask', guestId: 'garbage-usage', providers: [] };
 
 const result = (providerId: string): ProviderResult => ({
   // SAFETY: the ids this test asks for are built-in ids and the `ext-` ids of its two fake extensions.
@@ -80,6 +80,22 @@ describe('the extensions\' usage providers in the quota store', () => {
     const before = useQuotaStore.getState().extensionProviders;
     await useQuotaStore.getState().loadExtensionProviders();
     expect(useQuotaStore.getState().extensionProviders).toBe(before);
+  });
+
+  test('drops and fetches again an extension whose update reads a different provider under the same id', async () => {
+    await useQuotaStore.getState().fetchQuotas(['claude']);
+    extensions = [{ ...TEAPOT, providers: ['openrouter'] }, GARBAGE];
+    await useQuotaStore.getState().loadExtensionProviders();
+    await pause();
+    requested.length = 0;
+
+    extensions = [{ ...TEAPOT, providers: ['xiaomi'] }, GARBAGE];
+    await useQuotaStore.getState().loadExtensionProviders();
+    // The old sample is gone at once, so it can never read as the new provider's usage.
+    expect(useQuotaStore.getState().results.map((entry) => entry.providerId)).toEqual(['claude', GARBAGE.id]);
+    await pause();
+    expect(fetchedQuotas().filter((url) => url.includes('ext-')).map((url) => url.slice(url.indexOf('/api/quota/')))).toEqual(['/api/quota/ext-teapot-usage?workspaceId=ws_ext_test']);
+    expect(useQuotaStore.getState().results.map((entry) => entry.providerId)).toEqual(['claude', GARBAGE.id, TEAPOT.id]);
   });
 
   test('changing the Work Status list while an extension is paused keeps its choice', async () => {

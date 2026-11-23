@@ -16,6 +16,8 @@ import { useI18n } from '@/lib/i18n';
 import { MarkdownSvgFailureContext, useMarkdownPresentation } from './MarkdownPresentationContext';
 import { activateMarkdownFile, useOpenMarkdownFile } from './markdownFileReferences';
 import type { MarkdownCodePlugin } from './streamdownCode';
+import { useOnDemandComponent } from '@/hooks/useOnDemandComponent';
+import { useChatSurfaceMode } from '../useChatSurfaceMode';
 import { MarkdownDiff } from './MarkdownDiff';
 import { MarkdownSuggestionContext, isSuggestionLanguage, suggestionPatch } from './markdownSuggestion';
 
@@ -111,7 +113,29 @@ const MarkdownCodeBody = React.memo(function MarkdownCodeBody({ source, language
   );
 });
 
-export function MarkdownCode({ children, className, node, ...props }: React.ComponentProps<'code'> & ExtraProps) {
+type CodeProps = React.ComponentProps<'code'> & ExtraProps;
+
+const runnableLanguages = new Set(['bash', 'sh', 'shell', 'zsh']);
+const loadReplyCommandCode = () => import('./ReplyCommand').then((module) => module.ReplyCommandCode);
+const ignoreLoadFailure = () => undefined;
+
+function RunnableCode(props: CodeProps) {
+  const { directory, settledReply } = useMarkdownPresentation();
+  const ReplyCommandCode = useOnDemandComponent(true, loadReplyCommandCode, ignoreLoadFailure);
+  const source = (props.node?.children.map((child) => child.type === 'text' ? child.value : '').join('') ?? '').replace(/\n$/, '');
+  const language = /language-([^\s]+)/.exec(props.className ?? '')?.[1] ?? '';
+  return <MarkdownCodeBlock {...props} command={ReplyCommandCode && settledReply ? <ReplyCommandCode sessionId={settledReply.sessionId} directory={directory} language={language} source={source} /> : null} />;
+}
+
+export function MarkdownCode(props: CodeProps) {
+  const { settledReply } = useMarkdownPresentation();
+  const surface = useChatSurfaceMode();
+  const language = /language-([^\s]+)/.exec(props.className ?? '')?.[1] ?? '';
+  const runnable = settledReply !== null && surface !== 'peek' && surface !== 'mini-chat' && runnableLanguages.has(language.toLowerCase());
+  return runnable ? <RunnableCode {...props} /> : <MarkdownCodeBlock {...props} command={null} />;
+}
+
+function MarkdownCodeBlock({ children, className, node, command, ...props }: CodeProps & { command: React.ReactNode }) {
   const presentation = useMarkdownPresentation();
   const { t } = useI18n();
   const wrap = useUIStore((state) => state.codeBlockLineWrap);
@@ -186,6 +210,7 @@ export function MarkdownCode({ children, className, node, ...props }: React.Comp
               data-streamdown="code-block-actions"
               className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-md border border-sidebar bg-sidebar/80 px-1.5 py-1 supports-[backdrop-filter]:bg-sidebar/70 supports-[backdrop-filter]:backdrop-blur"
             >
+              {command}
               {!proposal && <Button
                 variant="ghost"
                 size="xs"

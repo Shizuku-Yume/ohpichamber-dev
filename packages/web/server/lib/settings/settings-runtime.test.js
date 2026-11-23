@@ -46,6 +46,34 @@ const createRuntime = async ({
 };
 
 describe('settings runtime', () => {
+  it('serializes feature mutations with a user save and keeps unrelated instance fields', async () => {
+    const { runtime, cleanup } = await createRuntime({ mergePersistedSettings: (current, changes) => ({ ...current, ...changes }) });
+    try {
+      let release;
+      const feature = runtime.updateSettingsFromDisk(async (current) => {
+        await new Promise((resolve) => { release = resolve; });
+        return { ...current, publicOrigin: 'https://host.example' };
+      });
+      await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+      const save = runtime.persistSettings({ desktopKeepAwakeEnabled: true });
+      release();
+      await Promise.all([feature, save]);
+      expect(await runtime.readSettingsFromDisk()).toMatchObject({ publicOrigin: 'https://host.example', desktopKeepAwakeEnabled: true });
+    } finally { await cleanup(); }
+  });
+
+  it('reads the latest document for each feature write and recovers from a failed mutation', async () => {
+    const { runtime, cleanup } = await createRuntime();
+    try {
+      await expect(runtime.updateSettingsFromDisk(() => { throw new Error('failed feature'); })).rejects.toThrow('failed feature');
+      await Promise.all([
+        runtime.updateSettingsFromDisk((current) => ({ ...current, publicOrigin: 'https://host.example' })),
+        runtime.updateSettingsFromDisk((current) => ({ ...current, privateRelay: { enabled: false } })),
+      ]);
+      expect(await runtime.readSettingsFromDisk()).toMatchObject({ publicOrigin: 'https://host.example', privateRelay: { enabled: false } });
+    } finally { await cleanup(); }
+  });
+
   it('round-trips both archived-only retention states through instance settings', async () => {
     const { runtime, settingsFilePath, cleanup } = await createRuntime();
     try {

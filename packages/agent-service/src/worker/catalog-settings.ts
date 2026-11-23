@@ -55,7 +55,8 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
     descriptor.condition = presentation.condition;
     descriptor.conditionActive = presentation.conditionActive ?? true;
   }
-  if (setting.enumValues !== undefined) descriptor.enumValues = [...setting.enumValues];
+  if (setting.enumValues !== undefined) descriptor.enumValues = setting.enumValues.filter(value => id !== 'edit.mode' || value !== 'magic');
+  if (id === 'edit.mode' && descriptor.value === 'magic') descriptor.value = 'none';
   if (list !== undefined) descriptor.options = list;
   if (ui?.label !== undefined) descriptor.label = ui.label;
   if (ui?.description !== undefined) descriptor.description = ui.description;
@@ -109,6 +110,9 @@ export class NativeSettings {
     for (const change of request.changes) {
       const setting = handle(change.id);
       if (change.value === null) continue;
+      if (change.id === 'edit.mode' && change.value === 'magic') {
+        throw new ProjectionError(400, 'INVALID_REQUEST', 'Magic edit mode is not supported');
+      }
       try { setting.assertWritable(change.value); }
       catch (error) {
         throw new ProjectionError(400, 'INVALID_REQUEST', error instanceof Error ? error.message : `Invalid value for ${change.id}`);

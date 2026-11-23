@@ -2,6 +2,12 @@
 
 ## Purpose
 
+Chats draft model/effort preferences are Host profile settings applied only to
+chat drafts. They do not replace Canonical OMP defaults or turn subagent catalog
+entries into root agents. Loading or switching Hosts preserves manual picks and
+rejects stale preference responses. Leads flags and orchestration stores remain
+deferred.
+
 `packages/ui/src/stores` contains app-level Zustand stores for persistent UI state, runtime state, and feature caches.
 
 Not all state in the UI belongs here.

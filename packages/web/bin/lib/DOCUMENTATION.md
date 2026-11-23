@@ -8,6 +8,14 @@ In the pre-M0 baseline, the CLI manages both OpenChamber Host Gateway services a
 
 ## Entrypoint Boundary
 
+Checkout commands run `bin/cli.js` with Bun, including `start:web`.
+Published commands run `build/bin/cli.js`.
+Each CLI loads its own sibling server tree, so both paths work without a stale
+build entering the development loop.
+The package also ships `bin/cli.js` as a compatibility entry for startup
+services created before the build directory existed. It forwards execution to
+the built CLI so those services survive an upgrade.
+
 - `../cli.js`
   - Loads standalone package aliases and the existing Node source resolver before dynamically importing the TypeScript controller. Emitted builds load the corresponding JavaScript controller.
   - Re-exports public entrypoint helpers without a second command table or signal state.
@@ -72,6 +80,10 @@ Command modules implement user-facing commands and preserve output contracts acr
   - Receives `serveCommand` and `stopCommand` by dependency injection. Do not reach back into `cli.js` command globals from this module.
 
 ## Shared Helper Modules
+
+CLI settings saves and read/modify/write updates use the same in-process write
+queue. Relay key migration receives that queued updater and rereads strictly;
+it never replaces unreadable settings with an empty document.
 
 These modules hold reusable, non-presentational logic for commands.
 

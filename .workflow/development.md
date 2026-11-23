@@ -4,6 +4,92 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
+`TerminalView`: completed output stays visible despite close-on-exit, a missing
+Host session cannot become an interactive shell, and command tabs cannot restart.
+The original isolated production reproduction recorded a successful command-mode
+create followed by automatic session deletion and panel closure, not lost input.
+UI type-check, lint and 106 focused tests pass. A separate headless Chromium
+profile against the isolated production CLI on port 43219 shows `TERMINAL_OK`,
+the new tab selected and the terminal input focused after command completion;
+evidence is in `/home/ubuntu/reply-terminal-fix/after-desktop.png`.
+
+The Chat Settings follow-up restores the pasted-image checkbox and its translated
+copy on all 15 locales. Office-document radios already rendered all three modes;
+their search entry was stranded in the unused `search-chat-sending` module. The
+main index now consumes that table, including the pasted-image entry, and both
+targets open Composer. Attachment option tables live separately to avoid growing
+the oversized page. These shared profile controls apply to Web/PWA, Electron,
+hosted mobile and Capacitor through the existing settings writer.
+Production verification also exposed the Host's stale merge-time deletion of
+`savePastedImagesAsFiles`; removing it lets the restored control persist instead
+of surviving only in the current client cache.
+
+The upstream `sections/**` selector/anchor comparison found no other clear
+OMP-applicable control omission. Remaining unmatched controls are legacy engine
+tools/goal/suggestion switches (local-device compatibility fields), OpenCode
+agent/command/provider/plugin/compaction configuration, dormant usage reporting,
+or unreleased isolated spaces. Native quotas retain their per-provider work-status
+checkbox; native MCP retains environment/header editors. These are not restored
+as second authorities.
+UI type-check/lint, 7 Chat Settings tests, 16 search tests, 12 layout guards,
+68 Host settings tests and server type-check pass. The isolated production path
+opens Composer from the `docx` search result and persists both image-saving
+booleans plus the selected document mode. Screenshot:
+`/home/ubuntu/reply-terminal-fix/settings-after.png`.
+
+OpenChamber v2.8.0 (`30c70496a5`) is integrated by the two-parent merge
+`cb5c92b26`; `8173b1275` then merges `origin/main` (`08000b159`, PR #134)
+without conflicts. Agent Service and vendored SDK content match main's OMP
+19.1.0 integration. The upstream pin and complete delta ledger now track v2.8.0;
+the settled exclusions are recorded in the 2026-11-22 v2.8.0 merge decision.
+`bun install`, full root type-check (all five check guardrails plus Electron,
+Agent Contract, Agent Service and mobile) and root lint pass; lint retains
+nonfatal hook warnings. Final guard reconciliation preserves the excluded
+engines rather than restoring their constructors. It also caught missing
+terminal tunnel-auth injection and managed-chat model/effort persistence, now
+covered by focused regressions. Context-pin read/modify/write keeps concurrent
+edits through Canonical metadata revision preconditions checked in the Host's
+SQLite transaction, with bounded runtime-scoped UI retries. Focused SDK, UI,
+Host and contract checks pass. The final isolated root run passes 6/7 workspace
+suites: UI passes 1,498/1,498 files; Web Vitest passes 629 files with nine skipped
+(10,104 tests passed). Merge regressions in UI fixtures, quota helpers, task
+imports, CLI key migration and emitted loader packaging are repaired. Only the
+scripts suite fails: 35/38 files pass, and the three known M0 PIDFD VM files still
+fail after their required one-file reruns. The managed-sync loopback case failed
+its targeted rerun but passes the final aggregate. Root production build passes.
+The production CLI's isolated
+Chrome smoke opens a saved session and settings without console errors after
+configuring a placeholder native credential in an authorized project outside
+HOME; no model request is sent. This does not certify live providers, devices
+or updaters. External evidence: `/home/ubuntu/upstream-v280-validation/` and
+`/home/ubuntu/upstream-v280-smoke.png`.
+
+The [OMP 19.1 integration](specs/omp19-1-integration.md) pins 19.1.0 at
+`a7135b8f`. The worker uses tool commands behind Host authorization, retains
+worker-local MCP (including the upstream legacy-negotiation fallback), migrates
+explicit tool-command preferences, and refuses magic edit mode. A real
+Agent Service/worker smoke with loopback fixtures verified Canonical plan
+proposal and resolution, refusal of a mounted tool through Host policy, MCP
+connection and tool publication, and shell output retrieval. No live provider
+was used. Agent Service types, the focused UI/Host tests, and Linux Electron
+runtime staging and readiness were verified. The settings UI was not
+visually checked.
+
+The uncapped Agent Service suite passed with 703 passes and 12 skips. The
+socket replay test now starts from the journal's current cursor so session
+startup events do not use up its replay window. Root type-check passed with
+the Electron runtime staged: the upstream wiring audit now excludes staged
+SDK code from application constructor detection and leaves the allowlist
+intact. Independent workflow and security reviewers could not be spawned.
+
+PR review found that native Task and Vibe children did not receive the Host
+Bash authorizer. Fresh and restored children now inherit it; a loopback
+Task child test checks denial of Bash and separate authorization of a
+Bash-mounted tool. The independently constructed `/tan` clone also lacked
+the Host Bash guard on 19.0. It now receives both the Bash authorizer and
+the tool observer. A loopback `/tan` test verifies both checks.
+
 Custom-provider model projection now inherits native reasoning levels and budgets
 when configured options are empty, while explicit non-empty choices win. Worker
 projection regressions and the UI form contract are covered. On Windows the

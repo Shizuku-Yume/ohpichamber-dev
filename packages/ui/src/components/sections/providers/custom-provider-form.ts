@@ -54,6 +54,8 @@ export {
   OMP_THINKING_MODES,
 };
 
+export { storedProviderEntrySchema, type StoredProviderSource } from './stored-provider-entry';
+
 export const CUSTOM_PROVIDER_ID = '__custom_provider__';
 const CUSTOM_PROVIDER_PROTOCOLS = ['chat-completions', 'responses', 'messages', 'generate-content'] as const;
 

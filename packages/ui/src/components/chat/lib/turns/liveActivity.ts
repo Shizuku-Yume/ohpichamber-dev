@@ -49,7 +49,9 @@ const UI_BLOCK_FENCE = /^ {0,3}(`{3,}|~{3,})openui-lang[ \t]*$/m;
  * the agent wrote before a later step, and a call still waiting on an answer.
  * The final answer's own text is the answer, so it is never hoisted.
  */
-export function getShownPages(messages: readonly ChatMessageEntry[], finalMessage?: ChatMessageEntry): ShownPart[] {
+export const hasUiBlock = (text: string): boolean => UI_BLOCK_FENCE.test(fenceUiBlocks(text));
+
+export function getShownPages(messages: readonly ChatMessageEntry[], finalMessage?: ChatMessageEntry, keepText = false): ShownPart[] {
     const shown: ShownPart[] = [];
     const results = toolResultsByCall(messages);
     for (const message of messages) {
@@ -59,7 +61,7 @@ export function getShownPages(messages: readonly ChatMessageEntry[], finalMessag
                     sessionID: message.sessionId, messageID: message.messageId,
                 });
                 if (isShownInPlace(view)) shown.push(part);
-            } else if (part.type === 'text' && message !== finalMessage && UI_BLOCK_FENCE.test(fenceUiBlocks(part.content))) {
+            } else if (part.type === 'text' && message !== finalMessage && (hasUiBlock(part.content) || (keepText && part.content.trim().length > 0))) {
                 shown.push(part);
             }
         }

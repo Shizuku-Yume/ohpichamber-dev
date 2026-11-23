@@ -2,6 +2,27 @@
 
 ## Scope
 
+Attachment intake can hold a file for saving at Send (`saveOnSend`) or keep a
+copy alongside its media (`saveCopyOnSend`). `held-attachments.ts` prepares those
+files through the Host-owned `saveWorkspaceAttachments`, not agent SDK temp-file
+APIs. Input-store preparation updates only the captured draft's unchanged files;
+native prompt and queue admission also prepare held files before uploading their
+Canonical attachment identities. Failed saves block admission, and runtime
+changes cannot commit an old result into a new Host. Path-note sizes describe
+the actual note bytes uploaded to the Canonical API.
+
+New-draft admission reports the acknowledged session and resolved Host directory
+through `onSessionCreated` before applying the mode or sending the first prompt.
+Composer reference transfer and failed-send text restoration use that captured
+receipt, never a later live session selection. Runtime changes suppress stale
+metadata writes and notifications.
+
+Pending questions/forms remain in each directory child's `form[sessionId]`
+bucket. Canonical snapshots and CAS-versioned question events replace only that
+session's requests; subscribers observe only their session buckets. Historical
+tool output is not another pending-question authority. Leads orchestration and
+its draft flags remain deferred.
+
 Canonical sessions do not carry the inherited operator-child or workflow-agent
 tags. The operator-only Take Over and mark-done interception are not supported:
 ordinary child-session lineage does not imply either role. Pending tool
@@ -70,6 +91,11 @@ uses `RuntimeAPIs.notifications`. Local desktop delivery is not duplicated, and
 a remote Host's desktop delivery does not suppress notifications on this client.
 
 ## Host operational metadata authority
+
+Read/modify/write metadata actions include the confirmed Host revision. A
+`METADATA_CONFLICT` re-reads and recomputes the merge patch, up to three attempts;
+read failures, other errors and runtime switches reject without another write.
+This preserves concurrent context-pin edits without OpenCode metadata routes.
 
 The Host owns session operational metadata (pins, color, icon, notes), workspace associations, archive state, and folder membership; OMP owns session titles directly in session storage. Execution session records and persisted UI caches are not metadata fallbacks. Metadata responses and change events carry decimal-string revisions; the metadata patch route (`PATCH /api/agent/v1/sessions/:sessionId/metadata`) requires a `{ changes: { ... } }` wrapper and returns `SessionMetadataState` (`{ sessionId, revision, metadata }`).
 

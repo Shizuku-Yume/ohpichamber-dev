@@ -1,14 +1,16 @@
+import { mobileFilesList, type MobileFilesListedFor } from './mobileFilesList';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Input } from '@/components/ui/input';
-import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { useFileTreeUpload } from '@/components/views/files/useFileTreeUpload';
 import { AUTO_RELIST_MAX_ENTRIES, useFileTreeChanges, type FileTreeChangeBatch } from '@/components/views/files/useFileTreeChanges';
 import type { FileTabCloseGuard } from '@/components/views/FilesView';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
@@ -88,10 +90,11 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   const setSelectedPath = useFilesViewTabsStore((state) => state.setSelectedPath);
   const [route, setRoute] = React.useState<MobileFilesRoute>(() => ({ type: 'browser', directory: root }));
   const [entries, setEntries] = React.useState<FileListEntry[]>([]);
+  const [entriesDirectory, setEntriesDirectory] = React.useState<string | null>(null);
   const [isLoadingDirectory, setIsLoadingDirectory] = React.useState(false);
   const [directoryError, setDirectoryError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState('');
-  const [searchOutcome, setSearchOutcome] = React.useState<MobileSearchOutcome | null>(null);
+  const [searchOutcome, setSearchOutcome] = React.useState<{ owner: MobileFilesListedFor; outcome: MobileSearchOutcome } | null>(null);
   const [searchAttempt, setSearchAttempt] = React.useState(0);
   const normalizedQuery = query.trim();
   const directoryLoadRequestIdRef = React.useRef(0);
@@ -134,6 +137,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
         return a.name.localeCompare(b.name);
       }));
+      setEntriesDirectory(directory);
     } catch (error) {
       if (directoryLoadRequestIdRef.current !== requestId) return;
       if (options?.background) {
@@ -141,6 +145,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
         return;
       }
       setEntries([]);
+      setEntriesDirectory(directory);
       setDirectoryError(error instanceof Error ? error.message : t('mobile.files.error.listFailed'));
     } finally {
       if (directoryLoadRequestIdRef.current === requestId) {
@@ -191,10 +196,10 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
     const timeoutId = window.setTimeout(() => {
       void files.search({ directory: route.directory, query: normalizedQuery, maxResults: 40 })
         .then((results) => {
-          if (!cancelled) setSearchOutcome({ kind: 'success', results });
+          if (!cancelled) setSearchOutcome({ owner: { directory: route.directory, query: normalizedQuery }, outcome: { kind: 'success', results } });
         })
         .catch(() => {
-          if (!cancelled) setSearchOutcome({ kind: 'error' });
+          if (!cancelled) setSearchOutcome({ owner: { directory: route.directory, query: normalizedQuery }, outcome: { kind: 'error' } });
         });
     }, 250);
 
@@ -223,6 +228,13 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
     setRoute({ type: 'file', path: target, returnDirectory: root });
     if (pendingFileFocusPath) useUIStore.getState().setPendingFileFocusPath(null);
   }, [pendingFileFocusPath, pendingFileNavigation, root, setSelectedPath]);
+
+  const ownSearch = searchOutcome?.owner.directory === (route.type === 'browser' ? route.directory : null) && searchOutcome?.owner.query === normalizedQuery ? searchOutcome : null;
+  const searchResultsFor = ownSearch?.outcome.kind === 'success' ? ownSearch.owner : null;
+  const isSearching = Boolean(normalizedQuery) && ownSearch === null;
+  const list = mobileFilesList({
+    runtimeKey: getRuntimeKey(), route, query, entriesDirectory, directoryError, searchResultsFor, isSearching,
+  });
 
   if (!root) {
     return <MobileFilesState message={t('mobile.files.empty.noDirectory')} />;
@@ -327,10 +339,10 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
         </div>
       </div>
 
-      <ScrollShadow className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+      <ScrollableOverlay memoryKey={list.key} memoryReady={list.ready} outerClassName="min-h-0 flex-1" className="px-2 pb-3 pt-1" useScrollShadow disableHorizontal>
         {normalizedQuery ? (
           <MobileSearchResults
-            outcome={searchOutcome}
+            outcome={ownSearch?.outcome ?? null}
             actions={fileActions}
             onOpenFile={openFile}
             onRetry={() => setSearchAttempt((attempt) => attempt + 1)}
@@ -356,7 +368,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
             ))}
           </div>
         )}
-      </ScrollShadow>
+      </ScrollableOverlay>
     </div>
   );
 };

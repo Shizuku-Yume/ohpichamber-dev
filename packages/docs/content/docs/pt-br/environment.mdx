@@ -48,6 +48,10 @@ Inicia o OhPiChamber em modo headless quando definido como `true` ou `1`. As rot
 
 Origens que podem mostrar o OhPiChamber dentro de um frame na própria página, separadas por espaços, por exemplo `https://dash.example.com`. `*` permite qualquer site. Por padrão só o próprio OhPiChamber e seus apps desktop e mobile podem incorporá-lo, o que impede outros sites de sobrepor os botões dele.
 
+### `OPENCHAMBER_TRUSTED_PROXIES`
+
+Endereços de proxies reversos que rodam em outra máquina ou em outro contêiner, separados por vírgulas, como `192.168.1.10` ou `172.18.0.0/16`. O OhPiChamber limita as tentativas de login com falha por cliente e só lê o endereço do cliente em `X-Forwarded-For` quando a requisição vem desta máquina ou de um endereço desta lista. Um proxy fora da lista conta como um único cliente, então as tentativas com falha de uma pessoa podem impedir por um tempo que todos atrás dele façam login.
+
 ### `OPENCHAMBER_DATA_DIR`
 
 Altera o diretório de dados do OhPiChamber. O padrão é `~/.config/ohpichamber`.
@@ -115,4 +119,3 @@ Executável do Bun que o OhPiChamber deve usar ao iniciar processos daemon.
 ### `BUN_INSTALL`
 
 Raiz da instalação do Bun. O OhPiChamber usa isso para encontrar `bin/bun` ao iniciar daemons e atualizar.
-

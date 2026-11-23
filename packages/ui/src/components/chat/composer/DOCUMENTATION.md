@@ -122,10 +122,11 @@ surface on desktop and the overlay itself on mobile.
 | `largeTextPasteOffer.ts` | Ask-toast offer id begin/resolve (supersede + double-apply guards) |
 
 `ChatInput.handlePaste` owns paste orchestration: URL-over-selection markdown
-links, clipboard files, and large plain-text pastes. Pasted and dropped files
+links, clipboard files, and large plain-text pastes. Pasted, dropped and picked files
 share `attachFilesWithCitation`: every file attaches and is cited in the draft
 as `[name]`; images get a generated unique name first, other files keep their
-own name and are cited only after they attached. A copied file's filename text
+own name and are cited only after they attached. Pickers allow all file types;
+binary formats no model reads stay local chips and become path notes at Send. A copied file's filename text
 is suppressed so only the citation lands in the draft.
 
 File inputs and drops use browser `File` objects, including native mobile
@@ -499,7 +500,8 @@ the form submit attaches.
 While the comment is open, the selection menu keeps the quoted range painted
 through its existing highlight overlay (rAF on scroll/resize, no polling); the
 Range lives in that menu component only and is released when the comment
-ends or the message unmounts.
+ends or the message unmounts. A desktop inline comment moves to the next menu
+of the same message instead (see the message module's invariants).
 
 Voice: the comment shell mounts its own `ComposerDictation` whose insert
 callbacks target the comment draft (insert-and-send attaches; it never sends).

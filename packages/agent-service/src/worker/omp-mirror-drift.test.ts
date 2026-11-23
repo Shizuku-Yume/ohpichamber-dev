@@ -374,7 +374,7 @@ function extractOrderedSessionCalls(methodBody: string): string[] {
 const EXPECTED_OMP_PLAN_MODE_CALLS = {
   enterPlanMode: [
     'session.getEnabledToolNames',
-    'session.getMountedXdevToolNames',
+    'session.getMountedToolCommandNames',
     'session.hasBuiltInTool',
     'session.getAllToolNames',
     'session.getPlanModeState',
@@ -401,14 +401,14 @@ const EXPECTED_OMP_PLAN_MODE_CALLS = {
   tearDownPlanMode: [
     'session.getPlanModeState',
     'session.getEnabledToolNames',
-    'session.getMountedXdevToolNames',
+    'session.getMountedToolCommandNames',
     'session.configuredThinkingLevel',
     'session.setPlanModeState',
     'session.restoreNonMCPToolPresentation',
     'session.setPlanModeState',
     'session.configuredThinkingLevel',
     'session.getEnabledToolNames',
-    'session.getMountedXdevToolNames',
+    'session.getMountedToolCommandNames',
     'session.setActiveToolPresentation',
     'session.setPlanProposalHandler',
     'sessionManager.appendModeChange',
@@ -530,7 +530,7 @@ function validatePlanModeDrift(interactiveModeSource: string, workerModeSource: 
 
   assertSubsequence(errors, 'WorkerModeController.enterPlan', workerEnterCalls, [
     'session.getEnabledToolNames',
-    'session.getMountedXdevToolNames',
+    'session.getMountedToolCommandNames',
     'session.getAllToolNames',
     'session.resolveRoleModelWithThinking',
     'session.getPlanModeState',
@@ -554,7 +554,7 @@ function validatePlanModeDrift(interactiveModeSource: string, workerModeSource: 
   assertSubsequence(errors, 'WorkerModeController.exitPlan', workerExitCalls, [
     'session.getPlanModeState',
     'session.getEnabledToolNames',
-    'session.getMountedXdevToolNames',
+    'session.getMountedToolCommandNames',
     'session.setPlanModeState',
     'session.restoreNonMCPToolPresentation',
     'session.setModelTemporary',

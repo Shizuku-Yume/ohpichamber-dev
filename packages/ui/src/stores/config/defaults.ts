@@ -10,6 +10,8 @@ import { resolveGitGenerationModelSelection } from "./selectionResolution";
 import { canonicalClient } from "@/api/canonicalClient";
 
 interface OpenChamberDefaults {
+    chatsDefaultModel?: string;
+    chatsDefaultVariant?: string;
     autoCreateWorktree?: boolean;
     gitmojiEnabled?: boolean;
     defaultFileViewerPreview?: boolean;
@@ -24,6 +26,15 @@ interface OpenChamberDefaults {
     sttLanguage?: string;
     sttCorrectTranscript?: boolean;
 }
+
+let chatsDefaultsRevision = 0;
+const applyChatsDefaultsToDraft = (get: () => ConfigStore): void => {
+    const session = useSessionUIStore.getState();
+    const state = get();
+    if (session.currentSessionId || !session.newSessionDraft?.open || session.newSessionDraft.target !== 'chat'
+        || state.selectionSource === 'manual' || state.currentVariantSelection.override !== undefined) return;
+    state.applyDefaultModelAgentSelection({ projectDefaultModel: state.chatsDefaultModel, projectDefaultVariant: state.chatsDefaultVariant });
+};
 
 // Directory activation re-reads the OpenChamber defaults, which are global,
 // not per directory: one request serves the switches that land inside this
@@ -63,6 +74,8 @@ const fetchOpenChamberDefaults = (context: ConfigRuntimeContext): Promise<OpenCh
 const toOpenChamberDefaults = (data: DesktopSettings): OpenChamberDefaults => {
     const zenModel = data.zenModel ?? '';
     return {
+        chatsDefaultModel: data.chatsDefaultModel?.trim() || undefined,
+        chatsDefaultVariant: data.chatsDefaultVariant?.trim() || undefined,
         autoCreateWorktree: data.autoCreateWorktree,
         gitmojiEnabled: data.gitmojiEnabled,
         defaultFileViewerPreview: data.defaultFileViewerPreview,
@@ -105,8 +118,9 @@ const requestOpenChamberDefaults = async (context: ConfigRuntimeContext): Promis
         return finish('error', null);
     }
 };
-export const createSettingsDefaults: ConfigSlice<"loadSessionDefaults" | "setSettingsAutoCreateWorktree" | "setSettingsGitmojiEnabled" | "setSettingsDefaultFileViewerPreview" | "setSettingsZenModel" | "getResolvedGitGenerationModel" | "loadOmpSettings"> = (set, get) => ({
+export const createSettingsDefaults: ConfigSlice<"loadSessionDefaults" | "setChatsDefaultModel" | "setChatsDefaultVariant" | "setSettingsAutoCreateWorktree" | "setSettingsGitmojiEnabled" | "setSettingsDefaultFileViewerPreview" | "setSettingsZenModel" | "getResolvedGitGenerationModel" | "loadOmpSettings"> = (set, get) => ({
     loadSessionDefaults: async () => {
+        const defaultsRevision = chatsDefaultsRevision;
         const runtimeContext = captureConfigRuntimeContext();
         const defaults = await fetchOpenChamberDefaults(runtimeContext);
         if (!isConfigRuntimeContextCurrent(runtimeContext) || !defaults) return false;
@@ -114,6 +128,8 @@ export const createSettingsDefaults: ConfigSlice<"loadSessionDefaults" | "setSet
             const next: Partial<ConfigStore> = {
                 configRuntimeKey: runtimeContext.runtimeKey,
                 settingsDefaultsLoaded: true,
+                chatsDefaultModel: defaultsRevision === chatsDefaultsRevision ? defaults.chatsDefaultModel : state.chatsDefaultModel,
+                chatsDefaultVariant: defaultsRevision === chatsDefaultsRevision ? defaults.chatsDefaultVariant : state.chatsDefaultVariant,
                 settingsAutoCreateWorktree: defaults.autoCreateWorktree ?? false,
                 settingsGitmojiEnabled: defaults.gitmojiEnabled ?? false,
                 settingsDefaultFileViewerPreview: defaults.defaultFileViewerPreview ?? true,
@@ -139,6 +155,18 @@ export const createSettingsDefaults: ConfigSlice<"loadSessionDefaults" | "setSet
         }
         markStartupTrace('config.defaults:published');
         return true;
+    },
+    setChatsDefaultModel: (model: string | undefined) => {
+        chatsDefaultsRevision += 1;
+        invalidateOpenChamberDefaultsCache();
+        set({ chatsDefaultModel: model });
+        applyChatsDefaultsToDraft(get);
+    },
+    setChatsDefaultVariant: (variant: string | undefined) => {
+        chatsDefaultsRevision += 1;
+        invalidateOpenChamberDefaultsCache();
+        set({ chatsDefaultVariant: variant });
+        applyChatsDefaultsToDraft(get);
     },
     setSettingsAutoCreateWorktree: (enabled: boolean) => {
         set({

@@ -46,6 +46,8 @@ import type { DesktopSettings } from '@/lib/settings/registry';
 import type { GitIdentityProfile, GitIdentitySummary } from './git-identity';
 import type { PushAPI } from './push';
 export type { PushAPI, NativePushStatus, PushSubscribePayload, PushUnsubscribePayload, ApnsTokenPayload } from './push';
+import type { RepositoryReferenceCommit, RepositoryReferenceReviewer, RepositoryReferenceReviewerState } from './repositoryReferenceTypes';
+export type { RepositoryReferenceReviewer } from './repositoryReferenceTypes';
 import type {
   ChangeRequest,
   ChangeRequestContext,
@@ -1420,7 +1422,7 @@ export interface SettingsLoadResult {
 
 export interface SettingsAPI {
   load(): Promise<SettingsLoadResult>;
-  save(changes: Partial<SettingsPayload>): Promise<SettingsPayload>;
+  save(changes: Partial<SettingsPayload>, options?: { keepalive?: boolean }): Promise<SettingsPayload>;
 
   restartOpenCode?: () => Promise<{ restarted: boolean }>;
 }
@@ -1474,7 +1476,7 @@ export interface EditorAPI {
     original: string,
     modified: string,
     label?: string,
-    options?: { line?: number; patch?: string },
+    options?: { line?: number; patch?: string; snapshot?: boolean },
   ): Promise<void>;
 }
 
@@ -1645,12 +1647,6 @@ export type RepositoryReferenceThread = {
   replies: RepositoryReferenceComment[];
 };
 
-export type RepositoryReferenceReviewer = {
-  id: string;
-  login: string;
-  avatarUrl?: string;
-};
-
 export type RepositoryReferenceDetail = {
   number: number;
   body?: string;
@@ -1660,6 +1656,7 @@ export type RepositoryReferenceDetail = {
   pull: {
     reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
     reviewers: RepositoryReferenceReviewer[];
+    reviewerStates?: RepositoryReferenceReviewerState[];
     additions: number;
     deletions: number;
     changedFiles: number;
@@ -1671,16 +1668,8 @@ export type RepositoryReferenceDetail = {
     submitRequirements?: ChangeRequestSubmitRequirement[];
     revisions?: ChangeRequestRevision[];
   } | null;
+  references?: ChangeRequestContext['references'];
   discussion?: { canComment: boolean; canClose: boolean; canReopen: boolean };
-};
-
-export type RepositoryReferenceCommit = {
-  sha: string;
-  headline: string;
-  author: { login: string; avatarUrl?: string } | null;
-  authorName: string | null;
-  committedAt: string | null;
-  url: string | null;
 };
 
 export type RepositoryReferenceDetailResult =
@@ -1815,6 +1804,7 @@ export interface SourceControlAPI {
       includeDiff?: boolean;
       includeCIDetails?: boolean;
       includeTimeline?: boolean;
+      includeReferences?: boolean;
       project?: { owner: string; name: string };
       revision?: string;
     },
@@ -1828,6 +1818,7 @@ export interface SourceControlAPI {
     context: SourceControlReadContext,
     number: number,
     project?: { owner: string; name: string },
+    options?: { includeReferences?: boolean },
   ): Promise<Issue | null>;
   issueComments(
     context: SourceControlReadContext,
@@ -1839,7 +1830,7 @@ export interface SourceControlAPI {
 
   references(context: SourceControlReadContext, query: RepositoryReferenceQuery): Promise<RepositoryReferencePage>;
   referencesAcross?(contexts: SourceControlReadContext[], query: RepositoryReferenceQuery): Promise<RepositoryReferencesAcrossResult>;
-  referenceDetail(context: SourceControlReadContext, ref: RepositoryItemRef & { kind?: 'discussion' }): Promise<RepositoryReferenceDetailResult>;
+  referenceDetail(context: SourceControlReadContext, ref: RepositoryItemRef & { kind?: 'discussion' }, options?: { includeReferences?: boolean }): Promise<RepositoryReferenceDetailResult>;
   changeRequestListStatuses(context: SourceControlReadContext, refs: RepositoryItemRef[]): Promise<ChangeRequestListStatusesResult>;
 }
 

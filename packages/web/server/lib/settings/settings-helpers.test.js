@@ -910,11 +910,12 @@ describe('settings registry gate', () => {
     // Registry keys whose server branch is a pass-through: the registry parser
     // owns their shape, so the fixture is the client's own write shape.
     sessionRetentionIncludeInWork: true,
-    dictationAutoSend: true, sttEndpointPath: '/speech_to_text', sttCorrectTranscript: true,
+    dictationAutoSend: true, sttEndpointPath: '/speech_to_text', sttCorrectTranscript: true, sttPrompt: 'Project vocabulary.', documentAttachBehavior: 'save',
     sidebarSections: [{ kind: 'custom', id: 'g', name: 'Clients', grouping: 'project', links: [] }],
     sidebarPinLists: [{ id: 'pinned', name: 'Pinned' }], sidebarHiddenSections: ['work'],
     sessionTabsPerWorkspace: true, selectionApprovalText: 'Looks good.', customProviderLogos: { acme: { mime: 'image/png', updatedAt: 1 } },
     lastUsedEfforts: { 'anthropic/claude': 'high' },
+    chatsDefaultModel: 'anthropic/claude', chatsDefaultVariant: 'high',
   };
 
   it('accepts a valid value for every persistable registry key (no server-side drift)', () => {
@@ -1012,5 +1013,49 @@ describe('settings registry gate', () => {
       autoSaveEnabled: false,
     });
     expect(helpers.sanitizeSettingsUpdate({ largeTextPasteBehavior: 'maybe', fileEditorKeymap: 'emacs' })).toEqual({});
+  });
+
+  it('keeps every office document choice and drops an unknown one', () => {
+    const helpers = createTestHelpersWithRealSanitizers();
+    for (const mode of ['ask', 'save', 'convert']) {
+      const accepted = helpers.sanitizeSettingsUpdate({ documentAttachBehavior: mode });
+      expect(accepted).toEqual({ documentAttachBehavior: mode });
+      expect(helpers.formatSettingsResponse(helpers.mergePersistedSettings({}, accepted))).toMatchObject({ documentAttachBehavior: mode });
+    }
+    expect(helpers.sanitizeSettingsUpdate({ documentAttachBehavior: 'attach' })).toEqual({});
+  });
+
+  it.each([false, true])('round trips pasted-image saving %s and preserves it across absent or invalid updates', (value) => {
+    const helpers = createTestHelpersWithRealSanitizers();
+    const accepted = helpers.sanitizeSettingsUpdate({ savePastedImagesAsFiles: value });
+    expect(accepted).toEqual({ savePastedImagesAsFiles: value });
+    const saved = helpers.mergePersistedSettings({}, accepted);
+    expect(helpers.formatSettingsResponse(saved)).toMatchObject(accepted);
+    const reloaded = JSON.parse(JSON.stringify(saved));
+    for (const invalid of [undefined, null, 'true', 1]) {
+      const update = helpers.sanitizeSettingsUpdate({ savePastedImagesAsFiles: invalid });
+      expect(update).toEqual({});
+      expect(helpers.formatSettingsResponse(helpers.mergePersistedSettings(reloaded, update))).toMatchObject(accepted);
+    }
+  });
+
+  it('round trips managed-chat model preferences, clears blanks and rejects non-text values', () => {
+    const helpers = createTestHelpersWithRealSanitizers();
+    const accepted = helpers.sanitizeSettingsUpdate({ chatsDefaultModel: ' anthropic/claude ', chatsDefaultVariant: ' high ' });
+    expect(accepted).toEqual({ chatsDefaultModel: 'anthropic/claude', chatsDefaultVariant: 'high' });
+    expect(helpers.formatSettingsResponse(helpers.mergePersistedSettings({}, accepted))).toMatchObject(accepted);
+    const cleared = helpers.sanitizeSettingsUpdate({ chatsDefaultModel: ' ', chatsDefaultVariant: '' });
+    expect(cleared).toEqual({ chatsDefaultModel: undefined, chatsDefaultVariant: undefined });
+    expect(helpers.mergePersistedSettings(accepted, cleared).chatsDefaultModel).toBeUndefined();
+    expect(helpers.sanitizeSettingsUpdate({ chatsDefaultModel: 5, chatsDefaultVariant: ['high'] })).toEqual({});
+  });
+
+  it('trims a mode choice and drops one that is not text', () => {
+    const helpers = createTestHelpersWithRealSanitizers();
+    expect(helpers.sanitizeSettingsUpdate({ largeTextPasteBehavior: ' inline ', documentAttachBehavior: ' save ', fileEditorKeymap: ' vim ' }))
+      .toEqual({ largeTextPasteBehavior: 'inline', documentAttachBehavior: 'save', fileEditorKeymap: 'vim' });
+    for (const value of [1, null, ['save'], { mode: 'save' }]) {
+      expect(helpers.sanitizeSettingsUpdate({ largeTextPasteBehavior: value, documentAttachBehavior: value, fileEditorKeymap: value })).toEqual({});
+    }
   });
 });

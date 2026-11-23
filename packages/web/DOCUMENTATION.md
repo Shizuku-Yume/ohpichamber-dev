@@ -21,6 +21,8 @@ This package owns the browser build, Vite plugins, development launchers and web
 - `build:server` emits JavaScript, declarations and inline-source maps into
   `build/{server,bin}`. The UI build owns `dist` and cannot erase server output.
   `build` and `prepack` run the server build; development and tests read sources.
+- The emitted CLI also carries `build/scripts/standalone-loader.mjs`; the
+  published compatibility entry uses the package-root copy of the same loader.
 - The server compiler program is checked before type-checking or deleting the
   previous build. Only implementation sources physically inside this package
   may participate; dependency declarations can remain external.

@@ -26,6 +26,7 @@ interface LiveTurnActivityProps {
     turn: TurnRecord;
     hasLaterAssistant: boolean;
     expanded: boolean;
+    keepText?: boolean;
     onToggle: () => void;
     renderMessage: (message: ChatMessageEntry) => React.ReactNode;
 }
@@ -34,7 +35,7 @@ interface LiveTurnActivityProps {
  * The fold's header. Folded, it also draws what stays in view: a working
  * turn's latest steps, then the pages it showed and the steps after them.
  */
-function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, renderMessage }: LiveTurnActivityProps) {
+function LiveTurnActivity({ turn, hasLaterAssistant, expanded, keepText = false, onToggle, renderMessage }: LiveTurnActivityProps) {
     const { t } = useI18n();
     const finalMessage = getLiveFinalMessage(turn.assistantMessages);
     const activityMessages = React.useMemo(
@@ -77,11 +78,11 @@ function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, renderM
     // above the answer once one arrives, and stays there in a turn that ended
     // without one. The fold no longer holds it, so it moves at most from the
     // bottom of the fold to the top of the answer.
-    const shownPages = React.useMemo(() => getShownPages(turn.assistantMessages, finalMessage), [finalMessage, turn.assistantMessages]);
+    const shownPages = React.useMemo(() => getShownPages(turn.assistantMessages, finalMessage, keepText), [finalMessage, turn.assistantMessages, keepText]);
     const hoistedPages = React.useMemo(() => new Set(shownPages.map((part) => part.partId)), [shownPages]);
     const finalContext = React.useMemo(() => finalMessage ? {
-        messageId: finalMessage.messageId, expanded: isExpanded, contentId: finalActivityContentId(turn.turnId), pages: shownPages,
-    } : null, [finalMessage, isExpanded, shownPages, turn.turnId]);
+        messageId: finalMessage.messageId, expanded: isExpanded, contentId: finalActivityContentId(turn.turnId), pages: shownPages, keepText,
+    } : null, [finalMessage, isExpanded, shownPages, turn.turnId, keepText]);
     // No diff parsing at token frequency. The report is only shown once the
     // turn settles; later authoritative tool metadata can refine it.
     const summary = React.useMemo(() => settled ? summarizeLiveActivity(turn.assistantMessages) : null,
@@ -167,18 +168,19 @@ export interface TurnFoldProps {
     turn: TurnRecord;
     hasLaterAssistant: boolean;
     expanded: boolean;
+    keepText?: boolean;
     finalMessageId: string | undefined;
     onToggle: () => void;
     renderMessage: (message: ChatMessageEntry) => React.ReactNode;
 }
 
 /** The fold row of a turn: its header, and the steps the fold keeps in view. */
-export function TurnFold({ turn, hasLaterAssistant, expanded, onToggle, renderMessage }: TurnFoldProps) {
-    return <LiveTurnActivity turn={turn} hasLaterAssistant={hasLaterAssistant} expanded={expanded} onToggle={onToggle} renderMessage={renderMessage} />;
+export function TurnFold({ turn, hasLaterAssistant, expanded, keepText, onToggle, renderMessage }: TurnFoldProps) {
+    return <LiveTurnActivity turn={turn} hasLaterAssistant={hasLaterAssistant} expanded={expanded} keepText={keepText} onToggle={onToggle} renderMessage={renderMessage} />;
 }
 
-export function TurnPagesRow({ turn }: { turn: TurnRecord }) {
-    const pages = React.useMemo(() => getShownPages(turn.assistantMessages), [turn.assistantMessages]);
+export function TurnPagesRow({ turn, keepText = false }: { turn: TurnRecord; keepText?: boolean }) {
+    const pages = React.useMemo(() => getShownPages(turn.assistantMessages, undefined, keepText), [turn.assistantMessages, keepText]);
     const results = React.useMemo(() => toolResultsByCall(turn.assistantMessages), [turn.assistantMessages]);
     if (pages.length === 0) return null;
     return (

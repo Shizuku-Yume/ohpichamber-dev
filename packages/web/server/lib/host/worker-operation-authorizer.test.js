@@ -119,7 +119,7 @@ describe('Host-owned native descriptor authority', () => {
       const internalRead = { type: 'tool', toolName: 'read', input: { path: 'agent://native' } };
       const internalDescriptor = { toolName: 'read', sourcePaths: [], destinationPaths: [], fileOps: [], internalReadUrls: ['agent://native'], declaredTier: 'read' };
       expect(await harness.authorize(harness.scope, internalRead, internalDescriptor)).toEqual({ allowed: true });
-      for (const scheme of ['agent', 'history', 'local', 'proc', 'skill', 'xd', 'mcp', 'omp', 'issue', 'pr']) {
+      for (const scheme of ['agent', 'history', 'local', 'proc', 'skill', 'help', 'mcp', 'omp', 'issue', 'pr']) {
         expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: [`${scheme}://native`] })).toEqual({ allowed: true });
       }
       expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: ['artifact://native'] })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });

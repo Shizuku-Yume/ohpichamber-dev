@@ -53,6 +53,8 @@ export const subscribeConfigRuntimeChanges = (): void => {
             agentModelSelections: {},
             defaultProviders: {},
             settingsDefaultModel: undefined,
+            chatsDefaultModel: undefined,
+            chatsDefaultVariant: undefined,
             settingsDefaultReasoningEffort: undefined,
             settingsDefaultsLoaded: false,
             settingsZenModel: undefined,

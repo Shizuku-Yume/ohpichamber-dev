@@ -3,6 +3,10 @@
 ## Purpose
 This module provides notification message preparation utilities for the web server runtime, including text truncation and plain-text normalization for system notifications.
 
+## Authentication and settings writes
+
+`POST /api/notifications/emit` requires an explicitly supplied API auth gate on the route itself. Bootstrap supplies the same tunnel/UI decision as the general API gate; there is no OpenCode plugin bypass. The general gate delegates this route to its local gate. Push public-origin and VAPID writes use the settings runtime's shared write queue, preserving concurrent user saves.
+
 ## Entrypoints and structure
 - `packages/web/server/lib/notifications/index.js`: public entrypoint imported by `packages/web/server/index.js`.
 - `packages/web/server/lib/notifications/routes.js`: route registration for push, visibility, and session status endpoints.

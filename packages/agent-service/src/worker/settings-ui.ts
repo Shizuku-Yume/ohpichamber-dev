@@ -52,6 +52,8 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'disassembler.idleCloseSec': 'config-only',
   'ghidra.installDir': 'boundary',
   'ghidra.python': 'boundary',
+  'binja.installDir': 'boundary',
+  'binja.python': 'boundary',
   'mcp.evalNamespaces': 'config-only',
   'mcp.builtinTransforms': 'config-only',
   // --- appearance (50) ---
@@ -72,7 +74,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'images.autoResize': 'chat:images',
   'images.blockImages': 'chat:images',
   'tui.resizeScrollback': 'tui-only',
-  'tui.completeScrollback': 'tui-only',
+  'pty.notify': 'tui-only',
   'terminal.showProgress': 'tui-only',
   'terminal.programStatus': 'tui-only',
   'tui.textSizing': 'tui-only',
@@ -219,6 +221,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
 
   // --- files (28) ---
   'edit.mode': 'engine',
+  'edit.magic.model': 'boundary',
   'edit.fuzzyMatch': 'engine',
   'edit.fuzzyThreshold': 'engine',
   'edit.streamingAbort': 'engine',
@@ -516,10 +519,10 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   // runs print mode, so nothing in the GUI reads the flag.
   'async.printWake': 'tui-only',
   'async.widgets': 'engine',
-  'tools.xdev': 'engine',
-  'tools.xdevDocs': 'engine',
-  'tools.xdevInlineDevices': 'config-only',
-  'tools.xdevNotices': 'engine',
+  'tools.commands': 'engine',
+  'tools.commandDocs': 'engine',
+  'tools.commandInline': 'config-only',
+  'tools.commandNotices': 'engine',
   // `dev.autoqa` posts tool grievances to https://qa.omp.sh and the fork never
   // registers a consent handler, so this toggle silently re-arms recording
   // with no GUI consent surface. It crosses the enterprise boundary and stays
@@ -544,6 +547,8 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'browser.screenshotDir': 'boundary',
   'mcp.enableProjectConfig': 'engine',
   'mcp.startupTimeoutMs': 'engine',
+  'mcp.shared': 'boundary',
+  'mcp.idleStopMinutes': 'config-only',
   // `setMcpRenderMarkdownResults` is a pi-tui renderer switch.
   'mcp.renderMarkdownResults': 'tui-only',
   'mcp.notifications': 'engine',

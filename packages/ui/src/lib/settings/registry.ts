@@ -35,7 +35,8 @@ import { sanitizeWorkStatusHiddenSections, sanitizeWorkStatusSectionOrder } from
 import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-import { useUIStore, type FileEditorKeymap, type LargeTextPasteBehavior } from '@/stores/useUIStore';
+import { STT_PROMPT_MAX_LENGTH, readTranscriptionPrompt, setTranscriptionPrompt } from '@/stores/useTranscriptionPromptStore';
+import { useUIStore, type DocumentAttachBehavior, type FileEditorKeymap, type LargeTextPasteBehavior } from '@/stores/useUIStore';
 import { z } from 'zod';
 import {
  parseActivityRenderMode,
@@ -201,6 +202,7 @@ const parseMobileKeyboardModeValue = mapParser(parseTrimmedString, (value) => no
 const parseDraftStarters: SettingsParser<DraftStarterRef[]> = mapParser(fromSchema(z.array(z.unknown())), sanitizeStarterRefs);
 const parseWorkStatusHiddenSections: SettingsParser<string[]> = mapParser(fromSchema(z.array(z.unknown())), (value) => sanitizeWorkStatusHiddenSections(value));
 const parseLargeTextPasteBehavior: SettingsParser<LargeTextPasteBehavior> = parseOneOf(['ask', 'attach', 'inline', 'inline-double-paste']);
+const parseDocumentAttachBehavior: SettingsParser<DocumentAttachBehavior> = parseOneOf(['ask', 'save', 'convert']);
 const parseFileEditorKeymap: SettingsParser<FileEditorKeymap> = parseOneOf(['default', 'vim']);
 const parseResponseStylePreset: SettingsParser<ResponseStylePreset> = parseGuarded(isResponseStylePreset);
 
@@ -280,6 +282,7 @@ export const SETTINGS_REGISTRY = {
  themeVariant: field({ scope: 'profile', effect: ['server', 'shell', 'ui'], derived: true, parse: parseOneOf(['light', 'dark']) }),
  lightThemeId: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseNonEmptyString }),
  darkThemeId: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseNonEmptyString }),
+  sttPrompt: field({ scope: 'profile', effect: ['store', 'ui', 'server'], parse: parseTextUpTo(STT_PROMPT_MAX_LENGTH), ui: { read: readTranscriptionPrompt, write: setTranscriptionPrompt, autoSave: false } }),
 
  // ── Interface language (profile; the i18n store owns the live copy and keeps
  // browser storage as the first-paint copy; the language picker writes it) ──
@@ -385,15 +388,15 @@ export const SETTINGS_REGISTRY = {
  terminalShell: field({ scope: 'instance', effect: ['ui'], parse: parseTerminalShell, ui: uiStore('terminalShell', (v) => useUIStore.getState().setTerminalShell(v)) }),
  terminalLoginShells: field({ scope: 'instance', effect: ['ui'], parse: parseTerminalShells(isTerminalShell), ui: uiStore('terminalLoginShells', (v) => useUIStore.getState().setTerminalLoginShells(v)) }),
  openInAppId: field({ scope: 'instance', effect: ['store'], parse: parseNonEmptyTrimmedString }),
- dictationEnabled: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseBoolean, ui: configField('dictationEnabled') }),
- dictationAutoSend: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseBoolean, ui: configField('dictationAutoSend') }),
- sttProvider: field({ scope: 'instance', effect: ['store', 'ui'], parse: parseSttProvider, ui: configField('sttProvider') }),
- sttServerUrl: field({ scope: 'instance', effect: ['store', 'ui'], parse: parseTrimmedStringUpTo(2048), ui: configField('sttServerUrl') }),
- sttEndpointPath: field({ scope: 'instance', effect: ['store', 'ui'], parse: fromSchema(z.string().trim().max(1024)), ui: configField('sttEndpointPath') }),
- sttModel: field({ scope: 'instance', effect: ['store', 'ui'], parse: parseTrimmedStringUpTo(256), ui: configField('sttModel') }),
- sttLocalModel: field({ scope: 'instance', effect: ['store', 'ui'], parse: parseTrimmedStringUpTo(256), ui: configField('sttLocalModel') }),
- sttLanguage: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseTrimmedStringUpTo(64), ui: configField('sttLanguage') }),
- sttCorrectTranscript: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseBoolean, ui: configField('sttCorrectTranscript') }),
+ dictationEnabled: field({ scope: 'profile', effect: ['store', 'ui', 'server'], parse: parseBoolean, ui: configField('dictationEnabled') }),
+ dictationAutoSend: field({ scope: 'profile', effect: ['store', 'ui', 'server'], parse: parseBoolean, ui: configField('dictationAutoSend') }),
+ sttProvider: field({ scope: 'instance', effect: ['store', 'ui', 'server'], parse: parseSttProvider, ui: configField('sttProvider') }),
+ sttServerUrl: field({ scope: 'instance', effect: ['store', 'ui', 'server'], parse: parseTrimmedStringUpTo(2048), ui: configField('sttServerUrl') }),
+ sttEndpointPath: field({ scope: 'instance', effect: ['store', 'ui', 'server'], parse: fromSchema(z.string().trim().max(1024)), ui: configField('sttEndpointPath') }),
+ sttModel: field({ scope: 'instance', effect: ['store', 'ui', 'server'], parse: parseTrimmedStringUpTo(256), ui: configField('sttModel') }),
+ sttLocalModel: field({ scope: 'instance', effect: ['store', 'ui', 'server'], parse: parseTrimmedStringUpTo(256), ui: configField('sttLocalModel') }),
+ sttLanguage: field({ scope: 'profile', effect: ['store', 'ui', 'server'], parse: parseTrimmedStringUpTo(64), ui: configField('sttLanguage') }),
+ sttCorrectTranscript: field({ scope: 'profile', effect: ['store', 'ui', 'server'], parse: parseBoolean, ui: configField('sttCorrectTranscript') }),
 
  // ── Tunnels (instance) ──
  tunnelProvider: field({ scope: 'instance', effect: ['server', 'ui'], parse: mapParser(parseNonEmptyTrimmedString, (value) => value.toLowerCase()) }),
@@ -566,6 +569,9 @@ export const SETTINGS_REGISTRY = {
  draftStartersVisible: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('draftStartersVisible', (v) => useUIStore.getState().setDraftStartersVisible(v)) }),
  draftStartersCraftGoalAdded: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean }),
  draftStartersScheduleTaskAdded: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean }),
+ chatsDefaultModel: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseNonEmptyString, ui: configField('chatsDefaultModel') }),
+ chatsDefaultVariant: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseNonEmptyString, ui: configField('chatsDefaultVariant') }),
+ documentAttachBehavior: field({ scope: 'profile', effect: ['ui'], parse: parseDocumentAttachBehavior, ui: uiStore('documentAttachBehavior', (v) => useUIStore.getState().setDocumentAttachBehavior(v)) }),
 
  // ── Typography (profile; sizes per surface) ──
  fontSize: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('fontSize', (v) => useUIStore.getState().setFontSize(v)) }),

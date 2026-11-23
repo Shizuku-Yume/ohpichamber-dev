@@ -903,17 +903,31 @@ export async function patchSessionMetadata(
  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
  const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey, expectedRuntimeRevision)
  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
- const metadata = await canonicalClient.getSessionMetadata(sessionId)
- if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
- if (metadata.sessionId !== sessionId) throw new Error("Metadata response identified another session")
- const currentMetadata = metadata.metadata ?? {}
- const nextMetadata = SessionMetadataSchema.parse(updater(currentMetadata))
- const patch = SessionMetadataPatchSchema.parse({ changes: buildMetadataMergePatch(currentMetadata, nextMetadata) })
- const result = await canonicalClient.patchSessionMetadata(sessionId, patch)
- if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
- if (result.sessionId !== sessionId) throw new Error("Metadata response identified another session")
- if (directory) registerSessionDirectory(sessionId, resolveGlobalSessionDirectory(current) ?? directory)
- return publishCanonicalMetadata(current, result)
+ for (let attempt = 0; ; attempt++) {
+  const metadata = await canonicalClient.getSessionMetadata(sessionId)
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
+  if (metadata.sessionId !== sessionId) throw new Error("Metadata response identified another session")
+  const currentMetadata = metadata.metadata ?? {}
+  const nextMetadata = SessionMetadataSchema.parse(updater(currentMetadata))
+  const patch = SessionMetadataPatchSchema.parse({
+   expectedRevision: metadata.revision,
+   changes: buildMetadataMergePatch(currentMetadata, nextMetadata),
+  })
+  let result
+  try {
+   result = await canonicalClient.patchSessionMetadata(sessionId, patch)
+  } catch (error) {
+   if (error instanceof CanonicalApiError && error.problem.code === "METADATA_CONFLICT" && attempt < 2) {
+    if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed", { cause: error })
+    continue
+   }
+   throw error
+  }
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
+  if (result.sessionId !== sessionId) throw new Error("Metadata response identified another session")
+  if (directory) registerSessionDirectory(sessionId, resolveGlobalSessionDirectory(current) ?? directory)
+  return publishCanonicalMetadata(current, result)
+ }
 }
 
 export async function setLinkedIssue(

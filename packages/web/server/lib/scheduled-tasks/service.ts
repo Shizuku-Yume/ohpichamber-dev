@@ -1,4 +1,5 @@
 import { asNonEmptyString } from '../shared/guards.js';
+import { assertTaskTextWithinLimits } from '../projects/task-text-limits.js';
 import fs from 'node:fs';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
 import { discoverLoopFiles, loopFingerprint, parseLoopDefinition, setLoopFileEnabled } from './loops.js';
@@ -115,6 +116,11 @@ export const createScheduledTaskService = (dependencies: ScheduledTaskServiceDep
     const { id } = await findProjectByID(projectID);
     if (!taskInput || typeof taskInput !== 'object') {
       throw new OpenChamberControlError('task payload is required', 400);
+    }
+    try {
+      assertTaskTextWithinLimits(taskInput);
+    } catch (error) {
+      throw new OpenChamberControlError(error instanceof Error ? error.message : 'Task text is too long', 400);
     }
     let upserted;
     const previous = taskInput.id ? (await projectConfigRuntime.listScheduledTasks(id)).find((task) => task.id === taskInput.id) : null;

@@ -109,6 +109,7 @@ export function CommentTextEditor({
             {fieldPicker.picker}
             <ComposerEditor
                 ref={editorRef}
+                scriptAwareWords
                 dataChatInput="comment"
                 value={value}
                 languageContext={languageContext}

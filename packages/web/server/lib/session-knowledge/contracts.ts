@@ -53,6 +53,7 @@ export interface KnowledgeInput {
   checkout?: Checkout | null;
   responseStyleInstruction?: string | null | undefined;
   extensions?: string | undefined;
+  lead?: { brief: string | null | undefined } | null | undefined;
 }
 
 export interface KnowledgeEntries {
@@ -62,6 +63,8 @@ export interface KnowledgeEntries {
   'openchamber.checkout'?: string;
   'openchamber.response-style'?: string;
   'openchamber.extensions'?: string;
+  'openchamber.lead'?: string;
+  'openchamber.lead-brief'?: string;
 }
 
 export interface KnowledgeSummary {
@@ -105,6 +108,7 @@ export interface SessionKnowledgeDependencies {
   isSecretRequestAvailable?: () => boolean | Promise<boolean>;
   isWorkflowAvailable?: () => boolean | Promise<boolean>;
   readExtensionInstructions?: (directory: string) => Promise<string | null>;
+  readLeadBrief?: ((sessionId: string) => Promise<string | null>) | null;
   readSessionMetadata?: ((sessionId: string) => Promise<SessionMetadata | undefined>) | null;
   persistSessionMetadata?: ((sessionId: string, directory: string, patch: {
     openchamber: { project_context_pins: SessionPins };

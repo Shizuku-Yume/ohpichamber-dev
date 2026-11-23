@@ -52,6 +52,7 @@ type TraySession = {
 
 type TrayApproval = {
   kind: 'permission' | 'form';
+  canSave?: boolean;
   id: string;
   sessionId: string;
   sessionTitle: string;
@@ -60,7 +61,7 @@ type TrayApproval = {
 };
 
 type TrayUsageRow = { label: string; value: string };
-type TrayUsageGroup = { provider: string; rows: TrayUsageRow[]; status: string | null };
+type TrayUsageGroup = { provider: string; account: string | null; rows: TrayUsageRow[]; status: string | null };
 type TrayUsage = { mode: 'usage' | 'remaining'; groups: TrayUsageGroup[] };
 
 type TraySnapshot = {
@@ -168,27 +169,28 @@ const buildUsage = (): TrayUsage => {
     const status = !result.ok && result.error
       ? result.error
       : rows.length === 0
-        ? 'No rate limits reported'
+        ? translateQuota('header.services.noRateLimitsReported')
         : null;
-    groups.push({ provider: meta.name, rows, status });
+    const account = meta.id === 'opencode-go' ? result.accountLabel?.trim() || null : null;
+    groups.push({ provider: meta.name, account, rows, status });
   }
   return { mode, groups };
 };
 
-const resolveInstanceName = async (): Promise<string> => {
+const resolveInstanceName = async (): Promise<{ kind: 'local' | 'fallback' } | { kind: 'named'; name: string } | null> => {
   try {
-    if (isDesktopLocalOriginActive()) return 'Local OhPiChamber';
+    if (isDesktopLocalOriginActive()) return { kind: 'local' };
     const localOrigin = (window as unknown as { __OPENCHAMBER_LOCAL_ORIGIN__?: string }).__OPENCHAMBER_LOCAL_ORIGIN__
       || window.location.origin;
     const runtimeApiBaseUrl = getRuntimeApiBaseUrl();
-    if (runtimeApiBaseUrl && locationMatchesHost(runtimeApiBaseUrl, localOrigin)) return 'Local OhPiChamber';
+    if (runtimeApiBaseUrl && locationMatchesHost(runtimeApiBaseUrl, localOrigin)) return { kind: 'local' };
     const cfg = await desktopHostsGet();
     const match = cfg.hosts.find((host) =>
       runtimeApiBaseUrl ? locationMatchesHost(runtimeApiBaseUrl, getDesktopHostApiUrl(host)) : false);
-    if (match?.label?.trim()) return redactSensitiveUrl(match.label.trim());
-    return 'Instance';
+    if (match?.label?.trim()) return { kind: 'named', name: redactSensitiveUrl(match.label.trim()) };
+    return { kind: 'fallback' };
   } catch {
-    return '';
+    return null;
   }
 };
 
@@ -228,7 +230,7 @@ const collectLiveData = (): LiveData => {
       for (const request of requests ?? []) {
         const id = request.approvalId;
         const sid = request.sessionId || sessionId;
-        approvals.push({ kind: 'permission', id, sessionId: sid, sessionTitle: '', label: permissionLabel(request), directory });
+        approvals.push({ kind: 'permission', canSave: request.policyTarget !== undefined, id, sessionId: sid, sessionTitle: '', label: permissionLabel(request), directory });
       }
     }
     for (const [sessionId, requests] of Object.entries(state.form ?? {})) {
@@ -344,7 +346,7 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       const id = request.approvalId;
       if (seen.has(id)) continue;
       seen.add(id);
-      approvals.push({ kind: 'permission', id, sessionId: request.sessionId, sessionTitle, label: permissionLabel(request), directory: pending.directory });
+      approvals.push({ kind: 'permission', canSave: request.policyTarget !== undefined, id, sessionId: request.sessionId, sessionTitle, label: permissionLabel(request), directory: pending.directory });
     }
     for (const request of pending.forms) {
       const id = request.questionId;
@@ -365,9 +367,13 @@ export const useTraySync = (): void => {
     let disposed = false;
     let lastSerialized = '';
     let flushTimer: number | null = null;
-    let instanceName = '';
+    let instance: Awaited<ReturnType<typeof resolveInstanceName>> = null;
     const flushNow = () => {
       if (disposed) return;
+      const { dictionary } = useI18nStore.getState();
+      const instanceName = instance?.kind === 'named' ? instance.name
+        : instance?.kind === 'local' ? formatMessage(dictionary, 'tray.instance.local')
+          : instance?.kind === 'fallback' ? formatMessage(dictionary, 'tray.instance.fallback') : '';
       const snapshot = buildSnapshot(instanceName, trayEnabled);
       const serialized = JSON.stringify(snapshot);
       if (serialized === lastSerialized) return;
@@ -385,6 +391,9 @@ export const useTraySync = (): void => {
 
     const unsubscribeNotif = useNotificationStore.subscribe(() => scheduleFlush());
     const unsubscribeGlobal = useGlobalSessionsStore.subscribe(() => scheduleFlush());
+    const unsubscribeLocale = useI18nStore.subscribe((state, previous) => {
+      if (state.dictionary !== previous.dictionary) scheduleFlush();
+    });
     const unsubscribeUI = useUIStore.subscribe((state, previous) => {
       if (state.dockBadgeEnabled !== previous.dockBadgeEnabled || state.notifyOnSubtasks !== previous.notifyOnSubtasks) {
         scheduleFlush();
@@ -395,6 +404,7 @@ export const useTraySync = (): void => {
       if (flushTimer !== null) window.clearTimeout(flushTimer);
       unsubscribeNotif();
       unsubscribeGlobal();
+      unsubscribeLocale();
       unsubscribeUI();
     };
 
@@ -405,7 +415,7 @@ export const useTraySync = (): void => {
 
     void resolveInstanceName().then((name) => {
       if (disposed) return;
-      instanceName = name;
+      instance = name;
       flushNow();
     });
 

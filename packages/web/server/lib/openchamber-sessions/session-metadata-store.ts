@@ -117,7 +117,7 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
           // the per-session queue: separate Host connections cannot lose a patch.
           const current = readRow(id);
           const metadata = current?.metadata ?? {};
-          const patch = decide(metadata);
+          const patch = decide(metadata, current?.revision ?? '0');
           if (patch === null) return { metadata, revision: current?.revision ?? '0', changed: false };
           const parsedPatch = JsonObjectSchema.safeParse(patch);
           if (!parsedPatch.success) throw new MetadataWriteError('A metadata patch must be a JSON object');

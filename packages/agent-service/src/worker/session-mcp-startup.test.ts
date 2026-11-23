@@ -44,16 +44,25 @@ const rpc = z.object({
   params: z.object({ protocolVersion: z.string().optional() }).passthrough().optional(),
 });
 
-test('worker open does not wait for an external MCP handshake and publishes tools when it lands', async () => {
+for (const legacy of [false, true]) test(`worker open does not wait for the ${legacy ? 'legacy' : 'modern'} MCP connection and publishes tools when it lands`, async () => {
   const handshakeStarted = Promise.withResolvers<void>();
   const releaseHandshake = Promise.withResolvers<void>();
   let initialized = 0;
+  let discovered = 0;
   const endpoint = Bun.serve({
     hostname: '127.0.0.1', port: 0, async fetch(request) {
       if (request.method === 'GET') return new Response(null, { status: 405 });
       if (request.method === 'DELETE') return new Response(null, { status: 204 });
       const message = rpc.parse(await request.json());
       if (message.id === undefined) return new Response(null, { status: 202 });
+      if (message.method === 'server/discover') {
+        discovered += 1;
+        handshakeStarted.resolve();
+        await releaseHandshake.promise;
+        return Response.json(legacy
+          ? { jsonrpc: '2.0', id: message.id, error: { code: -32022, message: 'Unsupported protocol version', data: { supported: ['2025-11-25'] } } }
+          : { jsonrpc: '2.0', id: message.id, result: { resultType: 'complete', supportedVersions: ['2026-07-28'], capabilities: { tools: {} }, cacheScope: 'private' } });
+      }
       if (message.method === 'initialize') {
         initialized += 1;
         handshakeStarted.resolve();
@@ -94,7 +103,7 @@ test('worker open does not wait for an external MCP handshake and publishes tool
       async () => { }, async () => { throw new Error('No Host action expected'); }, () => { });
 
     // The worker is open and admissible while the external handshake is still pending.
-    // MCP tools are mounted under xd:// device names; none exist before the catalogue lands.
+    // No MCP tool commands exist before the catalogue lands.
     expect(worker.session.getAllToolInfos().map(tool => tool.name)).not.toContain('mcp__slow_tool');
     await handshakeStarted.promise;
 
@@ -102,7 +111,8 @@ test('worker open does not wait for an external MCP handshake and publishes tool
     releaseHandshake.resolve();
     await worker.mcpStartup;
     expect(worker.session.getAllToolInfos().map(tool => tool.name)).toContain('mcp__slow_tool');
-    expect(initialized).toBe(1);
+    expect(discovered).toBeGreaterThan(0);
+    expect(initialized).toBe(legacy ? 2 : 0);
     expect(opened).toContain('mcp');
   } finally {
     releaseHandshake.resolve();

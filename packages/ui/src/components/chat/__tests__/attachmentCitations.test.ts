@@ -1,14 +1,27 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-import { assignImageAttachmentFilenames, buildAttachmentCitationText, buildImagePathCitationText, findAttachmentCitationRanges, findLocalFileLinks, isGenericImageFilename, nextPastedContextFilename } from '../attachmentCitations';
+import {
+    assignImageAttachmentFilenames,
+    buildAttachmentCitationText,
+    buildImagePathCitationText,
+    findAttachmentCitationRanges,
+    findImagePathCitationNames,
+    findLocalFileLinks,
+    imageSaveModeForModel,
+    isGenericImageFilename,
+    nextPastedContextFilename,
+} from '../attachmentCitations';
 
-const decodeHeic = async (): Promise<Blob> => new Blob(['jpeg-data'], { type: 'image/jpeg' });
-
-mock.module('heic2any', () => ({
-    default: async () => decodeHeic(),
-}));
 
 describe('attachment citations', () => {
+    test('escapes local path citations and normalizes Windows separators', () => {
+        expect(buildImagePathCitationText([
+            { filename: 'photo.png', path: '/workspace/image (1).png' },
+            { filename: 'screen.png', path: 'C:\\work\\screen.png' },
+        ])).toBe('[photo.png](</workspace/image (1).png>) [screen.png](C:/work/screen.png)');
+        expect(buildImagePathCitationText([])).toBe('');
+    });
+
     test('keeps meaningful image names', () => {
         expect(assignImageAttachmentFilenames([
             { name: 'desktop_without_icons.jpg', type: 'image/jpeg' },
@@ -60,11 +73,39 @@ describe('attachment citations', () => {
         expect(nextPastedContextFilename(['pasted-context-1.txt', 'notes.md'])).toBe('pasted-context-2.txt');
         expect(nextPastedContextFilename(['PASTED-CONTEXT-2.TXT'])).toBe('pasted-context-1.txt');
     });
+
+    test('finds the names of links already in the draft', () => {
+        const draft = 'see [image-1.png](/tmp/x/image-1.png) and [image-2.png] and [shot.png](<C:/a b/shot.png>)';
+        expect(findImagePathCitationNames(draft)).toEqual(['image-1.png', 'shot.png']);
+        expect(assignImageAttachmentFilenames([{ name: 'image.png', type: 'image/png' }], findImagePathCitationNames(draft)))
+            .toEqual(['image-2.png']);
+    });
+});
+
+describe('image save mode', () => {
+    test('attaches only while the setting is off', () => {
+        expect(imageSaveModeForModel(false, ['text'])).toBe('attach');
+        expect(imageSaveModeForModel(false, ['text', 'image'])).toBe('attach');
+        expect(imageSaveModeForModel(false, undefined)).toBe('attach');
+    });
+
+    test('a model without image input gets the saved file in place of the attachment', () => {
+        expect(imageSaveModeForModel(true, ['text'])).toBe('instead');
+    });
+
+    test('a model that takes images gets the attachment and the saved file', () => {
+        expect(imageSaveModeForModel(true, ['text', 'image'])).toBe('alongside');
+        expect(imageSaveModeForModel(true, ['TEXT', 'IMAGE'])).toBe('alongside');
+    });
+
+    test('unknown model metadata counts as a model that takes the attachment', () => {
+        expect(imageSaveModeForModel(true, undefined)).toBe('alongside');
+    });
 });
 
 describe('links to files on disk', () => {
-    test('finds the saved-image links the composer writes, plain and in angle brackets', () => {
-        const text = `see ${buildImagePathCitationText([{ filename: 'a.png', path: '/tmp/oc/a.png' }, { filename: 'b.png', path: 'C:\\Temp dir\\b.png' }])}`;
+    test('finds links to local files, plain and in angle brackets', () => {
+        const text = 'see [a.png](/tmp/oc/a.png) [b.png](<C:/Temp dir/b.png>)';
         expect(findLocalFileLinks(text).map(({ name, path }) => ({ name, path }))).toEqual([
             { name: 'a.png', path: '/tmp/oc/a.png' },
             { name: 'b.png', path: 'C:/Temp dir/b.png' },

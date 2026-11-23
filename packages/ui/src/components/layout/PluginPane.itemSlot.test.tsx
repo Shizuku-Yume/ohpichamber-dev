@@ -59,26 +59,30 @@ test('an item parked for the rail reaches the panel, not a block of the same ext
   const windows: Window[] = [];
   const restores: Array<() => void> = [];
   // Strict Mode runs the panel's mount effect twice, as the app does in development.
-  const render = (withPanel: boolean) => root.render(
+  const render = (withPanel: boolean, panelOpen = true) => root.render(
     <React.StrictMode><I18nProvider><ThemeSystemContext.Provider value={themeContext}>
       <SyncProvider client={client} directory="/visible">
         <PluginPane mode="plugin:tracker" surface="block" block={block} />
-        {withPanel ? <PluginPane mode="plugin:tracker" /> : null}
+        {withPanel ? <PluginPane mode="plugin:tracker" panelOpen={panelOpen} /> : null}
       </SyncProvider>
     </ThemeSystemContext.Provider></I18nProvider></React.StrictMode>,
   );
   // What each frame is told after its `hello`: the `ready` and `item` it gets.
+  const connections = new Map<HTMLIFrameElement, Awaited<ReturnType<typeof connectPluginPaneFixture>>>();
   const itemsSentTo = async (entry: string) => {
     const frame = [...container.querySelectorAll<HTMLIFrameElement>('iframe')].find((candidate) => candidate.src.includes(`/${entry}`));
     if (!frame) throw new Error(`${entry} frame did not mount`);
-    const guestWindow = new Window();
-    windows.push(guestWindow);
-    Object.defineProperty(frame, 'contentWindow', { configurable: true, value: guestWindow });
-    const frameWindow = frame.contentWindow;
-    if (!frameWindow) throw new Error('Guest window is missing');
-    const connection = await connectPluginPaneFixture(frame);
-    restores.push(connection.close);
-    return connection.received.flatMap((message) => (
+    let connection = connections.get(frame);
+    if (!connection) {
+      const guestWindow = new Window();
+      windows.push(guestWindow);
+      Object.defineProperty(frame, 'contentWindow', { configurable: true, value: guestWindow });
+      connection = await connectPluginPaneFixture(frame);
+      connections.set(frame, connection);
+      restores.push(connection.close);
+    }
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    return connection.received.splice(0).flatMap((message) => (
       message.type === 'ready' ? [message.payload.item] : message.type === 'item' ? [message.payload.item] : []
     ));
   };
@@ -99,6 +103,16 @@ test('an item parked for the rail reaches the panel, not a block of the same ext
     expect(panelItems.length).toBeGreaterThan(0);
     expect(panelItems.every((item) => JSON.stringify(item) === JSON.stringify(link))).toBe(true);
     expect(useGuestItemStore.getState().pendingItemByGuest).toEqual({});
+    await act(async () => render(true, false));
+    await act(async () => render(true, true));
+    expect(await itemsSentTo('panel/index.html')).toEqual([null, null]);
+    await act(async () => render(true, false));
+    const nextLink: GuestLinkItem = { ...link, identifier: 'DEMO-13' };
+    await act(async () => {
+      useGuestItemStore.getState().setPendingItem('tracker', nextLink);
+      render(true, true);
+    });
+    expect(await itemsSentTo('panel/index.html')).toEqual([nextLink, nextLink]);
   } finally {
     await act(async () => root.unmount());
     for (const restore of restores) restore();

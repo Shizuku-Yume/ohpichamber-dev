@@ -1,21 +1,19 @@
 import React from 'react';
 
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { captureRuntimeInstance, getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { CanonicalToolView } from './toolView';
 import {
     ImageGrantRequestError,
     loadPreparedImageAsDataUrl,
     prepareLocalMarkdownImages,
-    resolveWorkspaceMarkdownImageSource,
 } from '../../markdown/markdownImageAssets';
 
-const LOCAL_IMAGE_RE = /(["'`])((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>\n]*?\.(?:png|jpe?g|gif|webp))\1|url\(\s*((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>()\s]*?\.(?:png|jpe?g|gif|webp))\s*\)/gi;
-const PAGE_IMAGE_BUDGET_BYTES = 25 * 1024 * 1024;
+const LOCAL_IMAGE_RE = /(["'`])((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])(?:(?!\1)[^<>\n])*?\.(?:png|jpe?g|gif|webp))\1|url\(\s*((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>()\s]*?\.(?:png|jpe?g|gif|webp))\s*\)/gi;
 const OLDER_SERVER_MAX_IMAGES = 12;
 
 /** The local image paths a page names, in order, once each. */
-function renderPageImageSources(html: string): string[] {
+export function renderPageImageSources(html: string): string[] {
     const sources = new Set<string>();
     for (const match of html.matchAll(LOCAL_IMAGE_RE)) {
         const source = match[2] ?? match[3];
@@ -24,10 +22,9 @@ function renderPageImageSources(html: string): string[] {
     return [...sources];
 }
 
-const dataUrlBytes = (url: string): number => Math.floor((url.length - url.indexOf(',') - 1) * 3 / 4);
 
 /** The page with each loaded image's path swapped for its data URL; an image that did not load keeps its path. */
-function inlineRenderPageImages(html: string, images: ReadonlyMap<string, string>): string {
+export function inlineRenderPageImages(html: string, images: ReadonlyMap<string, string>): string {
     return html.replace(LOCAL_IMAGE_RE, (match: string, quote: string | undefined, quoted: string | undefined, bare: string | undefined) => {
         const url = images.get(quoted ?? bare ?? '');
         if (!url) return match;
@@ -44,14 +41,15 @@ type PrepareImages = typeof prepareLocalMarkdownImages;
  * before. Any other failure stays a failure: a request without the page's call
  * id gets no weight budget.
  */
-function prepareRenderPageImages(
+export function prepareRenderPageImages(
     request: Parameters<PrepareImages>[0] & { callId: string },
     prepare: PrepareImages = prepareLocalMarkdownImages,
+    isCurrent: () => boolean = () => true,
 ): ReturnType<PrepareImages> {
     const { sources, directory, sessionId, messageId, signal } = request;
     return prepare(request).catch((error) => {
         const olderServer = error instanceof ImageGrantRequestError && error.status === 400;
-        if (!olderServer || sources.length <= OLDER_SERVER_MAX_IMAGES || signal.aborted) throw error;
+        if (!olderServer || sources.length <= OLDER_SERVER_MAX_IMAGES || signal.aborted || !isCurrent()) throw error;
         return prepare({ sources: sources.slice(0, OLDER_SERVER_MAX_IMAGES), directory, sessionId, messageId, signal });
     });
 }
@@ -64,23 +62,14 @@ async function loadRenderPageImages({ sources, sessionId, messageId, callId, dir
     directory: string;
     signal: AbortSignal;
 }): Promise<Map<string, string>> {
+    const isCurrent = captureRuntimeInstance();
     const images = new Map<string, string>();
     const keep = (source: string) => (url: string) => {
         images.set(source, url);
     };
     const skip = () => undefined;
-    if (isVSCodeRuntime()) {
-        let bytes = 0;
-        for (const source of sources) {
-            const url = await resolveWorkspaceMarkdownImageSource(source, directory, signal).catch(skip);
-            if (!url) continue;
-            bytes += dataUrlBytes(url);
-            if (bytes > PAGE_IMAGE_BUDGET_BYTES) break;
-            images.set(source, url);
-        }
-        return images;
-    }
-    const prepared = await prepareRenderPageImages({ sources, directory, sessionId, messageId, callId, signal });
+    const prepared = await prepareRenderPageImages({ sources, directory, sessionId, messageId, callId, signal }, prepareLocalMarkdownImages, isCurrent);
+    if (!isCurrent()) throw new Error('Runtime changed');
     await Promise.all(sources.map((source) => {
         const image = prepared.get(source);
         if (image?.status !== 'ready') return undefined;
@@ -116,29 +105,32 @@ const rememberPage = (partId: string, html: string, inlined: string) => {
  */
 export function useRenderPageHtml(part: CanonicalToolView, html: string): string | null {
     const directory = useEffectiveDirectory() ?? '';
+    const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+    const pageKey = JSON.stringify([runtimeKey, directory, part.sessionID, part.messageID, part.callID, part.id]);
     const sources = React.useMemo(() => renderPageImageSources(html), [html]);
-    const [loaded, setLoaded] = React.useState(() => rememberedPages.get(part.id) ?? null);
+    const [loaded, setLoaded] = React.useState(() => ({ key: pageKey, page: rememberedPages.get(pageKey) ?? null }));
     const { id: partId, sessionID: sessionId, messageID: messageId, callID: callId } = part;
 
     React.useEffect(() => {
         if (sources.length === 0) return;
-        const remembered = rememberedPages.get(partId);
+        const remembered = rememberedPages.get(pageKey);
         if (remembered?.html === html) {
-            setLoaded(remembered);
+            setLoaded({ key: pageKey, page: remembered });
             return;
         }
         const controller = new AbortController();
+        const isCurrent = captureRuntimeInstance();
         loadRenderPageImages({ sources, sessionId, messageId, callId, directory, signal: controller.signal })
             .catch(() => new Map<string, string>())
             .then((images) => {
-                if (controller.signal.aborted) return;
+                if (controller.signal.aborted || !isCurrent()) return;
                 const page = { html, inlined: inlineRenderPageImages(html, images) };
-                rememberPage(partId, page.html, page.inlined);
-                setLoaded(page);
+                rememberPage(pageKey, page.html, page.inlined);
+                setLoaded({ key: pageKey, page });
             });
         return () => controller.abort();
-    }, [callId, directory, html, messageId, partId, sessionId, sources]);
+    }, [callId, directory, html, messageId, pageKey, partId, sessionId, sources]);
 
     if (sources.length === 0) return html;
-    return loaded?.html === html ? loaded.inlined : null;
+    return loaded.key === pageKey && loaded.page?.html === html ? loaded.page.inlined : null;
 }

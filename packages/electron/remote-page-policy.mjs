@@ -1,3 +1,5 @@
+import { TRAY_LOCALE_DICTIONARIES } from './tray-locales.mjs';
+
 // Payloads from remote renderers cross into the local Electron process. Keep
 // this command allowlist here so IPC authorization and its tests share one policy.
 
@@ -20,6 +22,7 @@ const REMOTE_SAFE_COMMANDS = new Set([
   'desktop_get_lan_address',
   'desktop_capture_page_rect',
   'desktop_tray_update',
+  'desktop_set_tray_locale',
 ]);
 
 export const isRemoteSafeCommand = (command) => REMOTE_SAFE_COMMANDS.has(command);
@@ -32,3 +35,7 @@ export const redactHostsConfigForRemote = (config) => ({
   ...config,
   hosts: config.hosts.map(({ clientToken: _clientToken, requestHeaders: _requestHeaders, ...host }) => host),
 });
+
+export const parseTrayLocale = (value) => (
+  Object.keys(TRAY_LOCALE_DICTIONARIES).find((locale) => locale === value) ?? null
+);

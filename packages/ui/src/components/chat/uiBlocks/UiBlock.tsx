@@ -1,6 +1,7 @@
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import type { Theme } from '@/types/theme';
 import React from 'react';
+import { useReplyDraftPersistence, type ReplyDraftStorage } from '@/hooks/useReplyDraftPersistence';
 import { z } from 'zod';
 import { Icon } from '@/components/icon/Icon';
 import { Button as UiButton } from '@/components/ui/button';
@@ -247,6 +248,7 @@ function CardNoteSlot({ decision, card, children }: { decision: string; card: Bl
   const path = React.useContext(PathContext);
   const note = form.notes.get(decision) ?? '';
   const [open, setOpen] = React.useState(note !== '');
+  const [opened, setOpened] = React.useState(false);
   const place = noteSlot(card);
   if (!place || (form.disabled && !note)) return <>{children}</>;
   const element = open ? (
@@ -257,7 +259,7 @@ function CardNoteSlot({ decision, card, children }: { decision: string; card: Bl
       disabled={form.disabled}
       onChange={(event) => form.setNote(decision, event.target.value)}
       rows={1}
-      autoFocus
+      autoFocus={opened}
     />
   ) : null;
   const trailing = form.disabled ? null : !open ? (
@@ -268,7 +270,10 @@ function CardNoteSlot({ decision, card, children }: { decision: string; card: Bl
       className="text-muted-foreground hover:bg-transparent hover:text-foreground"
       aria-label={t('chat.uiBlock.note.add')}
       title={t('chat.uiBlock.note.add')}
-      onClick={() => setOpen(true)}
+      onClick={() => {
+        setOpen(true);
+        setOpened(true);
+      }}
     >
       <Icon name="sticky-note" className="size-4" />
     </UiButton>
@@ -1372,10 +1377,11 @@ function addKitStyles() {
  document.head.append(style);
 }
 
-export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions, theme, isImageExport = false }: {
+export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions, draft, theme, isImageExport = false }: {
   source: string;
   complete: boolean;
   host?: UiBlockHost;
+  draft?: ReplyDraftStorage;
   actions?: React.ReactNode;
   onNotDrawn?: (errors: string[]) => void;
   theme?: Theme;
@@ -1403,15 +1409,17 @@ export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions, 
  React.useEffect(() => {
   if (notDrawnErrors) onNotDrawn?.(notDrawnErrors);
  }, [notDrawnErrors, onNotDrawn]);
- const [values, setValues] = React.useState<Record<string, UiBlockFieldValue>>(() => host.answered?.values ?? {});
- const [chosen, setChosen] = React.useState<Chosen>(() => chosenFrom(host));
- const [notes, setNotes] = React.useState<Notes>(() => notesFrom(host));
+ const [restored] = React.useState(() => draft?.load());
+ const [values, setValues] = React.useState<Record<string, UiBlockFieldValue>>(() => host.answered?.values ?? restored?.values ?? {});
+ const [chosen, setChosen] = React.useState<Chosen>(() => host.answered ? chosenFrom(host) : new Map(restored?.chosen));
+ const [notes, setNotes] = React.useState<Notes>(() => host.answered ? notesFrom(host) : new Map(restored?.notes));
  const [sending, setSending] = React.useState(false);
  const [sent, setSent] = React.useState(host.answered !== null);
  const [failed, setFailed] = React.useState(false);
  const pageNote = (answer: UiBlockHost['answered']) => (answer && 'note' in answer ? answer.note ?? '' : '');
- const [note, setNote] = React.useState(() => pageNote(host.answered));
+ const [note, setNote] = React.useState(() => host.answered ? pageNote(host.answered) : restored?.note ?? '');
  const [noteOpen, setNoteOpen] = React.useState(() => pageNote(host.answered) !== '');
+ useReplyDraftPersistence(draft, values, chosen, notes, note, sent, host.answered !== null);
  // An answer stored after this block mounted (given on another device, or
  // read back after a reload) shows here too and freezes the block.
  const [shownAnswer, setShownAnswer] = React.useState(host.answered);

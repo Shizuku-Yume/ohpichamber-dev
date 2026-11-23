@@ -4,27 +4,38 @@ import type { AttachIssueRequest } from 'ohpichamber-sdk'
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import type { InlineCommentDraftTarget } from "@/stores/useInlineCommentDraftStore"
-import { HeicConversionError, prepareAttachmentFiles } from "./attachment-files";
+import { HeicConversionError, PATH_NOTE_MEDIA_TYPE, fileReferenceNoteText, prepareAttachmentFiles } from "./attachment-files";
 import { getChatDraftIdentityKey, subscribeChatDraftDeletion, type ChatDraftIdentity } from "@/lib/chatDraftPersistence"
 import { pathForDroppedFile } from "@/lib/desktop"
 import { attachmentBasename } from "@/lib/attachmentIdentity";
 import { formatFileSize } from "@/lib/fileSize"
 import { formatMessage, useI18nStore } from "@/lib/i18n/store"
+import { captureRuntimeInstance, getRuntimeKey, getRuntimeSwitchRevision } from "@/lib/runtime-switch"
+import { prepareAttachmentsHeldForSend } from "./held-attachments"
+import type { RejectedSharedFile } from '@/lib/nativeSharedFiles'
 
-const MAX_INLINE_ATTACHMENT_BYTES = 10 * 1024 * 1024
-const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+export type PendingDraftContent = {
+ draftId: number
+ files: File[]
+ text: string | null
+ rejected: RejectedSharedFile[]
+ accept?: () => void
+}
+
+export const MAX_INLINE_ATTACHMENT_BYTES = 10 * 1024 * 1024
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 const INTAKE_REDACTED_FILENAME = /\.(har|ipynb)$/i
 
 const prepareFileReference = async (file: File, path: string): Promise<AttachedFile> => {
  const note = new File(
-  [`File on disk: ${path} (${formatFileSize(file.size)}). Its content is not in this message. Read what you need from it with your tools.\n`],
+  [fileReferenceNoteText(path, formatFileSize(file.size))],
   file.name,
   { type: "text/plain" },
  )
  return {
   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   file: note,
-  dataUrl: await readFileAsDataUrl(note, "text/plain"),
+  dataUrl: await readFileAsDataUrl(note, PATH_NOTE_MEDIA_TYPE),
   mimeType: "text/plain",
   filename: file.name,
   size: file.size,
@@ -36,6 +47,7 @@ const prepareFileReference = async (file: File, path: string): Promise<AttachedF
 
 const MAX_ATTACHMENT_PREPARATION_ATTEMPTS = 3
 let attachmentReadGeneration = 0
+const heldSavesInFlight = new Map<string, Promise<string[]>>()
 
 const hasGeneratedFilenameCollision = (filenames: string[], attachedFiles: AttachedFile[]): boolean => {
  if (filenames.length === 0) return false
@@ -112,6 +124,34 @@ const restoredAttachmentFile = ({ url, mimeType, filename }: RestoredAttachment)
  return new File([bytes], basename, { type: mimeType })
 }
 
+export type AddAttachedFileOptions = { shared?: boolean; saveOnSend?: "reference" | "copy" }
+
+const saveHeldFiles = async (
+ get: () => InputState,
+ target: ChatDraftIdentity | null,
+ directory: string | undefined,
+ sentIds: ReadonlySet<string>,
+): Promise<string[]> => {
+ const isCurrent = captureRuntimeInstance()
+ const activeDraftKey = get().attachmentDraftKey
+ const held = attachedFilesFor(get(), target).filter((file) => sentIds.has(file.id) && (file.saveOnSend || file.saveCopyOnSend))
+ if (target && target.runtimeKey !== getRuntimeKey()) return held.map((entry) => entry.filename)
+ const failed: string[] = []
+ for (const file of held) {
+  try {
+   const replacement = await prepareAttachmentsHeldForSend([file], directory, isCurrent)
+   if (!isCurrent()) return held.map((entry) => entry.filename)
+   if (target === null && get().attachmentDraftKey !== activeDraftKey) continue
+   const current = attachedFilesFor(get(), target)
+   if (!current.includes(file)) continue
+   get().setAttachedFiles(current.flatMap((entry) => entry === file ? replacement : [entry]), target ?? undefined)
+  } catch {
+   failed.push(file.filename)
+  }
+ }
+ return failed
+}
+
 export type SyntheticContextPart = {
  text: string
  attachments?: AttachedFile[]
@@ -129,7 +169,7 @@ export type ComposerAddress = {
   attachments: ChatDraftIdentity | null
 }
 
-type InputState = {
+export type InputState = {
  pendingComposerRestore: {
   target: ChatDraftIdentity
   text: string
@@ -161,12 +201,16 @@ type InputState = {
  pendingPresetSubmit: { text: string; type: "command" | "skill" } | null
  /** Guest rail/dialog attach. ChatInput consumes this into the composer chip. */
  pendingGuestIssue: AttachIssueRequest | null
+ pendingDraftContents: Map<number, { content: PendingDraftContent; isCurrent: () => boolean }>
+ requestDraftContent: (draftId: number, content: Omit<PendingDraftContent, 'draftId'>) => void
+ consumePendingDraftContent: (draftId: number) => PendingDraftContent | null
  pendingBtwComposerRequest: PendingBtwComposerRequest | null
  attachedFiles: AttachedFile[]
  attachmentDraftKey: string | null
  attachmentDrafts: Map<string, AttachedFile[]>
  selectAttachmentDraft: (target: ChatDraftIdentity | null) => void
  restoreAttachedFiles: (files: AttachedFile[], target: ChatDraftIdentity | null) => void
+ moveAttachedFiles: (from: ChatDraftIdentity, to: ChatDraftIdentity) => void
  composerAddress: ComposerAddress | null
  setComposerAddress: (address: ComposerAddress | null) => void
 
@@ -181,7 +225,8 @@ type InputState = {
  setPendingSyntheticParts: (parts: SyntheticContextPart[] | null, target?: string | null) => void
  consumePendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
  getPendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
- addAttachedFile: (file: File, target?: ChatDraftIdentity | null, onPrepared?: (files: readonly AttachedFile[]) => void) => Promise<boolean>
+ addAttachedFile: (file: File, target?: ChatDraftIdentity | null, onPrepared?: (files: readonly AttachedFile[]) => void, options?: AddAttachedFileOptions) => Promise<boolean>
+ saveAttachmentsHeldForSend: (target: ChatDraftIdentity | null, directory: string | undefined, sentIds: ReadonlySet<string>) => Promise<string[]>
  removeAttachedFile: (id: string) => void
  setAttachedFiles: (files: AttachedFile[], target?: ChatDraftIdentity | null) => void
  clearAttachedFiles: (target?: ChatDraftIdentity | null) => void
@@ -235,6 +280,21 @@ export const useInputStore = create<InputState>()((set, get) => ({
  pinnedSyntheticParts: new Map(),
  pendingPresetSubmit: null,
  pendingGuestIssue: null,
+ pendingDraftContents: new Map(),
+ requestDraftContent: (draftId, content) => {
+  const pending = new Map([...get().pendingDraftContents].filter(([, entry]) => entry.isCurrent()))
+  const { files, text, rejected, accept } = content
+  pending.set(draftId, { content: { draftId, files: [...files], text, rejected: [...rejected], ...(accept ? { accept } : {}) }, isCurrent: captureRuntimeInstance() })
+  set({ pendingDraftContents: pending })
+ },
+ consumePendingDraftContent: (draftId) => {
+  const pending = new Map(get().pendingDraftContents)
+  const entry = pending.get(draftId)
+  if (!entry) return null
+  pending.delete(draftId)
+  set({ pendingDraftContents: pending })
+  return entry.isCurrent() ? entry.content : null
+ },
  pendingBtwComposerRequest: null,
  attachedFiles: [],
  attachmentDraftKey: null,
@@ -268,6 +328,23 @@ export const useInputStore = create<InputState>()((set, get) => ({
   const present = new Set(existing.map((file) => file.id))
   const missing = files.filter((file) => !present.has(file.id))
   if (missing.length) state.setAttachedFiles([...existing, ...missing], target)
+ },
+ moveAttachedFiles: (from, to) => {
+  if (from.runtimeKey !== to.runtimeKey) throw new Error("Cannot move attachments between runtimes")
+  const fromKey = getChatDraftIdentityKey(from)
+  const toKey = getChatDraftIdentityKey(to)
+  if (fromKey === toKey) return
+  set((state) => {
+   const files = attachedFilesFor(state, from)
+   if (!files.length) return state
+   const existing = attachedFilesFor(state, to)
+   const ids = new Set(existing.map((file) => file.id))
+   const moved = [...existing, ...files.filter((file) => !ids.has(file.id))]
+   const drafts = new Map(state.attachmentDrafts)
+   drafts.delete(fromKey)
+   if (toKey !== state.attachmentDraftKey) drafts.set(toKey, moved)
+   return { attachmentDrafts: drafts, attachedFiles: state.attachmentDraftKey === toKey ? moved : state.attachmentDraftKey === fromKey ? [] : state.attachedFiles }
+  })
  },
 
  setPendingInputText: (text, mode = "replace", target = null) =>
@@ -328,8 +405,20 @@ export const useInputStore = create<InputState>()((set, get) => ({
   target === null ? get().pendingSyntheticParts : get().pinnedSyntheticParts.get(target) ?? null
  ),
 
- addAttachedFile: async (file: File, target?: ChatDraftIdentity | null, onPrepared?: (files: readonly AttachedFile[]) => void) => {
+ addAttachedFile: async (file, target, onPrepared, options) => {
   const generation = attachmentReadGeneration
+  if (options?.saveOnSend === "reference" && !INTAKE_REDACTED_FILENAME.test(file.name) && file.size <= MAX_ATTACHMENT_BYTES) {
+   const mimeType = file.type.split(";", 1)[0]?.trim() || "application/octet-stream"
+   const attached: AttachedFile = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, file, dataUrl: await readFileAsDataUrl(file, mimeType),
+    mimeType, filename: file.name, size: file.size, source: "local",
+    saveOnSend: true,
+   }
+   if (generation !== attachmentReadGeneration) return false
+   set((state) => appendAttachedFiles(state, [attached], target))
+   onPrepared?.([attached])
+   return true
+  }
   const referencePath = INTAKE_REDACTED_FILENAME.test(file.name) ? null : pathForDroppedFile(file)
   const attachReference = async (path: string): Promise<boolean> => {
    const reference = await prepareFileReference(file, path)
@@ -361,6 +450,13 @@ export const useInputStore = create<InputState>()((set, get) => ({
    if (generation !== attachmentReadGeneration) return false
    if (!attachedFiles) return referencePath ? attachReference(referencePath) : false
 
+   if (options?.saveOnSend) {
+    for (const attached of attachedFiles) {
+     if (options.saveOnSend === "copy") attached.saveCopyOnSend = true
+     else attached.saveOnSend = true
+    }
+   }
+
    const generatedFilenames = attachedFiles.slice(1).map((attachment) => attachment.filename)
    if (hasGeneratedFilenameCollision(generatedFilenames, attachedFilesFor(get(), target))) continue
 
@@ -369,6 +465,17 @@ export const useInputStore = create<InputState>()((set, get) => ({
    return true
   }
   return false
+ },
+
+ saveAttachmentsHeldForSend: (target, directory, sentIds) => {
+  const key = JSON.stringify([getRuntimeKey(), getRuntimeSwitchRevision(), target ? getChatDraftIdentityKey(target) : get().attachmentDraftKey, directory, [...sentIds].sort()])
+  const pending = heldSavesInFlight.get(key)
+  if (pending) return pending
+  const saving = saveHeldFiles(get, target, directory, sentIds)
+  heldSavesInFlight.set(key, saving)
+  const settle = () => { if (heldSavesInFlight.get(key) === saving) heldSavesInFlight.delete(key) }
+  void saving.then(settle, settle)
+  return saving
  },
 
  removeAttachedFile: (id) =>

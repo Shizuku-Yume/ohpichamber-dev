@@ -1,4 +1,5 @@
 import { createProjectIdFromPath, projectConfigFileStemOf } from '../projects/project-id.js';
+import { createSettingsWriteQueue } from './settings-write-queue.js';
 import {
   buildPreferencesFields,
   flattenPreferences,
@@ -63,7 +64,6 @@ export const createSettingsRuntime = (deps) => {
     onMessageSearchReasoningChanged = () => { },
   } = deps;
 
-  let persistSettingsLock = Promise.resolve();
 
   const PREFERENCES_FILE_PATH = preferencesFilePathFor(SETTINGS_FILE_PATH, path);
   // True while preferences.json exists but cannot be read. Profile writes are
@@ -1037,8 +1037,9 @@ export const createSettingsRuntime = (deps) => {
     return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration8.settings;
   };
 
+  const { enqueue, updateSettingsFromDisk } = createSettingsWriteQueue(readSettingsFromDiskMigrated, writeSettingsToDisk);
   const persistResolvedSettings = async (resolveChanges, { surface = null, preserveProjectIcons = false } = {}) => {
-    const result = persistSettingsLock.then(async () => {
+    return enqueue(async () => {
       const current = await readSettingsFromDisk({ surface });
       const changes = typeof resolveChanges === 'function' ? resolveChanges(current) : resolveChanges;
       // Log field names only — changes can carry credentials (UI password,
@@ -1136,10 +1137,6 @@ export const createSettingsRuntime = (deps) => {
       }
       return formatSettingsResponse(next);
     });
-    // A failed write (a full disk) rejects only its own caller; the next
-    // save still runs instead of replaying that error until a restart.
-    persistSettingsLock = result.catch(() => { });
-    return result;
   };
 
   const persistSettings = (changes, options) => persistResolvedSettings(() => changes, options);
@@ -1151,5 +1148,6 @@ export const createSettingsRuntime = (deps) => {
     writeSettingsToDisk,
     persistSettings,
     persistResolvedSettings,
+    updateSettingsFromDisk,
   };
 };

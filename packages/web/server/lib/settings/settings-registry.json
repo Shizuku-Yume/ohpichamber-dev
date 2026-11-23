@@ -117,6 +117,9 @@
       "scope": "profile",
       "perSurface": true
     },
+    "sttPrompt": {
+      "scope": "profile"
+    },
     "locale": {
       "scope": "profile"
     },
@@ -592,6 +595,15 @@
       "scope": "profile"
     },
     "draftStartersScheduleTaskAdded": {
+      "scope": "profile"
+    },
+    "chatsDefaultModel": {
+      "scope": "profile"
+    },
+    "chatsDefaultVariant": {
+      "scope": "profile"
+    },
+    "documentAttachBehavior": {
       "scope": "profile"
     },
     "fontSize": {

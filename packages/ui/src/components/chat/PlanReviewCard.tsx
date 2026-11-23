@@ -15,10 +15,14 @@ import { FormMarkdown } from './FormMarkdown';
 import { buildPlanReviewAnswer, parsePlanReview } from './questionRequest';
 import { useQuestionResponse } from './useQuestionResponse';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
+import { useFormDockFold } from './useFormDockFold';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { dropFormDraft, formDraftScope, loadFormDraft, saveFormDraft } from './formDrafts';
 interface PlanReviewCardProps {
     form: QuestionRequest;
     docked?: boolean;
     forms?: readonly QuestionRequest[];
+    directory?: string;
 }
 
 /** Select sentinel for "no explicit execution model"; Base UI rejects an
@@ -26,29 +30,43 @@ interface PlanReviewCardProps {
 const DEFAULT_MODEL_VALUE = '__default__';
 
 /** A plan decision is an answer, including Reject; it is never a cancellation. */
-export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardProps) {
+export function PlanReviewCard({ form, docked = false, forms, directory }: PlanReviewCardProps) {
     const { t } = useI18n();
     const review = React.useMemo(() => parsePlanReview(form.schema), [form.schema]);
-    const [feedback, setFeedback] = React.useState('');
-    const [executionModel, setExecutionModel] = React.useState<{ providerId: string; modelId: string } | null>(null);
-    const [collapsed, setCollapsed] = React.useState(false);
+    const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+    const scope = React.useMemo(() => formDraftScope({ sessionId: form.sessionId, questionId: form.questionId }, directory, runtimeKey), [directory, form.sessionId, form.questionId, runtimeKey]);
+    const signature = JSON.stringify(review);
+    const [restored] = React.useState(() => {
+        const draft = loadFormDraft(scope);
+        return draft?.kind === 'plan-review' && draft.fieldsSignature === signature ? draft : null;
+    });
+    const [feedback, setFeedback] = React.useState(restored?.feedback ?? '');
+    const [executionModel, setExecutionModel] = React.useState<{ providerId: string; modelId: string } | null>(restored?.executionModel ?? null);
+    const [collapsed, setCollapsed] = useFormDockFold(docked);
     const feedbackId = React.useId();
     const providers = useConfigStore((state) => state.providers);
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
     const { isResponding, hasResponded, answer } = useQuestionResponse(form);
     const availableMaxHeight = useMobileAutocompleteMaxHeight(bodyRef, docked && !collapsed, 400);
     const formIds = React.useMemo(() => docked ? (forms ?? [form]).map((item) => item.questionId) : [], [docked, form, forms]);
-    useRequestReveal(formIds, React.useCallback(() => setCollapsed(false), []));
+    useRequestReveal(formIds, React.useCallback(() => setCollapsed(false), [setCollapsed]));
 
     // Rebuilt pending records and failed replies preserve the feedback draft.
+    const appliedSignature = React.useRef(signature);
     React.useEffect(() => {
+        if (appliedSignature.current === signature) return;
+        appliedSignature.current = signature;
         setFeedback('');
-    }, [form.questionId, review?.title, review?.planReference, review?.planText]);
+        setExecutionModel(null);
+    }, [signature]);
+    React.useEffect(() => {
+        if (!hasResponded && appliedSignature.current === signature) saveFormDraft(scope, { kind: 'plan-review', fieldsSignature: signature, feedback, executionModel });
+    }, [executionModel, feedback, hasResponded, scope, signature]);
 
     const submit = React.useCallback(async (action: PlanReviewResponse['action']) => {
         const payload = buildPlanReviewAnswer(action, feedback, executionModel);
-        if (payload) await answer(payload);
-    }, [answer, executionModel, feedback]);
+        if (payload && await answer(payload)) dropFormDraft(scope);
+    }, [answer, executionModel, feedback, scope]);
 
     const handleFeedbackKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (isIMECompositionEvent(event) || event.key !== 'Enter' || event.shiftKey || !(event.ctrlKey || event.metaKey)) return;

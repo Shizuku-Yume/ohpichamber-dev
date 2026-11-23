@@ -4,6 +4,7 @@ export {
   clampPercent,
   formatQuotaValueLabel,
   formatQuotaWindowValueLabel,
+  formatQuotaRowValue,
   formatQuotaResetLabel,
   formatQuotaResetShort,
   compactQuotaValueLabel,

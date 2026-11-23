@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createProjectDirectoryRuntime } from '../projects/project-directory-runtime.js';
 import { createHostSessionState } from '../host/session-state.js';
 import { history as historyFixture, runtimeSession, snapshot as snapshotFixture } from '../event-stream/canonical-test-fixtures.js';
-import { mergeMetadataPatch } from './session-metadata-store.js';
+import { createSessionMetadataStore, mergeMetadataPatch } from './session-metadata-store.js';
 import * as routes from './routes.js';
 import { createSessionWorktreeMover } from './worktree-move.js';
 
@@ -37,7 +37,7 @@ const validScope = (sessionId) => ({
 const createApp = (overrides = {}) => {
   const app = express(); const archiveStore = overrides.archiveStore ?? createMemoryArchiveStore(); const sessionMetadataStore = overrides.sessionMetadataStore ?? createMemorySessionMetadataStore();
   const { registerOpenChamberSessionRoutes } = overrides.routes;
-  registerOpenChamberSessionRoutes(app, {
+  const dependencies = {
     service: { request: vi.fn() },
     agentScopeStore: overrides.agentScopeStore ?? routeFixture.agentScopeStore,
     resolveWorkspaceScope: async () => validScope('workspace'),
@@ -53,7 +53,14 @@ const createApp = (overrides = {}) => {
     sessionMetadataStore,
     isRequestOriginAllowed: async () => true,
     ...overrides,
-  });
+  };
+  if (overrides.canonical) {
+    const router = express.Router();
+    overrides.routes.registerCanonicalSessionRoutes(router, overrides.routes.createOpenChamberSessionService(dependencies));
+    app.use('/api/agent/v1/sessions', router);
+  } else {
+    registerOpenChamberSessionRoutes(app, dependencies);
+  }
   return { app, archiveStore, sessionMetadataStore, hostSessionState: routeFixture };
 };
 
@@ -405,6 +412,31 @@ describe('canonical session route contracts', () => {
     ]) await request(app).patch('/api/openchamber/sessions/ses_admitted/metadata').send({ changes }).expect(400);
     expect(sessionMetadataStore.entries.size).toBe(0);
     expect(broadcastGlobalUiEvent).not.toHaveBeenCalled();
+  });
+
+  it('checks Canonical metadata preconditions inside the Host transaction without broadcasting conflicts', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'metadata-compare-'));
+    const sessionMetadataStore = createSessionMetadataStore({ dataDir });
+    const broadcastGlobalUiEvent = vi.fn();
+    const { app } = createApp({ routes, sessionMetadataStore, broadcastGlobalUiEvent, canonical: true });
+    const endpoint = '/api/agent/v1/sessions/ses_admitted/metadata';
+    try {
+      const first = await request(app).patch(endpoint).send({ expectedRevision: '0', changes: { notes: 'first' } }).expect(200);
+      expect(first.body.revision).toBe('1');
+      const stale = await request(app).patch(endpoint).send({ expectedRevision: '0', changes: { notes: 'lost update' } }).expect(409);
+      expect(stale.body.code).toBe('METADATA_CONFLICT');
+      expect(await sessionMetadataStore.getState('ses_admitted')).toEqual({ metadata: { notes: 'first' }, revision: '1' });
+      expect(broadcastGlobalUiEvent).toHaveBeenCalledTimes(1);
+      const retry = await request(app).patch(endpoint).send({ expectedRevision: '1', changes: { folder: 'other' } }).expect(200);
+      expect(retry.body).toMatchObject({ revision: '2', metadata: { notes: 'first', folder: 'other' } });
+      const empty = await request(app).patch(endpoint).send({ expectedRevision: '2', changes: {} }).expect(200);
+      expect(empty.body.revision).toBe('2');
+      await request(app).patch(endpoint).send({ expectedRevision: '01', changes: {} }).expect(400);
+      expect(broadcastGlobalUiEvent).toHaveBeenCalledTimes(2);
+    } finally {
+      await sessionMetadataStore.close();
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
   });
 
   describe('session links the UI owns', () => {

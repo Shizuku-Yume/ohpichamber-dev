@@ -23,6 +23,7 @@ import type { normalizeTunnelProvider, normalizeTunnelMode, normalizeOptionalPat
 import { idleStopSchema } from '../spaces/idle-stop.js';
 
 import { PROVIDER_LOGO_MIMES } from '../appearance/provider-logo-routes.js';
+import { sanitizeDictationSettings } from './settings-dictation.js';
 
 const settingsDocumentSchema = z.looseObject({});
 
@@ -304,14 +305,14 @@ type StringSettingsKey =
   | 'pwaAppName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'browserProvider' | 'agentMemoryDreamingModel'
   | 'agentMemoryDreamingVariant' | 'agentImageModel' | 'isolatedSpacesSshHost' | 'openCodeUpdateToastDismissedVersion'
   | 'terminalShell' | 'openInAppId' | 'globalBehaviorPrompt' | 'responseStylePreset' | 'responseStyleCustomInstructions'
-  | 'sttServerUrl' | 'sttModel' | 'sttEndpointPath' | 'sttLocalModel' | 'sttLanguage' | 'sidebarProjectDisplayMode'
+  | 'sttServerUrl' | 'sttModel' | 'sttEndpointPath' | 'sttLocalModel' | 'sttLanguage' | 'sttPrompt' | 'sidebarProjectDisplayMode'
   | 'sidebarViewMode' | 'sidebarListSessionGrouping' | 'sidebarGrouping' | 'sidebarProjectSortOrder'
   | 'selectionApprovalText';
 
 type ClearableStringSettingsKey =
   | 'managedRemoteTunnelHostname' | 'managedRemoteTunnelSelectedPresetId' | 'defaultModel' | 'defaultVariant'
   | 'defaultAgent' | 'smallModelOverride' | 'smallModelVariant' | 'walkthroughModelOverride' | 'walkthroughModelVariant'
-  | 'fallbackModel' | 'fallbackVariant' | 'defaultGitIdentityId' | 'zenModel';
+  | 'fallbackModel' | 'fallbackVariant' | 'defaultGitIdentityId' | 'zenModel' | 'chatsDefaultModel' | 'chatsDefaultVariant';
 
 type NumberSettingsKey =
   | 'inputHistoryLimit' | 'sidebarSessionBatchSize' | 'liveBrowserTabLimit' | 'sessionGoalMaxAutoTurns'
@@ -359,6 +360,7 @@ export type SanitizedSettings = Partial<Record<BooleanSettingsKey, boolean>>
     draftStarters?: { type: 'command' | 'skill'; name: string }[];
     fileTreeSide?: 'left' | 'right';
     largeTextPasteBehavior?: 'ask' | 'attach' | 'inline' | 'inline-double-paste';
+    documentAttachBehavior?: 'ask' | 'save' | 'convert';
     fileEditorKeymap?: 'default' | 'vim';
     sessionGoalChecker?: 'classifier' | 'small-model';
     notificationMode?: 'always' | 'hidden-only';
@@ -376,7 +378,7 @@ export type SanitizedSettings = Partial<Record<BooleanSettingsKey, boolean>>
     weekStartPreference?: 'auto' | 'sunday' | 'monday';
     chatRenderMode?: 'sorted' | 'live';
     messageStreamTransport?: 'auto' | 'ws' | 'sse';
-    activityRenderMode?: 'collapsed' | 'summary';
+    activityRenderMode?: 'collapsed' | 'text' | 'summary';
     mermaidRenderingMode?: 'svg' | 'ascii';
     userMessageRenderingMode?: 'markdown' | 'plain';
     chatWidth?: 'default' | 'wider' | 'full';
@@ -1055,6 +1057,9 @@ if (isString(candidate.fileEditorKeymap)) {
       }
     }
 
+    const documentAttachBehavior = z.enum(['ask', 'save', 'convert']).safeParse(typeof candidate.documentAttachBehavior === 'string' ? candidate.documentAttachBehavior.trim() : candidate.documentAttachBehavior);
+    if (documentAttachBehavior.success) result.documentAttachBehavior = documentAttachBehavior.data;
+
 if (isString(candidate.fileEditorVimMappings)) {
       result.fileEditorVimMappings = candidate.fileEditorVimMappings.slice(0, 10_000);
     }
@@ -1285,6 +1290,11 @@ if (isString(candidate.defaultModel)) {
       result.defaultModel = trimmed.length > 0 ? trimmed : undefined;
     }
 
+    for (const key of ['chatsDefaultModel', 'chatsDefaultVariant'] as const) {
+      const value = z.string().trim().safeParse(candidate[key]);
+      if (value.success) result[key] = value.data.length > 0 ? value.data : undefined;
+    }
+
 const lastSelectedModel = lastSelectedModelSchema.safeParse(candidate.lastSelectedModel);
 
 if (lastSelectedModel.success) {
@@ -1508,7 +1518,7 @@ if (isString(candidate.messageStreamTransport)) {
 
 if (isString(candidate.activityRenderMode)) {
       const mode = candidate.activityRenderMode.trim();
-      if (mode === 'collapsed' || mode === 'summary') {
+      if (mode === 'collapsed' || mode === 'text' || mode === 'summary') {
         result.activityRenderMode = mode;
       }
     }
@@ -1891,6 +1901,8 @@ if (candidate.sttCorrectTranscript === true || candidate.sttCorrectTranscript ==
       result.sttCorrectTranscript = candidate.sttCorrectTranscript;
     }
 
+    sanitizeDictationSettings(candidate, result);
+
 for (const key of Object.keys(result)) {
       if (!isPersistableSettingsKey(key)) {
         Reflect.deleteProperty(result, key);
@@ -1905,7 +1917,6 @@ const mergePersistedSettings = (current, changes) => {
     delete merged.defaultAgent;
     delete merged.sessionWorkKeepInGroup;
     delete merged.messageStreamTransport;
-    delete merged.savePastedImagesAsFiles;
     if (Array.isArray(merged.projects)) {
       merged.projects = merged.projects.map((proj) => {
         if (!proj || typeof proj !== 'object' || !('defaultAgent' in proj)) return proj;

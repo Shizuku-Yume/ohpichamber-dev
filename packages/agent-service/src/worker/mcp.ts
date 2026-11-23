@@ -22,6 +22,9 @@ import { parseCallbackInput } from '@oh-my-pi/pi-ai/oauth/callback-server';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent';
 import { readMCPConfigFile, writeMCPConfigFile } from '@oh-my-pi/pi-coding-agent/mcp/config-writer';
 import { MCPManager, type MCPAuthHandler, type MCPLoadResult } from '@oh-my-pi/pi-coding-agent/mcp/manager';
+import { LocalMcpHost } from '@oh-my-pi/pi-coding-agent/mcp/host/local';
+import { mcpUpstreams } from '@oh-my-pi/pi-coding-agent/mcp/host/peers';
+import { McpStore } from '@oh-my-pi/pi-coding-agent/mcp/host/store';
 import { discoverOAuthEndpoints, type OAuthEndpoints } from '@oh-my-pi/pi-coding-agent/mcp/oauth-discovery';
 import { resolveMcpOAuthEndpointsFromServer } from '@oh-my-pi/pi-coding-agent/mcp/oauth-reauth';
 import {
@@ -584,7 +587,7 @@ export interface NativeMcpDependencies {
  */
 export class WorkerMcp extends MCPManager {
   #active = new Map<string, MCPManager>();
-  #owned = new Set<MCPManager>();
+  #owned = new Map<MCPManager, LocalMcpHost>();
   #session: AgentSession | undefined;
   #closed = false;
   #tail: Promise<void> = Promise.resolve();
@@ -609,7 +612,7 @@ export class WorkerMcp extends MCPManager {
   private worker: CatalogWorkerIdentity;
 
   constructor(private readonly deps: NativeMcpDependencies) {
-    super(deps.cwd, null);
+    super(deps.cwd);
     this.worker = CatalogWorkerIdentitySchema.parse(deps.worker);
     this.#catalog = MCPCatalogStateSchema.parse({
       worker: this.worker, runtimeStatus: 'unavailable',
@@ -1186,13 +1189,14 @@ export class WorkerMcp extends MCPManager {
   async #stage(server: MCPServerConfig): Promise<MCPManager> {
     const config = await this.#nativeConfig(server);
     this.#assertCurrent();
-    const manager = new MCPManager(this.deps.cwd, null, async () => ({
+    const host = new LocalMcpHost({ store: McpStore.memory(), upstreams: mcpUpstreams });
+    const manager = new MCPManager(this.deps.cwd, async () => ({
       configs: { [server.serverId]: config }, sources: {}, exaApiKeys: [],
-    }));
+    }), 0, host);
     manager.setAuthStorage(this.deps.authStorage);
     manager.setAuthHandler(this.#authHandler);
     manager.setNotificationsEnabled(this.#notificationsEnabled);
-    this.#owned.add(manager);
+    this.#owned.set(manager, host);
     try {
       const result = await manager.connectServers({ [server.serverId]: config }, {}, undefined, 0);
       const status = await manager.waitForStartup(30_000);
@@ -1571,7 +1575,8 @@ export class WorkerMcp extends MCPManager {
   }
   async #release(managers: Iterable<MCPManager>): Promise<void> {
     const results = await Promise.allSettled([...managers].map(async manager => {
-      await manager.disconnectAll();
+      try { await manager.disconnectAll(); }
+      finally { await this.#owned.get(manager)?.dispose(); }
       this.#owned.delete(manager);
     }));
     if (results.some(result => result.status === 'rejected')) throw new NativeMcpError('MCP_APPLY_FAILED', 'MCP transport cleanup failed.', true);
@@ -1659,7 +1664,7 @@ export class WorkerMcp extends MCPManager {
     this.#oauth.clear();
     for (const flow of pending) flow.abort.abort();
     await Promise.allSettled(pending.map(flow => flow.done));
-    await this.#release(this.#owned);
+    await this.#release(this.#owned.keys());
     await this.#tail;
     this.#active.clear();
     this.#session = undefined;

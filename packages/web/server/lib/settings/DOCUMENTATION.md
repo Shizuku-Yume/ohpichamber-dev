@@ -2,13 +2,18 @@
 
 ## Ownership
 
-This module owns OpenChamber's settings persistence: the instance and profile files, their migrations, path and record normalization, request sanitizing and response shaping, and the generated registry snapshot `settings-registry.json` (`bun run settings-registry:generate` writes it from the UI registry). `GET` and `PUT /api/config/settings` are registered by `../opencode/routes.js`, which receives this runtime from server composition. What a setting means belongs to the feature that reads it.
+This module owns OhPiChamber's settings persistence: the instance and profile files, their migrations, path and record normalization, request sanitizing and response shaping, and the generated registry snapshot `settings-registry.json` (`bun run settings-registry:generate` writes it from the UI registry). `GET` and `PUT /api/config/settings` are registered by `../host/settings-routes.js`, which receives this runtime from server composition. What a setting means belongs to the feature that reads it.
 
 ## Invariants
+
+- Managed-chat model and effort overrides round-trip through `chatsDefaultModel` and `chatsDefaultVariant`; blank strings clear them. Named OpenCode agent defaults do not become a second OMP root-agent authority.
+
+- Feature read/modify/write operations use `updateSettingsFromDisk`. The same `settings-write-queue.ts` serializes user saves and feature writes for VAPID keys, public origin and private relay configuration. Each operation rereads under the queue; a failed operation rejects only its caller. Profile surfaces, unreadable-preference protection, icon preservation and reserved OMP preferences retain their existing owners.
 
 - Settings callers that regenerate persisted identity use the strict reader: only ENOENT means first run. Corrupt JSON, non-object content, and I/O errors throw so a transient read failure cannot replace pairing keys and orphan devices.
 - Settings writes replace complete files atomically because Electron and SSH readers can treat a partial JSON read as an empty document and then overwrite the user's settings. Only directories created by the write receive tightened permissions; existing administrator permissions and ACLs remain intact.
 - Question presentation (`questionsInChat`) is a persisted boolean. Both chat and popup choices survive Host sanitizing; absent or invalid values do not overwrite the preference.
+- `savePastedImagesAsFiles` is a profile boolean for Host-owned attachment saving. Both choices survive sanitizing, merging and response shaping; unrelated writes retain the choice.
 - Project validation preserves entries after permission or transient filesystem failures. Project context reconciliation merges lists by identity across ID changes because a directory move cannot merge two existing `context.json` files; version-1 string conversion stays owned by `project-context`, and the destination wins when both values remain strings.
 - Project-folder migration also checks raw names that the filesystem can hold because older IDs can still have data there. Orphan recovery uses a unique setup-command match against an otherwise empty canonical project; an orphan's folder is named by its actual raw filename.
 - Empty notification templates select language-aware defaults. Migration clears only the old seeded English set and preserves user-authored text. Splitting scheduled tasks from the control tool preserves an earlier choice to disable that tool.
@@ -17,6 +22,12 @@ This module owns OpenChamber's settings persistence: the instance and profile fi
 - Sidebar-order saves from older clients preserve omitted built-in sections beside their stored neighbours. The generated settings registry remains authoritative for writable keys; its JSON snapshot is loaded with `createRequire` because the server runs plain ESM across Node versions with differing import-attribute support.
 
 ## Decisions
+
+### Why settings preserve the transcription prompt as typed
+
+`settings-dictation.ts` keeps `sttPrompt` untrimmed because the client applies
+the save response to the field as the user types. Dictation trims it when
+starting a transcription.
 
 ### Why request values and sanitized settings have separate types
 

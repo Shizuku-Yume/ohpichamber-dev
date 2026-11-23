@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { waitArgsSchema } from '@/sync/extension-waits';
 
+import { openRouterSpendSelection } from '@/lib/quota/windowKeys';
 import type { JsonValue } from '@openchamber/agent-contract';
 
 /** Tool arguments as the model produced them. */
@@ -167,6 +169,11 @@ const windowSchema = z.object({
   resetAt: z.number().nullable().catch(null),
   resetAtFormatted: z.string().nullable().optional().catch(null),
   resetAfterFormatted: z.string().nullable().optional().catch(null),
+  valueLabel: z.string().nullable().optional().catch(undefined),
+  value: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('requests'), count: z.number().finite().nonnegative() }),
+    z.object({ kind: z.literal('spend'), spent: z.number().finite().nonnegative().nullable(), limit: z.number().finite().positive().nullable() }),
+  ]).optional().catch(undefined),
 }).passthrough();
 
 export const usageSchema = z.object({
@@ -189,11 +196,16 @@ type UsageWindowRow = z.infer<typeof windowSchema>;
  */
 export const tightestWindow = (provider: UsageProviderRow): { key: string; window: UsageWindowRow } | null => {
   let best: { key: string; window: UsageWindowRow } | null = null;
-  for (const [key, window] of Object.entries(provider.usage?.windows ?? {})) {
+  const windows = provider.usage?.windows ?? {};
+  for (const [key, window] of Object.entries(windows)) {
     if (window.usedPercent === null) continue;
     if (!best || window.usedPercent > (best.window.usedPercent ?? -1)) best = { key, window };
   }
-  return best;
+  if (best) return best;
+  const openRouter = openRouterSpendSelection(provider.providerId, windows);
+  if (!openRouter) return null;
+  const key = openRouter.capKeys[0] ?? openRouter.fallbackKey;
+  return { key, window: windows[key] };
 };
 
 const deletedSchema = z.object({ deleted: z.literal(true) });
@@ -226,7 +238,31 @@ export const prWatchedSchema = z.object({
   }),
 });
 
-const prUnwatchedSchema = z.object({ watching: z.literal(false), stopped: z.boolean() });
+const waitEntrySchema = z.object({
+  waitId: z.string().min(1),
+  source: z.string().min(1),
+  extension: z.string().nullable().optional().catch(undefined),
+  title: z.string().min(1),
+  label: z.string().nullable().optional().catch(undefined),
+  args: waitArgsSchema.optional().catch(undefined),
+  status: z.enum(['waiting', 'waking']).optional().catch(undefined),
+});
+export type WaitEntry = z.infer<typeof waitEntrySchema>;
+
+export const waitStartedSchema = z.union([prWatchedSchema, z.object({ waiting: waitEntrySchema })]);
+
+export const waitListedSchema = z.object({
+  waiting: z.array(waitEntrySchema),
+  sources: z.array(z.object({
+    source: z.string().min(1),
+    extension: z.string().nullable().optional().catch(undefined),
+    title: z.string().min(1),
+  })),
+});
+
+const waitStoppedSchema = z.object({ stopped: z.number() });
+
+const prUnwatchedSchema = z.object({ watching: z.union([z.literal(false), z.array(z.unknown())]), stopped: z.boolean() });
 
 export const workNamedSchema = z.object({
   title: text,
@@ -296,6 +332,52 @@ export const workflowResultSchema = z.union([
 export const workflowStoppedSchema = z.object({ runId: z.string(), state: z.string(), reused: z.number().optional().catch(undefined) });
 export const workflowSavedSchema = z.object({ name: z.string(), path: z.string() });
 
+const secretRunSchema = z.object({
+  answer: z.union([
+    z.object({
+      status: z.literal('ran'),
+      outcome: z.enum(['exited', 'timeout', 'killed', 'not-started']).catch('killed'),
+      exitCode: z.number().int().nullable().catch(null),
+    }),
+    z.object({ status: z.literal('declined') }),
+    z.object({ answered: z.literal(false) }),
+  ]),
+  stdout: z.string().optional().catch(undefined),
+  stderr: z.string().optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+  notSaved: z.array(z.string()).optional().catch(undefined),
+});
+
+type SecretRunVerbKey =
+  | 'chat.toolPart.openchamber.action.secretRun'
+  | 'chat.toolPart.openchamber.action.secretRunFailed'
+  | 'chat.toolPart.openchamber.action.secretRunTimedOut'
+  | 'chat.toolPart.openchamber.action.secretRunNotStarted'
+  | 'chat.toolPart.openchamber.action.secretRunStopped'
+  | 'chat.toolPart.openchamber.action.secretRunDeclined'
+  | 'chat.toolPart.openchamber.action.secretRunNotRun';
+
+export const secretRowView = (
+  envelope: Pick<OpenChamberEnvelope, 'ok' | 'action'> & { data?: unknown } | null,
+): { key: SecretRunVerbKey; code?: number; output?: string; file?: string; notSaved?: string[] } | null => {
+  if (envelope?.ok !== true) return null;
+
+  if (envelope.action !== 'secret.run') return null;
+  const parsed = secretRunSchema.safeParse(envelope.data);
+  if (!parsed.success) return null;
+  const { answer, stdout = '', stderr = '', error = '', notSaved = [] } = parsed.data;
+  const output = [stdout, stderr, error].map((part) => part.trimEnd()).filter(Boolean).join('\n');
+  if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRunNotRun', output };
+  if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRunDeclined', output };
+  const saveFailed = notSaved.length > 0 ? { notSaved } : {};
+  if (answer.outcome === 'timeout') return { key: 'chat.toolPart.openchamber.action.secretRunTimedOut', output, ...saveFailed };
+  if (answer.outcome === 'not-started') return { key: 'chat.toolPart.openchamber.action.secretRunNotStarted', output, ...saveFailed };
+  if (answer.outcome === 'killed' || answer.exitCode === null) return { key: 'chat.toolPart.openchamber.action.secretRunStopped', output, ...saveFailed };
+  if (answer.exitCode !== 0) return { key: 'chat.toolPart.openchamber.action.secretRunFailed', code: answer.exitCode, output, ...saveFailed };
+  return { key: 'chat.toolPart.openchamber.action.secretRun', output, ...saveFailed };
+};
+
+
 const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>([
   ['session.link', linkedSchema],
   ['session.create', dispatchedSchema],
@@ -323,6 +405,9 @@ const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>(
   ['session.messages', sessionMessagesSchema],
   ['pr.watch', prWatchedSchema],
   ['pr.unwatch', prUnwatchedSchema],
+  ['wait.start', waitStartedSchema],
+  ['wait.list', waitListedSchema],
+  ['wait.stop', waitStoppedSchema],
   ['work.name', workNamedSchema],
   ['file.open', fileOpenedSchema],
   ['schedule.run', scheduleRanSchema],
@@ -345,6 +430,7 @@ const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>(
   ['workflow.stop', workflowStoppedSchema],
   ['workflow.resume', workflowStoppedSchema],
   ['workflow.save', workflowSavedSchema],
+  ['secret.run', secretRunSchema],
 ]);
 
 /**
@@ -374,6 +460,9 @@ export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'session.track': 'chat.toolPart.openchamber.action.sessionTrack',
   'pr.watch': 'chat.toolPart.openchamber.action.prWatch',
   'pr.unwatch': 'chat.toolPart.openchamber.action.prUnwatch',
+  'wait.list': 'chat.toolPart.openchamber.action.waitList',
+  'wait.start': 'chat.toolPart.openchamber.action.waitStart',
+  'wait.stop': 'chat.toolPart.openchamber.action.waitStop',
   'work.name': 'chat.toolPart.openchamber.action.workName',
   'file.open': 'chat.toolPart.openchamber.action.fileOpen',
   'schedule.list': 'chat.toolPart.openchamber.action.scheduleList',

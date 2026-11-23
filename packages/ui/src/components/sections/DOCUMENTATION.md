@@ -4,6 +4,12 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+Session defaults keep native OMP model roles authoritative. The managed-chat
+model/effort row is a Host-persisted override for chats outside projects, uses the
+shared model effort picker, and remains disabled until preferences are loaded.
+OpenCode plugin banners, source-file provider editors and separate quota
+credential forms are excluded; Canonical provider credentials remain selected.
+
 Voice playback renders its voice-picker row only when the selected provider
 can render a picker: local voice options exist, OpenAI speech is available,
 system speech has voices, or Browser has voices with a language. The label and
@@ -242,7 +248,7 @@ files. The server keeps a certificate the form never read
 
 Model rows render collapsed (name, id, explicit or inherited API badge, kind badge, host cue from per-model `baseUrl`, limits, thinking summary, non-text inputs, and Duplicate / Remove actions) so a multi-protocol provider with dozens of models stays scannable. When six or more models are configured, a search input and per-API protocol filter chips appear above the list. A row added by hand or duplicated opens immediately, and a row with a validation error opens on submit. A capability is written only when it is known (a saved model, a catalog answer, or the user's edit); an unknown tool-support value is left out of the request so a save never replaces what the native runner knows with a text-only default.
 
-All custom providers and built-in provider overrides edit OMP 19.0.0 `models.yml` directly through `ProviderConfigureRequest.native`: provider-level `api` is optional (`Per-model (no provider default)` allows mixing protocols such as `openai-responses`, `anthropic-messages`, and `google-generative-ai` under one gateway), `auth` / `authHeader` / `apiKey` status (env/command/literal without leaking secrets) and non-destructive header patching preserve existing `models.yml` secrets, and built-in providers open in `Provider overrides` mode (with `modelOverrides`, endpoint/header/discovery/compat overrides, and `Reset overrides` confirmation) instead of copying their catalog. Per-model advanced settings include structured OpenAI/Bedrock `compat` flags (`supportsStore`, `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsUsageInStreaming`, `requiresThinkingAsText`, `maxTokensField`) synchronized with the raw JSON editor so unknown compat keys are preserved.
+All custom providers and built-in provider overrides edit OMP 19.1 `models.yml` directly through `ProviderConfigureRequest.native`: provider-level `api` is optional (`Per-model (no provider default)` allows mixing protocols such as `openai-responses`, `anthropic-messages`, and `google-generative-ai` under one gateway), `auth` / `authHeader` / `apiKey` status (env/command/literal without leaking secrets) and non-destructive header patching preserve existing `models.yml` secrets, and built-in providers open in `Provider overrides` mode (with `modelOverrides`, endpoint/header/discovery/compat overrides, and `Reset overrides` confirmation) instead of copying their catalog. Per-model advanced settings include structured OpenAI/Bedrock `compat` flags (`supportsStore`, `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsUsageInStreaming`, `requiresThinkingAsText`, `maxTokensField`) synchronized with the raw JSON editor so unknown compat keys are preserved.
 Custom-provider icons are OhPiChamber profile preferences, keyed by provider
 ID. They are not written into OpenCode config because OpenCode has no provider
 icon field. "Default" stores nothing, so the provider's own logo (or the
@@ -960,6 +966,7 @@ the browser, and a second meaning there confuses both.
 - Message-search status reads continue beyond an initially settled answer after a switch because the debounced save can start indexing later.
 - Voice keys stay on the server. Dictation cleanup starts off because it sends text to the small-model provider, and without that model the server retains the transcription. Voice pickers share install state and list installed models plus the default; dictation displays the server's choice when no saved model is available.
 - Usage panels show only their provider's error, so Console budgets survive a failed Go usage read. Balance-only windows omit percentage bars and used captions because they report no usage share.
+- Settings names the Go credential next to its meters and the Console workspace next to its budgets. The two reads can use different accounts when the Go reader falls back to a key.
 - About separates app, connected-server and OpenCode updates. A latest-version toast waits for every relevant check; failed checks keep prior status, and authoritative running versions replace temporary installed-but-not-running state.
 - About offers upgrade commands only for package-manager installations. Update notes cover the offered release range; a stable release offered to Canary has only that release's notes.
 

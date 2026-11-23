@@ -6,6 +6,7 @@ import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
+import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 
 export const cleanupPersistedSessionState = (identity: {
   runtimeKey: string;
@@ -21,6 +22,7 @@ export const cleanupPersistedSessionState = (identity: {
   }
   useSessionFoldersStore.getState().removeSessionEverywhere(identity.runtimeKey, identity.sessionId);
   useSessionMultiSelectStore.getState().removeMany([identity.sessionId]);
+  useSessionTabsStore.getState().removeTabs([identity.sessionId], identity.runtimeKey);
   useInlineCommentDraftStore.getState().clearSessionDrafts(identity.runtimeKey, identity.directory, identity.sessionId);
   useSessionPinnedStore.getState().clearPinnedSession(identity.runtimeKey, identity.directory, identity.sessionId);
   const inputHistoryIdentity = createInputHistoryIdentity(identity.runtimeKey, identity.directory, identity.sessionId);

@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-22 - Keep OMP 19.1 commands and MCP behind the Host boundary
+
+- **Decided:** retain OMP's native Bash command transport while authorizing both Bash and the dispatched tool, and keep MCP hosts local to the worker. Keep magic edit mode out of the Canonical settings and authorization surface.
+- **Instead of:** replacing the built-in Bash tool, using OMP's shared MCP daemon, or exposing every upstream edit mode.
+- **Because:** replacing Bash disables tool mounts; daemon sharing changes the owner of session-scoped connections and credentials; magic edits need an explicit authorization model before exposure.
+- **Mine:** yes (19.1 upgrade scope).
+- **Revisit when:** upstream supplies equivalent authorization hooks, or the Host boundary can enforce equivalent isolation for shared MCP and magic edits.
+
 ## 2026-11-22 - Keep mobile pairing confirmation above address sheets
 
 - **Decided:** expose the existing shared dialog layer and backdrop overrides through `useConfirmDialog`, and raise only mobile pairing confirmation to the app-level confirmation layer used by shared trust prompts.
@@ -2047,3 +2055,14 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** catalog-filled custom rows already mark reasoning support but save an empty options list, leaving the composer with only Off despite native selectable efforts.
 - **Mine:** yes (requested fix)
 - **Revisit when:** the canonical model configuration distinguishes an explicit empty override from absent reasoning metadata.
+
+## 2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners
+
+- **Decided:** adopt upstream v2.8.0 (`30c70496a5ca0105e04e60a783964576973edc8f`) through real two-parent merge `cb5c92b26`, followed by `origin/main` merge `8173b1275`. Main's OMP 19.1.0 Agent Service and vendored SDK patches win. Preserve fork branding and all retained Web/PWA, Electron, hosted/Capacitor mobile and Guest surfaces.
+- **Owners:** Canonical Client/sync and `/api/agent/v1` remain the agent authority. Host Gateway owns filesystem, Git/worktrees, PTY, browser, authentication/pairing/relay, notifications and Guest sandboxing. Keep private MessagePort v2/bootstrap and Canonical Guest session/context/token contracts. Translate compatible upstream UX and security fixes onto these owners, never OpenCode-shaped adapters.
+- **Translated contracts:** preserve concurrent context-pin edits with optional `expectedRevision` on Canonical metadata patches, checked atomically by the Host writer with `METADATA_CONFLICT` and bounded client re-read/recompute. Do not restore the OpenCode metadata compare-and-set endpoint. Managed chats retain Host-persisted model/effort overrides through the shared model-role editor, without a second named-agent authority.
+- **Deferred:** Leads needs an OMP orchestration design; its UI, server and SDK implementation are excluded. OpenCode service/plugin bridges, OpenCode named-agent workflow forks, OpenCode engine, VS Code extension and retired verification stand remain excluded.
+- **Settled:** `secret.request` disk persistence is still refused; command-scoped `secret.run` remains supported without a saved-secret authority. Electron keeps its restrictive remote IPC allowlist, Host browser ownership and separate Agent Service lifecycle. Do not import `changelog/2.8.0.md`: fork release notes remain maintainer-owned. Exclude upstream `scripts/perf` additions; retain existing fork OMP-aware perf tooling.
+- **Tracking:** pin the drift script and baseline metadata to v2.8.0. The delta ledger lists every remaining differing path and actual state, preserving earlier applicable decisions and naming this decision for merged adaptations and exclusions. Historical comparison and toolchain evidence in the baseline JSON is not current runtime certification.
+- **Mine:** yes (maintainer-directed merge and explicitly settled choices).
+- **Revisit when:** an OMP orchestration design is approved, the Guest protocol or Electron trust boundary changes intentionally, or the maintainer changes release-history/perf ownership.

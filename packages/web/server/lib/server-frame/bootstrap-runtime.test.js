@@ -43,7 +43,7 @@ describe('notification bootstrap composition', () => {
     expect(response.body.context).toEqual(context);
     await request(app).post('/api/sessions/session/view').expect(200);
     await request(app).post('/api/sessions/session/message-sent').expect(200);
-    expect(clear.mock.calls).toEqual([['session'], ['session']]);
+    expect(clear.mock.calls).toEqual([['session', { viewed: true }], ['session']]);
     expect(clearPendingPushBadge).toHaveBeenCalledTimes(2);
   });
 

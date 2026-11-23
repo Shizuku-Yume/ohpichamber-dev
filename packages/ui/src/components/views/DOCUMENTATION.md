@@ -97,6 +97,10 @@ stores own durable state and shared caches.
   or returning to navigation cannot re-enter a remembered page. Header Back and
   Android Back follow the same page-list-item ladder; the shell handles only a
   press at its root when it owns Back.
+- The phone Settings list keeps its offset per instance while a page replaces
+  it. Its search results are their own list, so clearing the search returns the
+  list where it was. A split page keeps its item list mounted under the open
+  item instead of unmounting it, so Back returns to the item list where it was.
 - Settings links and search open the owning page before revealing an item. The
   reveal retries for a bounded number of frames because detail pages load late.
 - Tracker lookup accepts only the linked item. When issue and change-request
@@ -242,6 +246,12 @@ wherever the pointer is, and while it is held at the editor's top or bottom
 edge, or past it, the editor scrolls and the range follows. The click that
 ends a drag lands on whatever the pointer ended over, so each view's
 click-outside handler skips it (`isDragReleaseClick`) and the range stays.
+
+A text selection in the `FilesView` editor gets a Comment action from
+`comments/useCodeSelectionComment.tsx`: `useFileComments` passes the Files
+view's visibility as the scope that closes the action when it changes.
+`useFileEditorExtensions` adds the stable extension to the editor, so a scope
+change does not reconfigure the editor.
 
 ### Why a comment's annotation keeps one DOM node
 
@@ -506,8 +516,8 @@ re-renders every row.
 
 The Files editor's row (`renderFileToolbar`, an `ActionToolbar`) has the actions
 the open file's type allows, the same in every mode. The row itself keeps save
-state, the mode toggle (and HTML annotation), find, comment on the file and
-full screen; go to line, symbols, line wrap, read aloud, the file's own actions
+state, the mode toggle (and HTML annotation), find and comment on the file;
+go to line, symbols, line wrap, read aloud, the file's own actions
 (open in app, copy contents, copy path, download) and auto-save live in "More
 actions". With every action on the row it ran to a dozen icons, most of them
 rarely used (maintainer, 2026-10-28). A tool the current mode cannot run opens
@@ -676,7 +686,7 @@ unsaved, so an empty editor never stays stuck open.
 Files view takes the same comment from its toolbar, as a `file` draft beside
 its line comments. Its editor and cards sit between the toolbar and the
 scroller, so they stay on screen at any scroll; the CodeMirror line widgets
-filter those drafts out, and the fullscreen overlay shows them while it is open.
+filter those drafts out.
 Changes hands its PR source to walkthrough; walkthrough's Changes action opens
 PR mode with the shared selection. Picking a PR never generates a walkthrough.
 
@@ -783,6 +793,13 @@ after it stops. The check runs on the live `exit` event and on a snapshot that
 reports `exited`, so a tab whose process ended while the panel was closed goes
 away when it is shown. VS Code has neither tabs nor the setting and keeps the
 exited terminal.
+
+A tab started from a command in a reply (a `terminal` tab in command mode) is
+the exception: it never closes on its own, whatever the setting, since its
+output is the point of running it. When its server session is gone (a server
+restart, a close from another client), the tab stays exited with its command mode and output instead of
+going back to idle, which would start an interactive shell in it; a reload
+restores it exited too (`stores/DOCUMENTATION.md`).
 
 In the desktop app Cmd/Ctrl+W closes the shown terminal tab the same way,
 without asking, so a command still running in it ends. The key goes through

@@ -25,11 +25,11 @@ export class TTSService {
     const apiKey = await selectedApiKey(this.resolveCredential, options);
     if (normalized.value && !normalized.official) {
       const OpenAI = await loadOpenAI();
-      return new OpenAI({ apiKey, baseURL: normalized.value, ...(endpoint ? { fetch: endpoint } : {}) });
+      return new OpenAI({ apiKey, baseURL: normalized.value, fetchOptions: { redirect: 'manual' }, ...(endpoint ? { fetch: endpoint } : {}) });
     }
     if (!this._client || this._lastApiKey !== apiKey) {
       const OpenAI = await loadOpenAI();
-      this._client = new OpenAI({ apiKey, ...(normalized.value ? { baseURL: normalized.value } : {}) });
+      this._client = new OpenAI({ apiKey, fetchOptions: { redirect: 'manual' }, ...(normalized.value ? { baseURL: normalized.value } : {}) });
       this._lastApiKey = apiKey;
     }
     return this._client;

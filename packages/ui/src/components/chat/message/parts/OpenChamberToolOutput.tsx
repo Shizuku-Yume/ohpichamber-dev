@@ -1,3 +1,4 @@
+import { secretRowView } from './openChamberToolEnvelope';
 import { formatModelRef } from '@openchamber/agent-contract';
 import * as React from 'react';
 import { z } from 'zod';
@@ -12,7 +13,7 @@ import { openWorkflowRunInPanel } from '@/lib/workflows/panel';
 import { useWorkflowRun } from '@/lib/workflows/store';
 import { workflowRunLook } from '../../workflows/workflowRunPresentation';
 import { useI18n } from '@/lib/i18n';
-import { formatQuotaResetLabel, formatWindowLabel } from '@/lib/quota';
+import { formatQuotaResetLabel, formatQuotaRowValue, formatWindowLabel } from '@/lib/quota';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useChatColumnActions } from '../../chatColumnSession';
@@ -34,7 +35,6 @@ import {
     scheduleRanSchema,
     fileOpenedSchema,
     workNamedSchema,
-    prWatchedSchema,
     sessionMessagesSchema,
     sessionStatusSchema,
     knowledgeListedSchema,
@@ -55,6 +55,7 @@ import {
     type OpenChamberCallInput,
     type OpenChamberEnvelope,
 } from './openChamberToolEnvelope';
+import { PrWatchedBody, WaitListedBody, WaitStartedBody } from './WaitToolOutput';
 import { GeneratedImages } from './GeneratedImages';
 import { RawToggleContext, usePanelsAvailable } from './toolResultContext';
 import { Actions, Field, List, ListRow, Section, SessionLinkRow, Warning, WebLinkRow, type OpenActionInput } from './ToolResultParts';
@@ -208,14 +209,14 @@ const UsageBody: React.FC<{ data: unknown }> = ({ data }) => {
                     }
                     const { key, window } = tightest;
                     const percent = displayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
-                    const reset = formatQuotaResetLabel(window.resetAt, window.resetAfterFormatted ?? window.resetAtFormatted, timeFormatPreference);
+                    const reset = formatQuotaResetLabel(window.resetAt, window.resetAfterFormatted ?? window.resetAtFormatted, timeFormatPreference, provider.providerId);
                     const caption = [formatWindowLabel(key), reset ? t('settings.usage.card.resetsAt', { time: reset }) : undefined].filter(Boolean).join(' · ');
                     return (
                         <React.Fragment key={provider.providerId}>
                             <span className="truncate text-foreground">{name}</span>
-                            <UsageProgressBar percent={percent} tonePercent={window.usedPercent} className="h-1.5" />
+                            {percent === null ? <span aria-hidden className="h-1.5" /> : <UsageProgressBar percent={percent} tonePercent={window.usedPercent} className="h-1.5" />}
                             <span className="text-end tabular-nums text-foreground">
-                                {percent === null ? '' : `${Math.round(percent)}%`}
+                                {formatQuotaRowValue(window, percent, t)}
                             </span>
                             <span className="truncate text-muted-foreground" title={caption}>{reset}</span>
                         </React.Fragment>
@@ -464,29 +465,6 @@ const SessionMessagesBody: React.FC<{ data: unknown }> = ({ data }) => {
                 </div>
             )}
             <Actions open={directory ? { label: t('chat.toolPart.openchamber.open.session'), icon: 'chat-3', onOpen: () => openSession(sessionId, directory) } : null} />
-        </>
-    );
-};
-
-const PR_STATUS_KEYS = {
-    waking: 'chat.toolPart.openchamber.pr.status.waking',
-    unknown: 'chat.toolPart.openchamber.pr.status.unknown',
-    pending: 'chat.toolPart.openchamber.pr.status.pending',
-    passed: 'chat.toolPart.openchamber.pr.status.passed',
-    failed: 'chat.toolPart.openchamber.pr.status.failed',
-    open: 'chat.toolPart.openchamber.pr.status.open',
-} as const;
-
-const PrWatchedBody: React.FC<{ data: unknown }> = ({ data }) => {
-    const { t } = useI18n();
-    const parsed = prWatchedSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { url, number, title, status } = parsed.data.watching;
-    const label = [number ? `#${number}` : undefined, title || undefined].filter(Boolean).join(' ');
-    return (
-        <>
-            <WebLinkRow url={url} icon="git-pull-request" primary={label || url} secondary={status ? t(PR_STATUS_KEYS[status]) : undefined} />
-            <Actions />
         </>
     );
 };
@@ -800,8 +778,20 @@ const OpenChamberView: React.FC<{
 }> = ({ envelope, part, input, directory, isMobile, onShowPopup }) => {
     const { t } = useI18n();
     const { data, action } = envelope;
+    const rawToggle = React.useContext(RawToggleContext);
     const call = readOpenChamberCallInput(input);
     switch (action) {
+        case 'secret.run': {
+            const row = secretRowView(envelope);
+            return row ? (
+                <div className="space-y-2">
+                    <div className="typography-meta">{t(row.key, { code: row.code ?? 0 })}</div>
+                    {row.output ? <pre className="whitespace-pre-wrap break-words typography-meta">{row.output}</pre> : null}
+                    {row.notSaved?.length ? <Warning text={t('chat.toolPart.openchamber.secretRun.notSaved', { names: row.notSaved.join(', ') })} /> : null}
+                    {rawToggle}
+                </div>
+            ) : null;
+        }
         case 'projects.list': return <ProjectsListedBody data={data} />;
         case 'session.list': return <SessionsListedBody data={data} />;
         case 'models.list': return <ModelPreferencesBody data={data} />;
@@ -815,6 +805,9 @@ const OpenChamberView: React.FC<{
         case 'session.status': return <SessionStatusBody data={data} />;
         case 'session.messages': return <SessionMessagesBody data={data} />;
         case 'pr.watch': return <PrWatchedBody data={data} />;
+        case 'wait.start': return <WaitStartedBody data={data} />;
+        case 'wait.list': return <WaitListedBody data={data} />;
+        case 'wait.stop':
         case 'pr.unwatch':
         case 'browser.close': return <Actions />;
         case 'work.name': return <WorkNamedBody data={data} />;
@@ -868,4 +861,3 @@ const OpenChamberView: React.FC<{
         default: return null;
     }
 };
-

@@ -45,6 +45,7 @@ type WorktreeChangedEvent = {
 
 type BrowserControlRequestEvent = {
  type: 'browser-control-request';
+ preferredConnectionId: string | null;
  requestId: string;
  action: string;
  parameters: Record<string, unknown>;
@@ -199,6 +200,8 @@ type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataSt
 type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
  /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
+ | { type: 'quota-credentials-changed' }
+ | { type: 'quota-providers-changed' }
  | { type: 'guests-changed' }
  | { type: 'guest-service-event'; guestId: string; topic: string; data: JsonValue }
  /** A terminal session was created, exited, restarted or removed. */
@@ -228,6 +231,7 @@ type OpenChamberEvent =
  | ScheduledTaskRanEvent
  | SessionCreatedEvent
  | WorktreeChangedEvent
+ | { type: 'browser-control-preferred'; connectionId: string }
  | BrowserControlRequestEvent
  | FileOpenRequestEvent
  | PlanOpenRequestEvent
@@ -649,6 +653,14 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   return;
  }
 
+ if (envelope.type === 'openchamber:quota-credentials-changed') {
+  for (const listener of listeners) listener({ type: 'quota-credentials-changed' });
+  return;
+ }
+ if (envelope.type === 'openchamber:quota-providers-changed') {
+  for (const listener of listeners) listener({ type: 'quota-providers-changed' });
+  return;
+ }
  if (envelope.type === 'openchamber:session-folders-changed') {
   const parsed = sessionFoldersChangedSchema.safeParse(envelope.properties);
   if (parsed.success) for (const listener of listeners) listener({ type: 'session-folders-changed', ...parsed.data });
@@ -692,6 +704,14 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   return;
  }
 
+ if (envelope.type === 'openchamber:browser-control-preferred') {
+  const parsed = z.string().min(1).safeParse(getEventProperties(envelope.properties)?.connectionId);
+  if (parsed.success) {
+   for (const listener of listeners) listener({ type: 'browser-control-preferred', connectionId: parsed.data });
+  }
+  return;
+ }
+
  if (envelope.type === 'openchamber:browser-control-request') {
   const properties = getEventProperties(envelope.properties);
   const requestId = typeof properties?.requestId === 'string' ? properties.requestId : '';
@@ -700,9 +720,12 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
    return;
   }
 
+  const preferred = z.string().min(1).nullable().optional().safeParse(properties?.preferredConnectionId);
+  if (!preferred.success) return;
   const rawParameters = properties?.parameters;
   const nextEvent: BrowserControlRequestEvent = {
    type: 'browser-control-request',
+   preferredConnectionId: preferred.data ?? null,
    requestId,
    action,
    parameters: rawParameters && typeof rawParameters === 'object' && !Array.isArray(rawParameters)

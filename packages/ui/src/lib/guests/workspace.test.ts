@@ -217,7 +217,7 @@ describe('extension workspace projection', () => {
       expect(activity).toEqual(['idle', 'unknown', 'idle']);
     } finally { stop(); }
   });
-  test('worktree loading and errors retain data, and token updates do not publish', async () => {
+  test('worktree loading and errors retain data, and unrelated part updates do not publish', async () => {
     const snapshots: number[] = [];
     const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board', () => snapshots.push(1));
     const child = manager.ensureChild('/b-tree', { bootstrap: false });

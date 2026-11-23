@@ -20,7 +20,7 @@ const editResultSchema = z.object({
         perFileResults: z.array(editFileSchema.nullable().catch(null)).optional(),
     }),
 });
-const writeResultSchema = z.object({ details: z.object({ resolvedPath: z.string().min(1) }) });
+const writeResultSchema = z.object({ details: z.object({ resolvedPath: z.string().min(1).optional(), diff: z.string().optional() }) });
 const pathValueSchema = z.string();
 
 const WORKSPACE_PATH_SENTINEL = '[workspace]/';
@@ -261,11 +261,15 @@ export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): T
     if (part.type !== 'tool_result' || part.isError) return [];
     const call = pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
     if (isWriteTool(part.toolName)) {
-        const resolved = writeResultSchema.safeParse(part.output).data?.details.resolvedPath;
+        const details = writeResultSchema.safeParse(part.output).data?.details;
+        const resolved = details?.resolvedPath;
         const inputPath = pathValueSchema.safeParse(call?.input.path).data;
         // Writes to tool devices/coordination URLs do not mutate project files.
         const path = resolved ?? (inputPath && !/^[a-z][a-z0-9+.-]*:\/\//i.test(inputPath) ? inputPath : undefined);
-        return path && workspaceRelativePath(path) !== null ? [{ path: normalizeWorkspaceToolPath(path) }] : [];
+        if (!path || workspaceRelativePath(path) === null) return [];
+        const diff = details?.diff?.split('\n').slice(0, 2000).join('\n');
+        const parsed = diff ? parseDiffHunks(path, diff) : undefined;
+        return [{ path: normalizeWorkspaceToolPath(path), ...parsed }];
     }
     if (isAstEditTool(part.toolName)) {
         return parseAstEditOutput(part.output);

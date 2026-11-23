@@ -1,3 +1,5 @@
+import { LIST_ROUTE } from '@/hooks/useMobileChangesNavigation';
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { commitRequestRepository, commitRequestShown, type MobileChangesCommitRequest } from './mobileChangesCommitRequest';
 import { isCompleteIdentity } from '@/lib/api/git-identity';
 import React from 'react';
@@ -60,7 +62,6 @@ import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionSt
 import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
-import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { fileDiffFromPatch, isBinaryPatch } from '@/lib/diff/patchFileDiff';
 import { parseDiffFromFile, type FileDiffMetadata } from '@pierre/diffs';
 import type { GitStatus, GitSubmoduleState } from '@/lib/api/types';
@@ -120,7 +121,6 @@ type ComparisonDiff =
  | { status: 'error'; message: string };
 const LOADING_COMPARISON_DIFF: ComparisonDiff = { status: 'loading' };
 const FULL_CONTEXT_DIFF_LINES = 1_000_000;
-const LIST_ROUTE: ChangesRoute = { type: 'list' };
 
 const REVERT_PATHS_CONCURRENCY = 2;
 

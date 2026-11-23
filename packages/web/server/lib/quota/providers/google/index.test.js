@@ -52,6 +52,23 @@ const stubGoogle = (exchange, { access = 'new-access', project = 'test-project' 
 };
 
 describe('Google quota OAuth client compatibility', () => {
+  it('does not read quota without a selected native credential', async () => {
+    configureLogin(null);
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const result = await fetchGoogleQuota();
+    expect(result.configured).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('reads quota for a direct Gemini CLI login', async () => {
+    configureLogin();
+    stubGoogle(() => Response.json({ access_token: 'new-access' }));
+    const result = await fetchGoogleQuota();
+    expect(result.configured).toBe(true);
+    expect(result.ok).toBe(true);
+  });
+
   it('keeps Gemini CLI as the first client even for pipe-packed refresh tokens', async () => {
     configureLogin();
     const clients = stubGoogle(() => Response.json({ access_token: 'new-access' }));

@@ -155,10 +155,11 @@ function waitForGoal(worker: WorkerSession, predicate: () => boolean, timeoutMs?
  return pending.promise;
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse, apiKey, headers }: {
+async function fixture({ respond, invoke, machineCommands = [], deniedCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse, apiKey, headers }: {
  respond: (payload: ProviderRequest, root: string, request: Request) => Promise<Response> | Response;
  invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
  machineCommands?: string[];
+ deniedCommands?: string[];
  onSubagent?: (payload: SubagentLifecyclePayload) => void;
  denyWebSearch?: boolean;
  denyLsp?: boolean;
@@ -234,6 +235,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   }
   if (request.type !== 'tool' || request.toolName !== 'bash') return;
   const command = z.string().parse(request.input.command);
+  if (deniedCommands.includes(command)) throw new Error('Host policy refused Bash');
   if (machineCommands.includes(command)) return;
   const grant = request.approvalId && request.toolCallId
    ? interactions.consumeApprovalGrant(rootSessionId, generation, request.approvalId, request.toolCallId, request.toolName, request.input) : undefined;
@@ -438,10 +440,10 @@ test('a live worker turns recap.enabled off after a turn and no recap follows', 
  } finally { await harness.close(); }
 }, 30000);
 
-test('a worker test uses the real SDK session with xd:// mounts; toggling notify keeps mounted tools enabled', async () => {
+test('a worker test uses the real SDK session with tool commands; toggling notify keeps mounted tools enabled', async () => {
  const harness = await fixture({ respond: () => completion() });
  try {
-  const initialMounted = harness.worker.session.getMountedXdevToolNames();
+  const initialMounted = harness.worker.session.getMountedToolCommandNames();
   expect(initialMounted.length).toBeGreaterThan(0);
   const initialEnabled = harness.worker.session.getEnabledToolNames();
   for (const tool of initialMounted) {
@@ -450,7 +452,7 @@ test('a worker test uses the real SDK session with xd:// mounts; toggling notify
 
   // Toggling notify on must keep every mounted tool enabled
   await harness.worker.toggleHostTool('notify', true);
-  const afterEnableMounted = harness.worker.session.getMountedXdevToolNames();
+  const afterEnableMounted = harness.worker.session.getMountedToolCommandNames();
   expect(afterEnableMounted).toEqual(initialMounted);
   const afterEnableAll = harness.worker.session.getEnabledToolNames();
   expect(afterEnableAll).toContain('notify');
@@ -460,7 +462,7 @@ test('a worker test uses the real SDK session with xd:// mounts; toggling notify
 
   // Toggling notify off must also keep every mounted tool enabled
   await harness.worker.toggleHostTool('notify', false);
-  const afterDisableMounted = harness.worker.session.getMountedXdevToolNames();
+  const afterDisableMounted = harness.worker.session.getMountedToolCommandNames();
   expect(afterDisableMounted).toEqual(initialMounted);
   const afterDisableAll = harness.worker.session.getEnabledToolNames();
   expect(afterDisableAll).not.toContain('notify');
@@ -900,6 +902,26 @@ test('Host policy refusal blocks native lsp tool before execution', async () => 
   const outcome = harness.events.map(input => input.event).find(event => event.type === 'tool.completed' && event.toolCallId === 'lsp-denied-call');
   expect(outcome).toMatchObject({ status: 'failed', isError: true });
   expect(harness.fatal()).toBe(false);
+ } finally { unsubscribe(); await harness.close(); }
+}, 30000);
+
+test('a Bash-mounted tool still reaches Host authorization with its own validated input', async () => {
+ const command = `lsp -j '{"action":"status"}'`;
+ const harness = await fixture({
+  denyLsp: true, machineCommands: [command], respond(payload) {
+   return payload.messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'bash', id: 'mounted-lsp', input: { command } });
+  }
+ });
+ const terminal = Promise.withResolvers<void>();
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
+ try {
+  expect(harness.worker.session.getMountedToolCommandNames()).toContain('lsp');
+  cfgBashPatterns.override(harness.worker.session.settings, [{ match: command, approval: 'allow' }]);
+  await harness.worker.operation({ type: 'prompt', runId: 'mounted-lsp-run', request: prompt('Try the LSP command.') });
+  await terminal.promise;
+  expect(harness.hostRequests).toContainEqual(expect.objectContaining({ type: 'tool', toolName: 'lsp', input: { action: 'status' } }));
+  const outcome = harness.events.map(input => input.event).find(event => event.type === 'tool.completed' && event.toolCallId === 'mounted-lsp');
+  expect(JSON.stringify(outcome)).toContain('Host policy refused the tool operation');
  } finally { unsubscribe(); await harness.close(); }
 }, 30000);
 
@@ -1877,6 +1899,42 @@ test('native child tool calls re-enter Host authorization', async () => {
  }
 }, 60000);
 
+test('native child Bash and its mounted commands both require Host authorization', async () => {
+ const shellCommand = 'printf child-bash-denied';
+ const mountedCommand = `lsp -j '{"action":"status"}'`;
+ let requests = 0;
+ const harness = await fixture({
+  deniedCommands: [shellCommand], machineCommands: [mountedCommand], denyLsp: true,
+  respond: () => {
+   requests += 1;
+   if (requests === 1) return completion({ name: 'task', id: 'child-bash-task', input: { agent: 'child', name: 'child-bash', task: 'Run both Bash commands.' } });
+   if (requests === 2) return completion({ name: 'bash', id: 'child-bash-shell', input: { command: shellCommand } });
+   if (requests === 3) return completion({ name: 'bash', id: 'child-bash-mounted', input: { command: mountedCommand } });
+   return completion();
+  },
+ });
+ const terminal = Promise.withResolvers<void>();
+ const unsubscribe = harness.worker.session.subscribe(event => {
+  if (event.type === 'agent_end') terminal.resolve();
+ });
+ try {
+  cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
+  cfgBashPatterns.override(harness.worker.session.settings, [shellCommand, mountedCommand].map(match => ({ match, approval: 'allow' })));
+  await harness.worker.operation({ type: 'prompt', runId: 'child-bash-run', request: prompt('Spawn one native child to run both Bash commands.') });
+  await terminal.promise;
+  expect(harness.hostRequests.filter(request => request.type === 'tool' && ['bash', 'lsp'].includes(request.toolName))).toEqual([
+   expect.objectContaining({ toolName: 'bash', input: { command: shellCommand }, toolCallId: 'child-bash-shell' }),
+   expect.objectContaining({ toolName: 'bash', input: { command: mountedCommand }, toolCallId: 'child-bash-mounted' }),
+   expect.objectContaining({ toolName: 'lsp', input: { action: 'status' } }),
+  ]);
+  expect(harness.requests[2]?.messages.at(-1)?.content).toContain('Host policy refused Bash');
+  expect(harness.requests[3]?.messages.at(-1)?.content).toContain('Host policy refused the tool operation');
+ } finally {
+  unsubscribe();
+  await harness.close();
+ }
+}, 60000);
+
 test('provider.use authorization is requested once per provider/model/endpoint tuple for the worker lifetime', async () => {
  const harness = await fixture({ respond: () => completion() });
  const turnDone = () => {
@@ -2046,11 +2104,11 @@ test('native vibe mode restores tools after reopening and returning to Main', as
   const before = harness.worker.session.getEnabledToolNames();
   const entered = await harness.worker.operation({ type: 'mode.set', mode: 'vibe' });
   expect(entered).toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
-  expect(harness.worker.session.getEnabledToolNames()).toEqual(['read', ...(harness.worker.session.hasBuiltInTool('todo') ? ['todo'] : []), 'vibe_spawn', 'vibe_send', 'vibe_wait', 'vibe_kill', 'vibe_list']);
+  expect(harness.worker.session.getEnabledToolNames()).toEqual(['read', ...(harness.worker.session.hasBuiltInTool('todo') ? ['todo'] : []), 'vibe_spawn', 'vibe_send', 'vibe_wait', 'vibe_kill', 'vibe_list', 'report_issue']);
   expect(harness.journal.snapshot().session.mode).toEqual({ kind: 'vibe' });
   await harness.reopen();
   expect(harness.worker.mode()).toEqual({ kind: 'vibe' });
-  expect(harness.worker.session.getEnabledToolNames()).toEqual(['read', ...(harness.worker.session.hasBuiltInTool('todo') ? ['todo'] : []), 'vibe_spawn', 'vibe_send', 'vibe_wait', 'vibe_kill', 'vibe_list']);
+  expect(harness.worker.session.getEnabledToolNames()).toEqual(['read', ...(harness.worker.session.hasBuiltInTool('todo') ? ['todo'] : []), 'vibe_spawn', 'vibe_send', 'vibe_wait', 'vibe_kill', 'vibe_list', 'report_issue']);
   expect(await harness.worker.operation({ type: 'mode.set', mode: 'main' })).toEqual({ type: 'mode.set', mode: { kind: 'main' } });
   expect(harness.worker.session.getEnabledToolNames()).toEqual(before);
   await harness.reopen();
@@ -2275,10 +2333,10 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
   const releasePlanning = Promise.withResolvers<void>();
   const planText = '# Native plan\nImplement the requested review.';
   const harness = await fixture({
-   planModel: true, respond: async payload => {
+   planModel: true, machineCommands: ['propose review'], respond: async payload => {
     stage++;
     if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
-    if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+    if (stage === 2) return completion({ name: 'bash', id: 'propose-plan', input: { command: 'propose review' } });
     const content = JSON.stringify(payload.messages);
     if (content.includes('Plan approved.') || content.includes('Revise the verification step.')) {
      executionStarted = true;
@@ -2298,12 +2356,13 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
    }
   });
   try {
+   cfgBashPatterns.override(harness.worker.session.settings, [{ match: 'propose review', approval: 'allow' }]);
    // Keep this fixture's short transcript compactable so approve-compact
    // exercises the real compaction path; a second test covers the no-op.
    if (action === 'approve-compact') cfgCompactionKeepRecentTokens.override(harness.worker.session.settings, 1);
    await harness.worker.session.setActiveToolPresentation(
     harness.worker.session.getEnabledToolNames().filter(name => name !== 'read'),
-    harness.worker.session.getMountedXdevToolNames().filter(name => name !== 'read'),
+    harness.worker.session.getMountedToolCommandNames().filter(name => name !== 'read'),
    );
    const before = harness.worker.session.getEnabledToolNames();
    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
@@ -2332,7 +2391,7 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
      expect(JSON.stringify(harness.requests.at(-1)?.messages)).toContain('Revise the verification step.');
     } else {
      expect(harness.worker.mode()).toEqual({ kind: 'main' });
-     expect(harness.worker.session.getEnabledToolNames()).toEqual(before.includes('read') ? before : [...before, 'read']);
+     expect(new Set(harness.worker.session.getEnabledToolNames())).toEqual(new Set([...before, 'read']));
      const executionMessages = harness.worker.seed().messages.filter(message => message.role === 'user');
      expect(JSON.stringify(executionMessages.at(-1))).toContain('Plan approved.');
      expect(JSON.stringify(executionMessages.at(-1))).toContain(planText.replaceAll('\n', '\\n'));
@@ -2352,12 +2411,13 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
 test('Stop cancels plan-review compaction without starting approved execution', async () => {
  let stage = 0;
  const planText = '# Stop plan\nDo not execute after Stop.';
- const harness = await fixture({ planModel: true, respond: () => {
+ const harness = await fixture({ planModel: true, machineCommands: ['propose review'], respond: () => {
   stage++;
   if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
-  if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+  if (stage === 2) return completion({ name: 'bash', id: 'propose-plan', input: { command: 'propose review' } });
   return completion();
  } });
+ cfgBashPatterns.override(harness.worker.session.settings, [{ match: 'propose review', approval: 'allow' }]);
  const compacting = Promise.withResolvers<void>();
  const release = Promise.withResolvers<never>();
  let compactionActive = false;
@@ -2401,15 +2461,16 @@ test('approve-compact continues the approved plan when there is nothing to compa
  const execution = Promise.withResolvers<void>();
  let stage = 0;
  const harness = await fixture({
-  planModel: true, respond: payload => {
+  planModel: true, machineCommands: ['propose small'], respond: payload => {
    stage++;
    if (stage === 1) return completion({ name: 'write', id: 'write-small-plan', input: { path: 'local://PLAN.md', content: planText } });
-   if (stage === 2) return completion({ name: 'write', id: 'propose-small-plan', input: { path: 'xd://propose', content: 'small' } });
+   if (stage === 2) return completion({ name: 'bash', id: 'propose-small-plan', input: { command: 'propose small' } });
    if (JSON.stringify(payload.messages).includes('Plan approved.')) execution.resolve();
    return completion();
   }
  });
  try {
+  cfgBashPatterns.override(harness.worker.session.settings, [{ match: 'propose small', approval: 'allow' }]);
   await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
   await harness.worker.operation({ type: 'prompt', runId: 'small-plan-run', request: prompt('Prepare a small plan.') });
   const question = await harness.waitQuestion();
@@ -2642,14 +2703,15 @@ test('execution model validation error resolves failed plan review without worke
  let stage = 0;
  const planText = '# Test plan\nVerify execution model.';
  const harness = await fixture({
-  planModel: true, respond: async () => {
+  planModel: true, machineCommands: ['propose review'], respond: async () => {
    stage++;
    if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
-   if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+   if (stage === 2) return completion({ name: 'bash', id: 'propose-plan', input: { command: 'propose review' } });
    return completion();
   }
  });
  try {
+  cfgBashPatterns.override(harness.worker.session.settings, [{ match: 'propose review', approval: 'allow' }]);
   await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
   await harness.worker.operation({ type: 'prompt', runId: 'plan-run', request: prompt('Prepare plan') });
   const question = await harness.waitQuestion();
@@ -2675,15 +2737,16 @@ test('valid execution model with thinking level applies to session execution', a
  const planText = '# Test plan\nVerify valid execution model.';
  const execution = Promise.withResolvers<void>();
  const harness = await fixture({
-  planModel: true, respond: async () => {
+  planModel: true, machineCommands: ['propose review'], respond: async () => {
    stage++;
    if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
-   if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+   if (stage === 2) return completion({ name: 'bash', id: 'propose-plan', input: { command: 'propose review' } });
    if (stage >= 4) execution.resolve();
    return completion();
   }
  });
  try {
+  cfgBashPatterns.override(harness.worker.session.settings, [{ match: 'propose review', approval: 'allow' }]);
   await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
   await harness.worker.operation({ type: 'prompt', runId: 'plan-run', request: prompt('Prepare plan') });
   const question = await harness.waitQuestion();
@@ -2700,6 +2763,39 @@ test('valid execution model with thinking level applies to session execution', a
   await execution.promise;
   expect(harness.fatal()).toBe(false);
   expect(harness.worker.session.model?.id).toBe('native-model');
+ } finally {
+  await harness.close();
+ }
+}, 30000);
+
+test('/tan authorizes Bash and Bash-mounted tools through the Host', async () => {
+ const shellCommand = 'printf tan-bash-denied';
+ const mountedCommand = `lsp -j '{"action":"status"}'`;
+ const completed = Promise.withResolvers<void>();
+ let requests = 0;
+ const harness = await fixture({
+  deniedCommands: [shellCommand], machineCommands: [mountedCommand], denyLsp: true,
+  respond: () => {
+   requests += 1;
+   if (requests === 1) return completion({ name: 'bash', id: 'tan-bash-shell', input: { command: shellCommand } });
+   if (requests === 2) return completion({ name: 'bash', id: 'tan-bash-mounted', input: { command: mountedCommand } });
+   completed.resolve();
+   return completion();
+  },
+ });
+ try {
+  cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
+  cfgBashPatterns.override(harness.worker.session.settings, [shellCommand, mountedCommand].map(match => ({ match, approval: 'allow' })));
+  expect(harness.worker.session.getMountedToolCommandNames()).toContain('lsp');
+  await harness.worker.operation({ type: 'command', text: '/tan Run both Bash commands.' });
+  await completed.promise;
+  expect(harness.hostRequests.filter(request => request.type === 'tool' && ['bash', 'lsp'].includes(request.toolName))).toEqual([
+   expect.objectContaining({ toolName: 'bash', input: { command: shellCommand }, toolCallId: 'tan-bash-shell' }),
+   expect.objectContaining({ toolName: 'bash', input: { command: mountedCommand }, toolCallId: 'tan-bash-mounted' }),
+   expect.objectContaining({ toolName: 'lsp', input: { action: 'status' } }),
+  ]);
+  expect(harness.requests[1]?.messages.at(-1)?.content).toContain('Host policy refused Bash');
+  expect(harness.requests[2]?.messages.at(-1)?.content).toContain('Host policy refused the tool operation');
  } finally {
   await harness.close();
  }

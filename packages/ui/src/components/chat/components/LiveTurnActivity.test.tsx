@@ -14,6 +14,7 @@ import type { RuntimeAPIs } from '@/lib/api/types';
 import { SyncProvider } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
 import { DedicatedMobileAppProvider, type MobileAppActions } from '@/apps/mobileAppContext';
+import { ChatColumnSessionContext } from '../chatColumnSession';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { projectTurnRecords } from '../lib/turns/projectTurnRecords';
 import type { ChatMessageEntry, TurnChangedFile, TurnRecord } from '../lib/turns/types';
@@ -88,25 +89,26 @@ function turn(messages: ChatMessageEntry[]): TurnRecord {
 }
 
 // The rows a turn under a fold becomes in the list, drawn the way MessageList draws them.
-function TurnRows({ record, retired, expanded, onToggle, renderMessage }: {
+function TurnRows({ record, retired, expanded, keepText = false, onToggle, renderMessage }: {
     record: TurnRecord;
     retired: boolean;
     expanded: boolean;
+    keepText?: boolean;
     onToggle: () => void;
     renderMessage: (message: ChatMessageEntry) => React.ReactNode;
 }) {
     const rows = buildTimelineRows([{ kind: 'turn', key: 'turn', turn: record, isLastTurn: true, hasLaterAssistant: retired }], {
-        collapsedActivity: true, expandedTurns: new Map([[record.turnId, expanded]]), showReasoningTraces: true,
+        collapsedActivity: true, keepActivityText: keepText, expandedTurns: new Map([[record.turnId, expanded]]), showReasoningTraces: true,
     }, []);
     const finalMessageId = rows.find((row) => row.kind === 'turn-fold')?.finalMessageId;
-    const { hoistedPages, finalContext } = useTurnFoldContexts(record, retired, expanded, finalMessageId);
+    const { hoistedPages, finalContext } = useTurnFoldContexts(record, retired, expanded, finalMessageId, keepText);
     return <LiveTurnHoistedPagesContext.Provider value={hoistedPages}>
         {rows.map((row) => {
             if (row.kind === 'turn-fold') {
                 return <TurnFold key={row.key} turn={record} hasLaterAssistant={retired} expanded={expanded}
-                    finalMessageId={row.finalMessageId} onToggle={onToggle} renderMessage={renderMessage} />;
+                    finalMessageId={row.finalMessageId} keepText={keepText} onToggle={onToggle} renderMessage={renderMessage} />;
             }
-            if (row.kind === 'turn-pages') return <TurnPagesRow key={row.key} turn={record} />;
+            if (row.kind === 'turn-pages') return <TurnPagesRow key={row.key} turn={record} keepText={keepText} />;
             if (row.kind !== 'turn-message') return null;
             const message = record.assistantMessages.find((candidate) => candidate.messageId === row.messageId);
             if (!message) return null;
@@ -117,9 +119,11 @@ function TurnRows({ record, retired, expanded, onToggle, renderMessage }: {
     </LiveTurnHoistedPagesContext.Provider>;
 }
 
-function Harness({ record, retired = false, changedFiles, isLatestTurn = true, mobileActions = null }: {
+function Harness({ record, noticeOpened = false, keepText = false, retired = false, changedFiles, isLatestTurn = true, mobileActions = null }: {
     record: TurnRecord;
+    noticeOpened?: boolean;
     retired?: boolean;
+    keepText?: boolean;
     changedFiles?: TurnChangedFile[];
     isLatestTurn?: boolean;
     mobileActions?: MobileAppActions | null;
@@ -133,7 +137,7 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true, m
                 onToggleTool={() => undefined} onShowPopup={() => undefined} streamPhase="completed" allowAnimation={false}
                 hasTextContent={message.parts.some((part) => part.type === 'text')} showReasoningTraces
                 turnGroupingContext={{
-                    turnId: 'user', isFirstAssistantInTurn: message === record.assistantMessages[0],
+                    turnId: 'user', snapshotTurnId: noticeOpened ? undefined : 'user', isFirstAssistantInTurn: message === record.assistantMessages[0],
                     isLastAssistantInTurn: message === record.assistantMessages.at(-1),
                     isLatestTurn, changedFiles, isWorking: false, hasTools: record.hasTools, hasReasoning: record.hasReasoning,
                 }}
@@ -143,7 +147,7 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true, m
     const content = <RuntimeAPIContext.Provider value={runtimeApis}>
         <SyncProvider client={client} directory="/project">
             <I18nProvider>
-                <TurnRows record={record} retired={retired} expanded={expanded}
+                <TurnRows record={record} retired={retired} expanded={expanded} keepText={keepText}
                     onToggle={() => setExpanded((value) => !value)} renderMessage={renderMessage} />
             </I18nProvider>
         </SyncProvider>
@@ -346,7 +350,20 @@ describe('live Activity with the real message body', () => {
         expect(useUIStore.getState().pendingDiffFile).toBe('existing.ts');
     });
 
-    test('keeps historical files informational and withholds the list before stop', async () => {
+    test('historical files open the column file viewer without inventing a snapshot diff', async () => {
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
+        const pending = useUIStore.getState().pendingTurnDiffFile;
+        await act(async () => root.render(<ChatColumnSessionContext.Provider value={{ sessionId: 'pinned-session', directory: '/column' }}>
+            <Harness record={record} changedFiles={[{ file: 'src/older.ts', additions: 1, deletions: 1 }]} isLatestTurn={false} retired />
+        </ChatColumnSessionContext.Provider>));
+        const button = container.querySelector<HTMLButtonElement>('button[aria-label="Open src/older.ts"]');
+        expect(button).not.toBeNull();
+        await act(async () => button?.click());
+        expect(useUIStore.getState().pendingFileFocusPath).toBe('/column/src/older.ts');
+        expect(useUIStore.getState().pendingTurnDiffFile).toEqual(pending);
+    });
+
+    test('historical files stay hidden until completion and expand into the file viewer', async () => {
         const files = Array.from({ length: 5 }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
         const final = assistant('final', [text('answer', 'Done')]);
         await act(async () => root.render(<Harness record={turn([final])} changedFiles={files} isLatestTurn={false} />));
@@ -354,8 +371,11 @@ describe('live Activity with the real message body', () => {
         await act(async () => root.render(<Harness record={turn([final])} changedFiles={files} isLatestTurn={false} retired />));
         expect(container.textContent).toContain('file-0.ts');
         await act(async () => changedFilesToggle()?.click());
-        expect(container.textContent).toContain('file-4.ts');
-        expect(container.querySelectorAll('button[aria-label^="Open src/file-"]')).toHaveLength(0);
+        expect(container.querySelectorAll('button[aria-label^="Open src/file-"]')).toHaveLength(5);
+        const pending = useUIStore.getState().pendingTurnDiffFile;
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Open src/file-4.ts"]')?.click());
+        expect(useUIStore.getState().pendingFileFocusPath).toBe('/project/src/file-4.ts');
+        expect(useUIStore.getState().pendingTurnDiffFile).toEqual(pending);
     });
 
     test('renders one operation card for matched, running and failed tool parts', async () => {

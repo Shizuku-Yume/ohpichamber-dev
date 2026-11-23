@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { NotificationPayload } from './contracts.js';
 import type { Application, ExpressFactory, Request, RequestHandler } from '../shared/http-contracts.js';
 
-const NOTIFICATION_EMIT_PATH = '/api/notifications/emit';
+export const NOTIFICATION_EMIT_PATH = '/api/notifications/emit';
 const RATE_WINDOW_MS = 10_000;
 const RATE_MAX_PER_WINDOW = 10;
 
@@ -49,5 +49,8 @@ export const registerNotificationEmitRoutes = (app, dependencies) => {
     try { const result = await emitter.emit(req.body); if (result.retryAfter) res.setHeader('Retry-After', String(result.retryAfter)); return res.status(result.status).json(result.body); }
     catch (error) { return next(error); }
   };
-  return { registerApiRoute: () => { app.post(NOTIFICATION_EMIT_PATH, jsonBody, respond); } };
+  return { registerApiRoute: (apiAuth) => {
+    if (!apiAuth) throw new TypeError('registerApiRoute needs the API auth middleware');
+    app.post(NOTIFICATION_EMIT_PATH, jsonBody, apiAuth, respond);
+  } };
 };

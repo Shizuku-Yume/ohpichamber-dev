@@ -5,6 +5,15 @@ import {
   SessionMetadataStateSchema,
 } from './metadata.ts';
 
+test('metadata patches accept an optional decimal revision and reject malformed preconditions', () => {
+  const patch = { expectedRevision: '0', changes: { notes: 'first' } };
+  expect(SessionMetadataPatchSchema.parse(patch)).toEqual(patch);
+  expect(SessionMetadataPatchSchema.parse({ changes: {} })).toEqual({ changes: {} });
+  for (const expectedRevision of [0, -1, null, '01', '-1', '18446744073709551616']) {
+    expect(SessionMetadataPatchSchema.safeParse({ expectedRevision, changes: {} }).success).toBe(false);
+  }
+});
+
 const goal = {
   id: 'goal_1', objective: 'Ship it', objectiveFile: true, status: 'active', tokenBudget: 100,
   tokensUsed: 1, tokensBaseline: 2, tokensCommitted: 3, turnsUsed: 4, blockedStreak: 5,

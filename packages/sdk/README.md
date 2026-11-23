@@ -4,7 +4,7 @@ Build extensions for [OhPiChamber](https://github.com/Shizuku-Yume/ohpichamber).
 
 Full guide: [Build an extension](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Reference: [Host API](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) and [UI kit](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Extensions with a local process: [GUEST_SERVICES.md](./GUEST_SERVICES.md).
 
-Extensions load on Web and Electron. OhPiChamber has removed the VS Code extension form and plans mobile sandboxed iframes in M5, without local service processes. External editor launch and VS Code theme import remain separate retained capabilities. See [migration scope](../../.workflow/omp-migration/scope.md).
+Extensions load on Web, Electron, hosted mobile and Capacitor mobile (mobile frames require their manifest opt-in). Mobile connects to the Host Gateway and spawns no services. The VS Code extension form remains removed; external editor launch and VS Code theme import remain separate retained capabilities. See [migration scope](../../.workflow/omp-migration/scope.md).
 
 Device-scoped extension storage is local browser preference data. It stays partitioned by the host's runtime identity and the extension installation. URL aliases are not guaranteed to share preferences; saved host and relay connections follow the host's existing runtime identity rules.
 
@@ -220,6 +220,7 @@ await host.startSession({
 await host.prompt({ text: 'Fix the login', send: true });
 await host.setBadge(3); // number on the rail icon; null clears it
 await host.openCommit(sha); // show a commit of the open project in the Diff view
+await host.openWalkthrough({ base: 'main' }); // Changes Walkthrough on This branch against main; the user clicks Generate
 await host.setHeight(document.body.scrollHeight); // Work Status section: frame height, clamped by the host
 const { text } = await host.generate({ prompt: task.description, system: 'One-line summary only.' }); // capability model
 

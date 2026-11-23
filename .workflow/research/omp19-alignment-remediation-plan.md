@@ -1,9 +1,13 @@
 # OMP 19.0.0 Alignment Remediation Plan
 
-**Date:** 2026-11-23  
-**Base commit:** `19613812d5` (followed by Fix A & Fix B commits on this branch)  
-**Pinned OMP:** `19.0.0` (`vendor/omp/57771ae5`, installed under `packages/agent-service/node_modules/@oh-my-pi/*`)  
-**Reference checkout:** `/home/shizuku/Project/oh-my-pi`
+- **Date:** 2026-11-23
+- **Research base:** `19613812d5`
+- **Research pin:** OMP `19.0.0` (`vendor/omp/57771ae5`)
+
+This research snapshot predates OMP 19.1.0 and OpenChamber v2.8.0. Verify each
+workstream against the current `main`, the pinned SDK, and their existing
+Canonical routes before implementing it. The metrics below describe the
+research base, not current settings coverage.
 
 ## 1. Metadata & Executive Overview
 

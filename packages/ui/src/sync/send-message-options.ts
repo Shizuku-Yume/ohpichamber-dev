@@ -20,6 +20,7 @@ export type SendProgress = {
 export type SendMessageOptions = {
   userInitiated?: boolean
   target?: CapturedSendTarget
+  isCurrentRuntime?: () => boolean
   sessionId?: string
   directory?: string
   historySubmissions?: InputHistorySubmission[]
