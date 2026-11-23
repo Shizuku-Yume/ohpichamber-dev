@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import type { CompletionRequest, CompletionResult, Model } from '@openchamber/agent-contract';
+import type { CompletionRequest, CompletionResult, JsonObject, Model } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { invalidateSettingsCache } from './persistence';
 import { getRuntimeKey, switchRuntimeEndpoint } from './runtime-switch';
@@ -16,7 +16,7 @@ const reasoningModel = (provider: string, modelId: string, efforts: string[]): M
   reasoningOptions: efforts.map((effort) => ({ reasoningEffort: effort, label: effort, budgetTokens: null })),
 });
 let models: Model[];
-let ompSettingsRoles: Record<string, string>;
+let ompSettingsRoles: JsonObject;
 let restorers: Array<() => void>;
 
 beforeEach(() => {
@@ -64,6 +64,12 @@ describe('canonical utility generation', () => {
     ompSettingsRoles = { commit: ' ,chosen/large,other/haiku', default: 'other/haiku' };
     expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection)
       .toEqual({ providerId: 'chosen', modelId: 'large' });
+  });
+
+  test('Git generation uses the default if OMP does not recognize the saved commit role value', async () => {
+    ompSettingsRoles = { commit: { selector: 'chosen/large', fallback: ['other/haiku'] }, default: 'other/haiku' };
+    expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection)
+      .toEqual({ providerId: 'other', modelId: 'haiku' });
   });
 
   test('a role selector variant travels with the completion request', async () => {

@@ -242,6 +242,13 @@ describe('role chains', () => {
     expect(resolveRoleSelector('commit', roles)).toBe('chosen/haiku:high');
     expect(isRoleConfigured('commit', { commit: [' ', ', '] })).toBe(false);
   });
+
+  test('a preserved object or mixed array uses the default like OMP settings', () => {
+    const roles = { commit: { selector: 'chosen/haiku' }, smol: ['chosen/haiku', null], default: 'other/model' };
+    expect(isRoleConfigured('commit', roles)).toBe(false);
+    expect(resolveRoleSelector('commit', roles)).toBe('other/model');
+    expect(resolveRoleSelector('smol', roles)).toBe('other/model');
+  });
 });
 
 describe('reasoning effort', () => {
