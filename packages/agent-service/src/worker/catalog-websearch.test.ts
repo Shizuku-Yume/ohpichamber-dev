@@ -351,6 +351,25 @@ test('changing the primary cannot silently remove a project-owned alias fallback
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('switching away from a promoted provider reveals its unchanged project fallback', async () => {
+  const { directory, bootstrap } = await fixture();
+  const projectConfig = 'retry:\n  fallbackChains:\n    web: [web/parallel, web/exa]\n';
+  const projectPath = join(bootstrap.cwd, '.omp', 'config.yml');
+  await mkdir(join(bootstrap.cwd, '.omp'));
+  await writeFile(projectPath, projectConfig);
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    expect(await search.operation({
+      type: 'update', request: { expectedRevision: '0', selectedProviderId: 'web/parallel', fallbackProviderIds: ['web/exa'] },
+    })).toMatchObject({ result: { status: 'applied', state: { revision: '1', selectedProviderId: 'web/parallel', fallbackProviderIds: ['web/exa'] } } });
+    expect(await search.operation({
+      type: 'update', request: { expectedRevision: '1', selectedProviderId: 'web/tavily', fallbackProviderIds: ['web/exa'] },
+    })).toMatchObject({ result: { status: 'applied', state: { revision: '2', selectedProviderId: 'web/tavily', fallbackProviderIds: ['web/parallel', 'web/exa'] } } });
+    expect(await readFile(projectPath, 'utf8')).toBe(projectConfig);
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('separate workspace native owners sharing the same directory cannot bypass CAS', async () => {
   const { directory, bootstrap } = await fixture();
   const runtime = await openNativeRuntime(bootstrap);

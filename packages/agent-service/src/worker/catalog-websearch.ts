@@ -234,7 +234,9 @@ export class NativeWebSearch {
             primary === null ? null : resolveNext(primary) ?? primary,
             resolveNext,
           );
-          if (!isDeepStrictEqual(projected, fallbacks)) {
+          // The previous primary was hidden from the old projection and can
+          // reappear without changing any of the visible fallback choices.
+          if (!isDeepStrictEqual(projected.filter(id => id !== before.selectedProviderId), fallbacks)) {
             throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Changing the primary would change a read-only native fallback chain');
           }
         }
