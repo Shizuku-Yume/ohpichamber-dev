@@ -17,9 +17,17 @@ test('public provider flow and account result envelopes reject token and private
     expect(CatalogResultSchema.safeParse({ ...flow, result: { ...flow.result, [field]: 'private-marker' } }).success).toBe(false);
   }
   const account = { credentialRef: 'opaque', method: 'oauth', active: true, disabled: false };
-  const accounts = { type: 'catalog.provider.accounts', result: { providerId: 'stored-provider', revision: '0', accounts: [account], selectionMode: 'pinned', selectionOverriddenBy: null } };
+  const accounts = { type: 'catalog.provider.accounts', result: { providerId: 'stored-provider', revision: '0', accounts: [account] } };
   expect(CatalogResultSchema.safeParse(accounts).success).toBe(true);
   expect(CatalogResultSchema.safeParse({ ...accounts, result: { ...accounts.result, accounts: [{ ...account, storageId: 'private-row' }] } }).success).toBe(false);
+});
+
+test('selection reads and results have a separate strict envelope', () => {
+  expect(CatalogOperationSchema.parse({ type: 'catalog.provider.account-selection.read', providerId: 'stored-provider' }).type)
+    .toBe('catalog.provider.account-selection.read');
+  expect(CatalogResultSchema.parse({ type: 'catalog.provider.account-selection', result: {
+    revision: '0', providerId: 'stored-provider', selectionMode: 'automatic', pinnedCredentialRef: null, selectionOverriddenBy: null,
+  } }).type).toBe('catalog.provider.account-selection');
 });
 
 test('provider discovery rejects malformed endpoint credentials and header injection', () => {

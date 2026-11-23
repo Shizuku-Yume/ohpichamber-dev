@@ -6,11 +6,14 @@ Account selection persists in `openchamber.defaultCredentials`: an explicit null
 means automatic native selection; only an absent key falls back to the legacy
 provider credential ref. Account creation and OAuth commit preserve existing
 selection. Automatic and pinned mutations share the catalog commit and rollback
-path. Removing a pinned account leaves the pin unavailable until the user selects
-another account or automatic mode.
+path. Removing the effective explicit pin writes an automatic null before deleting
+the credential. Metadata write failure leaves the credential untouched; credential
+delete failure restores the prior metadata, including an absent default-map key.
 
-Rosters mark only explicit pins active and report a non-stored winning auth
-source through `selectionOverriddenBy`, using the provider auth projection.
+Legacy rosters retain their strict shape and projected stored-credential `active`
+fallback. Only the opt-in account-selection read reports explicit pin state and
+the non-stored winning auth source through `selectionOverriddenBy`, using the
+provider auth projection. All existing mutation responses remain legacy rosters.
 Automatic resolution delegates to native ModelRegistry and its limits/backoff.
 Provider auth credential refs remain available to private quota/TTS/routing
 consumers independently of account selection. Host provider-use authorization

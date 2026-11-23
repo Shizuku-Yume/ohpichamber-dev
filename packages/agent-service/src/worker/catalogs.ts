@@ -94,6 +94,8 @@ export class WorkerCatalogs {
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Cache warming persistence requires the workspace writer');
       case 'catalog.provider.accounts.read':
         return { type: 'catalog.provider.accounts', result: await this.credentials.accounts(operation.providerId, revision) };
+      case 'catalog.provider.account-selection.read':
+        return { type: 'catalog.provider.account-selection', result: await this.credentials.selection(operation.providerId, revision) };
       case 'catalog.provider.account.mutate':
         if (operation.request.action === 'remove') this.oauth.cancelProvider(operation.providerId);
         return { type: 'catalog.provider.accounts', result: await this.credentials.account(operation.providerId, operation.request, revision) };

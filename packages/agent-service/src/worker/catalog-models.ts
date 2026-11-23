@@ -1100,6 +1100,16 @@ export class NativeModels {
    () => ({ revision, providerId, provider: this.provider(providerId) })));
  }
 
+ async removeCredential(providerId: string, credentialRef: string, revision: string, remove: () => Promise<void>): Promise<void> {
+  if (this.defaultCredentialRef(providerId) !== credentialRef) {
+   await remove();
+   return;
+  }
+  const state = await this.load();
+  state.metadata.defaultCredentials[providerId] = null;
+  await this.commit(state, () => { }, () => ({ revision, providerId, provider: this.provider(providerId) }), remove);
+ }
+
  provider(providerId: string): Provider {
   const reference = this.defaultCredentialRef(providerId);
   const configured = this.metadata.providers[providerId];
@@ -1341,7 +1351,7 @@ export class NativeModels {
  }
 
  private async commit(state: ConfigState, project: () => void,
-  result: () => ModelMutationResult | ProviderMutationResult | ImageModelMutationResult) {
+  result: () => ModelMutationResult | ProviderMutationResult | ImageModelMutationResult, finalize?: () => Promise<void>) {
   const config = this.validate(state.config);
   const oldMetadata = this.metadata;
   const oldEnabled = [...cfgEnabledModels.get(this.context.settings)];
@@ -1357,6 +1367,7 @@ export class NativeModels {
    await this.context.settings.flush();
    await this.syncModelPolicies();
    this.metadata = state.metadata;
+   await finalize?.();
    return result();
   } catch (error) {
    if (published) {

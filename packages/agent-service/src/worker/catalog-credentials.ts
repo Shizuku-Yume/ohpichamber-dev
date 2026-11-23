@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
-import { ProviderAccountsSchema, ProviderAccountMutationRequestSchema, type ProviderAccounts, type ProviderAccountMutationRequest } from '@openchamber/agent-contract';
+import { ProviderAccountsSchema, ProviderAccountSelectionSchema, ProviderAccountMutationRequestSchema, type ProviderAccounts, type ProviderAccountSelection, type ProviderAccountMutationRequest } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
@@ -37,16 +37,24 @@ export class NativeCredentials {
     const labels = await this.labels();
     const selected = this.models.defaultCredentialRef(providerId);
     const provider = this.models.provider(providerId);
-    const selectionOverriddenBy = provider.auth.status === 'configured' && provider.auth.source !== 'stored-credential'
-      ? provider.auth.source : null;
-    return ProviderAccountsSchema.parse({ revision, providerId, selectionMode: selected === null ? 'automatic' : 'pinned',
-      selectionOverriddenBy, accounts: this.authStorage.credentials.list(providerId).map(row => {
+    const active = selected ?? (provider.auth.status === 'configured' && provider.auth.source === 'stored-credential' ? provider.auth.credentialRef : null);
+    return ProviderAccountsSchema.parse({ revision, providerId, accounts: this.authStorage.credentials.list(providerId).map(row => {
       const credentialRef = credentialReference(providerId, row.id);
       const account = { credentialRef, method: row.credential.type === 'oauth' ? 'oauth' : 'api-key',
-        label: labels[credentialRef], active: credentialRef === selected, disabled: row.disabledCause !== null };
+        label: labels[credentialRef], active: credentialRef === active, disabled: row.disabledCause !== null };
       if (row.credential.type !== 'oauth') return account;
       return { ...account, email: row.credential.email, accountId: row.credential.accountId };
     }) });
+  }
+
+  async selection(providerId: string, revision: string): Promise<ProviderAccountSelection> {
+    await this.models.readProviders(this.workspaceId, revision);
+    const pinnedCredentialRef = this.models.defaultCredentialRef(providerId);
+    const provider = this.models.provider(providerId);
+    const selectionOverriddenBy = provider.auth.status === 'configured' && provider.auth.source !== 'stored-credential'
+      ? provider.auth.source : null;
+    return ProviderAccountSelectionSchema.parse({ revision, providerId, pinnedCredentialRef,
+      selectionMode: pinnedCredentialRef === null ? 'automatic' : 'pinned', selectionOverriddenBy });
   }
 
   async account(providerId: string, input: ProviderAccountMutationRequest, revision: string): Promise<ProviderAccounts> {
@@ -195,8 +203,10 @@ export class NativeCredentials {
       .find(row => credentialReference(request.providerId, row.id) === request.credentialRef);
     if (!stored) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Credential reference is no longer stored for this provider');
     try {
-      const removed = await this.authStorage.credentials.removeById(request.providerId, stored.id);
-      if (!removed) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Credential reference is no longer stored for this provider');
+      await this.models.removeCredential(request.providerId, request.credentialRef, revision, async () => {
+        const removed = await this.authStorage.credentials.removeById(request.providerId, stored.id);
+        if (!removed) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Credential reference is no longer stored for this provider');
+      });
       await this.authStorage.credentials.reload();
     } catch (error) {
       if (error instanceof ProjectionError) throw error;

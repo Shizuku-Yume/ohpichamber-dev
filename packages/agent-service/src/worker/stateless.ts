@@ -301,6 +301,7 @@ export class StatelessWorker {
       case 'catalog.settings.write':
         result = { type: 'catalog.settings.mutated', state: await this.settingsStore.write(workspaceId, revision, operation.request) }; break;
       case 'catalog.provider.accounts.read': result = { type: 'catalog.provider.accounts', result: await this.credentials.accounts(operation.providerId, revision) }; break;
+      case 'catalog.provider.account-selection.read': result = { type: 'catalog.provider.account-selection', result: await this.credentials.selection(operation.providerId, revision) }; break;
       case 'catalog.provider.account.mutate':
         if (operation.request.action === 'remove') this.oauth.cancelProvider(operation.providerId);
         result = { type: 'catalog.provider.accounts', result: await this.credentials.account(operation.providerId, operation.request, revision) }; break;

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ProviderAccounts as Accounts, ProviderAccountMutationRequest } from '@openchamber/agent-contract';
+import type { ProviderAccounts as Accounts, ProviderAccountSelection, ProviderAccountMutationRequest } from '@openchamber/agent-contract';
 import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS, SettingsChipGroup, SettingsFieldRow } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 
 interface ProviderAccountsProps {
   roster: Accounts;
+  selection: ProviderAccountSelection | null;
   /** Credential with an account write in flight; every account action waits for it. */
   busyId: string | null;
   onMutate: (request: ProviderAccountMutationRequest) => void;
@@ -78,6 +79,7 @@ const RenameField: React.FC<{
 
 export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   roster,
+  selection,
   busyId,
   onMutate,
   disabled = false,
@@ -85,9 +87,9 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   const { t } = useI18n();
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
   const enabledAccounts = roster.accounts.filter((account) => !account.disabled);
-  const pinnedAccount = enabledAccounts.find((account) => account.active);
+  const pinnedAccount = enabledAccounts.find((account) => account.credentialRef === selection?.pinnedCredentialRef);
   const canSwitch = enabledAccounts.length > 1;
-  const selectionDisabled = busyId !== null || disabled || roster.selectionOverriddenBy !== null;
+  const selectionDisabled = busyId !== null || disabled || selection?.selectionOverriddenBy != null;
   const accountName = (account: Accounts['accounts'][number]) => {
     const index = roster.accounts.indexOf(account);
     const method = t(account.method === 'oauth' ? 'settings.providers.accounts.method.oauth' : 'settings.providers.accounts.method.key');
@@ -101,11 +103,11 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
 
   return (
     <div className="divide-y divide-[var(--surface-subtle)]">
-      {canSwitch ? (
+      {selection && canSwitch ? (
         <SettingsFieldRow label={t('settings.providers.accounts.selection.label')}>
           <SettingsChipGroup
             aria-label={t('settings.providers.accounts.selection.label')}
-            value={roster.selectionMode === 'automatic' ? 'automatic' : pinnedAccount ? `account:${pinnedAccount.credentialRef}` : ''}
+            value={selection.selectionMode === 'automatic' ? 'automatic' : pinnedAccount ? `account:${pinnedAccount.credentialRef}` : ''}
             options={[
               { value: 'automatic', label: t('settings.providers.accounts.selection.automatic'), disabled: selectionDisabled },
               ...enabledAccounts.map((account) => ({
@@ -118,13 +120,13 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
           />
         </SettingsFieldRow>
       ) : null}
-      {roster.selectionOverriddenBy !== null ? (
-        <p className="py-2 typography-micro text-muted-foreground">{t(overrideKeys[roster.selectionOverriddenBy])}</p>
-      ) : roster.selectionMode === 'automatic' ? (
+      {selection?.selectionOverriddenBy != null ? (
+        <p className="py-2 typography-micro text-muted-foreground">{t(overrideKeys[selection.selectionOverriddenBy])}</p>
+      ) : selection?.selectionMode === 'automatic' ? (
         <p className="py-2 typography-micro text-muted-foreground">{t('settings.providers.accounts.selection.info')}</p>
       ) : null}
       {roster.accounts.map((account) => {
-        const active = roster.selectionMode === 'pinned' && account.active;
+        const active = selection ? selection.pinnedCredentialRef === account.credentialRef : account.active;
         const busy = busyId !== null;
         const methodLabel = account.method === 'oauth'
           ? t('settings.providers.accounts.method.oauth')
@@ -154,9 +156,9 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate typography-ui-label font-medium text-foreground">{name}</span>
-                    {active ? (
+                    {(selection || roster.accounts.length > 1) && active ? (
                       <span className="shrink-0 rounded-full bg-[var(--interactive-selection)] px-2 py-px typography-micro font-medium text-[var(--interactive-selection-foreground)]">
-                        {t('settings.providers.accounts.selection.pinned')}
+                        {t(selection ? 'settings.providers.accounts.selection.pinned' : 'settings.providers.accounts.active')}
                       </span>
                     ) : null}
                   </div>
@@ -168,6 +170,14 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                     <div className="typography-micro text-muted-foreground">{methodLabel}</div>
                   )}
                 </div>
+                {!selection && canSwitch && !active && !account.disabled ? (
+                  <Button variant="outline" size="xs" disabled={busy || disabled}
+                    onClick={() => onMutate({ action: 'select', expectedRevision: roster.revision, credentialRef: account.credentialRef })}
+                    aria-label={t('settings.providers.accounts.useAria', { account: name })}>
+                    {busyId === account.credentialRef ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : null}
+                    {t('settings.providers.accounts.use')}
+                  </Button>
+                ) : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button

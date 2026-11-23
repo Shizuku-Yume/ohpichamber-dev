@@ -30,11 +30,33 @@ test('OAuth start requires unchanged starting revision', async () => {
 
 
 test('account reads reject foreign provider and secret-bearing payloads', async () => {
-  respond({ revision: '0', providerId: 'other', accounts: [], selectionMode: 'automatic', selectionOverriddenBy: null });
+  respond({ revision: '0', providerId: 'other', accounts: [] });
   await expect(client.providerAccounts('workspace', 'stored-provider')).rejects.toThrow();
   restoreFetch?.();
-  respond({ revision: '0', providerId: 'stored-provider', accounts: [], selectionMode: 'automatic', selectionOverriddenBy: null, token: 'private' });
+  respond({ revision: '0', providerId: 'stored-provider', accounts: [], token: 'private' });
   await expect(client.providerAccounts('workspace', 'stored-provider')).rejects.toThrow();
+});
+
+test('only the older Host unknown-route response disables the selection capability', async () => {
+  for (const [status, code] of [[404, 'NOT_IMPLEMENTED'], [404, 'UNAUTHORIZED'], [503, 'SERVICE_UNAVAILABLE'], [403, 'UNAUTHORIZED']] as const) {
+    const fetch = spyOn(transport, 'runtimeFetch').mockResolvedValue(Response.json({
+      type: `urn:ohpichamber:problem:${code}`, title: 'Request refused', status, code,
+      detail: code === 'NOT_IMPLEMENTED' ? 'No canonical operation matches this route.' : 'Request refused.', retryable: status >= 500,
+    }, { status }));
+    try {
+      if (code === 'NOT_IMPLEMENTED') expect(await client.providerAccountSelection('workspace', 'stored-provider')).toBeNull();
+      else await expect(client.providerAccountSelection('workspace', 'stored-provider')).rejects.toMatchObject({ problem: { status, code } });
+    } finally { fetch.mockRestore(); }
+  }
+});
+
+test('selection state preserves its identity and rejects malformed successful responses', async () => {
+  const state = { revision: '7', providerId: 'stored-provider', selectionMode: 'pinned', pinnedCredentialRef: 'opaque', selectionOverriddenBy: null };
+  respond(state);
+  expect(await client.providerAccountSelection('workspace', 'stored-provider')).toEqual(state);
+  restoreFetch?.();
+  respond({ ...state, providerId: 'other' });
+  await expect(client.providerAccountSelection('workspace', 'stored-provider')).rejects.toThrow();
 });
 
 

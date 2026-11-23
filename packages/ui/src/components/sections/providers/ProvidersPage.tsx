@@ -5,6 +5,7 @@ import type {
   Provider,
   ProviderAccounts as Accounts,
   ProviderAccountMutationRequest,
+  ProviderAccountSelection,
   ProviderConfigurationRead,
   ProviderOAuthMethods as Methods,
   ProviderMutationResult,
@@ -58,7 +59,7 @@ import type { CustomProviderLogoPlan } from './custom-provider-form';
 const ADD_PROVIDER_ID = '__add_provider__';
 const CLASSIFICATION_PAGE_ID = '__classification__';
 
-type Detail = { accounts: Accounts; configuration: ProviderConfigurationRead | null };
+type Detail = { accounts: Accounts; selection: ProviderAccountSelection | null; configuration: ProviderConfigurationRead | null };
 
 const formatTokens = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) return null;
@@ -148,9 +149,10 @@ function ProviderDetail({
     });
     void Promise.all([
       canonicalClient.providerAccounts(workspaceId, provider.providerId),
+      canonicalClient.providerAccountSelection(workspaceId, provider.providerId),
       configuration,
-    ]).then(([accounts, config]) => {
-      if (active && runtime === getRuntimeKey()) setDetail({ accounts, configuration: config });
+    ]).then(([accounts, selection, config]) => {
+      if (active && runtime === getRuntimeKey()) setDetail({ accounts, selection, configuration: config });
     }).catch(() => {
       if (active && runtime === getRuntimeKey()) setFailed(true);
     });
@@ -195,8 +197,9 @@ function ProviderDetail({
     setAccountError(null);
     try {
       const next = await canonicalClient.mutateProviderAccount(workspaceId, provider.providerId, request);
+      const selection = await canonicalClient.providerAccountSelection(workspaceId, provider.providerId);
       if (!current()) return;
-      setDetail((value) => value ? { ...value, accounts: next } : value);
+      setDetail((value) => value ? { ...value, accounts: next, selection } : value);
       if (request.action === 'automatic') {
         toast.success(t('settings.providers.accounts.selection.enabled'));
         await onRefresh();
@@ -374,6 +377,7 @@ function ProviderDetail({
         {accounts.length > 0 ? (
           <ProviderAccounts
             roster={detail.accounts}
+            selection={detail.selection}
             busyId={accountBusyId}
             disabled={busy || disconnectBusy}
             onMutate={(request) => { void mutateAccount(request); }}

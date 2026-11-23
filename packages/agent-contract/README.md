@@ -8,10 +8,13 @@ projection seeds; full snapshot cursor, run and window checks remain on snapshot
 
 Shared JSON wire types and Zod validation for the Canonical Agent API at `/api/agent/v1`. The Host, Agent Service and clients import this package; OMP SDK objects stay private to the Agent Service. The separate `ohpichamber-sdk` package remains the Guest extension contract.
 
-Provider account rosters require `selectionMode` (`automatic` or `pinned`) and
-`selectionOverriddenBy` (null or the winning provider auth source). Account
-`active` marks only an explicit pin, never a native automatic choice. The
-`automatic` mutation takes only `expectedRevision`; `select` pins a stored ref.
+Provider account rosters retain the strict `{ revision, providerId, accounts }`
+shape for shipped clients. Account `active` retains its legacy meaning: the
+explicit pin, otherwise the projected stored provider credential. The opt-in
+`account-selection` GET returns `ProviderAccountSelection` with selection mode,
+explicit `pinnedCredentialRef` (null in automatic mode) and overriding auth source.
+The `automatic` mutation takes only `expectedRevision` and returns the legacy
+roster; `select` pins a stored ref.
 
 `questions.ts` owns the `omp.ask` control schema. Native HTML forms are parsed inside the worker into optional/required controls, immutable option identifiers with separate display labels, disabled choices, initial values and safe Markdown context. Raw HTML is never mounted. Native hidden fields, numeric conversion and constraint validation stay worker-private. Historical questions without these optional fields retain their existing behavior. `QuestionReply.action: "update"` saves current form values in the worker without answering and advances the pending CAS version. Only native form drafts with `timeoutResetAt` may advance their version while pending. It resets the native inactivity timeout (`timeoutResetAt`); a new-version `question.requested` event updates the countdown without publishing draft contents. Timeout submits the worker's last accepted values, including defaults and incomplete controls, to OMP. A form with no native timeout waits for a reply or run cancellation. All retained clients use this same Host Gateway flow; Guest SDK and remote mobile process ownership are unchanged.
 

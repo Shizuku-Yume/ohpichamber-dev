@@ -14,7 +14,7 @@ beforeEach(() => {
 afterEach(() => {
   resetSettingsForTest();
 });
-test('bound API-key credentialRef selects the exact stored row across multiple keys and fails closed on disable or delete', async () => {
+test('bound API-key credentialRef fails closed on disable while removing the pin enables native selection', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-credentials-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
@@ -162,15 +162,12 @@ test('bound API-key credentialRef selects the exact stored row across multiple k
       credentialRef: secondRef,
     }, '9');
     const catalogAfterDelete = await models.readProviders('workspace_1', '9');
-    expect(catalogAfterDelete.providers.find(entry => entry.providerId === providerId)?.auth).toEqual({
-      status: 'missing',
-    });
-    await expect(models.selection({ providerId, modelId })).rejects.toMatchObject({
-      status: 422,
-      code: 'PROVIDER_UNAVAILABLE',
-    });
-    expect(await runtime.modelRegistry.getApiKey(selectedBeforeDelete.nativeModel, evenSessionId)).toBeUndefined();
-    expect(await runtime.modelRegistry.resolver(selectedBeforeDelete.nativeModel, oddSessionId)({ lastChance: false, error: undefined })).toBeUndefined();
+    expect(catalogAfterDelete.providers.find(entry => entry.providerId === providerId)?.auth).toMatchObject({ status: 'configured', source: 'stored-credential' });
+    expect(models.defaultCredentialRef(providerId)).toBeNull();
+    await expect(models.selection({ providerId, modelId })).resolves.toBeDefined();
+    expect(await models.resolveProviderCredential(providerId, evenSessionId)).toEqual({ bound: false });
+    expect(await runtime.modelRegistry.getApiKey(selectedBeforeDelete.nativeModel, evenSessionId)).toBe('secret-key-gamma');
+    expect(await runtime.modelRegistry.resolver(selectedBeforeDelete.nativeModel, oddSessionId)({ lastChance: false, error: undefined })).toBeDefined();
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();
@@ -178,7 +175,7 @@ test('bound API-key credentialRef selects the exact stored row across multiple k
   }
 });
 
-test('bound OAuth credentialRef pins session affinity to the selected row without sibling fallback', async () => {
+test('bound OAuth credentialRef pins the selected row and deleting it enables native selection', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-oauth-credentials-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
@@ -258,12 +255,10 @@ test('bound OAuth credentialRef pins session affinity to the selected row withou
       credentialRef: secondRef,
     }, '5');
     await expect(credentials.resolve(privateSelection)).rejects.toMatchObject({ status: 404, code: 'CREDENTIAL_UNAVAILABLE' });
-    await expect(models.selection({ providerId, modelId })).rejects.toMatchObject({
-      status: 422,
-      code: 'PROVIDER_UNAVAILABLE',
-    });
-    expect(await runtime.modelRegistry.getApiKey(selected.nativeModel, 'oauth-session-1')).toBeUndefined();
-    expect(await runtime.modelRegistry.getApiKeyWithCredentialForProvider(providerId, 'oauth-session-1')).toBeUndefined();
+    expect(models.defaultCredentialRef(providerId)).toBeNull();
+    await expect(models.selection({ providerId, modelId })).resolves.toBeDefined();
+    expect(await runtime.modelRegistry.getApiKey(selected.nativeModel, 'oauth-session-1')).toBe('oauth-access-one');
+    expect(await runtime.modelRegistry.getApiKeyWithCredentialForProvider(providerId, 'oauth-session-1')).toMatchObject({ apiKey: 'oauth-access-one' });
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();

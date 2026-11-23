@@ -144,6 +144,15 @@ do not enter new credentials. Runtime provider-use admission authorizes the
 provider/model/endpoint independently of native account selection. Private
 quota/TTS/routing credential resolution remains reference-specific.
 
+Accounts GET and mutation responses retain the strict legacy roster shape and
+projected stored-credential active fallback. The opt-in `account-selection` GET
+shares accounts authentication, workspace/project/origin gates and enterprise
+policy, returning selection mode, explicit pin and overriding auth source. New
+clients render legacy Use/Active controls only for the older Host's 404
+`NOT_IMPLEMENTED` unknown route; other failures remain errors. No wire response
+embeds an extended roster; the UI's local detail state holds roster and selection
+separately.
+
 ### Speculative session preparation
 
 `POST /api/agent/v1/sessions/prepare` and `DELETE /api/agent/v1/sessions/prepare` manage bounded speculative preparation for fast new-chat latency:

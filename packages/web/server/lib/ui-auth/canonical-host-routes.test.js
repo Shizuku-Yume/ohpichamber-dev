@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
+import { z } from 'zod';
+import { CounterSchema, EntityIdSchema, ProviderAccountSchema } from '@openchamber/agent-contract';
 import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
 import { createAgentServiceSupervisor } from '../host/agent-service-supervisor.js';
 import { createSelectedCredentialHandoff } from '../host/private-credential.js';
@@ -14,6 +16,7 @@ import { createRequestSecurityRuntime } from '../security/request-security.js';
 import { registerCommonRequestMiddleware } from '../server-frame/core-routes.js';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpichamber-canonical-host-'));
+const OldProviderAccountsSchema = z.strictObject({ revision: CounterSchema, providerId: EntityIdSchema, accounts: z.array(ProviderAccountSchema) });
 const originalDataDir = process.env.OPENCHAMBER_DATA_DIR;
 process.env.OPENCHAMBER_DATA_DIR = root;
 const { createUiAuth } = await import('./ui-auth.js');
@@ -166,7 +169,7 @@ describe('canonical Host authenticated real-service boundary', () => {
     servicePhase = 'ready';
     for (const [method, suffix, body] of [
       ['get', 'oauth-methods'], ['post', 'discover', { endpoint: 'https://provider.invalid/v1', protocol: 'responses' }],
-      ['get', 'native/accounts'], ['post', 'native/accounts', { action: 'select', credentialRef: 'opaque', expectedRevision: '0' }],
+      ['get', 'native/accounts'], ['get', 'native/account-selection'], ['post', 'native/accounts', { action: 'select', credentialRef: 'opaque', expectedRevision: '0' }],
       ['post', 'native/accounts', { action: 'automatic', expectedRevision: '0' }],
       ['post', 'native/oauth', { action: 'start', expectedRevision: '0' }], ['get', 'native/config'],
     ]) {
@@ -176,13 +179,40 @@ describe('canonical Host authenticated real-service boundary', () => {
     }
     expect(requests).toHaveLength(0);
   });
+  it('keeps default account responses old-client strict and selection reads opt-in with the same scope gates', async () => {
+    servicePhase = 'ready';
+    const base = '/api/agent/v1/workspaces/workspace_1/providers/stored-provider';
+    for (const selectionMode of ['automatic', 'pinned']) {
+      const roster = { revision: '7', providerId: 'stored-provider', accounts: [
+        { credentialRef: 'opaque', method: 'oauth', active: true, disabled: false },
+      ] };
+      const state = { revision: '7', providerId: 'stored-provider', selectionMode,
+        pinnedCredentialRef: selectionMode === 'pinned' ? 'opaque' : null, selectionOverriddenBy: null };
+      requestService = async (url) => Response.json(String(url).endsWith('/account-selection') ? state : roster);
+      for (const method of ['get', 'post']) {
+        let call = request(app)[method](`${base}/accounts`).set('Authorization', `Bearer ${token}`);
+        if (method === 'post') call = call.send({ action: selectionMode === 'automatic' ? 'automatic' : 'select', expectedRevision: '6',
+          ...(selectionMode === 'pinned' ? { credentialRef: 'opaque' } : {}) });
+        const response = await call.expect(200);
+        expect(OldProviderAccountsSchema.parse(response.body)).toEqual(roster);
+      }
+      expect((await request(app).get(`${base}/account-selection`).set('Authorization', `Bearer ${token}`).expect(200)).body).toEqual(state);
+      for (const suffix of ['accounts', 'account-selection']) {
+        assertProblem(await request(app).get(`/api/agent/v1/workspaces/workspace_foreign/providers/stored-provider/${suffix}`)
+          .set('Authorization', `Bearer ${token}`), 403, 'UNAUTHORIZED');
+      }
+    }
+    const overridden = { revision: '7', providerId: 'stored-provider', selectionMode: 'pinned', pinnedCredentialRef: 'opaque', selectionOverriddenBy: 'managed-environment' };
+    requestService = async () => Response.json(overridden);
+    expect((await request(app).get(`${base}/account-selection`).set('Authorization', `Bearer ${token}`).expect(200)).body).toEqual(overridden);
+  });
   it('gates OAuth entry actions at use time but permits cancellation, polling and existing account changes', async () => {
     servicePhase = 'ready';
     const identity = { flowId: 'flow', generation: 'generation' };
     const oauth = '/api/agent/v1/workspaces/workspace_1/providers/login-method/oauth';
     requestService = async (_url, init) => {
       const body = JSON.parse(init.body);
-      if (body.credentialRef || body.action === 'automatic') return Response.json({ revision: '1', providerId: 'stored-provider', accounts: [], selectionMode: body.action === 'select' ? 'pinned' : 'automatic', selectionOverriddenBy: null });
+      if (body.credentialRef || body.action === 'automatic') return Response.json({ revision: '1', providerId: 'stored-provider', accounts: [] });
       return Response.json({ ...identity, providerId: 'stored-provider', revision: '0', status: body.action === 'cancel' ? 'cancelled' : 'pending', manualInput: false });
     };
     policyEnabled = true;

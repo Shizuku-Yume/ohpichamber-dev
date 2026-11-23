@@ -16,9 +16,14 @@ export const ProviderAccountSchema = z.strictObject({
 });
 export const ProviderAccountsSchema = z.strictObject({
   revision: CounterSchema, providerId: EntityIdSchema, accounts: z.array(ProviderAccountSchema),
+});
+export const ProviderAccountSelectionSchema = z.strictObject({
+  revision: CounterSchema, providerId: EntityIdSchema,
   selectionMode: z.enum(['automatic', 'pinned']),
+  pinnedCredentialRef: EntityIdSchema.nullable(),
   selectionOverriddenBy: ProviderAuthSourceSchema.nullable(),
 });
+export type ProviderAccountSelection = z.infer<typeof ProviderAccountSelectionSchema>;
 export type ProviderAccounts = z.infer<typeof ProviderAccountsSchema>;
 export const ProviderAccountMutationRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('automatic'), expectedRevision: CounterSchema }),

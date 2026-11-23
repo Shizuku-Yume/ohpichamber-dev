@@ -3,7 +3,7 @@ import {
   OMP_MODEL_APIS, OMP_PROVIDER_APIS,
   OmpModelDefinitionReadSchema, OmpModelDefinitionWriteSchema,
   OmpModelOverrideReadSchema, OmpProviderConfigReadSchema, OmpProviderConfigWriteSchema,
-  ProviderAccountSchema, ProviderAccountsSchema, ProviderAccountMutationRequestSchema,
+  ProviderAccountSchema, ProviderAccountsSchema, ProviderAccountSelectionSchema, ProviderAccountMutationRequestSchema,
   ProviderOAuthMethodsSchema, ProviderOAuthRequestSchema, ProviderOAuthResultSchema,
   ProviderModelDiscoveryRequestSchema, ProviderModelDiscoveryResultSchema,
   ModelCatalogInfoSchema, ProviderModelEnrichRequestSchema, ProviderModelEnrichResultSchema,
@@ -16,7 +16,7 @@ const flow = { flowId: 'flow_local', generation: 'generation_local', providerId:
 const discovery = { providerId: 'models_local', endpoint: 'http://127.0.0.1:18080/v1', protocol: 'chat-completions' };
 
 test('account contracts expose opaque references and reject native row IDs and returned credential secrets', () => {
-  expect(ProviderAccountsSchema.parse({ revision: '7', providerId: 'models_local', accounts: [account], selectionMode: 'pinned', selectionOverriddenBy: null }).accounts).toEqual([account]);
+  expect(ProviderAccountsSchema.parse({ revision: '7', providerId: 'models_local', accounts: [account] }).accounts).toEqual([account]);
   for (const credentialRef of [12, null, '']) {
     expect(ProviderAccountSchema.safeParse({ ...account, credentialRef }).success).toBe(false);
     for (const action of ['select', 'remove', 'label']) {
@@ -26,28 +26,29 @@ test('account contracts expose opaque references and reject native row IDs and r
   }
   for (const extra of [{ id: 12 }, { credentialId: 12 }, { apiKey: 'secret' }, { accessToken: 'secret' }, { refreshToken: 'secret' }, { credential: { access: 'secret' } }]) {
     expect(ProviderAccountSchema.safeParse({ ...account, ...extra }).success).toBe(false);
-    expect(ProviderAccountsSchema.safeParse({ revision: '7', providerId: 'models_local', accounts: [account], selectionMode: 'pinned', selectionOverriddenBy: null, ...extra }).success).toBe(false);
+    expect(ProviderAccountsSchema.safeParse({ revision: '7', providerId: 'models_local', accounts: [account], ...extra }).success).toBe(false);
   }
   expect(ProviderAccountMutationRequestSchema.parse({ action: 'label', expectedRevision: '7', credentialRef: account.credentialRef, label: '  Work  ' })).toMatchObject({ label: 'Work' });
   expect(ProviderAccountMutationRequestSchema.safeParse({ action: 'select', expectedRevision: 7, credentialRef: account.credentialRef }).success).toBe(false);
 });
 
-test('automatic account selection is strict and roster selection state is required', () => {
+test('automatic account selection is strict and selection state is opt-in', () => {
   const automatic = { action: 'automatic', expectedRevision: '7' };
   expect(ProviderAccountMutationRequestSchema.parse(automatic)).toEqual(automatic);
   expect(ProviderAccountMutationRequestSchema.safeParse({ ...automatic, credentialRef: account.credentialRef }).success).toBe(false);
-  const roster = { revision: '7', providerId: 'models_local', accounts: [], selectionMode: 'automatic', selectionOverriddenBy: null };
-  expect(ProviderAccountsSchema.parse(roster)).toEqual(roster);
+  const roster = { revision: '7', providerId: 'models_local', selectionMode: 'automatic', pinnedCredentialRef: null, selectionOverriddenBy: null };
+  expect(ProviderAccountSelectionSchema.parse(roster)).toEqual(roster);
+  expect(ProviderAccountsSchema.safeParse({ ...roster, accounts: [] }).success).toBe(false);
   for (const selectionOverriddenBy of ['stored-credential', 'managed-environment', 'external-environment']) {
-    expect(ProviderAccountsSchema.parse({ ...roster, selectionOverriddenBy }).selectionOverriddenBy).toBe(selectionOverriddenBy);
+    expect(ProviderAccountSelectionSchema.parse({ ...roster, selectionOverriddenBy }).selectionOverriddenBy).toBe(selectionOverriddenBy);
   }
-  for (const field of ['selectionMode', 'selectionOverriddenBy'] as const) {
+  for (const field of ['selectionMode', 'selectionOverriddenBy', 'pinnedCredentialRef'] as const) {
     const missing: Partial<typeof roster> = { ...roster };
     delete missing[field];
-    expect(ProviderAccountsSchema.safeParse(missing).success).toBe(false);
+    expect(ProviderAccountSelectionSchema.safeParse(missing).success).toBe(false);
   }
-  expect(ProviderAccountsSchema.safeParse({ ...roster, selectionMode: 'pool' }).success).toBe(false);
-  expect(ProviderAccountsSchema.safeParse({ ...roster, selectionOverriddenBy: 'config' }).success).toBe(false);
+  expect(ProviderAccountSelectionSchema.safeParse({ ...roster, selectionMode: 'pool' }).success).toBe(false);
+  expect(ProviderAccountSelectionSchema.safeParse({ ...roster, selectionOverriddenBy: 'config' }).success).toBe(false);
 });
 
 test('OAuth contracts preserve method versus storage identity and keep grants out of every result', () => {

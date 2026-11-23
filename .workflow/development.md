@@ -6,8 +6,9 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 W8 adds persisted automatic account selection without resetting legacy
 pins: an explicit null default ref suppresses legacy fallback, while an absent
-key preserves it. Rosters require selection mode and overriding auth source;
-only explicit pins mark accounts active. Native ModelRegistry owns automatic
+key preserves it. Legacy rosters retain their exact strict shape and projected
+stored-credential active fallback; the opt-in account-selection route carries
+explicit pin state and overriding source. Native ModelRegistry owns automatic
 selection and backoff; Host provider/model/endpoint admission and private
 quota/TTS/routing credential refs remain independent. Providers settings uses
 shared selection controls for Automatic or an enabled account, explicit Pinned
@@ -15,14 +16,15 @@ badges, native-backoff copy and localized override notices that disable account
 selection. Automatic mutations have separate success feedback and do not carry
 a credential ref. Focused contract, worker, Host and session-ordering tests pass.
 The D4 decision records persistence and admission semantics; the dated research
-plan remains historical. The account chip group is the only selection control;
+plan remains historical. New clients fall back to the pre-W8 Use/Active UI only
+for the older Host's 404 NOT_IMPLEMENTED unknown-route response; other selection
+errors use the existing load/mutation error path. Selection refetches after account
+mutations. Removing an effective pin clears it transactionally before deletion.
+On supported Hosts the account chip group is the only selection control;
 unavailable pins select no chip, while an existing pinned row retains its badge.
 The section retains its account help separately from automatic-mode copy.
-Local verification: 9 account component tests, 11
-Providers page helper tests, 2 OAuth component tests and 5 Canonical provider
-client tests pass individually; 81 contract tests and 79 worker/protocol tests
-pass. Root type-check (including upstream drift) and lint pass; lint reports
-warnings outside the changed files. No visual or live-provider rotation
+Local tests cover legacy strict parsing, selection capability fallback, supported
+selection states and pin-removal rollback. No visual or live-provider rotation
 certification is included.
 
 The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in

@@ -503,6 +503,15 @@ export class CanonicalClient {
   providerAccounts(workspaceId: string, providerId: string): Promise<C.ProviderAccounts> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/accounts`, scoped(C.ProviderAccountsSchema, result => result.providerId === providerId));
   }
+  async providerAccountSelection(workspaceId: string, providerId: string): Promise<C.ProviderAccountSelection | null> {
+    try {
+      return await request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/account-selection`,
+        scoped(C.ProviderAccountSelectionSchema, result => result.providerId === providerId));
+    } catch (error) {
+      if (error instanceof CanonicalApiError && error.problem.status === 404 && error.problem.code === 'NOT_IMPLEMENTED') return null;
+      throw error;
+    }
+  }
   mutateProviderAccount(workspaceId: string, providerId: string, input: C.ProviderAccountMutationRequest): Promise<C.ProviderAccounts> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/accounts`, scoped(C.ProviderAccountsSchema, result => result.providerId === providerId), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderAccountMutationRequestSchema, input),
