@@ -92,7 +92,7 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
     // own request for reasoning and must reach the completion as its effort,
     // not be dropped when the selector is split into provider and model.
     const rolesValue = ompSettings?.settings.find((s) => s.id === 'modelRoles')?.value;
-    const modelRoles = rolesValue && typeof rolesValue === 'object' ? (rolesValue as Record<string, string>) : null;
+    const modelRoles = rolesValue && typeof rolesValue === 'object' && !Array.isArray(rolesValue) ? rolesValue : null;
     const roleConfigured = modelRoles ? isRoleConfigured(targetRole, modelRoles) || isRoleConfigured('default', modelRoles) : false;
     const roleSelector = modelRoles ? resolveRoleSelector(targetRole, modelRoles) : undefined;
     if (roleConfigured) {

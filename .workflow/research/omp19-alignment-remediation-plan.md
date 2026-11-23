@@ -216,6 +216,8 @@ Before breaking P1/P2 workstreams (`W5`, `W8`, `W10`, `W11`) into `flow-break` t
 
 #### W3: Reconcile All 51 Silently Dropped `page:*` OMP Settings & `GUI_WRITTEN_PAGES` Fail-Closed Guardrail
 
+**OMP 19.1 reconciliation:** `git.enabled` controls the TUI status line, and the three notification flags control terminal notifications, not the Host notifications that reach Web, Electron, or mobile. Keep these terminal-only. Web Search already writes all three listed settings through its scoped catalog; do not add a second write route. Disabling `secrets.enabled` turns off OMP credential redaction, and `providers.fetch` can route URLs to an external reader; keep both outside generic Settings writes. Command source toggles do not affect the Commands editor's native prompt-template loader. Usage and Voice settings stay config-only until their owning surfaces implement them. Provider transport and tier settings stay config-only pending a provider-owned review of their SDK behavior and policy; this initial placement pass does not implement those controls.
+
 - **Priority & Risk Class:** `P0` · Contract/route integrity bug ("hollow" dropped settings + 3 stale keys).
 - **Root Cause & Code Evidence:**
   - `packages/agent-service/src/worker/settings-ui.ts:581-588`:

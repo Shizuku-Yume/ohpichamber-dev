@@ -4,6 +4,13 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The W6 branch merge of main preserves both MCP and settings-placement changes.
+Worker MCP tests (25), isolated importer/page/runtime/locale tests (4/4 files),
+UI and Agent Service type-checks, root type-check including drift, and W6-file
+oxlint pass. The merge required rebuilding stale Canonical contract declarations
+with `bun run --cwd packages/agent-contract build`; no source workaround was
+needed. Evidence: `/home/ubuntu/w6-evidence/merge-*.log`.
+
 W6 imported credential rows use the same key path as manual rows. The importer
 shares the editor's normalization functions and refuses keys that would change
 or fail validation. This replaces the imported-only exact-spelling mode, which
@@ -56,6 +63,15 @@ The extra dead-code gate exits 1 with repository-wide findings (106 files,
 124 exports, 44 exported types and one duplicate); it is not a clean gate.
 No visual or live-service verification was performed; the next check is a
 maintainer review of the import/create/private-save UI flow.
+
+The OMP 19.1 settings-placement pass exposes native host sleep prevention in
+General. Native layer overrides are read-only, and Linux containers without a
+system D-Bus socket display that the feature is unavailable; no deployment
+permissions are added. The native settings tests cover both guards, including a
+container without a bus. It adds a registry guard against missing SDK IDs and unrendered page
+placements, leaving terminal-only controls and existing Web Search catalog
+writes with their respective owners. Provider protocol/tier, usage, and voice
+controls still need their owner-specific work.
 
 The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
 `TerminalView`: completed output stays visible despite close-on-exit, a missing

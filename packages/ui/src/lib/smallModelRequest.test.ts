@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import type { CompletionRequest, CompletionResult, Model } from '@openchamber/agent-contract';
+import type { CompletionRequest, CompletionResult, JsonObject, Model } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { invalidateSettingsCache } from './persistence';
 import { getRuntimeKey, switchRuntimeEndpoint } from './runtime-switch';
@@ -16,7 +16,7 @@ const reasoningModel = (provider: string, modelId: string, efforts: string[]): M
   reasoningOptions: efforts.map((effort) => ({ reasoningEffort: effort, label: effort, budgetTokens: null })),
 });
 let models: Model[];
-let ompSettingsRoles: Record<string, string>;
+let ompSettingsRoles: JsonObject;
 let restorers: Array<() => void>;
 
 beforeEach(() => {
@@ -58,6 +58,21 @@ describe('canonical utility generation', () => {
     restorers.push(() => complete.mockRestore());
     await expect(requestSmallModel({ directory: '/repo', prompt: 'hello' }, { notifyOnError: false })).rejects.toThrow();
     expect(complete).not.toHaveBeenCalled();
+  });
+
+  test('Git generation uses the primary model from a preserved commit fallback chain', async () => {
+    ompSettingsRoles = { commit: ' ,chosen/large,other/haiku', default: 'other/haiku' };
+    expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection)
+      .toEqual({ providerId: 'chosen', modelId: 'large' });
+  });
+
+  test.each([
+    ['mixed fallback list', ['chosen/large', { selector: 'other/haiku' }]],
+    ['legacy object', { selector: 'chosen/large', fallback: ['other/haiku'] }],
+  ])('Git generation uses the saved primary commit model in a %s', async (_shape, commit) => {
+    ompSettingsRoles = { commit, default: 'other/haiku' };
+    expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection)
+      .toEqual({ providerId: 'chosen', modelId: 'large' });
   });
 
   test('a role selector variant travels with the completion request', async () => {

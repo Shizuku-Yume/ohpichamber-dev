@@ -1,4 +1,4 @@
-import { type Model, type Provider, type ProviderAuthState, type OmpSettingsState } from "@openchamber/agent-contract";
+import { type ImageModel, type Model, type Provider, type ProviderAuthState, type OmpSettingsState } from "@openchamber/agent-contract";
 import { type ModelMetadata } from "@/types";
 import { type VoiceApiKeyState, type VoiceApiKeyKind } from "@/lib/voiceKeysApi";
 import { type UseBoundStore, type StoreApi } from "zustand";
@@ -36,6 +36,7 @@ export type DefaultAgentModelSelection = {
 export interface DirectoryScopedConfig {
     providersLoaded?: boolean;
     providers: ProviderWithModelList[];
+    imageModels?: readonly ImageModel[];
     /**
       * The full canonical model catalog for this directory, including models a
       * provider disabled. Settings pages assign model roles and commit-message

@@ -10,16 +10,14 @@ import {
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
-import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
-import type { JsonValue } from '@openchamber/agent-contract';
+import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 
 export const MemoryPage: React.FC = () => {
   const { t } = useI18n();
   const directory = useSettingsDirectory();
   const models = useSettingsModels(directory);
 
-  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('memory');
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading } = useOmpPageSettings('memory');
 
   const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
   const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);
@@ -29,31 +27,8 @@ export const MemoryPage: React.FC = () => {
   );
 
   const handleMemoryRoleChange = React.useCallback(
-    async (selector: string) => {
-      if (!ompState) return;
-      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
-      if (selector) nextRoles.memory = selector;
-      else delete nextRoles.memory;
-      try {
-        await canonicalClient.updateOmpSettings(ompState.workspaceId, {
-          expectedRevision: ompState.revision,
-          changes: [{ id: 'modelRoles', value: nextRoles }],
-        });
-      } catch (err) {
-        if (err instanceof CanonicalApiError && err.problem.status === 409) {
-          const latest = await canonicalClient.getOmpSettings(ompState.workspaceId);
-          const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
-          const merged: Record<string, JsonValue> = { ...latestRoles };
-          if (selector) merged.memory = selector;
-          else delete merged.memory;
-          await canonicalClient.updateOmpSettings(latest.workspaceId, {
-            expectedRevision: latest.revision,
-            changes: [{ id: 'modelRoles', value: merged }],
-          });
-        }
-      }
-    },
-    [ompState, rolesMap],
+    (selector: string) => void updateSettings((state) => [modelRoleChange(state, 'memory', selector)]),
+    [updateSettings],
   );
 
   const backendSettings = getSectionSettings('backend');
