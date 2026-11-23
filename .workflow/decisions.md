@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-23 - Keep discovery and native prompt authoring on their existing catalogs
+
+- Commands and installed Skills own their OMP discovery switches through the existing settings catalog. Native overrides are read-only on these pages. Personal Claude command and Claude/Codex skill switches stay in `config.yml` because the Extensions provider user-source opt-in can enable discovery independently. The personal OpenCode command switch stays visible with that interaction explained. The four skill lists stay in `config.yml`; the registry URL stays outside the GUI write allowlist.
+- Prompt Template creation uses a confined relative Markdown name for nested folders, not the legacy `openchamber.group` display metadata. Command and prompt writes preserve untouched native frontmatter and leave public response schemas unchanged. `side` stays on disk: OMP 19.1 applies its side-question behavior only in the interactive terminal.
+- Keep the existing application model and agent binding contract. Canonical prompt preparation projects it for existing app consumers; it isn't native OMP command metadata.
+- The existing Behavior route owns only `AGENTS.md`; generic workspace file editing is not a scoped settings authoring contract. A separate Behavior change should prove SDK discovery for each exact file before adding explicit allowlisted kinds and revisioned writes. In particular, OMP 19.1's `APPEND_SYSTEM.md` auto-discovery is in its CLI entrypoint, so SDK support needs verification before promising an editor. No hook or SSH writes.
+- Keep Host/client audio and native OMP voice configuration separate. No Host egress, provider, or credential changes; native voice editing requires evidence of what each setting controls in the SDK-backed app.
+
 ## 2026-11-23 - Provider credential selection: D4 resolved
 
 - **Decided:** an explicit null in `defaultCredentials` means automatic native OMP selection; an absent key preserves legacy provider pins. Selecting an account remains an explicit pin. Adding credentials or completing OAuth does not select an account. Removing the effective pinned account writes an automatic null before deletion; failed deletion restores the prior metadata, while failed metadata persistence leaves the credential untouched.
@@ -11,6 +19,12 @@
 - **Tracking:** the upstream Providers components and provider locale bundle deliberately differ for this Canonical/OMP selection contract. The dated OMP 19.0 research plan remains historical input, not the implemented wire contract.
 - **Mine:** yes (maintainer-settled W8 design).
 - **Revisit when:** OMP exposes different selection semantics or Host provider-use admission changes. Live-provider rotation remains unverified.
+
+## 2026-11-23 - Keep native plugin lifecycle opt-in
+
+- **Decided:** OMP plugin settings and features use the pinned native global and workspace configuration paths. PluginsPage exposes the controls from a separate Canonical lifecycle read. The original plugin list and mutation responses keep their strict shapes and meanings for installed Capacitor clients.
+- **Not included:** OMP `PluginManager.link` replaces the plugin name's existing entry and links a mutable directory into the profile-global executable plugin root. The existing authenticated workspace routes are shared with paired remote clients; workspace confinement and a folder picker prove neither local operator intent nor permission for profile-global executable replacement. Native linking remains a local OMP CLI action until there is a dedicated Host local-capability and authorization lane for it.
+- **Consequences:** Global feature selection uses a registered package runtime record; project marketplace installs have separate native lockfiles and no equivalent safe registry-targeted global feature setter. Marketplace features can be selected by workspace override without altering installation or enterprise policy.
 
 ## 2026-11-22 - Keep OMP 19.1 commands and MCP behind the Host boundary
 

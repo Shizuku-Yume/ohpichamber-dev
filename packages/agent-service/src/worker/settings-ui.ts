@@ -165,6 +165,18 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'tools.approvalMode': 'tui-only',
   'tools.restrictedFolders': 'config-only',
   'skills.registryUrl': 'boundary',
+  'skills.enabled': 'skills:discovery',
+  'skills.enableCodexUser': 'config-only',
+  'skills.enableClaudeUser': 'config-only',
+  'skills.enableClaudeProject': 'skills:discovery',
+  'skills.enablePiUser': 'skills:discovery',
+  'skills.enablePiProject': 'skills:discovery',
+  'skills.enableAgentsUser': 'skills:discovery',
+  'skills.enableAgentsProject': 'skills:discovery',
+  'skills.customDirectories': 'config-only',
+  'skills.ignoredSkills': 'config-only',
+  'skills.manualSkills': 'config-only',
+  'skills.includeSkills': 'config-only',
   'stt.enabled': 'config-only',
   'stt.submitTrigger': 'config-only',
   'collab.relayUrl': 'boundary',
@@ -421,9 +433,9 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'skills.enableSkillCommands': 'engine',
   // The Commands editor reads native prompt templates, not TUI command discovery.
   'commands.enableClaudeUser': 'config-only',
-  'commands.enableClaudeProject': 'config-only',
-  'commands.enableOpencodeUser': 'config-only',
-  'commands.enableOpencodeProject': 'config-only',
+  'commands.enableClaudeProject': 'commands:catalog',
+  'commands.enableOpencodeUser': 'commands:catalog',
+  'commands.enableOpencodeProject': 'commands:catalog',
 
   // --- providers (41) ---
   'providers.maxInFlightRequests': 'config-only',
@@ -596,6 +608,8 @@ const GUI_WRITTEN_PAGES: Readonly<Record<string, true>> = {
   tools: true,
   memory: true,
   usage: true,
+  commands: true,
+  skills: true,
 };
 
 /**

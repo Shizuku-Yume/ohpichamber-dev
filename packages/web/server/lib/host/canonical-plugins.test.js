@@ -100,9 +100,30 @@ describe('native plugin Host authorization and enterprise boundary', () => {
     problem(await request(app).get(endpoint), 401, 'UNAUTHORIZED');
     problem(await request(app).get(`${endpoint}?oc_client_token=${token}`), 401, 'UNAUTHORIZED');
     problem(await authorized(request(app).get('/api/agent/v1/workspaces/foreign_workspace/plugins')), 403, 'UNAUTHORIZED');
+    problem(await request(app).get(`${endpoint}/lifecycle`), 401, 'UNAUTHORIZED');
+    problem(await authorized(request(app).get('/api/agent/v1/workspaces/foreign_workspace/plugins/lifecycle')), 403, 'UNAUTHORIZED');
     await authorized(request(app).get(endpoint)).expect(200);
     await clients.revokeClient(clientId);
     problem(await authorized(request(app).get(endpoint)), 401, 'UNAUTHORIZED');
+  }, 60_000);
+
+  it('keeps lifecycle metadata opt-in and rejects stale configure requests and directory installs', async () => {
+    const initial = (await authorized(request(app).get(endpoint)).expect(200)).body;
+    const lifecycle = (await authorized(request(app).get(`${endpoint}/lifecycle`)).expect(200)).body;
+    expect(lifecycle).toEqual({ workspaceId: initial.workspaceId, revision: initial.revision, projectWritable: true, plugins: [] });
+    expect(initial).not.toHaveProperty('projectWritable');
+    problem(await authorized(request(app).post(`${endpoint}/install`)).send({
+      expectedRevision: initial.revision, source: { kind: 'local-directory', path: '.' }
+    }), 400, 'INVALID_REQUEST');
+    const payload = { expectedRevision: '42', target: { kind: 'package', name: 'fixture' }, settingsScope: 'workspace', enabledFeatures: [] };
+    problem(await authorized(request(app).patch(`${endpoint}/fixture`)).send(payload), 409, 'CATALOG_CONFLICT');
+    problem(await authorized(request(app).patch(`${endpoint}/other`)).send(payload), 400, 'INVALID_REQUEST');
+    policy.enterpriseMode = true;
+    expect((await authorized(request(app).get(`${endpoint}/lifecycle`)).expect(200)).body).toEqual(lifecycle);
+    problem(await authorized(request(app).post(`${endpoint}/install`)).send({
+      expectedRevision: initial.revision, source: { kind: 'local-directory', path: '.' }
+    }), 403, 'enterprise_mode');
+    expect((await authorized(request(app).get(endpoint)).expect(200)).body).toEqual(initial);
   }, 60_000);
 
   it('rechecks enterprise authority for every package-manager or marketplace request', async () => {

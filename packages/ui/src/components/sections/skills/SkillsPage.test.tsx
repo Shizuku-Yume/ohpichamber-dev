@@ -1,5 +1,6 @@
 import { afterAll, afterEach, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
+import type { OmpSettingsState } from '@openchamber/agent-contract';
 import type { DiscoveredSkill } from '@/stores/useSkillsStore';
 
 const browser = new Window({ url: 'http://localhost/' });
@@ -18,6 +19,8 @@ Object.assign(globalThis, {
 const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
   if (url.pathname === '/api/config/settings') return Response.json({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  if (url.pathname === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  if (url.pathname === '/api/agent/v1/workspaces/workspace/settings') return Response.json({ workspaceId: 'workspace', revision: '0', totalCount: 0, settings: [] });
   if (url.pathname === '/api/fs/home') return Response.json({ home: '/test' });
   if (url.pathname === '/api/location') return Response.json({ data: { directory: '/test' } });
   if (url.pathname === '/api/session') return Response.json({ data: [], cursor: {} });
@@ -32,6 +35,39 @@ const { ThemeSystemContext } = await import('@/contexts/theme-system-context');
 const { getDefaultTheme } = await import('@/lib/theme/themes');
 const { EditorView } = await import('@codemirror/view');
 const { SkillsPage } = await import('./SkillsPage');
+const { canonicalClient } = await import('@/api/canonicalClient');
+test('Skills discovery writes its native setting and refreshes the catalog', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useSkillsStore.setState({ selectedSkillName: null, selectedAuthoredSkill: null, skillDraft: null });
+  const state: OmpSettingsState = {
+    workspaceId: 'workspace', revision: '1', totalCount: 2,
+    settings: [{ id: 'skills.enabled', type: 'boolean', value: true, default: true, configured: false,
+      placement: { type: 'page', page: 'skills', section: 'discovery' } }, {
+      id: 'skills.enablePiProject', type: 'boolean', value: false, default: true, configured: true,
+      condition: 'discoveryUsesSharedConfig', conditionActive: false,
+      placement: { type: 'page', page: 'skills', section: 'discovery' },
+    }],
+  };
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state);
+  const write = spyOn(canonicalClient, 'updateOmpSettings').mockResolvedValue({
+    ...state, revision: '2', settings: [{ ...state.settings[0], value: false, configured: true }],
+  });
+  const reload = spyOn(useSkillsStore.getState(), 'loadSkills').mockResolvedValue(true);
+  try {
+    await act(async () => root.render(<ThemeSystemContext.Provider value={themeContext}><I18nProvider><SkillsPage /></I18nProvider></ThemeSystemContext.Provider>));
+    const row = container.querySelector<HTMLElement>('[data-settings-item="omp.skills.enabled"]');
+    if (!row) throw new Error('Missing discovery setting');
+    const overridden = container.querySelector<HTMLElement>('[data-settings-item="omp.skills.enablePiProject"]');
+    expect(overridden?.getAttribute('aria-disabled')).toBe('true');
+    expect(container.textContent).toContain('Editing the shared setting would not change this project.');
+    await act(async () => overridden?.click());
+    expect(write).not.toHaveBeenCalled();
+    await act(async () => row.click());
+    expect(write).toHaveBeenCalledWith('workspace', { expectedRevision: '1', changes: [{ id: 'skills.enabled', value: false }] });
+    expect(reload).toHaveBeenCalledWith('/project');
+  } finally { resolve.mockRestore(); read.mockRestore(); write.mockRestore(); reload.mockRestore(); }
+});
 const theme = getDefaultTheme(false);
 const noThemeChange = (): never => { throw new Error('Unexpected theme change'); };
 const themeContext = {

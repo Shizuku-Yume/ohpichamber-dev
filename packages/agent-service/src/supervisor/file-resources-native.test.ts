@@ -1,9 +1,11 @@
 import { afterEach, expect, test } from 'bun:test';
+import { once } from 'node:events';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { parseFrontmatter } from '@oh-my-pi/pi-utils';
 import { CommandCatalogStateSchema, FileResourceExpandResultSchema, FileResourceSkillCatalogSchema, PromptTemplateCatalogStateSchema } from '@openchamber/agent-contract';
 import type { FileResourceOperation } from '../catalogs/file-resources-protocol.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
@@ -30,6 +32,10 @@ async function fixture() {
   };
   return {
     root, cwd, agentDirectory, workers, operation,
+    settings: () => catalogs.operation('workspace', { type: 'catalog.settings.read' }),
+    extensions: () => catalogs.operation('workspace', { type: 'extensions.read' }),
+    updateSettings: (revision: string, changes: Array<{ id: string; value: boolean }>) =>
+      catalogs.operation('workspace', { type: 'catalog.settings.write', request: { expectedRevision: revision, changes } }),
     reopen: async () => {
       for (const worker of workers.list()) await workers.stop(worker.rootSessionId);
       catalogs = new WorkspaceCatalogs(stateDirectory, workers);
@@ -110,6 +116,212 @@ test('native resource boundaries reject traversal and symlink writes while exter
   expect(await readdir(outside)).toEqual(['external.md']);
   expect(await readFile(join(outside, 'external.md'), 'utf8')).toBe('External command $1');
   expect(JSON.stringify(catalog)).not.toContain(outside);
+}, 60000);
+
+test('settings writes change native discovery without changing the resource response schemas', async () => {
+  const h = await fixture();
+  const claudeCommands = join(h.cwd, '.claude', 'commands');
+  const skill = join(h.cwd, '.omp', 'skills', 'example');
+  await mkdir(claudeCommands, { recursive: true });
+  await mkdir(skill, { recursive: true });
+  await writeFile(join(claudeCommands, 'hello.md'), 'Say hello.');
+  await writeFile(join(skill, 'SKILL.md'), '---\nname: example\ndescription: A hello example\n---\nSay hello.\n');
+  const read = await h.settings();
+  if (read.type !== 'catalog.settings') throw new Error('Expected OMP settings');
+  const changes = [{ id: 'commands.enableClaudeProject', value: false }, { id: 'skills.enabled', value: false }];
+  const commandsBefore = await h.operation({ action: 'commands.read' });
+  const skillsBefore = await h.operation({ action: 'skills.read' });
+  if (commandsBefore.kind !== 'commands' || skillsBefore.kind !== 'skills') throw new Error('Expected native catalogs');
+  expect(CommandCatalogStateSchema.parse(commandsBefore.catalog).commands.some(command => command.name === 'hello')).toBe(true);
+  expect(FileResourceSkillCatalogSchema.parse(skillsBefore.catalog).skills.some(skill => skill.name === 'example')).toBe(true);
+  await h.updateSettings(read.state.revision, changes);
+  const after = await h.operation({ action: 'commands.read' });
+  const skillsAfter = await h.operation({ action: 'skills.read' });
+  if (after.kind !== 'commands' || skillsAfter.kind !== 'skills') throw new Error('Expected native catalogs');
+  expect(CommandCatalogStateSchema.parse(after.catalog).commands.some(command => command.name === 'hello')).toBe(false);
+  expect(FileResourceSkillCatalogSchema.parse(skillsAfter.catalog).skills).toEqual([]);
+}, 60000);
+
+test('foreign user discovery opt-ins can load resources independently of capability switches', async () => {
+  const h = await fixture();
+  for (const [source, name] of [['.claude', 'claude-example'], ['.config/opencode', 'opencode-example']]) {
+    const directory = join(h.root, source, 'commands');
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, `${name}.md`), 'Say hello.');
+  }
+  for (const [source, name] of [['.claude', 'claude-example'], ['.codex', 'codex-example']]) {
+    const directory = join(h.root, source, 'skills', name);
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: A hello example\n---\nSay hello.\n`);
+  }
+  const config = join(h.agentDirectory, 'config.yml');
+  const capabilitySwitches = 'commands:\n  enableClaudeUser: false\n  enableOpencodeUser: false\nskills:\n  enableClaudeUser: false\n  enableCodexUser: false\n';
+  await writeFile(config, capabilitySwitches);
+  const discover = async () => {
+    const result = await h.extensions();
+    if (result.type !== 'extensions.inventory') throw new Error('Expected extension inventory');
+    const items = result.state.extensions.items.filter(item => item.enabled && item.name.endsWith('-example'));
+    return {
+      commands: items.filter(item => item.kind === 'slash-command').map(item => item.name).sort(),
+      skills: items.filter(item => item.kind === 'skill').map(item => item.name).sort(),
+    };
+  };
+  expect(await discover()).toEqual({ commands: [], skills: [] });
+  await writeFile(config, capabilitySwitches.replace('enableOpencodeUser: false', 'enableOpencodeUser: true'));
+  const commands = await h.operation({ action: 'commands.read' });
+  if (commands.kind !== 'commands') throw new Error('Expected native command catalog');
+  expect(commands.catalog.commands.some(command => command.name === 'opencode-example')).toBe(true);
+  await writeFile(config, capabilitySwitches + 'enabledProviders: [claude, opencode, codex]\n');
+  await h.settings();
+  expect(await discover()).toEqual({
+    commands: ['claude-example', 'opencode-example'],
+    skills: ['claude-example', 'codex-example'],
+  });
+  const settings = await h.settings();
+  if (settings.type !== 'catalog.settings') throw new Error('Expected OMP settings');
+  const exposed = settings.state.settings.filter(({ id }) => [
+    'commands.enableClaudeUser', 'commands.enableOpencodeUser', 'skills.enableClaudeUser', 'skills.enableCodexUser',
+  ].includes(id));
+  expect(exposed.map(({ id, value }) => ({ id, value }))).toEqual([{ id: 'commands.enableOpencodeUser', value: false }]);
+}, 60000);
+
+test('command editing preserves native side, raw keys and unrelated metadata', async () => {
+  const h = await fixture();
+  const dir = join(h.cwd, '.omp', 'commands');
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, 'hello.md');
+  const header = '---\r\n# Keep this on a body-only edit\r\nside: true\r\nargumentHint: a name\r\nnative-key: {inner-key: [keep, true]}\r\nopenchamber: {future-key: keep}\r\n---\r\n';
+  await writeFile(path, header + 'Say hello.\r\n');
+  const read = await h.operation({ action: 'commands.read' });
+  if (read.kind !== 'commands') throw new Error('Expected command catalog');
+  const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
+  if (!command) throw new Error('Expected authored command');
+  const { commandId, name, description, argumentHint } = command;
+  const updated = await h.operation({ action: 'commands.update', request: {
+    expectedRevision: read.catalog.revision, commandId, name, scope: 'workspace', description, argumentHint, content: 'Say hello again.\n',
+  } });
+  if (updated.kind !== 'commands') throw new Error('Expected updated command catalog');
+  expect(await readFile(path, 'utf8')).toBe(header + 'Say hello again.\n');
+  await h.operation({ action: 'commands.update', request: {
+    expectedRevision: updated.catalog.revision, commandId, name, scope: 'workspace', description: 'A greeting', content: 'Say hello again.\n',
+  } });
+  const file = await readFile(path, 'utf8');
+  expect(parseFrontmatter(file, { rawKeys: true }).frontmatter).toEqual({
+    description: 'A greeting', side: true, argumentHint: 'a name', 'native-key': { 'inner-key': ['keep', true] }, openchamber: { 'future-key': 'keep' },
+  });
+}, 60000);
+
+test('description edits preserve literal native metadata without OMP repair', async () => {
+  const h = await fixture();
+  const directory = join(h.cwd, '.omp', 'commands');
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, 'hello.md');
+  const nativeValue = 'keep <!-- literal -->\tand a tab';
+  const content = 'Say hello.\n';
+  await writeFile(path, `<!-- Header note -->\n---\ndescription: Original\nnative-key: "${nativeValue}"\n---\n${content}`);
+  const read = await h.operation({ action: 'commands.read' });
+  if (read.kind !== 'commands') throw new Error('Expected command catalog');
+  const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
+  if (!command) throw new Error('Expected authored command');
+  await h.operation({ action: 'commands.update', request: {
+    expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
+    description: 'Edited', content,
+  } });
+  const text = await readFile(path, 'utf8');
+  const prefix = '<!-- Header note -->\n';
+  expect(text.startsWith(prefix)).toBe(true);
+  expect(parseFrontmatter(text.slice(prefix.length), { repair: false, rawKeys: true }).frontmatter).toEqual({
+    description: 'Edited', 'native-key': nativeValue,
+  });
+}, 60000);
+
+test.each([
+  ['HTML comment scalar', 'native-key: "true <!-- x -->"\n', 'true <!-- x -->', 'Edited <!-- y -->'],
+  ['repairable colon scalar', 'native-key: before: after\n', 'before: after', 'Edited'],
+])('description edits round-trip a %s through OMP discovery', async (_name, metadata, nativeValue, description) => {
+  const h = await fixture();
+  const directory = join(h.cwd, '.omp', 'commands');
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, 'hello.md');
+  const content = 'Say hello.\n';
+  await writeFile(path, `---\ndescription: Original\n${metadata}---\n${content}`);
+  const read = await h.operation({ action: 'commands.read' });
+  if (read.kind !== 'commands') throw new Error('Expected command catalog');
+  const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
+  if (!command) throw new Error('Expected authored command');
+  await h.operation({ action: 'commands.update', request: {
+    expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
+    description, content,
+  } });
+  const reloaded = await h.operation({ action: 'commands.read' });
+  if (reloaded.kind !== 'commands') throw new Error('Expected command catalog');
+  expect(parseFrontmatter(await readFile(path, 'utf8'), { level: 'fatal', rawKeys: true }).frontmatter).toEqual({
+    description, 'native-key': nativeValue,
+  });
+  expect(reloaded.catalog.commands.find(entry => entry.commandId === command.commandId)).toMatchObject({ description, content });
+}, 60000);
+
+test('native delimiters separate metadata from the editable body', async () => {
+  const h = await fixture();
+  const dir = join(h.cwd, '.omp', 'commands');
+  await mkdir(dir, { recursive: true });
+  const fixtures = [
+    { name: 'commented', header: '--- # metadata\r\nside: true\r\n---\r\n', body: 'Say hello.\r\n' },
+    { name: 'repaired', header: '<!-- Note -->\r  ---\rside: true\r---', body: ' # Native body starts here\r' },
+  ];
+  for (const { name, header, body } of fixtures) {
+    expect(parseFrontmatter(header + body)).toEqual({ frontmatter: { side: true }, body: body.trim() });
+    await writeFile(join(dir, `${name}.md`), header + body);
+  }
+  const read = await h.operation({ action: 'commands.read' });
+  if (read.kind !== 'commands') throw new Error('Expected command catalog');
+  let revision = read.catalog.revision;
+  for (const { name, header, body } of fixtures) {
+    const command = read.catalog.commands.find(entry => entry.name === name && entry.editable);
+    if (!command) throw new Error('Expected authored command');
+    expect(command.content).toBe(body);
+    const content = body.replace(/hello|starts/, 'again');
+    const updated = await h.operation({ action: 'commands.update', request: {
+      expectedRevision: revision, commandId: command.commandId, name, scope: 'workspace', content,
+    } });
+    if (updated.kind !== 'commands') throw new Error('Expected updated command catalog');
+    expect(await readFile(join(dir, `${name}.md`), 'utf8')).toBe(header + content);
+    revision = updated.catalog.revision;
+  }
+}, 60000);
+
+test('a native command with many leading comments and no frontmatter does not block discovery', async () => {
+  const h = await fixture();
+  await h.operation({ action: 'commands.read' });
+  const directory = join(h.cwd, '.omp', 'commands');
+  await mkdir(directory, { recursive: true });
+  const content = '<!-- Note -->\n'.repeat(1_000) + 'Say hello.\n';
+  await writeFile(join(directory, 'commented.md'), content);
+  const result = await Promise.race([
+    h.operation({ action: 'commands.read' }),
+    once(AbortSignal.timeout(3_000), 'abort').then(() => { throw new Error('Comment-only command discovery exceeded the worker watchdog'); }),
+  ]);
+  if (result.kind !== 'commands') throw new Error('Expected command catalog');
+  expect(result.catalog.commands.find(entry => entry.name === 'commented' && entry.editable)?.content).toBe(content);
+}, 60000);
+
+test('nested native prompt creation and body editing preserve the folder and native metadata', async () => {
+  const h = await fixture();
+  const created = await h.operation({ action: 'templates.create', request: {
+    expectedRevision: '0', name: 'reviews/backend/hello', scope: 'workspace', content: 'Say hello.',
+  } });
+  if (created.kind !== 'templates') throw new Error('Expected template catalog');
+  const entry = created.catalog.templates.find(template => template.editable);
+  if (!entry) throw new Error('Expected authored template');
+  expect(entry).toMatchObject({ name: 'hello', group: 'reviews/backend', source: '(project:reviews:backend)' });
+  const path = join(h.cwd, '.omp', 'prompts', 'reviews', 'backend', 'hello.md');
+  const header = '---\ncustom-key: {inner-key: true}\n---\n';
+  await writeFile(path, header + 'Say hello.');
+  await h.operation({ action: 'templates.update', request: {
+    expectedRevision: created.catalog.revision, templateId: entry.templateId, name: entry.name, scope: 'workspace',
+    description: entry.description, group: entry.group, content: 'Say hello again.',
+  } });
+  expect(await readFile(path, 'utf8')).toBe(header + 'Say hello again.');
 }, 60000);
 
 test('pre-session native skill discovery retains authoring identity and SDK argument expansion without private roots', async () => {
