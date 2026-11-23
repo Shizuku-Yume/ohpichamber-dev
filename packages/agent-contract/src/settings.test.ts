@@ -81,6 +81,8 @@ test('an owned-by placement requires an owner and conditional setting reports co
 test('OMP settings changes require valid ids and a next revision request', () => {
   const request = { expectedRevision: '2', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] };
   expect(OmpSettingsUpdateRequestSchema.parse(request)).toEqual(request);
+  const conditional = { ...request, changes: [{ ...request.changes[0], expectedValue: 80 }] };
+  expect(OmpSettingsUpdateRequestSchema.parse(conditional)).toEqual(conditional);
   expect(OmpSettingsUpdateRequestSchema.safeParse({ ...request, changes: [] }).success).toBe(false);
   expect(OmpSettingsUpdateRequestSchema.safeParse({ ...request, changes: [request.changes[0], request.changes[0]] }).success).toBe(false);
   expect(OmpSettingsUpdateRequestSchema.safeParse({ ...request, changes: [{ id: '', value: 10 }] }).success).toBe(false);

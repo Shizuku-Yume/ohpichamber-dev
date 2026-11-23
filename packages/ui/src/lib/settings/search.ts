@@ -800,6 +800,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['plan', 'plan mode', 'model', 'plan model', 'role'],
   },
   {
+    id: 'sessions.model-compaction',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.defaults.compaction.modelRules',
+    descriptionKey: 'settings.openchamber.defaults.compaction.modelRulesInfo',
+    keywords: ['compaction', 'model', 'context limit', 'threshold', 'tokens'],
+  },
+  {
     id: 'sessions.fallback-model',
     page: 'sessions',
     titleKey: 'settings.omp.items.retry.fallbackChains.label',

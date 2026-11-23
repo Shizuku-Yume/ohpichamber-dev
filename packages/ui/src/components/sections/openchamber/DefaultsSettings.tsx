@@ -22,6 +22,7 @@ import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { SessionWarmingField } from './SessionWarmingField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { RetryFallbackChains } from './RetryFallbackChains';
+import { ModelCompactionSettings } from './ModelCompactionSettings';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -495,6 +496,7 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             />
           ))}
         </div>
+        <ModelCompactionSettings state={ompState} saving={isSavingOmp} updateSettings={updateSettings} />
       </SettingsSection>
 
       {/* Retry & Model Fallback */}
