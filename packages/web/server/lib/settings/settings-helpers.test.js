@@ -1025,6 +1025,20 @@ describe('settings registry gate', () => {
     expect(helpers.sanitizeSettingsUpdate({ documentAttachBehavior: 'attach' })).toEqual({});
   });
 
+  it.each([false, true])('round trips pasted-image saving %s and preserves it across absent or invalid updates', (value) => {
+    const helpers = createTestHelpersWithRealSanitizers();
+    const accepted = helpers.sanitizeSettingsUpdate({ savePastedImagesAsFiles: value });
+    expect(accepted).toEqual({ savePastedImagesAsFiles: value });
+    const saved = helpers.mergePersistedSettings({}, accepted);
+    expect(helpers.formatSettingsResponse(saved)).toMatchObject(accepted);
+    const reloaded = JSON.parse(JSON.stringify(saved));
+    for (const invalid of [undefined, null, 'true', 1]) {
+      const update = helpers.sanitizeSettingsUpdate({ savePastedImagesAsFiles: invalid });
+      expect(update).toEqual({});
+      expect(helpers.formatSettingsResponse(helpers.mergePersistedSettings(reloaded, update))).toMatchObject(accepted);
+    }
+  });
+
   it('round trips managed-chat model preferences, clears blanks and rejects non-text values', () => {
     const helpers = createTestHelpersWithRealSanitizers();
     const accepted = helpers.sanitizeSettingsUpdate({ chatsDefaultModel: ' anthropic/claude ', chatsDefaultVariant: ' high ' });

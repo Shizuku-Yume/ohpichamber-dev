@@ -2406,6 +2406,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'Inline-Assistant-Aktionen',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Kopieren Sie Antwort, Speichern als Bild und Vorlesen in Assistant-Textblöcken anzeigen, die vor späteren Tool-Aufrufen in derselben Antwort erscheinen.',
   'settings.openchamber.visual.field.allowPromptingSubagentSessionsAria': 'Erlaube Prompting von Subagent-Sitzungen',
+  'settings.openchamber.visual.field.savePastedImagesAsFiles': 'Eingefügte Bilder als Dateien speichern',
+  'settings.openchamber.visual.field.savePastedImagesAsFilesInfo': 'Ein eingefügtes oder angehängtes Bild wird auf dem Rechner gespeichert, auf dem OhPiChamber läuft, und sein Pfad kommt in die Nachricht, damit der Agent es öffnen, senden oder bearbeiten kann. Ein Modell, das keine Bilder lesen kann, bekommt seine Bilder auch bei ausgeschalteter Option als Pfade.',
   'settings.openchamber.visual.field.allowPromptingSubagentSessions': 'Erlaube Prompting von Subagent-Sitzungen',
   'settings.openchamber.visual.field.showToolFileIconsAria': 'Tool-Datei-Symbole anzeigen',
   'settings.openchamber.visual.field.showToolFileIcons': 'Tool-Datei-Symbole anzeigen',

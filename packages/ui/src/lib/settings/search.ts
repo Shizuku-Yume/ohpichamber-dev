@@ -5,6 +5,7 @@ import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
 import { ompLayoutSettingIds } from '@/components/sections/openchamber/ompSettingsLayout';
+import { CHAT_SENDING_SEARCH_ITEMS } from './search-chat-sending';
 
 /** The search anchor of one shortcut's row: the id the Shortcuts page names it by. */
 export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
@@ -727,39 +728,12 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.messageSearch.field.reasoning',
     keywords: ['search', 'reasoning', 'thinking', 'index'],
   },
-  {
-    id: 'chat.composer',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.section.composer',
-    keywords: ['input', 'draft', 'spellcheck', 'paste'],
-  },
-  {
-    id: 'chat.spellcheck',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.enableSpellcheckInTextInputs',
-    keywords: ['spelling', 'input'],
-    isAvailable: (ctx) => !ctx.isMobile,
-  },
+  ...CHAT_SENDING_SEARCH_ITEMS,
   {
     id: 'chat.persist-drafts',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.persistDraftMessages',
     keywords: ['draft', 'message'],
-  },
-  {
-    id: 'chat.large-text-paste',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.largeTextPaste',
-    descriptionKey: 'settings.openchamber.visual.field.largeTextPasteHint',
-    keywords: ['paste', 'clipboard', 'attachment', 'large', 'text', 'file', 'double paste', 'ctrl v', 'cmd v'],
-  },
-  {
-    id: 'chat.enter-to-send',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.enterToSend',
-    descriptionKey: 'settings.openchamber.visual.field.enterToSendHint',
-    keywords: ['enter', 'shift enter', 'ctrl enter', 'cmd enter', 'mod enter', 'send', 'newline'],
-    isAvailable: (ctx) => !ctx.isMobile,
   },
   {
     id: 'chat.selection-approval-text',
@@ -797,14 +771,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.openchamber.visual.goal.maxTurnsLabel',
     keywords: ['goal', 'turns', 'limit', 'continuations', 'safety'],
-  },
-  {
-    id: 'chat.mobile-return-key-sends',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.mobileReturnKeySends',
-    descriptionKey: 'settings.openchamber.visual.field.mobileReturnKeySendsHint',
-    keywords: ['mobile', 'keyboard', 'return', 'send', 'composer'],
-    isAvailable: (ctx) => ctx.isMobile,
   },
   {
     id: 'sessions.default-model',

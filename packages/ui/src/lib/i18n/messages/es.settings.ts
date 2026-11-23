@@ -2443,6 +2443,8 @@ export const settingsDict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActions": "Acciones en línea del asistente",
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Muestra Copiar respuesta, Guardar como imagen y Leer en voz alta en bloques de texto del asistente que aparecen antes de llamadas a herramientas posteriores dentro de la misma respuesta.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "Permitir enviar solicitudes a sesiones de subagentes",
+  "settings.openchamber.visual.field.savePastedImagesAsFiles": "Guardar las imágenes pegadas como archivos",
+  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "Una imagen pegada o adjunta se guarda en la máquina donde se ejecuta OhPiChamber y su ruta se añade al mensaje, para que el agente pueda abrirla, enviarla o editarla. Un modelo que no lee imágenes las recibe como rutas aunque esta opción esté desactivada.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "Permitir solicitudes en sesiones de subagentes",
   "settings.openchamber.visual.field.draftStartersVisible": "Mostrar iniciadores en la pantalla de nueva sesión",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "Mostrar iniciadores en la pantalla de nueva sesión",

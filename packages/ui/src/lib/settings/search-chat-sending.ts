@@ -29,6 +29,13 @@ export const CHAT_SENDING_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['office', 'document', 'word', 'excel', 'powerpoint', 'opendocument', 'docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods', 'drop', 'attachment', 'convert', 'save'],
   },
   {
+    id: 'chat.save-pasted-images',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.savePastedImagesAsFiles',
+    descriptionKey: 'settings.openchamber.visual.field.savePastedImagesAsFilesInfo',
+    keywords: ['image', 'screenshot', 'paste', 'vision', 'text-only', 'model', 'path', 'attachment', 'file', 'link'],
+  },
+  {
     id: 'chat.enter-to-send',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.enterToSend',

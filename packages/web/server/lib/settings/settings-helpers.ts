@@ -1917,7 +1917,6 @@ const mergePersistedSettings = (current, changes) => {
     delete merged.defaultAgent;
     delete merged.sessionWorkKeepInGroup;
     delete merged.messageStreamTransport;
-    delete merged.savePastedImagesAsFiles;
     if (Array.isArray(merged.projects)) {
       merged.projects = merged.projects.map((proj) => {
         if (!proj || typeof proj !== 'object' || !('defaultAgent' in proj)) return proj;

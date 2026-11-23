@@ -2332,6 +2332,8 @@ export const settingsDict = {
   'settings.openchamber.visual.field.showSplitAssistantMessageActions': 'Actions intégrées de l\'assistant',
   'settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip': 'Afficher Copier la réponse, Enregistrer en image et Lire à haute voix sur les blocs de texte de l\'assistant qui apparaissent avant les appels d\'outil suivants dans la même réponse.',
   'settings.openchamber.visual.field.allowPromptingSubagentSessionsAria': 'Autoriser les requêtes dans les sessions de sous-agents',
+  'settings.openchamber.visual.field.savePastedImagesAsFiles': 'Enregistrer les images collées comme fichiers',
+  'settings.openchamber.visual.field.savePastedImagesAsFilesInfo': 'Une image collée ou jointe est enregistrée sur la machine où s’exécute OhPiChamber, et son chemin est ajouté au message pour que l’agent puisse l’ouvrir, l’envoyer ou la modifier. Un modèle qui ne lit pas les images les reçoit sous forme de chemins même quand cette option est désactivée.',
   'settings.openchamber.visual.field.allowPromptingSubagentSessions': 'Autoriser les requêtes dans les sessions de sous-agents',
   'settings.openchamber.visual.field.draftStartersVisible': 'Afficher les raccourcis sur l’écran de nouvelle session',
   'settings.openchamber.visual.field.draftStartersVisibleAria': 'Afficher les raccourcis sur l’écran de nouvelle session',

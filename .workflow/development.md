@@ -14,6 +14,30 @@ profile against the isolated production CLI on port 43219 shows `TERMINAL_OK`,
 the new tab selected and the terminal input focused after command completion;
 evidence is in `/home/ubuntu/reply-terminal-fix/after-desktop.png`.
 
+The Chat Settings follow-up restores the pasted-image checkbox and its translated
+copy on all 15 locales. Office-document radios already rendered all three modes;
+their search entry was stranded in the unused `search-chat-sending` module. The
+main index now consumes that table, including the pasted-image entry, and both
+targets open Composer. Attachment option tables live separately to avoid growing
+the oversized page. These shared profile controls apply to Web/PWA, Electron,
+hosted mobile and Capacitor through the existing settings writer.
+Production verification also exposed the Host's stale merge-time deletion of
+`savePastedImagesAsFiles`; removing it lets the restored control persist instead
+of surviving only in the current client cache.
+
+The upstream `sections/**` selector/anchor comparison found no other clear
+OMP-applicable control omission. Remaining unmatched controls are legacy engine
+tools/goal/suggestion switches (local-device compatibility fields), OpenCode
+agent/command/provider/plugin/compaction configuration, dormant usage reporting,
+or unreleased isolated spaces. Native quotas retain their per-provider work-status
+checkbox; native MCP retains environment/header editors. These are not restored
+as second authorities.
+UI type-check/lint, 7 Chat Settings tests, 16 search tests, 12 layout guards,
+68 Host settings tests and server type-check pass. The isolated production path
+opens Composer from the `docx` search result and persists both image-saving
+booleans plus the selected document mode. Screenshot:
+`/home/ubuntu/reply-terminal-fix/settings-after.png`.
+
 OpenChamber v2.8.0 (`30c70496a5`) is integrated by the two-parent merge
 `cb5c92b26`; `8173b1275` then merges `origin/main` (`08000b159`, PR #134)
 without conflicts. Agent Service and vendored SDK content match main's OMP
