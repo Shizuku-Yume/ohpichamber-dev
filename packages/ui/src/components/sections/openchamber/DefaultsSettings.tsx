@@ -1,7 +1,7 @@
 import React from 'react';
-import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { formatModelRef } from '@openchamber/agent-contract';
-import type { JsonValue, OmpSettingsChange, OmpSettingsState } from '@openchamber/agent-contract';
+import type { OmpSettingsChange } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
@@ -18,7 +18,7 @@ import { NumberInput } from '@/components/ui/number-input';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
 import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
-import { changedRoles, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { modelRoleChange, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { SessionWarmingField } from './SessionWarmingField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
@@ -44,17 +44,19 @@ const SESSION_MODE_OPTIONS: readonly { value: SessionModeValue; labelKey: I18nKe
 
 
 export const DefaultsSettings: React.FC = () => {
-  const { t } = useI18n();
   const directory = useSettingsDirectory();
+  return <DefaultsSettingsContent key={directory} directory={directory} />;
+};
+
+const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ directory }) => {
+  const { t } = useI18n();
 
   const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const defaultSessionMode = useUIStore((state) => state.defaultSessionMode);
   const setDefaultSessionMode = useUIStore((state) => state.setDefaultSessionMode);
-  const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
-  // A failed settings read leaves `ompState` null, which the role editors
-  // cannot tell apart from "still loading": the row would spin forever.
-  const [ompStateFailed, setOmpStateFailed] = React.useState(false);
+  const { state: ompState, form: ompForm, loading, saving: isSavingOmp, updateSettings, updateSetting: handleOmpChange, getSectionSettings } = useOmpPageSettings('sessions');
+  const ompStateFailed = Boolean(directory && !loading && !ompState);
   // The catalog loader already read this directory's models; a second fetch
   // here duplicated the slowest request the Settings page made.
   const models = useSettingsModels(directory);
@@ -63,45 +65,6 @@ export const DefaultsSettings: React.FC = () => {
   const chatsDefaultsLoaded = useConfigStore((state) => state.settingsDefaultsLoaded);
   const setChatsDefaultModel = useConfigStore((state) => state.setChatsDefaultModel);
   const setChatsDefaultVariant = useConfigStore((state) => state.setChatsDefaultVariant);
-  const [isSavingOmp, setIsSavingOmp] = React.useState(false);
-
-
-  const ompStateRef = React.useRef<OmpSettingsState | null>(null);
-  ompStateRef.current = ompState;
-
-  React.useEffect(() => {
-    if (!directory) {
-      setOmpState(null);
-      setOmpStateFailed(false);
-      return;
-    }
-
-    const abort = new AbortController();
-    let cancelled = false;
-    setOmpStateFailed(false);
-
-    void (async () => {
-      try {
-        const workspace = await canonicalClient.resolveWorkspace(directory);
-        if (cancelled || abort.signal.aborted) return;
-        const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
-        if (cancelled || abort.signal.aborted) return;
-        setOmpState(snapshot);
-      } catch (err) {
-        if (!cancelled && !(err instanceof Error && err.name === 'AbortError')) {
-          // Failure is not loading: the row must stop spinning.
-          setOmpState(null);
-          setOmpStateFailed(true);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      abort.abort();
-    };
-  }, [directory]);
-
   const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
   const rolesMap = React.useMemo(
     () => parseRolesRecord(modelRolesSetting?.value),
@@ -133,100 +96,23 @@ export const DefaultsSettings: React.FC = () => {
     return typeof value === 'string' ? value : '';
   }, [ompState]);
 
-  /**
-   * Write the role record, plus any settings that must land with it. Two writes
-   * from one user action would race the same revision: the first moves it and
-   * the second conflicts, so the value the user picked halfway never persists.
-   */
-  const updateRolesOnServer = React.useCallback(
-    async (nextRoles: Record<string, JsonValue>, also: OmpSettingsChange[] = []) => {
-      const currentState = ompStateRef.current;
-      if (!currentState) return;
-      // The snapshot this write was computed against, so a 409 re-applies only
-      // the entries it actually changed.
-      const previousRoles = parseRolesRecord(currentState.settings.find((s) => s.id === 'modelRoles')?.value);
-      setIsSavingOmp(true);
-      try {
-        let next: OmpSettingsState;
-        try {
-          next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
-            expectedRevision: currentState.revision,
-            changes: [{ id: 'modelRoles', value: nextRoles }, ...also],
-          });
-        } catch (error) {
-          if (error instanceof CanonicalApiError && error.problem.status === 409) {
-            const latest = await canonicalClient.getOmpSettings(currentState.workspaceId);
-            const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
-            // Re-apply only the entries this write changed. Any role or fallback
-            // chain someone else wrote in the newer snapshot stays untouched.
-            const merged: Record<string, JsonValue> = { ...latestRoles };
-            const changed = changedRoles(previousRoles, nextRoles);
-            for (const [role, value] of Object.entries(changed.written)) merged[role] = value;
-            for (const role of changed.removed) delete merged[role];
-            next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
-              expectedRevision: latest.revision,
-              // The accompanying values are this action's own: the newer
-              // snapshot's value for them was never the user's choice.
-              changes: [{ id: 'modelRoles', value: merged }, ...also],
-            });
-          } else {
-            throw error;
-          }
-        }
-        setOmpState(next);
-        // `modelRoles` lives in the shared agent directory, so this write moved
-        // `planRoleAvailable` for every workspace — not only the one Settings
-        // is describing. The composer reads the catalog of its session's
-        // directory, which can be a managed chat or another project, so every
-        // initialized directory re-reads through the bootstrap lane that owns
-        // the read.
-        refreshDirectoryCatalogs();
-      } catch (err) {
-        console.warn('Failed to update default model role:', err);
-      } finally {
-        setIsSavingOmp(false);
-      }
-    },
-    [],
-  );
-
-  const handleDefaultModelChange = React.useCallback(
-    (selector: string) => {
-      const nextRoles = { ...rolesMap };
-      if (selector) nextRoles.default = selector;
-      else delete nextRoles.default;
-      void updateRolesOnServer(nextRoles);
-    },
-    [rolesMap, updateRolesOnServer],
-  );
-
-  const handleDefaultEffortChange = React.useCallback(
-    (level: string) => {
-      const nextRoles = { ...rolesMap };
-      const selector = formatRoleSelector(selectedModelId, level);
-      if (selector) nextRoles.default = selector;
-      else delete nextRoles.default;
-      // Keep the session-wide level in step: a model with no configured role
-      // level inherits it, so the one picker sets both in one write.
-      void updateRolesOnServer(nextRoles, [{ id: 'defaultThinkingLevel', value: level || null }]);
-    },
-    [rolesMap, selectedModelId, updateRolesOnServer],
-  );
-
-  /**
-   * Write one native model role and nothing else. `smol` is the small model,
-   * `slow` the changes walkthrough. The fallback chain is not a role and is
-   * written separately through `retry.fallbackChains`.
-   */
   const setRole = React.useCallback(
-    (role: string, selector: string) => {
-      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
-      if (selector) nextRoles[role] = selector;
-      else delete nextRoles[role];
-      void updateRolesOnServer(nextRoles);
+    async (role: string, selector: string, also: OmpSettingsChange[] = []) => {
+      const saved = await updateSettings((state) => [modelRoleChange(state, role, selector), ...also]);
+      if (saved) refreshDirectoryCatalogs();
     },
-    [rolesMap, updateRolesOnServer],
+    [updateSettings],
   );
+
+  const handleDefaultModelChange = (selector: string) => void setRole('default', selector);
+  const handleDefaultEffortChange = (level: string) => {
+    const selector = formatRoleSelector(selectedModelId, level);
+    if (selector) {
+      void setRole('default', selector, [{ id: 'defaultThinkingLevel', value: level || null }]);
+    } else {
+      void handleOmpChange('defaultThinkingLevel', level || null);
+    }
+  };
 
   /** The walkthrough resolves its model through the native `slow` role. */
   const setWalkthroughModel = React.useCallback(
@@ -262,51 +148,23 @@ export const DefaultsSettings: React.FC = () => {
    * actually continues a session when a usage limit stops it. Writing
    * `retry.fallbackChains` keeps every other chain and wildcard entry intact.
    */
-  const fallbackRoles = React.useMemo(() => {
-    const value = ompState?.settings.find((s) => s.id === 'retry.fallbackChains')?.value;
-    const parsed = typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, JsonValue> : {};
-    const chain = parsed.default;
-    const first = Array.isArray(chain) && typeof chain[0] === 'string' ? chain[0] : '';
-    return { chains: parsed, current: first };
-  }, [ompState]);
+  const chains = parseRolesRecord(ompState?.settings.find((setting) => setting.id === 'retry.fallbackChains')?.value);
+  const defaultChain = Array.isArray(chains.default) ? chains.default : [];
+  const fallback = typeof defaultChain[0] === 'string' ? defaultChain[0] : '';
 
-  const updateFallbackChain = React.useCallback(
-    async (selector: string) => {
-      const currentState = ompStateRef.current;
-      if (!currentState) return;
-      const revision = currentState.revision;
-      const nextChains: Record<string, JsonValue> = { ...fallbackRoles.chains };
-      if (selector) {
-        // One configured fallback, replacing whatever was there: a longer chain
-        // would continue on models this row never shows.
-        nextChains.default = [selector];
-      } else {
-        // "None" clears the default chain outright; leaving a later link would
-        // keep continuing on a model the row says is not configured.
-        delete nextChains.default;
-      }
-      setIsSavingOmp(true);
-      try {
-        const next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
-          expectedRevision: revision,
-          changes: selector
-            // The chain alone never runs while native model fallback is off.
-            ? [{ id: 'retry.fallbackChains', value: nextChains }, { id: 'retry.modelFallback', value: true }]
-            : [{ id: 'retry.fallbackChains', value: nextChains }],
-        });
-        setOmpState(next);
-      } catch (err) {
-        console.warn('Failed to update the fallback model:', err);
-      } finally {
-        setIsSavingOmp(false);
-      }
-    },
-    [fallbackRoles.chains],
-  );
+  const updateFallbackChain = (selector: string) => updateSettings((state) => {
+    const latestChains = parseRolesRecord(state.settings.find((setting) => setting.id === 'retry.fallbackChains')?.value);
+    const tail = Array.isArray(latestChains.default) ? latestChains.default.slice(1) : [];
+    if (selector) latestChains.default = [selector, ...tail];
+    else delete latestChains.default;
+    return selector
+      ? [{ id: 'retry.fallbackChains', value: latestChains }, { id: 'retry.modelFallback', value: true }]
+      : [{ id: 'retry.fallbackChains', value: latestChains }];
+  });
 
   const fallbackSelect = (): React.ReactNode => (
     <Select
-      value={fallbackRoles.current || '__none__'}
+      value={fallback || '__none__'}
       onValueChange={(val) => void updateFallbackChain(val === '__none__' ? '' : val)}
       disabled={isSavingOmp || !ompState}
     >
@@ -315,7 +173,8 @@ export const DefaultsSettings: React.FC = () => {
         aria-label={t('settings.openchamber.defaults.field.fallbackModel')}
       >
         <SelectValue placeholder={t('settings.openchamber.defaults.field.fallbackModelNone')}>
-          {fallbackRoles.current ? selectorLabel(fallbackRoles.current) : t('settings.openchamber.defaults.field.fallbackModelNone')}
+          {fallback ? selectorLabel(fallback) : t('settings.openchamber.defaults.field.fallbackModelNone')}
+          {defaultChain.length > 1 && <span title={defaultChain.slice(1).join(', ')}> +{defaultChain.length - 1}</span>}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -328,9 +187,9 @@ export const DefaultsSettings: React.FC = () => {
             </SelectItem>
           );
         })}
-        {fallbackRoles.current && !models.some((m) => formatModelRef(m) === fallbackRoles.current) && (
-          <SelectItem value={fallbackRoles.current}>
-            {fallbackRoles.current} ({t('settings.omp.modelRoles.customModel')})
+        {fallback && !models.some((m) => formatModelRef(m) === fallback) && (
+          <SelectItem value={fallback}>
+            {fallback} ({t('settings.omp.modelRoles.customModel')})
           </SelectItem>
         )}
       </SelectContent>
@@ -344,48 +203,8 @@ export const DefaultsSettings: React.FC = () => {
   const sessionGoalDefaultBudget = useUIStore((state) => state.sessionGoalDefaultBudget);
   const setSessionGoalDefaultBudget = useUIStore((state) => state.setSessionGoalDefaultBudget);
 
-  const handleOmpChange = React.useCallback(
-    async (id: string, value: JsonValue | null) => {
-      const currentState = ompStateRef.current;
-      if (!currentState) return;
-      setIsSavingOmp(true);
-      try {
-        const next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
-          expectedRevision: currentState.revision,
-          changes: [{ id, value }],
-        });
-        setOmpState(next);
-      } catch (err) {
-        if (err instanceof CanonicalApiError && err.problem.status === 409) {
-          const latest = await canonicalClient.getOmpSettings(currentState.workspaceId);
-          const next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
-            expectedRevision: latest.revision,
-            changes: [{ id, value }],
-          });
-          setOmpState(next);
-        } else {
-          console.warn(`Failed to update OMP setting ${id}:`, err);
-        }
-      } finally {
-        setIsSavingOmp(false);
-      }
-    },
-    [],
-  );
-
-  const getSectionRows = React.useCallback(
-    (section: string) => {
-      if (!ompState) return [];
-      return ompState.settings.filter(
-        (s) => s.placement?.type === 'page' && s.placement.page === 'sessions' && s.placement.section === section
-          // A record of per-model chains has no equal-length option list, so the
-          // generic row would draw an empty chip group. The fallback selector
-          // above is the control that writes it.
-          && s.id !== 'retry.fallbackChains',
-      );
-    },
-    [ompState],
-  );
+  const getSectionRows = (section: string) => getSectionSettings(section)
+    .filter((setting) => setting.id !== 'retry.fallbackChains');
 
   return (
     <>
@@ -576,8 +395,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -644,8 +463,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -663,8 +482,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -682,8 +501,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -701,8 +520,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -720,8 +539,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -739,8 +558,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -758,8 +577,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}
@@ -777,8 +596,8 @@ export const DefaultsSettings: React.FC = () => {
             <OmpRowControl
               key={s.id}
               setting={s}
-              value={s.value}
-              disabled={isSavingOmp}
+              value={ompForm[s.id]}
+              disabled={isSavingOmp && s.type !== 'string'}
               onChange={(val) => void handleOmpChange(s.id, val)}
             />
           ))}

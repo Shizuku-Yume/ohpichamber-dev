@@ -10,6 +10,13 @@ shared model effort picker, and remains disabled until preferences are loaded.
 OpenCode plugin banners, source-file provider editors and separate quota
 credential forms are excluded; Canonical provider credentials remain selected.
 
+Page-scoped OMP controls serialize writes against the last saved revision.
+After a conflict, they read the latest snapshot and apply the intended edit
+again. Changing directories hides the previous snapshot without redirecting
+queued writes. Editing the first model role or retry selector preserves remaining
+selectors. Tools offers image generation models from the separate image catalog,
+not chat models that accept images as input.
+
 Voice playback renders its voice-picker row only when the selected provider
 can render a picker: local voice options exist, OpenAI speech is available,
 system speech has voices, or Browser has voices with a language. The label and

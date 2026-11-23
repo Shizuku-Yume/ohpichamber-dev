@@ -235,6 +235,27 @@ describe('role chains', () => {
     expect(isRoleConfigured('smol', roles)).toBe(true);
     expect(isRoleConfigured('slow', roles)).toBe(false);
   });
+
+  test('a native comma-separated role expands its primary selector and aliases', () => {
+    const roles = { commit: ' , @smol:high,other/backup', smol: [' ', ', chosen/haiku,other/spare'] };
+    expect(isRoleConfigured('commit', roles)).toBe(true);
+    expect(resolveRoleSelector('commit', roles)).toBe('chosen/haiku:high');
+    expect(isRoleConfigured('commit', { commit: [' ', ', '] })).toBe(false);
+  });
+
+  test('a primary selector remains readable alongside preserved legacy entries', () => {
+    const roles = { commit: { selector: '@smol', fallback: ['other/spare'] }, smol: ['chosen/haiku', null], default: 'other/model' };
+    expect(isRoleConfigured('commit', roles)).toBe(true);
+    expect(resolveRoleSelector('commit', roles)).toBe('chosen/haiku');
+    expect(resolveRoleSelector('smol', roles)).toBe('chosen/haiku');
+  });
+
+  test('saved values without a string selector fall back to default', () => {
+    const roles = { commit: { selector: false }, smol: [null], default: 'other/model' };
+    expect(isRoleConfigured('commit', roles)).toBe(false);
+    expect(resolveRoleSelector('commit', roles)).toBe('other/model');
+    expect(resolveRoleSelector('smol', roles)).toBe('other/model');
+  });
 });
 
 describe('reasoning effort', () => {

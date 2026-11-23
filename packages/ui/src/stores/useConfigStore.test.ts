@@ -1,6 +1,6 @@
 import { flushDeferredStorage } from './utils/safeStorage';
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import type { Agent } from '@openchamber/agent-contract';
+import type { Agent, ImageModel } from '@openchamber/agent-contract';
 import type { DesktopSettings } from '@/lib/desktop';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 
@@ -121,6 +121,7 @@ const canonicalResponseFor = (workspaceId: string): Promise<TestProviderResponse
 type TestProviderResponse = {
   providers: ReturnType<typeof providerInfo>[];
   models: ReturnType<typeof model>[];
+  imageModels?: ImageModel[];
   defaults?: { model: { providerId: string; modelId: string } | null; thinkingLevel: string | null };
 };
 
@@ -195,6 +196,7 @@ mock.module('@/api/canonicalClient', () => ({
         workspaceId,
         revision: '0',
         models: response.models,
+        imageModels: response.imageModels ?? [],
         defaults: response.defaults ?? { model: null, thinkingLevel: null },
       };
     }),
@@ -400,14 +402,17 @@ describe('useConfigStore provider persistence', () => {
   });
 
   test('resolves the workspace and merges canonical providers with enabled models', async () => {
+    const imageModels = [{ provider: 'alpha', modelId: 'generator', name: 'Image generator' }];
     getProvidersForConfigImpl = async () => ({
       providers: [providerInfo('alpha'), providerInfo('beta')],
       models: [model('alpha', 'first'), { ...model('alpha', 'disabled'), enabled: false }, model('beta', 'second')],
+      imageModels,
     });
 
     await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
 
     expect(resolvedWorkspaceDirectories).toEqual([DIRECTORY]);
+    expect(useConfigStore.getState().directoryScoped[DIRECTORY]?.imageModels).toEqual(imageModels);
     expect(useConfigStore.getState().providers.map((entry) => ({
       providerId: entry.providerId,
       models: entry.models.map((item) => item.modelId),

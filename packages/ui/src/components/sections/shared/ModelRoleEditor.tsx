@@ -144,6 +144,7 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
         modelId={parsed?.modelId ?? ''}
         onChange={onModelChange}
         directory={directory}
+        disabled={disabled}
         loading={loading}
         placeholder={t('settings.omp.modelRoles.inheritFallback')}
         className={SETTINGS_WIDTH_SELECT_CLASS}

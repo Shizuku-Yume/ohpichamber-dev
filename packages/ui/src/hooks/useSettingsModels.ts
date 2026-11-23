@@ -1,6 +1,7 @@
 import React from 'react';
-import type { Model } from '@openchamber/agent-contract';
+import type { ImageModel, Model } from '@openchamber/agent-contract';
 import { selectCatalogLoadedForDirectory, selectModelsForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { toConfigDirectoryKey } from '@/stores/config/directories';
 
 /**
  * The canonical model catalog for a Settings directory.
@@ -24,5 +25,18 @@ export const useSettingsModels = (directory: string | null): Model[] => {
     void useConfigStore.getState().loadProviders({ directory, source: 'settingsModels' });
   }, [directory, loaded, models.length]);
 
+  return models;
+};
+
+export const useSettingsImageModels = (directory: string | null): readonly ImageModel[] | undefined => {
+  const models = useConfigStore((state) => directory
+    ? state.directoryScoped[toConfigDirectoryKey(directory)]?.imageModels
+    : undefined);
+  const loaded = useConfigStore((state) => selectCatalogLoadedForDirectory(state, 'models', directory));
+  const needsLoad = !loaded || models === undefined;
+  React.useEffect(() => {
+    if (!directory || !needsLoad) return;
+    void useConfigStore.getState().loadProviders({ directory, source: 'settingsImageModels' });
+  }, [directory, needsLoad]);
   return models;
 };

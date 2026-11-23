@@ -10,6 +10,8 @@ import {
   splitSelectorThinking,
   type JsonValue,
   type Model,
+  type OmpSettingsChange,
+  type OmpSettingsState,
 } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 
@@ -107,24 +109,29 @@ export function parseRolesRecord(val: unknown): Record<string, JsonValue> {
 
 /** The selector shown for a role; native role values may be arrays of fallbacks. */
 export function roleSelector(value: JsonValue | undefined): string {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
-  if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.selector === 'string') return value.selector;
-  return '';
+  const primary = typeof value === 'string' ? value
+    : Array.isArray(value) ? value[0]
+    : value && typeof value === 'object' ? value.selector
+    : undefined;
+  return typeof primary === 'string' ? (primary.split(',', 1)[0] ?? '').trim() : '';
 }
 
-/**
- * The entries `next` really changed relative to `previous`: written values plus
- * the keys it removed.
- */
-export function changedRoles(
-  previous: Record<string, JsonValue>,
-  next: Record<string, JsonValue>,
-): { written: Record<string, JsonValue>; removed: string[] } {
-  const removed = Object.keys(previous).filter((role) => !Object.hasOwn(next, role));
-  const written: Record<string, JsonValue> = {};
-  for (const [role, value] of Object.entries(next)) {
-    if (previous[role] !== value) written[role] = value;
+function replaceFirstSelector(value: JsonValue | undefined, selector: string): string {
+  const separator = typeof value === 'string' ? value.indexOf(',') : -1;
+  return separator < 0 || typeof value !== 'string' ? selector : selector + value.slice(separator);
+}
+
+export function modelRoleChange(state: OmpSettingsState, role: string, selector: string): OmpSettingsChange {
+  const roles = parseRolesRecord(state.settings.find((setting) => setting.id === 'modelRoles')?.value);
+  const prior = roles[role];
+  if (!selector) {
+    delete roles[role];
+  } else if (Array.isArray(prior)) {
+    roles[role] = [replaceFirstSelector(prior[0], selector), ...prior.slice(1)];
+  } else if (prior && typeof prior === 'object') {
+    roles[role] = { ...prior, selector: replaceFirstSelector(prior.selector, selector) };
+  } else {
+    roles[role] = replaceFirstSelector(prior, selector);
   }
-  return { written, removed };
+  return { id: 'modelRoles', value: roles };
 }
