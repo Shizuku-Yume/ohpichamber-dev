@@ -4,6 +4,14 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Usage renders native OMP account quotas and reset-credit counts from the
+existing canonical report, without changing its schema or adding a redemption
+route. The Usage page edits six reset-policy numbers; the switches that enable
+automatic redemption remain outside the GUI write allowlist. Matching
+provider-wide windows are shown once; Guest SDK quotas, uncovered windows and
+Work Status remain on the Host quota path. Removing built-in Host scrapers still
+requires replacing those consumers and preserving their provider coverage.
+
 The W6 branch merge of main preserves both MCP and settings-placement changes.
 Worker MCP tests (25), isolated importer/page/runtime/locale tests (4/4 files),
 UI and Agent Service type-checks, root type-check including drift, and W6-file

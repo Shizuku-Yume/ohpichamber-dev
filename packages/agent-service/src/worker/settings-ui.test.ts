@@ -187,6 +187,28 @@ test('a moved row is absent from state and refused on write', async () => {
   } finally { await f.close(); }
 });
 
+test('Usage edits reset tuning without exposing automatic redemption', async () => {
+  const f = await fixture();
+  try {
+    const state = await f.native.read('workspace_1', '0');
+    const usage = state.settings.filter((setting) => setting.placement.type === 'page' && setting.placement.page === 'usage');
+    expect(usage.map((setting) => setting.id).sort()).toEqual([
+      'claudeResets.keepCredits', 'claudeResets.minBlockedMinutes', 'claudeResets.salvageHorizonHours',
+      'codexResets.keepCredits', 'codexResets.minBlockedMinutes', 'codexResets.salvageHorizonHours',
+    ]);
+    expect(usage.every((setting) => setting.type === 'number')).toBe(true);
+    const saved = await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{ id: 'codexResets.keepCredits', value: 2 }],
+    });
+    expect(saved.settings.find((setting) => setting.id === 'codexResets.keepCredits')?.value).toBe(2);
+    await expect(f.native.write('workspace_1', '2', {
+      expectedRevision: saved.revision,
+      changes: [{ id: 'codexResets.autoRedeem5h', value: 'yes' }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  } finally { await f.close(); }
+});
+
 test('General power uses the native OMP sleep-prevention setting', async () => {
   const f = await fixture();
   try {

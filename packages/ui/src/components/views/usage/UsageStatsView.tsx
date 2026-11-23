@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import type { I18nKey } from '@/lib/i18n';
-import type { UsageModel, UsageProvider, UsageStats } from '@openchamber/agent-contract';
+import type { UsageAccounts, UsageModel, UsageProvider, UsageStats } from '@openchamber/agent-contract';
 import { formatDateTimeForPreference, formatTimeForPreference } from '@/lib/timeFormat';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -100,7 +100,9 @@ export function UsageStatsView({ className }: { className?: string }): React.Rea
  * The token report itself, without a scroll container: the standalone Stats
  * surface wraps it, and the Usage page places it above the quota cards.
  */
-export function UsageStatsReport(): React.ReactNode {
+export function UsageStatsReport({ renderReport }: {
+  renderReport?: (report: React.ReactNode, accounts: UsageAccounts | undefined) => React.ReactNode;
+} = {}): React.ReactNode {
   const { t } = useI18n();
   const intlLocale = getCurrentIntlLocale();
   const projects = useProjectsInSidebarOrder(useProjectsStore((store) => store.projects));
@@ -127,7 +129,7 @@ export function UsageStatsReport(): React.ReactNode {
     };
   }, [intlLocale]);
 
-  return (
+  const report = (
     <div className="@container">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 @xl:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -211,6 +213,7 @@ export function UsageStatsReport(): React.ReactNode {
       </div>
     </div>
   );
+  return renderReport ? renderReport(report, stats?.accounts) : report;
 }
 
 function formatUpdatedAt(timestamp: number, preference: TimeFormatPreference): string {
