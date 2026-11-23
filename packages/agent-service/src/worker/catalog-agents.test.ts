@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { YAML } from 'bun';
@@ -8,6 +8,8 @@ import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config
 import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import { loadBundledAgents } from '@oh-my-pi/pi-coding-agent/task/agents';
 import { cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
+import { cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-coding-agent/task/settings';
+import { parseFrontmatter } from '@oh-my-pi/pi-utils';
 import { NativeModels } from './catalog-models.ts';
 import { NativeAgents } from './catalog-agents.ts';
 import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime } from './native-runtime.ts';
@@ -54,8 +56,13 @@ test('agent profile mutations round-trip through native markdown and model resol
     await agents.update({ expectedRevision: '3', agent: updatedAgent }, '4');
     const catalog = await agents.read('workspace_1', '4');
     expect(catalog.agents.find(entry => entry.agentId === agent.agentId)).toEqual(updatedAgent);
-    await agents.delete({ expectedRevision: '4', agentId: agent.agentId }, '5');
-    const afterDelete = await agents.read('workspace_1', '5');
+    cfgTaskAgentModelOverrides.set(runtime.settings, { [agent.agentId]: ['m212-loopback/m212-model'] });
+    await runtime.settings.flush();
+    await agents.update({ expectedRevision: '4', agent: { ...updatedAgent, model: null } }, '5');
+    expect(cfgTaskAgentModelOverrides.get(runtime.settings)).toEqual({});
+    expect((await agents.definition(agent.agentId)).model).toBeUndefined();
+    await agents.delete({ expectedRevision: '5', agentId: agent.agentId }, '6');
+    const afterDelete = await agents.read('workspace_1', '6');
     expect(afterDelete.agents.some(entry => entry.agentId === agent.agentId)).toBe(false);
   } finally {
     runtime.authStorage.close();
@@ -79,6 +86,60 @@ test('an agent write creates a profile that can be read back', async () => {
     const profile = await agents.profile('test-owner');
     expect(profile.agentId).toBe('test-owner');
     expect(profile.name).toBe('Test owner');
+  } finally {
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a description edit preserves native agent settings, selectors and prompt bytes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-agent-native-roundtrip-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  const directory = join(cwd, '.omp', 'agents');
+  await Promise.all([directory, agentDirectory].map(path => mkdir(path, { recursive: true })));
+  const file = join(directory, 'local-reviewer.md');
+  const body = '\nUse exact output.\n\n  Indented line.  \n\n';
+  await writeFile(file, `---
+name: local-reviewer
+description: Original
+model: ["@smol", "anthropic/claude-haiku-4-5:high"]
+output: { type: object }
+autoloadSkills: [git]
+prewalk: true
+structured: true
+readSummarize: false
+thinking: inherit
+x-custom: { value: 1 }
+---
+${body}`);
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const agents = new NativeAgents({
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES,
+    });
+    const overrides = { 'local-reviewer': ['@task', '@slow'] };
+    cfgTaskAgentModelOverrides.set(runtime.settings, overrides);
+    await runtime.settings.flush();
+    const profile = await agents.profile('local-reviewer');
+    await agents.update({ expectedRevision: '0', agent: { ...profile, description: 'Updated' } }, '1');
+    const stored = await readFile(file, 'utf8');
+    expect(stored.endsWith(`---\n${body}`)).toBe(true);
+    expect(parseFrontmatter(stored, { rawKeys: true }).frontmatter).toMatchObject({
+      description: 'Updated',
+      model: ['@smol', 'anthropic/claude-haiku-4-5:high'],
+      output: { type: 'object' },
+      autoloadSkills: ['git'],
+      prewalk: true,
+      structured: true,
+      readSummarize: false,
+      thinking: 'inherit',
+      'x-custom': { value: 1 },
+    });
+    expect(cfgTaskAgentModelOverrides.get(runtime.settings)).toEqual(overrides);
+    expect((await agents.definition('local-reviewer')).model).toEqual(['@task', '@slow']);
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readdir, readFile, mkdir, open, rm, realpath } from 'node:fs/promises';
 import { join, dirname, relative, isAbsolute, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { YAML } from 'bun';
 import { z } from 'zod';
 import { loadBundledAgents, parseAgent } from '@oh-my-pi/pi-coding-agent/task/agents';
@@ -17,7 +18,8 @@ import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capabili
 import { resolveCliModel } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgTaskDisabledAgents, cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
-import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, type AgentThinkingLevel, formatModelRef } from '@openchamber/agent-contract';
+import { parseFrontmatter } from '@oh-my-pi/pi-utils';
+import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, formatModelRef } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 import type { NativeModels } from './catalog-models.ts';
 
@@ -37,17 +39,7 @@ const LegacyOpenChamberMetadataSchema = z.object({
 const ProfileMetadataSchema = z.object({
   openchamber: LegacyOpenChamberMetadataSchema.optional(),
 });
-interface AgentFrontmatterFields {
-  name: string;
-  description: string;
-  openchamber: Agent;
-  tools?: string[];
-  model?: string;
-  thinkingLevel?: AgentThinkingLevel;
-  spawns?: string[] | '*';
-  blocking?: boolean;
-  advisor?: boolean | string;
-}
+const FRONTMATTER_HEADER = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 function profilePath(cwd: string, agentId: string): string {
   return join(cwd, '.omp', 'agents', `profile_${createHash('sha256').update(agentId).digest('hex')}.md`);
 }
@@ -213,32 +205,55 @@ export class NativeAgents {
   }
 
   private async write(agent: Agent, revision: string, existing?: AgentDefinition): Promise<AgentMutationResult> {
-    if (agent.model && !this.context.modelRegistry.find(agent.model.providerId, agent.model.modelId)) {
-      throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Agent profile model is unavailable');
-    }
-    const fields: AgentFrontmatterFields = { name: agent.agentId, description: agent.description, openchamber: agent };
-    if (agent.allowedTools !== null) fields.tools = agent.allowedTools;
-    if (agent.model) fields.model = formatModelRef({ providerId: agent.model.providerId, modelId: agent.model.modelId });
-    if (agent.thinkingLevel !== undefined) fields.thinkingLevel = agent.thinkingLevel;
-    if (agent.spawns !== undefined) fields.spawns = agent.spawns;
-    if (agent.blocking !== undefined) fields.blocking = agent.blocking;
-    if (agent.advisor !== undefined) fields.advisor = agent.advisor;
-    const content = `---\n${YAML.stringify(fields)}\n---\n\n${agent.systemPromptOverride ?? ''}\n`;
     const path = existing?.source === 'project' && existing.filePath && resolve(dirname(existing.filePath)) === resolve(this.context.cwd, '.omp', 'agents')
       ? existing.filePath : profilePath(this.context.cwd, agent.agentId);
-    try { parseAgent(path, content, 'project', 'fatal'); }
-    catch { throw new ProjectionError(422, 'INVALID_REQUEST', 'Agent profile is not a valid native definition'); }
     const directory = dirname(path);
     await this.assertWorkspacePath(path);
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    const escape = relative(await realpath(this.context.cwd), await realpath(directory));
-    if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Agent definition directory leaves the authorized workspace');
     let previousContent: string | null = null;
     try {
       const fileEscape = relative(await realpath(this.context.cwd), await realpath(path));
       if (fileEscape.startsWith('..') || isAbsolute(fileEscape)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Agent definition leaves the authorized workspace');
       previousContent = await readFile(path, 'utf8');
     } catch (error) { if (!(error instanceof Error) || !missing(error)) throw error; }
+    const previous = existing ? await this.project(existing) : undefined;
+    const modelChanged = !isDeepStrictEqual(previous?.model, agent.model);
+    if (modelChanged && agent.model && !this.context.modelRegistry.find(agent.model.providerId, agent.model.modelId)) {
+      throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Agent profile model is unavailable');
+    }
+    const header = previousContent?.match(FRONTMATTER_HEADER)?.[0];
+    const content = (() => {
+      try {
+        if (previousContent !== null && !header) throw new Error('Agent frontmatter cannot be preserved');
+        const fields = previousContent === null ? {} : parseFrontmatter(previousContent, {
+          source: path, level: 'fatal', repair: false, rawKeys: true,
+        }).frontmatter;
+        const set = (key: string, value: Agent[keyof Agent] | undefined) => {
+          if (value === undefined) delete fields[key]; else fields[key] = value;
+        };
+        fields.name = agent.agentId;
+        fields.description = agent.description;
+        fields.openchamber = agent;
+        if (!header || !isDeepStrictEqual(previous?.allowedTools, agent.allowedTools)) set('tools', agent.allowedTools ?? undefined);
+        if (modelChanged) set('model', agent.model ? formatModelRef(agent.model) : undefined);
+        else if (!header) set('model', existing?.model);
+        if (!header || previous?.thinkingLevel !== agent.thinkingLevel) {
+          delete fields.thinking;
+          set('thinkingLevel', agent.thinkingLevel);
+        }
+        if (!header || !isDeepStrictEqual(previous?.spawns, agent.spawns)) set('spawns', agent.spawns);
+        if (!header || previous?.blocking !== agent.blocking) set('blocking', agent.blocking);
+        if (!header || previous?.advisor !== agent.advisor) set('advisor', agent.advisor);
+        const body = header && previousContent !== null && previous?.systemPromptOverride === agent.systemPromptOverride
+          ? previousContent.slice(header.length)
+          : `\n${agent.systemPromptOverride ?? ''}\n`;
+        const updated = `---\n${YAML.stringify(fields)}\n---\n${body}`;
+        parseAgent(path, updated, 'project', 'fatal');
+        return updated;
+      } catch { throw new ProjectionError(422, 'INVALID_REQUEST', 'Agent profile is not a valid native definition'); }
+    })();
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const escape = relative(await realpath(this.context.cwd), await realpath(directory));
+    if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Agent definition directory leaves the authorized workspace');
     const previousDisabled = [...cfgTaskDisabledAgents.get(this.context.settings)];
     const previousOverrides = { ...cfgTaskAgentModelOverrides.get(this.context.settings) };
     const result = AgentMutationResultSchema.parse({ revision, agentId: agent.agentId, agent });
@@ -247,9 +262,11 @@ export class NativeAgents {
       await this.persist(path, content);
       published = true;
       cfgTaskDisabledAgents.set(this.context.settings, previousDisabled.filter(id => id !== agent.agentId));
-      const overrides = { ...previousOverrides };
-      delete overrides[agent.agentId];
-      cfgTaskAgentModelOverrides.set(this.context.settings, overrides);
+      if (modelChanged && Object.hasOwn(previousOverrides, agent.agentId)) {
+        const overrides = { ...previousOverrides };
+        delete overrides[agent.agentId];
+        cfgTaskAgentModelOverrides.set(this.context.settings, overrides);
+      }
       await this.context.settings.flush();
     } catch {
       if (published) {

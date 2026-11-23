@@ -32,6 +32,14 @@ With no live session worker, a configure or apply classifies the saved servers b
 
 MCP sign-in is a state of the saved configuration, not an install error. The coordinator always sets `MCPApplyResult.outcome` (`applied`, `saved-needs-auth`, `saved-not-connected`); a `saved-needs-auth` result is returned to the caller, while only a genuinely non-auth failure throws `MCP_APPLY_FAILED`. The worker's `isAuthError` accepts the same 401/403/`insufficient_scope` signals. `WorkerMcp` discovers endpoints through OMP's `resolveMcpOAuthEndpointsFromServer`, which probes the server anonymously and reads `WWW-Authenticate`/`Mcp-Auth-Server`; an `issuerUrl` or `resourceMetadataUrl` from the request still wins. A failed sign-in keeps the provider's own sentence: `#toOAuthError` passes a non-native `Error` through and maps a rejected dynamic client registration to `MCP_OAUTH_CLIENT_REGISTRATION_REJECTED` instead of an opaque line. Starting a second flow while one is pending throws `MCP_OAUTH_IN_PROGRESS` (HTTP 409), and cancelling keeps `MCP_OAUTH_CANCELLED`. A flow that fails after the browser handoff (consent denied, state mismatch, token exchange, expiry) has no request left to throw from, so `oauthRead` reports its cause once on the next `unauthenticated` result as `error: {code, detail, retryable}` and retires the entry; a user cancel stays neutral with no error.
 
+## Agent profile catalog
+
+Agent profile updates retain unmanaged native frontmatter and the existing
+Markdown body when the prompt is unchanged. An edit to another profile field
+does not replace the native model selector list or clear its OMP settings
+override. Changing the profile model explicitly still replaces the selectors
+and clears that override.
+
 ## Provider and model catalogs
 
 `GET /api/agent/v1/workspaces/:workspaceId/providers` publishes the complete native provider directory used by Settings: bundled providers, configured `models.yml` providers, stored credentials and OAuth providers. It stays complete so the connection directory can offer a provider that is not configured yet.

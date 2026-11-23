@@ -129,6 +129,24 @@ test('rows without a native per-item switch are not toggleable', async () => {
   } finally { await f.close(); }
 });
 
+test('SSH aliases from a single file have unique IDs independent of file order', async () => {
+  const f = await fixture();
+  try {
+    const path = join(f.cwd, 'ssh.json');
+    const first = { host: 'shared-host.invalid' };
+    const second = { host: 'shared-host.invalid', port: 2222 };
+    const readIds = async () => new Map((await f.extensions.readInventory()).items
+      .filter(item => item.providerId === 'ssh-json' && item.scope === 'project')
+      .map(item => [item.name, item.id]));
+    await writeFile(path, JSON.stringify({ hosts: { first, second } }));
+    const ids = await readIds();
+    expect([...ids.keys()].sort()).toEqual(['first', 'second']);
+    expect(new Set(ids.values()).size).toBe(2);
+    await writeFile(path, JSON.stringify({ hosts: { second, first } }));
+    expect(await readIds()).toEqual(ids);
+  } finally { await f.close(); }
+});
+
 test('MCP rows publish only sanitized connection facts', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-extensions-secrets-'));
   const cwd = join(root, 'workspace');
