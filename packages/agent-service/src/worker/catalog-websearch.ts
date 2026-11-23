@@ -124,7 +124,12 @@ function preserveFallbacksAcrossPrimaryChange(
     if (!requested.has(id)) return value;
     const next = resolveModelRoleValue(value, pool, { settings, roleLookup: nextRoles });
     if (next.model && selector(next.model) === id) return value;
-    return current.explicitThinkingLevel && current.thinkingLevel ? `${id}:${current.thinkingLevel}` : id;
+    const pinned = current.explicitThinkingLevel && current.thinkingLevel ? `${id}:${current.thinkingLevel}` : id;
+    const patterns = value.split(',');
+    const match = patterns.findIndex(pattern => resolveWebSelector(pattern, settings, pool) === id);
+    if (match < 0) return value;
+    patterns[match] = patterns[match].replace(patterns[match].trim(), () => pinned);
+    return patterns.join(',');
   });
 }
 

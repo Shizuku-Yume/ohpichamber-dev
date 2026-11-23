@@ -206,14 +206,15 @@ test('choosing a primary preserves requested fallbacks that followed the old imp
   const { directory, bootstrap } = await fixture();
   const runtime = await openNativeRuntime(bootstrap);
   try {
-    cfgRetryFallbackChains.setEntry(runtime.settings, 'web', ['@web:high', 'web/exa:low', 'vendor/unavailable-model']);
+    cfgRetryFallbackChains.setEntry(runtime.settings, 'web', ['vendor/missing, @web:high, web/google', 'web/exa:low', 'vendor/unavailable-model']);
     await runtime.settings.flush();
     const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
     const fallbackProviderIds = ['web/parallel', 'web/exa'];
     expect(await search.operation({ type: 'read' })).toMatchObject({ state: { selectedProviderId: null, fallbackProviderIds } });
     expect(await search.operation({ type: 'update', request: { expectedRevision: '0', selectedProviderId: 'web/tavily', fallbackProviderIds } }))
       .toMatchObject({ result: { status: 'applied', state: { selectedProviderId: 'web/tavily', fallbackProviderIds } } });
-    expect(cfgRetryFallbackChains.get(runtime.settings).web).toEqual(['web/parallel:high', 'web/exa:low', 'vendor/unavailable-model']);
+    expect(cfgRetryFallbackChains.get(runtime.settings).web)
+      .toEqual(['vendor/missing, web/parallel:high, web/google', 'web/exa:low', 'vendor/unavailable-model']);
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
