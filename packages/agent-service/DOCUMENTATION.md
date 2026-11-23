@@ -15,6 +15,10 @@ fallback. Only the opt-in account-selection read reports explicit pin state and
 the non-stored winning auth source through `selectionOverriddenBy`, using the
 provider auth projection. All existing mutation responses remain legacy rosters.
 Automatic resolution delegates to native ModelRegistry and its limits/backoff.
+Before unbound resolution, native `sessions.release` clears this session's old
+explicit OAuth pin from memory and persistent affinity. Each existing session
+cleans up on its next resolution; native automatic warm affinity is retained.
+Changing the explicit account replaces the native pin through `sessions.pin`.
 Provider auth credential refs remain available to private quota/TTS/routing
 consumers independently of account selection. Host provider-use authorization
 still precedes runtime credential resolution and authorizes provider/model/endpoint.

@@ -20,6 +20,10 @@ plan remains historical. New clients fall back to the pre-W8 Use/Active UI only
 for the older Host's 404 NOT_IMPLEMENTED unknown-route response; other selection
 errors use the existing load/mutation error path. Selection refetches after account
 mutations. Removing an effective pin clears it transactionally before deletion.
+Unbound resolution releases old explicit native OAuth session pins through the
+19.1 `sessions.release` API, including persisted and inherited pins, without
+clearing native automatic warm affinity. Explicit A-to-B selection replaces the
+native pin; no parallel session-pin map or rotation policy is added.
 On supported Hosts the account chip group is the only selection control;
 unavailable pins select no chip, while an existing pinned row retains its badge.
 The section retains its account help separately from automatic-mode copy.

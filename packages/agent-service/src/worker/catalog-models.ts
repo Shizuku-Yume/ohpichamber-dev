@@ -1214,9 +1214,16 @@ export class NativeModels {
   await this.load();
   await this.context.authStorage.credentials.reload();
   const source = this.context.authStorage.keys.source(providerId);
-  if (source && source.kind !== 'api_key' && source.kind !== 'oauth') return { bound: false };
   const reference = this.defaultCredentialRef(providerId);
-  if (!reference) return { bound: false };
+  const overridden = source && source.kind !== 'api_key' && source.kind !== 'oauth';
+  if (overridden || !reference) {
+   const targetSessionId = sessionId ?? this.context.currentNativeSessionId();
+   const sessions = this.context.authStorage.sessions;
+   if (targetSessionId && (overridden || sessions.sticky?.(providerId, targetSessionId)?.explicit === true)) {
+    sessions.release(providerId, targetSessionId);
+   }
+   return { bound: false };
+  }
   return {
    bound: true,
    credential: await this.resolveBoundCredential(providerId, reference, sessionId, options),

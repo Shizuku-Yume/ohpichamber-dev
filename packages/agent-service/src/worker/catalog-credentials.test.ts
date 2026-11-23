@@ -266,6 +266,57 @@ test('bound OAuth credentialRef pins the selected row and deleting it enables na
   }
 });
 
+test('automatic resolution releases persisted explicit OAuth session pins while preserving native automatic affinity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-oauth-unpin-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  let runtime = await openNativeRuntime({ cwd, agentDirectory });
+  const providerId = 'anthropic';
+  const sessionId = 'bound-session';
+  const inheritedSessionId = 'inherited-session';
+  const credentials = () => new NativeCredentials(runtime.authStorage, runtime.models, 'workspace_1', 'agent_1');
+  const sticky = (id = sessionId) => runtime.authStorage.sessions.sticky?.(providerId, id);
+  try {
+    nativeModelsContext(runtime, () => sessionId);
+    for (const [index, name] of ['one', 'two'].entries()) {
+      await credentials().write({ expectedRevision: String(index), providerId,
+        credential: { method: 'oauth', accessToken: `unpin-access-${name}`, refreshToken: `unpin-refresh-${name}`, expiresAt: Date.now() + 3_600_000 },
+      }, String(index + 1));
+    }
+    const [first, second] = runtime.authStorage.credentials.list(providerId);
+    if (!first || !second) throw new Error('Expected two OAuth rows');
+    const pin = async (id: number, revision: number) => credentials().account(providerId, {
+      action: 'select', expectedRevision: String(revision - 1), credentialRef: credentialReference(providerId, id),
+    }, String(revision));
+    await pin(first.id, 3);
+    expect(await runtime.models.resolveProviderCredential(providerId, sessionId)).toMatchObject({ bound: true, credential: { credentialId: first.id } });
+    expect(sticky()).toMatchObject({ credentialId: first.id, explicit: true });
+    await pin(second.id, 4);
+    expect(await runtime.models.resolveProviderCredential(providerId, sessionId)).toMatchObject({ bound: true, credential: { credentialId: second.id } });
+    expect(sticky()).toMatchObject({ credentialId: second.id, explicit: true });
+    expect(runtime.authStorage.sessions.inherit(sessionId, inheritedSessionId)).toBe(1);
+    await credentials().account(providerId, { action: 'automatic', expectedRevision: '4' }, '5');
+    expect(await runtime.models.resolveProviderCredential(providerId, undefined)).toEqual({ bound: false });
+    expect(sticky()).toBeUndefined();
+    expect(await runtime.models.resolveProviderCredential(providerId, inheritedSessionId)).toEqual({ bound: false });
+    expect(sticky(inheritedSessionId)).toBeUndefined();
+
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    runtime = await openNativeRuntime({ cwd, agentDirectory });
+    expect(sticky()).toBeUndefined();
+    expect(sticky(inheritedSessionId)).toBeUndefined();
+    expect(await runtime.models.resolveProviderCredential(providerId, sessionId)).toEqual({ bound: false });
+    expect(runtime.authStorage.sessions.pin(providerId, sessionId, first.id, { restoredAtMs: Date.now() })).toBe(true);
+    expect(sticky()).toMatchObject({ credentialId: first.id });
+    expect(sticky()?.explicit).toBeUndefined();
+    expect(await runtime.models.resolveProviderCredential(providerId, sessionId)).toEqual({ bound: false });
+    expect(sticky()).toMatchObject({ credentialId: first.id });
+  } finally { runtime.authStorage.close(); resetSettingsForTest(); await rm(root, { recursive: true, force: true }); }
+});
+
 test('selected custom-provider file handoff persists and reloads the exact SDK API key across a cold owner reopen', async () => {
   const root = await mkdtemp(join(tmpdir(), 'selected-handoff-'));
   const cwd = join(root, 'workspace');
