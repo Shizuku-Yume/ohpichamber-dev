@@ -2915,7 +2915,6 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.expandProvider": "展開供應商",
   "chat.modelControls.keyboardHint": "↑↓ 導覽{thinking} • Enter 選擇 • Esc 關閉",
   "chat.modelControls.keyboardHintNavigate": "↑↓ 導覽",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} 切換 Agent",
   'chat.modelControls.keyboardHintSwitchThinking': '{shortcut} 切換',
   'commandPalette.item.toggleReasoningTraces': '顯示或隱藏推理軌跡',
   "chat.modelControls.keyboardHintThinking": "←→ 思考",

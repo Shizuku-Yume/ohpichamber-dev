@@ -2843,7 +2843,6 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.expandProvider": "توسيع الموفر",
   "chat.modelControls.keyboardHint": "↑↓ للتنقل{thinking} • Enter للاختيار • Esc للإغلاق",
   "chat.modelControls.keyboardHintNavigate": "↑↓ للتنقل",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} لتبديل الوكيل",
   'chat.modelControls.keyboardHintSwitchThinking': '{shortcut} للتبديل',
   'commandPalette.item.toggleReasoningTraces': 'إظهار مسارات التفكير أو إخفاؤها',
   "chat.modelControls.keyboardHintThinking": "←→ التفكير",

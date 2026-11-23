@@ -2946,7 +2946,6 @@ const part2 = {
   "chat.modelControls.expandProvider": "Expand provider",
   "chat.modelControls.keyboardHint": "↑↓ navigate{thinking} • Enter select • Esc close",
   "chat.modelControls.keyboardHintNavigate": "↑↓ navigate",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} switch agent",
   'chat.modelControls.keyboardHintSwitchThinking': '{shortcut} switch',
   'commandPalette.item.toggleReasoningTraces': 'Show or hide reasoning traces',
   "chat.modelControls.keyboardHintThinking": "←→ thinking",

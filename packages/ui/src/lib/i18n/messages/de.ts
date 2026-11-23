@@ -2656,7 +2656,6 @@ export const dict = {
   "chat.modelControls.expandProvider": "Anbieter ausklappen",
   "chat.modelControls.keyboardHint": "↑↓ navigieren{thinking} • Enter auswählen • Esc schließen",
   "chat.modelControls.keyboardHintNavigate": "↑↓ navigieren",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} Agent wechseln",
   'chat.modelControls.keyboardHintSwitchThinking': '{shortcut} wechseln',
   'commandPalette.item.toggleReasoningTraces': 'Denkspuren ein- oder ausblenden',
   "chat.modelControls.keyboardHintThinking": "←→ denken",

@@ -2900,7 +2900,6 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.expandProvider": "Розгорнути провайдера",
   "chat.modelControls.keyboardHint": "↑↓ навігація{thinking} • Enter вибрати • Esc закрити",
   "chat.modelControls.keyboardHintNavigate": "↑↓ навігація",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} змінити агента",
   "chat.modelControls.keyboardHintSwitchThinking": "{shortcut} змінити",
   "chat.modelControls.keyboardHintThinking": "←→ мислення",
   "chat.modelControls.reorderProviderTitle": "Перетягніть, щоб змінити порядок провайдера",

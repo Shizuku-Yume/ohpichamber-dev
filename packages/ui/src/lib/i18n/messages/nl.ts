@@ -2947,7 +2947,6 @@ const part2 = {
   "chat.modelControls.expandProvider": "Provider uitvouwen",
   "chat.modelControls.keyboardHint": "↑↓ navigeren{thinking} • Enter selecteren • Esc sluiten",
   "chat.modelControls.keyboardHintNavigate": "↑↓ navigeren",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} agent wisselen",
   'chat.modelControls.keyboardHintSwitchThinking': '{shortcut} wisselen',
   'commandPalette.item.toggleReasoningTraces': 'Redeneringstraces tonen of verbergen',
   "chat.modelControls.keyboardHintThinking": "←→ denken",

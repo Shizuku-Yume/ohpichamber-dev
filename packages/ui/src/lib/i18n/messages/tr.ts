@@ -2775,7 +2775,6 @@ export const dict = {
   "chat.modelControls.expandProvider": "Provider'ı genişlet",
   "chat.modelControls.keyboardHint": "↑↓ gezin{thinking} • Enter seç • Esc kapat",
   "chat.modelControls.keyboardHintNavigate": "↑↓ gezin",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} agent değiştir",
   'chat.modelControls.keyboardHintSwitchThinking': '{shortcut} değiştir',
   "chat.modelControls.keyboardHintThinking": "←→ düşünme",
   "chat.modelControls.reorderProviderTitle": "Yeniden sıralamak için provider'ı sürükleyin",

@@ -2845,7 +2845,6 @@ const part2 = {
   "chat.modelControls.expandProvider": "הרחב ספק",
   "chat.modelControls.keyboardHint": "↑↓ ניווט{thinking} • Enter בחירה • Esc סגירה",
   "chat.modelControls.keyboardHintNavigate": "↑↓ ניווט",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} החלפת סוכן",
   'chat.modelControls.keyboardHintSwitchThinking': '{shortcut} החלפה',
   'commandPalette.item.toggleReasoningTraces': 'הצג/הסתר עקבות חשיבה',
   "chat.modelControls.keyboardHintThinking": "←→ חשיבה",

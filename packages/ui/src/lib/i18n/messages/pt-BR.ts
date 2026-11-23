@@ -2900,7 +2900,6 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.expandProvider": "Expandir provedor",
   "chat.modelControls.keyboardHint": "↑↓ navegar{thinking} • Enter selecionar • Esc fechar",
   "chat.modelControls.keyboardHintNavigate": "↑↓ navegar",
-  "chat.modelControls.keyboardHintSwitchAgent": "{shortcut} alternar agente",
   "chat.modelControls.keyboardHintSwitchThinking": "{shortcut} alternar",
   "chat.modelControls.keyboardHintThinking": "←→ mudar raciocínio",
   "chat.modelControls.reorderProviderTitle": "Arraste para reordenar provedor",
