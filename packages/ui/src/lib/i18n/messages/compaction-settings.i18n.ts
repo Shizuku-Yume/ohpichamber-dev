@@ -193,9 +193,9 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.background': 'Kompaktuj w tle',
   },
   'zh-CN': {
-    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "即使关闭扩展上下文，按 token 数设置的规则也可能启用更大的上下文窗口。较长的请求可能产生更高费用。",
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "即使关闭扩展上下文，按 Token 数设置的规则也可能启用更大的上下文窗口。较长的请求可能产生更高费用。",
     'settings.openchamber.defaults.compaction.modelRules': "按模型压缩",
-    'settings.openchamber.defaults.compaction.modelRulesInfo': "设置模型何时压缩上下文。指定完整模型或以 * 结尾的服务商前缀，再输入 token 数 (90000)、固定阈值 (f90000) 或百分比 (80%)。",
+    'settings.openchamber.defaults.compaction.modelRulesInfo': "设置模型何时压缩上下文。指定完整模型或以 * 结尾的服务商前缀，再输入 Token 数 (90000)、固定阈值 (f90000) 或百分比 (80%)。",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "添加模型规则",
     'settings.openchamber.defaults.compaction.modelRuleSelector': "模型选择器",
     'settings.openchamber.defaults.compaction.modelRuleValue': "压缩阈值",
@@ -212,9 +212,9 @@ export const compactionSettingsI18n = {
   'settings.openchamber.defaults.compaction.background': '在后台压缩',
 },
   'zh-TW': {
-    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "即使關閉擴充上下文，以 token 數量設定的規則仍可能啟用更大的上下文視窗。較長的請求可能產生更高費用。",
+    'settings.openchamber.defaults.compaction.modelRuleCostWarning': "即使關閉擴充上下文，以 Token 數量設定的規則仍可能啟用更大的上下文視窗。較長的請求可能產生更高費用。",
     'settings.openchamber.defaults.compaction.modelRules': "依模型壓縮",
-    'settings.openchamber.defaults.compaction.modelRulesInfo': "設定模型何時壓縮上下文。指定完整模型或以 * 結尾的供應商前綴，再輸入 token 數 (90000)、固定閾值 (f90000) 或百分比 (80%)。",
+    'settings.openchamber.defaults.compaction.modelRulesInfo': "設定模型何時壓縮上下文。指定完整模型或以 * 結尾的供應商前綴，再輸入 Token 數 (90000)、固定閾值 (f90000) 或百分比 (80%)。",
     'settings.openchamber.defaults.compaction.modelRuleAdd': "新增模型規則",
     'settings.openchamber.defaults.compaction.modelRuleSelector': "模型選擇器",
     'settings.openchamber.defaults.compaction.modelRuleValue': "壓縮閾值",
