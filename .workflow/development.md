@@ -4,6 +4,13 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+W6 review also reproduces an imported draft renamed before Create: the secret
+write used the created ID but the reference binding used the initial draft ID.
+The editor now retains the ID accepted by Create and uses it for autosave and
+private credential writes/bindings. The page regression checks both IDs;
+the isolated page/runtime tests pass (2/2 files). Evidence:
+`/home/ubuntu/w6-evidence/finding3-before.log` and `finding3-after.log`.
+
 W6 review: a force-enabled native user entry was projected disabled because the
 reader ignores `enabledServers`; a label edit then added it to the denylist.
 The failing regression observed that new denylist entry. Identity/credential-only

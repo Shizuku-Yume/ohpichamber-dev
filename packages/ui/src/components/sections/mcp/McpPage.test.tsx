@@ -17,12 +17,14 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async () => Respo
 mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/repo' }));
 mock.module('./McpOAuthSignIn', () => ({ McpOAuthSignIn: () => null }));
 const secretWrites: Array<{ value: string; persistedRevision: string }> = [];
+const secretServerIds: string[] = [];
 // DOM globals and canonical transport seams must exist before importing the editor.
 const real = await import('@/api/canonicalClient');
 mock.module('@/api/canonicalClient', () => ({
   ...real, canonicalClient: {
     resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
-    writeWorkspaceMcpCredential: async (_workspaceId: string, _serverId: string, request: { value: string; persistedRevision: string }) => {
+    writeWorkspaceMcpCredential: async (_workspaceId: string, serverId: string, request: { value: string; persistedRevision: string }) => {
+      secretServerIds.push(serverId);
       secretWrites.push(request);
       return { workspaceId: 'workspace', serverId: 'tools', persistedRevision: '3', credentialRef: 'private_ref' };
     },
@@ -41,6 +43,7 @@ const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: tr
 const applyResult = (servers: MCPServerConfig[]): MCPApplyResult => ({ kind: 'mcp', status: 'no-active-workers', outcome: 'applied', workers: [], configuration: { workspaceId: 'workspace', persistedRevision: '3', config: { servers } } });
 beforeEach(() => {
   secretWrites.length = 0;
+  secretServerIds.length = 0;
   root = createRoot(container);
   useMcpStore.getState().resetForRuntimeSwitch();
   useMcpConfigStore.setState({ selectedMcpName: 'tools', mcpDraft: null, serversByDirectory: { '/repo': [server] }, configurationsByDirectory: { '/repo': applyResult([server]).configuration } });
@@ -99,10 +102,11 @@ test('header values are written privately and only opaque references reach confi
 
 test('standard imports prefill private rows and save only opaque credential references', async () => {
   const configs: Array<Partial<MCPServerConfig>> = [];
+  const boundServerIds: string[] = [];
   useMcpConfigStore.setState({
     selectedMcpName: 'new-tools', mcpDraft: { ...server, serverId: 'new-tools' },
     createMcp: async config => { configs.push(config); return { ok: true, result: applyResult([config]), outcome: 'applied' }; },
-    updateMcp: async (_serverId, config) => { configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]), outcome: 'applied' }; },
+    updateMcp: async (serverId, config) => { boundServerIds.push(serverId); configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]), outcome: 'applied' }; },
   });
   await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
   const open = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Import from JSON snippet'));
@@ -121,14 +125,20 @@ test('standard imports prefill private rows and save only opaque credential refe
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Value"]')?.value).toBe('import-private');
   expect(secretWrites).toEqual([]);
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Value"]')?.disabled).toBe(true);
+  const name = [...container.querySelectorAll('input')].find(input => input.value === 'new-tools');
+  if (!name) throw new Error('Missing server name');
+  await edit(name, 'renamed-tools', false);
   const create = [...container.querySelectorAll('button')].find(button => button.textContent === 'Create');
   if (!create) throw new Error('Missing create control');
   await act(async () => { create.click(); });
   expect(secretWrites).toEqual([]);
+  expect(configs[0].serverId).toBe('renamed-tools');
   const save = [...container.querySelectorAll('button')].find(button => button.textContent === 'Save Changes');
   if (!save) throw new Error('Missing credential save');
   await act(async () => { save.click(); });
   expect(secretWrites).toEqual([{ value: 'import-private', persistedRevision: '3' }]);
+  expect(secretServerIds).toEqual(['renamed-tools']);
+  expect(boundServerIds).toEqual(['renamed-tools']);
   expect(configs.at(-1)?.transport).toEqual({ type: 'http', url: 'https://imported.test', headerCredentialRefs: { 'X-Api-Key': 'private_ref' } });
   expect(JSON.stringify(configs)).not.toContain('import-private');
 });
