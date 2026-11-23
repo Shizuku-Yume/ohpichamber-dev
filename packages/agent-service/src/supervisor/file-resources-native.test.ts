@@ -150,6 +150,29 @@ test('scoped Behavior writes do not shadow inherited OMP system and sticky rules
   expect(await readdir(h.cwd)).not.toContain('.omp');
 }, 60000);
 
+test('clearing a Behavior condition removes the native fallback triggers', async () => {
+  const h = await fixture();
+  const directory = join(h.cwd, '.omp', 'rules');
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, 'legacy.mdc');
+  const source = createSourceMeta('native', path, 'project');
+  const header = '---\ndescription: Still in the rulebook\nttsr_trigger: first\nttsrTrigger: second\nttsr-trigger: third\n---\n';
+  const content = 'Use a greeting.';
+  await writeFile(path, header + content);
+  expect(discoverRuleFromMarkdown('legacy.mdc', header + content, path, source)?.condition).toEqual(['first']);
+  const initial = await h.operation({ action: 'behavior.read' });
+  if (initial.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  const entry = initial.catalog.files[0];
+  await h.operation({ action: 'behavior.write', request: {
+    kind: entry.kind, scope: entry.scope, name: entry.name, content, expectedVersion: entry.version,
+    expectedRevision: initial.catalog.revision, fields: { condition: null },
+  } });
+  const saved = await readFile(path, 'utf8');
+  expect(discoverRuleFromMarkdown('legacy.mdc', saved, path, source)?.condition).toBeUndefined();
+  expect(entry.fields.condition).toBe('first');
+  expect(parseFrontmatter(saved, { rawKeys: true }).frontmatter).toEqual({ description: 'Still in the rulebook' });
+}, 60000);
+
 test('behavior file targets refuse escapes, executable hooks, SSH, symlinks and stale writes', async () => {
   const h = await fixture();
   const outside = join(h.root, 'outside.md');

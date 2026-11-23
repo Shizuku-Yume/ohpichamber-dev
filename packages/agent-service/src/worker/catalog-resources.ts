@@ -101,12 +101,14 @@ function ruleFilename(name: string): boolean {
   return /^[\p{L}\p{N}_-][\p{L}\p{N}_. -]*\.(?:mdc|md)$/u.test(name) && !/^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])\./i.test(name);
 }
 function version(text: string | undefined) { return text === undefined ? null : createHash('sha256').update(text).digest('hex'); }
+const legacyRuleConditionKeys = ['ttsr_trigger', 'ttsrTrigger'] as const;
 function behaviorFields(kind: 'rule' | 'instruction', text: string, path: string): BehaviorFileFields {
   const parsed = parseFrontmatter(text, { source: path }).frontmatter;
   const fields: Record<string, unknown> = {};
   const shape = kind === 'rule' ? BehaviorRuleFieldsSchema.shape : { applyTo: BehaviorFileFieldsSchema.shape.applyTo };
   for (const [key, schema] of Object.entries(shape)) {
-    const field = schema.safeParse(parsed[key]);
+    const value = key === 'condition' ? parsed[key] ?? parsed[legacyRuleConditionKeys[0]] ?? parsed[legacyRuleConditionKeys[1]] : parsed[key];
+    const field = schema.safeParse(value);
     if (field.success && field.data != null) fields[key] = field.data;
   }
   return BehaviorFileFieldsSchema.parse(fields);
@@ -195,7 +197,8 @@ export class NativeFileResources {
             const metadata = editableFrontmatter(header, yaml, path, NativeFrontmatterSchema);
             for (const [key, value] of Object.entries(fields)) {
               for (const rawKey of Object.keys(metadata)) {
-                if (Object.hasOwn(normalizeFrontmatterKeys({ [rawKey]: true }), key)) delete metadata[rawKey];
+                const normalized = normalizeFrontmatterKeys({ [rawKey]: true });
+                if (Object.hasOwn(normalized, key) || (key === 'condition' && legacyRuleConditionKeys.some(alias => Object.hasOwn(normalized, alias)))) delete metadata[rawKey];
               }
               if (value !== null) metadata[key] = value;
             }
