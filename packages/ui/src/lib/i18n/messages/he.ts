@@ -81,6 +81,7 @@ import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
+import { behaviorFilesI18n } from './behavior-files.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
@@ -3996,6 +3997,7 @@ const part2 = {
   ...btwI18n.he,
   ...subagentHudI18n['he'],
   ...ompSettingsI18n.he,
+  ...behaviorFilesI18n['he'],
   ...pluginsMarketplaceI18n.he,
   "mobile.connect.welcome.title": "התחברות ל-OhPiChamber",
   "mobile.connect.saved.title": "חיבורים שמורים",

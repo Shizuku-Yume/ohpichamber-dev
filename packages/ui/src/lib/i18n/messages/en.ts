@@ -79,6 +79,7 @@ import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
+import { behaviorFilesI18n } from './behavior-files.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { btwI18n } from './btw.i18n';
@@ -3971,6 +3972,7 @@ const part2 = {
   ...tooltipsChatI18n.en,
   ...chatWorkbenchI18n['en'],
   ...ompSettingsI18n.en,
+  ...behaviorFilesI18n['en'],
   ...pluginsMarketplaceI18n.en,
   ...subagentHudI18n['en'],
   ...btwI18n['en'],

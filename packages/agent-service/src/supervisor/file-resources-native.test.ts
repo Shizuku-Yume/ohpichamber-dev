@@ -6,19 +6,28 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseFrontmatter } from '@oh-my-pi/pi-utils';
-import { CommandCatalogStateSchema, FileResourceExpandResultSchema, FileResourceSkillCatalogSchema, PromptTemplateCatalogStateSchema } from '@openchamber/agent-contract';
+import { CommandCatalogStateSchema, FileResourceExpandResultSchema, FileResourceSkillCatalogSchema, PromptTemplateCatalogStateSchema, type ExtensionToggleRequest } from '@openchamber/agent-contract';
 import type { FileResourceOperation } from '../catalogs/file-resources-protocol.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { lookupBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-commands/builtin-registry';
+import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
+import { createSourceMeta, discoverRuleFromMarkdown } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
+import { TtsrManager } from '@oh-my-pi/pi-coding-agent/export/ttsr';
+import { initializeWithSettings, loadCapability } from '@oh-my-pi/pi-coding-agent/discovery';
+import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { reset as resetCapabilities } from '@oh-my-pi/pi-coding-agent/capability';
+import { ruleCapability, type Rule } from '@oh-my-pi/pi-coding-agent/capability/rule';
+import { systemPromptCapability, type SystemPrompt } from '@oh-my-pi/pi-coding-agent/capability/system-prompt';
 import { ALLOWED_BUILTIN_COMMANDS } from '../worker/builtin-commands.ts';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); });
-async function fixture() {
+async function fixture(nested = false) {
   const root = await mkdtemp(join(tmpdir(), 'native-file-resources-'));
-  const cwd = join(root, 'workspace'); const agentDirectory = join(root, 'agent');
-  await mkdir(cwd); await mkdir(agentDirectory);
+  const project = join(root, 'workspace');
+  const cwd = nested ? join(project, 'nested') : project; const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true }); await mkdir(agentDirectory);
   const workers = new WorkerRegistry({ workerEntrypoint: fileURLToPath(new URL('../worker/index.ts', import.meta.url)), startupTimeoutMs: 30000, policyCheck: async () => ({ allowed: true }) });
   cleanups.push(async () => { await workers.close(); await rm(root, { recursive: true, force: true }); });
   const stateDirectory = join(root, 'service');
@@ -34,6 +43,7 @@ async function fixture() {
     root, cwd, agentDirectory, workers, operation,
     settings: () => catalogs.operation('workspace', { type: 'catalog.settings.read' }),
     extensions: () => catalogs.operation('workspace', { type: 'extensions.read' }),
+    toggleExtension: (request: ExtensionToggleRequest) => catalogs.operation('workspace', { type: 'extensions.toggle', request }),
     updateSettings: (revision: string, changes: Array<{ id: string; value: boolean }>) =>
       catalogs.operation('workspace', { type: 'catalog.settings.write', request: { expectedRevision: revision, changes } }),
     reopen: async () => {
@@ -43,6 +53,181 @@ async function fixture() {
     },
   };
 }
+
+test('behavior file edits preserve native rule metadata, both fixed scopes, and strict legacy catalogs', async () => {
+  const h = await fixture();
+  const root = join(h.cwd, '.omp');
+  const rule = join(root, 'rules', 'greeting.mdc');
+  const header = '---\r\nenabled: false\r\ncondition: "hello"\r\nfuture: "true <!-- note -->"\r\n---\r\n';
+  await mkdir(join(root, 'rules'), { recursive: true });
+  await writeFile(rule, header + 'Old.\r\n');
+  const legacy = await h.operation({ action: 'commands.read' });
+  if (legacy.kind !== 'commands') throw new Error('Expected command catalog');
+  expect(Object.keys(legacy.catalog).sort()).toEqual(['builtinCommands', 'commands', 'revision', 'workspaceId']);
+  const read = async () => {
+    const result = await h.operation({ action: 'behavior.read' });
+    if (result.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+    return result.catalog;
+  };
+  const initial = await read();
+  const entry = initial.files[0];
+  expect(entry).toMatchObject({ scope: 'workspace', name: 'greeting.mdc', content: 'Old.\r\n', fields: { enabled: false, condition: 'hello' } });
+  const bodyOnly = await h.operation({ action: 'behavior.write', request: {
+    kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: entry.version, expectedRevision: initial.revision, content: 'New.\r\n',
+  } });
+  expect(await readFile(rule, 'utf8')).toBe(header + 'New.\r\n');
+  if (bodyOnly.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  await h.operation({ action: 'behavior.write', request: {
+    kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: bodyOnly.catalog.files[0].version,
+    expectedRevision: bodyOnly.catalog.revision, content: 'New.\r\n',
+    fields: { enabled: null, description: 'A note <!-- literal -->', astCondition: ['return $VALUE;'], scope: ['tool:edit(**/*.ts)'], repeatMode: 'after-gap' },
+  } });
+  expect(parseFrontmatter(await readFile(rule, 'utf8'), { level: 'fatal' }).frontmatter).toEqual({
+    condition: 'hello', future: 'true <!-- note -->', description: 'A note <!-- literal -->',
+    astCondition: ['return $VALUE;'], scope: ['tool:edit(**/*.ts)'], repeatMode: 'after-gap',
+  });
+  for (const scope of ['agent', 'workspace'] as const) {
+    const base = scope === 'workspace' ? root : h.agentDirectory;
+    for (const [kind, name] of [['system', 'SYSTEM.md'], ['sticky-rules', 'RULES.md']] as const) {
+      const { revision } = await read();
+      const content = `# ${scope} ${name}\n`;
+      await h.operation({ action: 'behavior.write', request: { kind, scope, name, content, expectedVersion: null, expectedRevision: revision } });
+      expect(await readFile(join(base, name), 'utf8')).toBe(content);
+    }
+    const { revision } = await read();
+    const content = 'Use a greeting.\n';
+    await h.operation({ action: 'behavior.write', request: {
+      kind: 'instruction', scope, name: 'greeting.instructions.md', content, expectedVersion: null, expectedRevision: revision, fields: { applyTo: '**/*.ts' },
+    } });
+    expect(parseFrontmatter(await readFile(join(base, 'instructions', 'greeting.instructions.md'), 'utf8'))).toEqual({
+      body: 'Use a greeting.', frontmatter: { applyTo: '**/*.ts' },
+    });
+  }
+  const inventory = await h.extensions();
+  if (inventory.type !== 'extensions.inventory') throw new Error('Expected native Extensions inventory');
+  expect(inventory.state.extensions.items.filter(entry => entry.kind === 'instruction' && entry.name === 'greeting').map(entry => entry.scope).sort()).toEqual(['project', 'user']);
+  const catalog = await read();
+  const target = catalog.files.find(file => file.scope === 'agent' && file.kind === 'system')!;
+  await h.operation({ action: 'behavior.delete', request: { kind: target.kind, scope: target.scope, name: target.name, expectedVersion: target.version, expectedRevision: catalog.revision } });
+  expect((await read()).files.some(file => file.scope === 'agent' && file.kind === 'system')).toBe(false);
+}, 60000);
+
+test('new enabled Behavior rules must be usable by OMP', async () => {
+  const h = await fixture();
+  const request = { kind: 'rule', scope: 'workspace' as const, name: 'new.mdc', content: 'Use a greeting.', expectedRevision: '0', expectedVersion: null };
+  const path = join(h.cwd, request.name);
+  const rule = discoverRuleFromMarkdown(request.name, request.content, path, createSourceMeta('native', path, 'project'));
+  expect(rule).not.toBeNull();
+  const manager = new TtsrManager();
+  expect(bucketRules([rule!], manager)).toEqual({ rulebookRules: [], alwaysApplyRules: [] });
+  expect(manager.getRules()).toEqual([]);
+  for (const fields of [undefined, { globs: ['*.md'] }, { condition: ['['] }]) {
+    await expect(h.operation({ action: 'behavior.write', request: { ...request, fields } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  }
+  const created = await h.operation({ action: 'behavior.write', request: { ...request, fields: { condition: ['*.md'] } } });
+  if (created.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  expect(created.catalog.files).toHaveLength(1);
+}, 60000);
+
+test('scoped Behavior writes do not shadow inherited OMP system and sticky rules', async () => {
+  const h = await fixture(true);
+  const parent = join(h.root, 'workspace', '.omp');
+  await mkdir(parent);
+  await writeFile(join(parent, 'SYSTEM.md'), 'Inherited system.');
+  await writeFile(join(parent, 'RULES.md'), 'Inherited rules.');
+  const checkInherited = async () => {
+    resetCapabilities();
+    const options = { cwd: h.cwd, agentDir: h.agentDirectory };
+    const systems = await loadCapability<SystemPrompt>(systemPromptCapability.id, options);
+    const rules = await loadCapability<Rule>(ruleCapability.id, options);
+    expect(systems.items.find(item => item.level === 'project')?.path).toBe(join(parent, 'SYSTEM.md'));
+    expect(rules.items.find(item => item.name === 'RULES@project')?._source?.path).toBe(join(parent, 'RULES.md'));
+  };
+  await checkInherited();
+  const request = { scope: 'workspace' as const, content: 'Use a greeting.', expectedRevision: '0', expectedVersion: null };
+  const outcome = await h.operation({ action: 'behavior.write', request: { ...request, kind: 'instruction', name: 'new.md' } }).catch(error => error as unknown);
+  await checkInherited();
+  expect(outcome).toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: 'new.mdc', fields: { alwaysApply: true } } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  expect(await readdir(h.cwd)).not.toContain('.omp');
+}, 60000);
+
+test('an inherited sticky rule disabled in Extensions does not block a local Behavior write', async () => {
+  const h = await fixture(true);
+  const parent = join(h.root, 'workspace', '.omp');
+  await mkdir(parent);
+  const path = join(parent, 'RULES.md');
+  await writeFile(path, 'Inherited rules.');
+  const initial = await h.extensions();
+  if (initial.type !== 'extensions.inventory') throw new Error('Expected Extensions inventory');
+  const sticky = initial.state.extensions.items.find(item => item.kind === 'rule' && item.name === 'RULES@project');
+  expect(sticky).toMatchObject({ enabled: true, providerId: 'native', toggleable: true });
+  const request = { kind: 'instruction', name: 'new.md', scope: 'workspace' as const, content: 'Use a greeting.', expectedVersion: null };
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, expectedRevision: initial.state.revision } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  const disabled = await h.toggleExtension({
+    providerId: sticky!.providerId, extensionId: sticky!.id, enabled: false, expectedRevision: initial.state.revision,
+  });
+  if (disabled.type !== 'extensions.inventory') throw new Error('Expected Extensions inventory');
+  expect(disabled.state.extensions.items.find(item => item.id === sticky!.id)).toMatchObject({ enabled: false, disabledReason: 'item-disabled' });
+  resetCapabilities();
+  const release = initializeWithSettings(await Settings.init({ cwd: h.cwd, agentDir: h.agentDirectory }));
+  try {
+    const rules = await loadCapability<Rule>(ruleCapability.id, { cwd: h.cwd, agentDir: h.agentDirectory });
+    expect(rules.items.find(item => item.name === 'RULES@project')).toBeUndefined();
+  } finally { release(); }
+  const result = await h.operation({ action: 'behavior.write', request: { ...request, expectedRevision: disabled.state.revision } });
+  if (result.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  expect(result.catalog.files).toMatchObject([{ name: request.name, content: request.content }]);
+  expect(await readFile(path, 'utf8')).toBe('Inherited rules.');
+}, 60000);
+
+test('clearing a Behavior condition removes the native fallback triggers', async () => {
+  const h = await fixture();
+  const directory = join(h.cwd, '.omp', 'rules');
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, 'legacy.mdc');
+  const source = createSourceMeta('native', path, 'project');
+  const header = '---\ndescription: Still in the rulebook\nttsr_trigger: first\nttsrTrigger: second\nttsr-trigger: third\n---\n';
+  const content = 'Use a greeting.';
+  await writeFile(path, header + content);
+  expect(discoverRuleFromMarkdown('legacy.mdc', header + content, path, source)?.condition).toEqual(['first']);
+  const initial = await h.operation({ action: 'behavior.read' });
+  if (initial.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  const entry = initial.catalog.files[0];
+  await h.operation({ action: 'behavior.write', request: {
+    kind: entry.kind, scope: entry.scope, name: entry.name, content, expectedVersion: entry.version,
+    expectedRevision: initial.catalog.revision, fields: { condition: null },
+  } });
+  const saved = await readFile(path, 'utf8');
+  expect(discoverRuleFromMarkdown('legacy.mdc', saved, path, source)?.condition).toBeUndefined();
+  expect(entry.fields.condition).toBe('first');
+  expect(parseFrontmatter(saved, { rawKeys: true }).frontmatter).toEqual({ description: 'Still in the rulebook' });
+}, 60000);
+
+test('behavior file targets refuse escapes, executable hooks, SSH, symlinks and stale writes', async () => {
+  const h = await fixture();
+  const outside = join(h.root, 'outside.md');
+  await writeFile(outside, 'Do not replace.\n');
+  const root = join(h.cwd, '.omp');
+  await mkdir(join(root, 'rules'), { recursive: true });
+  await symlink(outside, join(root, 'rules', 'escape.md'));
+  const request = { scope: 'workspace' as const, content: 'Benign.\n', expectedRevision: '0', expectedVersion: null };
+  for (const [kind, name] of [
+    ['rule', '../outside.md'], ['rule', outside], ['rule', 'C:\\outside.md'], ['rule', 'escape.md'],
+    ['hook', 'hook.md'], ['ssh', 'ssh.json'], ['system', 'APPEND_SYSTEM.md'], ['rule', 'ssh.json'],
+  ]) {
+    await expect(h.operation({ action: 'behavior.write', request: { ...request, kind, name } })).rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
+  }
+  expect(await readFile(outside, 'utf8')).toBe('Do not replace.\n');
+  const created = await h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: 'local.md', fields: { alwaysApply: true } } });
+  if (created.kind !== 'behavior') throw new Error('Expected Behavior catalog');
+  expect(created.catalog.files.map(file => file.name)).toEqual(['local.md']);
+  const entry = created.catalog.files[0];
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: entry.name, expectedVersion: entry.version } })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+  await writeFile(join(root, 'rules', entry.name), 'Outside edit.\n');
+  await expect(h.operation({ action: 'behavior.write', request: { ...request, kind: 'rule', name: entry.name, expectedRevision: created.catalog.revision, expectedVersion: entry.version } })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+  expect(await readFile(join(root, 'rules', entry.name), 'utf8')).toBe('Outside edit.\n');
+}, 60000);
 
 test('native command CRUD preserves Markdown, metadata, quoted arguments and durable CAS without a session', async () => {
   const h = await fixture();

@@ -13,9 +13,12 @@ workspace auth gate, and OMP readiness. This is not full M7 release evidence.
 W11 exposes OMP 19.1 command and skill discovery on their existing pages and
 creates grouped native prompts through the existing catalog. Command and prompt
 edits preserve unowned native metadata without evolving Capacitor response
-schemas. The Behavior route remains limited to `AGENTS.md`; rule, system-prompt
-and instruction editors need a separately confined resource contract and SDK
-consumption evidence. Host voice remains separate from native OMP config.
+schemas. The original Behavior route remains limited to `AGENTS.md`. The opt-in
+Behavior file catalog authors OMP 19.1 scoped rules, `RULES.md`, `SYSTEM.md`, and
+instructions in the selected workspace or agent directory. Native instructions
+are loaded by Extensions discovery, not injected into SDK sessions. The CLI-only
+`APPEND_SYSTEM.md` discovery path is not part of the editor. Hooks, SSH, and Host
+voice boundaries are unchanged.
 Isolated worker and UI tests verify discovery writes, nested creation and
 metadata preservation; existing Host tests cover Behavior and voice contracts.
 Native project overrides are read-only on the discovery pages. The overlapping
