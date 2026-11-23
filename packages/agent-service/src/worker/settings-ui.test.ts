@@ -58,7 +58,7 @@ test('misclassifications are fixed: followUpMode is not a chat owner; recap belo
 
 test('an owned-by placement names an owner control, and all placement types stay populated', () => {
   expect([...OMP_SETTING_OWNER_IDS].sort()).toEqual([
-    'chat.session-recap', 'chat.suggestion-generator', 'omp.modelRoles', 'sessions.default-thinking',
+    'chat.session-recap', 'chat.suggestion-generator', 'model-roles.section.chat', 'sessions.default-thinking',
     'sessions.fallback-model', 'sessions.model-compaction',
   ]);
   const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, 'config-only': 0, hidden: 0, boundary: 0 };

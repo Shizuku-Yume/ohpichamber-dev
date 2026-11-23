@@ -92,3 +92,34 @@ test('magic edit mode is neither offered nor writable through settings', async (
     })).rejects.toThrow('Magic edit mode is not supported');
   } finally { await f.close(); }
 });
+
+test('a model role the project config sets is refused instead of saved where it is shadowed', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'settings-roles-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(join(cwd, '.omp'), { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  await writeFile(join(cwd, '.omp', 'config.yml'), 'modelRoles:\n  plan: fixture/project-plan\n');
+  await writeFile(join(agentDirectory, 'config.yml'), 'modelRoles:\n  smol: fixture/global-smol\n');
+  const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  const native = new NativeSettings(settings, agentDirectory);
+  try {
+    const read = await native.read('workspace_1', '1');
+    const roles = read.settings.find(setting => setting.id === 'modelRoles')?.value as Record<string, unknown>;
+    expect(roles).toMatchObject({ plan: 'fixture/project-plan', smol: 'fixture/global-smol' });
+    const refused = native.write('workspace_1', '2', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'modelRoles', value: { ...roles, plan: 'fixture/other' } }],
+    });
+    await expect(refused).rejects.toMatchObject({ status: 409 });
+    await native.write('workspace_1', '2', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'modelRoles', value: { ...roles, smol: 'fixture/new-smol' } }],
+    });
+    const stored = YAML.parse(await readFile(join(agentDirectory, 'config.yml'), 'utf8')) as { modelRoles: Record<string, unknown> };
+    expect(stored.modelRoles.smol).toBe('fixture/new-smol');
+  } finally {
+    settings.cancelPendingSaves();
+    await rm(root, { recursive: true, force: true });
+  }
+});

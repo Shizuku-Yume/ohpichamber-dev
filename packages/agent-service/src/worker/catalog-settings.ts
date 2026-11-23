@@ -43,6 +43,24 @@ function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
   return undefined;
 }
 
+/**
+ * A role the project's own config sets shadows the shared one, and the route
+ * writes the shared layer: changing that role would save a value no session
+ * in this project reads.
+ */
+function changesProjectModelRole(settings: Settings, value: unknown): boolean {
+  const project = settings.getProjectSettings().modelRoles;
+  if (project === null || typeof project !== 'object' || Array.isArray(project)) return false;
+  const current = cfgModelRolesRecord(settings);
+  const next = value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return Object.keys(project).some(role => !isDeepStrictEqual(current[role], next[role]));
+}
+
+function cfgModelRolesRecord(settings: Settings): Record<string, unknown> {
+  const roles = handle('modelRoles').layered(settings);
+  return roles !== null && typeof roles === 'object' && !Array.isArray(roles) ? roles as Record<string, unknown> : {};
+}
+
 function hasCompactionOverride(setting: AnySetting, settings: Settings): boolean {
   if (setting.id !== 'compaction.modelThresholds' && setting.id !== 'compaction.modelThresholdsEnabled') return false;
   const provenance = settings.getProvenance(setting);
@@ -155,6 +173,9 @@ export class NativeSettings {
         change.expectedValue,
       )) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native OMP setting changed on disk');
+      }
+      if (change.id === 'modelRoles' && changesProjectModelRole(this.settings, change.value)) {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
       }
       const inactiveCondition = inactiveWriteCondition(setting, this.settings);
       if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig || inactiveCondition === RESET_POLICY_OVERRIDE || inactiveCondition === COMPACTION_OVERRIDE) {

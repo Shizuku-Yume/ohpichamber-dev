@@ -136,10 +136,10 @@ describe('OMP settings layout', () => {
       const matches = ompPageIds.filter((candidate) => candidate === `omp.${id}`);
       expect({ id, count: matches.length }).toEqual({ id, count: 1 });
     }
-    // The page's own two non-row anchors: the model-role editor and the closing
-    // config.yml section.
+    // The page's own non-row anchor: the closing config.yml section. Model
+    // roles moved to their own page.
     const extra = ompPageIds.filter((candidate) => !OMP_SETTING_IDS.some((id) => candidate === `omp.${id}`));
-    expect(extra.sort()).toEqual(['omp.configFile', 'omp.modelRoles']);
+    expect(extra.sort()).toEqual(['omp.configFile']);
     for (const id of ['omp.dev.autoqa', 'omp.spotlight.experiment.enabled', 'omp.read.renderMarkdown']) {
       expect(`${id}: ${ompPageIds.includes(id)}`).toBe(`${id}: false`);
     }

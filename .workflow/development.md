@@ -119,6 +119,17 @@ The extra dead-code gate exits 1 with repository-wide findings (106 files,
 No visual or live-service verification was performed; the next check is a
 maintainer review of the import/create/private-save UI flow.
 
+W5 model-role remediation adds a Model roles settings page that lists OMP
+19.1's sixteen built-in roles in their native order. It edits vision, commit,
+tiny, memory, task, advisor, widget, judge and image from the existing chat and
+image catalogs. Defaults, Web search and Voice keep their roles behind links,
+and Git, Memory, Agents and Tools link to the page. A shared write that changes
+a role the project's `.omp/config.yml` sets now returns 409. Strict
+catalog and settings schemas are unchanged. Judge-kind, tiny-kind, TTS and STT
+models stay unlisted until a capability endpoint exists; dictation,
+`modelTags`, `cycleOrder` and `modelPresets` stay terminal-only. Worker settings
+tests, the page/layout/ownership tests, root type-check, oxlint and drift pass.
+
 The OMP 19.1 settings-placement pass exposes native host sleep prevention in
 General. Native layer overrides are read-only, and Linux containers without a
 system D-Bus socket display that the feature is unavailable; no deployment

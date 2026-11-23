@@ -10,6 +10,7 @@ export type SettingsPageSlug =
   | 'web-search'
   | 'tools'
   | 'memory'
+  | 'model-roles'
   | 'omp'
   | 'behavior'
   | 'usage'
@@ -118,6 +119,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     kind: 'single',
     description: 'Agent memory backend and options for persistent learnings.',
     keywords: ['memory', 'backend', 'mnemopi', 'hindsight', 'sharpshooter', 'autolearn', 'learnings', 'embeddings', 'recall', 'retain'],
+  },
+  {
+    slug: 'model-roles',
+    title: 'Model roles',
+    group: 'agent',
+    kind: 'single',
+    description: 'Pick the model each OMP role runs on.',
+    keywords: ['model roles', 'roles', 'models', 'vision', 'tiny', 'judge', 'widget', 'advisor', 'subagent', 'commit', 'image', 'thinking effort'],
   },
   {
     slug: 'usage',
@@ -326,6 +335,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'tools';
     case 'memory':
       return 'database-2';
+    case 'model-roles':
+      return 'cpu';
     case 'omp':
       return 'equalizer-2';
     case 'behavior':

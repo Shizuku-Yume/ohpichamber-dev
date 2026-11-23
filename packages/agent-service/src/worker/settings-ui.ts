@@ -562,10 +562,11 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'spotlight.experiment.enabled': 'boundary',
 
   // --- Untabbed settings explicitly placed ---
-  // The role record is drawn by the shared `ModelRoleEditor`, not by a generic
-  // row: Defaults (default), Agents (task, advisor), Tools (image) and Memory
-  // (memory) each edit one role through the same control.
-  'modelRoles': 'owned-by omp.modelRoles',
+  // The role record is drawn by the Model roles page, one `ModelRoleEditor` per
+  // role, not by a generic row. Defaults keeps default, smol, slow and plan
+  // beside the session controls they feed, and Web search owns web; other
+  // pages show their role and link to the hub.
+  'modelRoles': 'owned-by model-roles.section.chat',
   'cycleOrder': 'tui-only',
   'modelPresets': 'tui-only',
   'suggestion.generator': 'owned-by chat.suggestion-generator',
