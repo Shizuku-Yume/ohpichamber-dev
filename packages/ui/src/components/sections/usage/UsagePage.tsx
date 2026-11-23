@@ -113,8 +113,13 @@ const ResetCreditSettings: React.FC = () => {
   return (
     <SettingsSection title={t('settings.usage.native.resetPolicy')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
       {rows.map((setting) => (
-        <OmpRowControl key={setting.id} setting={setting} value={form[setting.id] ?? setting.value}
-          disabled={saving || setting.conditionActive === false} onChange={(value) => void updateSetting(setting, value)} />
+        <React.Fragment key={setting.id}>
+          <OmpRowControl setting={setting} value={form[setting.id] ?? setting.value}
+            disabled={saving || setting.conditionActive === false} onChange={(value) => void updateSetting(setting, value)} />
+          {setting.conditionActive === false && (
+            <p className="typography-meta text-muted-foreground">{t('settings.omp.sharedConfig.overridden')}</p>
+          )}
+        </React.Fragment>
       ))}
     </SettingsSection>
   );

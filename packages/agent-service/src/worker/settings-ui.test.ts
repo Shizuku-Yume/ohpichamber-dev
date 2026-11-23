@@ -209,6 +209,27 @@ test('Usage edits reset tuning without exposing automatic redemption', async () 
   } finally { await f.close(); }
 });
 
+test('a project reset policy is readable without allowing edits to shared config', async () => {
+  const f = await fixture();
+  try {
+    const sharedPath = join(f.agentDirectory, 'config.yml');
+    const sharedConfig = 'codexResets:\n  keepCredits: 3\n';
+    await writeFile(sharedPath, sharedConfig);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'codexResets:\n  keepCredits: 7\n');
+    const state = await f.native.read('workspace_1', '0');
+    expect(state.settings.find(({ id }) => id === 'codexResets.keepCredits')).toMatchObject({
+      value: 7,
+      conditionActive: false,
+    });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{ id: 'codexResets.keepCredits', value: 2 }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(sharedPath, 'utf8')).toBe(sharedConfig);
+  } finally { await f.close(); }
+});
+
 test('General power uses the native OMP sleep-prevention setting', async () => {
   const f = await fixture();
   try {
