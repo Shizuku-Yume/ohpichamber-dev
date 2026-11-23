@@ -1,5 +1,15 @@
 # Decisions
 
+## 2026-11-23 - Provider credential selection: D4 resolved
+
+- **Decided:** an explicit null in `defaultCredentials` means automatic native OMP selection; an absent key preserves legacy provider pins. Selecting an account remains an explicit pin. Adding credentials or completing OAuth does not select an account. Removing an account leaves its dangling pin unchanged.
+- **Boundary:** Host `provider.use` admission remains provider/model/endpoint-based and runs before credential resolution, independent of which account OMP selects. Provider auth references remain available to private quota/TTS/routing consumers. Native OMP retains account ranking, limits and backoff; no application rotation mechanism is added.
+- **UI:** shared Providers settings offers Automatic or an enabled account, marks explicit pins, preserves reauthentication states and disables selection when a higher-precedence credential wins. Canonical mutations and localized feedback are shared by Web/PWA, Electron, hosted mobile and Capacitor.
+- **Instead of:** silently clearing existing pins, treating the projected private credential as a runtime selection, or maintaining a second rotation policy.
+- **Tracking:** the upstream Providers components and provider locale bundle deliberately differ for this Canonical/OMP selection contract. The dated OMP 19.0 research plan remains historical input, not the implemented wire contract.
+- **Mine:** yes (maintainer-settled W8 design).
+- **Revisit when:** OMP exposes different selection semantics or Host provider-use admission changes. Live-provider rotation remains unverified.
+
 ## 2026-11-22 - Keep OMP 19.1 commands and MCP behind the Host boundary
 
 - **Decided:** retain OMP's native Bash command transport while authorizing both Bash and the dispatched tool, and keep MCP hosts local to the worker. Keep magic edit mode out of the Canonical settings and authorization surface.

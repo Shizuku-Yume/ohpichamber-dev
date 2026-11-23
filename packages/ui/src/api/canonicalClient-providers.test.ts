@@ -30,10 +30,10 @@ test('OAuth start requires unchanged starting revision', async () => {
 
 
 test('account reads reject foreign provider and secret-bearing payloads', async () => {
-  respond({ revision: '0', providerId: 'other', accounts: [] });
+  respond({ revision: '0', providerId: 'other', accounts: [], selectionMode: 'automatic', selectionOverriddenBy: null });
   await expect(client.providerAccounts('workspace', 'stored-provider')).rejects.toThrow();
   restoreFetch?.();
-  respond({ revision: '0', providerId: 'stored-provider', accounts: [], token: 'private' });
+  respond({ revision: '0', providerId: 'stored-provider', accounts: [], selectionMode: 'automatic', selectionOverriddenBy: null, token: 'private' });
   await expect(client.providerAccounts('workspace', 'stored-provider')).rejects.toThrow();
 });
 

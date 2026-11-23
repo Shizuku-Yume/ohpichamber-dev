@@ -17,7 +17,7 @@ test('public provider flow and account result envelopes reject token and private
     expect(CatalogResultSchema.safeParse({ ...flow, result: { ...flow.result, [field]: 'private-marker' } }).success).toBe(false);
   }
   const account = { credentialRef: 'opaque', method: 'oauth', active: true, disabled: false };
-  const accounts = { type: 'catalog.provider.accounts', result: { providerId: 'stored-provider', revision: '0', accounts: [account] } };
+  const accounts = { type: 'catalog.provider.accounts', result: { providerId: 'stored-provider', revision: '0', accounts: [account], selectionMode: 'pinned', selectionOverriddenBy: null } };
   expect(CatalogResultSchema.safeParse(accounts).success).toBe(true);
   expect(CatalogResultSchema.safeParse({ ...accounts, result: { ...accounts.result, accounts: [{ ...account, storageId: 'private-row' }] } }).success).toBe(false);
 });

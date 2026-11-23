@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema } from './primitives.ts';
-import { ModelSchema, ProviderConfigurationSchema } from './catalogs.ts';
+import { ModelSchema, ProviderAuthSourceSchema, ProviderConfigurationSchema } from './catalogs.ts';
 import {
   OmpProviderApiSchema,
   OmpProviderConfigReadSchema,
@@ -14,9 +14,14 @@ export const ProviderAccountSchema = z.strictObject({
   credentialRef: EntityIdSchema, method: z.enum(['api-key', 'oauth']), label: z.string().max(128).optional(),
   email: z.string().optional(), accountId: z.string().optional(), active: z.boolean(), disabled: z.boolean(),
 });
-export const ProviderAccountsSchema = z.strictObject({ revision: CounterSchema, providerId: EntityIdSchema, accounts: z.array(ProviderAccountSchema) });
+export const ProviderAccountsSchema = z.strictObject({
+  revision: CounterSchema, providerId: EntityIdSchema, accounts: z.array(ProviderAccountSchema),
+  selectionMode: z.enum(['automatic', 'pinned']),
+  selectionOverriddenBy: ProviderAuthSourceSchema.nullable(),
+});
 export type ProviderAccounts = z.infer<typeof ProviderAccountsSchema>;
 export const ProviderAccountMutationRequestSchema = z.discriminatedUnion('action', [
+  z.strictObject({ action: z.literal('automatic'), expectedRevision: CounterSchema }),
   z.strictObject({ action: z.literal('select'), expectedRevision: CounterSchema, credentialRef: EntityIdSchema }),
   z.strictObject({ action: z.literal('remove'), expectedRevision: CounterSchema, credentialRef: EntityIdSchema }),
   z.strictObject({ action: z.literal('label'), expectedRevision: CounterSchema, credentialRef: EntityIdSchema, label: z.string().trim().max(128) }),

@@ -1,5 +1,21 @@
 # MCP backend integration
 
+## Provider account selection
+
+Account selection persists in `openchamber.defaultCredentials`: an explicit null
+means automatic native selection; only an absent key falls back to the legacy
+provider credential ref. Account creation and OAuth commit preserve existing
+selection. Automatic and pinned mutations share the catalog commit and rollback
+path. Removing a pinned account leaves the pin unavailable until the user selects
+another account or automatic mode.
+
+Rosters mark only explicit pins active and report a non-stored winning auth
+source through `selectionOverriddenBy`, using the provider auth projection.
+Automatic resolution delegates to native ModelRegistry and its limits/backoff.
+Provider auth credential refs remain available to private quota/TTS/routing
+consumers independently of account selection. Host provider-use authorization
+still precedes runtime credential resolution and authorizes provider/model/endpoint.
+
 ## Native Host usage tool
 
 `openchamber_usage` exposes only `usage.read`. It is disabled by default, follows

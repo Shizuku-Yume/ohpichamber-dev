@@ -138,6 +138,12 @@ The composed Node Host/Bun scenario has verified these boundaries on Linux, incl
 
 Authentication requires a validated UI cookie (`ui-session` or signed `ui-passwordless`), a paired bearer token, or a tunnel session. URL/Guest asset tokens and `X-Internal-Secret` are not external credentials. Protected routes use `allowAnonymousSession: false`. Mutations and requests with an explicit `Origin` header require `isRequestOriginAllowed(req)`; disallowed or opaque `Origin: null` headers are refused with 403 `INVALID_ORIGIN`. Enterprise mode policy is read at use time and returns 403 `enterprise_mode` for provider entry operations. Responses use `Cache-Control: no-store`.
 
+Existing account mutations (`select`, `automatic`, `remove`, `label`) share the
+authenticated workspace gateway and remain available in enterprise mode; they
+do not enter new credentials. Runtime provider-use admission authorizes the
+provider/model/endpoint independently of native account selection. Private
+quota/TTS/routing credential resolution remains reference-specific.
+
 ### Speculative session preparation
 
 `POST /api/agent/v1/sessions/prepare` and `DELETE /api/agent/v1/sessions/prepare` manage bounded speculative preparation for fast new-chat latency:

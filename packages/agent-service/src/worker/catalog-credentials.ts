@@ -37,11 +37,13 @@ export class NativeCredentials {
     const labels = await this.labels();
     const selected = this.models.defaultCredentialRef(providerId);
     const provider = this.models.provider(providerId);
-    const active = selected ?? (provider.auth.status === 'configured' && provider.auth.source === 'stored-credential' ? provider.auth.credentialRef : null);
-    return ProviderAccountsSchema.parse({ revision, providerId, accounts: this.authStorage.credentials.list(providerId).map(row => {
+    const selectionOverriddenBy = provider.auth.status === 'configured' && provider.auth.source !== 'stored-credential'
+      ? provider.auth.source : null;
+    return ProviderAccountsSchema.parse({ revision, providerId, selectionMode: selected === null ? 'automatic' : 'pinned',
+      selectionOverriddenBy, accounts: this.authStorage.credentials.list(providerId).map(row => {
       const credentialRef = credentialReference(providerId, row.id);
       const account = { credentialRef, method: row.credential.type === 'oauth' ? 'oauth' : 'api-key',
-        label: labels[credentialRef], active: credentialRef === active, disabled: row.disabledCause !== null };
+        label: labels[credentialRef], active: credentialRef === selected, disabled: row.disabledCause !== null };
       if (row.credential.type !== 'oauth') return account;
       return { ...account, email: row.credential.email, accountId: row.credential.accountId };
     }) });
@@ -50,6 +52,10 @@ export class NativeCredentials {
   async account(providerId: string, input: ProviderAccountMutationRequest, revision: string): Promise<ProviderAccounts> {
     const request = ProviderAccountMutationRequestSchema.parse(input);
     await this.models.readProviders(this.workspaceId, request.expectedRevision);
+    if (request.action === 'automatic') {
+      await this.models.selectCredential(providerId, null, revision);
+      return this.accounts(providerId, revision);
+    }
     const row = this.authStorage.credentials.list(providerId).find(row => credentialReference(providerId, row.id) === request.credentialRef);
     if (!row) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider account is no longer stored');
     if (request.action === 'select') {

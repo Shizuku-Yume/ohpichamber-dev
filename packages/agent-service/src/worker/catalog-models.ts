@@ -1080,7 +1080,9 @@ export class NativeModels {
  }
 
  defaultCredentialRef(providerId: string): string | null {
-  return this.metadata.defaultCredentials[providerId] ?? this.metadata.providers[providerId]?.credentialRef ?? null;
+  return Object.hasOwn(this.metadata.defaultCredentials, providerId)
+   ? this.metadata.defaultCredentials[providerId] ?? null
+   : this.metadata.providers[providerId]?.credentialRef ?? null;
  }
 
  async selectCredential(providerId: string, credentialRef: string | null, revision: string): Promise<ProviderMutationResult> {

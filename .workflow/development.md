@@ -4,6 +4,24 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+W8 adds persisted automatic account selection without resetting legacy
+pins: an explicit null default ref suppresses legacy fallback, while an absent
+key preserves it. Rosters require selection mode and overriding auth source;
+only explicit pins mark accounts active. Native ModelRegistry owns automatic
+selection and backoff; Host provider/model/endpoint admission and private
+quota/TTS/routing credential refs remain independent. Providers settings uses
+shared selection controls for Automatic or an enabled account, explicit Pinned
+badges, native-backoff copy and localized override notices that disable account
+selection. Automatic mutations have separate success feedback and do not carry
+a credential ref. Focused contract, worker, Host and session-ordering tests pass.
+The D4 decision records persistence and admission semantics; the dated research
+plan remains historical. Local verification: 7 account component tests, 11
+Providers page helper tests, 2 OAuth component tests and 5 Canonical provider
+client tests pass individually; 81 contract tests and 79 worker/protocol tests
+pass. Root type-check (including upstream drift) and lint pass; lint reports
+warnings outside the changed files. No visual or live-provider rotation
+certification is included.
+
 The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
 `TerminalView`: completed output stays visible despite close-on-exit, a missing
 Host session cannot become an interactive shell, and command tabs cannot restart.

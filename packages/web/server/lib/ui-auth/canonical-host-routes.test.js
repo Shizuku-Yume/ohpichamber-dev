@@ -167,6 +167,7 @@ describe('canonical Host authenticated real-service boundary', () => {
     for (const [method, suffix, body] of [
       ['get', 'oauth-methods'], ['post', 'discover', { endpoint: 'https://provider.invalid/v1', protocol: 'responses' }],
       ['get', 'native/accounts'], ['post', 'native/accounts', { action: 'select', credentialRef: 'opaque', expectedRevision: '0' }],
+      ['post', 'native/accounts', { action: 'automatic', expectedRevision: '0' }],
       ['post', 'native/oauth', { action: 'start', expectedRevision: '0' }], ['get', 'native/config'],
     ]) {
       let call = request(app)[method](`/api/agent/v1/workspaces/workspace_1/providers/${suffix}`);
@@ -181,7 +182,7 @@ describe('canonical Host authenticated real-service boundary', () => {
     const oauth = '/api/agent/v1/workspaces/workspace_1/providers/login-method/oauth';
     requestService = async (_url, init) => {
       const body = JSON.parse(init.body);
-      if (body.credentialRef) return Response.json({ revision: '1', providerId: 'stored-provider', accounts: [] });
+      if (body.credentialRef || body.action === 'automatic') return Response.json({ revision: '1', providerId: 'stored-provider', accounts: [], selectionMode: body.action === 'select' ? 'pinned' : 'automatic', selectionOverriddenBy: null });
       return Response.json({ ...identity, providerId: 'stored-provider', revision: '0', status: body.action === 'cancel' ? 'cancelled' : 'pending', manualInput: false });
     };
     policyEnabled = true;
@@ -203,11 +204,17 @@ describe('canonical Host authenticated real-service boundary', () => {
       }), 403, 'enterprise_mode');
     expect(requests).toHaveLength(0);
     for (const action of ['status', 'cancel']) await request(app).post(oauth).set('Authorization', `Bearer ${token}`).send({ action, ...identity }).expect(200);
-    for (const action of ['select', 'remove', 'label']) await request(app).post('/api/agent/v1/workspaces/workspace_1/providers/stored-provider/accounts')
-      .set('Authorization', `Bearer ${token}`).send({ action, expectedRevision: '0', credentialRef: 'opaque', ...(action === 'label' ? { label: 'Work' } : {}) }).expect(200);
+    for (const action of ['select', 'automatic', 'remove', 'label']) {
+      const body = { action, expectedRevision: '0', ...(action === 'automatic' ? {} : { credentialRef: 'opaque' }), ...(action === 'label' ? { label: 'Work' } : {}) };
+      await request(app).post('/api/agent/v1/workspaces/workspace_1/providers/stored-provider/accounts')
+        .set('Authorization', `Bearer ${token}`).send(body).expect(200);
+      expect(JSON.parse(requests.at(-1).init.body)).toEqual(body);
+      assertProblem(await request(app).post('/api/agent/v1/workspaces/workspace_foreign/providers/stored-provider/accounts')
+        .set('Authorization', `Bearer ${token}`).send(body), 403, 'UNAUTHORIZED');
+    }
     policyEnabled = false;
     await request(app).post(oauth).set('Authorization', `Bearer ${token}`).send({ action: 'start', expectedRevision: '0' }).expect(200);
-    expect(requests).toHaveLength(6);
+    expect(requests).toHaveLength(7);
   });
   it('authorizes workspace MCP Settings independently of session admission and rejects foreign workspace access', async () => {
     servicePhase = 'ready';

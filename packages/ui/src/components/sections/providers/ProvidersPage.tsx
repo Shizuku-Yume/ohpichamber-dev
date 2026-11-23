@@ -189,14 +189,18 @@ function ProviderDetail({
 
   const mutateAccount = async (request: ProviderAccountMutationRequest) => {
     if (busy || disconnectBusy || accountBusyId !== null) return;
-    const previous = detail?.accounts.accounts.find((account) => account.credentialRef === request.credentialRef);
-    setAccountBusyId(request.credentialRef);
+    const previous = request.action === 'automatic' ? undefined
+      : detail?.accounts.accounts.find((account) => account.credentialRef === request.credentialRef);
+    setAccountBusyId(request.action === 'automatic' ? 'automatic' : request.credentialRef);
     setAccountError(null);
     try {
       const next = await canonicalClient.mutateProviderAccount(workspaceId, provider.providerId, request);
       if (!current()) return;
       setDetail((value) => value ? { ...value, accounts: next } : value);
-      if (request.action === 'select') {
+      if (request.action === 'automatic') {
+        toast.success(t('settings.providers.accounts.selection.enabled'));
+        await onRefresh();
+      } else if (request.action === 'select') {
         toast.success(t('settings.providers.accounts.toast.switched', {
           account: previous?.label || previous?.email || previous?.accountId || request.credentialRef,
         }));
@@ -210,7 +214,7 @@ function ProviderDetail({
       if (current()) {
         setAccountError(problemMessage(error, t(request.action === 'label'
           ? 'settings.providers.accounts.toast.renameFailed'
-          : request.action === 'select'
+          : request.action === 'select' || request.action === 'automatic'
             ? 'settings.providers.accounts.toast.switchFailed'
             : 'settings.providers.accounts.toast.removeFailed')));
       }
@@ -321,7 +325,7 @@ function ProviderDetail({
     <>
       <SettingsSection
         title={t('settings.providers.accounts.title')}
-        info={t('settings.providers.accounts.info')}
+        info={t('settings.providers.accounts.selection.info')}
         divider={false}
         headerAction={(
           <div className="flex items-center gap-1">
