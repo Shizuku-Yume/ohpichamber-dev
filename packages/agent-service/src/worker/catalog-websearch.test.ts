@@ -263,6 +263,24 @@ test('project settings remain authoritative when native search updates would ove
   } finally { await worker.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('the project fallback reset cannot clear the hidden shared web chain', async () => {
+  const { directory, bootstrap } = await fixture();
+  const configPath = join(bootstrap.agentDirectory, 'config.yml');
+  const sharedConfig = 'retry:\n  fallbackChains:\n    web: [web/exa]\n';
+  await writeFile(configPath, sharedConfig);
+  await mkdir(join(bootstrap.cwd, '.omp'));
+  await writeFile(join(bootstrap.cwd, '.omp', 'config.yml'), 'retry:\n  fallbackChains: null\n');
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    for (const fallbackProviderIds of [null, ['web/tavily']]) {
+      await expect(search.operation({ type: 'update', request: { expectedRevision: '0', fallbackProviderIds } }))
+        .rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+    }
+    expect(await readFile(configPath, 'utf8')).toBe(sharedConfig);
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('separate workspace native owners sharing the same directory cannot bypass CAS', async () => {
   const { directory, bootstrap } = await fixture();
   const runtime = await openNativeRuntime(bootstrap);

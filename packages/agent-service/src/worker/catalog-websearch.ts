@@ -149,10 +149,14 @@ export class NativeWebSearch {
       if (operation.type === 'update') {
         const request = operation.request;
         const blockedSources = ['project', 'overlay', 'env', 'runtime'];
+        const projectRetry = this.runtime.settings.getProjectSettings().retry;
         if ((request.enabled !== undefined && blockedSources.includes(cfgWebSearchEnabled.provenance(this.runtime.settings)))
           || (request.timeoutSeconds !== undefined && blockedSources.includes(cfgProvidersWebSearchTimeoutSeconds.provenance(this.runtime.settings)))
           || (request.selectedProviderId !== undefined && blockedSources.includes(this.runtime.settings.getModelRoleProvenance('web')))
-          || (request.fallbackProviderIds !== undefined && blockedSources.includes(cfgRetryFallbackChains.provenance(this.runtime.settings)))
+          || (request.fallbackProviderIds !== undefined && (
+            blockedSources.includes(cfgRetryFallbackChains.provenance(this.runtime.settings)) ||
+            (projectRetry && typeof projectRetry === 'object' && Object.hasOwn(projectRetry, 'fallbackChains'))
+          ))
           || (request.providerSearchDelayMs !== undefined && blockedSources.includes(cfgExaSearchDelayMs.provenance(this.runtime.settings)))
           || (request.providerEndpoint !== undefined && blockedSources.includes(cfgSearxngEndpoint.provenance(this.runtime.settings)))
           || (request.providerCategories !== undefined && blockedSources.includes(cfgSearxngCategories.provenance(this.runtime.settings)))
