@@ -4,6 +4,18 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+W11 exposes OMP 19.1 command and skill discovery on their existing pages and
+creates grouped native prompts through the existing catalog. Command and prompt
+edits preserve unowned native metadata without evolving Capacitor response
+schemas. The Behavior route remains limited to `AGENTS.md`; rule, system-prompt
+and instruction editors need a separately confined resource contract and SDK
+consumption evidence. Host voice remains separate from native OMP config.
+Isolated worker and UI tests verify discovery writes, nested creation and
+metadata preservation; existing Host tests cover Behavior and voice contracts.
+Native project overrides are read-only on the discovery pages. The overlapping
+personal Claude command and Claude/Codex skill opt-ins stay config-only. The
+personal OpenCode command row explains the separate Extensions opt-in.
+
 Sessions → Compaction exposes the native OMP 19 model threshold map and its
 enable switch. Exact selectors and wildcard prefixes keep their native token,
 fixed-trigger, or percentage values. Edits preserve other entries; native
@@ -1711,6 +1723,12 @@ The current W1-W10 matrix keeps W1-W6 on their existing M0/M1/M2 receipts. W7 la
 2026-10-21 Task73 Guest projection archive: Task73's remaining Guest Shell output/stop row is closed by composed evidence rather than a third connected run. Its own connected run at `4c7dce22e` proves the registered `path_*` project with canonical `pro_22c41305` scope, the root `T15-ITEMS`/`T15-SHELL` sessions, own item links only (ITEM-1), the worktree `T15-WORKTREE` session and the directory-scoped running-shell projection; its `readShellOutput`/`stopShell` half failed in the Host bridge. Task74's connected run at `0152a0718` supplies that half (Guest output cursor 33, `{stopped:true}`, canonical job ended `stopped`) with this task's projection source unchanged: `workspace.ts` and the SDK documents are byte-identical and `shells.ts` only gained the optional `AbortSignal` parameter, verified by `git diff 4c7dce22e 0152a0718`. Both receipts are retained: `task73-guest-projection-2026-10-21.json` now records the closure split, its limits and the cited Task74 receipt, so the two observations are not duplicated. Limits: no single run observed all four visible elements together, Electron desktop shares the projection but was not packaged-run for this path, and hosted/Capacitor Guest surfaces remain unsupported. Task15 may reuse the Task73 receipt for Guest item/project observations and must cite Task74's receipt for shell output/stop; Task18's integrated gate stays open. No Guest service, Host, browser, tests or builds ran for the closure.
 
 ## Reusable findings
+
+### OMP 19.1 plugin lifecycle
+
+W9 adds native feature and workspace settings controls without expanding the default Canonical plugin responses. The opt-in lifecycle route and legacy mutation shape are covered by contract, native worker, Host authorization and settings component tests using local fixtures. Installed Capacitor binaries and visual presentation remain unverified. Local directory linking stays CLI-only; the authorization gap is recorded in [decisions](decisions.md#2026-11-23---keep-native-plugin-lifecycle-opt-in).
+
+The pinned SDK treats a newly created workspace config directory as a project discovery anchor. Workspace override writes therefore stay unavailable if creating that directory would hide an inherited marketplace registry or make a nested Git workspace stop discovering future installs at its current project root. An override is keyed by native package name, so only the active copy can edit workspace options when a project and global install share that name.
 
 ### Inherited guidance is not the target architecture
 

@@ -9,7 +9,6 @@ import type { useComposerMobileActions } from './useComposerMobileActions';
 import type { useComposerLargePasteState } from './useComposerLargePasteState';
 import type { useComposerExpansion } from './useComposerExpansion';
 import type { useComposerEditorState } from './useComposerEditorState';
-import type { useComposerEditorActions } from './useComposerEditorActions';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerDraftHistory } from './useComposerDraftHistory';
 import type { useComposerAutocompleteState } from './useComposerAutocompleteState';
@@ -17,7 +16,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { shouldSubmitEnter } from '../../composer/keyboardPolicy';
 import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { isIMECompositionEvent } from '@/lib/ime';
-import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
+import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { getMarkdownAutoPairEdit, getOrderedListContinuationEdit } from '../../composer/text';
 
 type Dependencies = {
@@ -25,12 +24,11 @@ type Dependencies = {
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
     draftText: Pick<ReturnType<typeof useComposerDraftText>, 'setInputMode' | 'composerText'>;
     autocompleteState: Pick<ReturnType<typeof useComposerAutocompleteState>, 'closeAutocomplete' | 'openAutocomplete' | 'commandRef' | 'skillRef' | 'mentionRef' | 'emojiRef'>;
-    preferences: Pick<ReturnType<typeof useComposerPreferences>, 'largeTextPasteBehavior' | 'cycleAgentShortcut' | 'isMobile' | 'enterToSend' | 'enterToSendConfigured' | 'mobileReturnKeySends'>;
+    preferences: Pick<ReturnType<typeof useComposerPreferences>, 'largeTextPasteBehavior' | 'isMobile' | 'enterToSend' | 'enterToSendConfigured' | 'mobileReturnKeySends'>;
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'isDesktopExpanded' | 'setExpandedInput'>;
     mobileActions: Pick<ReturnType<typeof useComposerMobileActions>, 'handlePromptHistoryShortcut'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'isBtwActive' | 'inputMode' | 'currentSessionId' | 'attachedFiles'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'handleExitBtw' | 'currentSessionPhase' | 'autoReviewRunning'>;
-    editorActions: Pick<ReturnType<typeof useComposerEditorActions>, 'handleCycleAgent'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'queuedMessages' | 'followUpBehavior'>;
     queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEditById' | 'handleQueueMessage'>;
     draftHistory: Pick<ReturnType<typeof useComposerDraftHistory>, 'messageHistory' | 'applyHistoryValue'>;
@@ -40,7 +38,7 @@ type Dependencies = {
 
 export function createComposerKeyHandler({
     largePasteState, editorState, draftText, autocompleteState, preferences, expansion, mobileActions,
-    sessionScope, sessionLifecycle, editorActions, queueState, queueActions, draftHistory,
+    sessionScope, sessionLifecycle, queueState, queueActions, draftHistory,
     sendAvailability, submission,
 }: Dependencies) {
     const { largeTextPasteGesture } = largePasteState;
@@ -50,14 +48,13 @@ export function createComposerKeyHandler({
         closeAutocomplete, openAutocomplete, commandRef, skillRef, mentionRef, emojiRef,
     } = autocompleteState;
     const {
-        largeTextPasteBehavior, cycleAgentShortcut, isMobile, enterToSend, enterToSendConfigured,
+        largeTextPasteBehavior, isMobile, enterToSend, enterToSendConfigured,
         mobileReturnKeySends,
     } = preferences;
     const { isDesktopExpanded, setExpandedInput } = expansion;
     const { handlePromptHistoryShortcut } = mobileActions;
     const { isBtwActive, inputMode, currentSessionId, attachedFiles } = sessionScope;
     const { handleExitBtw, currentSessionPhase, autoReviewRunning } = sessionLifecycle;
-    const { handleCycleAgent } = editorActions;
     const { queuedMessages, followUpBehavior } = queueState;
     const { handleQueuedMessageEditById, handleQueueMessage } = queueActions;
     const { messageHistory, applyHistoryValue } = draftHistory;
@@ -135,22 +132,6 @@ export function createComposerKeyHandler({
         if (isDesktopExpanded && e.key === 'Escape') {
             e.preventDefault();
             setExpandedInput(false);
-            return;
-        }
-
-        const cycleAgentBackwardShortcut = cycleAgentShortcut && !cycleAgentShortcut.includes('shift')
-            ? normalizeCombo(`shift+${cycleAgentShortcut}`)
-            : '';
-        const cycleAgentDirection = cycleAgentBackwardShortcut && eventMatchesShortcut(e, cycleAgentBackwardShortcut)
-            ? -1
-            : eventMatchesShortcut(e, cycleAgentShortcut)
-                ? 1
-                : 0;
-
-        if (!isBtwActive && cycleAgentDirection !== 0 && openAutocomplete === null) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleCycleAgent(cycleAgentDirection);
             return;
         }
 

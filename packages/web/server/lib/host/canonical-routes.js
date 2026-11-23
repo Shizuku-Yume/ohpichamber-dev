@@ -74,6 +74,7 @@ const AGENT_ROUTES = [
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace\/preview-upgrade$/, request: C.PluginPreviewUpgradeRequestSchema, response: C.PluginUpgradePreviewResultSchema, pluginEgress: true },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace\/upgrade-all$/, request: C.PluginUpgradeAllRequestSchema, response: C.PluginMutationResultSchema, pluginEgress: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/doctor$/, response: C.PluginDoctorResultSchema },
+ { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/lifecycle$/, response: C.PluginLifecycleStateSchema },
  { method: 'PATCH', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/(?<pluginName>[^/]+)$/, request: C.PluginConfigureRequestSchema, response: C.PluginMutationResultSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/(?<pluginName>[^/]+)\/update$/, request: C.PluginUpgradeRequestSchema, response: C.PluginMutationResultSchema, pluginEgress: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/local\/(?<extensionId>[^/]+)$/, response: C.LocalExtensionSourceSchema },

@@ -150,7 +150,6 @@ export function useComposerSessionScope({
 
     const clearAttachedFiles = useInputStore((s) => s.clearAttachedFiles);
 
-    const pickSessionAgent = useSelectionStore((s) => s.pickSessionAgent);
 
     const sessionAgentPick = useSelectionStore(React.useCallback(
         (s) => currentSessionId ? s.sessionPickedAgents.get(currentSessionId) ?? null : null,
@@ -213,7 +212,7 @@ export function useComposerSessionScope({
         consumePendingBtwComposerRequest, btwDirectory, btwPanel, sendHeldByMissingFolderRef,
         consumePendingSyntheticParts, projectActionsRef, clearAttachedFiles, sendHeldByMissingFolder,
         setReviewDialogOpen, sessionFolder, pendingPresetSubmit,
-        clearAbortPrompt, abortCurrentOperation, pickSessionAgent, addAttachedFile, setPendingInputText,
+        clearAbortPrompt, abortCurrentOperation, addAttachedFile, setPendingInputText,
         pendingGuestIssue, consumePendingGuestIssue, pendingComposerReferenceCount, setNewSessionDraftTarget,
         hasPendingForm, currentManagementSessionId, draftPermissionMode,
         setDraftPermissionMode, abortPromptSessionId, acknowledgeSessionAbort, claimAttachmentSlot,

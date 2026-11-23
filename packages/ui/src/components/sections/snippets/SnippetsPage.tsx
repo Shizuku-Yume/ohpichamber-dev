@@ -1,4 +1,5 @@
 import React from 'react';
+import { FileResourceNameSchema } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,6 +39,7 @@ export const SnippetsPage: React.FC = () => {
   );
   const isNew = Boolean(snippetDraft && snippetDraft.name === selectedSnippetName && !selectedSnippet);
   const [draftName, setDraftName] = React.useState('');
+  const [draftFolder, setDraftFolder] = React.useState('');
   const [draftScope, setDraftScope] = React.useState<SnippetScope>('agent');
   const [description, setDescription] = React.useState('');
   const [content, setContent] = React.useState('');
@@ -53,6 +55,7 @@ export const SnippetsPage: React.FC = () => {
         content: snippetDraft.content || '',
       };
       setDraftName(next.draftName);
+      setDraftFolder('');
       setDraftScope(next.draftScope);
       setDescription(next.description);
       setContent(next.content);
@@ -74,9 +77,13 @@ export const SnippetsPage: React.FC = () => {
     const initial = initialStateRef.current;
     if (!initial) return false;
     if (isNew && draftName !== initial.draftName) return true;
+    if (isNew && draftFolder.trim()) return true;
     if (isNew && draftScope !== initial.draftScope) return true;
     return description !== initial.description || content !== initial.content;
-  }, [content, description, draftName, draftScope, isNew]);
+  }, [content, description, draftFolder, draftName, draftScope, isNew]);
+
+  const folder = draftFolder.trim();
+  const invalidFolder = folder !== '' && !FileResourceNameSchema.safeParse(`${folder}/template`).success;
 
   const handleSave = async () => {
     const snippetName = isNew ? draftName.trim().replace(/\s+/g, '-') : selectedSnippetName?.trim();
@@ -89,12 +96,13 @@ export const SnippetsPage: React.FC = () => {
       toast.error(t('settings.snippets.page.toast.contentRequired'));
       return;
     }
+    if (isNew && invalidFolder) return;
 
 
     setIsSaving(true);
     try {
       const success = isNew
-        ? await createSnippet(snippetName, content, { description, scope: draftScope })
+        ? await createSnippet(folder ? `${folder}/${snippetName}` : snippetName, content, { description, scope: draftScope })
         : await updateSnippet(snippetName, { content, description });
       if (!success) {
         toast.error(t('settings.snippets.page.toast.saveFailed'));
@@ -152,6 +160,19 @@ export const SnippetsPage: React.FC = () => {
             </Select>
           </SettingsFieldRow>
         ) : null}
+        {isNew ? (
+          <SettingsFieldRow label={t('settings.omp.discovery.promptFolder.label')}
+            info={t('settings.omp.discovery.promptFolder.description')}>
+            <Input
+              aria-label={t('settings.omp.discovery.promptFolder.label')}
+              aria-invalid={invalidFolder}
+              value={draftFolder}
+              onChange={(event) => setDraftFolder(event.target.value)}
+              inputSize="compact"
+              className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
+            />
+          </SettingsFieldRow>
+        ) : null}
         <SettingsFieldRow label={t('settings.common.field.description')}>
           <Input
             value={description}
@@ -173,7 +194,7 @@ export const SnippetsPage: React.FC = () => {
           <Textarea readOnly={!isNew && !selectedSnippet?.editable} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('settings.snippets.page.field.contentPlaceholder')} rows={12} className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
         </div>
         <div className="pt-3">
-          <Button onClick={handleSave} disabled={isSaving || !isDirty || (!isNew && !selectedSnippet?.editable)} size="xs" className="!font-normal">
+          <Button onClick={handleSave} disabled={isSaving || !isDirty || (isNew ? invalidFolder : !selectedSnippet?.editable)} size="xs" className="!font-normal">
             {isSaving ? t('settings.common.actions.saving') : t('settings.common.actions.saveChanges')}
           </Button>
         </div>

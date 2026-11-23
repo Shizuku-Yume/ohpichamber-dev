@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-23 - Keep discovery and native prompt authoring on their existing catalogs
+
+- Commands and installed Skills own their OMP discovery switches through the existing settings catalog. Native overrides are read-only on these pages. Personal Claude command and Claude/Codex skill switches stay in `config.yml` because the Extensions provider user-source opt-in can enable discovery independently. The personal OpenCode command switch stays visible with that interaction explained. The four skill lists stay in `config.yml`; the registry URL stays outside the GUI write allowlist.
+- Prompt Template creation uses a confined relative Markdown name for nested folders, not the legacy `openchamber.group` display metadata. Command and prompt writes preserve untouched native frontmatter and leave public response schemas unchanged. `side` stays on disk: OMP 19.1 applies its side-question behavior only in the interactive terminal.
+- Keep the existing application model and agent binding contract. Canonical prompt preparation projects it for existing app consumers; it isn't native OMP command metadata.
+- The existing Behavior route owns only `AGENTS.md`; generic workspace file editing is not a scoped settings authoring contract. A separate Behavior change should prove SDK discovery for each exact file before adding explicit allowlisted kinds and revisioned writes. In particular, OMP 19.1's `APPEND_SYSTEM.md` auto-discovery is in its CLI entrypoint, so SDK support needs verification before promising an editor. No hook or SSH writes.
+- Keep Host/client audio and native OMP voice configuration separate. No Host egress, provider, or credential changes; native voice editing requires evidence of what each setting controls in the SDK-backed app.
+
 ## 2026-11-23 - Provider credential selection: D4 resolved
 
 - **Decided:** an explicit null in `defaultCredentials` means automatic native OMP selection; an absent key preserves legacy provider pins. Selecting an account remains an explicit pin. Adding credentials or completing OAuth does not select an account. Removing the effective pinned account writes an automatic null before deletion; failed deletion restores the prior metadata, while failed metadata persistence leaves the credential untouched.
@@ -11,6 +19,12 @@
 - **Tracking:** the upstream Providers components and provider locale bundle deliberately differ for this Canonical/OMP selection contract. The dated OMP 19.0 research plan remains historical input, not the implemented wire contract.
 - **Mine:** yes (maintainer-settled W8 design).
 - **Revisit when:** OMP exposes different selection semantics or Host provider-use admission changes. Live-provider rotation remains unverified.
+
+## 2026-11-23 - Keep native plugin lifecycle opt-in
+
+- **Decided:** OMP plugin settings and features use the pinned native global and workspace configuration paths. PluginsPage exposes the controls from a separate Canonical lifecycle read. The original plugin list and mutation responses keep their strict shapes and meanings for installed Capacitor clients.
+- **Not included:** OMP `PluginManager.link` replaces the plugin name's existing entry and links a mutable directory into the profile-global executable plugin root. The existing authenticated workspace routes are shared with paired remote clients; workspace confinement and a folder picker prove neither local operator intent nor permission for profile-global executable replacement. Native linking remains a local OMP CLI action until there is a dedicated Host local-capability and authorization lane for it.
+- **Consequences:** Global feature selection uses a registered package runtime record; project marketplace installs have separate native lockfiles and no equivalent safe registry-targeted global feature setter. Marketplace features can be selected by workspace override without altering installation or enterprise policy.
 
 ## 2026-11-22 - Keep OMP 19.1 commands and MCP behind the Host boundary
 
@@ -2078,3 +2092,18 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Tracking:** pin the drift script and baseline metadata to v2.8.0. The delta ledger lists every remaining differing path and actual state, preserving earlier applicable decisions and naming this decision for merged adaptations and exclusions. Historical comparison and toolchain evidence in the baseline JSON is not current runtime certification.
 - **Mine:** yes (maintainer-directed merge and explicitly settled choices).
 - **Revisit when:** an OMP orchestration design is approved, the Guest protocol or Electron trust boundary changes intentionally, or the maintainer changes release-history/perf ownership.
+
+## 2026-11-23 - Retire the root composer agent cycling shortcut (OMP 19 remediation W10)
+
+- **Decided:** remove the `cycle_agent` shortcut (default Tab) from the composer, the global shortcut handler, the model picker, the Help dialog and the shortcut schema, together with the unreachable pinned-chat `agentSelectable` branch of `ModelControls` and its locale keys. Root prompts are admitted with `agentId: null` (`prompt-admission.js`) and the main composer submits `agent: undefined`, so the shortcut only switched hidden UI agent state and the agent's remembered model, misleading the user about which agent runs.
+- **Kept:** agent profiles for `task` subagents, `/agent`, the Agents page and command/prompt `agentId` bindings. The store-level agent memory (`currentAgentName`, `setAgent`, per-session agent/model memory, `favoriteAgents` and `pickSessionAgent`) still keys model and effort memory and is a follow-up, not part of this change. Saved `shortcutOverrides.cycle_agent` values stay accepted by the Host settings sanitizer and are ignored because the schema no longer lists the action.
+- **Audit corrections to the remediation plan:** `permissionDefaultMode` (`ask`/`safety`/`auto`) is still a live Host policy (`permission-auto-accept` runtime and routes, new-session enrollment), and `sessionGoalChecker` still selects the worker goal checker through `OPENCHAMBER_SESSION_GOAL_CHECKER`. The 2026-11-05 retirement entry for `SET-02` does not describe current source. Both controls stay until their runtime authority is retired with a migration; removing the UI alone would leave an unreachable live policy. Routing already labels the category control "Thinking" and Tools already separates Host-injected tools, so neither needs a change. OMP-native `tools.approvalMode`, `tools.approval`, `bash.patterns` and `tools.restrictedFolders` stay config-only: no existing settings authorization covers editing approval policy from the GUI.
+- **Mine:** no (W10 of the maintainer-approved OMP 19 remediation plan; audit corrections recorded for maintainer review).
+- **Revisit when:** the Host permission policy or the goal checker is retired at runtime, or a GUI authorization model for approval policy is approved.
+
+## 2026-11-23 - Purge dead OpenCode locale copy and guard OMP config syntax (OMP 19 remediation W12)
+
+- **Decided:** delete the 177 English keys (and their 14 translations) whose copy names OpenCode or its `{env:VAR}`/`opencode.json` syntax and that no source file references by literal, template prefix or key base, plus the unused `SettingsLegacyFormatNote` component and its `settings.common.legacyFormat.note` key. Reword three live keys that named OpenCode as the runtime to OMP (Behavior page AGENTS.md note, document attach hint, web search missing provider). `messages.test.ts` now rejects `{env:`, `{file:` and `opencode.json(c)` in every locale and requires every English key naming OpenCode to be on an audited list.
+- **Kept (audited, still named OpenCode):** OpenCode Zen provider and promotion sources; OMP skills discovery locations for `.opencode`; `opencode-snippets` compatibility; the legacy OpenCode data notice; OpenCode plugin catalog entries and the extension `opencodePlugin` contribution and quota-credential wording, whose runtime contract is not settled; Gemini key lookup wording, the SSH passphrase storage hint, the remote-instance missing-CLI remedy, OpenCode Console budgets and the unreleased isolated-spaces key note, whose current storage or runtime is not verified.
+- **Mine:** no (W12 of the maintainer-approved OMP 19 remediation plan).
+- **Revisit when:** the plugin, extension `opencodePlugin`, classification key lookup or SSH credential storage contracts move to OMP, or isolated spaces are released.

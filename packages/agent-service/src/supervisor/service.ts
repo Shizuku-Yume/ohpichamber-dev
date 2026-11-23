@@ -19,7 +19,7 @@ import type {
   CacheWarmingState, CacheWarmingApplyResult, SessionCacheWarmingState, SessionCacheWarmingApplyResult, OmpSettingsState,
   UsageStats, UsageToolsResponse, ImageGenerateResult, ImageModelMutationResult,
   WebSearchConfigState, WebSearchMutationResult,
-  PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
+  PluginCatalogState, PluginLifecycleState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
   PluginUpdateCheckResult, PluginUpgradePreviewResult, PluginMarketplaceSources,
   ExtensionInventoryState,
   SessionRecapListResponse, SubagentListResponse, SubagentTranscriptResponse, SubagentTreeCostResponse,
@@ -94,7 +94,7 @@ type ServiceResponse =
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
   | MCPConfigurationState | MCPConnectionTestResult | MCPWorkspaceReconnectResult | MCPSecretWriteResult
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
-  | PluginCatalogState | PluginMutationResult | PluginDoctorResult | PluginMarketplaceState
+  | PluginCatalogState | PluginLifecycleState | PluginMutationResult | PluginDoctorResult | PluginMarketplaceState
   | PluginUpdateCheckResult | PluginUpgradePreviewResult | PluginMarketplaceSources
   | ExtensionInventoryState
   | ModelCatalog | ProviderCatalog | AgentCatalog

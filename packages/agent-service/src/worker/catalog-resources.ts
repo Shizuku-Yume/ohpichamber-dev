@@ -4,9 +4,10 @@ import { link, lstat, mkdir, open, readdir, readFile, realpath, rename, unlink }
 
 import { removeTemporaryFile } from './temporary-file.ts';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { YAML } from 'bun';
 import { z } from 'zod';
-import { parseFrontmatter } from '@oh-my-pi/pi-utils';
+import { normalizeFrontmatterKeys, parseFrontmatter } from '@oh-my-pi/pi-utils';
 import { loadSlashCommands, expandSlashCommand } from '@oh-my-pi/pi-coding-agent/extensibility/slash-commands';
 import { loadPromptTemplates, expandPromptTemplate } from '@oh-my-pi/pi-coding-agent/config/prompt-templates';
 import { loadCapability, type SlashCommand } from '@oh-my-pi/pi-coding-agent/discovery';
@@ -16,7 +17,7 @@ import { loadSkills, type LoadSkillsOptions } from '@oh-my-pi/pi-coding-agent/ex
 import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capability/types';
 import {
   CommandEntrySchema, PromptTemplateEntrySchema, ModelSelectionSchema, EntityIdSchema,
-  FileResourceNameSchema, FileResourcePathSchema, CounterSchema, JsonObjectSchema,
+  FileResourceNameSchema, FileResourcePathSchema, CounterSchema,
   type CommandEntry, type PromptTemplateEntry, type FileResourceScope, type FileResourceSkillEntry,
 } from '@openchamber/agent-contract';
 import type { FileResourceOperation, FileResourceResult } from '../catalogs/file-resources-protocol.ts';
@@ -33,16 +34,58 @@ export interface NativeFileResourcesContext {
 }
 const MetadataSchema = z.object({
   description: z.string().optional(),
-  openchamber: z.strictObject({ modelSelection: ModelSelectionSchema.optional(), agentId: EntityIdSchema.optional(), group: z.string().optional() }).optional(),
+  openchamber: z.object({ modelSelection: ModelSelectionSchema.optional(), agentId: EntityIdSchema.optional(), group: z.string().optional() }).optional(),
   'argument-hint': z.string().optional(), argumentHint: z.string().optional(),
 });
+const NativeFrontmatterSchema = z.record(z.string(), z.unknown());
 interface OwnedFile { path: string; name: string; scope: FileResourceScope; text: string; editable: boolean; }
 interface ResourceLocation { path: string; scope: FileResourceScope; }
 function missing(error: Error): boolean { return 'code' in error && error.code === 'ENOENT'; }
 function inside(root: string, path: string): boolean { const part = relative(root, path); return part !== '' && part !== '..' && !part.startsWith(`..${sep}`) && !isAbsolute(part); }
-function rawBody(text: string): string {
-  const frontmatter = /^---[ \t]*\r?\n[\s\S]*?^---[ \t]*(?:\r?\n|$)/m.exec(text);
-  return frontmatter ? text.slice(frontmatter[0].length) : text;
+function frontmatterBoundary(text: string) {
+  // pi-utils repairs leading HTML comments, then closes at the first newline followed by "---".
+  const whitespace = /\s*/y;
+  let commentsEnd = 0;
+  while (whitespace.test(text) && text.startsWith('<!--', whitespace.lastIndex)) {
+    const close = text.indexOf('-->', whitespace.lastIndex + 4);
+    if (close === -1) break;
+    commentsEnd = close + 3;
+    whitespace.lastIndex = commentsEnd;
+  }
+  const prefix = commentsEnd > 0 && text.startsWith('---', whitespace.lastIndex) ? text.slice(0, whitespace.lastIndex) : '';
+  const match = /^---([\s\S]*?)(?:\r\n?|\n)---(?:[^\S\r\n]*(?:\r\n?|\n|$))?/.exec(text.slice(prefix.length));
+  return match === null
+    ? { prefix: '', header: '', yaml: '' }
+    : { prefix, header: prefix + match[0], yaml: match[1] };
+}
+function editableFrontmatter(header: string, yaml: string, path: string): Record<string, unknown> {
+  const repaired = parseFrontmatter(header, { source: path, level: 'fatal', rawKeys: true }).frontmatter;
+  // Keep literal values when the original YAML is valid without OMP's repairs.
+  try {
+    const raw = NativeFrontmatterSchema.safeParse(YAML.parse(yaml.replace(/\r\n?/g, '\n').slice(1)));
+    if (raw.success && MetadataSchema.safeParse(normalizeFrontmatterKeys(raw.data)).success) return raw.data;
+  } catch {
+    // A header admitted by OMP can still require repair before it is valid YAML.
+  }
+  return repaired;
+}
+function serializeFrontmatter(prefix: string, metadata: Record<string, unknown>, path: string): string {
+  const verify = (yaml: string) => {
+    const header = `${prefix}---\n${yaml}\n---\n`;
+    try {
+      const { frontmatter } = parseFrontmatter(header, { source: path, level: 'fatal', rawKeys: true });
+      if (isDeepStrictEqual(frontmatter, metadata) && MetadataSchema.safeParse(normalizeFrontmatterKeys(frontmatter)).success) return header;
+    } catch {
+      // Try the protected encoding before rejecting the edit.
+    }
+  };
+  const yaml = YAML.stringify(metadata).trimEnd();
+  const plain = yaml.includes('<!--') ? undefined : verify(yaml);
+  if (plain !== undefined) return plain;
+  // JSON is valid YAML flow syntax. Escape the comment opener before OMP can strip it.
+  const quoted = verify(JSON.stringify(metadata, null, 2).replaceAll('<!--', '\\u003c!--'));
+  if (quoted !== undefined) return quoted;
+  throw new ProjectionError(400, 'INVALID_REQUEST', 'Cannot save frontmatter without changing values when OMP reloads it');
 }
 function identity(kind: string, path: string): string { return `${kind}_${createHash('sha256').update(path).digest('hex')}`; }
 function denied(): never { throw new ProjectionError(403, 'UNAUTHORIZED', 'Resource is outside an authorable native directory'); }
@@ -114,9 +157,9 @@ export class NativeFileResources {
     return files;
   }
   private metadata(text: string, path: string) {
-    const parsed = parseFrontmatter(text, { source: path, level: 'fatal', repair: false });
+    const parsed = parseFrontmatter(text, { source: path, level: 'fatal' });
     const metadata = MetadataSchema.parse(parsed.frontmatter);
-    return { content: rawBody(text), description: metadata.description, argumentHint: metadata['argument-hint'] ?? metadata.argumentHint, ...metadata.openchamber };
+    return { content: text.slice(frontmatterBoundary(text).header.length), description: metadata.description, argumentHint: metadata['argument-hint'] ?? metadata.argumentHint, ...metadata.openchamber };
   }
   private async commands() {
     resetCapabilities();
@@ -201,7 +244,7 @@ export class NativeFileResources {
     result.sort((a, b) => (ranks.get(`${a.entry.source}\0${a.entry.name}`) ?? native.length) - (ranks.get(`${b.entry.source}\0${b.entry.name}`) ?? native.length));
     return { entries: result, native };
   }
-  private async write(kind: 'commands' | 'prompts', request: { name: string; scope: FileResourceScope; content: string; description?: string; argumentHint?: string; modelSelection?: z.infer<typeof ModelSelectionSchema>; agentId?: string | null; group?: string }, current?: ResourceLocation): Promise<void> {
+  private async write(kind: 'commands' | 'prompts', request: { name: string; scope: FileResourceScope; content: string; description?: string; argumentHint?: string; modelSelection?: z.infer<typeof ModelSelectionSchema>; agentId?: string | null; group?: string }, current?: ResourceLocation & { entry: CommandEntry | PromptTemplateEntry }): Promise<void> {
     const name = FileResourceNameSchema.parse(request.name);
     const directory = current && current.scope === request.scope && !name.includes('/') ? dirname(current.path) : this.root(request.scope, kind);
     const path = join(directory, `${name}.md`);
@@ -212,17 +255,45 @@ export class NativeFileResources {
       try { await lstat(path); throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Resource already exists'); }
       catch (error) { if (!(error instanceof Error && missing(error))) throw error; }
     }
-    const frontmatter = current ? JsonObjectSchema.parse(parseFrontmatter(await readFile(current.path, 'utf8'), { source: current.path, level: 'fatal', repair: false }).frontmatter) : {};
-    delete frontmatter.argumentHint;
-    delete frontmatter['argument-hint'];
+    const previousText = current ? await readFile(current.path, 'utf8') : '';
+    const { prefix, header, yaml } = frontmatterBoundary(previousText);
+    const { description, group } = request;
+    const descriptionChanged = description !== undefined && description !== current?.entry.description;
+    const argumentHintChanged = request.argumentHint !== undefined && request.argumentHint !== this.metadata(previousText, path).argumentHint;
+    const modelChanged = (request.modelSelection !== undefined || kind === 'commands') && !isDeepStrictEqual(request.modelSelection, current?.entry.modelSelection);
+    const agentChanged = request.agentId !== undefined && (request.agentId ?? undefined) !== current?.entry.agentId;
+    const groupChanged = group !== undefined && group !== current?.entry.group;
+    let editedMetadata: Record<string, unknown> | undefined;
+    if (descriptionChanged || argumentHintChanged || modelChanged || agentChanged || groupChanged) {
+      const frontmatter = editableFrontmatter(header, yaml, path);
+      const metadata = { ...frontmatter };
+      if (descriptionChanged) metadata.description = description;
+      if (argumentHintChanged) {
+        delete metadata.argumentHint;
+        delete metadata['argument-hint'];
+        if (request.argumentHint) metadata['argument-hint'] = request.argumentHint;
+      }
+      const bindings = NativeFrontmatterSchema.safeParse(frontmatter.openchamber);
+      const openchamber = bindings.success ? { ...bindings.data } : {};
+      if (modelChanged) {
+        delete openchamber['model-selection'];
+        if (request.modelSelection) openchamber.modelSelection = request.modelSelection;
+        else delete openchamber.modelSelection;
+      }
+      if (agentChanged) {
+        delete openchamber['agent-id'];
+        if (request.agentId) openchamber.agentId = request.agentId;
+        else delete openchamber.agentId;
+      }
+      if (groupChanged) openchamber.group = group;
+      if (bindings.success || Object.keys(openchamber).length) metadata.openchamber = openchamber;
+      if (!isDeepStrictEqual(frontmatter, metadata)) editedMetadata = metadata;
+    }
+    const nextHeader = editedMetadata === undefined && (header || !request.content.startsWith('---') && !frontmatterBoundary(request.content).header)
+      ? header && header === previousText && !/[\r\n]$/.test(header) && request.content ? `${header}\n` : header
+      : serializeFrontmatter(prefix, editedMetadata ?? {}, path);
+    const text = nextHeader + request.content;
     const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
-    const argumentHint = request.argumentHint !== undefined ? { 'argument-hint': request.argumentHint } : {};
-    const openchamber = Object.assign({},
-      request.modelSelection ? { modelSelection: request.modelSelection } : {},
-      request.agentId ? { agentId: request.agentId } : {},
-      request.group !== undefined ? { group: request.group } : {});
-    const metadata = Object.assign({ ...frontmatter, description: request.description ?? '' }, argumentHint, { openchamber });
-    const text = `---\n${YAML.stringify(metadata).trimEnd()}\n---\n${request.content}`;
     try {
       const file = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try { await file.writeFile(text); await file.sync(); } finally { await file.close(); }
@@ -302,7 +373,7 @@ export class NativeFileResources {
         const item = commands.find(item => item.entry.commandId === operation.request.commandId);
         if (!item) throw new ProjectionError(404, 'INVALID_REQUEST', 'Command is not in the native catalog');
         if (!item.path || !item.entry.editable || item.entry.scope === 'inherited') denied();
-        const location = { path: item.path, scope: item.entry.scope };
+        const location = { path: item.path, scope: item.entry.scope, entry: item.entry };
         if (operation.action === 'commands.update') await this.write('commands', operation.request, location);
         else await this.remove(location);
       }
@@ -325,7 +396,7 @@ export class NativeFileResources {
       const item = templates.find(item => item.entry.templateId === operation.request.templateId);
       if (!item) throw new ProjectionError(404, 'INVALID_REQUEST', 'Template is not in the native catalog');
       if (!item.path || !item.entry.editable || item.entry.scope === 'inherited') denied();
-      const location = { path: item.path, scope: item.entry.scope };
+      const location = { path: item.path, scope: item.entry.scope, entry: item.entry };
       if (operation.action === 'templates.update') await this.write('prompts', operation.request, location);
       else await this.remove(location);
     }

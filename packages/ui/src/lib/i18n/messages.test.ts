@@ -277,4 +277,60 @@ describe('i18n dictionaries', () => {
 
     expect(failures).toEqual([]);
   });
+
+  // OMP reads models.yml, mcp.json and config.yml: OpenCode's `{env:VAR}` and
+  // `{file:path}` substitutions and its opencode.json file do not exist there.
+  // OpenCode may still be named where it is a real provider, a discovery source,
+  // a compatible format, an extension contract or legacy-data notice; anything
+  // else would describe OpenCode as the runtime.
+  test('no locale shows OpenCode config syntax, and english names OpenCode only on audited keys', () => {
+    const openCodeSyntax = /\{env:|\{file:|opencode\.jsonc?/i;
+    const syntaxFailures: string[] = [];
+    for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
+      for (const [key, value] of Object.entries(dictionary)) {
+        if (typeof value === 'string' && openCodeSyntax.test(value)) syntaxFailures.push(`${locale} ${key}: "${value}"`);
+      }
+    }
+    expect(syntaxFailures).toEqual([]);
+
+    const auditedOpenCodeKeys = new Set([
+      'integrationsCatalog.entry.resource-monitor.details',
+      'integrationsCatalog.group.plugin',
+      'integrationsCatalog.plugin.confirm.description',
+      'integrationsCatalog.status.plugin',
+      'settings.classification.gemini.key.info',
+      'settings.classification.source.gemini.description',
+      'settings.classification.source.gemini.missing',
+      'settings.classification.source.zenKey.description',
+      'settings.classification.source.zenKey.missing',
+      'settings.classification.source.zenKey.name',
+      'settings.classification.source.zenPromo.name',
+      'settings.classification.source.zenPromo.unavailable',
+      'settings.extensions.capability.service.providesQuota',
+      'settings.extensions.capability.service.providesQuota.credentials',
+      'settings.extensions.capability.service.providesQuota.none',
+      'settings.extensions.service.providesQuota',
+      'settings.extensions.service.providesQuota.none',
+      'settings.extensions.toast.invalidOpenCodePlugin',
+      'settings.page.extensions.description',
+      'settings.remoteInstances.page.error.hint.noOpencode',
+      'settings.sessions.permissions.explain.safetyUnavailable',
+      'settings.skills.catalog.conflicts.source.opencode',
+      'settings.skills.location.option.projectOpencode.description',
+      'settings.skills.location.option.projectOpencode.label',
+      'settings.skills.location.option.userOpencode.description',
+      'settings.skills.location.option.userOpencode.label',
+      'settings.skills.sidebar.badge.opencode',
+      'settings.snippets.page.hint',
+      'settings.sourceControl.ssh.passphraseHint',
+      'settings.usage.consoleBudgets.title',
+      'spaces.create.access.hostKeysNotReused',
+      'startup.legacyNotice.descriptionGeneric',
+      'startup.legacyNotice.title',
+    ]);
+    const unaudited = Object.entries(enDict as Record<string, string>)
+      .filter(([key, value]) => /opencode/i.test(value) && !auditedOpenCodeKeys.has(key))
+      .map(([key, value]) => `${key}: "${value}"`);
+    expect(unaudited).toEqual([]);
+  });
 });

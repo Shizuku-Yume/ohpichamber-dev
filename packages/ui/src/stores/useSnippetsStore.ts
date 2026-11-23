@@ -135,11 +135,16 @@ export const useSnippetsStore = create<SnippetsStore>()(devtools((set, get) => {
       try { return await promise; } finally { if (pendingLoads.get(directory) === entry) pendingLoads.delete(directory); }
     },
     createSnippet: async (name, content, options = { scope: 'agent' }) => {
-      const success = await mutate((catalog) => canonicalClient.fileResources.createPromptTemplate(catalog.workspaceId, {
-        ...options, name, content, expectedRevision: catalog.revision,
-      }));
+      let existingIds: ReadonlySet<string> = new Set();
+      const success = await mutate((catalog) => {
+        existingIds = new Set(catalog.templates.map(template => template.templateId));
+        return canonicalClient.fileResources.createPromptTemplate(catalog.workspaceId, {
+          ...options, name, content, expectedRevision: catalog.revision,
+        });
+      });
       if (success) {
-        const created = get().snippets.find(template => template.name === name && template.scope === options.scope);
+        const leafName = name.split('/').at(-1);
+        const created = get().snippets.find(template => template.name === leafName && template.scope === options.scope && !existingIds.has(template.templateId));
         if (created) set({ selectedSnippetName: created.templateId });
       }
       return success;

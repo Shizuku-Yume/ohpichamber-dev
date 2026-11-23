@@ -4,10 +4,12 @@ import { Input } from '@/components/ui/input';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { selectAvailableSkillsForDirectory, useSkillsStore, type PendingFile } from '@/stores/useSkillsStore';
+import { invalidateSkillsLoadCache, selectAvailableSkillsForDirectory, useSkillsStore, type PendingFile } from '@/stores/useSkillsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import {
   useAutosave,
   AUTOSAVE_SAVED,
@@ -65,6 +67,28 @@ const SkillsInstalledPage: React.FC = () => {
   const { t } = useI18n();
   const { currentTheme } = useThemeSystem();
   const directory = useSettingsDirectory();
+  const { getSectionSettings, updateSettings, saving } = useOmpPageSettings('skills');
+  const discoverySettings = getSectionSettings('discovery');
+  const discoverySection = discoverySettings.length > 0 ? (
+    <SettingsSection title={t('settings.omp.discovery.title')}>
+      {discoverySettings.map(setting => (
+        <React.Fragment key={setting.id}>
+          <OmpRowControl setting={setting} value={setting.value} disabled={saving || setting.conditionActive === false}
+            onChange={async value => {
+              if (!await updateSettings(() => [{ id: setting.id, value }])) {
+                toast.error(t('settings.common.status.saveFailed'));
+                return;
+              }
+              invalidateSkillsLoadCache(directory);
+              await useSkillsStore.getState().loadSkills(directory);
+            }} />
+          {setting.conditionActive === false && (
+            <p className="typography-meta text-muted-foreground">{t('settings.omp.sharedConfig.overridden')}</p>
+          )}
+        </React.Fragment>
+      ))}
+    </SettingsSection>
+  ) : null;
   const {
     selectedSkillName,
     skillDraft,
@@ -349,6 +373,7 @@ const SkillsInstalledPage: React.FC = () => {
     // empty pane keeps it instead of centring a message with no title.
     return (
       <SettingsPageLayout title={pageTitle} showSaveStatus={false}>
+        {discoverySection}
         <div className="flex items-center justify-center py-16">
           <div className="max-w-sm text-center text-muted-foreground">
             <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 @xl:h-12 @xl:w-12 opacity-50" />
@@ -363,6 +388,7 @@ const SkillsInstalledPage: React.FC = () => {
   if (loading || loadFailed) {
     return (
       <SettingsPageLayout title={pageTitle} showSaveStatus={false}>
+        {discoverySection}
         <div className="flex items-center justify-center py-16">
           <div className={loadFailed ? 'text-center text-[var(--status-error)]' : 'text-center text-muted-foreground'}>
             <p role={loadFailed ? 'alert' : undefined}>
@@ -381,6 +407,7 @@ const SkillsInstalledPage: React.FC = () => {
         description={description}
         onBlurCapture={autosave.onBlurCapture}
       >
+        {discoverySection}
         {applyFailed ? (
           <p role="alert" className="typography-meta text-[var(--status-warning)] pb-4">
             {t('settings.skills.page.status.sourceCommittedApplyFailed')}

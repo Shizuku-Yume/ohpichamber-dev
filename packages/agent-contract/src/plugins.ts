@@ -46,6 +46,22 @@ export const InstalledPluginEntrySchema = z.strictObject({
  }
 });
 export type InstalledPluginEntry = z.infer<typeof InstalledPluginEntrySchema>;
+const PluginLifecycleEntrySchema = InstalledPluginEntrySchema.safeExtend({
+ availableFeatures: z.array(z.strictObject({ name: z.string(), description: z.string().optional(), defaultEnabled: z.boolean() })),
+ globalFeatures: z.array(z.string()).nullable(),
+ globalFeaturesWritable: z.boolean(),
+ workspaceFeatures: z.array(z.string()).nullable(),
+ workspaceWritable: z.boolean(),
+ projectSettings: JsonObjectSchema,
+}).refine(plugin => Object.keys(plugin.projectSettings).every(key =>
+ plugin.settingDefinitions.some(setting => setting.key === key && !setting.secret)),
+ 'Only declared nonsecret project settings are public');
+export const PluginLifecycleStateSchema = z.strictObject({
+ workspaceId: EntityIdSchema, revision: CounterSchema, projectWritable: z.boolean(),
+ projectWriteBlock: z.literal('registry-root-change').optional(),
+ plugins: z.array(PluginLifecycleEntrySchema),
+}).refine(state => new Set(state.plugins.map(plugin => plugin.id)).size === state.plugins.length, 'Plugin identities are unique');
+export type PluginLifecycleState = z.infer<typeof PluginLifecycleStateSchema>;
 /** Capability targets a marketplace manifest can declare: strings or structured maps. */
 const MarketplaceCapabilitySchema = z.union([z.string().min(1), z.array(z.string().min(1)), z.record(z.string(), JsonValueSchema)]);
 /** Manifest detail fields, copied verbatim from the native marketplace catalog. */
@@ -293,13 +309,15 @@ export const PluginInstallRequestSchema = z.strictObject({
 export type PluginInstallRequest = z.infer<typeof PluginInstallRequestSchema>;
 export const PluginUninstallRequestSchema = z.strictObject({ expectedRevision: CounterSchema, target: PluginTargetSchema });
 export type PluginUninstallRequest = z.infer<typeof PluginUninstallRequestSchema>;
-// Settings replace declared nonsecret GLOBAL overrides; omitted secret keys remain private and unchanged.
-// Native project overrides are read inputs, never synthesized writes; saved-global and effective values are distinct.
 export const PluginConfigureRequestSchema = z.strictObject({
  expectedRevision: CounterSchema, target: PluginTargetSchema, enabled: z.boolean().optional(),
- settingsScope: z.literal('global').optional(), settings: JsonObjectSchema.optional(),
-}).refine(request => request.enabled !== undefined || request.settings !== undefined, 'A plugin configuration change is required')
- .refine(request => request.settings === undefined || request.settingsScope === 'global', 'Setting writes explicitly target native global scope');
+ enabledFeatures: z.array(z.string().min(1)).refine(names => new Set(names).size === names.length).nullable().optional(),
+ settingsScope: PluginScopeSchema.optional(), settings: JsonObjectSchema.optional(),
+}).refine(request => request.enabled !== undefined || request.settings !== undefined || request.enabledFeatures !== undefined, 'A plugin configuration change is required')
+ .refine(request => (request.settings === undefined && request.enabledFeatures === undefined) || request.settingsScope !== undefined,
+  'Settings and feature writes explicitly select a native scope')
+ .refine(request => request.enabledFeatures === undefined || request.settingsScope === 'workspace'
+  || request.target.kind === 'package' || request.target.scope === 'user', 'Project marketplace installs require workspace feature selection');
 export type PluginConfigureRequest = z.infer<typeof PluginConfigureRequestSchema>;
 export const LocalExtensionWriteRequestSchema = z.strictObject({ expectedRevision: CounterSchema, extensionId: LocalExtensionIdSchema, content: z.string().max(1048576) });
 export type LocalExtensionWriteRequest = z.infer<typeof LocalExtensionWriteRequestSchema>;

@@ -39,10 +39,9 @@ import { useSync } from '@/sync/use-sync';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { useIsTextTruncated } from '@/hooks/useIsTextTruncated';
-import { formatEffortLabel, getCycledAgentId, type MobileControlsPanel } from './mobileControlsUtils';
+import { formatEffortLabel, type MobileControlsPanel } from './mobileControlsUtils';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
-import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import { markStartupTrace } from '@/lib/startupTrace';
 import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
@@ -234,12 +233,10 @@ type ModelControlsProps = {
     /** Offers "Run on several models" at the top of the desktop model picker. */
     onRunInParallel?: () => void;
 } & (
-        | { selection?: never; sessionId?: never; agentSelectable?: never }
+        | { selection?: never; sessionId?: never }
         | {
             selection: ComposerModelSelection;
             sessionId: string | null;
-            /** Offers the agent picker and saves the pick for `sessionId` (a chat pinned in the side panel). */
-            agentSelectable?: boolean;
         }
     );
 
@@ -250,7 +247,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     onRunInParallel,
     selection,
     sessionId: controlledSessionId,
-    agentSelectable = false,
 }) => {
     const { t } = useI18n();
     const { focusInput: focusColumnInput } = useChatColumnActions();
@@ -392,10 +388,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
     const setSettingsPage = useUIStore((state) => state.setSettingsPage);
     const hiddenModels = useUIStore((state) => state.hiddenModels);
-    const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
-    const cycleAgentShortcut = React.useMemo(() => (
-        getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
-    ), [cycleAgentShortcutOverride]);
 
     // Separate state for agent selector to avoid conflict with model selector
     const { favoriteModelsList, recentModelsList } = useModelLists();
@@ -1194,80 +1186,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const agentName = resolveLiveAgentName();
         if (currentSessionId) saveAgentModelReasoningEffortForSession(currentSessionId, agentName ?? ROOT_SELECTION_AGENT, providerId, modelId, effort ?? 'off');
     }, [commitVariantSelectionForModel, currentModelId, currentProviderId, currentSessionId, providers, resolveLiveAgentName, saveAgentModelReasoningEffortForSession, selection, setCurrentReasoningEffort, controlledSessionId]);
-
-    const handleAgentChange = React.useCallback((agentName: string, options?: { closeModelSelector?: boolean }) => {
-        if (selection) {
-            if (!agentSelectable || !controlledSessionId) return;
-            // The pick belongs to the controlled session only; the app-wide
-            // agent stays the main chat's.
-            saveSessionAgentSelection(controlledSessionId, agentName);
-            const profile = agents.find((agent) => agent.agentId === agentName);
-            const model = getAgentModelForSession(controlledSessionId, agentName) ?? profile?.model;
-            if (model) {
-                saveSessionModelSelection(controlledSessionId, model.providerId, model.modelId);
-            }
-            if (options?.closeModelSelector ?? true) {
-                setAgentMenuOpen(false);
-            }
-            return;
-        }
-        try {
-            setAgent(agentName);
-            if (options?.closeModelSelector ?? true) {
-                setAgentMenuOpen(false);
-            }
-
-            if (currentSessionId) {
-                saveSessionAgentSelection(currentSessionId, agentName);
-            }
-            if (isCompact) {
-                closeMobilePanel();
-            }
-        } catch (error) {
-            console.error('[ModelControls] Handle agent change error:', error);
-        }
-    }, [
-        agentSelectable,
-        agents,
-        getAgentModelForSession,
-        saveSessionModelSelection,
-        closeMobilePanel,
-        controlledSessionId,
-        currentSessionId,
-        isCompact,
-        saveSessionAgentSelection,
-        setAgent,
-        setAgentMenuOpen,
-        selection,
-    ]);
-
-    const handleCycleAgentFromModelPicker = React.useCallback((direction: 1 | -1) => {
-        // Auto hides the agent control, so the shortcut must not change a
-        // choice the user cannot see.
-        if (isAutoSelected) return;
-        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
-        if (!nextAgentName) {
-            return;
-        }
-        handleAgentChange(nextAgentName, { closeModelSelector: false });
-    }, [agents, currentAgentName, handleAgentChange, isAutoSelected]);
-
-    const getCycleAgentDirectionFromEvent = React.useCallback((event: KeyboardEvent | React.KeyboardEvent): 1 | -1 | null => {
-        if (selection) return null;
-        const cycleAgentBackwardShortcut = cycleAgentShortcut && !cycleAgentShortcut.includes('shift')
-            ? normalizeCombo(`shift+${cycleAgentShortcut}`)
-            : '';
-
-        if (cycleAgentBackwardShortcut && eventMatchesShortcut(event, cycleAgentBackwardShortcut)) {
-            return -1;
-        }
-
-        if (eventMatchesShortcut(event, cycleAgentShortcut)) {
-            return 1;
-        }
-
-        return null;
-    }, [cycleAgentShortcut, selection]);
 
     const handleEffortSelect = React.useCallback((effort: string, providerId = currentProviderId, modelId = currentModelId) => {
         const targetModel = providers.find((provider) => provider.providerId === providerId)?.models.find((model) => model.modelId === modelId);
@@ -2129,31 +2047,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         };
 
         const handleModelPickerKeyDown = (e: React.KeyboardEvent, selectedItem: ModelPickerEntry | undefined) => {
-            const cycleAgentDirection = getCycleAgentDirectionFromEvent(e);
-            if (cycleAgentDirection) {
-                e.preventDefault();
-                handleCycleAgentFromModelPicker(cycleAgentDirection);
-                return;
-            }
-
             if (selectedItem) handleEffortKey(e, selectedItem);
         };
 
         const handleSharedModelSelect = (entry: ModelPickerEntry) => {
             const effectiveAgentName = resolveLiveAgentName();
             handleProviderAndModelChange(entry.providerId, entry.modelId, { agentName: effectiveAgentName });
-        };
-
-        const handleModelShortcutKeyDownCapture = (e: React.KeyboardEvent) => {
-            const cycleAgentDirection = getCycleAgentDirectionFromEvent(e);
-            if (!cycleAgentDirection) {
-                return;
-            }
-
-            e.preventDefault();
-            e.stopPropagation();
-            keyboardOwnsModelSelectionRef.current = true;
-            handleCycleAgentFromModelPicker(cycleAgentDirection);
         };
 
         const handleModelMenuOpenChange = (nextOpen: boolean) => {
@@ -2243,7 +2142,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             alignOffset={-40}
                             constrainToMain
                             collisionAvoidance={{ side: 'none', align: 'shift' }}
-                            onKeyDownCapture={handleModelShortcutKeyDownCapture}
                         >
                             {!selection && <div className="p-1 border-b border-border/40">
                                 <button
@@ -2300,7 +2198,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     return (
                                         <div className="flex items-center gap-x-2 whitespace-nowrap overflow-hidden">
                                             <span>{t('chat.modelControls.keyboardHintNavigate')}</span>
-                                            {!selection && <span>{t('chat.modelControls.keyboardHintSwitchAgent', { shortcut: 'Tab' })}</span>}
                                             {activeHasEfforts ? <span>{t('chat.modelControls.keyboardHintThinking')}</span> : null}
                                         </div>
                                     );

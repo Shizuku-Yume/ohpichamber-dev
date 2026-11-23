@@ -1,9 +1,12 @@
-import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { expect, spyOn, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import * as fs from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { __resetDirsFromEnvForTests, getPluginsDir, getPluginsLockfile, getProjectPluginOverridesPath, setAgentDir } from '@oh-my-pi/pi-utils';
 import { PluginManager } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
+import { getEnabledPlugins, getPluginSettings } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/loader';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { NativePlugins } from './catalog-plugins.ts';
 import { nativeExtensionRoots } from './native-runtime.ts';
@@ -43,7 +46,7 @@ async function resetNativeState(): Promise<void> {
   clearPluginRootsAndCaches();
 }
 
-async function fixture() {
+async function fixture(configDir = '.omp') {
   const keys = ['HOME', 'USERPROFILE', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] as const;
   const environment: Record<(typeof keys)[number], string | undefined> = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const home = homedir();
@@ -55,7 +58,7 @@ async function fixture() {
   await resetNativeState();
   process.env.HOME = home;
   process.env.USERPROFILE = home;
-  process.env.PI_CONFIG_DIR = '.omp';
+  process.env.PI_CONFIG_DIR = configDir;
   for (const key of ['OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR']) delete process.env[key];
   for (const key of ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME']) process.env[key] = join(root, key.toLowerCase());
   __resetDirsFromEnvForTests();
@@ -63,7 +66,7 @@ async function fixture() {
   await writeFile(join(packageDirectory, 'package.json'), JSON.stringify({
     name: '@native-proof/plugin', version: '1.0.0',
     omp: {
-      description: 'Native package proof', settings: {
+      description: 'Native package proof', features: { stable: { default: true }, preview: { description: 'Preview capability' } }, settings: {
         greeting: { type: 'string' }, retries: { type: 'number', min: 0, max: 3 }, token: { type: 'string', secret: true },
       }
     }
@@ -225,6 +228,14 @@ nativeTest('native marketplace project installs retain scoped enablement while d
     expect(await new PluginManager(context.cwd).getPluginSettings('@native-proof/plugin')).toEqual({ token: 'global secret' });
     await context.plugins.operation({ type: 'plugins.uninstall', request: { expectedRevision: '3', target } }, '4');
     expect((await context.plugins.read('4')).plugins).toEqual([]);
+    const userTarget = { ...target, scope: 'user' as const };
+    await context.plugins.operation({
+      type: 'plugins.install', request: { expectedRevision: '4', source: userTarget }
+    }, '5');
+    await context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '5', target: userTarget, settingsScope: 'global', enabledFeatures: ['preview'] }
+    }, '6');
+    expect((await getEnabledPlugins(sibling)).find(plugin => plugin.name === '@native-proof/plugin')?.enabledFeatures).toEqual(['preview']);
   } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
 });
 
@@ -292,8 +303,284 @@ nativeTest('native doctor reports real checks without exposing native profile or
   } finally { await context.cleanup(); }
 });
 
+nativeTest('native feature selection and workspace overrides round-trip without changing the legacy catalog shape', async () => {
+  const context = await fixture();
+  try {
+    const native = new PluginManager(context.cwd);
+    await native.link(context.packageDirectory);
+    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+    const path = getProjectPluginOverridesPath(context.cwd);
+    await mkdir(join(context.cwd, '.omp'));
+    await writeFile(path, JSON.stringify({
+      future: { kept: true }, settings: { [target.name]: { token: 'fixture-secret', undeclared: 'private' } }
+    }));
+    const configure = (request: Omit<Extract<Parameters<NativePlugins['operation']>[0], { type: 'plugins.configure' }>['request'], 'target' | 'expectedRevision'>) =>
+      context.plugins.operation({ type: 'plugins.configure', request: { ...request, target, expectedRevision: '0' } }, '1');
+    await configure({ settingsScope: 'global', enabledFeatures: ['preview'], settings: { greeting: 'global' } });
+    await configure({ settingsScope: 'workspace', enabledFeatures: [], settings: { greeting: 'project' } });
+    const global = new PluginManager(context.root);
+    expect(await global.getEnabledFeatures(target.name)).toEqual(['preview']);
+    expect((await getEnabledPlugins(context.cwd)).find(plugin => plugin.name === target.name)?.enabledFeatures).toEqual([]);
+    expect(await getPluginSettings(target.name, context.cwd)).toMatchObject({ greeting: 'project', token: 'fixture-secret' });
+    expect(await getPluginSettings(target.name, context.root)).toEqual({ greeting: 'global' });
+    const result = await context.plugins.operation({ type: 'plugins.lifecycle' }, '1');
+    if (result.type !== 'plugins.lifecycle') throw new Error('Expected opt-in lifecycle data');
+    expect(result.result.plugins[0]).toMatchObject({
+      availableFeatures: [{ name: 'stable', defaultEnabled: true }, { name: 'preview', defaultEnabled: false, description: 'Preview capability' }],
+      globalFeatures: ['preview'], workspaceFeatures: [], projectSettings: { greeting: 'project' }
+    });
+    expect(JSON.stringify(result)).not.toContain('fixture-secret');
+    expect(JSON.stringify(result)).not.toContain('undeclared');
+    expect((await context.plugins.read('1')).plugins[0]).not.toHaveProperty('projectSettings');
+    expect(await Bun.file(path).json()).toMatchObject({ future: { kept: true } });
+    await expect(configure({ settingsScope: 'workspace', settings: { token: 'blocked' } })).rejects.toMatchObject({ status: 400 });
+    await expect(configure({ settingsScope: 'global', enabledFeatures: ['unknown'] })).rejects.toMatchObject({ status: 400 });
+    await configure({ settingsScope: 'workspace', enabledFeatures: null, settings: {} });
+    expect((await getEnabledPlugins(context.cwd)).find(plugin => plugin.name === target.name)?.enabledFeatures).toEqual(['preview']);
+    expect(await getPluginSettings(target.name, context.cwd)).toMatchObject({ greeting: 'global', token: 'fixture-secret' });
+    await configure({ settingsScope: 'global', enabledFeatures: null });
+    expect(await new PluginManager(context.cwd).getEnabledFeatures(target.name)).toBeNull();
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace settings roll back a committed override and enablement if the authoritative catalog cannot be read', async () => {
+  const context = await fixture();
+  try {
+    await new PluginManager(context.cwd).link(context.packageDirectory);
+    await mkdir(join(context.cwd, '.omp'));
+    const path = getProjectPluginOverridesPath(context.cwd);
+    const nativeBefore = await readFile(getPluginsLockfile(), 'utf8');
+    const overridesBefore = '{"settings":{"@native-proof/plugin":{"greeting":"keep"}}}\n';
+    await writeFile(path, overridesBefore);
+    await symlink(context.root, join(context.cwd, '.omp', 'extensions'), 'dir');
+    await expect(context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0', target: { kind: 'package', name: '@native-proof/plugin' },
+        enabled: false, settingsScope: 'workspace', settings: { greeting: 'rollback' }
+      }
+    }, '1')).rejects.toMatchObject({ status: 403 });
+    expect(await readFile(path, 'utf8')).toBe(overridesBefore);
+    expect(await readFile(getPluginsLockfile(), 'utf8')).toBe(nativeBefore);
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace overrides never overwrite a symlink or shadow a native fallback file', async () => {
+  const context = await fixture();
+  try {
+    await new PluginManager(context.cwd).link(context.packageDirectory);
+    const path = getProjectPluginOverridesPath(context.cwd);
+    const outside = join(context.root, 'outside.json');
+    await mkdir(join(context.cwd, '.omp'));
+    await writeFile(outside, '{}');
+    await symlink(outside, path);
+    const write = () => context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0', target: { kind: 'package', name: '@native-proof/plugin' },
+        settingsScope: 'workspace', settings: { greeting: 'blocked' }
+      }
+    }, '1');
+    await expect(write()).rejects.toMatchObject({ status: 403 });
+    expect(await readFile(outside, 'utf8')).toBe('{}');
+    await rm(path);
+    await mkdir(join(context.cwd, '.claude'));
+    await writeFile(join(context.cwd, '.claude', 'plugin-overrides.json'), '{}');
+    await expect(write()).rejects.toMatchObject({ status: 403 });
+    expect(await Bun.file(path).exists()).toBe(false);
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace overrides do not create a new registry root inside a Git workspace', async () => {
+  const context = await fixture();
+  try {
+    await mkdir(join(context.cwd, '.git'));
+    const cwd = join(context.cwd, 'nested');
+    await mkdir(cwd);
+    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+    await new PluginManager(cwd).link(context.packageDirectory);
+    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    const prospectiveRegistry = join(context.cwd, '.omp', 'plugins', 'installed_plugins.json');
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(prospectiveRegistry);
+    expect(await Bun.file(prospectiveRegistry).exists()).toBe(false);
+    const write = (plugins: NativePlugins) => plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+    }, '1');
+    expect(await nested.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
+      type: 'plugins.lifecycle', result: { projectWritable: false, projectWriteBlock: 'registry-root-change', plugins: [{ target, workspaceWritable: false }] }
+    });
+    await expect(write(nested)).rejects.toMatchObject({ status: 403, details: { projectWriteBlock: 'registry-root-change' } });
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(prospectiveRegistry);
+    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).exists()).toBe(false);
+
+    const expectWritable = async (path: string, plugins: NativePlugins) => {
+      expect(await plugins.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
+        type: 'plugins.lifecycle', result: { projectWritable: true, plugins: [{ target, workspaceWritable: true }] }
+      });
+      await write(plugins);
+      expect(await Bun.file(getProjectPluginOverridesPath(path)).json()).toEqual({ features: { [target.name]: ['preview'] } });
+      expect(await getEnabledPlugins(path)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+    };
+    await expectWritable(context.cwd, context.plugins);
+    await mkdir(join(cwd, '.omp'));
+    await expectWritable(cwd, nested);
+    const outsideGit = join(context.root, 'outside-git');
+    await mkdir(outsideGit);
+    await mkdir(join(context.root, '.omp'));
+    expect(await resolveOrDefaultProjectRegistryPath(outsideGit)).toBe(join(context.root, '.omp', 'plugins', 'installed_plugins.json'));
+    const independent = new NativePlugins({ cwd: outsideGit, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    await expectWritable(outsideGit, independent);
+  } finally { await context.cleanup(); }
+});
+
+for (const caseBehavior of ['case-sensitive', 'case-insensitive', 'ambiguous'] as const) {
+  nativeTest(`workspace overrides handle differently cased registry roots in a ${caseBehavior} workspace`, async () => {
+    const configDir = '.OMP';
+    const context = await fixture(configDir);
+    try {
+      await mkdir(join(context.cwd, '.git'));
+      const cwd = join(context.cwd, 'nested');
+      await mkdir(cwd);
+      const root = await fs.realpath(cwd);
+      const entry = 'local.md';
+      const alias = join(root, 'Local.md');
+      const entries = caseBehavior === 'ambiguous' ? [] : [entry];
+      if (entries.length > 0) await writeFile(join(cwd, entry), '');
+      if (caseBehavior === 'case-sensitive' && existsSync(alias)) return;
+      const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+      await new PluginManager(cwd).link(context.packageDirectory);
+      const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+      const registry = join(context.cwd, configDir, 'plugins', 'installed_plugins.json');
+      expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+      const lstat = fs.lstat;
+      const probe = caseBehavior === 'case-insensitive'
+        ? spyOn(fs, 'lstat').mockImplementation((path, options) => lstat(path === alias ? join(root, entry) : path, options))
+        : null;
+      try {
+        const lifecycle = await nested.operation({ type: 'plugins.lifecycle' }, '0');
+        const write = () => nested.operation({
+          type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+        }, '1');
+        if (caseBehavior !== 'case-sensitive') {
+          expect(lifecycle).toMatchObject({
+            type: 'plugins.lifecycle', result: { projectWritable: false, projectWriteBlock: 'registry-root-change', plugins: [{ target, workspaceWritable: false }] }
+          });
+          await expect(write()).rejects.toMatchObject({ status: 403, details: { projectWriteBlock: 'registry-root-change' } });
+          expect(await readdir(cwd)).toEqual(entries);
+        } else {
+          expect(lifecycle).toMatchObject({
+            type: 'plugins.lifecycle', result: { projectWritable: true, plugins: [{ target, workspaceWritable: true }] }
+          });
+          await write();
+          expect(await Bun.file(getProjectPluginOverridesPath(cwd)).json()).toEqual({ features: { [target.name]: ['preview'] } });
+          expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+        }
+        expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+      } finally { probe?.mockRestore(); }
+    } finally { await context.cleanup(); }
+  });
+}
+
+nativeTest('workspace overrides do not change registry discovery under a custom native config directory', async () => {
+  const configDir = '.custom-omp';
+  const context = await fixture(configDir);
+  try {
+    await mkdir(join(context.cwd, '.git'));
+    const cwd = join(context.cwd, 'nested');
+    await mkdir(cwd);
+    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+    await new PluginManager(cwd).link(context.packageDirectory);
+    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    const registry = join(context.cwd, configDir, 'plugins', 'installed_plugins.json');
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+    expect(await Bun.file(registry).exists()).toBe(false);
+    expect(getProjectPluginOverridesPath(cwd)).toBe(join(cwd, '.omp', 'plugin-overrides.json'));
+    expect(await nested.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
+      type: 'plugins.lifecycle', result: { projectWritable: true, plugins: [{ target, workspaceWritable: true }] }
+    });
+    await nested.operation({
+      type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+    }, '1');
+    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).json()).toEqual({ features: { [target.name]: ['preview'] } });
+    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace overrides leave an inherited marketplace install visible to the catalog and native loader', async () => {
+  const context = await fixture();
+  try {
+    const marketplace = join(context.root, 'inherited-marketplace');
+    await mkdir(join(marketplace, '.omp-plugin'), { recursive: true });
+    await mkdir(join(marketplace, 'proof'));
+    await writeFile(join(marketplace, 'proof', 'package.json'), await readFile(join(context.packageDirectory, 'package.json')));
+    await writeFile(join(marketplace, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('inherited-proof', [{
+      name: 'proof', source: './proof', version: '1.0.0', description: 'Inherited project plugin'
+    }]));
+    await context.plugins.operation({ type: 'plugins.marketplace.manage', request: { action: 'add', expectedRevision: '0', source: marketplace } }, '1');
+    const target = { kind: 'marketplace' as const, name: 'proof', marketplace: 'inherited-proof', scope: 'project' as const };
+    await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '1', source: target } }, '2');
+    const cwd = join(context.cwd, 'nested');
+    await mkdir(cwd);
+    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    const inherited = join(context.cwd, '.omp', 'plugins', 'installed_plugins.json');
+    expect(await Bun.file(inherited).exists()).toBe(true);
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(inherited);
+    expect((await nested.read('2')).plugins).toContainEqual(expect.objectContaining({ target }));
+    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: '@native-proof/plugin', scope: 'project' }));
+    const lifecycle = await nested.operation({ type: 'plugins.lifecycle' }, '2');
+    const save = await nested.operation({
+      type: 'plugins.configure', request: { expectedRevision: '2', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+    }, '3').catch((error: unknown) => error);
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(inherited);
+    expect((await nested.read('2')).plugins).toContainEqual(expect.objectContaining({ target }));
+    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: '@native-proof/plugin', scope: 'project' }));
+    expect(lifecycle).toMatchObject({ type: 'plugins.lifecycle', result: { projectWritable: false } });
+    expect(save).toMatchObject({ status: 403 });
+    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).exists()).toBe(false);
+  } finally { await context.cleanup(); }
+});
+
 const marketplaceCatalog = (name: string, plugins: Array<Record<string, unknown>>) => JSON.stringify({
   name, owner: { name: 'Test' }, plugins,
+});
+
+nativeTest('only the active copy of a package can change shared workspace features', async () => {
+  const context = await fixture();
+  try {
+    await new PluginManager(context.cwd).link(context.packageDirectory);
+    const global = { kind: 'package' as const, name: '@native-proof/plugin' };
+    const marketplace = join(context.root, 'shadowing-marketplace');
+    await mkdir(join(marketplace, '.omp-plugin'), { recursive: true });
+    await mkdir(join(marketplace, 'proof'));
+    await writeFile(join(marketplace, 'proof', 'package.json'), JSON.stringify({
+      name: global.name, version: '2.0.0', omp: { features: { stable: { default: true }, 'project-only': { default: true } } }
+    }));
+    await writeFile(join(marketplace, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('shadow-proof', [{
+      name: 'proof', source: './proof', version: '2.0.0', description: 'Project copy of a global package'
+    }]));
+    await context.plugins.operation({ type: 'plugins.marketplace.manage', request: { action: 'add', expectedRevision: '0', source: marketplace } }, '1');
+    const project = { kind: 'marketplace' as const, name: 'proof', marketplace: 'shadow-proof', scope: 'project' as const };
+    await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '1', source: project } }, '2');
+    expect((await context.plugins.read('2')).plugins.map(entry => entry.target)).toEqual([global, project]);
+    await context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '2', target: project, settingsScope: 'workspace', enabledFeatures: ['stable', 'project-only'] }
+    }, '3');
+    const active = async () => (await getEnabledPlugins(context.cwd)).find(entry => entry.name === global.name);
+    expect(await active()).toMatchObject({ scope: 'project', version: '2.0.0', enabledFeatures: ['stable', 'project-only'] });
+    const lifecycle = await context.plugins.operation({ type: 'plugins.lifecycle' }, '3');
+    const save = await context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '3', target: global, settingsScope: 'workspace', enabledFeatures: [] }
+    }, '4').catch((error: unknown) => error);
+    expect(await active()).toMatchObject({ scope: 'project', version: '2.0.0', enabledFeatures: ['stable', 'project-only'] });
+    expect(save).toMatchObject({ status: 400 });
+    await expect(context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '3', target: project, settingsScope: 'workspace', enabled: false, enabledFeatures: [] }
+    }, '4')).rejects.toMatchObject({ status: 400 });
+    expect(await active()).toMatchObject({ scope: 'project', version: '2.0.0', enabledFeatures: ['stable', 'project-only'] });
+    expect(lifecycle).toMatchObject({ type: 'plugins.lifecycle', result: { plugins: [
+      { target: global, globalFeaturesWritable: true, workspaceWritable: false },
+      { target: project, workspaceWritable: true }
+    ] } });
+  } finally { await context.cleanup(); }
 });
 
 nativeTest('marketplace source management reads, adds and removes native registry entries without inventing catalogs', async () => {
