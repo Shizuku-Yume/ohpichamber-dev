@@ -22,6 +22,14 @@ test('public provider flow and account result envelopes reject token and private
   expect(CatalogResultSchema.safeParse({ ...accounts, result: { ...accounts.result, accounts: [{ ...account, storageId: 'private-row' }] } }).success).toBe(false);
 });
 
+test('selection reads and results have a separate strict envelope', () => {
+  expect(CatalogOperationSchema.parse({ type: 'catalog.provider.account-selection.read', providerId: 'stored-provider' }).type)
+    .toBe('catalog.provider.account-selection.read');
+  expect(CatalogResultSchema.parse({ type: 'catalog.provider.account-selection', result: {
+    revision: '0', providerId: 'stored-provider', selectionMode: 'automatic', pinnedCredentialRef: null, selectionOverriddenBy: null,
+  } }).type).toBe('catalog.provider.account-selection');
+});
+
 test('provider discovery rejects malformed endpoint credentials and header injection', () => {
   const request = { endpoint: 'https://provider.invalid/v1', protocol: 'responses' };
   expect(CatalogOperationSchema.safeParse({ type: 'catalog.provider.models.discover', request }).success).toBe(true);

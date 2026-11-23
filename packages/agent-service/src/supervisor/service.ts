@@ -15,7 +15,7 @@ import type {
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, ShellStreamResponse, ShellStdinResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
-  ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderModelEnrichResult, ProviderConfigurationRead,
+  ProviderAccounts, ProviderAccountSelection, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderModelEnrichResult, ProviderConfigurationRead,
   CacheWarmingState, CacheWarmingApplyResult, SessionCacheWarmingState, SessionCacheWarmingApplyResult, OmpSettingsState,
   UsageStats, UsageToolsResponse, ImageGenerateResult, ImageModelMutationResult,
   WebSearchConfigState, WebSearchMutationResult,
@@ -99,7 +99,7 @@ type ServiceResponse =
   | ExtensionInventoryState
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
-  | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderModelEnrichResult
+  | ProviderAccounts | ProviderAccountSelection | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderModelEnrichResult
   | ProviderConfigurationRead
   | CacheWarmingState | CacheWarmingApplyResult | SessionCacheWarmingState | SessionCacheWarmingApplyResult | OmpSettingsState
   | WebSearchConfigState | WebSearchMutationResult

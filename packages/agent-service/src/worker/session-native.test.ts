@@ -1960,10 +1960,10 @@ test('provider.use authorization is requested once per provider/model/endpoint t
  } finally { await harness.close(); }
 }, 30000);
 
-test('a denied provider.use is never cached, so the next turn asks the Host again', async () => {
+test('automatic selection authorizes provider.use before resolving and never caches denial', async () => {
  // Deny only the first authorization: a cache that stored denials would skip the
  // Host on the second turn and let the refused provider through.
- const harness = await fixture({ respond: () => completion(), denyProviderUse: attempt => (attempt === 1 ? new Error('Host policy refused the provider') : undefined) });
+ const harness = await fixture({ respond: () => completion(), apiKey: 'automatic-fixture-key', denyProviderUse: attempt => (attempt === 1 ? new Error('Host policy refused the provider') : undefined) });
  const turnSettled = () => {
   const done = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => {
@@ -1972,13 +1972,22 @@ test('a denied provider.use is never cached, so the next turn asks the Host agai
   return { done: done.promise, unsubscribe };
  };
  const providerUseRequests = () => harness.hostRequests.filter(request => request.type === 'tool' && request.toolName === 'provider.use');
+ const resolver = spyOn(harness.worker.session.modelRegistry, 'resolver');
  try {
+  const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
+  if (!model) throw new Error('Fixture model is unavailable');
+  await harness.worker.operation({ type: 'catalog', revision: '3', operation: {
+   type: 'catalog.provider.configure', request: { expectedRevision: '2', configuration: {
+    providerId: model.provider, name: 'Native fixture', endpoint: model.baseUrl, protocol: 'chat-completions', credentialRef: null,
+   } },
+  } });
   // Prompt admission returns before the model call, so the refusal lands later in the turn.
   const first = turnSettled();
   await harness.worker.operation({ type: 'prompt', runId: 'provider-use-denied', request: prompt('Denied turn.') }).catch(() => undefined);
   await first.done;
   first.unsubscribe();
   expect(providerUseRequests()).toHaveLength(1);
+  expect(resolver).not.toHaveBeenCalled();
   expect(harness.fatal()).toBe(false);
   const second = turnSettled();
   await harness.worker.operation({ type: 'prompt', runId: 'provider-use-retry', request: prompt('Retried turn.') });
@@ -1986,8 +1995,9 @@ test('a denied provider.use is never cached, so the next turn asks the Host agai
   second.unsubscribe();
   // No cached denial: the retry performs a second full Host authorization.
   expect(providerUseRequests()).toHaveLength(2);
+  expect(resolver).toHaveBeenCalled();
   expect(harness.fatal()).toBe(false);
- } finally { await harness.close(); }
+ } finally { resolver.mockRestore(); await harness.close(); }
 }, 30000);
 
 test('the next turn in an open session uses the updated provider endpoint', async () => {

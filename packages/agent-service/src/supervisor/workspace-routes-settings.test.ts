@@ -45,6 +45,12 @@ async function fixture() {
     if (operation.operation.type === 'catalog.settings.read') {
       return { type: 'catalog', result: { type: 'catalog.settings', state: await native.read('workspace', operation.revision) } };
     }
+    if (operation.operation.type === 'catalog.provider.account-selection.read') {
+      return { type: 'catalog', result: { type: 'catalog.provider.account-selection', result: {
+        revision: operation.revision, providerId: operation.operation.providerId,
+        selectionMode: 'automatic', pinnedCredentialRef: null, selectionOverriddenBy: null,
+      } } };
+    }
     if (operation.operation.type === 'catalog.settings.write') {
       return { type: 'catalog', result: { type: 'catalog.settings.mutated', state: await native.write('workspace', operation.revision, operation.operation.request) } };
     }
@@ -78,6 +84,17 @@ async function fixture() {
     },
   };
 }
+
+test('provider account selection GET dispatches the read without advancing catalog revision', async () => {
+  const f = await fixture();
+  try {
+    const result = await f.call('GET', '/api/agent/v1/workspaces/workspace/providers/native/account-selection');
+    expect(result).toEqual({ status: 200, body: {
+      revision: '0', providerId: 'native', selectionMode: 'automatic', pinnedCredentialRef: null, selectionOverriddenBy: null,
+    } });
+    expect(f.catalogs.revision('workspace')).toBe('0');
+  } finally { await f.close(); }
+});
 
 test('GET and PATCH /workspaces/:id/omp/settings round-trip all sixteen OMP model roles', async () => {
   const f = await fixture();
