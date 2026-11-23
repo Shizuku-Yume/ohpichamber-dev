@@ -8,7 +8,6 @@ import {
   SettingsFieldRow,
   SettingsCheckboxRow,
   SettingsInset,
-  SettingsChipGroup,
   SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
@@ -18,7 +17,7 @@ import { NumberInput } from '@/components/ui/number-input';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
 import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
-import { modelRoleChange, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { levelLabel, modelRoleChange, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { SessionWarmingField } from './SessionWarmingField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
@@ -91,10 +90,9 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
    * its own resolves to. The page shows it as the default model's effort
    * control, so a user picks one level rather than two competing defaults.
    */
-  const configuredThinkingLevel = React.useMemo(() => {
-    const value = ompState?.settings.find((s) => s.id === 'defaultThinkingLevel')?.value;
-    return typeof value === 'string' ? value : '';
-  }, [ompState]);
+  const thinkingSetting = ompState?.settings.find((s) => s.id === 'defaultThinkingLevel');
+  const configuredThinkingLevel = typeof thinkingSetting?.value === 'string' ? thinkingSetting.value : '';
+  const thinkingOptions = thinkingSetting?.options ?? [];
 
   const setRole = React.useCallback(
     async (role: string, selector: string, also: OmpSettingsChange[] = []) => {
@@ -250,15 +248,23 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
                 onChange={handleDefaultEffortChange}
               />
             ) : (
-              <SettingsChipGroup
-                value={configuredThinkingLevel || 'off'}
-                aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
-                options={['off', 'low', 'medium', 'high'].map((level) => ({
-                  value: level,
-                  label: t(`settings.omp.modelRoles.effort.${level}` as I18nKey),
-                }))}
-                onChange={handleDefaultEffortChange}
-              />
+              <Select
+                value={configuredThinkingLevel}
+                disabled={isSavingOmp || thinkingOptions.length === 0}
+                onValueChange={(value) => void handleOmpChange('defaultThinkingLevel', value)}
+              >
+                <SelectTrigger
+                  className={SETTINGS_WIDTH_SELECT_CLASS}
+                  aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
+                >
+                  <SelectValue>{configuredThinkingLevel ? levelLabel(t, configuredThinkingLevel) : t('settings.omp.value.default')}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {thinkingOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{levelLabel(t, option.value)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </SettingsFieldRow>
 

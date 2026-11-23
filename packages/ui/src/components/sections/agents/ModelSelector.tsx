@@ -29,6 +29,7 @@ interface ModelSelectorProps {
     allowedProviderIds?: string[];
     isModelAllowed?: (providerId: string, modelId: string) => boolean;
     placeholder?: string;
+    noneLabel?: string;
     tooltipsEnabled?: boolean;
     dropdownPortalToBody?: boolean;
     directory?: string;
@@ -47,6 +48,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     allowedProviderIds,
     isModelAllowed,
     placeholder,
+    noneLabel,
     tooltipsEnabled = true,
     dropdownPortalToBody = false,
     compact = false,
@@ -112,7 +114,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         favorites: t('settings.agents.modelSelector.section.favorites'),
         recent: t('settings.agents.modelSelector.section.recent'),
         keyboardHint: t('settings.agents.modelSelector.keyboardHints'),
-        notSelected: placeholder || t('settings.agents.modelSelector.notSelected'),
+        notSelected: noneLabel || placeholder || t('settings.agents.modelSelector.notSelected'),
         favorite: t('settings.agents.modelSelector.actions.favorite'),
         unfavorite: t('settings.agents.modelSelector.actions.unfavorite'),
         provider: t('chat.modelControls.provider'),
@@ -122,7 +124,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         input: t('chat.modelControls.input'),
         output: t('chat.modelControls.output'),
         costPerMillion: t('chat.modelControls.costPerMillion'),
-    }), [placeholder, t]);
+    }), [noneLabel, placeholder, t]);
 
     const selectedModel = providerId && modelId ? { providerID: providerId, modelID: modelId } : null;
     const displayReady = isReady || (!loading && Boolean(selectedModel));

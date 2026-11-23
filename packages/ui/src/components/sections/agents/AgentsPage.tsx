@@ -441,11 +441,14 @@ export const AgentsPage: React.FC = () => {
             </SelectContent>
           </Select>
         </SettingsFieldRow>
-        <SettingsFieldRow settingsItem="agents.spawns" label={t('settings.agents.page.mode.subagent')}>
+        <SettingsFieldRow
+          settingsItem="agents.spawns"
+          label={t('settings.agents.page.spawns.label')}
+          info={t('settings.agents.page.spawns.info')}
+        >
           <Input
             value={form.spawns}
-            placeholder={t('settings.commands.agentSelector.selectAgentPlaceholder')}
-            aria-label={t('settings.agents.page.mode.subagent')}
+            aria-label={t('settings.agents.page.spawns.label')}
             onChange={(event) => {
               setForm({ ...form, spawns: event.target.value });
               requestSave();

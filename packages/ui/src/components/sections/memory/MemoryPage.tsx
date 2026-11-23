@@ -1,12 +1,16 @@
 import React from 'react';
+import { formatModelRef, parseModelSelector } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
+  SettingsFieldRow,
   SettingsSection,
   SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
@@ -17,7 +21,7 @@ export const MemoryPage: React.FC = () => {
   const directory = useSettingsDirectory();
   const models = useSettingsModels(directory);
 
-  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading } = useOmpPageSettings('memory');
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading, saving } = useOmpPageSettings('memory');
 
   const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
   const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);
@@ -40,6 +44,12 @@ export const MemoryPage: React.FC = () => {
 
   const currentBackend = ompForm['memory.backend'] ?? backendById.get('memory.backend')?.value ?? 'off';
   const isEnabled = currentBackend !== 'off';
+  const sharpshooterSetting = backendById.get('sharpshooter.model');
+  const sharpshooterValue = ompForm['sharpshooter.model'] === undefined
+    ? sharpshooterSetting?.value
+    : ompForm['sharpshooter.model'];
+  const sharpshooterSelector = typeof sharpshooterValue === 'string' ? sharpshooterValue : '';
+  const sharpshooterModel = parseModelSelector(sharpshooterSelector);
 
   const mnemopiKeys = [
     'mnemopi.bank',
@@ -106,13 +116,26 @@ export const MemoryPage: React.FC = () => {
             </div>
           ) : null}
 
-          {currentBackend === 'sharpshooter' && backendById.has('sharpshooter.model') ? (
-            <OmpRowControl
-              setting={backendById.get('sharpshooter.model')!}
-              value={ompForm['sharpshooter.model'] !== undefined ? ompForm['sharpshooter.model'] : backendById.get('sharpshooter.model')!.value}
-              disabled={ompLoading}
-              onChange={(val) => void updateOmpSetting('sharpshooter.model', val)}
-            />
+          {currentBackend === 'sharpshooter' && sharpshooterSetting ? (
+            <SettingsFieldRow
+              settingsItem="omp.sharpshooter.model"
+              label={t('settings.omp.items.sharpshooter.model.label')}
+              info={t('settings.omp.items.sharpshooter.model.description')}
+            >
+              <ModelSelector
+                providerId={sharpshooterModel?.providerId ?? ''}
+                modelId={sharpshooterModel?.modelId ?? ''}
+                placeholder={sharpshooterSelector || t('settings.omp.sharpshooter.useSmallModel')}
+                noneLabel={t('settings.omp.sharpshooter.useSmallModel')}
+                directory={directory ?? undefined}
+                disabled={ompLoading || saving}
+                className={SETTINGS_WIDTH_SELECT_CLASS}
+                onChange={(providerId, modelId) => {
+                  if (providerId === sharpshooterModel?.providerId && modelId === sharpshooterModel.modelId) return;
+                  void updateOmpSetting(sharpshooterSetting, formatModelRef({ providerId, modelId }) || null);
+                }}
+              />
+            </SettingsFieldRow>
           ) : null}
         </div>
       </SettingsSection>

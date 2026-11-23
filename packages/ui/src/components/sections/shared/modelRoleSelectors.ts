@@ -19,6 +19,7 @@ import type { I18nKey } from '@/lib/i18n';
 const EFFORT_LEVELS = THINKING_LEVELS.filter((level) => level !== 'inherit');
 
 const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
+  auto: 'settings.remoteInstances.page.field.auto',
   off: 'settings.omp.modelRoles.effort.off',
   minimal: 'settings.omp.modelRoles.effort.minimal',
   low: 'settings.omp.modelRoles.effort.low',

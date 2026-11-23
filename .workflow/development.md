@@ -4,6 +4,15 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The OMP 19 settings-control follow-up restores native thinking choices and a
+searchable Sharpshooter model picker, clarifies allowed subagents and shadowed
+extensions, and replaces Plugins Apply with next-session guidance when no
+workers are registered. The Tools and Chat settings pages no longer read
+obsolete controls. Isolated Linux Chrome verified the unmatched default and
+persisted Extra high choice, persisted model selection, zero-worker guidance,
+and allowed-subagent help. The background session-list refresh remained
+unverified after an error; this is not multi-platform certification.
+
 The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
 `TerminalView`: completed output stays visible despite close-on-exit, a missing
 Host session cannot become an interactive shell, and command tabs cannot restart.
