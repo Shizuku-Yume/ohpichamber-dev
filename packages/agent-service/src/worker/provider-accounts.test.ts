@@ -77,7 +77,7 @@ for (const legacyPin of [false, true]) test(`removing a ${legacyPin ? 'legacy' :
     runtime = await openNativeRuntime({ cwd, agentDirectory });
     expect(runtime.models.defaultCredentialRef(providerId)).toBeNull();
   } finally { runtime.authStorage.close(); await rm(root, { recursive: true, force: true }); }
-});
+}, 30_000); // Each rollback rebuilds the native catalog from disk.
 
 test('automatic selection persists over legacy pins without changing private provider projection', async () => {
   const root = await mkdtemp(join(tmpdir(), 'provider-selection-'));
