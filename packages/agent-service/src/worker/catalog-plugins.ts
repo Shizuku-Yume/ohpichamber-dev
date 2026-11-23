@@ -2,7 +2,7 @@ import { lstat, mkdir, readFile, realpath, stat, writeFile, rename, unlink } fro
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
-import { getAgentDir, getConfigRootDir, getPluginsDir, getPluginsLockfile, getPluginsPackageJson, getPluginsNodeModules, getProjectPluginOverridesPath, normalizePathForComparison } from '@oh-my-pi/pi-utils';
+import { getAgentDir, getConfigDirName, getConfigRootDir, getPluginsDir, getPluginsLockfile, getPluginsPackageJson, getPluginsNodeModules, getProjectPluginOverridesPath, normalizePathForComparison } from '@oh-my-pi/pi-utils';
 import { PluginManager, validateSetting } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
 import { getConfigDirPaths } from '@oh-my-pi/pi-coding-agent/config';
 import type { InstalledPlugin } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/types';
@@ -201,7 +201,7 @@ export class NativePlugins {
     if ((parentEntry && (!parentEntry.isDirectory() || await realpath(parent) !== parent)) || (entry && !entry.isFile())) {
       throw new ProjectionError(403, 'UNAUTHORIZED', 'Plugin overrides cannot use a symbolic link or non-file target');
     }
-    if (!parentEntry) {
+    if (!parentEntry && normalizePathForComparison(directory) === normalizePathForComparison(join(cwd, getConfigDirName()))) {
       const registry = await resolveOrDefaultProjectRegistryPath(cwd);
       if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== normalizePathForComparison(directory)
         && (await Bun.file(registry).exists() || await hasAncestorGitRoot(cwd))) {

@@ -44,7 +44,7 @@ async function resetNativeState(): Promise<void> {
   clearPluginRootsAndCaches();
 }
 
-async function fixture() {
+async function fixture(configDir = '.omp') {
   const keys = ['HOME', 'USERPROFILE', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] as const;
   const environment: Record<(typeof keys)[number], string | undefined> = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const home = homedir();
@@ -56,7 +56,7 @@ async function fixture() {
   await resetNativeState();
   process.env.HOME = home;
   process.env.USERPROFILE = home;
-  process.env.PI_CONFIG_DIR = '.omp';
+  process.env.PI_CONFIG_DIR = configDir;
   for (const key of ['OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR']) delete process.env[key];
   for (const key of ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME']) process.env[key] = join(root, key.toLowerCase());
   __resetDirsFromEnvForTests();
@@ -426,6 +426,32 @@ nativeTest('workspace overrides do not create a new registry root inside a Git w
     expect(await resolveOrDefaultProjectRegistryPath(outsideGit)).toBe(join(context.root, '.omp', 'plugins', 'installed_plugins.json'));
     const independent = new NativePlugins({ cwd: outsideGit, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
     await expectWritable(outsideGit, independent);
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace overrides do not change registry discovery under a custom native config directory', async () => {
+  const configDir = '.custom-omp';
+  const context = await fixture(configDir);
+  try {
+    await mkdir(join(context.cwd, '.git'));
+    const cwd = join(context.cwd, 'nested');
+    await mkdir(cwd);
+    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+    await new PluginManager(cwd).link(context.packageDirectory);
+    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    const registry = join(context.cwd, configDir, 'plugins', 'installed_plugins.json');
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+    expect(await Bun.file(registry).exists()).toBe(false);
+    expect(getProjectPluginOverridesPath(cwd)).toBe(join(cwd, '.omp', 'plugin-overrides.json'));
+    expect(await nested.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
+      type: 'plugins.lifecycle', result: { projectWritable: true, plugins: [{ target, workspaceWritable: true }] }
+    });
+    await nested.operation({
+      type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+    }, '1');
+    expect(await Bun.file(getProjectPluginOverridesPath(cwd)).json()).toEqual({ features: { [target.name]: ['preview'] } });
+    expect(await getEnabledPlugins(cwd)).toContainEqual(expect.objectContaining({ name: target.name, enabledFeatures: ['preview'] }));
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
   } finally { await context.cleanup(); }
 });
 
