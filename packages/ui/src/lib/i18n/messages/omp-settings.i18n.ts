@@ -9,6 +9,7 @@
  */
 export const ompSettingsI18n = {
   'en': {
+    'settings.omp.power.overridden': "A native configuration override sets this value. Editing the shared setting would not change this project.",
     'settings.omp.group.power': "Power",
     'settings.omp.items.power.sleepPrevention.label': "Host sleep prevention",
     'settings.omp.items.power.sleepPrevention.description': "Keep the host awake during an agent turn. A session waiting for background work does not prevent sleep.",
@@ -1302,6 +1303,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 hour',
   },
   'ar': {
+    'settings.omp.power.overridden': "يضبط تجاوز في التهيئة الأصلية هذه القيمة. لن يؤثر تعديل الإعداد المشترك في هذا المشروع.",
     'settings.omp.group.power': "الطاقة",
     'settings.omp.items.power.sleepPrevention.label': "منع سكون المضيف",
     'settings.omp.items.power.sleepPrevention.description': "أبقِ المضيف مستيقظًا أثناء عمل الوكيل. لا تمنع الجلسة التي تنتظر عملاً في الخلفية السكون.",
@@ -2595,6 +2597,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': 'ساعة واحدة',
   },
   'he': {
+    'settings.omp.power.overridden': "ערך זה מוגדר על ידי דריסה בתצורה המקורית. שינוי ההגדרה המשותפת לא ישפיע על הפרויקט הזה.",
     'settings.omp.group.power': "צריכת חשמל",
     'settings.omp.items.power.sleepPrevention.label': "מניעת שינה של המארח",
     'settings.omp.items.power.sleepPrevention.description': "שמירה על המארח ער בזמן שהסוכן עובד. הפעלה שממתינה למשימות ברקע אינה מונעת שינה.",
@@ -3888,6 +3891,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': 'שעה אחת',
   },
   'de': {
+    'settings.omp.power.overridden': "Eine native Konfigurationsüberschreibung legt diesen Wert fest. Änderungen an der gemeinsamen Einstellung wirken sich nicht auf dieses Projekt aus.",
     'settings.omp.group.power': "Energie",
     'settings.omp.items.power.sleepPrevention.label': "Ruhezustand des Hosts verhindern",
     'settings.omp.items.power.sleepPrevention.description': "Hält den Host wach, während der Agent arbeitet. Beim Warten auf Hintergrundaufgaben bleibt der Ruhezustand möglich.",
@@ -5181,6 +5185,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 Stunde',
   },
   'es': {
+    'settings.omp.power.overridden': "Una configuración nativa fija este valor. Editar el ajuste compartido no cambiaría este proyecto.",
     'settings.omp.group.power': "Energía",
     'settings.omp.items.power.sleepPrevention.label': "Evitar la suspensión del servidor",
     'settings.omp.items.power.sleepPrevention.description': "Mantiene activo el servidor durante un turno del agente. Esperar a tareas en segundo plano no impide la suspensión.",
@@ -6474,6 +6479,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 hora',
   },
   'fr': {
+    'settings.omp.power.overridden': "Une surcharge de la configuration native fixe cette valeur. Modifier le réglage partagé ne changera pas ce projet.",
     'settings.omp.group.power': "Alimentation",
     'settings.omp.items.power.sleepPrevention.label': "Empêcher la veille de l’hôte",
     'settings.omp.items.power.sleepPrevention.description': "Maintient l’hôte éveillé pendant un tour de l’agent. Attendre une tâche en arrière-plan n’empêche pas la veille.",
@@ -7767,6 +7773,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 heure',
   },
   'ja': {
+    'settings.omp.power.overridden': "ネイティブ設定でこの値が上書きされています。共有設定を変更してもこのプロジェクトには反映されません。",
     'settings.omp.group.power': "電源",
     'settings.omp.items.power.sleepPrevention.label': "ホストのスリープを防止",
     'settings.omp.items.power.sleepPrevention.description': "エージェントが処理中はホストを起動状態に保ちます。バックグラウンド処理の待機中はスリープを妨げません。",
@@ -9060,6 +9067,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 時間',
   },
   'ko': {
+    'settings.omp.power.overridden': "네이티브 설정에서 이 값을 덮어씁니다. 공유 설정을 편집해도 이 프로젝트는 변경되지 않습니다.",
     'settings.omp.group.power': "전원",
     'settings.omp.items.power.sleepPrevention.label': "호스트 절전 방지",
     'settings.omp.items.power.sleepPrevention.description': "에이전트가 작업하는 동안 호스트를 깨워 둡니다. 백그라운드 작업을 기다릴 때는 절전을 막지 않습니다.",
@@ -10353,6 +10361,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1시간',
   },
   'nl': {
+    'settings.omp.power.overridden': "Een systeemeigen configuratie overschrijft deze waarde. Een wijziging aan de gedeelde instelling heeft geen invloed op dit project.",
     'settings.omp.group.power': "Energie",
     'settings.omp.items.power.sleepPrevention.label': "Slaapstand van de host voorkomen",
     'settings.omp.items.power.sleepPrevention.description': "Houdt de host actief tijdens een beurt van de agent. Wachten op achtergrondtaken verhindert de slaapstand niet.",
@@ -11646,6 +11655,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 uur',
   },
   'pl': {
+    'settings.omp.power.overridden': "Ten parametr ustawia konfiguracja natywna. Zmiana ustawienia współdzielonego nie wpłynie na ten projekt.",
     'settings.omp.group.power': "Zasilanie",
     'settings.omp.items.power.sleepPrevention.label': "Zapobieganie uśpieniu hosta",
     'settings.omp.items.power.sleepPrevention.description': "Utrzymuje hosta w gotowości, gdy agent pracuje. Oczekiwanie na zadania w tle nie blokuje uśpienia.",
@@ -12939,6 +12949,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 godzina',
   },
   'pt-BR': {
+    'settings.omp.power.overridden': "Uma substituição na configuração nativa define este valor. Editar a configuração compartilhada não afetará este projeto.",
     'settings.omp.group.power': "Energia",
     'settings.omp.items.power.sleepPrevention.label': "Impedir a suspensão do host",
     'settings.omp.items.power.sleepPrevention.description': "Mantém o host ativo durante um turno do agente. Aguardar tarefas em segundo plano não impede a suspensão.",
@@ -14232,6 +14243,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 hora',
   },
   'tr': {
+    'settings.omp.power.overridden': "Bu değer yerel yapılandırma tarafından geçersiz kılınır. Ortak ayarı düzenlemek bu projeyi değiştirmez.",
     'settings.omp.group.power': "Güç",
     'settings.omp.items.power.sleepPrevention.label': "Ana makinenin uykuya geçmesini önle",
     'settings.omp.items.power.sleepPrevention.description': "Ajan çalışırken ana makineyi uyanık tutar. Arka plan görevlerini beklemek uykuya geçmeyi engellemez.",
@@ -15525,6 +15537,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 saat',
   },
   'uk': {
+    'settings.omp.power.overridden': "Це значення перевизначено в нативній конфігурації. Зміна спільного налаштування не вплине на цей проєкт.",
     'settings.omp.group.power': "Живлення",
     'settings.omp.items.power.sleepPrevention.label': "Запобігати засинанню хоста",
     'settings.omp.items.power.sleepPrevention.description': "Хост не засинає під час роботи агента. Очікування фонових завдань не перешкоджає переходу в режим сну.",
@@ -16818,6 +16831,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 година',
   },
   'zh-CN': {
+    'settings.omp.power.overridden': "原生配置覆盖了此值。修改共享设置不会影响当前项目。",
     'settings.omp.group.power': "电源",
     'settings.omp.items.power.sleepPrevention.label': "防止主机休眠",
     'settings.omp.items.power.sleepPrevention.description': "在智能体执行回合期间保持主机唤醒。等待后台任务时不会阻止休眠。",
@@ -18111,6 +18125,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.ida.idleCloseSec.options.3600': '1 小时',
   },
   'zh-TW': {
+    'settings.omp.power.overridden': "原生設定覆寫了此值。修改共用設定不會影響此專案。",
     'settings.omp.group.power': "電源",
     'settings.omp.items.power.sleepPrevention.label': "防止主機進入睡眠",
     'settings.omp.items.power.sleepPrevention.description': "在代理執行回合期間讓主機保持喚醒。等待背景工作時不會阻止睡眠。",

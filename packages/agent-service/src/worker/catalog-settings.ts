@@ -17,6 +17,13 @@ import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 const byId = new Map<string, AnySetting>();
 
+function writeBlock(setting: AnySetting, settings: Settings): OmpSetting['writeBlock'] {
+  if (setting.id !== 'power.sleepPrevention') return undefined;
+  const provenance = settings.getProvenance(setting);
+  if (provenance !== 'global' && provenance !== 'default') return 'layer-override';
+  return undefined;
+}
+
 /**
  * The settings route is a view over OMP's own registry. It never
  * declares a second schema: ids, types, defaults, enum values and UI metadata
@@ -62,6 +69,8 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (ui?.description !== undefined) descriptor.description = ui.description;
   if (ui?.group !== undefined) descriptor.group = ui.group;
   if (ui?.tab !== undefined) descriptor.tab = ui.tab;
+  const blocked = writeBlock(setting, settings);
+  if (blocked !== undefined) descriptor.writeBlock = blocked;
   return OmpSettingSchema.parse(descriptor);
 }
 
@@ -109,6 +118,10 @@ export class NativeSettings {
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     for (const change of request.changes) {
       const setting = handle(change.id);
+      const blocked = writeBlock(setting, this.settings);
+      if (blocked === 'layer-override') {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared sleep setting');
+      }
       if (change.value === null) continue;
       if (change.id === 'edit.mode' && change.value === 'magic') {
         throw new ProjectionError(400, 'INVALID_REQUEST', 'Magic edit mode is not supported');

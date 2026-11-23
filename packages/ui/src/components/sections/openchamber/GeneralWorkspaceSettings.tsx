@@ -410,13 +410,19 @@ export const GeneralPowerSettings: React.FC = () => {
   return (
     <SettingsSection title={t('settings.omp.group.power')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
       {rows.map((setting) => (
-        <OmpRowControl
-          key={setting.id}
-          setting={setting}
-          value={form[setting.id] ?? setting.value}
-          disabled={saving}
-          onChange={(value) => void updateSetting(setting, value)}
-        />
+        <React.Fragment key={setting.id}>
+          <OmpRowControl
+            setting={setting}
+            value={form[setting.id] ?? setting.value}
+            disabled={saving || setting.writeBlock !== undefined}
+            onChange={(value) => void updateSetting(setting, value)}
+          />
+          {setting.writeBlock ? (
+            <p className="typography-meta text-muted-foreground">
+              {t('settings.omp.power.overridden')}
+            </p>
+          ) : null}
+        </React.Fragment>
       ))}
     </SettingsSection>
   );

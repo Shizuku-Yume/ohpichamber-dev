@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as contract from '@openchamber/agent-contract';
@@ -20,7 +20,7 @@ async function fixture() {
   await mkdir(agentDirectory, { recursive: true });
   const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
   return {
-    settings, agentDirectory, native: new NativeSettings(settings, agentDirectory),
+    settings, cwd, agentDirectory, native: new NativeSettings(settings, agentDirectory),
     async close() {
       settings.cancelPendingSaves();
       await rm(root, { recursive: true, force: true });
@@ -201,6 +201,27 @@ test('General power uses the native OMP sleep-prevention setting', async () => {
     });
     const after = await f.native.read('workspace_1', '1');
     expect(after.settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('off');
+  } finally { await f.close(); }
+});
+
+test('a project power override is readable but cannot change the global config', async () => {
+  const f = await fixture();
+  try {
+    const globalPath = join(f.agentDirectory, 'config.yml');
+    const globalConfig = 'power:\n  sleepPrevention: idle\n';
+    await writeFile(globalPath, globalConfig);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'power:\n  sleepPrevention: display\n');
+    const before = await f.native.read('workspace_1', '0');
+    expect(before.settings.find(({ id }) => id === 'power.sleepPrevention')).toMatchObject({
+      value: 'display',
+      writeBlock: 'layer-override',
+    });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{ id: 'power.sleepPrevention', value: 'off' }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(globalPath, 'utf8')).toBe(globalConfig);
   } finally { await f.close(); }
 });
 
