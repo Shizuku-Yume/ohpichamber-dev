@@ -1378,7 +1378,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.previous_project.label': '이전 프로젝트',
   'settings.openchamber.keyboardShortcuts.action.next_project.label': '다음 프로젝트',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': '테마 순환',
-  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': '에이전트 순환',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': '즐겨찾기 모델 앞으로 순환',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': '즐겨찾기 모델 뒤로 순환',
   'settings.openchamber.keyboardShortcuts.action.open_model_selector.label': '모델 선택기 열기',

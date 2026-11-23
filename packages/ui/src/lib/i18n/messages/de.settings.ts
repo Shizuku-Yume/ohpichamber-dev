@@ -1362,7 +1362,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.previous_project.label': 'Vorheriges Projekt',
   'settings.openchamber.keyboardShortcuts.action.next_project.label': 'Nächstes Projekt',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Thema wechseln',
-  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent wechseln',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'Favorites Modell vorwärts durchschalten',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': 'Favorites Modell rückwärts durchschalten',
   'settings.openchamber.keyboardShortcuts.action.open_model_selector.label': 'Modellauswahl öffnen',

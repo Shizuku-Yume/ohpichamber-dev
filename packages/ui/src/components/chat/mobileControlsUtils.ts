@@ -4,22 +4,6 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 
 export type MobileControlsPanel = 'model' | 'agent' | 'variant' | 'effort' | null;
 
-/** Cycle through available favorites, or the complete enabled native roster. */
-export const getCycledAgentId = (
-    agents: readonly Pick<Agent, 'agentId'>[],
-    currentAgentId: string | undefined,
-    direction: 1 | -1 = 1,
-    favoriteAgentIds: readonly string[] = [],
-) => {
-    const favorites = agents.filter((agent) => favoriteAgentIds.includes(agent.agentId));
-    const candidates = favorites.length > 0 ? favorites : agents;
-    if (candidates.length === 0) return null;
-    const index = candidates.findIndex((agent) => agent.agentId === currentAgentId);
-    if (index < 0) return (direction === 1 ? candidates[0] : candidates[candidates.length - 1]).agentId;
-    if (candidates.length === 1) return null;
-    return candidates[(index + direction + candidates.length) % candidates.length].agentId;
-};
-
 const capitalizeLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 export const getAgentDisplayName = (

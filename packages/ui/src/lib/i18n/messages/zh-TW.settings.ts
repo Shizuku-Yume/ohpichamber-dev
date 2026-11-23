@@ -1256,7 +1256,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.previous_project.label': '上一個專案',
   'settings.openchamber.keyboardShortcuts.action.next_project.label': '下一個專案',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': '輪換主題',
-  'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': '輪換 agent',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': '向前輪換收藏模型',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_backward.label': '向後輪換收藏模型',
   'settings.openchamber.keyboardShortcuts.action.open_model_selector.label': '開啟模型選擇器',
