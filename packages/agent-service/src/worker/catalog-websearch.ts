@@ -166,17 +166,22 @@ export class NativeWebSearch {
       if (before.revision !== operation.request.expectedRevision) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Web search configuration revision changed');
       const options: WebSearchProviderOptions = operation.type === 'update' ? operation.request.providerOptions ?? {} : {};
       let fallbackSelectors: string[] | undefined;
+      let writeFallbacks = false;
       if (operation.type === 'update') {
         const request = operation.request;
         const blockedSources = ['project', 'overlay', 'env', 'runtime'];
         const projectRetry = this.runtime.settings.getProjectSettings().retry;
+        const fallbacksBlocked = blockedSources.includes(cfgRetryFallbackChains.provenance(this.runtime.settings)) ||
+          (projectRetry && typeof projectRetry === 'object' && Object.hasOwn(projectRetry, 'fallbackChains'));
+        const requestedFallbacks = request.fallbackProviderIds;
+        const echoesBlockedFallbacks = fallbacksBlocked && request.selectedProviderId !== undefined &&
+          Array.isArray(requestedFallbacks) && requestedFallbacks.length === before.fallbackProviderIds.length &&
+          requestedFallbacks.every((id, i) => id === before.fallbackProviderIds[i]);
+        writeFallbacks = requestedFallbacks !== undefined && !echoesBlockedFallbacks;
         if ((request.enabled !== undefined && blockedSources.includes(cfgWebSearchEnabled.provenance(this.runtime.settings)))
           || (request.timeoutSeconds !== undefined && blockedSources.includes(cfgProvidersWebSearchTimeoutSeconds.provenance(this.runtime.settings)))
           || (request.selectedProviderId !== undefined && blockedSources.includes(this.runtime.settings.getModelRoleProvenance('web')))
-          || (request.fallbackProviderIds !== undefined && (
-            blockedSources.includes(cfgRetryFallbackChains.provenance(this.runtime.settings)) ||
-            (projectRetry && typeof projectRetry === 'object' && Object.hasOwn(projectRetry, 'fallbackChains'))
-          ))
+          || (writeFallbacks && fallbacksBlocked)
           || (request.providerSearchDelayMs !== undefined && blockedSources.includes(cfgExaSearchDelayMs.provenance(this.runtime.settings)))
           || (request.providerEndpoint !== undefined && blockedSources.includes(cfgSearxngEndpoint.provenance(this.runtime.settings)))
           || (request.providerCategories !== undefined && blockedSources.includes(cfgSearxngCategories.provenance(this.runtime.settings)))
@@ -204,7 +209,7 @@ export class NativeWebSearch {
         for (const id of [...(selected ? [selected] : []), ...fallbacks]) {
           if (!selectorPool.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Unknown native web search model selector');
         }
-        if (Array.isArray(request.fallbackProviderIds)) {
+        if (writeFallbacks && Array.isArray(requestedFallbacks)) {
           // A retained fallback can depend on @web (possibly through another
           // role). Pin only selectors that would follow the new primary.
           const chain = configuredChain && request.selectedProviderId !== undefined && request.selectedProviderId !== configuredPrimary
@@ -231,7 +236,7 @@ export class NativeWebSearch {
           if (request.enabled !== undefined) cfgWebSearchEnabled.set(this.runtime.settings, request.enabled);
           if (request.timeoutSeconds !== undefined) cfgProvidersWebSearchTimeoutSeconds.set(this.runtime.settings, request.timeoutSeconds);
           if (request.selectedProviderId !== undefined) this.runtime.settings.setModelRole('web', request.selectedProviderId ?? undefined);
-          if (request.fallbackProviderIds !== undefined) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', fallbackSelectors);
+          if (writeFallbacks) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', fallbackSelectors);
           if (request.providerSearchDelayMs !== undefined) {
             if (request.providerSearchDelayMs === null) cfgExaSearchDelayMs.unset(this.runtime.settings);
             else cfgExaSearchDelayMs.set(this.runtime.settings, request.providerSearchDelayMs);

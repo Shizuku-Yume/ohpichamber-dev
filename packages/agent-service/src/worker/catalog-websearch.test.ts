@@ -294,6 +294,15 @@ test('the project fallback reset cannot clear the hidden shared web chain', asyn
         .rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
     }
     expect(await readFile(configPath, 'utf8')).toBe(sharedConfig);
+    const read = await search.operation({ type: 'read' });
+    if (read.type !== 'state') throw new Error('Expected native search state');
+    const { fallbackProviderIds, providers } = read.state;
+    const selectedProviderId = providers.find(provider => !fallbackProviderIds.includes(provider.providerId))?.providerId;
+    expect(selectedProviderId).toBeDefined();
+    expect(await search.operation({
+      type: 'update', request: { expectedRevision: '0', enabled: true, selectedProviderId, fallbackProviderIds },
+    })).toMatchObject({ result: { status: 'applied', state: { selectedProviderId } } });
+    expect(runtime.settings.getGlobalSettings().retry).toEqual({ fallbackChains: { web: ['web/exa'] } });
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
