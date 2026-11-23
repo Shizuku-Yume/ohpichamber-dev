@@ -489,6 +489,31 @@ describe('DefaultsSettings', () => {
     }
   });
 
+  test('the web retry chain links to Web Search rather than opening a second editor', async () => {
+    const snapshot = {
+      ...mockOmpSettings,
+      settings: mockOmpSettings.settings.map((setting) => setting.id === 'retry.fallbackChains'
+        ? { ...setting, value: { web: ['web/exa'] } }
+        : setting),
+    } as OmpSettingsState;
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot);
+    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump');
+    try {
+      await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
+      await settle();
+      const group = host.querySelector('[data-settings-item="sessions.fallback-model"]');
+      expect(group?.textContent).toContain('web/exa');
+      const link = [...group?.querySelectorAll('button') ?? []].find((button) => button.textContent === 'Web search');
+      expect(link).toBeDefined();
+      await act(async () => link?.click());
+      expect(jump).toHaveBeenCalledWith('web-search', 'web-search.fallbacks');
+      expect(group?.querySelector('textarea')).toBeNull();
+    } finally {
+      read.mockRestore();
+      jump.mockRestore();
+    }
+  });
+
   test.each([
     ['75%', '75%', false],
     ['84000', 84000, true],

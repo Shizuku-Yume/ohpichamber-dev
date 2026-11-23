@@ -15,8 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/lib/i18n';
+import { useUIStore } from '@/stores/useUIStore';
 
 const CHAINS = 'retry.fallbackChains';
+const WEB_CHAIN = 'web';
 
 function isChain(value: JsonValue): value is string[] {
   return Array.isArray(value) && value.every((selector) => typeof selector === 'string');
@@ -38,7 +40,8 @@ function ChainEditor({ rule, keys, models, directory, disabled, onSave }: ChainE
   const [selectors, setSelectors] = React.useState(rule?.chain.join('\n') ?? '');
   const [failed, setFailed] = React.useState(false);
   const nextKey = key.trim();
-  const duplicate = !rule && keys.includes(nextKey);
+  const reserved = !rule && nextKey === WEB_CHAIN;
+  const duplicate = !rule && keys.includes(nextKey) && !reserved;
   const selectorLabel = t('settings.retryFallback.selectors');
   const keyLabel = t('settings.retryFallback.key');
   const save = async (next: string[] | undefined) => {
@@ -47,7 +50,7 @@ function ChainEditor({ rule, keys, models, directory, disabled, onSave }: ChainE
   return (
     <form onSubmit={(event) => {
       event.preventDefault();
-      if (!disabled && nextKey && !duplicate) {
+      if (!disabled && nextKey && !duplicate && !reserved) {
         void save(selectors.split('\n').map((selector) => selector.trim()).filter(Boolean));
       }
     }}>
@@ -75,8 +78,9 @@ function ChainEditor({ rule, keys, models, directory, disabled, onSave }: ChainE
           {t(duplicate ? 'settings.retryFallback.duplicate' : 'settings.omp.saveFailed')}
         </p>
       )}
+      {reserved && <WebSearchFallbackLink />}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={disabled || !nextKey || duplicate}>{t('settings.common.actions.saveChanges')}</Button>
+        <Button type="submit" size="sm" disabled={disabled || !nextKey || duplicate || reserved}>{t('settings.common.actions.saveChanges')}</Button>
         {rule && (
           <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => void save(undefined)}>
             {t('settings.common.actions.delete')}
@@ -84,6 +88,16 @@ function ChainEditor({ rule, keys, models, directory, disabled, onSave }: ChainE
         )}
       </div>
     </form>
+  );
+}
+
+function WebSearchFallbackLink() {
+  const { t } = useI18n();
+  return (
+    <Button type="button" size="sm" variant="outline"
+      onClick={() => useUIStore.getState().requestSettingsJump('web-search', 'web-search.fallbacks')}>
+      {t('settings.page.webSearch.title')}
+    </Button>
   );
 }
 
@@ -124,12 +138,16 @@ export function RetryFallbackChains({
       info={t('settings.omp.items.retry.fallbackChains.description')}
       description={writable ? undefined : t(setting.conditionActive === false
         ? 'settings.retryFallback.overridden' : 'settings.view.unavailable.title')}>
-      {Object.entries(entries).map(([key, chain]) => isChain(chain) && (
+      {Object.entries(entries).map(([key, chain]) => isChain(chain) && (key === WEB_CHAIN ? (
+        <SettingsFieldRow key={key} label={key} description={chain.join(' → ')}>
+          <WebSearchFallbackLink />
+        </SettingsFieldRow>
+      ) : (
         <SettingsDisclosure key={key} title={key} secondary={chain.join(' → ')}
           expanded={editing?.key === key} onToggle={() => setEditing(editing?.key === key ? null : { key })}>
           <ChainEditor rule={{ key, chain }} {...editorProps} />
         </SettingsDisclosure>
-      ))}
+      )))}
       {writable && (
         <SettingsDisclosure title={t('settings.retryFallback.addChain')} expanded={editing !== null && editing.key === undefined}
           onToggle={() => setEditing(editing !== null && editing.key === undefined ? null : {})}>

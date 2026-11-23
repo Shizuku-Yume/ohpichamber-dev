@@ -251,6 +251,51 @@ test('shared retry fallback chains round-trip in order and reject stale edits', 
   } finally { await f.close(); }
 });
 
+test('retry fallback edits reject stale native rule order and preserve the reordered keys', async () => {
+  const f = await fixture();
+  try {
+    const id = 'retry.fallbackChains';
+    const path = join(f.agentDirectory, 'config.yml');
+    await writeFile(path, 'retry:\n  fallbackChains:\n    p/model: [p/first]\n    p/model:high: [p/next]\n');
+    const before = await f.native.read('workspace_1', '0');
+    const original = before.settings.find((setting) => setting.id === id)?.value;
+    const reordered = 'retry:\n  fallbackChains:\n    p/model:high: [p/next]\n    p/model: [p/first]\n';
+    await writeFile(path, reordered);
+    const value = { 'p/model': ['p/replacement'], 'p/model:high': ['p/next'] };
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision, changes: [{ id, value, expectedValue: original }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(path, 'utf8')).toBe(reordered);
+    const refreshed = await f.native.read('workspace_1', '0');
+    const updated = await f.native.write('workspace_1', '1', {
+      expectedRevision: refreshed.revision, changes: [{ id, value, expectedValue: refreshed.settings.find((setting) => setting.id === id)?.value }],
+    });
+    expect(Object.entries(updated.settings.find((setting) => setting.id === id)?.value ?? {})).toEqual([
+      ['p/model:high', ['p/next']], ['p/model', ['p/replacement']],
+    ]);
+  } finally { await f.close(); }
+});
+
+test('Web Search is the only settings writer for the web retry chain', async () => {
+  const f = await fixture();
+  try {
+    const id = 'retry.fallbackChains';
+    await writeFile(join(f.agentDirectory, 'config.yml'), 'retry:\n  fallbackChains:\n    web: [web/exa]\n    default: [p/first]\n');
+    const before = await f.native.read('workspace_1', '0');
+    const expectedValue = before.settings.find((setting) => setting.id === id)?.value;
+    for (const value of [{ web: ['web/tavily'], default: ['p/first'] }, { default: ['p/first'] }, null]) {
+      await expect(f.native.write('workspace_1', '1', {
+        expectedRevision: before.revision, changes: [{ id, value, expectedValue }],
+      })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    }
+    const value = { web: ['web/exa'], default: ['p/next'] };
+    const after = await f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision, changes: [{ id, value, expectedValue }],
+    });
+    expect(after.settings.find((setting) => setting.id === id)?.value).toEqual(value);
+  } finally { await f.close(); }
+});
+
 test.each([
   'retry:\n  fallbackChains:\n    plan: [project/model:high]\n',
   'retry:\n  fallbackChains: null\n',
