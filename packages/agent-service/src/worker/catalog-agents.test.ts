@@ -100,7 +100,7 @@ test('a description edit preserves native agent settings, selectors and prompt b
   const directory = join(cwd, '.omp', 'agents');
   await Promise.all([directory, agentDirectory].map(path => mkdir(path, { recursive: true })));
   const file = join(directory, 'local-reviewer.md');
-  const body = '\nUse exact output.\n\n  Indented line.  \n\n';
+  const body = ' <!-- prompt starts here -->\nUse exact output.\n\n---\n\n  Indented line.  \n\n';
   const prefix = '<!-- native agent profile -->\n\n';
   await writeFile(file, `${prefix}---
 name: local-reviewer
@@ -112,9 +112,8 @@ prewalk: true
 structured: true
 readSummarize: false
 thinking-level: xhigh
-x-custom: { value: 1 }
----
-${body}`);
+x-custom: { value: "first\t<!-- literal -->" }
+---${body}`);
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
   try {
     const agents = new NativeAgents({
@@ -128,8 +127,8 @@ ${body}`);
     await agents.update({ expectedRevision: '0', agent: { ...profile, description: 'Updated' } }, '1');
     const stored = await readFile(file, 'utf8');
     expect(stored.startsWith(prefix)).toBe(true);
-    expect(stored.endsWith(`---\n${body}`)).toBe(true);
-    expect(parseFrontmatter(stored, { rawKeys: true }).frontmatter).toMatchObject({
+    expect(stored.endsWith(`---${body}`)).toBe(true);
+    expect(parseFrontmatter(stored.slice(prefix.length), { rawKeys: true, repair: false }).frontmatter).toMatchObject({
       description: 'Updated',
       model: ['@smol', 'anthropic/claude-haiku-4-5:high'],
       output: { type: 'object' },
@@ -138,7 +137,7 @@ ${body}`);
       structured: true,
       readSummarize: false,
       'thinking-level': 'xhigh',
-      'x-custom': { value: 1 },
+      'x-custom': { value: 'first\t<!-- literal -->' },
     });
     expect(cfgTaskAgentModelOverrides.get(runtime.settings)).toEqual(overrides);
     expect((await agents.definition('local-reviewer')).model).toEqual(['@task', '@slow']);

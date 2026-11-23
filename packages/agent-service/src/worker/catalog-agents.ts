@@ -39,7 +39,14 @@ const LegacyOpenChamberMetadataSchema = z.object({
 const ProfileMetadataSchema = z.object({
   openchamber: LegacyOpenChamberMetadataSchema.optional(),
 });
-const FRONTMATTER_HEADER = /^((?:\s*<!--[\s\S]*?-->\s*)*)---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
+const FRONTMATTER_HEADER = /^((?:\s*<!--(?:(?!-->)[\s\S])*-->\s*)*)---(?=\r?\n)[\s\S]*?\r?\n---/;
+
+function profileFrontmatter(header: RegExpMatchArray, path: string): Record<string, unknown> {
+  return parseFrontmatter(header[0].slice(header[1].length), {
+    source: path, level: 'fatal', rawKeys: true, repair: false,
+  }).frontmatter;
+}
+
 function profilePath(cwd: string, agentId: string): string {
   return join(cwd, '.omp', 'agents', `profile_${createHash('sha256').update(agentId).digest('hex')}.md`);
 }
@@ -109,8 +116,8 @@ export class NativeAgents {
     if (definition.filePath && definition.source !== 'bundled') {
       try {
         const content = await readFile(definition.filePath, 'utf8');
-        const { frontmatter } = parseFrontmatter(content, { source: definition.filePath, level: 'fatal', rawKeys: true });
-        metadata = ProfileMetadataSchema.parse(frontmatter);
+        const header = content.match(FRONTMATTER_HEADER);
+        if (header) metadata = ProfileMetadataSchema.parse(profileFrontmatter(header, definition.filePath));
       } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile metadata could not be read'); }
     }
     const selector = this.effectiveModelSelectors(definition)?.[0];
@@ -224,9 +231,7 @@ export class NativeAgents {
     const content = (() => {
       try {
         if (previousContent !== null && !header) throw new Error('Agent frontmatter cannot be preserved');
-        const fields = previousContent === null ? {} : parseFrontmatter(previousContent, {
-          source: path, level: 'fatal', rawKeys: true,
-        }).frontmatter;
+        const fields = header ? profileFrontmatter(header, path) : {};
         const set = (key: string, value: Agent[keyof Agent] | undefined) => {
           if (value === undefined) delete fields[key]; else fields[key] = value;
         };
@@ -246,8 +251,8 @@ export class NativeAgents {
         if (!header || previous?.advisor !== agent.advisor) set('advisor', agent.advisor);
         const body = header && previousContent !== null && previous?.systemPromptOverride === agent.systemPromptOverride
           ? previousContent.slice(header[0].length)
-          : `\n${agent.systemPromptOverride ?? ''}\n`;
-        const updated = `${header?.[1] ?? ''}---\n${YAML.stringify(fields)}\n---\n${body}`;
+          : `\n\n${agent.systemPromptOverride ?? ''}\n`;
+        const updated = `${header?.[1] ?? ''}---\n${YAML.stringify(fields)}\n---${body}`;
         parseAgent(path, updated, 'project', 'fatal');
         return updated;
       } catch { throw new ProjectionError(422, 'INVALID_REQUEST', 'Agent profile is not a valid native definition'); }
