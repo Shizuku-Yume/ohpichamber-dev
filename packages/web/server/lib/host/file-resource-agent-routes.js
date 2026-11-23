@@ -4,6 +4,9 @@ import * as C from '@openchamber/agent-contract';
 /** @typedef {{ method: string, pattern: RegExp, request?: import('zod').ZodType, response: import('zod').ZodType }} FileResourceAgentRoute */
 /** @type {FileResourceAgentRoute[]} */
 export const FILE_RESOURCE_AGENT_ROUTES = [
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/behavior-files$/, response: C.BehaviorFileCatalogSchema },
+  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/behavior-files$/, request: C.BehaviorFileWriteSchema, response: C.BehaviorFileCatalogSchema },
+  { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/behavior-files$/, request: C.BehaviorFileDeleteSchema, response: C.BehaviorFileCatalogSchema },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/commands$/, response: C.CommandCatalogStateSchema },
   { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/commands$/, request: C.CommandCreateRequestSchema, response: C.CommandCatalogStateSchema },
   { method: 'PATCH', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/commands\/[^/]+$/, request: C.CommandUpdateRequestSchema, response: C.CommandCatalogStateSchema },

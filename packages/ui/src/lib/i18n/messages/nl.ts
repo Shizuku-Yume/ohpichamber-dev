@@ -81,6 +81,7 @@ import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
+import { behaviorFilesI18n } from './behavior-files.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
@@ -3974,6 +3975,7 @@ const part2 = {
   ...btwI18n.nl,
   ...subagentHudI18n['nl'],
   ...ompSettingsI18n.nl,
+  ...behaviorFilesI18n['nl'],
   ...pluginsMarketplaceI18n.nl,
   "settings.sourceControl.ssh.title": "SSH-sleutels",
   "settings.sourceControl.ssh.load": "Sleutels tonen",

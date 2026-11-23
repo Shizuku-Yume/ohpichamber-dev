@@ -5,6 +5,7 @@ import {
   PromptTemplateCreateRequestSchema, PromptTemplateUpdateRequestSchema, PromptTemplateDeleteRequestSchema,
   CommandExpandRequestSchema, PromptTemplateExpandRequestSchema, FileResourceExpandTextRequestSchema,
   FileResourceSkillExpandRequestSchema,
+  BehaviorFileWriteSchema, BehaviorFileDeleteSchema,
 } from '@openchamber/agent-contract';
 import type { WorkspaceCatalogs } from './workspaces.ts';
 import type { FileResourceOperation } from '../catalogs/file-resources-protocol.ts';
@@ -15,7 +16,7 @@ export async function fileResourceRoute(
   catalogs: WorkspaceCatalogs, request: IncomingMessage, url: URL,
   readBody: <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>,
 ) {
-  const route = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/(commands|prompt-templates|skills)(?:\/([^/]+))?$/.exec(url.pathname);
+  const route = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/(commands|prompt-templates|skills|behavior-files)(?:\/([^/]+))?$/.exec(url.pathname);
   if (!route) return null;
   let workspaceId: string;
   let item: string | undefined;
@@ -23,7 +24,13 @@ export async function fileResourceRoute(
   catch { throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The workspace or item id is not a valid entity id'); }
   let operation: FileResourceOperation;
   let status = 200;
-  if (route[2] === 'skills') {
+  if (route[2] === 'behavior-files') {
+    if (item !== undefined) return null;
+    if (request.method === 'GET') operation = { action: 'behavior.read' };
+    else if (request.method === 'PUT') operation = { action: 'behavior.write', request: await readBody(request, BehaviorFileWriteSchema) };
+    else if (request.method === 'DELETE') operation = { action: 'behavior.delete', request: await readBody(request, BehaviorFileDeleteSchema) };
+    else return null;
+  } else if (route[2] === 'skills') {
     if (item === 'catalog' && request.method === 'GET') operation = { action: 'skills.read' };
     else if (item === 'expand' && request.method === 'POST') operation = { action: 'skills.expand', request: await readBody(request, FileResourceSkillExpandRequestSchema) };
     else return null;

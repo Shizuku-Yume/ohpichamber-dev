@@ -38,6 +38,7 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { NativeBehaviorFiles } from './NativeBehaviorFiles';
 
 const agentsMdResponseSchema = z.object({
   content: z.string(),
@@ -311,6 +312,7 @@ export const BehaviorPage: React.FC = () => {
       description={t('settings.page.behavior.description')}
       onBlurCapture={autosave.onBlurCapture}
     >
+      {settingsDirectory && <NativeBehaviorFiles key={settingsDirectory} directory={settingsDirectory} />}
       <SettingsSection
         title={t('settings.behavior.page.section.systemPrompt')}
         info={(

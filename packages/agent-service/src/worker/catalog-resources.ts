@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, readdir, readFile, realpath, rename, unlink } from 'node:fs/promises';
+import { homedir } from 'node:os';
 
 import { removeTemporaryFile } from './temporary-file.ts';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -10,14 +11,23 @@ import { z } from 'zod';
 import { normalizeFrontmatterKeys, parseFrontmatter } from '@oh-my-pi/pi-utils';
 import { loadSlashCommands, expandSlashCommand } from '@oh-my-pi/pi-coding-agent/extensibility/slash-commands';
 import { loadPromptTemplates, expandPromptTemplate } from '@oh-my-pi/pi-coding-agent/config/prompt-templates';
+import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { cfgDisabledExtensions } from '@oh-my-pi/pi-coding-agent/extensibility/settings';
 import { loadCapability, type SlashCommand } from '@oh-my-pi/pi-coding-agent/discovery';
 import { slashCommandCapability } from '@oh-my-pi/pi-coding-agent/capability/slash-command';
+import { bucketRules } from '@oh-my-pi/pi-coding-agent/capability/rule-buckets';
+import { ruleCapability, type Rule } from '@oh-my-pi/pi-coding-agent/capability/rule';
+import { systemPromptCapability, type SystemPrompt } from '@oh-my-pi/pi-coding-agent/capability/system-prompt';
+import { createSourceMeta, discoverRuleFromMarkdown } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
+import { TtsrManager } from '@oh-my-pi/pi-coding-agent/export/ttsr';
 import { reset as resetCapabilities } from '@oh-my-pi/pi-coding-agent/capability';
 import { loadSkills, type LoadSkillsOptions } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
 import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capability/types';
 import {
   CommandEntrySchema, PromptTemplateEntrySchema, ModelSelectionSchema, EntityIdSchema,
   FileResourceNameSchema, FileResourcePathSchema, CounterSchema,
+  BehaviorFileCatalogSchema, BehaviorFileKindSchema, BehaviorFileFieldsSchema, BehaviorRuleFieldsSchema,
+  type BehaviorFileEntry, type BehaviorFileFields,
   type CommandEntry, type PromptTemplateEntry, type FileResourceScope, type FileResourceSkillEntry,
 } from '@openchamber/agent-contract';
 import type { FileResourceOperation, FileResourceResult } from '../catalogs/file-resources-protocol.ts';
@@ -29,6 +39,7 @@ import { ALLOWED_BUILTIN_COMMANDS, isAllowedBuiltinCommand } from './builtin-com
 export interface NativeFileResourcesContext {
   cwd: string;
   agentDirectory: string;
+  settings: Settings;
   extensionRoots: EffectiveExtensionRoots;
   skillOptions: LoadSkillsOptions;
 }
@@ -58,23 +69,23 @@ function frontmatterBoundary(text: string) {
     ? { prefix: '', header: '', yaml: '' }
     : { prefix, header: prefix + match[0], yaml: match[1] };
 }
-function editableFrontmatter(header: string, yaml: string, path: string): Record<string, unknown> {
+function editableFrontmatter(header: string, yaml: string, path: string, schema: z.ZodType = MetadataSchema): Record<string, unknown> {
   const repaired = parseFrontmatter(header, { source: path, level: 'fatal', rawKeys: true }).frontmatter;
   // Keep literal values when the original YAML is valid without OMP's repairs.
   try {
     const raw = NativeFrontmatterSchema.safeParse(YAML.parse(yaml.replace(/\r\n?/g, '\n').slice(1)));
-    if (raw.success && MetadataSchema.safeParse(normalizeFrontmatterKeys(raw.data)).success) return raw.data;
+    if (raw.success && schema.safeParse(normalizeFrontmatterKeys(raw.data)).success) return raw.data;
   } catch {
     // A header admitted by OMP can still require repair before it is valid YAML.
   }
   return repaired;
 }
-function serializeFrontmatter(prefix: string, metadata: Record<string, unknown>, path: string): string {
+function serializeFrontmatter(prefix: string, metadata: Record<string, unknown>, path: string, schema: z.ZodType = MetadataSchema): string {
   const verify = (yaml: string) => {
     const header = `${prefix}---\n${yaml}\n---\n`;
     try {
       const { frontmatter } = parseFrontmatter(header, { source: path, level: 'fatal', rawKeys: true });
-      if (isDeepStrictEqual(frontmatter, metadata) && MetadataSchema.safeParse(normalizeFrontmatterKeys(frontmatter)).success) return header;
+      if (isDeepStrictEqual(frontmatter, metadata) && schema.safeParse(normalizeFrontmatterKeys(frontmatter)).success) return header;
     } catch {
       // Try the protected encoding before rejecting the edit.
     }
@@ -89,13 +100,159 @@ function serializeFrontmatter(prefix: string, metadata: Record<string, unknown>,
 }
 function identity(kind: string, path: string): string { return `${kind}_${createHash('sha256').update(path).digest('hex')}`; }
 function denied(): never { throw new ProjectionError(403, 'UNAUTHORIZED', 'Resource is outside an authorable native directory'); }
+function ruleFilename(name: string): boolean {
+  return /^[\p{L}\p{N}_-][\p{L}\p{N}_. -]*\.(?:mdc|md)$/u.test(name) && !/^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])\./i.test(name);
+}
+function version(text: string | undefined) { return text === undefined ? null : createHash('sha256').update(text).digest('hex'); }
+const legacyRuleConditionKeys = ['ttsr_trigger', 'ttsrTrigger'] as const;
+function behaviorFields(kind: 'rule' | 'instruction', text: string, path: string): BehaviorFileFields {
+  const parsed = parseFrontmatter(text, { source: path }).frontmatter;
+  const fields: Record<string, unknown> = {};
+  const shape = kind === 'rule' ? BehaviorRuleFieldsSchema.shape : { applyTo: BehaviorFileFieldsSchema.shape.applyTo };
+  for (const [key, schema] of Object.entries(shape)) {
+    const value = key === 'condition' ? parsed[key] ?? parsed[legacyRuleConditionKeys[0]] ?? parsed[legacyRuleConditionKeys[1]] : parsed[key];
+    const field = schema.safeParse(value);
+    if (field.success && field.data != null) fields[key] = field.data;
+  }
+  return BehaviorFileFieldsSchema.parse(fields);
+}
+function instructionFilename(name: string): boolean { return name.endsWith('.md') && ruleFilename(name); }
+function assertNewRuleUsable(text: string, path: string, scope: FileResourceScope) {
+  const rule = discoverRuleFromMarkdown(basename(path), text, path, createSourceMeta('native', path, scope === 'workspace' ? 'project' : 'user'), {
+    stripNamePattern: /\.(md|mdc)$/,
+  });
+  if (!rule) return;
+  const manager = new TtsrManager();
+  const { rulebookRules, alwaysApplyRules } = bucketRules([rule], manager);
+  if (!rulebookRules.length && !alwaysApplyRules.length && !manager.getRules().length) {
+    throw new ProjectionError(400, 'INVALID_REQUEST', 'Add a description, set alwaysApply to true, or supply a usable condition, astCondition, or question. To save an inactive rule, set enabled to false.');
+  }
+}
 
 /** Native discovery and expansion run only here; file IDs never grant arbitrary path access. */
 export class NativeFileResources {
   constructor(private readonly context: NativeFileResourcesContext) { }
 
-  private root(scope: FileResourceScope, kind: 'commands' | 'prompts' | 'skills'): string {
+  private root(scope: FileResourceScope, kind: 'commands' | 'prompts' | 'skills' | 'rules' | 'instructions' | ''): string {
     return scope === 'workspace' ? join(this.context.cwd, '.omp', kind) : join(this.context.agentDirectory, kind);
+  }
+  private async readBehaviorFile(scope: FileResourceScope, path: string): Promise<string | undefined> {
+    try {
+      await this.confined(scope, path, false);
+      const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        if (!(await file.stat()).isFile()) denied();
+        return await file.readFile({ encoding: 'utf8' });
+      } finally { await file.close(); }
+    } catch (error) {
+      if (error instanceof Error && missing(error)) return undefined;
+      throw error;
+    }
+  }
+  private async assertBehaviorWriteKeepsInheritance() {
+    const root = this.root('workspace', '');
+    try {
+      await this.confined('workspace', root, false);
+      if ((await readdir(root)).length > 0) return;
+    } catch (error) {
+      if (!(error instanceof Error) || !missing(error)) throw error;
+    }
+    resetCapabilities();
+    const systems = await loadCapability<SystemPrompt>(systemPromptCapability.id, { cwd: this.context.cwd });
+    const rules = await loadCapability<Rule>(ruleCapability.id, {
+      cwd: this.context.cwd, agentDir: this.context.agentDirectory, disabledExtensions: cfgDisabledExtensions.get(this.context.settings),
+    });
+    const inheritedSystem = systems.items.some(item => item.level === 'project' && item._source.provider === 'native' && !inside(root, item.path));
+    const inheritedRules = rules.items.some(item => item.name === 'RULES@project' && item._source?.provider === 'native' && !inside(root, item._source.path));
+    if (inheritedSystem || inheritedRules) {
+      throw new ProjectionError(400, 'INVALID_REQUEST', 'Saving here would hide inherited OMP system prompts or sticky rules. Open the parent project as the workspace, or save in Global scope.');
+    }
+  }
+  private async behavior(
+    operation: Extract<FileResourceOperation, { action: 'behavior.read' | 'behavior.write' | 'behavior.delete' }>,
+    workspaceId: string, revision: string,
+  ): Promise<FileResourceResult> {
+    const scopes: FileResourceScope[] = ['agent'];
+    if (relative(homedir(), this.context.cwd) !== '') scopes.unshift('workspace');
+    if (operation.action !== 'behavior.read') {
+      const request = operation.request;
+      const { name, scope, kind } = request;
+      const directory = kind === 'rule' ? 'rules' : kind === 'instruction' ? 'instructions' : '';
+      if (!scopes.includes(scope) || !BehaviorFileKindSchema.safeParse(kind).success
+        || !(kind === 'rule' ? ruleFilename(name) : kind === 'instruction' ? instructionFilename(name) : name === (kind === 'system' ? 'SYSTEM.md' : 'RULES.md'))) denied();
+      const path = join(this.root(scope, directory), name);
+      const current = await this.readBehaviorFile(scope, path);
+      const assertVersion = (text: string | undefined) => {
+        if (version(text) !== request.expectedVersion) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Behavior file changed on disk');
+      };
+      assertVersion(current);
+      if (operation.action === 'behavior.delete') {
+        await this.confined(scope, path, false);
+        await unlink(path);
+      } else {
+        const { content, fields } = operation.request;
+        let text = content;
+        if (fields !== undefined && (kind === 'rule' ? !BehaviorRuleFieldsSchema.safeParse(fields).success
+          : kind === 'instruction' ? Object.keys(fields).some(key => key !== 'applyTo') : true)) denied();
+        if (directory) {
+          const previous = current ?? '';
+          const { header, prefix, yaml } = frontmatterBoundary(previous);
+          let nextHeader = header;
+          if (fields !== undefined && Object.keys(fields).length > 0) {
+            const metadata = editableFrontmatter(header, yaml, path, NativeFrontmatterSchema);
+            for (const [key, value] of Object.entries(fields)) {
+              for (const rawKey of Object.keys(metadata)) {
+                const normalized = normalizeFrontmatterKeys({ [rawKey]: true });
+                if (Object.hasOwn(normalized, key) || (key === 'condition' && legacyRuleConditionKeys.some(alias => Object.hasOwn(normalized, alias)))) delete metadata[rawKey];
+              }
+              if (value !== null) metadata[key] = value;
+            }
+            nextHeader = serializeFrontmatter(prefix, metadata, path, NativeFrontmatterSchema);
+          } else if (!nextHeader && (content.startsWith('---') || frontmatterBoundary(content).header)) {
+            nextHeader = serializeFrontmatter('', {}, path);
+          } else if (header && header === previous && !/[\r\n]$/.test(header) && content) {
+            nextHeader += '\n';
+          }
+          text = nextHeader + content;
+        }
+        if (kind === 'rule' && current === undefined) assertNewRuleUsable(text, path, scope);
+        if (scope === 'workspace' && current === undefined) await this.assertBehaviorWriteKeepsInheritance();
+        await this.confined(scope, path, true);
+        const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
+        try {
+          const file = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+          try { await file.writeFile(text); await file.sync(); } finally { await file.close(); }
+          assertVersion(await this.readBehaviorFile(scope, path));
+          if (current === undefined) {
+            try { await link(temporary, path); }
+            catch (error) {
+              if (error instanceof Error && 'code' in error && error.code === 'EEXIST') throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Behavior file changed on disk');
+              throw error;
+            }
+          } else await rename(temporary, path);
+        } finally { await removeTemporaryFile(temporary); }
+      }
+    }
+    const files: BehaviorFileEntry[] = [];
+    for (const scope of scopes) {
+      const add = async (kind: BehaviorFileEntry['kind'], name: string, path: string) => {
+        try {
+          const text = await this.readBehaviorFile(scope, path);
+          if (text === undefined) return;
+          const markdown = kind === 'rule' || kind === 'instruction';
+          files.push({ kind, scope, name, version: version(text)!, content: markdown ? text.slice(frontmatterBoundary(text).header.length) : text, fields: markdown ? behaviorFields(kind, text, path) : {} });
+        } catch (error) { if (!(error instanceof ProjectionError)) throw error; }
+      };
+      for (const [kind, name] of [['sticky-rules', 'RULES.md'], ['system', 'SYSTEM.md']] as const) await add(kind, name, join(this.root(scope, ''), name));
+      for (const [kind, directory, accepts] of [['rule', 'rules', ruleFilename], ['instruction', 'instructions', instructionFilename]] as const) {
+        const root = this.root(scope, directory);
+        try {
+          await this.confined(scope, root, false);
+          for (const name of (await readdir(root)).sort()) if (accepts(name)) await add(kind, name, join(root, name));
+        } catch (error) { if (!(error instanceof ProjectionError) && !(error instanceof Error && missing(error))) throw error; }
+      }
+    }
+    return { kind: 'behavior', catalog: BehaviorFileCatalogSchema.parse({ workspaceId, revision, scopes, files }) };
   }
   private async confined(scope: FileResourceScope, path: string, create: boolean): Promise<void> {
     const lexicalBase = scope === 'workspace' ? this.context.cwd : this.context.agentDirectory;
@@ -319,6 +476,7 @@ export class NativeFileResources {
   async operation(operation: FileResourceOperation, workspaceId: string, revision: string): Promise<FileResourceResult> {
     CounterSchema.parse(revision);
     if ('request' in operation && 'expectedRevision' in operation.request && BigInt(revision) !== BigInt(operation.request.expectedRevision) + 1n) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Resource mutation revision changed');
+    if (operation.action === 'behavior.read' || operation.action === 'behavior.write' || operation.action === 'behavior.delete') return this.behavior(operation, workspaceId, revision);
     if (operation.action === 'skills.read') {
       const skills: FileResourceSkillEntry[] = [];
       for (const skill of await this.skills()) {
