@@ -402,7 +402,10 @@ describe('DefaultsSettings', () => {
     }
   });
 
-  test('changing the default retry model retains the remaining selectors and other chains', async () => {
+  test.each([
+    ['o3-mini (openai)', { default: ['openai/o3-mini', '@slow', 'other/last'], 'other/original': ['@smol'] }],
+    ['None', { 'other/original': ['@smol'] }],
+  ])('selecting %s updates only the default retry chain', async (optionLabel, expectedChains) => {
     const snapshot = {
       ...mockOmpSettings,
       settings: mockOmpSettings.settings.map((setting) => setting.id === 'retry.fallbackChains'
@@ -419,12 +422,12 @@ describe('DefaultsSettings', () => {
       expect(trigger).toBeDefined();
       await act(async () => trigger?.dispatchEvent(new browser.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }) as unknown as Event));
       const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
-        .find((element) => element.textContent?.includes('o3-mini'));
+        .find((element) => element.textContent === optionLabel);
       expect(option).toBeDefined();
       await act(async () => option?.click());
       expect(save.mock.calls[0]?.[1].changes[0]).toEqual({
         id: 'retry.fallbackChains',
-        value: { default: ['openai/o3-mini', '@slow', 'other/last'], 'other/original': ['@smol'] },
+        value: expectedChains,
       });
     } finally {
       read.mockRestore();

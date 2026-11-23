@@ -156,7 +156,6 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
     const latestChains = parseRolesRecord(state.settings.find((setting) => setting.id === 'retry.fallbackChains')?.value);
     const tail = Array.isArray(latestChains.default) ? latestChains.default.slice(1) : [];
     if (selector) latestChains.default = [selector, ...tail];
-    else if (tail.length) latestChains.default = tail;
     else delete latestChains.default;
     return selector
       ? [{ id: 'retry.fallbackChains', value: latestChains }, { id: 'retry.modelFallback', value: true }]
