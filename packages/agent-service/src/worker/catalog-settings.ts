@@ -33,6 +33,12 @@ function inactivePowerCondition(setting: AnySetting, settings: Settings) {
   return undefined;
 }
 
+function hasCompactionOverride(setting: AnySetting, settings: Settings): boolean {
+  if (setting.id !== 'compaction.modelThresholds' && setting.id !== 'compaction.modelThresholdsEnabled') return false;
+  const provenance = settings.getProvenance(setting);
+  return provenance !== 'global' && provenance !== 'default';
+}
+
 /**
  * The settings route is a view over OMP's own registry. It never
  * declares a second schema: ids, types, defaults, enum values and UI metadata
@@ -78,7 +84,9 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (ui?.description !== undefined) descriptor.description = ui.description;
   if (ui?.group !== undefined) descriptor.group = ui.group;
   if (ui?.tab !== undefined) descriptor.tab = ui.tab;
-  const inactiveCondition = inactivePowerCondition(setting, settings);
+  const inactiveCondition = hasCompactionOverride(setting, settings)
+    ? 'compactionThresholdsUseSharedConfig'
+    : inactivePowerCondition(setting, settings);
   if (inactiveCondition !== undefined) {
     descriptor.condition = inactiveCondition;
     descriptor.conditionActive = false;
@@ -130,6 +138,9 @@ export class NativeSettings {
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     for (const change of request.changes) {
       const setting = handle(change.id);
+      if (hasCompactionOverride(setting, this.settings)) {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared model compaction setting');
+      }
       const inactiveCondition = inactivePowerCondition(setting, this.settings);
       if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared sleep setting');

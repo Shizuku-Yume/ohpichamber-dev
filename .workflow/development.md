@@ -4,6 +4,12 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Sessions → Compaction exposes the native OMP 19 model threshold map and its
+enable switch. Exact selectors and wildcard prefixes keep their native token,
+fixed-trigger, or percentage values. Edits preserve other entries; native
+project overrides are readable but cannot be copied into the shared config.
+The remaining model-role hub, ordered fallback, and preset work is separate.
+
 W8 adds persisted automatic account selection without resetting legacy
 pins: an explicit null default ref suppresses legacy fallback, while an absent
 key preserves it. Legacy rosters retain their exact strict shape and projected

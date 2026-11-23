@@ -59,7 +59,7 @@ test('misclassifications are fixed: followUpMode is not a chat owner; recap belo
 test('an owned-by placement names an owner control, and all placement types stay populated', () => {
   expect([...OMP_SETTING_OWNER_IDS].sort()).toEqual([
     'chat.session-recap', 'chat.suggestion-generator', 'omp.modelRoles', 'sessions.default-thinking',
-    'sessions.fallback-model',
+    'sessions.fallback-model', 'sessions.model-compaction',
   ]);
   const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, 'config-only': 0, hidden: 0, boundary: 0 };
   for (const placement of Object.values(OMP_SETTING_PLACEMENTS)) {
@@ -232,6 +232,50 @@ test('a project power override is readable but cannot change the global config',
     await expect(f.native.write('workspace_1', '1', {
       expectedRevision: before.revision,
       changes: [{ id: 'power.sleepPrevention', value: 'off' }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(globalPath, 'utf8')).toBe(globalConfig);
+  } finally { await f.close(); }
+});
+
+test('model compaction rules persist their native formats and reject invalid edits atomically', async () => {
+  const f = await fixture();
+  try {
+    const rules = { 'example/*': '80%', 'example/reasoning': 'f90000', 'other/model': 80000 };
+    const state = await f.native.write('workspace_1', '1', {
+      expectedRevision: '0',
+      changes: [{ id: 'compaction.modelThresholds', value: rules }, { id: 'compaction.modelThresholdsEnabled', value: false }],
+    });
+    expect(state.settings.find(({ id }) => id === 'compaction.modelThresholds')).toMatchObject({
+      placement: { type: 'owned-by', owner: 'sessions.model-compaction' },
+      value: rules,
+    });
+    expect(state.settings.find(({ id }) => id === 'compaction.modelThresholdsEnabled')?.value).toBe(false);
+    await expect(f.native.write('workspace_1', '2', {
+      expectedRevision: '1',
+      changes: [{ id: 'compaction.modelThresholdsEnabled', value: true }, { id: 'compaction.modelThresholds', value: { 'example/*': '101%' } }],
+    })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    const after = await f.native.read('workspace_1', '1');
+    expect(after.settings.find(({ id }) => id === 'compaction.modelThresholds')?.value).toEqual(rules);
+    expect(after.settings.find(({ id }) => id === 'compaction.modelThresholdsEnabled')?.value).toBe(false);
+  } finally { await f.close(); }
+});
+
+test('project model compaction rules are readable without writing them to shared config', async () => {
+  const f = await fixture();
+  try {
+    const globalPath = join(f.agentDirectory, 'config.yml');
+    const globalConfig = 'compaction:\n  modelThresholds:\n    example/*: 90000\n';
+    await writeFile(globalPath, globalConfig);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'compaction:\n  modelThresholds:\n    other/model: "80%"\n');
+    const before = await f.native.read('workspace_1', '0');
+    expect(before.settings.find(({ id }) => id === 'compaction.modelThresholds')).toMatchObject({
+      value: { 'other/model': '80%' },
+      conditionActive: false,
+    });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: '0',
+      changes: [{ id: 'compaction.modelThresholds', value: {} }],
     })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
     expect(readFileSync(globalPath, 'utf8')).toBe(globalConfig);
   } finally { await f.close(); }
