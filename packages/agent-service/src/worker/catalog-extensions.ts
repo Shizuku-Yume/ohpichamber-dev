@@ -87,8 +87,8 @@ function safeWarning(text: string, roots: DisplayRoots): string | undefined {
  return sanitized.split(/\s+/).some(token => token.startsWith('/') || /^[A-Za-z]:\\/.test(token)) ? undefined : sanitized;
 }
 
-function itemIdentity(kind: ExtensionKind, nativeId: string | undefined, source: ProjectedSource, itemPath: string): string {
- return `ext_${createHash('sha256').update(`${kind}\0${nativeId ?? ''}\0${source.provider}\0${itemPath}`).digest('hex').slice(0, 24)}`;
+function itemIdentityBase(kind: ExtensionKind, nativeId: string | undefined, key: string | undefined, name: string, source: ProjectedSource, itemPath: string): string {
+ return `ext_${createHash('sha256').update(JSON.stringify([kind, nativeId, key, name, source.provider, source.level, source.origin, source.pluginName, source.path, itemPath])).digest('hex').slice(0, 24)}`;
 }
 
 /** Only the scheme hostname survives; credentials, paths and query strings never reach the wire. */
@@ -154,6 +154,7 @@ export class NativeExtensions {
   await this.context.settings.reloadFromDisk();
   const roots = this.roots();
   const nativeIds = new Map<string, string>();
+  const occurrences = new Map<string, number>();
   const disabledExtensions = new Set(cfgDisabledExtensions.get(this.context.settings));
   const warnings: string[] = [];
   const rows: ExtensionItem[] = [];
@@ -178,11 +179,14 @@ export class NativeExtensions {
     const name = item.name ?? basename(itemPath);
     const nativeId = capability.toExtensionId?.(item);
     const key = capability.key(item);
+    const base = itemIdentityBase(kind, nativeId, key, name, source, itemPath);
+    const occurrence = (occurrences.get(base) ?? 0) + 1;
+    occurrences.set(base, occurrence);
     const shadowed = Boolean(item._shadowed);
     const nativeDisabled = nativeId !== undefined && disabledExtensions.has(nativeId);
     const reason = disabledReason(source, nativeDisabled, shadowed, isUserSourceEnabled, isProviderEnabled);
     const row: ExtensionItem = {
-     id: itemIdentity(kind, nativeId, source, itemPath),
+     id: occurrence === 1 ? base : `${base}_${occurrence}`,
      kind, name, providerId: source.provider, providerName: source.providerName,
      scope: source.level === 'native' ? 'builtin' : source.level,
      path: displayPath(itemPath, roots),
