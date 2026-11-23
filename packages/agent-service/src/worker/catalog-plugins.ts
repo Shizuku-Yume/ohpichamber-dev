@@ -226,10 +226,19 @@ export class NativePlugins {
         globalFeatures: state?.plugins?.[native.name]?.enabledFeatures ?? null,
         globalFeaturesWritable: await this.globalFeaturesWritable(plugin.target, native, runtime),
         workspaceFeatures: overrides.features?.[native.name] ?? null,
+        workspaceWritable: projectWritable && await this.workspacePluginWritable(managers.packages, plugin.target, native),
         projectSettings: publicSettings(overrides.settings?.[native.name] ?? {}, plugin.settingDefinitions)
       };
     }));
     return { workspaceId: this.context.worker.workspaceId, revision, projectWritable, plugins };
+  }
+
+  private async workspacePluginWritable(packages: PluginManager, target: PluginTarget, native: InstalledPlugin): Promise<boolean> {
+    const active = await packages.getPlugin(native.name);
+    if (!active?.enabled) return true;
+    const activeIsGlobal = normalizePathForComparison(active.path) === normalizePathForComparison(join(getPluginsNodeModules(), native.name));
+    const targetIsGlobal = target.kind === 'package' || target.scope === 'user';
+    return activeIsGlobal === targetIsGlobal;
   }
 
   private async globalFeaturesWritable(target: PluginTarget, native: InstalledPlugin, runtime: z.infer<typeof NativePluginConfigSchema>): Promise<boolean> {
@@ -426,6 +435,10 @@ export class NativePlugins {
               else await marketplace.setPluginEnabled(buildPluginId(target.name, target.marketplace), enabled, target.scope);
             }
             if (overridePath !== null) {
+              const workspacePackages = enabled === undefined ? packages : new PluginManager(this.context.cwd);
+              if (!await this.workspacePluginWritable(workspacePackages, target, native)) {
+                throw new ProjectionError(400, 'INVALID_REQUEST', 'Workspace overrides must target the active copy of the plugin');
+              }
               const overrides = NativePluginOverridesSchema.parse(previousOverrides === null ? {} : JSON.parse(previousOverrides));
               if (settings !== undefined) {
                 const values = { ...overrides.settings?.[native.name] };

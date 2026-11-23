@@ -424,6 +424,46 @@ const marketplaceCatalog = (name: string, plugins: Array<Record<string, unknown>
   name, owner: { name: 'Test' }, plugins,
 });
 
+nativeTest('only the active copy of a package can change shared workspace features', async () => {
+  const context = await fixture();
+  try {
+    await new PluginManager(context.cwd).link(context.packageDirectory);
+    const global = { kind: 'package' as const, name: '@native-proof/plugin' };
+    const marketplace = join(context.root, 'shadowing-marketplace');
+    await mkdir(join(marketplace, '.omp-plugin'), { recursive: true });
+    await mkdir(join(marketplace, 'proof'));
+    await writeFile(join(marketplace, 'proof', 'package.json'), JSON.stringify({
+      name: global.name, version: '2.0.0', omp: { features: { stable: { default: true }, 'project-only': { default: true } } }
+    }));
+    await writeFile(join(marketplace, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('shadow-proof', [{
+      name: 'proof', source: './proof', version: '2.0.0', description: 'Project copy of a global package'
+    }]));
+    await context.plugins.operation({ type: 'plugins.marketplace.manage', request: { action: 'add', expectedRevision: '0', source: marketplace } }, '1');
+    const project = { kind: 'marketplace' as const, name: 'proof', marketplace: 'shadow-proof', scope: 'project' as const };
+    await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '1', source: project } }, '2');
+    expect((await context.plugins.read('2')).plugins.map(entry => entry.target)).toEqual([global, project]);
+    await context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '2', target: project, settingsScope: 'workspace', enabledFeatures: ['stable', 'project-only'] }
+    }, '3');
+    const active = async () => (await getEnabledPlugins(context.cwd)).find(entry => entry.name === global.name);
+    expect(await active()).toMatchObject({ scope: 'project', version: '2.0.0', enabledFeatures: ['stable', 'project-only'] });
+    const lifecycle = await context.plugins.operation({ type: 'plugins.lifecycle' }, '3');
+    const save = await context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '3', target: global, settingsScope: 'workspace', enabledFeatures: [] }
+    }, '4').catch((error: unknown) => error);
+    expect(await active()).toMatchObject({ scope: 'project', version: '2.0.0', enabledFeatures: ['stable', 'project-only'] });
+    expect(save).toMatchObject({ status: 400 });
+    await expect(context.plugins.operation({
+      type: 'plugins.configure', request: { expectedRevision: '3', target: project, settingsScope: 'workspace', enabled: false, enabledFeatures: [] }
+    }, '4')).rejects.toMatchObject({ status: 400 });
+    expect(await active()).toMatchObject({ scope: 'project', version: '2.0.0', enabledFeatures: ['stable', 'project-only'] });
+    expect(lifecycle).toMatchObject({ type: 'plugins.lifecycle', result: { plugins: [
+      { target: global, globalFeaturesWritable: true, workspaceWritable: false },
+      { target: project, workspaceWritable: true }
+    ] } });
+  } finally { await context.cleanup(); }
+});
+
 nativeTest('marketplace source management reads, adds and removes native registry entries without inventing catalogs', async () => {
   const context = await fixture();
   try {

@@ -68,7 +68,7 @@ describe('native plugin contracts', () => {
   test('lifecycle data is opt-in and rejects secret or undeclared project values', () => {
     const extended = {
       ...plugin, availableFeatures: [{ name: 'preview', defaultEnabled: false }],
-      workspaceFeatures: null, globalFeatures: [], globalFeaturesWritable: true,
+      workspaceFeatures: null, workspaceWritable: true, globalFeatures: [], globalFeaturesWritable: true,
       projectSettings: { greeting: 'effective-project' }
     };
     const state = { workspaceId: 'workspace', revision: '1', projectWritable: true, plugins: [extended] };

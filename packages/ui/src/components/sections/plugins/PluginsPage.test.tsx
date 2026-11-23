@@ -281,7 +281,7 @@ test('feature checkboxes and project JSON write only to the selected native scop
   const lifecycle: PluginLifecycleState = {
     workspaceId, revision: catalog.revision, projectWritable: true, plugins: [{
       ...installed, availableFeatures: [{ name: 'stable', defaultEnabled: true }, { name: 'preview', defaultEnabled: false }],
-      globalFeatures: null, globalFeaturesWritable: true, workspaceFeatures: [], projectSettings: { greeting: 'project' }
+      globalFeatures: null, globalFeaturesWritable: true, workspaceFeatures: [], workspaceWritable: true, projectSettings: { greeting: 'project' }
     }]
   };
   const writes: Array<Omit<PluginConfigureRequest, 'expectedRevision'>> = [];
@@ -323,6 +323,35 @@ test('feature checkboxes and project JSON write only to the selected native scop
   await waitFor(() => writes.length === 2);
   expect(writes[1]).toEqual({ target: plugin.target, settingsScope: 'workspace', settings: { greeting: 'edited' } });
   expect(container.querySelector<HTMLTextAreaElement>('#native-plugin-settings')?.value).toContain('"global"');
+});
+
+test('a shadowed global copy offers only global features', async () => {
+  const projectPlugin: InstalledPluginEntry = {
+    ...plugin, id: 'project_copy', version: '2.0.0', scope: 'workspace',
+    target: { kind: 'marketplace', name: plugin.name, marketplace: 'fixture', scope: 'project' },
+  };
+  const catalog = { ...emptyCatalog, plugins: [plugin, projectPlugin] };
+  const lifecycle: PluginLifecycleState = {
+    workspaceId, revision: catalog.revision, projectWritable: true,
+    plugins: [
+      { ...plugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }], globalFeaturesWritable: true,
+        globalFeatures: null, workspaceFeatures: ['shared', 'project-only'], workspaceWritable: false, projectSettings: {} },
+      { ...projectPlugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }, { name: 'project-only', defaultEnabled: true }],
+        globalFeaturesWritable: false, globalFeatures: null, workspaceFeatures: ['shared', 'project-only'], workspaceWritable: true, projectSettings: {} },
+    ],
+  };
+  usePluginsStore.setState({
+    catalog, loadedDirectory: '/repo', loadedRuntimeKey: getRuntimeKey(), loadPlugins: async () => true,
+    readPluginLifecycle: async () => lifecycle,
+  });
+  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+  const card = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(plugin.name) && button.textContent?.includes(plugin.version));
+  if (!card) throw new Error('Missing global plugin card');
+  await act(async () => { card.click(); });
+  const shared = () => container.querySelector('[role="checkbox"][aria-label="shared"]');
+  await waitFor(() => shared() !== null);
+  expect(shared()?.getAttribute('aria-checked')).toBe('true');
+  expect(Array.from(container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Project')).toBe(false);
 });
 
 test('PluginsPage mounts without infinite re-render loop when catalog is null', async () => {

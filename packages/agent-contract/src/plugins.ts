@@ -51,6 +51,7 @@ const PluginLifecycleEntrySchema = InstalledPluginEntrySchema.safeExtend({
  globalFeatures: z.array(z.string()).nullable(),
  globalFeaturesWritable: z.boolean(),
  workspaceFeatures: z.array(z.string()).nullable(),
+ workspaceWritable: z.boolean(),
  projectSettings: JsonObjectSchema,
 }).refine(plugin => Object.keys(plugin.projectSettings).every(key =>
  plugin.settingDefinitions.some(setting => setting.key === key && !setting.secret)),

@@ -383,7 +383,7 @@ const PluginConfiguration: React.FC<{
 
   const details = lifecycle?.workspaceId === workspaceId ? lifecycle.plugins.find(entry => entry.id === plugin.id) : undefined;
   const ready = lifecycle?.revision === revision && details !== undefined;
-  const projectWritable = lifecycle?.projectWritable === true && details !== undefined;
+  const projectWritable = lifecycle?.projectWritable === true && details?.workspaceWritable === true;
   const activeScope = projectWritable ? scope : 'global';
   const selection = activeScope === 'global' ? details?.globalFeatures : details?.workspaceFeatures;
   const available = details?.availableFeatures ?? [];
