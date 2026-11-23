@@ -288,7 +288,7 @@ function walkJsFiles(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (['node_modules', 'fixtures', '__tests__', 'test-support', 'dist', 'build', 'agent-runtime', 'agent-runtime.staging'].includes(entry.name)) continue;
+      if (['node_modules', 'fixtures', '__tests__', 'test-support', 'dist', 'build', 'web-dist', 'agent-runtime', 'agent-runtime.staging'].includes(entry.name)) continue;
       out.push(...walkJsFiles(full));
     } else if (entry.isFile() && productionSource(full)) {
       out.push(full);

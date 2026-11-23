@@ -107,6 +107,15 @@ test('an unchanged fork passes the guardrail', () => {
   assert.match(result.output, /PASSED/);
 });
 
+test('staged Electron web assets are not production Host callers', () => {
+  const fixture = makeFixture(baseFiles());
+  fixture.fork('packages/web/server/index.js', INDEX.replace('createAutoReviewRuntime({ enabled: true })', 'null'));
+  fixture.fork('packages/electron/resources/web-dist/assets/chunk.js', 'createAutoReviewRuntime({ enabled: true });');
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /\[runtime-constructor\] createAutoReviewRuntime/);
+});
+
 test('typed factory calls are counted and still expose missing named dependencies', () => {
   const files = baseFiles();
   files['packages/web/server/index.js'] = INDEX.replace('createAutoReviewRuntime({ enabled: true })', 'createAutoReviewRuntime<{ enabled: boolean }>({ enabled: true })');
