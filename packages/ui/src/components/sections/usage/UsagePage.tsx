@@ -41,7 +41,7 @@ const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPr
 };
 
 function nativeUsageWindow(limit: UsageAuthLimit): UsageWindow {
-  const { used, limit: total, usedFraction, remainingFraction, unit } = limit.amount;
+  const { used, limit: total, remaining, usedFraction, remainingFraction, unit } = limit.amount;
   let usedPercent: number | null = null;
   if (usedFraction !== undefined) usedPercent = usedFraction * 100;
   else if (used !== undefined && total !== undefined && total > 0) usedPercent = used / total * 100;
@@ -57,6 +57,9 @@ function nativeUsageWindow(limit: UsageAuthLimit): UsageWindow {
     resetAfterSeconds: null,
     resetAtFormatted: null,
     resetAfterFormatted: null,
+    valueLabel: unit === 'credits' && remaining !== undefined && usedPercent === null
+      ? new Intl.NumberFormat(getCurrentIntlLocale(), { maximumFractionDigits: 2 }).format(remaining)
+      : undefined,
     value: unit === 'usd' ? { kind: 'spend', spent: used ?? null, limit: total ?? null }
       : unit === 'requests' && used !== undefined ? { kind: 'requests', count: used } : undefined,
   };

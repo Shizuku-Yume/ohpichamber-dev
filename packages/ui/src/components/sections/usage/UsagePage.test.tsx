@@ -73,6 +73,9 @@ describe('Usage page quota cards', () => {
                 provider: 'anthropic', fetchedAt: 1000, limits: [{
                   id: 'weekly', label: 'Native weekly quota', scope: { provider: 'anthropic' },
                   amount: { unit: 'percent', remainingFraction: 0.6 },
+                }, {
+                  id: 'balance', label: 'Credit balance', scope: { provider: 'anthropic' },
+                  amount: { unit: 'credits', remaining: 17.25 },
                 }],
               },
             ],
@@ -87,6 +90,7 @@ describe('Usage page quota cards', () => {
     expect(html).toContain('Available reset credits: 2');
     expect(html).toContain('Quota limit reached');
     expect(html).toContain('Native weekly quota');
+    expect(html).toMatch(/Credit balance.*>17\.25</);
     expect(html).toContain('Guest quota window');
     expect(html).toContain('Show in work status');
     expect(html).toContain('Other quota window');
