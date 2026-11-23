@@ -603,7 +603,7 @@ export const SETTINGS_REGISTRY = {
  customProviderLogos: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseCustomProviderLogos, ui: uiStore('customProviderLogos', setUi('customProviderLogos'), { autoSave: false }) }),
  recentModels: field<ModelRef[]>({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseModelRefs(16), ui: uiStore('recentModels', setUi('recentModels'), { autoSave: false }) }),
  lastSelectedModel: field({ scope: 'profile', effect: ['store'], parse: parseNonEmptyString, ui: uiStore('lastSelectedModel', setUi('lastSelectedModel')) }),
- favoriteAgents: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseStringSet, ui: uiStore('favoriteAgents', setUi('favoriteAgents'), { autoSave: false }) }),
+ favoriteAgents: field({ scope: 'profile', effect: ['store'], parse: parseStringSet, ui: uiStore('favoriteAgents', setUi('favoriteAgents'), { autoSave: false }) }),
  lastUsedEfforts: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseLastUsedEfforts, ui: uiStore('lastUsedEfforts', setUi('lastUsedEfforts'), { autoSave: false }) }),
  providerOrder: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseStringSet, ui: uiStore('providerOrder', (v) => useUIStore.getState().setProviderOrder(v)) }),
 

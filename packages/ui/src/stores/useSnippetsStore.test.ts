@@ -72,12 +72,12 @@ describe('native prompt template registry', () => {
   test('creates using viewed CAS and preserves Markdown without renderer expansion', async () => {
     await useSnippetsStore.getState().loadSnippets();
     const content = '# Heading\n\n  $1\n\n{{arguments}}\n';
-    const entry = template({ content, scope: 'agent', source: '(user)' });
-    create.mockResolvedValue(catalog([entry], '2'));
+    const entry = template({ templateId: 'template-created', content, scope: 'agent', source: '(user)', group: 'releases' });
+    create.mockResolvedValue(catalog([template(), entry], '2'));
     expect(await useSnippetsStore.getState().createSnippet('deploy', content, { scope: 'agent', group: 'releases' })).toBe(true);
     expect(create).toHaveBeenCalledWith('workspace', { expectedRevision: '1', name: 'deploy', content, scope: 'agent', group: 'releases' });
     expect(useSnippetsStore.getState().selectedSnippetName).toBe(entry.templateId);
-    expect(useSnippetsStore.getState().snippets[0].content).toBe(content);
+    expect(useSnippetsStore.getState().snippets).toEqual([template(), entry]);
     expect(expand).not.toHaveBeenCalled();
   });
 
