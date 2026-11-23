@@ -1,6 +1,6 @@
 import React from 'react';
-import type { OmpSettingsState } from '@openchamber/agent-contract';
-import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
+import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -21,14 +21,6 @@ import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 
 /** The OMP model role commit messages and PR descriptions are generated with. */
 const COMMIT_ROLE = 'commit';
-/** Only string roles survive; a malformed record must not erase the others. */
-const readRoleRecord = (value: unknown): Record<string, string> => {
- if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
- return Object.fromEntries(
-  Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
- );
-};
-
 export const GitSettings: React.FC = () => {
  const { t } = useI18n();
  const settingsDirectory = useSettingsDirectory();
@@ -39,15 +31,11 @@ export const GitSettings: React.FC = () => {
  const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
 
- const [isLoading, setIsLoading] = React.useState(true);
- const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
+ const { state: ompState, loading: loadingCommitRole, saving: isSavingCommitModel, updateSettings } = useOmpPageSettings('git');
  // The catalog loader already read this directory's models; a second fetch
  // here duplicated the slowest request the page made.
  const models = useSettingsModels(settingsDirectory);
- const [isSavingCommitModel, setIsSavingCommitModel] = React.useState(false);
  const [commitModelError, setCommitModelError] = React.useState<string | null>(null);
- const ompStateRef = React.useRef<OmpSettingsState | null>(null);
- ompStateRef.current = ompState;
 
  const viewOptions = React.useMemo(
   () => [
@@ -73,51 +61,14 @@ export const GitSettings: React.FC = () => {
 
    } catch (error) {
     console.warn('Failed to load git settings:', error);
-   } finally {
-    setIsLoading(false);
    }
   };
   loadSettings();
  }, [setGitChangesViewMode, setSettingsGitmojiEnabled]);
 
- // The commit role lives in OMP's `modelRoles`, so it is read for the
- // directory Settings describes — not whichever chat happens to be open.
- React.useEffect(() => {
-  if (!settingsDirectory) {
-   setOmpState(null);
-   return;
-  }
-  const abort = new AbortController();
-  let active = true;
-  void (async () => {
-   try {
-    const workspace = await canonicalClient.resolveWorkspace(settingsDirectory, { signal: abort.signal });
-    const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
-    if (!active || abort.signal.aborted) return;
-    setOmpState(snapshot);
-    setCommitModelError(null);
-   } catch (error) {
-    if (!active || abort.signal.aborted) return;
-    console.warn('Failed to load the commit message model:', error);
-    setOmpState(null);
-   }
-  })();
-  return () => {
-   active = false;
-   abort.abort();
-  };
- }, [settingsDirectory]);
-
- const roleRecord = React.useMemo(
-  () => readRoleRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value),
-  [ompState],
- );
- // The role record keeps its string selectors, so the shared editor can read
- // one role out of the same shape Defaults and the OMP page use.
- const roleSelectors = React.useMemo(
-  () => Object.fromEntries(Object.entries(roleRecord).filter(([, selector]) => selector.length > 0)),
-  [roleRecord],
- );
+ const roleSelectors = {
+  [COMMIT_ROLE]: roleSelector(parseRolesRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value)[COMMIT_ROLE]),
+ };
  /** What the commit role runs at when its selector names no level of its own. */
  const globalThinkingLevel = React.useMemo(() => {
   const value = ompState?.settings.find((setting) => setting.id === 'defaultThinkingLevel')?.value;
@@ -144,58 +95,13 @@ export const GitSettings: React.FC = () => {
   void updateDesktopSettings({ gitChangesViewMode: mode });
  }, [gitChangesViewMode, setGitChangesViewMode]);
 
- // Saving one role writes the whole record, so every other role is carried
- // over untouched. A concurrent config write is re-read and merged rather
- // than overwritten, and the outcome reports through the shared save
- // indicator so a refused write is never silent.
  const writeCommitRole = React.useCallback(async (selector: string) => {
-  const current = ompStateRef.current;
-  if (!current) return;
-  setIsSavingCommitModel(true);
   setCommitModelError(null);
   reportSettingsSaveState('saving');
-  const currentRoles = readRoleRecord(current.settings.find((setting) => setting.id === 'modelRoles')?.value);
-  const nextRoles = { ...currentRoles };
-  if (selector) nextRoles[COMMIT_ROLE] = selector;
-  else delete nextRoles[COMMIT_ROLE];
-  try {
-   let next: OmpSettingsState;
-   try {
-    next = await canonicalClient.updateOmpSettings(current.workspaceId, {
-     expectedRevision: current.revision,
-     changes: [{ id: 'modelRoles', value: nextRoles }],
-    });
-   } catch (error) {
-    if (!(error instanceof CanonicalApiError) || error.problem.status !== 409) throw error;
-    const latest = await canonicalClient.getOmpSettings(current.workspaceId);
-    const merged = readRoleRecord(latest.settings.find((setting) => setting.id === 'modelRoles')?.value);
-    if (selector) merged[COMMIT_ROLE] = selector;
-    else delete merged[COMMIT_ROLE];
-    next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
-     expectedRevision: latest.revision,
-     changes: [{ id: 'modelRoles', value: merged }],
-    });
-   }
-   setOmpState(next);
-   reportSettingsSaveState('saved');
-  } catch (error) {
-   console.warn('Failed to save the commit message model:', error);
-   reportSettingsSaveState('error');
-   setCommitModelError(t('settings.common.status.saveFailedReason', {
-    reason: error instanceof Error ? error.message : t('settings.common.status.saveFailed'),
-   }));
-  } finally {
-   setIsSavingCommitModel(false);
-  }
- }, [t]);
-
- const handleCommitRoleChange = React.useCallback((selector: string) => {
-  void writeCommitRole(selector);
- }, [writeCommitRole]);
-
- if (isLoading) {
-  return null;
- }
+  const saved = await updateSettings((state) => [modelRoleChange(state, COMMIT_ROLE, selector)]);
+  reportSettingsSaveState(saved ? 'saved' : 'error');
+  if (!saved) setCommitModelError(t('settings.common.status.saveFailed'));
+ }, [t, updateSettings]);
 
  return (
   <SettingsSection title={t('settings.openchamber.git.title')}>
@@ -208,10 +114,10 @@ export const GitSettings: React.FC = () => {
      globalLevel={globalThinkingLevel}
      settingsItem="git.commit-model"
      disabled={isSavingCommitModel || !ompState}
-     loading={!ompState}
+     loading={loadingCommitRole}
      label={t('settings.omp.modelRoles.role.commit.label')}
      info={t('settings.omp.modelRoles.role.commit.desc')}
-     onChange={handleCommitRoleChange}
+     onChange={writeCommitRole}
     />
     {commitModelError ? (
      <p role="alert" className="typography-meta text-[var(--status-error)]">{commitModelError}</p>

@@ -136,9 +136,12 @@ describe('settings item ownership', () => {
       const claim = claimsByOwner.get(owner);
       expect(claim !== undefined, `Owner "${owner}" for OMP setting "${id}" must exist in UI claims`).toBe(true);
       const claimFileSource = readFileSync(join(SECTIONS_ROOT, claim!.file), 'utf8');
-      const writesOmpKeyPattern = new RegExp(`updateOmpSettings[\\s\\S]*?id:\\s*['"]${id.replace('.', '\\.')}['"]`);
+      const writesOmpKeyPattern = new RegExp(`(?:updateOmpSettings|updateSettings)[\\s\\S]*?id:\\s*['"]${id.replace('.', '\\.')}['"]`);
+      const writesModelRoles = id === 'modelRoles'
+        && claimFileSource.includes('useOmpPageSettings(')
+        && /updateSettings\(\(state\) => \[modelRoleChange\(state,/.test(claimFileSource);
       expect(
-        writesOmpKeyPattern.test(claimFileSource),
+        writesModelRoles || writesOmpKeyPattern.test(claimFileSource),
         `File ${claim!.file} claiming "${owner}" must write OMP setting "${id}" via updateOmpSettings`,
       ).toBe(true);
     }

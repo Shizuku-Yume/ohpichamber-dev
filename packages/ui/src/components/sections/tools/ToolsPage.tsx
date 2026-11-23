@@ -1,9 +1,10 @@
 import React from 'react';
+import { formatModelRef } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { useSettingsModels } from '@/hooks/useSettingsModels';
+import { useSettingsImageModels } from '@/hooks/useSettingsModels';
 import { useGuestsStore } from '@/lib/guests/store';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
 import { BUILTIN_BROWSER_PROVIDER, browserProviderGuests } from '@/lib/guests/browser-providers';
@@ -16,18 +17,15 @@ import {
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
-import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
-import type { JsonValue } from '@openchamber/agent-contract';
+import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { isElectronShell } from '@/lib/desktop';
 
 export const ToolsPage: React.FC = () => {
   const { t } = useI18n();
   const directory = useSettingsDirectory();
-  const models = useSettingsModels(directory);
+  const imageModels = useSettingsImageModels(directory);
   const guests = useGuestsStore((state) => state.guests);
 
   // Host tools state
@@ -52,7 +50,7 @@ export const ToolsPage: React.FC = () => {
   const setAgentWorkflowToolEnabled = useUIStore((state) => state.setAgentWorkflowToolEnabled);
 
   // OMP tools state
-  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('tools');
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading, saving: ompSaving } = useOmpPageSettings('tools');
 
   React.useEffect(() => {
     void loadGuestCatalog();
@@ -99,39 +97,17 @@ export const ToolsPage: React.FC = () => {
   }, [setAgentWorkflowToolEnabled]);
 
   // Model roles for image tool
-  const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
-  const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);
-  const roleSelectors = React.useMemo(
-    () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
-    [rolesMap],
+  const imageRole = roleSelector(parseRolesRecord(ompForm.modelRoles).image);
+  const imageOptions = React.useMemo(
+    () => imageModels?.filter((model) => model.enabled !== false)
+      .map((model) => ({ value: formatModelRef(model), label: `${model.name} (${model.provider})` })) ?? [],
+    [imageModels],
   );
+  const selectedImage = imageOptions.find((option) => option.value === imageRole);
 
   const handleImageRoleChange = React.useCallback(
-    async (selector: string) => {
-      if (!ompState) return;
-      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
-      if (selector) nextRoles.image = selector;
-      else delete nextRoles.image;
-      try {
-        await canonicalClient.updateOmpSettings(ompState.workspaceId, {
-          expectedRevision: ompState.revision,
-          changes: [{ id: 'modelRoles', value: nextRoles }],
-        });
-      } catch (err) {
-        if (err instanceof CanonicalApiError && err.problem.status === 409) {
-          const latest = await canonicalClient.getOmpSettings(ompState.workspaceId);
-          const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
-          const merged: Record<string, JsonValue> = { ...latestRoles };
-          if (selector) merged.image = selector;
-          else delete merged.image;
-          await canonicalClient.updateOmpSettings(latest.workspaceId, {
-            expectedRevision: latest.revision,
-            changes: [{ id: 'modelRoles', value: merged }],
-          });
-        }
-      }
-    },
-    [ompState, rolesMap],
+    (selector: string) => void updateSettings((state) => [modelRoleChange(state, 'image', selector)]),
+    [updateSettings],
   );
 
   const availableSettings = getSectionSettings('available');
@@ -314,17 +290,30 @@ export const ToolsPage: React.FC = () => {
               />
               {ompForm['generate_image.enabled'] !== false ? (
                 <div className="ps-6">
-                  <ModelRoleEditor
-                    role="image"
-                    roles={roleSelectors}
-                    models={models}
-                    directory={directory ?? undefined}
-                    disabled={ompLoading}
+                  <SettingsFieldRow
                     label={t('settings.omp.modelRoles.role.image.label')}
                     info={t('settings.omp.modelRoles.role.image.desc')}
                     settingsItem="omp.modelRoles.image"
-                    onChange={handleImageRoleChange}
-                  />
+                  >
+                    <Select
+                      value={imageRole || '__inherit__'}
+                      disabled={!ompState || ompSaving || imageModels === undefined}
+                      onValueChange={(value) => handleImageRoleChange(value === '__inherit__' ? '' : value)}
+                    >
+                      <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('settings.omp.modelRoles.role.image.label')}>
+                        <SelectValue>
+                          {selectedImage?.label ?? (imageRole || t('settings.omp.modelRoles.inheritFallback'))}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__inherit__">{t('settings.omp.modelRoles.inheritFallback')}</SelectItem>
+                        {imageRole && !selectedImage && <SelectItem value={imageRole} disabled>{imageRole}</SelectItem>}
+                        {imageOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingsFieldRow>
                 </div>
               ) : null}
             </>

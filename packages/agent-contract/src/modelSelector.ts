@@ -15,6 +15,7 @@
  * not claim the whole id first. A caller without that lookup gets OMP's strict
  * behavior, which never mistakes `:max` for a thinking level.
  */
+import type { JsonObject, JsonValue } from './primitives.js';
 
 /** Thinking selectors, in OMP's display order. */
 export const THINKING_LEVELS = ['inherit', 'off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
@@ -349,17 +350,21 @@ export const DEFAULT_MODEL_ROLE = 'default';
 export const DEFAULT_MODEL_ROLE_ALIAS = '*';
 
 /**
- * A configured model-role record, as OMP's `modelRoles` setting holds it. A
- * native value may be a list of fallback selectors; the first is that role's
- * primary and the rest are tried in order elsewhere.
+ * The persisted `modelRoles` record. Utility generation reads the primary
+ * selector shown in Settings, without rewriting its saved fallback entries.
  */
-export type ModelRoleValues = Readonly<Record<string, string | readonly string[]>>;
+export type ModelRoleValues = Readonly<JsonObject>;
 
-/** A role's primary selector: its first entry when the native value is a list. */
-function roleValue(value: string | readonly string[] | undefined): string | undefined {
-  const first = typeof value === 'string' ? value : value?.[0];
-  const trimmed = typeof first === 'string' ? first.trim() : '';
-  return trimmed || undefined;
+/** The first nonblank string selector, including legacy object values. */
+function roleValue(value: JsonValue | undefined): string | undefined {
+  const entries = Array.isArray(value) ? value
+    : [value && typeof value === 'object' ? value.selector : value];
+  for (const entry of entries) {
+    if (typeof entry !== 'string') continue;
+    const selector = entry.split(',').map((part) => part.trim()).find(Boolean);
+    if (selector) return selector;
+  }
+  return undefined;
 }
 
 /** True when the record configures this role at all, even to an unexpandable value. */

@@ -260,6 +260,7 @@ export const createProviderCatalog: ConfigSlice<"invalidateProviderCache" | "loa
                             ...baseSnapshot,
                             providers: nextProviders,
                             models: modelCatalog.models,
+                            imageModels: modelCatalog.imageModels,
                             providersLoaded: true,
                             defaultProviders: nextDefaults,
                             currentProviderId: resolvedModel?.providerId ?? "",
@@ -271,7 +272,7 @@ export const createProviderCatalog: ConfigSlice<"invalidateProviderCache" | "loa
                             },
                             selectedProviderId
                         };
-                        if (baseSnapshot.providers === nextSnapshot.providers && baseSnapshot.models === nextSnapshot.models && baseSnapshot.providersLoaded === true && baseSnapshot.defaultProviders === nextSnapshot.defaultProviders && baseSnapshot.currentProviderId === nextSnapshot.currentProviderId && baseSnapshot.currentModelId === nextSnapshot.currentModelId && baseSnapshot.currentVariant === nextSnapshot.currentVariant && baseSnapshot.selectedProviderId === nextSnapshot.selectedProviderId && (state.activeDirectoryKey !== directoryKey || state.providers === nextSnapshot.providers && state.models === nextSnapshot.models && state.providersLoaded && state.defaultProviders === nextSnapshot.defaultProviders && state.currentProviderId === nextSnapshot.currentProviderId && state.currentModelId === nextSnapshot.currentModelId && state.currentVariant === nextSnapshot.currentVariant && state.selectedProviderId === nextSnapshot.selectedProviderId && state.workspaceId === workspace.workspaceId && state.settingsDefaultModel === ompDefaultModel && state.settingsDefaultReasoningEffort === ompDefaultReasoningEffort)) {
+                        if (baseSnapshot.imageModels === nextSnapshot.imageModels && baseSnapshot.providers === nextSnapshot.providers && baseSnapshot.models === nextSnapshot.models && baseSnapshot.providersLoaded === true && baseSnapshot.defaultProviders === nextSnapshot.defaultProviders && baseSnapshot.currentProviderId === nextSnapshot.currentProviderId && baseSnapshot.currentModelId === nextSnapshot.currentModelId && baseSnapshot.currentVariant === nextSnapshot.currentVariant && baseSnapshot.selectedProviderId === nextSnapshot.selectedProviderId && (state.activeDirectoryKey !== directoryKey || state.providers === nextSnapshot.providers && state.models === nextSnapshot.models && state.providersLoaded && state.defaultProviders === nextSnapshot.defaultProviders && state.currentProviderId === nextSnapshot.currentProviderId && state.currentModelId === nextSnapshot.currentModelId && state.currentVariant === nextSnapshot.currentVariant && state.selectedProviderId === nextSnapshot.selectedProviderId && state.workspaceId === workspace.workspaceId && state.settingsDefaultModel === ompDefaultModel && state.settingsDefaultReasoningEffort === ompDefaultReasoningEffort)) {
                             return state;
                         }
                         const nextState: Partial<ConfigStore> = {
