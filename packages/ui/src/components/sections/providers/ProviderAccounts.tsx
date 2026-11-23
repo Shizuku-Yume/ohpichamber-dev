@@ -1,6 +1,6 @@
 import React from 'react';
-import type { ProviderAccounts as Accounts, ProviderAccountMutationRequest } from '@openchamber/agent-contract';
-import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
+import type { ProviderAccounts as Accounts, ProviderAccountSelection, ProviderAccountMutationRequest } from '@openchamber/agent-contract';
+import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS, SettingsChipGroup, SettingsFieldRow } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,9 +13,11 @@ import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { providerAccountName } from './providerAuth';
 
 interface ProviderAccountsProps {
   roster: Accounts;
+  selection: ProviderAccountSelection | null;
   /** Credential with an account write in flight; every account action waits for it. */
   busyId: string | null;
   onMutate: (request: ProviderAccountMutationRequest) => void;
@@ -78,27 +80,55 @@ const RenameField: React.FC<{
 
 export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   roster,
+  selection,
   busyId,
   onMutate,
   disabled = false,
 }) => {
   const { t } = useI18n();
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
-  const switchableCount = roster.accounts.filter((account) => !account.disabled).length;
-  // With a single usable account there is nothing to switch between, so it
-  // carries no Use button; the Active mark still shows when idle ones sit next to it.
-  const canSwitch = switchableCount > 1;
-  const showActive = roster.accounts.length > 1;
+  const enabledAccounts = roster.accounts.filter((account) => !account.disabled);
+  const pinnedAccount = enabledAccounts.find((account) => account.credentialRef === selection?.pinnedCredentialRef);
+  const canSwitch = enabledAccounts.length > 1;
+  const selectionDisabled = busyId !== null || disabled || selection?.selectionOverriddenBy != null;
+  const accountName = (account: Accounts['accounts'][number]) => providerAccountName(account, roster.accounts.indexOf(account), t);
+  const overrideKeys = {
+    'stored-credential': 'settings.providers.accounts.selection.override.stored',
+    'managed-environment': 'settings.providers.accounts.selection.override.managed',
+    'external-environment': 'settings.providers.accounts.selection.override.external',
+  } as const;
 
   return (
     <div className="divide-y divide-[var(--surface-subtle)]">
-      {roster.accounts.map((account, index) => {
-        const active = account.active;
+      {selection && canSwitch ? (
+        <SettingsFieldRow label={t('settings.providers.accounts.selection.label')}>
+          <SettingsChipGroup
+            aria-label={t('settings.providers.accounts.selection.label')}
+            value={selection.selectionMode === 'automatic' ? 'automatic' : pinnedAccount ? `account:${pinnedAccount.credentialRef}` : ''}
+            options={[
+              { value: 'automatic', label: t('settings.providers.accounts.selection.automatic'), disabled: selectionDisabled },
+              ...enabledAccounts.map((account) => ({
+                value: `account:${account.credentialRef}`, label: accountName(account), disabled: selectionDisabled,
+              })),
+            ]}
+            onChange={(value) => onMutate(value === 'automatic'
+              ? { action: 'automatic', expectedRevision: roster.revision }
+              : { action: 'select', expectedRevision: roster.revision, credentialRef: value.slice('account:'.length) })}
+          />
+        </SettingsFieldRow>
+      ) : null}
+      {selection?.selectionOverriddenBy != null ? (
+        <p className="py-2 typography-micro text-muted-foreground">{t(overrideKeys[selection.selectionOverriddenBy])}</p>
+      ) : selection?.selectionMode === 'automatic' ? (
+        <p className="py-2 typography-micro text-muted-foreground">{t('settings.providers.accounts.selection.info')}</p>
+      ) : null}
+      {roster.accounts.map((account) => {
+        const active = selection ? selection.pinnedCredentialRef === account.credentialRef : account.active;
         const busy = busyId !== null;
         const methodLabel = account.method === 'oauth'
           ? t('settings.providers.accounts.method.oauth')
           : t('settings.providers.accounts.method.key');
-        const name = account.label || account.email || account.accountId || `${methodLabel} ${index + 1}`;
+        const name = accountName(account);
         const methodIcon: IconName = account.method === 'oauth' ? 'user-3' : 'key';
 
         return (
@@ -123,9 +153,9 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate typography-ui-label font-medium text-foreground">{name}</span>
-                    {showActive && active ? (
+                    {(selection || roster.accounts.length > 1) && active ? (
                       <span className="shrink-0 rounded-full bg-[var(--interactive-selection)] px-2 py-px typography-micro font-medium text-[var(--interactive-selection-foreground)]">
-                        {t('settings.providers.accounts.active')}
+                        {t(selection ? 'settings.providers.accounts.selection.pinned' : 'settings.providers.accounts.active')}
                       </span>
                     ) : null}
                   </div>
@@ -137,18 +167,10 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                     <div className="typography-micro text-muted-foreground">{methodLabel}</div>
                   )}
                 </div>
-                {canSwitch && !active && !account.disabled ? (
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={busy || disabled}
-                    onClick={() => onMutate({
-                      action: 'select',
-                      expectedRevision: roster.revision,
-                      credentialRef: account.credentialRef,
-                    })}
-                    aria-label={t('settings.providers.accounts.useAria', { account: name })}
-                  >
+                {!selection && canSwitch && !active && !account.disabled ? (
+                  <Button variant="outline" size="xs" disabled={busy || disabled}
+                    onClick={() => onMutate({ action: 'select', expectedRevision: roster.revision, credentialRef: account.credentialRef })}
+                    aria-label={t('settings.providers.accounts.useAria', { account: name })}>
                     {busyId === account.credentialRef ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : null}
                     {t('settings.providers.accounts.use')}
                   </Button>

@@ -86,13 +86,15 @@ export const ModelSchema = z.strictObject({
 });
 export type Model = z.infer<typeof ModelSchema>;
 
+export const ProviderAuthSourceSchema = z.enum(['stored-credential', 'managed-environment', 'external-environment']);
+
 export const ProviderAuthStateSchema = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('missing') }),
   z.strictObject({
     status: z.literal('configured'),
     credentialRef: EntityIdSchema,
     method: z.enum(['api-key', 'oauth']),
-    source: z.enum(['stored-credential', 'managed-environment', 'external-environment']),
+    source: ProviderAuthSourceSchema,
     /**
      * The environment variable that can back this provider: its name only,
      * never a value. `active` says it currently supplies the winning
