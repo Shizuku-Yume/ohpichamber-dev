@@ -25,6 +25,7 @@ export const MOBILE_SETTINGS_PAGES: readonly SettingsPageSlug[] = [
   'magic-prompts',
   'snippets',
   'agents',
+  'model-roles',
   'commands',
   'mcp',
   'plugins',
