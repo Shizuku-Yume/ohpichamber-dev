@@ -201,9 +201,10 @@ export class NativePlugins {
     if ((parentEntry && (!parentEntry.isDirectory() || await realpath(parent) !== parent)) || (entry && !entry.isFile())) {
       throw new ProjectionError(403, 'UNAUTHORIZED', 'Plugin overrides cannot use a symbolic link or non-file target');
     }
-    if (!parentEntry && normalizePathForComparison(directory) === normalizePathForComparison(join(cwd, getConfigDirName()))) {
+    const registryDirectory = normalizePathForComparison(join(cwd, getConfigDirName()));
+    if (!parentEntry && normalizePathForComparison(directory).toLowerCase() === registryDirectory.toLowerCase()) {
       const registry = await resolveOrDefaultProjectRegistryPath(cwd);
-      if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== normalizePathForComparison(directory)
+      if (registry !== undefined && normalizePathForComparison(dirname(dirname(registry))) !== registryDirectory
         && (await Bun.file(registry).exists() || await hasAncestorGitRoot(cwd))) {
         throw new ProjectionError(403, 'UNAUTHORIZED', 'Creating a workspace config directory would change its OMP plugin registry root', {
           projectWriteBlock: 'registry-root-change'

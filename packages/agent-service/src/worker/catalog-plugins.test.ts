@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { __resetDirsFromEnvForTests, getPluginsDir, getPluginsLockfile, getProjectPluginOverridesPath, setAgentDir } from '@oh-my-pi/pi-utils';
@@ -426,6 +426,29 @@ nativeTest('workspace overrides do not create a new registry root inside a Git w
     expect(await resolveOrDefaultProjectRegistryPath(outsideGit)).toBe(join(context.root, '.omp', 'plugins', 'installed_plugins.json'));
     const independent = new NativePlugins({ cwd: outsideGit, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
     await expectWritable(outsideGit, independent);
+  } finally { await context.cleanup(); }
+});
+
+nativeTest('workspace overrides refuse a registry directory name that differs only by case', async () => {
+  const configDir = '.OMP';
+  const context = await fixture(configDir);
+  try {
+    await mkdir(join(context.cwd, '.git'));
+    const cwd = join(context.cwd, 'nested');
+    await mkdir(cwd);
+    const target = { kind: 'package' as const, name: '@native-proof/plugin' };
+    await new PluginManager(cwd).link(context.packageDirectory);
+    const nested = new NativePlugins({ cwd, worker, agentDirectory: context.agentDirectory, settings: context.settings, extensionRoots: nativeExtensionRoots(context.settings) });
+    const registry = join(context.cwd, configDir, 'plugins', 'installed_plugins.json');
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
+    expect(await nested.operation({ type: 'plugins.lifecycle' }, '0')).toMatchObject({
+      type: 'plugins.lifecycle', result: { projectWritable: false, projectWriteBlock: 'registry-root-change', plugins: [{ target, workspaceWritable: false }] }
+    });
+    await expect(nested.operation({
+      type: 'plugins.configure', request: { expectedRevision: '0', target, settingsScope: 'workspace', enabledFeatures: ['preview'] }
+    }, '1')).rejects.toMatchObject({ status: 403, details: { projectWriteBlock: 'registry-root-change' } });
+    expect(await readdir(cwd)).toEqual([]);
+    expect(await resolveOrDefaultProjectRegistryPath(cwd)).toBe(registry);
   } finally { await context.cleanup(); }
 });
 
