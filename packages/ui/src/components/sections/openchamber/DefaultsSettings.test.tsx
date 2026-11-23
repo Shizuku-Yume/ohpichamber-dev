@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
+import type { OmpSettingsState } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -27,7 +28,8 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/repo' }));
+let settingsDirectory = '/repo';
+mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => settingsDirectory }));
 
 let updatedDesktopSettingsPayload: Record<string, unknown> | null = null;
 let updateSpy: ReturnType<typeof spyOn>;
@@ -101,6 +103,7 @@ mock.module('@/api/canonicalClient', () => ({
       return mockOmpSettings;
     },
     getModels: async () => mockModelCatalog,
+    getProviders: async () => ({ workspaceId: 'workspace_1', revision: '1', providers: [] }),
     updateOmpSettings: async () => mockOmpSettings,
     readCacheWarming: async () => ({ mode: 'off' }),
     updateCacheWarming: async () => ({ mode: 'off' }),
@@ -114,6 +117,9 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useSessionDisplayStore } = await import('@/stores/useSessionDisplayStore');
 const { DefaultsSettings } = await import('./DefaultsSettings');
+const { canonicalClient, CanonicalApiError } = await import('@/api/canonicalClient');
+const { useOmpPageSettings } = await import('../shared/useOmpPageSettings');
+const { modelRoleChange } = await import('../shared/modelRoleSelectors');
 const persistence = await import('@/lib/persistence');
 const syncRefs = await import('@/sync/sync-refs');
 // The composer's Plan availability is read from the workspace catalog, which
@@ -296,6 +302,141 @@ describe('DefaultsSettings', () => {
     // The write is in the shared agent directory, so the composer's directory —
     // not only the one this page names — must re-read its catalog.
     expect(catalogRefreshCalls).toBe(1);
+  });
+
+  test('a stale role write preserves the latest fallback and feeds the next setting its saved revision', async () => {
+    const initial: OmpSettingsState = {
+      workspaceId: 'workspace_1',
+      revision: '1',
+      totalCount: 2,
+      settings: [
+        {
+          id: 'modelRoles', type: 'record', default: {}, configured: true,
+          placement: { type: 'owned-by', owner: 'omp.modelRoles' },
+          value: { memory: ['provider/first,provider/second', '@smol'], image: 'provider/image' },
+        },
+        {
+          id: 'retry.maxRetries', type: 'number', default: 2, configured: true,
+          placement: { type: 'page', page: 'sessions', section: 'retry' }, value: 2,
+        },
+      ],
+    };
+    let server = initial;
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockImplementation(async () => server);
+    const save = spyOn(canonicalClient, 'updateOmpSettings').mockImplementation(async (_workspace, input) => {
+      if (input.expectedRevision !== server.revision) {
+        const problem = { status: 409, code: 'CATALOG_CONFLICT', title: 'Conflict', detail: 'Stale revision', type: 'about:blank', retryable: true } as const;
+        throw Object.assign(new CanonicalApiError(problem), { problem });
+      }
+      server = {
+        ...server, revision: String(Number(server.revision) + 1),
+        settings: server.settings.map((setting) => {
+          const change = input.changes.find((item) => item.id === setting.id);
+          return change ? { ...setting, value: change.value } : setting;
+        }),
+      };
+      return server;
+    });
+    const Harness = () => {
+      const { state, updateSettings, updateSetting } = useOmpPageSettings('sessions');
+      return <button data-revision={state?.revision} onClick={() => {
+        void updateSettings((current) => [modelRoleChange(current, 'memory', 'provider/new')]);
+        void updateSetting('retry.maxRetries', 3);
+      }} />;
+    };
+    try {
+      await act(async () => root.render(<Harness />));
+      const button = host.querySelector('button');
+      expect(button?.dataset.revision).toBe('1');
+      server = {
+        ...initial, revision: '2',
+        settings: initial.settings.map((setting) => setting.id === 'modelRoles'
+          ? { ...setting, value: { memory: ['provider/first,provider/second', '@slow'], image: { selector: 'provider/image', metadata: { enabled: true } } } }
+          : setting),
+      };
+      await act(async () => button?.click());
+      expect(save.mock.calls.map(([, request]) => request.expectedRevision)).toEqual(['1', '2', '3']);
+      expect(server.settings.map((setting) => setting.value)).toEqual([
+        { memory: ['provider/new,provider/second', '@slow'], image: { selector: 'provider/image', metadata: { enabled: true } } }, 3,
+      ]);
+      expect(button?.dataset.revision).toBe('4');
+    } finally {
+      read.mockRestore();
+      save.mockRestore();
+    }
+  });
+
+  test('changing the default retry model retains the remaining selectors and other chains', async () => {
+    const snapshot = {
+      ...mockOmpSettings,
+      settings: mockOmpSettings.settings.map((setting) => setting.id === 'retry.fallbackChains'
+        ? { ...setting, value: { default: ['other/original', '@slow', 'other/last'], 'other/original': ['@smol'] } }
+        : setting),
+    };
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot as OmpSettingsState);
+    const save = spyOn(canonicalClient, 'updateOmpSettings').mockResolvedValue(snapshot as OmpSettingsState);
+    try {
+      await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
+      await settle();
+      const trigger = Array.from(host.querySelectorAll('[role="combobox"]'))
+        .find((element) => element.textContent?.includes('other/original'));
+      expect(trigger).toBeDefined();
+      await act(async () => trigger?.dispatchEvent(new browser.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }) as unknown as Event));
+      const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+        .find((element) => element.textContent?.includes('o3-mini'));
+      expect(option).toBeDefined();
+      await act(async () => option?.click());
+      expect(save.mock.calls[0]?.[1].changes[0]).toEqual({
+        id: 'retry.fallbackChains',
+        value: { default: ['openai/o3-mini', '@slow', 'other/last'], 'other/original': ['@smol'] },
+      });
+    } finally {
+      read.mockRestore();
+      save.mockRestore();
+    }
+  });
+
+  test('switching directories hides the old snapshot and keeps queued writes in their original workspace', async () => {
+    const prior: OmpSettingsState = { workspaceId: 'workspace_1', revision: '1', totalCount: 0, settings: [] };
+    const current: OmpSettingsState = { ...prior, workspaceId: 'workspace_2', revision: '4' };
+    const { promise: pendingRead, resolve: finishRead } = Promise.withResolvers<OmpSettingsState>();
+    const workspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
+      workspaceId: directory === '/repo' ? prior.workspaceId : current.workspaceId,
+      projectId: 'project_1', name: directory,
+    }));
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockImplementation(
+      async (workspaceId) => workspaceId === prior.workspaceId ? prior : pendingRead,
+    );
+    const { promise: pendingWrite, resolve: finishWrite } = Promise.withResolvers<OmpSettingsState>();
+    const save = spyOn(canonicalClient, 'updateOmpSettings')
+      .mockImplementationOnce(() => pendingWrite)
+      .mockResolvedValue({ ...prior, revision: '3' });
+    const Harness = () => {
+      const { state, loading, updateSetting } = useOmpPageSettings('sessions');
+      return <button onClick={() => {
+        void updateSetting('plan.enabled', true);
+        void updateSetting('goal.enabled', true);
+      }}>{state?.revision ?? (loading ? 'loading' : 'empty')}</button>;
+    };
+    try {
+      await act(async () => root.render(<Harness />));
+      const button = host.querySelector('button');
+      expect(button?.textContent).toBe('1');
+      await act(async () => button?.click());
+      settingsDirectory = '/new-repo';
+      await act(async () => root.render(<Harness />));
+      expect(button?.textContent).toBe('loading');
+      await act(async () => finishRead(current));
+      await act(async () => finishWrite({ ...prior, revision: '2' }));
+      expect(button?.textContent).toBe('4');
+      expect(save.mock.calls.map(([workspaceId, input]) => [workspaceId, input.expectedRevision]))
+        .toEqual([[prior.workspaceId, '1'], [prior.workspaceId, '2']]);
+    } finally {
+      settingsDirectory = '/repo';
+      workspace.mockRestore();
+      read.mockRestore();
+      save.mockRestore();
+    }
   });
 
   test('default session mode selector updates useUIStore', async () => {

@@ -1,12 +1,11 @@
 import React from 'react';
 import type { AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
-import type { Agent, AgentThinkingLevel, JsonValue, ToolCatalogEntry } from '@openchamber/agent-contract';
-import { CanonicalApiError } from '@/api/canonicalClient';
+import type { Agent, AgentThinkingLevel, ToolCatalogEntry } from '@openchamber/agent-contract';
 import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
-import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -74,7 +73,7 @@ const thinkingLevelLabel = (level: AgentThinkingLevel | 'default', t: ReturnType
     case 'low': return t('settings.omp.modelRoles.effort.low');
     case 'medium': return t('settings.omp.modelRoles.effort.medium');
     case 'high': return t('settings.omp.modelRoles.effort.high');
-    case 'xhigh': return t('settings.omp.modelRoles.effort.high');
+    case 'xhigh': return t('settings.omp.modelRoles.effort.xhigh');
     case 'max': return t('settings.omp.modelRoles.effort.max');
     case 'auto': return t('settings.remoteInstances.page.field.auto');
     default: return level;
@@ -93,7 +92,7 @@ export const AgentsPage: React.FC = () => {
     agentDraft: state.agentDraft, setAgentDraft: state.setAgentDraft, setSelectedAgent: state.setSelectedAgent,
   })));
   const models = useSettingsModels(settingsDirectory);
-  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('agents');
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading } = useOmpPageSettings('agents');
   const subagentSettings = getSectionSettings('subagents');
   const prewalkSettings = getSectionSettings('prewalk');
   const advisorSettings = getSectionSettings('advisor');
@@ -106,31 +105,8 @@ export const AgentsPage: React.FC = () => {
   );
 
   const handleRoleChange = React.useCallback(
-    async (role: 'task' | 'advisor', selector: string) => {
-      if (!ompState) return;
-      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
-      if (selector) nextRoles[role] = selector;
-      else delete nextRoles[role];
-      try {
-        await canonicalClient.updateOmpSettings(ompState.workspaceId, {
-          expectedRevision: ompState.revision,
-          changes: [{ id: 'modelRoles', value: nextRoles }],
-        });
-      } catch (err) {
-        if (err instanceof CanonicalApiError && err.problem.status === 409) {
-          const latest = await canonicalClient.getOmpSettings(ompState.workspaceId);
-          const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
-          const merged: Record<string, JsonValue> = { ...latestRoles };
-          if (selector) merged[role] = selector;
-          else delete merged[role];
-          await canonicalClient.updateOmpSettings(latest.workspaceId, {
-            expectedRevision: latest.revision,
-            changes: [{ id: 'modelRoles', value: merged }],
-          });
-        }
-      }
-    },
-    [ompState, rolesMap],
+    (role: 'task' | 'advisor', selector: string) => void updateSettings((state) => [modelRoleChange(state, role, selector)]),
+    [updateSettings],
   );
   const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
   const revision = useAgentsStore((state) => state.revisionsByDirectory[directoryKey]);
@@ -459,7 +435,7 @@ export const AgentsPage: React.FC = () => {
               <SelectItem value="low">{t('settings.omp.modelRoles.effort.low')}</SelectItem>
               <SelectItem value="medium">{t('settings.omp.modelRoles.effort.medium')}</SelectItem>
               <SelectItem value="high">{t('settings.omp.modelRoles.effort.high')}</SelectItem>
-              <SelectItem value="xhigh">{t('settings.omp.modelRoles.effort.high')}</SelectItem>
+              <SelectItem value="xhigh">{t('settings.omp.modelRoles.effort.xhigh')}</SelectItem>
               <SelectItem value="max">{t('settings.omp.modelRoles.effort.max')}</SelectItem>
               <SelectItem value="auto">{t('settings.remoteInstances.page.field.auto')}</SelectItem>
             </SelectContent>
