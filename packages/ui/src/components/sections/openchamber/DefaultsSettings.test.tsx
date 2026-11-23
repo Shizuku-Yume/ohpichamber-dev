@@ -513,7 +513,7 @@ describe('DefaultsSettings', () => {
       expect(save?.disabled).toBe(false);
       await act(async () => save?.click());
       expect(write.mock.calls[0]?.[1].changes).toEqual([
-        { id: 'compaction.modelThresholds', value: { ...existing, 'example/model': 84000 } },
+        { id: 'compaction.modelThresholds', value: { ...existing, 'example/model': 84000 }, expectedValue: existing },
       ]);
     } finally {
       read.mockRestore();

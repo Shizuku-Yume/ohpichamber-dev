@@ -15,6 +15,7 @@ import { ProjectionError } from '../projection/journal.ts';
 import { OMP_SETTING_EXPOSED_IDS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 const byId = new Map<string, AnySetting>();
@@ -138,6 +139,12 @@ export class NativeSettings {
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     for (const change of request.changes) {
       const setting = handle(change.id);
+      if (change.expectedValue !== undefined && !isDeepStrictEqual(
+        JsonValueSchema.parse(setting.layered(this.settings) ?? null),
+        change.expectedValue,
+      )) {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native OMP setting changed on disk');
+      }
       if (hasCompactionOverride(setting, this.settings)) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared model compaction setting');
       }

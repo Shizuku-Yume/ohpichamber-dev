@@ -260,6 +260,28 @@ test('model compaction rules persist their native formats and reject invalid edi
   } finally { await f.close(); }
 });
 
+test('a stale model compaction edit cannot overwrite newer settings on disk', async () => {
+  const f = await fixture();
+  try {
+    const globalPath = join(f.agentDirectory, 'config.yml');
+    const initialRules = { 'example/*': 90000 };
+    await writeFile(globalPath, 'compaction:\n  modelThresholds:\n    example/*: 90000\n');
+    const before = await f.native.read('workspace_1', '0');
+    expect(before.settings.find(({ id }) => id === 'compaction.modelThresholds')?.value).toEqual(initialRules);
+    const updatedConfig = 'compaction:\n  modelThresholds:\n    example/*: 90000\n    other/model: "80%"\n';
+    await writeFile(globalPath, updatedConfig);
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{
+        id: 'compaction.modelThresholds',
+        value: { 'example/*': 85000 },
+        expectedValue: initialRules,
+      }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(globalPath, 'utf8')).toBe(updatedConfig);
+  } finally { await f.close(); }
+});
+
 test('project model compaction rules are readable without writing them to shared config', async () => {
   const f = await fixture();
   try {

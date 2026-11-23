@@ -109,7 +109,7 @@ export function ModelCompactionSettings({ state, saving, updateSettings }: Pick<
       }
       const next = value === undefined ? { ...current } : { ...current, [selector]: value };
       if (value === undefined) delete next[selector];
-      return [{ id: 'compaction.modelThresholds', value: next }];
+      return [{ id: 'compaction.modelThresholds', value: next, expectedValue: setting.value }];
     });
     if (saved) setEditing(null);
     return saved;

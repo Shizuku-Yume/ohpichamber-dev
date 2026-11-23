@@ -140,6 +140,7 @@ export type OmpSettingsState = z.infer<typeof OmpSettingsStateSchema>;
 export const OmpSettingsChangeSchema = z.strictObject({
   id: OmpSettingIdSchema,
   value: OmpSettingValueSchema,
+  expectedValue: OmpSettingValueSchema.optional(),
 });
 export type OmpSettingsChange = z.infer<typeof OmpSettingsChangeSchema>;
 
