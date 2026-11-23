@@ -181,6 +181,27 @@ test('a fallback reorder with no selected primary reads back in the order the us
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('editing the projected fallback order retains unresolved and effort-bearing native selectors', async () => {
+  const { directory, bootstrap } = await fixture();
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    const native = ['web/exa:high', 'vendor/unavailable-model', 'web/tavily', 'web/exa:low'];
+    cfgRetryFallbackChains.setEntry(runtime.settings, 'web', native);
+    await runtime.settings.flush();
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    expect(await search.operation({ type: 'read' })).toMatchObject({ state: { fallbackProviderIds: ['web/exa', 'web/tavily'] } });
+    await search.operation({ type: 'update', request: { expectedRevision: '0', fallbackProviderIds: ['web/exa', 'web/tavily'] } });
+    expect(cfgRetryFallbackChains.get(runtime.settings).web).toEqual(native);
+    const edited = ['web/tavily', 'web/exa', 'web/google'];
+    expect(await search.operation({ type: 'update', request: { expectedRevision: '1', fallbackProviderIds: edited } }))
+      .toMatchObject({ result: { status: 'applied', state: { fallbackProviderIds: edited } } });
+    expect(cfgRetryFallbackChains.get(runtime.settings).web)
+      .toEqual(['web/tavily', 'vendor/unavailable-model', 'web/exa:high', 'web/exa:low', 'web/google']);
+    await search.operation({ type: 'update', request: { expectedRevision: '2', fallbackProviderIds: ['web/google'] } });
+    expect(cfgRetryFallbackChains.get(runtime.settings).web).toEqual(['web/google', 'vendor/unavailable-model']);
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('an empty native web-role pool reports no selection and rejects new selectors', async () => {
   const { directory, bootstrap } = await fixture();
   const runtime = await openNativeRuntime(bootstrap);

@@ -79,6 +79,40 @@ function providerFor(model: SearchModel): Promise<SearchProvider | undefined> {
   return model.webSearch ? getGroundedSearchProvider(model.webSearch) : Promise.resolve(undefined);
 }
 
+function resolveWebSelector(value: string, settings: Settings, pool: SearchModel[]): string | undefined {
+  const model = resolveModelRoleValue(value, pool, { settings }).model;
+  return model ? selector(model) : undefined;
+}
+
+// The client edits projected provider IDs. Move their native selectors, not
+// canonical IDs, and leave selectors with no editable row in the chain.
+function editFallbackSelectors(
+  chain: string[] | undefined, visible: string[], requested: string[], resolve: (value: string) => string | undefined,
+): string[] {
+  if (!chain) return requested;
+  if (visible.length === requested.length && visible.every((id, i) => id === requested[i])) return chain;
+  const editable = new Set([...visible, ...requested]);
+  const groups = new Map<string, string[]>();
+  const ids = chain.map(value => {
+    const id = resolve(value);
+    if (!id || !editable.has(id)) return undefined;
+    const group = groups.get(id);
+    if (group) group.push(value);
+    else groups.set(id, [value]);
+    return id;
+  });
+  const replacements = requested.map(id => groups.get(id) ?? [id]);
+  const seen = new Set<string>();
+  const result = chain.flatMap((value, i) => {
+    const id = ids[i];
+    if (!id) return [value];
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return replacements.shift() ?? [];
+  });
+  return result.concat(replacements.flat());
+}
+
 /** Durable revision and native global settings share their actual agent-directory owner. */
 export class NativeWebSearch {
   private readonly revisionPath: string;
@@ -111,6 +145,7 @@ export class NativeWebSearch {
       const before = await this.readCurrent(this.runtime.settings);
       if (before.revision !== operation.request.expectedRevision) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Web search configuration revision changed');
       const options: WebSearchProviderOptions = operation.type === 'update' ? operation.request.providerOptions ?? {} : {};
+      let fallbackSelectors: string[] | undefined;
       if (operation.type === 'update') {
         const request = operation.request;
         const blockedSources = ['project', 'overlay', 'env', 'runtime'];
@@ -134,14 +169,20 @@ export class NativeWebSearch {
         // setting may name one even though the catalog exposes search engines
         // only. Validate against the native web-role pool plus the authoritative
         // current chain so non-selection updates preserve those settings.
-        const selectorPool = new Set(roleCandidatePool('web', this.runtime.settings, this.runtime.modelRegistry).map(candidate => selector(candidate)));
+        const pool = roleCandidatePool('web', this.runtime.settings, this.runtime.modelRegistry);
+        const selectorPool = new Set(pool.map(candidate => selector(candidate)));
+        const configuredChain = cfgRetryFallbackChains.get(this.runtime.settings).web;
         const configuredPrimary = this.runtime.settings.getModelRole('web');
         if (configuredPrimary) selectorPool.add(configuredPrimary);
-        for (const id of cfgRetryFallbackChains.get(this.runtime.settings).web ?? []) selectorPool.add(id);
+        for (const id of configuredChain ?? []) selectorPool.add(id);
         if (before.selectedProviderId) selectorPool.add(before.selectedProviderId);
         for (const id of before.fallbackProviderIds) selectorPool.add(id);
         for (const id of [...(selected ? [selected] : []), ...fallbacks]) {
           if (!selectorPool.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Unknown native web search model selector');
+        }
+        if (request.fallbackProviderIds !== undefined) {
+          fallbackSelectors = editFallbackSelectors(configuredChain, before.fallbackProviderIds, request.fallbackProviderIds,
+            value => resolveWebSelector(value, this.runtime.settings, pool));
         }
         for (const providerId of Object.keys(options)) {
           if (!before.providers.some(provider => provider.providerId === `web/${providerId}`)) throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Provider options require an available native provider');
@@ -161,7 +202,7 @@ export class NativeWebSearch {
           if (request.enabled !== undefined) cfgWebSearchEnabled.set(this.runtime.settings, request.enabled);
           if (request.timeoutSeconds !== undefined) cfgProvidersWebSearchTimeoutSeconds.set(this.runtime.settings, request.timeoutSeconds);
           if (request.selectedProviderId !== undefined) this.runtime.settings.setModelRole('web', request.selectedProviderId ?? undefined);
-          if (request.fallbackProviderIds !== undefined) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', request.fallbackProviderIds);
+          if (fallbackSelectors !== undefined) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', fallbackSelectors);
           if (request.providerSearchDelayMs !== undefined) {
             if (request.providerSearchDelayMs === null) cfgExaSearchDelayMs.unset(this.runtime.settings);
             else cfgExaSearchDelayMs.set(this.runtime.settings, request.providerSearchDelayMs);
@@ -238,10 +279,7 @@ export class NativeWebSearch {
     // primary is selected) jump back in front of a reordered list, so a saved
     // reorder looked like it did nothing.
     const pool = roleCandidatePool('web', settings, this.runtime.modelRegistry);
-    const resolveSelector = (value: string): string | undefined => {
-      const model = resolveModelRoleValue(value, pool, { settings }).model;
-      return model ? selector(model) : undefined;
-    };
+    const resolveSelector = (value: string) => resolveWebSelector(value, settings, pool);
     const configuredPrimary = settings.getModelRole('web')?.trim() || null;
     // A configured primary that resolves to no model stays named as configured:
     // the page then reports it as missing instead of promoting a fallback.
