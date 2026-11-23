@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as contract from '@openchamber/agent-contract';
@@ -20,7 +20,7 @@ async function fixture() {
   await mkdir(agentDirectory, { recursive: true });
   const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
   return {
-    settings, agentDirectory, native: new NativeSettings(settings, agentDirectory),
+    settings, cwd, agentDirectory, native: new NativeSettings(settings, agentDirectory),
     async close() {
       settings.cancelPendingSaves();
       await rm(root, { recursive: true, force: true });
@@ -173,7 +173,9 @@ test('a moved row is absent from state and refused on write', async () => {
     const moved = [
       'read.renderMarkdown', 'read.toolResultPreview', 'mcp.renderMarkdownResults',
       'async.printWake', 'extensionRenderers.assistantText',
-      'dev.autoqa', 'spotlight.experiment.enabled',
+      'dev.autoqa', 'spotlight.experiment.enabled', 'secrets.enabled', 'providers.fetch',
+      'git.enabled', 'completion.notify', 'error.notify', 'ask.notify',
+      'exa.enabled', 'exa.searchDelayMs', 'providers.webSearchTimeoutSeconds',
     ];
     for (const id of moved) {
       expect(byId.has(id), id).toBe(false);
@@ -182,6 +184,56 @@ test('a moved row is absent from state and refused on write', async () => {
         changes: [{ id, value: true }],
       }), id).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     }
+  } finally { await f.close(); }
+});
+
+test('General power uses the native OMP sleep-prevention setting', async () => {
+  const f = await fixture();
+  try {
+    const before = await f.native.read('workspace_1', '0');
+    const power = before.settings.find(({ id }) => id === 'power.sleepPrevention');
+    expect(power).toMatchObject({
+      placement: { type: 'page', page: 'general', section: 'power' },
+      value: 'idle',
+    });
+    const write = f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{ id: 'power.sleepPrevention', value: 'off' }],
+    });
+    const missingLinuxBus = process.platform === 'linux' && !process.env.DBUS_SYSTEM_BUS_ADDRESS
+      && !statSync('/var/run/dbus/system_bus_socket', { throwIfNoEntry: false })?.isSocket();
+    if (missingLinuxBus) {
+      expect(power).toMatchObject({ condition: contract.OMP_POWER_CONDITIONS.backendAvailable, conditionActive: false });
+      await expect(write).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' });
+      expect((await f.native.read('workspace_1', '0')).settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('idle');
+      return;
+    }
+    expect(power?.conditionActive).toBeUndefined();
+    await write;
+    const after = await f.native.read('workspace_1', '1');
+    expect(after.settings.find(({ id }) => id === 'power.sleepPrevention')?.value).toBe('off');
+  } finally { await f.close(); }
+});
+
+test('a project power override is readable but cannot change the global config', async () => {
+  const f = await fixture();
+  try {
+    const globalPath = join(f.agentDirectory, 'config.yml');
+    const globalConfig = 'power:\n  sleepPrevention: idle\n';
+    await writeFile(globalPath, globalConfig);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'power:\n  sleepPrevention: display\n');
+    const before = await f.native.read('workspace_1', '0');
+    expect(before.settings.find(({ id }) => id === 'power.sleepPrevention')).toMatchObject({
+      value: 'display',
+      condition: contract.OMP_POWER_CONDITIONS.usesSharedConfig,
+      conditionActive: false,
+    });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{ id: 'power.sleepPrevention', value: 'off' }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(globalPath, 'utf8')).toBe(globalConfig);
   } finally { await f.close(); }
 });
 
@@ -237,6 +289,16 @@ test('every exposed page row is drawn by the section a GUI owner renders', () =>
   }
   expect(unread).toEqual([]);
   expect(unwritten).toEqual([]);
+});
+
+test('the placement table contains only live IDs and never silently drops a page row', () => {
+  const registered = new Set(orderedSettings().map((setting) => setting.id));
+  registered.add('suggestion.generator');
+  const placements = Object.entries(OMP_SETTING_PLACEMENTS);
+  expect(placements.filter(([id]) => !registered.has(id)).map(([id]) => id)).toEqual([]);
+  expect(placements
+    .filter(([id, placement]) => placement.type === 'page' && !OMP_SETTING_EXPOSED_IDS.has(id))
+    .map(([id]) => id)).toEqual([]);
 });
 
 test('a value no generic row can draw is owned by the control that writes it, or config-only', () => {
