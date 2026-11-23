@@ -93,6 +93,7 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
   const thinkingSetting = ompState?.settings.find((s) => s.id === 'defaultThinkingLevel');
   const configuredThinkingLevel = typeof thinkingSetting?.value === 'string' ? thinkingSetting.value : '';
   const thinkingOptions = thinkingSetting?.options ?? [];
+  const unresolvedThinkingLevel = selectedEffort || configuredThinkingLevel;
 
   const setRole = React.useCallback(
     async (role: string, selector: string, also: OmpSettingsChange[] = []) => {
@@ -249,15 +250,18 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
               />
             ) : (
               <Select
-                value={configuredThinkingLevel}
+                value={unresolvedThinkingLevel}
                 disabled={isSavingOmp || thinkingOptions.length === 0}
-                onValueChange={(value) => void handleOmpChange('defaultThinkingLevel', value)}
+                onValueChange={(value) => {
+                  if (selectedEffort) handleDefaultEffortChange(value);
+                  else void handleOmpChange('defaultThinkingLevel', value);
+                }}
               >
                 <SelectTrigger
                   className={SETTINGS_WIDTH_SELECT_CLASS}
                   aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
                 >
-                  <SelectValue>{configuredThinkingLevel ? levelLabel(t, configuredThinkingLevel) : t('settings.omp.value.default')}</SelectValue>
+                  <SelectValue>{unresolvedThinkingLevel ? levelLabel(t, unresolvedThinkingLevel) : t('settings.omp.value.default')}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {thinkingOptions.map((option) => (

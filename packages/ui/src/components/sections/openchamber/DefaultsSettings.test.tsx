@@ -185,7 +185,10 @@ describe('DefaultsSettings', () => {
     expect(showChatsRow).not.toBeNull();
   });
 
-  test('the global thinking picker uses native choices without a resolved default model', async () => {
+  test.each([
+    { selector: 'unavailable/model', displayed: 'Auto', changedRoles: null },
+    { selector: 'short-name:high,other/model', displayed: 'High', changedRoles: { default: 'short-name:xhigh,other/model' } },
+  ])('the thinking picker uses native choices for $selector', async ({ selector, displayed, changedRoles }) => {
     const snapshot: OmpSettingsState = {
       workspaceId: 'workspace_1',
       revision: '1',
@@ -194,7 +197,7 @@ describe('DefaultsSettings', () => {
         {
           id: 'modelRoles', type: 'record', default: {}, configured: true,
           placement: { type: 'owned-by', owner: 'omp.modelRoles' },
-          value: { default: 'unavailable/model' },
+          value: { default: selector },
         },
         {
           id: 'defaultThinkingLevel', type: 'enum', default: 'high', configured: true,
@@ -210,12 +213,15 @@ describe('DefaultsSettings', () => {
       await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
       await settle();
       const trigger = host.querySelector('[data-settings-item="sessions.default-thinking"] [role="combobox"]');
-      expect(trigger?.textContent).toBe('Auto');
+      expect(trigger?.textContent).toBe(displayed);
       await act(async () => trigger?.dispatchEvent(new browser.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }) as unknown as Event));
       const options = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
       expect(options.map((option) => option.textContent)).toEqual(['Auto', 'Off', 'Minimal', 'Low', 'Medium', 'High', 'Extra high', 'Max']);
       await act(async () => options.find((option) => option.textContent === 'Extra high')?.click());
-      expect(save.mock.calls[0]?.[1].changes).toEqual([{ id: 'defaultThinkingLevel', value: 'xhigh' }]);
+      expect(save.mock.calls[0]?.[1].changes).toEqual([
+        ...(changedRoles ? [{ id: 'modelRoles', value: changedRoles }] : []),
+        { id: 'defaultThinkingLevel', value: 'xhigh' },
+      ]);
     } finally {
       read.mockRestore();
       save.mockRestore();
