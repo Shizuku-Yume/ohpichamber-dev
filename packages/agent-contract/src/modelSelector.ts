@@ -355,10 +355,10 @@ export const DEFAULT_MODEL_ROLE_ALIAS = '*';
  */
 export type ModelRoleValues = Readonly<Record<string, string | readonly string[]>>;
 
-/** A role's primary selector: its first entry when the native value is a list. */
+/** The first selector in a native array or comma-separated chain. */
 function roleValue(value: string | readonly string[] | undefined): string | undefined {
   const first = typeof value === 'string' ? value : value?.[0];
-  const trimmed = typeof first === 'string' ? first.trim() : '';
+  const trimmed = typeof first === 'string' ? first.split(',', 1)[0]?.trim() : undefined;
   return trimmed || undefined;
 }
 

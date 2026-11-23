@@ -235,6 +235,11 @@ describe('role chains', () => {
     expect(isRoleConfigured('smol', roles)).toBe(true);
     expect(isRoleConfigured('slow', roles)).toBe(false);
   });
+
+  test('a native comma-separated role expands its primary selector and aliases', () => {
+    const roles = { commit: '@smol:high,other/backup', smol: 'chosen/haiku,other/spare' };
+    expect(resolveRoleSelector('commit', roles)).toBe('chosen/haiku:high');
+  });
 });
 
 describe('reasoning effort', () => {

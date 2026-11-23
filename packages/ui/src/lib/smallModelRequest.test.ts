@@ -60,6 +60,12 @@ describe('canonical utility generation', () => {
     expect(complete).not.toHaveBeenCalled();
   });
 
+  test('Git generation uses the primary model from a preserved commit fallback chain', async () => {
+    ompSettingsRoles = { commit: 'chosen/large,other/haiku' };
+    expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection)
+      .toEqual({ providerId: 'chosen', modelId: 'large' });
+  });
+
   test('a role selector variant travels with the completion request', async () => {
     models = [model('chosen', 'large')];
     ompSettingsRoles = { smol: 'chosen/large#careful' };
