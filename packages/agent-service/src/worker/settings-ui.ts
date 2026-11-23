@@ -449,12 +449,12 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'exa.enabled': 'config-only',
   'exa.searchDelayMs': 'config-only',
   'searxng.endpoint': 'boundary',
-  'codexResets.minBlockedMinutes': 'config-only',
-  'codexResets.keepCredits': 'config-only',
-  'codexResets.salvageHorizonHours': 'config-only',
-  'claudeResets.minBlockedMinutes': 'config-only',
-  'claudeResets.keepCredits': 'config-only',
-  'claudeResets.salvageHorizonHours': 'config-only',
+  'codexResets.minBlockedMinutes': 'usage:resets',
+  'codexResets.keepCredits': 'usage:resets',
+  'codexResets.salvageHorizonHours': 'usage:resets',
+  'claudeResets.minBlockedMinutes': 'usage:resets',
+  'claudeResets.keepCredits': 'usage:resets',
+  'claudeResets.salvageHorizonHours': 'usage:resets',
   'live.voice': 'config-only',
   'tts.localVoice': 'config-only',
   'tts.localSpeed': 'config-only',
@@ -592,6 +592,7 @@ const GUI_WRITTEN_PAGES: Readonly<Record<string, true>> = {
   agents: true,
   tools: true,
   memory: true,
+  usage: true,
 };
 
 /**

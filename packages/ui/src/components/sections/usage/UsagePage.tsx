@@ -1,4 +1,5 @@
 import React from 'react';
+import type { UsageAccounts, UsageAuthLimit, UsageAuthReport } from '@openchamber/agent-contract';
 import { UsageCard } from './UsageCard';
 import { ConsoleBudgetsSection } from './ConsoleBudgetsSection';
 import { useQuotaAutoRefresh, useQuotaProviders, useQuotaStore } from '@/stores/useQuotaStore';
@@ -9,20 +10,23 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import type { UsageWindows, QuotaProviderId } from '@/types';
+import type { UsageWindow, UsageWindows, QuotaProviderId } from '@/types';
 import { getAllModelFamilies, getDisplayModelName, sortModelFamilies, groupModelsByFamilyWithGetter } from '@/lib/quota/model-families';
 import { Icon } from '@/components/icon/Icon';
-import { useI18n } from '@/lib/i18n';
+import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
   SettingsSection,
+  SettingsControlGroup,
   SettingsCheckboxRow,
   SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { UsageStatsReport } from '@/components/views/usage/UsageStatsView';
 import { useUsageStatsStore } from '@/components/views/usage/usageStatsStore';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { quotaCardProviderIds, hasQuotaData } from './usageProviderRows';
 import { resolveQuotaProviderId } from '@/components/chat/work-status/usageHeadline';
@@ -36,13 +40,103 @@ const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPr
   }
 };
 
+function nativeUsageWindow(limit: UsageAuthLimit): UsageWindow {
+  const { used, limit: total, remaining, usedFraction, remainingFraction, unit } = limit.amount;
+  let usedPercent: number | null = null;
+  if (usedFraction !== undefined) usedPercent = usedFraction * 100;
+  else if (used !== undefined && total !== undefined && total > 0) usedPercent = used / total * 100;
+  else if (unit === 'percent' && used !== undefined) usedPercent = used;
+  else if (remainingFraction !== undefined) usedPercent = Math.max(0, 1 - remainingFraction) * 100;
+  const remainingPercent = remainingFraction !== undefined ? remainingFraction * 100
+    : usedPercent === null ? null : Math.max(0, 100 - usedPercent);
+  return {
+    usedPercent,
+    remainingPercent,
+    windowSeconds: limit.window?.durationMs === undefined ? null : limit.window.durationMs / 1000,
+    resetAt: limit.window?.resetsAt ?? null,
+    resetAfterSeconds: null,
+    resetAtFormatted: null,
+    resetAfterFormatted: null,
+    valueLabel: unit === 'credits' && remaining !== undefined && usedPercent === null
+      ? new Intl.NumberFormat(getCurrentIntlLocale(), { maximumFractionDigits: 2 }).format(remaining)
+      : undefined,
+    value: unit === 'usd' ? { kind: 'spend', spent: used ?? null, limit: total ?? null }
+      : unit === 'requests' && used !== undefined ? { kind: 'requests', count: used } : undefined,
+  };
+}
+
+const NativeAccountUsage: React.FC<{ accounts: UsageAccounts; settingsItem?: string }> = ({ accounts, settingsItem }) => {
+  const { t } = useI18n();
+  const providers = useConfigStore((state) => state.providers);
+  const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
+  const reports = accounts.reports;
+  if (!reports?.length) return null;
+
+  const format = new Intl.NumberFormat(getCurrentIntlLocale(), { maximumFractionDigits: 2 });
+  const reportsByProvider = new Map<string, UsageAuthReport[]>();
+  for (const report of reports) {
+    if (report.limits.length === 0 && !report.resetCredits) continue;
+    const group = reportsByProvider.get(report.provider);
+    if (group) group.push(report);
+    else reportsByProvider.set(report.provider, [report]);
+  }
+  if (reportsByProvider.size === 0) return null;
+  return (
+    <SettingsSection title={t('settings.usage.native.title')} description={t('settings.usage.native.description')} settingsItem={settingsItem}>
+      {[...reportsByProvider].flatMap(([provider, group]) => {
+        const name = providers.find((entry) => entry.providerId === provider)?.name || provider;
+        return group.map((report, index) => (
+          <SettingsControlGroup key={`${provider}:${index}`}
+            title={group.length === 1 ? name : t('settings.usage.native.account', { provider: name, number: format.format(index + 1) })}
+            description={t('settings.usage.page.header.lastUpdated', { time: formatTime(report.fetchedAt, timeFormatPreference) })}
+          >
+            {report.resetCredits ? (
+              <p className="typography-meta text-muted-foreground">
+                {t('settings.usage.native.resetCredits', { count: format.format(report.resetCredits.availableCount) })}
+              </p>
+            ) : null}
+            {report.limits.map((limit, limitIndex) => (
+              <UsageCard key={`${limit.id}:${limitIndex}`} title={limit.label} subtitle={limit.scope.modelId}
+                window={nativeUsageWindow(limit)}
+                status={limit.status === 'exhausted' ? t('settings.usage.native.limitReached') : undefined} />
+            ))}
+          </SettingsControlGroup>
+        ));
+      })}
+    </SettingsSection>
+  );
+};
+
+const ResetCreditSettings: React.FC = () => {
+  const { t } = useI18n();
+  const { form, getSectionSettings, updateSetting, saving } = useOmpPageSettings('usage');
+  const rows = getSectionSettings('resets');
+  if (rows.length === 0) return null;
+
+  return (
+    <SettingsSection title={t('settings.usage.native.resetPolicy')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+      {rows.map((setting) => (
+        <React.Fragment key={setting.id}>
+          <OmpRowControl setting={setting} value={form[setting.id] ?? setting.value}
+            disabled={saving || setting.conditionActive === false} onChange={(value) => void updateSetting(setting, value)} />
+          {setting.conditionActive === false && (
+            <p className="typography-meta text-muted-foreground">{t('settings.omp.sharedConfig.overridden')}</p>
+          )}
+        </React.Fragment>
+      ))}
+    </SettingsSection>
+  );
+};
+
 interface ModelInfo {
   name: string;
   windows: UsageWindows;
 }
 
 /** One provider's quota panel: its windows, its models, and the work-status switch. */
-const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: string }> = ({ providerId, settingsItem }) => {
+const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: string; nativeWindows?: ReadonlySet<number> }> = ({
+  providerId, settingsItem, nativeWindows,
+}) => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const results = useQuotaStore((state) => state.results);
@@ -59,6 +153,8 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
   const providerName = providers.find((provider) => provider.id === providerId)?.name ?? providerId;
   const result = results.find((entry) => entry.providerId === providerId) ?? null;
   const usage = result?.usage;
+  const providerWindows = Object.entries(usage?.windows ?? {}).filter(([, window]) =>
+    window.windowSeconds === null || !nativeWindows?.has(window.windowSeconds));
   const refreshError = refreshErrors[providerId];
   const error = refreshError
     ? usage
@@ -170,9 +266,9 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
         </div>
       ) : null}
 
-      {usage?.windows && Object.keys(usage.windows).length > 0 ? (
+      {providerWindows.length > 0 ? (
         <div className="divide-y divide-[var(--surface-subtle)]">
-          {Object.entries(usage.windows).map(([label, window]) => (
+          {providerWindows.map(([label, window]) => (
             <UsageCard key={label} title={label} window={window} providerId={providerId} />
           ))}
         </div>
@@ -230,7 +326,7 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
 
       {usage?.consoleBudgets ? <ConsoleBudgetsSection consoleBudgets={usage.consoleBudgets} /> : null}
 
-      {!error && !hasQuotaData(usage) ? (
+      {!nativeWindows && !error && !hasQuotaData(usage) ? (
         <div>
           <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noQuotaWindowsTitle')}</p>
           <p className="typography-meta text-muted-foreground mt-1">{t('settings.usage.page.state.noQuotaWindowsDescription')}</p>
@@ -261,51 +357,48 @@ export const UsagePage: React.FC = () => {
     [quotaProviders, refreshErrors, results],
   );
 
-  if (selectedProvider !== null) {
-    const cfg = configProviders.find((p) => p.providerId === selectedProvider);
-    const providerName = cfg?.name || selectedProvider;
-    const quotaId = quotaProviders.find((p) => p.id === resolveQuotaProviderId(selectedProvider, nativeToLogical))?.id ?? null;
-
-    return (
-      <SettingsPageLayout title={providerName} showSaveStatus={false}>
-        <SettingsSection
-          title={t('usageStats.title')}
-          divider={false}
-          settingsItem="usage.statistics"
-        >
-          <UsageStatsReport />
-        </SettingsSection>
-
-        {quotaId && quotaCardIds.includes(quotaId) ? (
-          <ProviderQuota providerId={quotaId} />
-        ) : (
-          <SettingsSection title={t('settings.usage.page.section.quotas')} settingsItem="usage.quotas">
-            <p className="typography-micro text-muted-foreground">{t('usageStats.providers.noQuota')}</p>
-          </SettingsSection>
-        )}
-      </SettingsPageLayout>
-    );
-  }
-
+  const title = selectedProvider === null ? t('settings.page.usage.title')
+    : configProviders.find((p) => p.providerId === selectedProvider)?.name || selectedProvider;
+  const selectedQuotaId = resolveQuotaProviderId(selectedProvider, nativeToLogical);
+  const visibleQuotaIds = selectedProvider === null ? quotaCardIds : quotaCardIds.filter((id) => id === selectedQuotaId);
   return (
-    <SettingsPageLayout title={t('settings.page.usage.title')} showSaveStatus>
-      <SettingsSection
-        title={t('usageStats.title')}
-        divider={false}
-        settingsItem="usage.statistics"
-      >
-        <UsageStatsReport />
-      </SettingsSection>
-
-      {quotaCardIds.length > 0 ? (
-        quotaCardIds.map((providerId, index) => (
-          <ProviderQuota
-            key={providerId}
-            providerId={providerId}
-            settingsItem={index === 0 ? 'usage.quotas' : undefined}
-          />
-        ))
-      ) : null}
+    <SettingsPageLayout title={title} showSaveStatus={selectedProvider === null}>
+      <UsageStatsReport renderReport={(report, accounts) => {
+        const reports = accounts?.reports;
+        const hasNativeData = reports?.some((entry) => entry.limits.length > 0 || entry.resetCredits) ?? false;
+        const nativeWindows = new Map<string, Set<number>>();
+        for (const entry of reports ?? []) {
+          const providerId = resolveQuotaProviderId(entry.provider, nativeToLogical);
+          if (!providerId) continue;
+          for (const limit of entry.limits) {
+            const duration = limit.window?.durationMs;
+            if (limit.scope.modelId || limit.scope.tier || duration === undefined) continue;
+            if (nativeUsageWindow(limit).usedPercent === null && limit.status !== 'exhausted') continue;
+            const covered = nativeWindows.get(providerId) ?? new Set<number>();
+            covered.add(duration / 1000);
+            nativeWindows.set(providerId, covered);
+          }
+        }
+        return (
+          <>
+            <SettingsSection title={t('usageStats.title')} divider={false} settingsItem="usage.statistics">
+              {report}
+            </SettingsSection>
+            {hasNativeData && accounts ? <NativeAccountUsage accounts={accounts} settingsItem="usage.quotas" /> : null}
+            {visibleQuotaIds.map((providerId, index) => (
+              <ProviderQuota key={providerId} providerId={providerId}
+                settingsItem={!hasNativeData && index === 0 ? 'usage.quotas' : undefined}
+                nativeWindows={nativeWindows.get(providerId)} />
+            ))}
+            {selectedProvider !== null && !hasNativeData && visibleQuotaIds.length === 0 ? (
+              <SettingsSection title={t('settings.usage.page.section.quotas')} settingsItem="usage.quotas">
+                <p className="typography-micro text-muted-foreground">{t('usageStats.providers.noQuota')}</p>
+              </SettingsSection>
+            ) : null}
+          </>
+        );
+      }} />
+      {selectedProvider === null ? <ResetCreditSettings /> : null}
     </SettingsPageLayout>
   );
 };

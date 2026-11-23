@@ -11,6 +11,7 @@ interface UsageCardProps {
   title: string;
   window: UsageWindow;
   subtitle?: string | null;
+  status?: string;
   showToggle?: boolean;
   toggleEnabled?: boolean;
   toggleDisabled?: boolean;
@@ -23,6 +24,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({
   title,
   window,
   subtitle,
+  status,
   showToggle = false,
   toggleEnabled = false,
   toggleDisabled = false,
@@ -68,6 +70,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({
           </div>
         </div>
         <div className="flex items-center justify-end gap-1">
+          {status && <span className="typography-meta text-[var(--status-warning)]">{status}</span>}
           {showGiftReset && providerId && <UsageGiftResetButton window={window} providerId={providerId} />}
           <div className="typography-ui-label text-foreground tabular-nums">
             {percentLabel === '-' ? '' : percentLabel}

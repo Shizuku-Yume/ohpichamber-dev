@@ -12,7 +12,7 @@ import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { lookup, type AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { OMP_SETTING_EXPOSED_IDS, presentOmpSetting } from './settings-ui.ts';
+import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
@@ -25,11 +25,18 @@ function linuxPowerBusAvailable(): boolean {
   catch { return false; }
 }
 
-function inactivePowerCondition(setting: AnySetting, settings: Settings) {
-  if (setting.id !== 'power.sleepPrevention') return undefined;
+const RESET_POLICY_OVERRIDE = 'resetPolicyUsesSharedConfig';
+
+function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
+  const isPower = setting.id === 'power.sleepPrevention';
+  const placement = OMP_SETTING_PLACEMENTS[setting.id];
+  const isResetPolicy = placement?.type === 'page' && placement.page === 'usage' && placement.section === 'resets';
+  if (!isPower && !isResetPolicy) return undefined;
   const provenance = settings.getProvenance(setting);
-  if (provenance !== 'global' && provenance !== 'default') return OMP_POWER_CONDITIONS.usesSharedConfig;
-  if (process.platform === 'linux' && !linuxPowerBusAvailable()) return OMP_POWER_CONDITIONS.backendAvailable;
+  if (provenance !== 'global' && provenance !== 'default') {
+    return isPower ? OMP_POWER_CONDITIONS.usesSharedConfig : RESET_POLICY_OVERRIDE;
+  }
+  if (isPower && process.platform === 'linux' && !linuxPowerBusAvailable()) return OMP_POWER_CONDITIONS.backendAvailable;
   return undefined;
 }
 
@@ -78,7 +85,7 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (ui?.description !== undefined) descriptor.description = ui.description;
   if (ui?.group !== undefined) descriptor.group = ui.group;
   if (ui?.tab !== undefined) descriptor.tab = ui.tab;
-  const inactiveCondition = inactivePowerCondition(setting, settings);
+  const inactiveCondition = inactiveWriteCondition(setting, settings);
   if (inactiveCondition !== undefined) {
     descriptor.condition = inactiveCondition;
     descriptor.conditionActive = false;
@@ -130,9 +137,9 @@ export class NativeSettings {
     // route cannot invent a looser schema for numbers, enums, records or arrays.
     for (const change of request.changes) {
       const setting = handle(change.id);
-      const inactiveCondition = inactivePowerCondition(setting, this.settings);
-      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig) {
-        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared sleep setting');
+      const inactiveCondition = inactiveWriteCondition(setting, this.settings);
+      if (inactiveCondition === OMP_POWER_CONDITIONS.usesSharedConfig || inactiveCondition === RESET_POLICY_OVERRIDE) {
+        throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
       }
       if (inactiveCondition === OMP_POWER_CONDITIONS.backendAvailable) {
         throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Host sleep prevention is unavailable');
