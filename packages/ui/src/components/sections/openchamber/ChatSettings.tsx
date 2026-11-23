@@ -162,7 +162,6 @@ const MessagesTab: React.FC = () => {
     void updateDesktopSettings({ activityRenderMode: mode, chatRenderMode: 'live' });
   };
   const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('chat');
-  const displaySettings = getSectionSettings('display');
   const thinkingSettings = getSectionSettings('thinking');
   const imageSettings = getSectionSettings('images');
 
@@ -354,25 +353,6 @@ const MessagesTab: React.FC = () => {
             info={t('settings.openchamber.visual.field.copyMessagesAsPlainTextInfo')}
             settingsItem="chat.copy-plain-text"
           />
-        </div>
-      </SettingsSection>
-
-      {/* Display & Visibility */}
-      <SettingsSection
-        title={t('settings.chat.section.display.title')}
-        description={t('settings.chat.section.display.description')}
-        settingsItem="chat.section.display"
-      >
-        <div className={SETTINGS_SPACE_ROW_CLASS}>
-          {displaySettings.map((s) => (
-            <OmpRowControl
-              key={s.id}
-              setting={s}
-              value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
-              disabled={ompLoading}
-              onChange={(val) => void updateOmpSetting(s.id, val)}
-            />
-          ))}
         </div>
       </SettingsSection>
 
