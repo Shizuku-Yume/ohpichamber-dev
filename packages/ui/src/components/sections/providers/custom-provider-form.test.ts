@@ -1,38 +1,41 @@
 import { expect, test } from 'bun:test';
 import type { Model, ModelCatalogInfo, ProviderConfigurationRead } from '@openchamber/agent-contract';
 import { OMP_MODEL_APIS, OMP_PROVIDER_APIS } from '@openchamber/agent-contract';
+import { apiDisplayLabel, modelApiDisplayLabel } from './provider-api-labels';
 import {
-  apiDisplayLabel,
   applyModelCatalogInfo,
   autoFillFields,
   autoFillIds,
   autoFillNoticeFor,
   autoFillNoticeIds,
-  catalogInputs,
-  formatAutoFillNoticeModels,
-  unresolvedAutoFillIds,
-  buildCustomProviderRequest,
   createDiscoveredModelRow,
-  createEmptyCustomProviderForm,
-  createModelRow,
   discoveryFilterCounts,
   discoveryFilterValues,
   discoveryRows,
+  formatAutoFillNoticeModels,
   groupDiscoveryRows,
-  duplicateModelRow,
   idsMissingCatalog,
   idsToAdd,
-  markModelFieldTyped,
   matchesDiscoveryFilter,
   staleModelIds,
-  modelApiDisplayLabel,
-  isCustomProviderProtocol,
-  isValidProviderID,
+  unresolvedAutoFillIds,
+} from './custom-provider-autofill';
+import { buildCustomProviderRequest } from './custom-provider-persist';
+import {
+  catalogInputs,
+  createModelRow,
+  duplicateModelRow,
+  markModelFieldTyped,
   modelModalitiesForKind,
   normalizeModelModalities,
   readCompatBooleanFlag,
   readCompatMaxTokensField,
   updateCompatJsonFlag,
+} from './custom-provider-model-rows';
+import {
+  createEmptyCustomProviderForm,
+  isCustomProviderProtocol,
+  isValidProviderID,
   validateCustomProviderForm,
   type CustomProviderTranslator,
 } from './custom-provider-form';
@@ -587,7 +590,7 @@ test('compat flag helpers round-trip known flags while preserving unknown keys',
 });
 
 test('every known OMP provider and model api maps to a human label, not its raw slug', () => {
-  const required: Readonly<Record<string, string>> = {
+  const required = {
     'openai-completions': 'OpenAI Chat Completions',
     'openai-responses': 'OpenAI Responses',
     'openai-codex-responses': 'OpenAI Codex Responses',

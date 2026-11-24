@@ -9,7 +9,8 @@ import {
   shouldAutoOpenAuthPanel,
 } from './providerAuth';
 import { listConnectableProviders, listProvidersAcceptingKey, splitConnectableProviders } from './connectableProviders';
-import { providerHeaderWrite, createEmptyCustomProviderForm } from './custom-provider-form';
+import { createEmptyCustomProviderForm } from './custom-provider-form';
+import { providerHeaderWrite } from './custom-provider-persist';
 
 const methods: ProviderOAuthMethods['methods'] = [
   { methodId: 'console-login', providerId: 'native-console', name: 'Console', storeCredentialsAs: 'openai' },
