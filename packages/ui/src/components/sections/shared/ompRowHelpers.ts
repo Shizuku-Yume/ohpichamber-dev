@@ -4,6 +4,8 @@ import type { OmpSettingValue } from '@openchamber/agent-contract';
 export type OmpRowUnit =
   | 'percent'
   | 'seconds'
+  | 'minutes'
+  | 'hours'
   | 'tokens'
   | 'milliseconds'
   | 'kilobytes'
@@ -20,6 +22,8 @@ const UNIT_SUFFIXES = [
   ['Pct', 'percent'],
   ['Seconds', 'seconds'],
   ['Sec', 'seconds'],
+  ['Minutes', 'minutes'],
+  ['Hours', 'hours'],
   ['Tokens', 'tokens'],
   ['Milliseconds', 'milliseconds'],
   ['Ms', 'milliseconds'],
@@ -70,8 +74,9 @@ function endsWithWord(id: string, suffix: string): boolean {
  * `tools.artifactTailBytes` and `tools.artifactHeadBytes` in KB and converts
  * at consumption time (`value * 1024`). Every `Bytes` and `Columns` row today
  * also declares options, and a number row with options shows its units in the
- * option labels instead, so only the milliseconds and lines chips are reachable;
- * the mappings stay complete because the next such row may be free-form.
+ * option labels instead, so only the milliseconds, minutes, hours, lines and
+ * calls chips are reachable; the mappings stay complete because the next such
+ * row may be free-form.
  */
 export function inferUnit(id: string): OmpRowUnit | undefined {
   const overridden = UNIT_OVERRIDES[id];

@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ExtensionInventory } from '@openchamber/agent-contract';
+import { filterPluginCapabilities } from '@/components/sections/plugins/pluginCapabilities';
 
 /**
  * Settings layout guard.
@@ -1445,24 +1447,29 @@ function walkSources(directory: string, files: string[] = []): string[] {
 interface FileScan {
   readonly file: string;
   readonly fullPath: string;
+  readonly source: string;
   readonly detail: ScanDetail;
 }
 
 function scanSections(): FileScan[] {
   const sectionFiles = walkSources(SECTIONS_ROOT).map((fullPath) => {
     const file = sectionPath(fullPath);
+    const source = readFileSync(fullPath, 'utf8');
     return {
       file,
       fullPath,
-      detail: scanSourceDetailed(file, readFileSync(fullPath, 'utf8')),
+      source,
+      detail: scanSourceDetailed(file, source),
     };
   });
   const viewFiles = PANE_VIEW_SOURCES.map((file) => {
     const fullPath = join(COMPONENTS_ROOT, file);
+    const source = readFileSync(fullPath, 'utf8');
     return {
       file,
       fullPath,
-      detail: scanSourceDetailed(file, readFileSync(fullPath, 'utf8')),
+      source,
+      detail: scanSourceDetailed(file, source),
     };
   });
   return [...sectionFiles, ...viewFiles];
@@ -1474,6 +1481,82 @@ function formatViolations(violations: readonly Violation[]): string {
     .sort()
     .join('\n');
 }
+
+
+/**
+ * Regression guards for UX-audit remediations: each pins the mechanism the
+ * fix landed with so a later refactor cannot quietly restore the pattern it
+ * removed. The source-level pins ride the same `scanSections()` pass the
+ * layout rules already run, so they cost no extra read.
+ */
+describe('settings UX regression guards', () => {
+  test('ModelRoleLinkRow navigates with shared Button chrome, never SettingsInlineLink', () => {
+    // The affordance is an outline button with an arrow icon, not a bare
+    // inline link inside the row's control band.
+    const scan = scanSections().find((entry) => entry.file === 'shared/ModelRoleLinkRow.tsx');
+    expect(scan, 'shared/ModelRoleLinkRow.tsx must be scanned').toBeDefined();
+    expect(scan!.source).not.toContain('SettingsInlineLink');
+    expect(/import\s*\{[^}]*\bButton\b[^}]*\}\s*from\s*'@\/components\/ui\/button'/.test(scan!.source)).toBe(true);
+  });
+
+  test('PluginsPage and ExtensionControlCenter exclude ssh, openssh-config, and builtin-defaults entries', () => {
+    // The shared filter is the mechanism: it drops the `ssh` kind, the
+    // `openssh-config`/`builtin-defaults` discovery providers, and every
+    // builtin-scope row before the inventory reaches either component.
+    const inventory: ExtensionInventory = {
+      providers: [
+        { id: 'agents', displayName: 'Agents', description: '', priority: 1, capabilities: ['tool'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 2 },
+        { id: 'openssh-config', displayName: 'OpenSSH', description: '', priority: 2, capabilities: ['ssh'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 1 },
+        { id: 'builtin-defaults', displayName: 'Builtin', description: '', priority: 3, capabilities: ['tool'], enabled: true, userSourceEnabled: false, foreignUserSource: false, itemCount: 1 },
+      ],
+      items: [
+        { id: 'keep-tool', kind: 'tool', name: 't', providerId: 'agents', providerName: 'Agents', scope: 'user', path: 'p', enabled: true, shadowed: false, toggleable: true, triggers: [] },
+        { id: 'drop-ssh', kind: 'ssh', name: 's', providerId: 'openssh-config', providerName: 'OpenSSH', scope: 'user', path: 'p', enabled: true, shadowed: false, toggleable: true, triggers: [] },
+        { id: 'drop-builtin-provider', kind: 'tool', name: 'b', providerId: 'builtin-defaults', providerName: 'Builtin', scope: 'user', path: 'p', enabled: true, shadowed: false, toggleable: true, triggers: [] },
+        { id: 'drop-builtin-scope', kind: 'tool', name: 'n', providerId: 'agents', providerName: 'Agents', scope: 'builtin', path: 'p', enabled: true, shadowed: false, toggleable: true, triggers: [] },
+      ],
+      warnings: [],
+      kinds: [
+        { kind: 'tool', label: 'Tool' },
+        { kind: 'ssh', label: 'SSH' },
+      ],
+    };
+    const filtered = filterPluginCapabilities(inventory);
+    expect(filtered.items.map((item) => item.id)).toEqual(['keep-tool']);
+    expect(filtered.providers.map((provider) => provider.id)).toEqual(['agents']);
+    const scanned = new Map(scanSections().map((entry) => [entry.file, entry.source]));
+    for (const file of ['plugins/PluginsPage.tsx', 'plugins/ExtensionControlCenter.tsx']) {
+      const source = scanned.get(file);
+      expect(source, `${file} must be scanned`).toBeDefined();
+      expect(
+        source!.includes('filterPluginCapabilities'),
+        `${file} must route the extension inventory through filterPluginCapabilities`,
+      ).toBe(true);
+    }
+  });
+
+  test('UsagePage reset-policy and CustomProviderForm advanced disclosures start collapsed', () => {
+    const scanned = new Map(scanSections().map((entry) => [entry.file, entry.source]));
+    const usageSource = scanned.get('usage/UsagePage.tsx');
+    const providerSource = scanned.get('providers/CustomProviderForm.tsx');
+    expect(usageSource, 'usage/UsagePage.tsx must be scanned').toBeDefined();
+    expect(providerSource, 'providers/CustomProviderForm.tsx must be scanned').toBeDefined();
+    // `expanded` maps key->open; the empty initial map keeps every group
+    // collapsed, and a `true` literal would resurface one section open on load.
+    expect(usageSource!.includes('expanded[provider.key] === true')).toBe(true);
+    expect(/SettingsDisclosure[^]*expanded=\{true\}/.test(usageSource!)).toBe(false);
+    for (const state of ['discoveryOpen', 'compatOpen', 'bedrockOpen', 'remoteCompactionOpen']) {
+      expect(
+        new RegExp(`const \\[${state},\\s*set[A-Z]\\w*\\] = React\\.useState\\(false\\)`).test(providerSource!),
+        `CustomProviderForm ${state} must initialize to false`,
+      ).toBe(true);
+      expect(
+        new RegExp(`expanded=\\{${state}\\}`).test(providerSource!),
+        `CustomProviderForm must bind ${state} to a SettingsDisclosure`,
+      ).toBe(true);
+    }
+  });
+});
 
 describe('settings layout guard', () => {
   test('detects a raw width on a control and a section stack on a page', () => {

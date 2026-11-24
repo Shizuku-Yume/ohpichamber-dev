@@ -104,20 +104,18 @@ export const MemoryPage: React.FC = () => {
           ) : null}
 
           {isEnabled ? (
-            <div className="pt-2">
-              <ModelRoleEditor
-                role="memory"
-                roles={roleSelectors}
-                models={models}
-                directory={directory ?? undefined}
-                globalLevel={globalLevel}
-                disabled={ompLoading || saving || !ompState}
-                loading={ompLoading && !ompState}
-                label={t('settings.omp.modelRoles.role.memory.label')}
-                info={t('settings.omp.modelRoles.role.memory.desc')}
-                onChange={(selector) => void setRole('memory', selector)}
-              />
-            </div>
+            <ModelRoleEditor
+              role="memory"
+              roles={roleSelectors}
+              models={models}
+              directory={directory ?? undefined}
+              globalLevel={globalLevel}
+              disabled={ompLoading || saving || !ompState}
+              loading={ompLoading && !ompState}
+              label={t('settings.omp.modelRoles.role.memory.label')}
+              info={t('settings.omp.modelRoles.role.memory.desc')}
+              onChange={(selector) => void setRole('memory', selector)}
+            />
           ) : null}
 
           {currentBackend === 'sharpshooter' && sharpshooterSetting ? (
@@ -135,8 +133,9 @@ export const MemoryPage: React.FC = () => {
                 disabled={ompLoading || saving}
                 className={SETTINGS_WIDTH_SELECT_CLASS}
                 onChange={(providerId, modelId) => {
-                  if (providerId === sharpshooterModel?.providerId && modelId === sharpshooterModel.modelId) return;
                   const selector = formatModelRef({ providerId, modelId });
+                  if (!selector && !sharpshooterSelector) return;
+                  if (selector && providerId === sharpshooterModel?.providerId && modelId === sharpshooterModel.modelId) return;
                   void updateSettings((state) => {
                     const current = state.settings.find((setting) => setting.id === 'sharpshooter.model')?.value;
                     return [{ id: 'sharpshooter.model', value: selector ? replaceFirstSelector(current, selector) : null }];
@@ -172,7 +171,7 @@ export const MemoryPage: React.FC = () => {
       </SettingsSection>
 
       {/* MnemoPi Options */}
-      {(currentBackend === 'mnemopi' || currentBackend === 'off') ? (
+      {currentBackend === 'mnemopi' ? (
         <SettingsSection
           title={t('settings.memory.section.mnemopi.title')}
           description={t('settings.memory.section.mnemopi.description')}
@@ -197,7 +196,7 @@ export const MemoryPage: React.FC = () => {
       ) : null}
 
       {/* Hindsight Options */}
-      {(currentBackend === 'hindsight' || currentBackend === 'off') ? (
+      {currentBackend === 'hindsight' ? (
         <SettingsSection
           title={t('settings.memory.section.hindsight.title')}
           description={t('settings.memory.section.hindsight.description')}

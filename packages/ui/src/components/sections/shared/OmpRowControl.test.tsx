@@ -176,6 +176,37 @@ describe('units', () => {
     // A select row has no stepper, so no unit chip can be appended to it.
     expect(row?.querySelector('input[type="number"], input[inputmode="numeric"]')).toBeNull();
   });
+
+  test('Minutes and Hours suffixes render localized unit badges in English and non-English locales', async () => {
+    await render(setting({ id: 'codexResets.minBlockedMinutes', type: 'number' }), 60);
+    const enMinutesRow = container.querySelector('[data-settings-item="omp.codexResets.minBlockedMinutes"]');
+    expect(enMinutesRow?.textContent).toContain('minutes');
+
+    await render(setting({ id: 'claudeResets.salvageHorizonHours', type: 'number' }), 12);
+    const enHoursRow = container.querySelector('[data-settings-item="omp.claudeResets.salvageHorizonHours"]');
+    expect(enHoursRow?.textContent).toContain('hours');
+
+    await act(async () => {
+      useI18nStore.getState().setLocale('zh-CN');
+    });
+    while (useI18nStore.getState().loadingLocale) {
+      await settle();
+    }
+    try {
+      await render(setting({ id: 'claudeResets.minBlockedMinutes', type: 'number' }), 60);
+      expect(container.querySelector('[data-settings-item="omp.claudeResets.minBlockedMinutes"]')?.textContent).toContain('分钟');
+
+      await render(setting({ id: 'codexResets.salvageHorizonHours', type: 'number' }), 12);
+      expect(container.querySelector('[data-settings-item="omp.codexResets.salvageHorizonHours"]')?.textContent).toContain('小时');
+    } finally {
+      await act(async () => {
+        useI18nStore.getState().setLocale('en');
+      });
+      while (useI18nStore.getState().loadingLocale) {
+        await settle();
+      }
+    }
+  });
 });
 
 describe('the -1 option', () => {
