@@ -8,10 +8,14 @@ const snapshot = (running = []) => ({ scope: { kind: 'session', sessionId: 'ses-
 describe('Canonical session activity probe', () => {
   it('reads only running background shell jobs from the current session snapshot', async () => {
     const paths = [];
-    const probe = createCanonicalActivityProbe({ service: { request: async (pathname) => {
-      paths.push(pathname);
-      return Response.json(snapshot([job(), job({ jobId: 'foreground', background: false })]));
-    } } });
+    const probe = createCanonicalActivityProbe({
+      service: {
+        request: async (pathname) => {
+          paths.push(pathname);
+          return Response.json(snapshot([job(), job({ jobId: 'foreground', background: false })]));
+        }
+      }
+    });
     expect(await probe.fetchRunningBackgroundJobs('ses-1')).toEqual([{ kind: 'shell', startedAt: 5 }]);
     expect(paths).toEqual(['/api/agent/v1/sessions/ses-1/shell/jobs']);
   });
@@ -32,10 +36,14 @@ describe('Canonical session activity probe', () => {
   });
 
   it('uses native running children and descendants, not persisted or unrelated rows', async () => {
-    const probe = createCanonicalActivityProbe({ service: { request: async (pathname) => {
-      expect(pathname).toBe('/api/agent/v1/sessions/ses-1/subagents');
-      return Response.json({ subagents: [child()] });
-    } } });
+    const probe = createCanonicalActivityProbe({
+      service: {
+        request: async (pathname) => {
+          expect(pathname).toBe('/api/agent/v1/sessions/ses-1/subagents');
+          return Response.json({ subagents: [child()] });
+        }
+      }
+    });
     const statuses = await probe.fetchActiveSessionStatuses('ses-1');
     expect(await probe.hasWorkingChildren('ses-1', statuses)).toBe(true);
     expect(await probe.hasWorkingChildren('ses-1', [])).toBe(false);
@@ -43,5 +51,7 @@ describe('Canonical session activity probe', () => {
       expect(await probe.hasWorkingChildren('ses-1', [child(extra)])).toBe(false);
     }
     expect(await probe.hasWorkingChildren('ses-1', [child({ status: 'idle' }), child({ subagentId: 'sub-2', parentSessionId: 'ses-child', childSessionId: 'grandchild' })])).toBe(true);
+    expect(await probe.hasWorkingChildren('ses-1', [child({ childSessionId: undefined, status: 'running' })])).toBe(true);
+    expect(await probe.hasWorkingChildren('ses-1', [child({ childSessionId: undefined, status: 'idle' })])).toBe(false);
   });
 });

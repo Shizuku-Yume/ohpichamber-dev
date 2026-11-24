@@ -35,7 +35,7 @@ export const createCanonicalActivityProbe = ({ service }: {
         for (const child of statuses) {
           if (!child.persisted && parents.has(child.parentSessionId)) {
             if (child.status === 'running') return true;
-            parents.add(child.childSessionId);
+            if (child.childSessionId !== undefined) parents.add(child.childSessionId);
           }
         }
       }
