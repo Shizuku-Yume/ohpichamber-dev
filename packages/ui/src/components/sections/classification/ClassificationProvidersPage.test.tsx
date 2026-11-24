@@ -25,7 +25,7 @@ const originalRoutingState = useRoutingStore.getState();
 const container = document.createElement('div');
 document.body.appendChild(container);
 let root: Root;
-let restoreLoad = () => {};
+let restoreLoad = () => { };
 
 beforeEach(() => {
   useRoutingStore.setState({
@@ -34,9 +34,8 @@ beforeEach(() => {
     loaded: true,
     loadError: null,
     classifier: {
-      selected: 'zen-key', effective: null,
+      selected: 'openrouter', effective: null,
       sources: [
-        { id: 'zen-key', usable: false },
         { id: 'openrouter', usable: false },
         { id: 'vercel', usable: false },
       ],
@@ -73,18 +72,19 @@ const openProviderLink = async (label: string, targetProviderId: string, selecte
   expect(useRoutingStore.getState().classifier?.selected).toBe(selectedSource);
 };
 
-test('Zen key setup opens the native OpenCode Zen provider without selecting the classifier source', async () => {
-  await openProviderLink('OpenCode Zen', 'opencode-zen', 'zen-key');
+test('OpenRouter key setup opens the native OpenRouter provider without selecting the classifier source', async () => {
+  await openProviderLink('OpenRouter', 'openrouter', 'openrouter');
 });
 
 test('Vercel key setup opens the native Vercel AI Gateway provider', async () => {
-  useRoutingStore.setState({ classifier: {
-    selected: 'vercel', effective: null,
-    sources: [
-      { id: 'zen-key', usable: false },
-      { id: 'openrouter', usable: false },
-      { id: 'vercel', usable: false },
-    ],
-  } });
+  useRoutingStore.setState({
+    classifier: {
+      selected: 'vercel', effective: null,
+      sources: [
+        { id: 'openrouter', usable: false },
+        { id: 'vercel', usable: false },
+      ],
+    }
+  });
   await openProviderLink('Vercel AI Gateway', 'vercel-ai-gateway', 'vercel');
 });

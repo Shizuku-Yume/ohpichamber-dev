@@ -22,22 +22,7 @@ Sin proveedor, la red de seguridad y Auto quedan ocultos, y las sesiones en curs
 
 ## Configuración
 
-Jev está desactivado hasta que lo actives: nada de tus conversaciones va a un proveedor de clasificación a menos que elijas uno. Abre **Configuración → Proveedores → Proveedores de clasificación** y elige a dónde van las solicitudes a Jev. Además de **Desactivado**, hay siete opciones.
-
-### Promoción de OpenCode Zen
-
-Gratis por tiempo limitado, sin clave. Mientras dure la promoción, OpenCode Zen permite a OhPiChamber usar Jev sin costo.
-
-Cuando la promoción termine, la opción desaparece y OhPiChamber cambia a una de las claves de abajo, si tienes alguna.
-
-### Clave de OpenCode Zen
-
-Usa la clave API guardada y configurada para OpenCode Zen y se paga con tu saldo de Zen. La clasificación con Jev requiere una credencial de proveedor guardada en lugar de una variable de entorno.
-
-1. Abre **Configuración → Proveedores** y añade una clave API al proveedor **OpenCode Zen** (consulta [Proveedores, modelos y agentes](/es/providers/)).
-2. Vuelve a **Proveedores de clasificación** y elige **Clave de OpenCode Zen**.
-
-Para Jev, Zen solo acepta una clave API.
+Jev está desactivado hasta que lo actives: nada de tus conversaciones va a un proveedor de clasificación a menos que elijas uno. Abre **Configuración → Proveedores → Proveedores de clasificación** y elige a dónde van las solicitudes a Jev. Además de **Desactivado**, hay cinco opciones.
 
 ### Clave de OpenRouter
 
@@ -101,7 +86,7 @@ En cuanto un proveedor funciona, la tarjeta en **Configuración → Proveedores*
 
 ## Cuando tu elección deja de funcionar
 
-Si el proveedor que elegiste no se puede usar (terminó la promoción, se quitó una clave), OhPiChamber recurre a la primera de tus propias claves que funcione: clave de TypeSafe, luego tu endpoint personalizado, luego OpenRouter, luego Vercel AI Gateway, luego clave de Zen. Nunca recurre a la promoción ni a Google Gemini, y **Desactivado** sigue desactivado. La página te dice cuál está usando ahora.
+Si el proveedor que elegiste no se puede usar (por ejemplo, si se quitó una clave), OhPiChamber recurre a la primera de tus propias claves que funcione: clave de TypeSafe, luego tu endpoint personalizado, luego OpenRouter, luego Vercel AI Gateway. Nunca recurre a Google Gemini, y **Desactivado** sigue desactivado. La página te dice cuál está usando ahora.
 
 Si Jev va lento o falla en una solicitud, no se rompe nada. Cada función tiene una respuesta segura para ese caso:
 
@@ -114,7 +99,7 @@ Si Jev va lento o falla en una solicitud, no se rompe nada. Cada función tiene 
 
 Jev recibe tu último mensaje y, como contexto, fragmentos de la conversación reciente: hasta tres turnos anteriores, recortados a unos cientos de caracteres cada uno, y al terminar un turno, la respuesta del agente recortada a su principio y su final. Para la red de seguridad también recibe la acción para la que el agente pide permiso, tal como la describe OMP: el comando que el agente quiere ejecutar, o el archivo y el cambio en una edición. Cuando el agente crea un archivo, ese cambio es el archivo entero, incluidas las imágenes escritas como texto, como SVG. Cuando Jev comprueba un objetivo, recibe el objetivo y la última respuesta del agente, hasta 10.000 caracteres de ella.
 
-Las solicitudes van del servidor de OhPiChamber directamente a OpenCode Zen, OpenRouter, Vercel AI Gateway, Google, TypeSafe o tu endpoint personalizado, según tu elección.
+Las solicitudes van del servidor de OhPiChamber directamente a OpenRouter, Vercel AI Gateway, Google, TypeSafe o tu endpoint personalizado, según tu elección.
 
 ## Dónde funciona
 
@@ -122,5 +107,5 @@ Jev funciona en el servidor de OhPiChamber, así que está disponible en la app 
 
 ## Relacionado
 
-- [Proveedores, modelos y agentes](/es/providers/): dónde viven las claves de OpenCode Zen, OpenRouter y Vercel AI Gateway
+- [Proveedores, modelos y agentes](/es/providers/): dónde viven las claves de OpenRouter y Vercel AI Gateway
 - [Seguridad](/es/security/): cómo gestiona OhPiChamber las claves y el acceso

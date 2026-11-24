@@ -7,20 +7,17 @@ import {
   OPENROUTER_JEV_MODEL,
   VERCEL_JEV_API_URL,
   VERCEL_JEV_MODEL,
-  ZEN_CLIENT_ID,
-  ZEN_JEV_API_URL,
-  ZEN_JEV_MODEL,
-  ZEN_JEV_PAID_MODEL,
 } from './defaults.js';
 import { readEnterprisePolicy } from '../enterprise-mode.js';
 import type { EnterprisePolicyOptions } from '../enterprise-mode.js';
 import type { CustomEndpoint } from './store.js';
 
-export const CLASSIFIER_SOURCES = ['off', 'zen-promo', 'zen-key', 'openrouter', 'vercel', 'gemini', 'typesafe', 'custom'] as const;
+export const CLASSIFIER_SOURCES = ['off', 'openrouter', 'vercel', 'gemini', 'typesafe', 'custom'] as const;
 export type ClassifierSource = typeof CLASSIFIER_SOURCES[number];
+export const RETIRED_CLASSIFIER_SOURCES = ['zen-promo', 'zen-key'] as const;
+export type RetiredClassifierSource = typeof RETIRED_CLASSIFIER_SOURCES[number];
 export interface ClassifierKeys {
   typesafeKey?: string | null;
-  zenKey?: string | null;
   openrouterKey?: string | null;
   vercelKey?: string | null;
   geminiKey?: string | null;
@@ -37,7 +34,7 @@ export interface ClassifierEndpoint {
   headers: Record<string, string>;
   format?: 'gemini';
 }
-const FALLBACK_ORDER: Exclude<ClassifierSource, 'off'>[] = ['typesafe', 'custom', 'openrouter', 'vercel', 'zen-key'];
+const FALLBACK_ORDER: Exclude<ClassifierSource, 'off'>[] = ['typesafe', 'custom', 'openrouter', 'vercel'];
 
 export const parseCustomEndpointUrl = (input: string | null | undefined) => {
   const invalid = (message: string) => Object.assign(new Error(message), { status: 400 });
@@ -70,20 +67,28 @@ export const readPinnedCustomEndpoint = (options?: EnterprisePolicyOptions): Cus
   return pinned.apiKey ? { url, model, key: pinned.apiKey } : { url, model };
 };
 
-const LEGACY_SOURCES: ClassifierSource[] = ['zen-promo', 'zen-key', 'typesafe'];
+const LEGACY_SOURCES: ClassifierSource[] = ['typesafe'];
 
-export const resolveClassifier = ({ selected, typesafeKey, zenKey, openrouterKey, vercelKey, geminiKey, customEndpoint, zenPromotionActive }: ClassifierKeys & { selected: ClassifierSource | null; zenPromotionActive: boolean }): Classifier => {
-  const chosen = selected ?? (typesafeKey ? 'typesafe' : 'off');
+export const resolveClassifier = ({
+  selected,
+  typesafeKey,
+  openrouterKey,
+  vercelKey,
+  geminiKey,
+  customEndpoint,
+}: ClassifierKeys & { selected: ClassifierSource | RetiredClassifierSource | null }): Classifier => {
+  const isRetired = selected === 'zen-promo' || selected === 'zen-key';
   const usable = {
     off: true,
-    'zen-promo': Boolean(zenPromotionActive),
-    'zen-key': Boolean(zenKey),
     openrouter: Boolean(openrouterKey),
     vercel: Boolean(vercelKey),
     gemini: Boolean(geminiKey),
     typesafe: Boolean(typesafeKey),
     custom: Boolean(customEndpoint),
   };
+  const chosen: ClassifierSource = isRetired
+    ? (FALLBACK_ORDER.find((source) => usable[source]) ?? 'off')
+    : (selected ?? (typesafeKey ? 'typesafe' : 'off'));
   const effective = chosen === 'off'
     ? null
     : usable[chosen] ? chosen : FALLBACK_ORDER.find((source) => usable[source]) ?? null;
@@ -103,7 +108,7 @@ export const legacyClassifier = (classifier: Classifier) => {
 export const classifierEndpoint = (...args:
   | [source: 'custom', keys: ClassifierKeys & { customEndpoint: CustomEndpoint }]
   | [source: 'gemini', keys: ClassifierKeys & { geminiKey: string }]
-  | [source: Exclude<ClassifierSource, 'custom' | 'gemini'>, keys: ClassifierKeys]
+  | [source: Exclude<ClassifierSource, 'off' | 'custom' | 'gemini'>, keys: ClassifierKeys]
 ): ClassifierEndpoint => {
   const [source, keys] = args;
   if (source === 'custom') {
@@ -112,21 +117,15 @@ export const classifierEndpoint = (...args:
     if (customEndpoint.key) headers.authorization = `Bearer ${customEndpoint.key}`;
     return { url: customEndpoint.url, model: customEndpoint.model, headers };
   }
-  const { typesafeKey, zenKey, openrouterKey, vercelKey } = keys;
+  if (source === 'gemini') {
+    return { url: GEMINI_DECISIONS_API_URL, model: GEMINI_DECISIONS_MODEL, headers: { 'x-goog-api-key': keys.geminiKey }, format: 'gemini' };
+  }
+  const { typesafeKey, openrouterKey, vercelKey } = keys;
   if (source === 'typesafe') {
     return { url: JEV_API_URL, model: JEV_MODEL, headers: { authorization: `Bearer ${typesafeKey}` } };
   }
   if (source === 'openrouter') {
     return { url: OPENROUTER_JEV_API_URL, model: OPENROUTER_JEV_MODEL, headers: { authorization: `Bearer ${openrouterKey}` } };
   }
-  if (source === 'vercel') {
-    return { url: VERCEL_JEV_API_URL, model: VERCEL_JEV_MODEL, headers: { authorization: `Bearer ${vercelKey}` } };
-  }
-  if (source === 'gemini') {
-    return { url: GEMINI_DECISIONS_API_URL, model: GEMINI_DECISIONS_MODEL, headers: { 'x-goog-api-key': keys.geminiKey }, format: 'gemini' };
-  }
-  if (source === 'zen-key') {
-    return { url: ZEN_JEV_API_URL, model: ZEN_JEV_PAID_MODEL, headers: { authorization: `Bearer ${zenKey}`, 'x-opencode-client': ZEN_CLIENT_ID } };
-  }
-  return { url: ZEN_JEV_API_URL, model: ZEN_JEV_MODEL, headers: { 'x-opencode-client': ZEN_CLIENT_ID } };
+  return { url: VERCEL_JEV_API_URL, model: VERCEL_JEV_MODEL, headers: { authorization: `Bearer ${vercelKey}` } };
 };

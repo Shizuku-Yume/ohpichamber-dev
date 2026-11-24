@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { isSpaceDirectory, spaceApiPath, spaceIdOfDirectory } from './space-route';
+import { isSpaceDirectory, spaceApiPath, spaceDirectoryHeaders, spaceIdOfDirectory } from './space-route';
 
 const ID = 'a1b2c3d4e5f6';
 
@@ -34,5 +34,16 @@ describe('spaceApiPath', () => {
     expect(spaceApiPath(`/api/spaces/${ID}/session`, `/spaces/${ID}/repo`)).toBe(`/api/spaces/${ID}/session`);
     expect(spaceApiPath('/health', `/spaces/${ID}/repo`)).toBe('/health');
     expect(spaceApiPath('/auth/session', `/spaces/${ID}/repo`)).toBe('/auth/session');
+  });
+});
+
+describe('spaceDirectoryHeaders', () => {
+  test('emits x-openchamber-directory and encoding marker for space directories only', () => {
+    expect(spaceDirectoryHeaders(`/spaces/${ID}/repo`)).toEqual({
+      'x-openchamber-directory': encodeURIComponent(`/spaces/${ID}/repo`),
+      'x-openchamber-directory-encoding': 'uri',
+    });
+    expect(spaceDirectoryHeaders('/home/me/project')).toBeNull();
+    expect(spaceDirectoryHeaders(null)).toBeNull();
   });
 });

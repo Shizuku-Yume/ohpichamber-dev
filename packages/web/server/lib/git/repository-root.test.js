@@ -41,7 +41,7 @@ describe('vcsInitRefusal', () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const header = (directory) => ({ 'x-opencode-directory': encodeURIComponent(directory) });
+  const header = (directory) => ({ 'x-openchamber-directory': encodeURIComponent(directory) });
 
   it('lets an ordinary project directory through', () => {
     expect(vcsInitRefusal('POST', '/api/vcs/init', header(project), home)).toBeNull();
@@ -68,8 +68,13 @@ describe('vcsInitRefusal', () => {
   });
 
   it('unwraps a header the browser re-encoded once more', () => {
-    const doubled = { 'x-opencode-directory': encodeURIComponent(encodeURIComponent(home)), 'x-opencode-directory-encoding': 'uri' };
+    const doubled = { 'x-openchamber-directory': encodeURIComponent(encodeURIComponent(home)), 'x-openchamber-directory-encoding': 'uri' };
     expect(vcsInitRefusal('POST', '/api/vcs/init', doubled, home)).toMatch(/home directory/);
+  });
+
+  it('prefers x-openchamber-directory over legacy x-opencode-directory and keeps legacy fallback', () => {
+    expect(vcsInitRefusal('POST', '/api/vcs/init', { 'x-openchamber-directory': project, 'x-opencode-directory': home }, home)).toBeNull();
+    expect(vcsInitRefusal('POST', '/api/vcs/init', { 'x-opencode-directory': encodeURIComponent(home) }, home)).toMatch(/home directory/);
   });
 
   it('matches the route however the path is spelled', () => {

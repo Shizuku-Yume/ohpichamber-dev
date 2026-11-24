@@ -54,14 +54,14 @@ test('translated fallbacks preserve user titles and permission actions', () => {
 
 const snapshotWith = (...approvals) => ({ instanceName: 'OhPiChamber', sessions: [], approvals });
 
-const submenuLabels = (snapshot, id) => buildTrayMenuTemplate(snapshot, { onAction: () => {}, statusIcons: {} })
+const submenuLabels = (snapshot, id) => buildTrayMenuTemplate(snapshot, { onAction: () => { }, statusIcons: {} })
   .filter((row) => Array.isArray(row.submenu) && String(row.label).includes(id))
   .flatMap((row) => row.submenu.filter((item) => item.label).map((item) => item.label));
 
 describe('tray approval submenu', () => {
   test('uses the current locale even when the snapshot is unchanged', () => {
     const snapshot = snapshotWith(permission('savable', true));
-    const options = { onAction: () => {}, statusIcons: {} };
+    const options = { onAction: () => { }, statusIcons: {} };
     const english = buildTrayMenuTemplate(snapshot, { ...options, locale: 'en' });
     const german = buildTrayMenuTemplate(snapshot, { ...options, locale: 'de' });
     expect(english.map((item) => item.label)).toContain('Needs your attention');
@@ -87,17 +87,16 @@ describe('tray approval submenu', () => {
 describe('tray usage submenu', () => {
   const usageSnapshot = (account) => ({
     instanceName: 'OhPiChamber', sessions: [], approvals: [],
-    usage: { mode: 'usage', groups: [{ provider: 'OpenCode Go', account, status: null, rows: [{ label: '5h', value: '25%' }] }] },
+    usage: { mode: 'usage', groups: [{ provider: 'Claude', account, status: null, rows: [{ label: '5h', value: '25%' }] }] },
   });
-  const usageLabels = (snapshot) => buildTrayMenuTemplate(snapshot, { onAction: () => {}, statusIcons: {} })
+  const usageLabels = (snapshot) => buildTrayMenuTemplate(snapshot, { onAction: () => { }, statusIcons: {} })
     .filter((row) => Array.isArray(row.submenu))
     .flatMap((row) => row.submenu.map((item) => item.label));
 
   test('names the account next to the provider', () => {
-    expect(usageLabels(usageSnapshot('outlook'))).toContain('OpenCode Go · outlook');
-    expect(usageLabels(usageSnapshot(null))).toContain('OpenCode Go');
+    expect(usageLabels(usageSnapshot('outlook'))).toContain('Claude · outlook');
+    expect(usageLabels(usageSnapshot(null))).toContain('Claude');
   });
-
   test('the menu key changes when only the account changes, so a switch between accounts with equal meters shows', () => {
     expect(trayMenuKey(usageSnapshot('outlook'))).not.toBe(trayMenuKey(usageSnapshot('solar tool')));
   });

@@ -46,12 +46,12 @@ const formatStructuredQuotaValue = (
     const unknown = translate('quota.value.unknown');
     return value.limit === null
       ? unknown
-      : translate('settings.usage.consoleBudgets.spentOf', { spent: unknown, limit: money.format(value.limit) });
+      : translate('quota.value.spentOf', { spent: unknown, limit: money.format(value.limit) });
   }
   const spent = money.format(value.spent);
   return value.limit === null
     ? translate('quota.value.spent', { spent })
-    : translate('settings.usage.consoleBudgets.spentOf', { spent, limit: money.format(value.limit) });
+    : translate('quota.value.spentOf', { spent, limit: money.format(value.limit) });
 };
 
 export const formatQuotaWindowValueLabel = (

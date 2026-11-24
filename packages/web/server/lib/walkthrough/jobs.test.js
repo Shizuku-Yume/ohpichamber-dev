@@ -181,7 +181,7 @@ describe('generation jobs', () => {
   // was subtracted from the input allowance overruns the context mid-answer.
   it('requests exactly the budget the model resolution reserved', async () => {
     describeSmallModel.mockResolvedValue({
-      providerID: 'opencode-go',
+      providerID: 'openrouter',
       modelID: 'deepseek-v4-flash',
       source: 'config',
       inputCharBudget: 1_000_000,
@@ -500,7 +500,7 @@ describe('schema refusal memory', () => {
   beforeEach(() => {
     fs.rmSync(path.join(TEMP_DATA_DIR, 'walkthroughs'), { recursive: true, force: true });
     describeSmallModel.mockResolvedValue({
-      providerID: 'opencode-go',
+      providerID: 'openrouter',
       modelID: 'deepseek-v4-flash',
       source: 'config',
       inputCharBudget: 1_000_000,

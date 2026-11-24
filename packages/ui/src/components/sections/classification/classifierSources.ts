@@ -4,8 +4,6 @@ import { useUIStore } from '@/stores/useUIStore';
 
 export const useClassifierSourceName = (source: ClassifierSource | null): string | null => {
   const { t } = useI18n();
-  if (source === 'zen-promo') return t('settings.classification.source.zenPromo.name');
-  if (source === 'zen-key') return t('settings.classification.source.zenKey.name');
   if (source === 'openrouter') return t('settings.classification.source.openrouter.name');
   if (source === 'vercel') return t('settings.classification.source.vercel.name');
   if (source === 'gemini') return t('settings.classification.source.gemini.name');

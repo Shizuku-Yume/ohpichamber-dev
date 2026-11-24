@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { buildAttachmentHref, parseAttachmentHref } from './inlineMessageLinks';
+import * as inlineMessageLinks from './inlineMessageLinks';
+import { buildAgentHref, buildAttachmentHref, parseAgentHref, parseAttachmentHref } from './inlineMessageLinks';
 
 describe('attachment citation links', () => {
     test('round-trip names that would otherwise break a Markdown link target', () => {
@@ -24,5 +25,14 @@ describe('attachment citation links', () => {
         expect(parseAttachmentHref('#openchamber-skill:review')).toBeNull();
         expect(parseAttachmentHref('#openchamber-attachment:png')).toBeNull();
         expect(parseAttachmentHref('#openchamber-attachment:png:%E0%A4%A')).toBeNull();
+    });
+});
+
+describe('agent mention links', () => {
+    test('round-trip internal agent hrefs without building external opencode.ai URLs', () => {
+        const href = buildAgentHref('build agent');
+        expect(href).toBe('#openchamber-agent:build%20agent');
+        expect(parseAgentHref(href)).toBe('build agent');
+        expect('buildAgentMentionUrl' in inlineMessageLinks).toBe(false);
     });
 });

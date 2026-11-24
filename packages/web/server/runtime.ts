@@ -5,7 +5,6 @@ import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
 import http from 'http';
-import net from 'net';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
@@ -28,7 +27,7 @@ import {
  isUnsafeUnauthenticatedLanAllowed,
  readAdvertisedLanUrl,
 } from './lib/security/bind-host.js';
-import { isEnterpriseMode, isNetworkAccessBlocked, NETWORK_ACCESS_BLOCKED_ERROR, readEnterprisePolicy } from './lib/enterprise-mode.js';
+import { isEnterpriseMode, isNetworkAccessBlocked, NETWORK_ACCESS_BLOCKED_ERROR } from './lib/enterprise-mode.js';
 import {
  TUNNEL_MODE_MANAGED_LOCAL,
  TUNNEL_MODE_MANAGED_REMOTE,
@@ -102,7 +101,7 @@ import { createCanonicalQueueRuntime, createPromptQueueStore, registerCanonicalQ
 import { createDispatchResultsRuntime } from './lib/dispatch-results/runtime.js';
 import { createRoutingRuntime } from './lib/routing/runtime.js';
 import { registerHostPermissionRuntime } from './lib/permission-auto-accept/host-channel.js';
-import { createPermissionAutoAcceptRuntime, registerPermissionAutoAcceptRoutes } from './lib/permission-auto-accept/runtime.js';
+import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/runtime.js';
 import { createJevClient } from './lib/routing/jev.js';
 import { createSessionWorkRuntime } from './lib/session-work/runtime.js';
 import { createSelectedUsageQuota } from './lib/quota/selected-usage.js';
@@ -201,7 +200,6 @@ let exitOnShutdown = false;
 let isShuttingDown = false;
 let activeTunnelController = null;
 let runtimeManagedRemoteTunnelHostname = null;
-let expressApp = null;
 let server = null;
 let runtimeManagedRemoteTunnelToken = null;
 let uiAuthController = null;
@@ -291,6 +289,7 @@ const OPENCHAMBER_VERSION = (() => {
    return pkg.version.trim();
   }
  } catch {
+  return 'unknown';
  }
  return 'unknown';
 })();
@@ -730,7 +729,7 @@ const listQueueScopes = async () => {
 
 const readStoredSessionMetadata = (sessionID) => sessionMetadataStore.get(sessionID);
 
-const persistSessionMetadataPatch = async (sessionID, patch, { directory = '' } = {}) => {
+const persistSessionMetadataPatch = async (sessionID, patch, { directory: _directory = '' } = {}) => {
  const result = await sessionMetadataStore.setSessionMetadata(sessionID, patch);
  if (result.changed) {
   broadcastOpenChamberUiEvent({
@@ -1954,7 +1953,7 @@ async function main(options = {}) {
    // Last-Event-ID is sent when a session event stream resumes; without it
    // the packaged UI's preflight fails, the stream cannot recover, and the
    // directory's authoritative session status is invalidated to unavailable.
-   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,Last-Event-ID,X-OhPiChamber-Directory,X-OhPiChamber-Directory-Encoding,Ngrok-Skip-Browser-Warning,X-OhPiChamber-Surface,X-OhPiChamber-Provider,X-OhPiChamber-Model');
+   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,Last-Event-ID,X-OpenChamber-Directory,X-OpenChamber-Directory-Encoding,Ngrok-Skip-Browser-Warning,X-OpenChamber-Surface,X-OpenChamber-Provider,X-OpenChamber-Model');
    res.setHeader('Access-Control-Expose-Headers', 'x-next-cursor');
    res.setHeader('Vary', 'Origin');
    if (req.method === 'OPTIONS') {
@@ -1971,7 +1970,6 @@ async function main(options = {}) {
   },
   threshold: 1024,
  }));
- expressApp = app;
  server = http.createServer(app);
  gracefulShutdownRuntime.trackServerConnections(server);
  // A policy placed while the server runs cannot rebind it, so connections

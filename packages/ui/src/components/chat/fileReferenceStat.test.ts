@@ -41,6 +41,7 @@ describe('fileReferenceExists directory scoping (issue 3019)', () => {
     expect(exists).toBe(true);
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe('/api/fs/stat?path=%2Frepo-b%2Fsrc%2Findex.ts&optional=true&directory=%2Frepo-b');
+    expect(calls[0].headers.has('x-openchamber-directory')).toBe(false);
     expect(calls[0].headers.has('x-opencode-directory')).toBe(false);
   });
 
@@ -84,6 +85,7 @@ describe('findUniqueFileByName directory scoping', () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe('/api/fs/find-by-name?name=Renderer.tsx&directory=%2Frepo-b');
+    expect(calls[0].headers.has('x-openchamber-directory')).toBe(false);
     expect(calls[0].headers.has('x-opencode-directory')).toBe(false);
   });
 });

@@ -29,7 +29,7 @@ const builtinCategorySchema = z.object({ id: z.string().min(1), name: z.string()
 
 const jevSourceSchema = z.enum(['typesafe', 'zen-free']);
 
-const classifierSourceSchema = z.enum(['off', 'zen-promo', 'zen-key', 'openrouter', 'vercel', 'gemini', 'typesafe', 'custom']);
+const classifierSourceSchema = z.enum(['off', 'openrouter', 'vercel', 'gemini', 'typesafe', 'custom']);
 
 const customEndpointSchema = z.object({ url: z.string().min(1), model: z.string().min(1), keyPresent: z.boolean(), pinned: z.boolean().default(false) });
 

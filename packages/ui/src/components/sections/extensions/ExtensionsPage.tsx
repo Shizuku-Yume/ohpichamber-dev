@@ -40,7 +40,7 @@ import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { checkGuestUpdates, updateGuest } from '@/lib/guests/updates';
 import type { GuestSource, InstalledGuest, UnreadableGuest } from '@/lib/guests/types';
 import { useGuestsStore } from '@/lib/guests/store';
-import { useI18n, type I18nKey, type Locale } from '@/lib/i18n';
+import { useI18n, type I18nKey } from '@/lib/i18n';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { cn } from '@/lib/utils';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
@@ -54,17 +54,6 @@ type InstallSource =
   | { kind: 'file'; file: File };
 
 const isZipFile = (file: File): boolean => file.name.toLowerCase().endsWith('.zip');
-
-const WEBSITE_LOCALE_PATHS = {
-  uk: 'uk', 'zh-CN': 'zh', 'zh-TW': 'zh', es: 'es', 'pt-BR': 'pt', ko: 'ko',
-  pl: 'pl', fr: 'fr', ja: 'ja', de: 'de', tr: 'tr', nl: 'nl',
-  en: null, ar: null, he: null,
-} as const satisfies Record<Locale, string | null>;
-
-const communityExtensionsUrl = (locale: Locale): string => {
-  const path = WEBSITE_LOCALE_PATHS[locale];
-  return path ? `https://openchamber.dev/${path}/extensions/` : 'https://openchamber.dev/extensions/';
-};
 
 
 const sourceKey = (source?: GuestSource): I18nKey => {
@@ -555,7 +544,7 @@ const UnreadableExtensionCard: React.FC<{
 };
 
 export const ExtensionsPage: React.FC = () => {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const guests = useGuestsStore((state) => state.guests);
   const updatable = React.useMemo(() => guests.filter((guest) => guest.source === 'git' && guest.update), [guests]);
   const unreadable = useGuestsStore((state) => state.unreadable);
@@ -774,6 +763,8 @@ export const ExtensionsPage: React.FC = () => {
   const installRequest = useGuestInstallRequestStore((state) => state.request);
   const runInstallRef = React.useRef(runInstall);
   runInstallRef.current = runInstall;
+  const installFoldersRef = React.useRef(installFolders);
+  installFoldersRef.current = installFolders;
   React.useEffect(() => {
     if (!installRequest || status !== 'ready' || busy) return;
     const request = useGuestInstallRequestStore.getState().take();
@@ -783,7 +774,7 @@ export const ExtensionsPage: React.FC = () => {
       return;
     }
     setInstallValue(request.source);
-    installFolders.reset();
+    installFoldersRef.current.reset();
     setAddOpen(true);
   }, [busy, installRequest, status]);
 
@@ -1125,21 +1116,6 @@ export const ExtensionsPage: React.FC = () => {
         description={t('settings.page.extensions.description')}
         headerEnd={unsupported ? null : (
           <div className="flex items-center gap-2">
-            {enterpriseMode ? null : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0 gap-1.5"
-                data-settings-item="extensions.browse"
-                title={t('settings.extensions.browse.label')}
-                onClick={() => void openExternalUrl(communityExtensionsUrl(locale))}
-              >
-                <Icon name="compass-3" className="size-4" />
-                {t('settings.extensions.browse.label')}
-                <Icon name="external-link" className="size-3.5 text-muted-foreground" />
-              </Button>
-            )}
             {updatable.length > 1 ? (
               <Button
                 type="button"

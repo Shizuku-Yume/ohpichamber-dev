@@ -12,8 +12,6 @@ const base = {
 };
 
 const legacySources = [
-  { id: 'zen-promo', usable: true },
-  { id: 'zen-key', usable: false },
   { id: 'typesafe', usable: false },
 ];
 
@@ -29,7 +27,7 @@ describe('routingStateSchema', () => {
       },
     });
     expect(state.classifier?.effective).toBe('openrouter');
-    expect(state.classifier?.sources.map((source) => source.id)).toEqual(['zen-promo', 'zen-key', 'typesafe', 'openrouter', 'vercel']);
+    expect(state.classifier?.sources.map((source) => source.id)).toEqual(['typesafe', 'openrouter', 'vercel']);
   });
 
   test('lists the Gemini source with its saved-key flag, which older servers leave out', () => {
@@ -45,10 +43,21 @@ describe('routingStateSchema', () => {
     expect(parseClassifierTestResult({ ok: true, source: 'gemini', model: 'gemini-decision-1', ms: 160 })).toMatchObject({ source: 'gemini' });
   });
 
-  test('reads a v2.0.2 server, which sends only the classifier view', () => {
-    const state = routingStateSchema.parse({ ...base, classifier: { selected: 'zen-promo', effective: 'zen-promo', sources: legacySources } });
-    expect(state.classifier?.selected).toBe('zen-promo');
-    expect(state.classifier?.sources).toHaveLength(3);
+  test('reads a v2.0.2 server, which sends only the classifier view, and ignores retired sources', () => {
+    const state = routingStateSchema.parse({ ...base, classifier: { selected: 'typesafe', effective: 'typesafe', sources: legacySources } });
+    expect(state.classifier?.selected).toBe('typesafe');
+    expect(state.classifier?.sources).toHaveLength(1);
+    const retired = routingStateSchema.parse({
+      ...base,
+      classifier: {
+        selected: 'zen-promo',
+        effective: 'zen-key',
+        sources: [{ id: 'zen-promo', usable: true }, { id: 'zen-key', usable: false }, ...legacySources],
+      },
+    });
+    expect(retired.classifier?.selected).toBeNull();
+    expect(retired.classifier?.effective).toBeNull();
+    expect(retired.classifier?.sources.map((source) => source.id)).toEqual(['typesafe']);
   });
 
   test('a source this build does not know neither fails the state nor shows up', () => {
@@ -56,13 +65,13 @@ describe('routingStateSchema', () => {
       ...base,
       classification: {
         selected: 'cloudflare',
-        effective: 'zen-promo',
+        effective: 'typesafe',
         sources: [...legacySources, { id: 'cloudflare', usable: true }],
       },
     });
     expect(state.classifier?.selected).toBeNull();
-    expect(state.classifier?.effective).toBe('zen-promo');
-    expect(state.classifier?.sources.map((source) => source.id)).toEqual(['zen-promo', 'zen-key', 'typesafe']);
+    expect(state.classifier?.effective).toBe('typesafe');
+    expect(state.classifier?.sources.map((source) => source.id)).toEqual(['typesafe']);
   });
 
   test('reads Off and enterprise mode, and a server that sends no enterprise flag as not enterprise', () => {
@@ -94,7 +103,7 @@ describe('classifier test result', () => {
       { ok: true, source: 'typesafe', model: 'jev-latest', ms: 120 },
       { ok: false, reason: 'unavailable' },
       { ok: false, reason: 'http', status: 401, source: 'custom', model: 'm' },
-      { ok: false, reason: 'timeout', source: 'zen-promo', model: 'm' },
+      { ok: false, reason: 'timeout', source: 'gemini', model: 'm' },
       { ok: false, reason: 'unparsable', source: 'openrouter', model: 'm' },
       { ok: false, reason: 'network', message: 'ECONNREFUSED', source: 'vercel', model: 'm' },
     ];

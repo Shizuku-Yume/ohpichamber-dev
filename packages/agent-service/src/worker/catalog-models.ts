@@ -114,6 +114,7 @@ const DESCRIPTOR_LABELS: Readonly<Record<string, string>> = Object.freeze(
 );
 
 const DESCRIPTOR_IDS: ReadonlySet<string> = new Set(PROVIDER_DESCRIPTORS.map(d => d.providerId));
+const RETIRED_PROVIDER_IDS = { 'opencode-zen': true, 'opencode-go': true } as const;
 
 function isBuiltInProvider(providerId: string): boolean {
  return isGeneratedProvider(providerId)
@@ -741,7 +742,7 @@ export class NativeModels {
   // from (`getAvailable()`), so the composer never offers a model the session
   // cannot start with. Image generators are a separate native kind and are asked
   // for by kind instead of being filtered out of that pool by token limits.
-  const chatModels = this.context.modelRegistry.getAvailable();
+  const chatModels = this.context.modelRegistry.getAvailable().filter(model => !Object.hasOwn(RETIRED_PROVIDER_IDS, model.provider));
   const allowedChat = new Set(filterAvailableModelsByEnabledPatterns(chatModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
   const disabledProviders = new Set(cfgDisabledProviders.get(this.context.settings));
   const models = chatModels
@@ -752,7 +753,7 @@ export class NativeModels {
   // Image generators answer a prompt with pictures and publish no token
   // limits, so they travel beside the chat models instead of through
   // `publicModel`: a `contextWindow` there would be invented.
-  const rawImageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image');
+  const rawImageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image' && !Object.hasOwn(RETIRED_PROVIDER_IDS, model.provider));
   const allowedImage = new Set(filterAvailableModelsByEnabledPatterns(rawImageModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
   const imageModels = rawImageModels
    .map(model => {
@@ -808,7 +809,10 @@ export class NativeModels {
    ...this.context.authStorage.credentials.list().map(row => row.provider),
    ...this.context.oauthProviderIds(),
   ]);
-  const catalog = ProviderCatalogSchema.parse({ workspaceId, revision, providers: [...ids].map(id => this.provider(id)) });
+  const catalog = ProviderCatalogSchema.parse({
+   workspaceId, revision,
+   providers: [...ids].filter(id => !Object.hasOwn(RETIRED_PROVIDER_IDS, id)).map(id => this.provider(id)),
+  });
   this.catalogCache.set('providers', { key: cacheKey, catalog });
   return catalog;
  }

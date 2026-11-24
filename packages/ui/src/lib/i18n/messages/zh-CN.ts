@@ -27,7 +27,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -93,9 +92,9 @@ export const dict: Record<I18nKey, string> = {
   "chat.fileAttachment.actions.removeImage": "移除图片",
   "chat.fileAttachment.actions.removeNamed": "移除 {name}",
   "chat.fileAttachment.toast.attachFailed": "无法附加文件。请重试。",
-  'quota.family.zen': 'Zen 模型',
   'quota.value.requests': '请求数：{count}',
   'quota.value.spent': '已花费 {spent}',
+  'quota.value.spentOf': '已用 {spent}，共 {limit}',
   'quota.value.unknown': '未知',
   'quota.window.monthlyTotal': '月度总计',
   'quota.window.monthlyByok': '月度 BYOK',
@@ -225,7 +224,6 @@ export const dict: Record<I18nKey, string> = {
   ...connectionHeartbeatI18n['zh-CN'],
   ...compactionSettingsI18n['zh-CN'],
   ...heapSnapshotI18n['zh-CN'],
-  ...consoleBudgetsI18n['zh-CN'],
   ...imageToolI18n['zh-CN'],
   ...sharePagesI18n['zh-CN'],
   ...receivedPagesI18n['zh-CN'],
@@ -4015,13 +4013,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.themeImport.error.conflict": "此导入的主题已在服务器上被编辑，未覆盖原文件。",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "始终显示滚动条",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "即使指针位于可滚动区域之外，也保持滚动条可见。仅在此设备上生效。",
-  "settings.providers.page.openCodeGo.workspaceId": "工作区 ID",
-  "settings.providers.page.openCodeGo.apiKey": "API 密钥",
-  "settings.providers.page.openCodeGo.help": "从控制面板网址复制工作区 ID，并从浏览器开发者工具复制 auth Cookie。OhPiChamber 绝不会扫描浏览器 Cookie 存储。",
-  "settings.providers.page.openCodeGo.save": "保存并验证",
-  "settings.providers.page.openCodeGo.replace": "替换",
-  "settings.providers.page.openCodeGo.validate": "验证",
-  "settings.providers.page.openCodeGo.delete": "删除",
   "settings.providers.page.quotaCredentials.saved": "已保存 {provider} 凭据。",
   "settings.providers.page.quotaCredentials.accessToken": "访问令牌",
   "settings.providers.page.quotaCredentials.usageToken": "用量 API 令牌",
@@ -5544,7 +5535,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.providers.connect.recommended": "推荐",
   "settings.providers.connect.customHint": "任何兼容 OpenAI 或 Anthropic 的端点",
   "settings.providers.connect.note.openai": "GPT 模型，使用 ChatGPT 登录",
-  "settings.providers.connect.note.opencodeGo": "低价订阅",
   "settings.providers.connect.note.openrouter": "一个密钥使用所有模型",
   "settings.providers.connect.note.anthropic": "使用 API 密钥访问 Claude 模型",
   "settings.providers.connect.note.githubCopilot": "使用你的 Copilot 套餐中的模型",
@@ -6607,7 +6597,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.extensions.add.placeholder": "/path/to/panel 或 https://github.com/org/panel.git",
   "settings.extensions.add.action": "添加",
   "settings.extensions.add.aria": "从文件夹、ZIP 或 URL 添加扩展",
-  "settings.extensions.browse.label": "浏览扩展",
   "settings.extensions.add.browseFolder": "浏览文件夹",
   "settings.extensions.add.browseFolder.aria": "浏览文件夹",
   "settings.extensions.add.browseZip": "浏览 ZIP 压缩包",
@@ -7105,12 +7094,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.classification.status.fallback": "你的选择目前不可用，因此 Jev 通过 {provider} 运行。",
   "settings.classification.source.off.name": "关闭",
   "settings.classification.source.off.description": "不会向任何地方发送内容。风险拦截和 Auto 会隐藏，会话只有在你手动移入时才会进入进行中。",
-  "settings.classification.source.zenPromo.name": "OpenCode Zen 促销",
-  "settings.classification.source.zenPromo.description": "限时免费，无需密钥。促销结束后请改用密钥。",
-  "settings.classification.source.zenPromo.ended": "促销已结束。",
-  "settings.classification.source.zenKey.name": "OpenCode Zen 密钥",
-  "settings.classification.source.zenKey.description": "使用为 OpenCode Zen 配置的 API 密钥。从你的 Zen 余额扣费。",
-  "settings.classification.source.zenKey.missing": "没有可用于 OpenCode Zen 的 API 密钥。使用 OpenCode 账号登录不算；请在 设置 → 提供商 中添加 API 密钥。",
   "settings.classification.source.openrouter.name": "OpenRouter 密钥",
   "settings.classification.source.openrouter.description": "使用在提供商中配置的 OpenRouter API 密钥。从你的 OpenRouter 账户扣费。",
   "settings.classification.source.openrouter.missing": "没有可用的 OpenRouter API 密钥。请在 设置 → 提供商 中添加一个。",
@@ -7153,7 +7136,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.sessions.permissions.explain.safetyVia": "常规操作会自动运行；任何有风险或难以撤销的操作都会等你决定。由 Jev 通过 {provider} 判断。",
   "settings.sessions.permissions.explain.auto": "每个批准请求都会直接接受，不再询问。",
   "settings.sessions.permissions.agentPermissionsLink": "智能体权限",
-  "settings.sessions.permissions.explain.safetyUnavailable": "需要 Jev，而 Jev 需要一个分类提供方：免费的 OpenCode Zen 促销、设置 → 提供方中的 Zen API 密钥，或 TypeSafe 密钥。",
+  "settings.sessions.permissions.explain.safetyUnavailable": "需要 Jev，而 Jev 需要一个分类提供方：OpenRouter、Vercel、Gemini 或 TypeSafe 密钥，或自定义端点。",
   "chat.workStatus.sections.extensionBadge": "扩展",
   "chat.chatInput.toast.guestHasNoPanel": "此扩展无需面板即可运行。",
   "header.mainSurface.backToChat": "返回聊天",

@@ -201,21 +201,25 @@ const safeDecode = (value) => {
   }
 };
 
-// A percent-escape in the header: the SDK sends the directory URI-encoded on every request,
-// with no marker, and OpenCode decodes it on its side, so the guards must read what OpenCode
-// will. The marker still says so for the values the UI encodes because they are not Latin-1.
+// A percent-escape in the header: the client or legacy callers may send the directory URI-encoded
+// with or without the encoding marker, so the guard reads the decoded path either way.
 const PERCENT_ESCAPE = /%[0-9a-fA-F]{2}/;
 
-/** Every directory a request names in its query or its directory header, as OpenCode reads them. */
+/** Every directory a request names in its query or its directory headers. */
 export function requestedDirectories(req, url) {
   const directories = [];
   for (const key of ['directory', 'location[directory]']) {
     for (const value of url.searchParams.getAll(key)) directories.push(value);
   }
-  const header = req.headers['x-opencode-directory'];
-  if (header !== undefined && header.length > 0) {
-    const encoded = req.headers['x-opencode-directory-encoding'] === 'uri' || PERCENT_ESCAPE.test(header);
-    directories.push(encoded ? safeDecode(header) : header);
+  for (const [headerKey, encodingKey] of [
+    ['x-openchamber-directory', 'x-openchamber-directory-encoding'],
+    ['x-opencode-directory', 'x-opencode-directory-encoding'],
+  ]) {
+    const header = req.headers[headerKey];
+    if (header !== undefined && header.length > 0) {
+      const encoded = req.headers[encodingKey] === 'uri' || PERCENT_ESCAPE.test(header);
+      directories.push(encoded ? safeDecode(header) : header);
+    }
   }
   return directories;
 }
@@ -551,7 +555,7 @@ export function createSpaceDispatcher({ transport, now = Date.now, logger = cons
         finish('done');
         return;
       }
-      pipeline(upstream, res, () => {});
+      pipeline(upstream, res, () => { });
       finish('done');
     });
     upstreamRequest.on('error', (error) => {

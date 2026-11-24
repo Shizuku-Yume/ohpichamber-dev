@@ -71,9 +71,11 @@ describe('openchamber events', () => {
     });
     try {
       const source = MockEventSource.instances.at(-1)!;
-      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({
-        type: 'openchamber:permission-auto-accept.updated', properties,
-      }) });
+      const send = (properties: unknown) => source.onmessage?.({
+        data: JSON.stringify({
+          type: 'openchamber:permission-auto-accept.updated', properties,
+        })
+      });
       send({ sessions: {}, modes: {}, revision: 4 });
       expect(policies).toEqual([{
         type: 'openchamber:permission-auto-accept.updated',
@@ -96,9 +98,11 @@ describe('openchamber events', () => {
     });
     try {
       const source = MockEventSource.instances.at(-1)!;
-      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({
-        type: 'openchamber:notification', properties,
-      }) });
+      const send = (properties: unknown) => source.onmessage?.({
+        data: JSON.stringify({
+          type: 'openchamber:notification', properties,
+        })
+      });
       send({});
       send({ title: 'Done', desktopNotificationDelivered: true, desktopStdoutActive: false });
       expect(notifications).toEqual([{}, { title: 'Done', desktopNotificationDelivered: true, desktopStdoutActive: false }]);
@@ -161,7 +165,7 @@ describe('openchamber events', () => {
       'data: {"type":"openchamber:event-stream-ready"}\n\n',
       { headers: { 'content-type': 'text/event-stream' } },
     ));
-    let unsubscribe = () => {};
+    let unsubscribe = () => { };
     try {
       const ready = new Promise<void>((resolve) => {
         unsubscribe = subscribeOpenchamberEvents((event) => {
@@ -417,15 +421,19 @@ describe('openchamber events', () => {
       await hydrated.promise;
       expect(useExtensionWaitsStore.getState().bySession.get(sessionID)).toEqual([waiting]);
       const source = MockEventSource.instances.at(-1);
-      source?.onmessage?.({ data: JSON.stringify({
-        type: 'openchamber:extension-waits.updated',
-        properties: { revision: 2, sessionID, waits: [{ ...waiting, status: 'waking' }] },
-      }) });
+      source?.onmessage?.({
+        data: JSON.stringify({
+          type: 'openchamber:extension-waits.updated',
+          properties: { revision: 2, sessionID, waits: [{ ...waiting, status: 'waking' }] },
+        })
+      });
       expect(useExtensionWaitsStore.getState().bySession.get(sessionID)).toEqual([{ ...waiting, status: 'waking' }]);
-      source?.onmessage?.({ data: JSON.stringify({
-        type: 'openchamber:extension-waits.updated',
-        properties: { revision: 3, sessionID, waits: [] },
-      }) });
+      source?.onmessage?.({
+        data: JSON.stringify({
+          type: 'openchamber:extension-waits.updated',
+          properties: { revision: 3, sessionID, waits: [] },
+        })
+      });
       expect(useExtensionWaitsStore.getState().bySession.has(sessionID)).toBe(false);
     } finally {
       unsubscribeStore();
@@ -534,7 +542,7 @@ describe('openchamber events', () => {
     globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
       if (url.pathname !== '/api/permission-auto-accept') return new Response(null, { status: 404 });
-      const directory = new Headers(input instanceof Request ? input.headers : init?.headers).get('x-opencode-directory');
+      const directory = new Headers(input instanceof Request ? input.headers : init?.headers).get('x-openchamber-directory');
       if (directory) {
         spaceReads.push(decodeURIComponent(directory));
         return Response.json({ sessions: {}, modes: {}, revision: 1 });

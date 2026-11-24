@@ -11,7 +11,7 @@
  */
 import { z } from 'zod';
 import { ApprovalRequestSchema, EntityIdSchema, ModelCatalogSchema, ProviderCatalogSchema, modelRefKey } from '@openchamber/agent-contract';
-import { BUILTIN_CATEGORIES, ZEN_JEV_PROMOTION_ACTIVE } from './defaults.js';
+import { BUILTIN_CATEGORIES } from './defaults.js';
 import { createRoutingStore, parseEffectiveConfig } from './store.js';
 import { buildPermissionRequest, buildProbeRequest, buildRoutingRequest, createJevClient, decidePermission, decideRouting, isProbeAnswer } from './jev.js';
 import {
@@ -94,7 +94,6 @@ export function createRoutingRuntime({
   store = createRoutingStore({ dataDir }),
   jev = createJevClient({ fetchImpl }),
   resolveCredential,
-  zenPromotionActive = ZEN_JEV_PROMOTION_ACTIVE,
   enterpriseMode = isEnterpriseMode,
   readPinnedEndpoint = readPinnedCustomEndpoint,
   listCatalogModels = null,
@@ -124,7 +123,6 @@ export function createRoutingRuntime({
     return scope;
   };
   const nativeSources = {
-    'zen-key': { providerId: 'opencode-zen', keyField: 'zenKey' },
     openrouter: { providerId: 'openrouter', keyField: 'openrouterKey' },
     vercel: { providerId: 'vercel-ai-gateway', keyField: 'vercelKey' },
   };
@@ -146,12 +144,14 @@ export function createRoutingRuntime({
       for (const [source, { providerId, keyField }] of Object.entries(nativeSources)) {
         const provider = catalog.providers.find((entry) => entry.providerId === providerId);
         if (provider?.auth.status !== 'configured' || provider.auth.method !== 'api-key') continue;
-        selections[source] = { workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId,
-          providerId, credentialRef: provider.auth.credentialRef, purpose: 'routing' };
+        selections[source] = {
+          workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId,
+          providerId, credentialRef: provider.auth.credentialRef, purpose: 'routing'
+        };
         keys[keyField] = true;
       }
     }
-    const classifier = resolveClassifier({ selected, ...keys, zenPromotionActive });
+    const classifier = resolveClassifier({ selected, ...keys });
     let endpoint = null;
     if (useCredential && classifier.effective) {
       const native = nativeSources[classifier.effective];
@@ -395,7 +395,7 @@ export function createRoutingRuntime({
     const [config, presence] = await Promise.all([store.readConfig(), resolveAccess(workspaceScope)]);
     if (!presence.classifier.effective) return { action: 'hold', unavailable: true };
     const identity = JSON.stringify([approval.sessionId, approval.epoch, approval.workerGeneration, approval.version,
-      presence.classifier.effective, config.safetyNet.threshold]);
+    presence.classifier.effective, config.safetyNet.threshold]);
     const cached = permissionDecisions.get(approval.approvalId);
     if (cached?.identity === identity && now() - cached.at < PERMISSION_DECISION_TTL_MS) return cached.result;
     const access = await resolveAccess(workspaceScope, true);

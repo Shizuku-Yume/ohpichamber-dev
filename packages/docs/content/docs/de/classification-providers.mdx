@@ -22,22 +22,7 @@ Ohne Anbieter sind das Sicherheitsnetz und Auto ausgeblendet, und Sitzungen in A
 
 ## Einrichtung
 
-Jev ist aus, bis du es einschaltest: Aus deinen Unterhaltungen geht nichts an einen Klassifizierungsanbieter, solange du keinen auswählst. Öffne **Einstellungen → Anbieter → Klassifizierungsanbieter** und wähle, wohin Anfragen an Jev gehen. Neben **Aus** gibt es sieben Möglichkeiten.
-
-### OMP-Zen-Aktion
-
-Für begrenzte Zeit kostenlos, kein Schlüssel nötig. Solange die Aktion läuft, lässt OpenCode Zen OhPiChamber Jev kostenlos nutzen.
-
-Wenn die Aktion endet, verschwindet die Option, und OhPiChamber wechselt zu einem der Schlüssel unten, falls du einen hast.
-
-### OMP-Zen-Schlüssel
-
-Nutzt den für OpenCode Zen konfigurierten gespeicherten API-Schlüssel und rechnet über dein Zen-Guthaben ab. Die Jev-Klassifizierung erfordert gespeicherte Zugangsdaten im Provider-Speicher anstelle einer Umgebungsvariable.
-
-1. Öffne **Einstellungen → Anbieter** und füge dem Anbieter **OpenCode Zen** einen API-Schlüssel hinzu (siehe [Anbieter, Modelle und Agenten](/de/providers/)).
-2. Geh zurück zu **Klassifizierungsanbieter** und wähle **OMP-Zen-Schlüssel**.
-
-Für Jev akzeptiert Zen nur einen API-Schlüssel.
+Jev ist aus, bis du es einschaltest: Aus deinen Unterhaltungen geht nichts an einen Klassifizierungsanbieter, solange du keinen auswählst. Öffne **Einstellungen → Anbieter → Klassifizierungsanbieter** und wähle, wohin Anfragen an Jev gehen. Neben **Aus** gibt es fünf Möglichkeiten.
 
 ### OpenRouter-Schlüssel
 
@@ -101,7 +86,7 @@ Sobald ein Anbieter funktioniert, zeigt die Karte unter **Einstellungen → Anbi
 
 ## Wenn deine Wahl nicht mehr funktioniert
 
-Lässt sich der gewählte Anbieter nicht nutzen (die Aktion ist vorbei, ein Schlüssel wurde entfernt), weicht OhPiChamber auf den ersten deiner eigenen Schlüssel aus, der funktioniert: TypeSafe-Schlüssel, dann dein eigener Endpunkt, dann OpenRouter, dann Vercel AI Gateway, dann Zen-Schlüssel. Auf die Aktion oder auf Google Gemini weicht es nie aus, und **Aus** bleibt aus. Die Seite zeigt, welcher gerade benutzt wird.
+Lässt sich der gewählte Anbieter nicht nutzen (etwa weil ein Schlüssel entfernt wurde), weicht OhPiChamber auf den ersten deiner eigenen Schlüssel aus, der funktioniert: TypeSafe-Schlüssel, dann dein eigener Endpunkt, dann OpenRouter, dann Vercel AI Gateway. Auf Google Gemini weicht es nie aus, und **Aus** bleibt aus. Die Seite zeigt, welcher gerade benutzt wird.
 
 Ist Jev bei einer einzelnen Anfrage langsam oder schlägt fehl, geht nichts kaputt. Jede Funktion hat für diesen Fall eine sichere Antwort:
 
@@ -114,7 +99,7 @@ Ist Jev bei einer einzelnen Anfrage langsam oder schlägt fehl, geht nichts kapu
 
 Jev bekommt deine letzte Nachricht und als Kontext Auszüge aus der jüngsten Unterhaltung: bis zu drei vorherige Züge, jeweils auf ein paar hundert Zeichen gekürzt, und am Ende eines Zuges die Antwort des Agenten, gekürzt auf Anfang und Ende. Für das Sicherheitsnetz bekommt es außerdem die Aktion, für die der Agent um Erlaubnis fragt, so wie OMP sie beschreibt: den Befehl, den der Agent ausführen will, oder die Datei und die Änderung bei einer Bearbeitung. Legt der Agent eine Datei an, ist diese Änderung die ganze Datei, auch ein als Text geschriebenes Bild wie SVG. Prüft Jev ein Ziel, bekommt es das Ziel und die letzte Antwort des Agenten, davon bis zu 10.000 Zeichen.
 
-Anfragen gehen vom OhPiChamber-Server direkt an OpenCode Zen, OpenRouter, Vercel AI Gateway, Google, TypeSafe oder deinen eigenen Endpunkt, je nach deiner Wahl.
+Anfragen gehen vom OhPiChamber-Server direkt an OpenRouter, Vercel AI Gateway, Google, TypeSafe oder deinen eigenen Endpunkt, je nach deiner Wahl.
 
 ## Wo es funktioniert
 
@@ -122,5 +107,5 @@ Jev läuft im OhPiChamber-Server, also in der Desktop-App, in der Web-App und au
 
 ## Verwandt
 
-- [Anbieter, Modelle und Agenten](/de/providers/): wo die Schlüssel für OpenCode Zen, OpenRouter und Vercel AI Gateway liegen
+- [Anbieter, Modelle und Agenten](/de/providers/): wo die Schlüssel für OpenRouter und Vercel AI Gateway liegen
 - [Sicherheit](/de/security/): wie OhPiChamber mit Schlüsseln und Zugriff umgeht

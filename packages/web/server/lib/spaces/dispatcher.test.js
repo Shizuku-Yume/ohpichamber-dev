@@ -339,19 +339,21 @@ describe('space dispatcher', () => {
       expect(response.status, suffix).toBe(400);
       expect(await response.json()).toMatchObject({ code: 'directory_outside_space' });
     }
-    const byHeader = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-opencode-directory': '/home/me' } });
+    const byHeader = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-openchamber-directory': '/home/me' } });
     expect(byHeader.status).toBe(400);
-    const encoded = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-opencode-directory': encodeURIComponent('/home/me'), 'x-opencode-directory-encoding': 'uri' } });
+    const encoded = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-openchamber-directory': encodeURIComponent('/home/me'), 'x-openchamber-directory-encoding': 'uri' } });
     expect(encoded.status).toBe(400);
-    const sdkStyleOutside = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-opencode-directory': encodeURIComponent('/home/me') } });
+    const legacyOutside = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-opencode-directory': '/home/me' } });
+    expect(legacyOutside.status).toBe(400);
+    const sdkStyleOutside = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-openchamber-directory': encodeURIComponent('/home/me') } });
     expect(sdkStyleOutside.status).toBe(400);
     expect(inside.seen).toHaveLength(0);
-    // The SDK encodes the header on every request and sends no marker; OpenCode decodes it, so the guard reads it decoded too.
-    const sdkStyle = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-opencode-directory': encodeURIComponent(`/spaces/${ID}/repo`) } });
+    // Encoded headers without a marker are decoded too, so the guard reads them decoded.
+    const sdkStyle = await fetch(host.url(`/api/spaces/${ID}/echo`), { headers: { 'x-openchamber-directory': encodeURIComponent(`/spaces/${ID}/repo`) } });
     expect(sdkStyle.status).toBe(200);
     expect(inside.seen).toHaveLength(1);
 
-    const inside_ok = await fetch(host.url(`/api/spaces/${ID}/echo?directory=${encodeURIComponent(`/spaces/${ID}/repo`)}`), { headers: { 'x-opencode-directory': `/spaces/${ID}/repo/src` } });
+    const inside_ok = await fetch(host.url(`/api/spaces/${ID}/echo?directory=${encodeURIComponent(`/spaces/${ID}/repo`)}`), { headers: { 'x-openchamber-directory': `/spaces/${ID}/repo/src` } });
     expect(inside_ok.status).toBe(200);
     expect(inside.seen).toHaveLength(2);
   });
@@ -364,10 +366,12 @@ describe('space dispatcher', () => {
       expect(response.status, suffix).toBe(400);
       expect(await response.json()).toMatchObject({ code: 'space_directory_needs_prefix' });
     }
-    const byHeader = await fetch(host.url('/api/host'), { headers: { 'x-opencode-directory': `/spaces/${ID}/repo` } });
+    const byHeader = await fetch(host.url('/api/host'), { headers: { 'x-openchamber-directory': `/spaces/${ID}/repo` } });
     expect(byHeader.status).toBe(400);
-    // An SDK-style header, URI-encoded with no marker, names the same directory to OpenCode.
-    const byEncodedHeader = await fetch(host.url('/api/host'), { headers: { 'x-opencode-directory': encodeURIComponent(`/spaces/${ID}/repo`) } });
+    const byLegacyHeader = await fetch(host.url('/api/host'), { headers: { 'x-opencode-directory': `/spaces/${ID}/repo` } });
+    expect(byLegacyHeader.status).toBe(400);
+    // URI-encoded header without a marker names the same directory.
+    const byEncodedHeader = await fetch(host.url('/api/host'), { headers: { 'x-openchamber-directory': encodeURIComponent(`/spaces/${ID}/repo`) } });
     expect(byEncodedHeader.status).toBe(400);
 
     const ordinary = await fetch(host.url('/api/host?directory=/home/me/spaces/project'));

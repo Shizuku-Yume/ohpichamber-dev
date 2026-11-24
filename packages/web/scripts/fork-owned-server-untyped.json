@@ -492,18 +492,6 @@
       "forkPath": "server/lib/quota/providers/openai.js"
     },
     {
-      "path": "server/lib/quota/providers/opencode-go.ts",
-      "forkPath": "server/lib/quota/providers/opencode-go.js"
-    },
-    {
-      "path": "server/lib/quota/providers/opencode-zen.ts",
-      "forkPath": "server/lib/quota/providers/opencode-zen.js"
-    },
-    {
-      "path": "server/lib/quota/providers/opencode.ts",
-      "forkPath": "server/lib/quota/providers/opencode.js"
-    },
-    {
       "path": "server/lib/quota/providers/openrouter.ts",
       "forkPath": "server/lib/quota/providers/openrouter.js"
     },

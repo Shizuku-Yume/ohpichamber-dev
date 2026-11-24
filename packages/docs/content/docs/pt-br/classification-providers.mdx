@@ -22,22 +22,7 @@ Sem provedor, a rede de segurança e o Auto ficam ocultos, e as sessões em anda
 
 ## Configuração
 
-O Jev fica desativado até você ativá-lo: nada das suas conversas vai para um provedor de classificação a menos que você escolha um. Abra **Configurações → Provedores → Provedores de classificação** e escolha para onde vão as solicitações ao Jev. Além de **Desativado**, há sete opções.
-
-### Promoção do OpenCode Zen
-
-Grátis por tempo limitado, sem chave. Enquanto a promoção durar, o OpenCode Zen deixa o OhPiChamber usar o Jev sem custo.
-
-Quando a promoção acabar, a opção some e o OhPiChamber passa para uma das chaves abaixo, se você tiver alguma.
-
-### Chave do OpenCode Zen
-
-Usa a chave de API salva e configurada para o OpenCode Zen, paga com o seu saldo do Zen. A classificação do Jev requer uma credencial de provedor salva em vez de uma variável de ambiente.
-
-1. Abra **Configurações → Provedores** e adicione uma chave de API ao provedor **OpenCode Zen** (veja [Provedores, modelos e agentes](/pt-br/providers/)).
-2. Volte a **Provedores de classificação** e escolha **Chave do OpenCode Zen**.
-
-Para o Jev, o Zen só aceita uma chave de API.
+O Jev fica desativado até você ativá-lo: nada das suas conversas vai para um provedor de classificação a menos que você escolha um. Abra **Configurações → Provedores → Provedores de classificação** e escolha para onde vão as solicitações ao Jev. Além de **Desativado**, há cinco opções.
 
 ### Chave do OpenRouter
 
@@ -101,7 +86,7 @@ Assim que um provedor funciona, o cartão em **Configurações → Provedores** 
 
 ## Quando a sua escolha para de funcionar
 
-Se o provedor escolhido não puder ser usado (a promoção acabou, uma chave foi removida), o OhPiChamber recorre à primeira das suas próprias chaves que funcionar: chave da TypeSafe, depois seu endpoint personalizado, depois OpenRouter, depois Vercel AI Gateway, depois chave do Zen. Ele nunca recorre à promoção nem ao Google Gemini, e **Desativado** continua desativado. A página mostra qual está em uso agora.
+Se o provedor escolhido não puder ser usado (por exemplo, se uma chave foi removida), o OhPiChamber recorre à primeira das suas próprias chaves que funcionar: chave da TypeSafe, depois seu endpoint personalizado, depois OpenRouter e depois Vercel AI Gateway. Ele nunca recorre ao Google Gemini, e **Desativado** continua desativado. A página mostra qual está em uso agora.
 
 Se o Jev estiver lento ou falhar em uma solicitação, nada quebra. Cada função tem uma resposta segura para esse caso:
 
@@ -114,7 +99,7 @@ Se o Jev estiver lento ou falhar em uma solicitação, nada quebra. Cada funçã
 
 O Jev recebe sua última mensagem e, como contexto, trechos da conversa recente: até três turnos anteriores, cortados em algumas centenas de caracteres cada, e ao fim de um turno, o começo e o fim da resposta do agente. Para a rede de segurança, ele também recebe a ação para a qual o agente pede permissão, do jeito que o OMP a descreve: o comando que o agente quer executar, ou o arquivo e a mudança em uma edição. Quando o agente cria um arquivo, essa mudança é o arquivo inteiro, incluindo imagens escritas como texto, como SVG. Quando o Jev verifica um objetivo, ele recebe o objetivo e a última resposta do agente, até 10.000 caracteres dela.
 
-As solicitações vão do servidor do OhPiChamber direto para o OpenCode Zen, o OpenRouter, o Vercel AI Gateway, o Google, a TypeSafe ou o seu endpoint personalizado, conforme a sua escolha.
+As solicitações vão do servidor do OhPiChamber direto para o OpenRouter, o Vercel AI Gateway, o Google, a TypeSafe ou o seu endpoint personalizado, conforme a sua escolha.
 
 ## Onde funciona
 
@@ -122,5 +107,5 @@ O Jev roda no servidor do OhPiChamber, então funciona no app desktop, no app we
 
 ## Relacionado
 
-- [Provedores, modelos e agentes](/pt-br/providers/): onde ficam as chaves do OpenCode Zen, do OpenRouter e do Vercel AI Gateway
+- [Provedores, modelos e agentes](/pt-br/providers/): onde ficam as chaves do OpenRouter e do Vercel AI Gateway
 - [Segurança](/pt-br/security/): como o OhPiChamber lida com chaves e acesso

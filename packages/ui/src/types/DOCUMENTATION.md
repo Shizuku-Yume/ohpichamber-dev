@@ -38,10 +38,6 @@ serve arrives as an extension id. Permission types are owned by
 - `UsageWindowGiftReset.grantType` is the z.ai grant kind delivered per record
   by the list API. It is sent back unchanged on activation, and an absent value
   makes the runtimes fall back to `GLOBAL`.
-- `inputPriceAtLeast` is a USD price per 1M input tokens; the budget counts a
-  model once its input price reaches it.
-- `consoleBudgets` is OpenCode Go only: the budgets of the same sign-in, shown
-  on its usage page.
 - `accountLabel` names the sign-in the numbers came from when that is not the
   sign-in OpenChamber chats as.
 

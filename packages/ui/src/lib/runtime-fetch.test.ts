@@ -301,15 +301,15 @@ describe('runtimeFetch read coalescing', () => {
     try {
       configureRuntimeUrlResolver({ apiBaseUrl: 'https://api.example' });
       globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
-        const directory = new Headers(init?.headers).get('x-opencode-directory') ?? '';
+        const directory = new Headers(init?.headers).get('x-openchamber-directory') ?? '';
         seen.push(directory);
         await new Promise((r) => setTimeout(r, 20));
         return new Response(JSON.stringify({ directory }), { status: 200, headers: { 'content-type': 'application/json' } });
       }) as typeof fetch;
 
       const [a, b] = await Promise.all([
-        runtimeFetch('/api/config', { headers: { 'x-opencode-directory': encodeURIComponent('/repo/a') } }),
-        runtimeFetch('/api/config', { headers: { 'x-opencode-directory': encodeURIComponent('/repo/b') } }),
+        runtimeFetch('/api/config', { headers: { 'x-openchamber-directory': encodeURIComponent('/repo/a') } }),
+        runtimeFetch('/api/config', { headers: { 'x-openchamber-directory': encodeURIComponent('/repo/b') } }),
       ]);
 
       expect(seen).toHaveLength(2);
@@ -398,17 +398,17 @@ describe('runtimeFetch header sanitization', () => {
 
   test('sanitizeHeadersForBrowser leaves Latin-1 directory hints unchanged', () => {
     const path = 'C:\\work\\foo%20bar';
-    const result = sanitizeHeadersForBrowser({ 'x-opencode-directory': path });
+    const result = sanitizeHeadersForBrowser({ 'x-openchamber-directory': path });
     expect(result).toBeFalsy();
   });
 
   test('sanitizeHeadersForBrowser encodes non-Latin-1 directory hints with marker', () => {
     const path = 'D:\\文件夹';
-    const result = sanitizeHeadersForBrowser({ 'x-opencode-directory': path });
+    const result = sanitizeHeadersForBrowser({ 'x-openchamber-directory': path });
     expect(result).toBeTruthy();
     const encoded = Object.fromEntries(result!);
-    expect(encoded['x-opencode-directory']).toBe(encodeURIComponent(path));
-    expect(encoded['x-opencode-directory-encoding']).toBe('uri');
+    expect(encoded['x-openchamber-directory']).toBe(encodeURIComponent(path));
+    expect(encoded['x-openchamber-directory-encoding']).toBe('uri');
   });
 
   test('sanitizeHeadersForBrowser returns undefined for empty/undefined input', () => {
@@ -447,15 +447,15 @@ describe('runtimeFetch header sanitization', () => {
       }) as typeof fetch;
 
       await runtimeFetch('/api/config/providers', {
-        headers: { 'x-opencode-directory': 'D:\\文件夹' },
+        headers: { 'x-openchamber-directory': 'D:\\文件夹' },
       });
 
       expect(calls).toHaveLength(1);
-      const encoded = calls[0].headers.get('x-opencode-directory');
+      const encoded = calls[0].headers.get('x-openchamber-directory');
       expect(encoded).not.toBe('D:\\文件夹');
       // decodeURIComponent round-trips back to original
       expect(decodeURIComponent(encoded!)).toBe('D:\\文件夹');
-      expect(calls[0].headers.get('x-opencode-directory-encoding')).toBe('uri');
+      expect(calls[0].headers.get('x-openchamber-directory-encoding')).toBe('uri');
     } finally {
       setRuntimeUrlResolver(previous);
       Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
@@ -477,8 +477,8 @@ describe('runtimeFetch addresses isolated spaces', () => {
       lastHeaders = request.headers;
       seen = {
         url: target instanceof Request ? target.url : target.toString(),
-        directory: request.headers.get('x-opencode-directory'),
-        encoding: request.headers.get('x-opencode-directory-encoding'),
+        directory: request.headers.get('x-openchamber-directory'),
+        encoding: request.headers.get('x-openchamber-directory-encoding'),
       };
       return new Response('{}', { status: 200 });
     }) as typeof fetch;
@@ -493,7 +493,7 @@ describe('runtimeFetch addresses isolated spaces', () => {
   test('leaves the path of a request that names a space directory as it is: the server reads the directory', async () => {
     const query = `/api/git/status?directory=${encodeURIComponent(REPO)}`;
     expect(await capture(query)).toEqual({ url: query, directory: null, encoding: null });
-    expect((await capture('/api/fs/list', { headers: { 'x-opencode-directory': REPO } })).url).toBe('/api/fs/list');
+    expect((await capture('/api/fs/list', { headers: { 'x-openchamber-directory': REPO } })).url).toBe('/api/fs/list');
     expect((await capture('/api/fs/raw', { query: { path: '/x', directory: REPO } })).url)
       .toBe(`/api/fs/raw?path=%2Fx&directory=${encodeURIComponent(REPO)}`);
   });
@@ -506,11 +506,11 @@ describe('runtimeFetch addresses isolated spaces', () => {
     // A caller's own headers stay beside it, in any shape.
     await capture('/api/terminal/create', { method: 'POST', headers: [['Content-Type', 'application/json']], body: '{}', directory: REPO });
     expect(lastHeaders.get('content-type')).toBe('application/json');
-    expect(lastHeaders.get('x-opencode-directory')).toBe(encodeURIComponent(REPO));
+    expect(lastHeaders.get('x-openchamber-directory')).toBe(encodeURIComponent(REPO));
   });
 
   test('leaves a directory header the caller set itself, so a request naming two directories reaches the server as it is', async () => {
-    expect(await capture('/api/fs/list', { headers: { 'x-opencode-directory': '/home/me/repo' }, directory: REPO }))
+    expect(await capture('/api/fs/list', { headers: { 'x-openchamber-directory': '/home/me/repo' }, directory: REPO }))
       .toEqual({ url: '/api/fs/list', directory: '/home/me/repo', encoding: null });
     const originalWindow = globalThis.window;
     Object.defineProperty(globalThis, 'window', {
@@ -518,8 +518,8 @@ describe('runtimeFetch addresses isolated spaces', () => {
       value: { location: { origin: 'http://localhost:3000', href: 'http://localhost:3000/index.html' } },
     });
     try {
-      // The SDK builds a Request on the page's own origin, with its header URI-encoded.
-      const sdk = new Request('http://localhost:3000/api/session', { headers: { 'x-opencode-directory': encodeURIComponent(REPO) } });
+      // Caller builds a Request on the page's own origin, with its header URI-encoded.
+      const sdk = new Request('http://localhost:3000/api/session', { headers: { 'x-openchamber-directory': encodeURIComponent(REPO) } });
       expect(await capture(sdk, { directory: `/spaces/${SPACE}/other` }))
         .toEqual({ url: 'http://localhost:3000/api/session', directory: encodeURIComponent(REPO), encoding: null });
     } finally {
