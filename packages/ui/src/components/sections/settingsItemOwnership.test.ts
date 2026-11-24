@@ -28,7 +28,6 @@ const SAME_PAGE_CLAIMS: Readonly<Record<string, string>> = {
   'providers.connect': 'ProviderConnectPicker opens the form ProviderGrid resells',
   'providers.custom': 'ProviderConnectPicker offers custom setup; CustomProviderForm is it',
   'providers.logo': 'ProvidersPage lists custom provider logos; CustomProviderForm edits them',
-  'sessions.small-model': 'The opt-out toggle and the model picker are one setting, disabled together',
 };
 
 interface Claim {
@@ -63,7 +62,7 @@ function collectClaims(): Claim[] {
     const source = readFileSync(fullPath, 'utf8');
     const file = relative(SECTIONS_ROOT, fullPath).split(sep).join('/');
     const page = file.split('/')[0];
-    for (const match of source.matchAll(/settingsItem=(?:"([^"]*)"|`([^`]*)`)/g)) {
+    for (const match of source.matchAll(/settingsItem=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
       const literal = match[1];
       const template = match[2];
       if (literal !== undefined) {
@@ -145,5 +144,14 @@ describe('settings item ownership', () => {
         `File ${claim!.file} claiming "${owner}" must write OMP setting "${id}" via updateOmpSettings`,
       ).toBe(true);
     }
+  });
+
+  test('ModelRolesPage is the sole owner of omp.modelRoles and DefaultsSettings does not claim it', () => {
+    const claims = collectClaims();
+    const modelRolesFiles = new Set(claims
+      .filter((claim) => claim.id === 'omp.modelRoles.' || claim.id === 'omp.modelRoles' || claim.id.startsWith('omp.modelRoles.'))
+      .map((claim) => claim.file));
+    expect([...modelRolesFiles]).toEqual(['sections/model-roles/ModelRolesPage.tsx']);
+    expect(claims.some((claim) => claim.file === 'sections/openchamber/DefaultsSettings.tsx' && claim.id.startsWith('omp.modelRoles'))).toBe(false);
   });
 });

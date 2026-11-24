@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { OmpSettingsState } from '@openchamber/agent-contract';
+import type { ModelCatalog, OmpSettingsState } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -22,6 +22,7 @@ Object.assign(globalThis, {
   PointerEvent: browser.PointerEvent,
   MutationObserver: browser.MutationObserver,
   ResizeObserver: browser.ResizeObserver,
+  IntersectionObserver: class { observe() { } unobserve() { } disconnect() { } },
   getComputedStyle: browser.getComputedStyle.bind(browser),
   requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
   cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
@@ -29,13 +30,14 @@ Object.assign(globalThis, {
 });
 
 let settingsDirectory = '/repo';
-mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => settingsDirectory }));
+const directoryModule = await import('@/hooks/useSettingsDirectory');
+spyOn(directoryModule, 'useSettingsDirectory').mockImplementation(() => settingsDirectory);
 
 let updatedDesktopSettingsPayload: Record<string, unknown> | null = null;
 let updateSpy: ReturnType<typeof spyOn>;
 
 
-const mockModelCatalog = {
+const mockModelCatalog: ModelCatalog = {
   workspaceId: 'workspace_1',
   revision: '1',
   imageModels: [], planRoleAvailable: true,
@@ -45,7 +47,7 @@ const mockModelCatalog = {
       modelId: 'o3-mini',
       provider: 'openai',
       name: 'o3-mini',
-      modalities: ['text', 'image'] as const,
+      modalities: ['text', 'image'],
       contextWindow: 200000,
       maxOutputTokens: 64000,
       reasoningEffortSupported: true,
@@ -59,16 +61,18 @@ const mockModelCatalog = {
   ],
 };
 
-const mockOmpSettings = {
+const mockOmpSettings: OmpSettingsState = {
   workspaceId: 'workspace_1',
   revision: '1',
+  totalCount: 3,
   settings: [
     {
-      id: 'modelRoles' as const,
-      type: 'record' as const,
+      id: 'modelRoles',
+      type: 'record',
       value: { default: 'openai/o3-mini:high' },
       default: {},
       configured: true,
+      placement: { type: 'owned-by', owner: 'model-roles' },
     },
     // A retry row the section draws, and the record it must not draw.
     {
@@ -96,28 +100,13 @@ const mockOmpSettings = {
 // surface as a failed row, not as a control that says "loading" forever.
 let failOmpSettings = false;
 
-mock.module('@/api/canonicalClient', () => ({
-  CanonicalApiError: class extends Error { },
-  canonicalClient: {
-    resolveWorkspace: async () => ({ workspaceId: 'workspace_1', projectId: 'project_1', name: 'repo' }),
-    getOmpSettings: async () => {
-      if (failOmpSettings) throw new Error('Agent Service settings read failed');
-      return mockOmpSettings;
-    },
-    getModels: async () => mockModelCatalog,
-    getProviders: async () => ({ workspaceId: 'workspace_1', revision: '1', providers: [] }),
-    updateOmpSettings: async () => mockOmpSettings,
-    readCacheWarming: async () => ({ mode: 'off' }),
-    updateCacheWarming: async () => ({ mode: 'off' }),
-  },
-}));
-
 // React DOM must evaluate after happy-dom installs browser globals into globalThis.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useSessionDisplayStore } = await import('@/stores/useSessionDisplayStore');
+const { useConfigStore } = await import('@/stores/useConfigStore');
 const { DefaultsSettings } = await import('./DefaultsSettings');
 const { canonicalClient, CanonicalApiError } = await import('@/api/canonicalClient');
 const { useOmpPageSettings } = await import('../shared/useOmpPageSettings');
@@ -140,6 +129,7 @@ describe('DefaultsSettings', () => {
   let host: HTMLDivElement;
   let root: Root;
 
+  let clientSpies: ReturnType<typeof spyOn>[];
   beforeEach(() => {
     failOmpSettings = false;
     updatedDesktopSettingsPayload = null;
@@ -147,6 +137,18 @@ describe('DefaultsSettings', () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
+    clientSpies = [
+      spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace_1', projectId: 'project_1', name: 'repo' }),
+      spyOn(canonicalClient, 'getOmpSettings').mockImplementation(async () => {
+        if (failOmpSettings) throw new Error('Agent Service settings read failed');
+        return mockOmpSettings;
+      }),
+      spyOn(canonicalClient, 'getModels').mockResolvedValue(mockModelCatalog),
+      spyOn(canonicalClient, 'getProviders').mockResolvedValue({ workspaceId: 'workspace_1', revision: '1', providers: [] }),
+      spyOn(canonicalClient, 'updateOmpSettings').mockResolvedValue(mockOmpSettings),
+      spyOn(canonicalClient, 'readCacheWarming').mockResolvedValue({ workspaceId: 'workspace_1', revision: '1', mode: 'off' }),
+      spyOn(canonicalClient, 'updateCacheWarming').mockResolvedValue({ persisted: { workspaceId: 'workspace_1', revision: '1', mode: 'off' }, status: 'applied', workers: [] }),
+    ];
     refreshSpy = spyOn(syncRefs, 'refreshDirectoryCatalogs').mockImplementation(() => {
       catalogRefreshCalls += 1;
     });
@@ -163,6 +165,7 @@ describe('DefaultsSettings', () => {
     host.remove();
     refreshSpy?.mockRestore();
     updateSpy?.mockRestore();
+    clientSpies.forEach((spy) => spy.mockRestore());
   });
 
   test('renders default model, thinking effort, session mode, and persisted checkboxes', async () => {
@@ -270,7 +273,7 @@ describe('DefaultsSettings', () => {
     expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')).not.toBeNull();
   });
 
-  test('a failed settings read says so instead of spinning the plan model row forever', async () => {
+  test('a failed settings read says so instead of spinning the default model row forever', async () => {
     failOmpSettings = true;
     await act(async () => {
       root.render(
@@ -288,66 +291,144 @@ describe('DefaultsSettings', () => {
     expect(notice?.textContent).toBeTruthy();
     expect(notice?.parentElement?.getAttribute('data-settings-item') ?? undefined).toBeUndefined();
 
-    // The plan row is still drawn; the read failure is what it reports.
-    const planRow = host.querySelector('[data-settings-item="sessions.default-plan"]');
-    expect(planRow).not.toBeNull();
+    // The primary default model row is still drawn; the read failure is what it reports.
+    const defaultRow = host.querySelector('[data-settings-item="sessions.default-model"]');
+    expect(defaultRow).not.toBeNull();
   });
 
-  test('the plan model role is drawn with the Plan & Goal Modes it unlocks', async () => {
-    await act(async () => {
-      root.render(
-        <I18nProvider>
-          <DefaultsSettings />
-        </I18nProvider>,
-      );
-    });
-    await settle();
+  test('replaces redundant smol/slow/plan editors with ModelRoleLinkRows jumping to Model roles and drops moved engine sections', async () => {
+    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump').mockImplementation(() => { });
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <DefaultsSettings />
+          </I18nProvider>,
+        );
+      });
+      await settle();
 
-    // The composer disables Plan from the catalog's `planRoleAvailable`, which
-    // OMP resolves from `modelRoles.plan`; the control belongs beside the mode.
-    const modesSection = host.querySelector('[data-settings-item="sessions.plan-goal"]');
-    expect(modesSection).not.toBeNull();
-    const planRow = modesSection?.querySelector('[data-settings-item="sessions.default-plan"]');
-    expect(planRow).not.toBeNull();
+      // Does not claim omp.modelRoles or moved engine sections.
+      expect(host.querySelector('[data-settings-item="omp.modelRoles"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="sessions.sampling"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="sessions.execution"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="sessions.isolation"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="sessions.small-model"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="sessions.walkthrough-model"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="sessions.default-plan"]')).toBeNull();
 
-    // It is not a default-session row, so it must not sit in the defaults grid.
-    const defaultsSection = host.querySelector('[data-settings-item="omp.modelRoles"]');
-    expect(defaultsSection?.querySelector('[data-settings-item="sessions.default-plan"]')).toBeNull();
+      const linkButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+        .filter((button) => button.textContent === 'Set in Model roles');
+      expect(linkButtons.length).toBe(3);
+
+      await act(async () => linkButtons[0]?.click());
+      await act(async () => linkButtons[1]?.click());
+      await act(async () => linkButtons[2]?.click());
+      expect(jump.mock.calls).toEqual([
+        ['model-roles', 'omp.modelRoles.smol'],
+        ['model-roles', 'omp.modelRoles.slow'],
+        ['model-roles', 'omp.modelRoles.plan'],
+      ]);
+    } finally {
+      jump.mockRestore();
+    }
   });
 
-  test('writing a model role re-reads the catalog that decides Plan availability', async () => {
+  test('renders Goal settings inside a SettingsControlGroup with sibling rows and no nested checkbox-in-label', async () => {
+    useUIStore.setState({ sessionGoalDefaultBudgetEnabled: false });
+    const snapshot: OmpSettingsState = {
+      ...mockOmpSettings,
+      totalCount: mockOmpSettings.settings.length + 1,
+      settings: [
+        ...mockOmpSettings.settings,
+        {
+          id: 'goal.enabled',
+          type: 'boolean',
+          value: true,
+          default: false,
+          configured: true,
+          placement: { type: 'page', page: 'sessions', section: 'plan' },
+        },
+      ],
+    };
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot);
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <DefaultsSettings />
+          </I18nProvider>,
+        );
+      });
+      await settle();
+
+      const budgetRow = host.querySelector<HTMLElement>('[data-settings-item="chat.session-goal-budget"]');
+      expect(budgetRow).not.toBeNull();
+      expect(budgetRow?.closest('label')).toBeNull();
+      expect(host.querySelector('[data-settings-item="chat.session-goal-checker"]')).not.toBeNull();
+      expect(host.querySelector('[data-settings-item="chat.session-goal-max-turns"]')).not.toBeNull();
+      expect(host.querySelector('input[aria-label="Apply a default token budget to new goals"]')).toBeNull();
+
+      await act(async () => budgetRow?.click());
+      expect(updatedDesktopSettingsPayload).toEqual({ sessionGoalDefaultBudgetEnabled: true });
+      expect(host.querySelector('input[aria-label="Apply a default token budget to new goals"]')).not.toBeNull();
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  test('writing the default model role re-reads the catalog that decides Plan availability', async () => {
     catalogRefreshCalls = 0;
-
-    await act(async () => {
-      root.render(
-        <I18nProvider>
-          <DefaultsSettings />
-        </I18nProvider>,
-      );
+    const previousProviders = useConfigStore.getState().providers;
+    const previousLoaded = useConfigStore.getState().providersLoaded;
+    const previousDirectoryKey = useConfigStore.getState().activeDirectoryKey;
+    const previousModels = useConfigStore.getState().models;
+    useConfigStore.setState({
+      providersLoaded: true,
+      activeDirectoryKey: '/repo',
+      models: [...mockModelCatalog.models],
+      providers: [{
+        providerId: 'openai',
+        name: 'OpenAI',
+        endpoint: null,
+        protocol: null,
+        authMethods: ['api-key'],
+        auth: { status: 'missing' },
+        models: [...mockModelCatalog.models],
+      }],
     });
-    await settle();
+    const loadSpy = spyOn(useConfigStore.getState(), 'loadProviders').mockImplementation(async () => { });
 
-    // The plan editor writes `modelRoles` through the same path as the
-    // default model; that write invalidates `planRoleAvailable`.
-    await act(async () => {
-      const defaultsSection = host.querySelector('[data-settings-item="omp.modelRoles"]');
-      const picker = defaultsSection?.querySelector('button');
-      picker?.click();
-    });
-    await settle();
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <DefaultsSettings />
+          </I18nProvider>,
+        );
+      });
+      await settle();
 
-    const option = document.querySelector('[role="option"]');
-    expect(option).not.toBeNull();
-    await act(async () => {
-      if (option instanceof HTMLElement) option.click();
-    });
-    await settle();
+      await act(async () => {
+        const defaultRow = host.querySelector('[data-settings-item="sessions.default-model"]');
+        const picker = defaultRow?.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+        picker?.dispatchEvent(new browser.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }) as unknown as Event);
+      });
+      await settle();
 
-    // The write is in the shared agent directory, so the composer's directory —
-    // not only the one this page names — must re-read its catalog.
-    expect(catalogRefreshCalls).toBe(1);
+      const option = document.querySelector('[role="option"]');
+      expect(option).not.toBeNull();
+      await act(async () => {
+        if (option instanceof HTMLElement) option.click();
+      });
+      await settle();
+
+      expect(catalogRefreshCalls).toBe(1);
+    } finally {
+      loadSpy.mockRestore();
+      useConfigStore.setState({ providers: previousProviders, providersLoaded: previousLoaded, activeDirectoryKey: previousDirectoryKey, models: previousModels });
+    }
   });
-
   test('a stale role write preserves the latest fallback and feeds the next setting its saved revision', async () => {
     const initial: OmpSettingsState = {
       workspaceId: 'workspace_1',

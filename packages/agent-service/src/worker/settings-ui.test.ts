@@ -50,7 +50,7 @@ test('every TUI-visible OMP setting has a placement and no hand-kept id list rem
 });
 
 test('misclassifications are fixed: followUpMode is not a chat owner; recap belongs to Chat → Session recap', () => {
-  expect(OMP_SETTING_PLACEMENTS['followUpMode']).toEqual({ type: 'page', page: 'sessions', section: 'execution' });
+  expect(OMP_SETTING_PLACEMENTS['followUpMode']).toEqual({ type: 'engine' });
   expect(OMP_SETTING_PLACEMENTS['recap.enabled']).toEqual({ type: 'owned-by', owner: 'chat.session-recap' });
   expect(OMP_SETTING_PLACEMENTS['recap.idleSeconds']).toEqual({ type: 'owned-by', owner: 'chat.session-recap' });
   expect(OMP_SETTING_OWNER_IDS).not.toContain('chat.follow-up-behavior');
@@ -176,6 +176,7 @@ test('a moved row is absent from state and refused on write', async () => {
       'dev.autoqa', 'spotlight.experiment.enabled', 'secrets.enabled', 'providers.fetch',
       'git.enabled', 'completion.notify', 'error.notify', 'ask.notify',
       'exa.enabled', 'exa.searchDelayMs', 'providers.webSearchTimeoutSeconds',
+      'commands.enableOpencodeUser', 'commands.enableOpencodeProject',
     ];
     for (const id of moved) {
       expect(byId.has(id), id).toBe(false);
@@ -191,7 +192,7 @@ test('discovery exposes only the pinned boolean controls on Commands and Skills'
   const rows = [...OMP_SETTING_EXPOSED_IDS].filter(id => id.startsWith('commands.') || id.startsWith('skills.'));
   const types = new Map(orderedSettings().map(({ id, type }) => [id, type]));
   expect(rows.filter(id => id.startsWith('commands.')).sort()).toEqual([
-    'commands.enableClaudeProject', 'commands.enableOpencodeProject', 'commands.enableOpencodeUser',
+    'commands.enableClaudeProject',
   ]);
   expect(rows.filter(id => OMP_SETTING_PLACEMENTS[id]?.type === 'page' && id.startsWith('skills.')).sort()).toEqual([
     'skills.enableAgentsProject', 'skills.enableAgentsUser', 'skills.enableClaudeProject', 'skills.enablePiProject',
@@ -200,7 +201,8 @@ test('discovery exposes only the pinned boolean controls on Commands and Skills'
   for (const id of rows) expect(types.get(id)).toBe('boolean');
   for (const id of [
     'skills.customDirectories', 'skills.ignoredSkills', 'skills.manualSkills', 'skills.includeSkills',
-    'commands.enableClaudeUser', 'skills.enableClaudeUser', 'skills.enableCodexUser',
+    'commands.enableClaudeUser', 'commands.enableOpencodeProject', 'commands.enableOpencodeUser',
+    'skills.enableClaudeUser', 'skills.enableCodexUser',
   ]) {
     expect(OMP_SETTING_PLACEMENTS[id]).toEqual({ type: 'config-only' });
     expect(OMP_SETTING_EXPOSED_IDS.has(id)).toBe(false);

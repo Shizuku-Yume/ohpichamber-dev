@@ -11,10 +11,6 @@ interface LinkedRole {
 }
 
 export const LINKED_ROLES: Readonly<Record<string, LinkedRole>> = {
-  default: { page: 'sessions', item: 'sessions.default-model', linkKey: 'settings.omp.modelRoles.link.sessions' },
-  smol: { page: 'sessions', item: 'sessions.small-model', linkKey: 'settings.omp.modelRoles.link.sessions' },
-  slow: { page: 'sessions', item: 'sessions.walkthrough-model', linkKey: 'settings.omp.modelRoles.link.sessions' },
-  plan: { page: 'sessions', item: 'sessions.default-plan', linkKey: 'settings.omp.modelRoles.link.sessions' },
   web: { page: 'web-search', linkKey: 'settings.omp.modelRoles.link.webSearch' },
   speech: { page: 'voice', linkKey: 'settings.omp.modelRoles.link.voice' },
 };

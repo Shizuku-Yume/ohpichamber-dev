@@ -5,10 +5,10 @@ import { SettingsCheckboxRow, SETTINGS_HELPER_CLASS } from '@/components/section
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { selectSmallModelAvailability, useSmallModelStore } from '@/stores/useSmallModelStore';
-import { useUIStore } from '@/stores/useUIStore';
+import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
 
 const openSmallModelSettings = (): void => {
-    useUIStore.getState().requestSettingsJump('sessions', 'sessions.small-model');
+    openModelRoleEditor('smol');
 };
 
 export const TranscriptCorrectionRow = () => {

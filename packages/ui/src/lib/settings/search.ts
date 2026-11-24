@@ -74,6 +74,34 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   },
   ...ompLayoutSearchItems(),
   {
+    id: 'omp.modelRoles.default',
+    page: 'model-roles',
+    titleKey: 'settings.omp.modelRoles.role.default.label',
+    descriptionKey: 'settings.omp.modelRoles.role.default.desc',
+    keywords: ['model role', 'default', 'role', 'primary', 'new sessions'],
+  },
+  {
+    id: 'omp.modelRoles.smol',
+    page: 'model-roles',
+    titleKey: 'settings.omp.modelRoles.role.smol.label',
+    descriptionKey: 'settings.omp.modelRoles.role.smol.desc',
+    keywords: ['model role', 'small model', 'smol', 'summary', 'recap', 'cheap', 'role'],
+  },
+  {
+    id: 'omp.modelRoles.slow',
+    page: 'model-roles',
+    titleKey: 'settings.omp.modelRoles.role.slow.label',
+    descriptionKey: 'settings.omp.modelRoles.role.slow.desc',
+    keywords: ['model role', 'walkthrough', 'slow', 'diff', 'review', 'role'],
+  },
+  {
+    id: 'omp.modelRoles.plan',
+    page: 'model-roles',
+    titleKey: 'settings.omp.modelRoles.role.plan.label',
+    descriptionKey: 'settings.omp.modelRoles.role.plan.desc',
+    keywords: ['model role', 'plan', 'plan mode', 'role'],
+  },
+  {
     id: 'omp.modelRoles.memory',
     page: 'model-roles',
     titleKey: 'settings.omp.modelRoles.role.memory.label',
@@ -239,48 +267,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.omp.items.compaction.idleTimeoutSeconds.description' as I18nKey,
   },
   {
-    id: 'omp.temperature',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.temperature.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.temperature.description' as I18nKey,
-  },
-  {
-    id: 'omp.topP',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.topP.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.topP.description' as I18nKey,
-  },
-  {
-    id: 'omp.topK',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.topK.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.topK.description' as I18nKey,
-  },
-  {
-    id: 'omp.minP',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.minP.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.minP.description' as I18nKey,
-  },
-  {
-    id: 'omp.presencePenalty',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.presencePenalty.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.presencePenalty.description' as I18nKey,
-  },
-  {
-    id: 'omp.repetitionPenalty',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.repetitionPenalty.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.repetitionPenalty.description' as I18nKey,
-  },
-  {
-    id: 'omp.textVerbosity',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.textVerbosity.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.textVerbosity.description' as I18nKey,
-  },
-  {
     id: 'omp.retry.maxRetries',
     page: 'sessions',
     titleKey: 'settings.omp.items.retry.maxRetries.label' as I18nKey,
@@ -327,12 +313,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.omp.items.retry.fallbackRevertPolicy.label' as I18nKey,
     descriptionKey: 'settings.omp.items.retry.fallbackRevertPolicy.description' as I18nKey,
-  },
-  {
-    id: 'omp.task.isolation.enabled',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.task.isolation.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.task.isolation.enabled.description' as I18nKey,
   },
   {
     id: 'omp.plan.enabled',
@@ -826,15 +806,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['thinking', 'reasoning', 'variant'],
   },
   {
-    // The plan role is what makes Plan selectable in the composer, so a search
-    // for "plan model" has to land on the control that writes it.
-    id: 'sessions.default-plan',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.planModel.title',
-    descriptionKey: 'settings.openchamber.defaults.planModel.description',
-    keywords: ['plan', 'plan mode', 'model', 'plan model', 'role'],
-  },
-  {
     id: 'sessions.model-compaction',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.compaction.modelRules',
@@ -906,20 +877,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.sessionWork.field.keepInGroup',
     descriptionKey: 'settings.openchamber.sessionWork.field.keepInGroupInfo',
     keywords: ['in work', 'track', 'project group', 'folder', 'sidebar', 'keep'],
-  },
-  {
-    id: 'sessions.small-model',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.smallModel.title',
-    descriptionKey: 'settings.openchamber.defaults.smallModel.description',
-    keywords: ['small model', 'utility', 'summary', 'recap', 'cheap', 'override'],
-  },
-  {
-    id: 'sessions.walkthrough-model',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.walkthroughModel.title',
-    descriptionKey: 'settings.openchamber.defaults.walkthroughModel.description',
-    keywords: ['walkthrough', 'diff', 'review', 'changes', 'structured output', 'model', 'override'],
   },
   {
     id: 'sessions.auto-cleanup',

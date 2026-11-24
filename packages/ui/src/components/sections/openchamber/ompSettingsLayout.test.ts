@@ -72,7 +72,7 @@ const tabOf = (settingId: string): OmpSettingsTab | null => (
 describe('OMP settings layout', () => {
   test('the layout covers each engine row the agent service exposes exactly once', () => {
     const engine = exposedEngineIds();
-    expect(engine.length).toBe(86);
+    expect(engine.length).toBe(102);
     expect([...OMP_SETTING_IDS].sort()).toEqual([...engine].sort());
   });
 
