@@ -26,24 +26,33 @@ import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useModelPickerSectionsStore } from '@/stores/useModelPickerSectionsStore';
 import type { ModelMetadata } from '@/types';
-import type { Model, Provider } from '@openchamber/agent-contract';
+import type { ImageModel, Model, Provider } from '@openchamber/agent-contract';
 
-type ProviderModel = Model;
+/**
+ * The model fields the picker reads. Chat `Model` and `ImageModel` both carry
+ * them; the kind-specific fields stay on the caller's own catalog types.
+ */
+export type ModelPickerModel = Pick<Model | ImageModel, 'modelId' | 'name'> & {
+ contextWindow?: number;
+ maxOutputTokens?: number;
+};
 
-export type ModelPickerProvider = Provider & { models?: ProviderModel[] };
+export type ModelPickerProvider<TModel extends ModelPickerModel = Model> =
+ Pick<Provider, 'providerId'> & Partial<Omit<Provider, 'providerId'>> & { models?: TModel[] };
 
 /** Native catalog identity used throughout the picker. */
-export type ModelPickerEntry = {
- model: ProviderModel;
+export type ModelPickerEntry<TModel extends ModelPickerModel = Model> = {
+ model: TModel;
  providerId: string;
  modelId: string;
 };
 
 /** Favorites/recents retain persisted legacy keys only at this boundary. */
-type ModelPickerFavoriteEntry = Omit<ModelPickerEntry, 'providerId' | 'modelId'> & {
- providerID: string;
- modelID: string;
-};
+type ModelPickerFavoriteEntry<TModel extends ModelPickerModel = Model> =
+ Omit<ModelPickerEntry<TModel>, 'providerId' | 'modelId'> & {
+  providerID: string;
+  modelID: string;
+ };
 
 type HiddenModel = { providerID: string; modelID: string };
 
@@ -62,8 +71,8 @@ const formatUsdCurrency = (value: number) => new Intl.NumberFormat(getCurrentInt
  minimumFractionDigits: 2,
 }).format(value);
 
-const getModelDisplayName = (model: Record<string, unknown>) => {
- return getSharedModelDisplayName(model, undefined, { maxLength: 40 });
+const getModelDisplayName = (model: ModelPickerModel) => {
+ return getSharedModelDisplayName({ id: model.modelId, name: model.name }, model.modelId, { maxLength: 40 });
 };
 
 const formatModelContextTokens = (value?: number | null) => {
@@ -245,18 +254,18 @@ const ModelPickerRowHighlight: React.FC<{
 });
 
 const LEADING_ACTION_SLOT = 'leading-action';
-type NavigationItem = ModelPickerEntry | typeof LEADING_ACTION_SLOT;
+type NavigationItem<TModel extends ModelPickerModel> = ModelPickerEntry<TModel> | typeof LEADING_ACTION_SLOT;
 
-const entryOf = (item: NavigationItem | undefined): ModelPickerEntry | undefined => (
+const entryOf = <TModel extends ModelPickerModel>(item: NavigationItem<TModel> | undefined): ModelPickerEntry<TModel> | undefined => (
  item === LEADING_ACTION_SLOT ? undefined : item
 );
 
-const ModelPickerFooter: React.FC<{
+const ModelPickerFooter = <TModel extends ModelPickerModel>({ store, navigationList, footerContent, fallback }: {
  store: IndexSelectionStore;
- navigationList: NavigationItem[];
- footerContent: ModelPickerListProps['footerContent'];
+ navigationList: NavigationItem<TModel>[];
+ footerContent: ModelPickerListProps<TModel>['footerContent'];
  fallback: React.ReactNode;
-}> = ({ store, navigationList, footerContent, fallback }) => {
+}) => {
  const [selectedIndex, setSelectedIndex] = React.useState(() => store.getSnapshot());
 
  React.useEffect(() => store.subscribe(() => setSelectedIndex(store.getSnapshot())), [store]);
@@ -346,13 +355,13 @@ interface VirtualSectionHandle {
  scrollToIndex: (index: number) => void;
 }
 
-const VirtualProviderRows: React.FC<{
+const VirtualProviderRows = <TModel extends ModelPickerModel>({ sectionKey, entries, base, sections, renderRow }: {
  sectionKey: string;
- entries: ModelPickerEntry[];
+ entries: ModelPickerEntry<TModel>[];
  base: number;
  sections: Map<string, VirtualSectionHandle>;
- renderRow: (entry: ModelPickerEntry, rowIndex: number) => React.ReactNode;
-}> = ({ sectionKey, entries, base, sections, renderRow }) => {
+ renderRow: (entry: ModelPickerEntry<TModel>, rowIndex: number) => React.ReactNode;
+}) => {
  const listRef = React.useRef<HTMLDivElement | null>(null);
  const [scrollMargin, setScrollMargin] = React.useState(0);
  // Rows are single-line and share one height, which follows the UI font
@@ -459,13 +468,13 @@ const scrollIntoView = (container: HTMLElement | null, node: HTMLElement | null)
  container.scrollTop = Math.max(0, Math.min(target, max));
 };
 
-interface ModelPickerListProps {
- providers: ModelPickerProvider[];
- favoriteModels: ModelPickerFavoriteEntry[];
- recentModels: ModelPickerFavoriteEntry[];
+interface ModelPickerListProps<TModel extends ModelPickerModel = Model> {
+ providers: ModelPickerProvider<TModel>[];
+ favoriteModels: ModelPickerFavoriteEntry<TModel>[];
+ recentModels: ModelPickerFavoriteEntry<TModel>[];
  searchQuery: string;
  onSearchQueryChange: (value: string) => void;
- onSelect: (entry: ModelPickerEntry) => void;
+ onSelect: (entry: ModelPickerEntry<TModel>) => void;
  labels: {
   searchPlaceholder: string;
   /** Screen reader name of the list of models. */
@@ -491,7 +500,7 @@ interface ModelPickerListProps {
   * not one of `providers`, takes part in keyboard navigation like any row,
   * and is filtered by the search query on its display name.
   */
- leadingEntry?: ModelPickerEntry | null;
+ leadingEntry?: ModelPickerEntry<TModel> | null;
  /**
   * An action pinned right after the leading entry (the composer's "Run on
   * several models"). It is not a model, but it looks and navigates like a
@@ -508,7 +517,7 @@ interface ModelPickerListProps {
  isModelAllowed?: (providerId: string, modelId: string) => boolean;
  includeNotSelected?: boolean;
  onSelectNone?: () => void;
- selectionCount?: (entry: ModelPickerEntry) => number;
+ selectionCount?: (entry: ModelPickerEntry<TModel>) => number;
  disabled?: boolean;
  maxHeightClassName?: string;
  maxHeightStyle?: React.CSSProperties;
@@ -517,24 +526,24 @@ interface ModelPickerListProps {
  stickyHeaders?: boolean;
  autoFocus?: boolean;
  onEscape?: () => void;
- isFavorite?: (entry: ModelPickerEntry) => boolean;
- onToggleFavorite?: (entry: ModelPickerEntry) => void;
- renderRowEnd?: (entry: ModelPickerEntry, state: { isHighlighted: boolean; isSelected: boolean }) => React.ReactNode;
- onActiveKeyDown?: (event: React.KeyboardEvent, entry: ModelPickerEntry | undefined) => void;
- onActiveEntryChange?: (entry: ModelPickerEntry | undefined) => void;
- onVariantKey?: (event: React.KeyboardEvent, entry: ModelPickerEntry) => boolean;
- onReorderFavorite?: (active: ModelPickerEntry, over: ModelPickerEntry) => void;
+ isFavorite?: (entry: ModelPickerEntry<TModel>) => boolean;
+ onToggleFavorite?: (entry: ModelPickerEntry<TModel>) => void;
+ renderRowEnd?: (entry: ModelPickerEntry<TModel>, state: { isHighlighted: boolean; isSelected: boolean }) => React.ReactNode;
+ onActiveKeyDown?: (event: React.KeyboardEvent, entry: ModelPickerEntry<TModel> | undefined) => void;
+ onActiveEntryChange?: (entry: ModelPickerEntry<TModel> | undefined) => void;
+ onVariantKey?: (event: React.KeyboardEvent, entry: ModelPickerEntry<TModel>) => boolean;
+ onReorderFavorite?: (active: ModelPickerEntry<TModel>, over: ModelPickerEntry<TModel>) => void;
  reorderFavoriteAriaLabel?: string;
  reorderFavoriteTitle?: string;
  providerOrder?: string[];
  onReorderProvider?: (orderedProviderIDs: string[]) => void;
  reorderProviderTitle?: string;
- footerContent?: React.ReactNode | ((activeEntry: ModelPickerEntry | undefined) => React.ReactNode);
+ footerContent?: React.ReactNode | ((activeEntry: ModelPickerEntry<TModel> | undefined) => React.ReactNode);
  renderVersion?: number;
  tooltipsEnabled?: boolean;
 }
 
-export const ModelPickerList: React.FC<ModelPickerListProps> = ({
+export const ModelPickerList = <TModel extends ModelPickerModel = Model>({
  providers,
  favoriteModels,
  recentModels,
@@ -574,7 +583,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
  footerContent,
  renderVersion,
  tooltipsEnabled = true,
-}) => {
+}: ModelPickerListProps<TModel>) => {
  // getModelMetadata falls back to the provider's own model record for models
  // models.dev does not list. Subscribe to both sources it reads so rows
  // re-render when either arrives.
@@ -611,10 +620,10 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
   useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
  );
 
-  const allowedProviderSet = React.useMemo(() => {
-    if (!allowedProviderIds) return null;
-    return new Set(allowedProviderIds);
-  }, [allowedProviderIds]);
+ const allowedProviderSet = React.useMemo(() => {
+  if (!allowedProviderIds) return null;
+  return new Set(allowedProviderIds);
+ }, [allowedProviderIds]);
 
  const providerById = React.useMemo(() => new Map(providers.map((provider) => [provider.providerId, provider])), [providers]);
 
@@ -744,7 +753,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
  const showLeadingAction = Boolean(leadingAction) && !searchQuery.trim();
 
  const flatModelList = React.useMemo(() => {
-  const items: NavigationItem[] = [];
+  const items: NavigationItem<TModel>[] = [];
   if (visibleLeadingEntry) items.push(visibleLeadingEntry);
   if (showLeadingAction) items.push(LEADING_ACTION_SLOT);
   if (!collapsedSections.has('favorites')) filteredFavorites.forEach((entry) => items.push(entry));
@@ -758,7 +767,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
  const hasResults = flatModelList.some((item) => item !== LEADING_ACTION_SLOT);
  const favoriteSortingEnabled = Boolean(onReorderFavorite) && searchQuery.trim().length === 0 && filteredFavorites.length > 1;
  const providerSortingEnabled = Boolean(onReorderProvider) && searchQuery.trim().length === 0 && !allowedProviderSet && filteredProviders.length > 1;
- const favoriteLookup: Map<string, ModelPickerEntry> = React.useMemo(() => new Map(
+ const favoriteLookup: Map<string, ModelPickerEntry<TModel>> = React.useMemo(() => new Map(
   filteredFavorites.map((entry) => [modelRefInstanceKey(entry.providerId, entry.modelId), entry] as const),
  ), [filteredFavorites]);
 
@@ -940,7 +949,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
   </ModelPickerRowHighlight>
  );
 
- const renderRow = (entry: ModelPickerEntry, keyPrefix: string, showProviderLogo: boolean, rowIndex: number, dragHandleProps?: SortableFavoriteHandleProps | null) => {
+ const renderRow = (entry: ModelPickerEntry<TModel>, keyPrefix: string, showProviderLogo: boolean, rowIndex: number, dragHandleProps?: SortableFavoriteHandleProps | null) => {
   const metadata = {
    ...(getModelMetadata(entry.providerId, entry.modelId) ?? {}),
    id: entry.model.modelId,

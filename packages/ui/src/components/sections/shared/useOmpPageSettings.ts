@@ -7,6 +7,7 @@ import type {
 } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { reportSettingsSaveState } from '@/lib/persistence';
 
 export interface UseOmpPageSettingsResult {
   readonly state: OmpSettingsState | null;
@@ -95,6 +96,7 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
       const result = scope.tail.then(async () => {
         const current = scope.state;
         if (!current) return false;
+        reportSettingsSaveState('saving');
         try {
           let next: OmpSettingsState;
           try {
@@ -106,8 +108,10 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
             next = await write(latest);
           }
           publish(next);
+          reportSettingsSaveState('saved');
           return !signal.aborted;
         } catch (error) {
+          reportSettingsSaveState('error');
           if (!signal.aborted) console.warn('Failed to persist OMP settings:', error);
           return false;
         }

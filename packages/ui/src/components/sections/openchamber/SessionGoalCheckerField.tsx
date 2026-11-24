@@ -16,10 +16,11 @@ import { useI18n } from '@/lib/i18n';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
 import { DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, type SessionGoalChecker } from '@/lib/sessionGoalTurnLimit';
+import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
 import { useUIStore } from '@/stores/useUIStore';
 
 const openSmallModelSettings = (): void => {
-  useUIStore.getState().requestSettingsJump('sessions', 'sessions.small-model');
+  openModelRoleEditor('smol');
 };
 
 export const SessionGoalCheckerField: React.FC<{ disabled?: boolean }> = ({ disabled = false }) => {

@@ -72,16 +72,20 @@ test('behavior file edits preserve native rule metadata, both fixed scopes, and 
   const initial = await read();
   const entry = initial.files[0];
   expect(entry).toMatchObject({ scope: 'workspace', name: 'greeting.mdc', content: 'Old.\r\n', fields: { enabled: false, condition: 'hello' } });
-  const bodyOnly = await h.operation({ action: 'behavior.write', request: {
-    kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: entry.version, expectedRevision: initial.revision, content: 'New.\r\n',
-  } });
+  const bodyOnly = await h.operation({
+    action: 'behavior.write', request: {
+      kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: entry.version, expectedRevision: initial.revision, content: 'New.\r\n',
+    }
+  });
   expect(await readFile(rule, 'utf8')).toBe(header + 'New.\r\n');
   if (bodyOnly.kind !== 'behavior') throw new Error('Expected Behavior catalog');
-  await h.operation({ action: 'behavior.write', request: {
-    kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: bodyOnly.catalog.files[0].version,
-    expectedRevision: bodyOnly.catalog.revision, content: 'New.\r\n',
-    fields: { enabled: null, description: 'A note <!-- literal -->', astCondition: ['return $VALUE;'], scope: ['tool:edit(**/*.ts)'], repeatMode: 'after-gap' },
-  } });
+  await h.operation({
+    action: 'behavior.write', request: {
+      kind: entry.kind, name: entry.name, scope: entry.scope, expectedVersion: bodyOnly.catalog.files[0].version,
+      expectedRevision: bodyOnly.catalog.revision, content: 'New.\r\n',
+      fields: { enabled: null, description: 'A note <!-- literal -->', astCondition: ['return $VALUE;'], scope: ['tool:edit(**/*.ts)'], repeatMode: 'after-gap' },
+    }
+  });
   expect(parseFrontmatter(await readFile(rule, 'utf8'), { level: 'fatal' }).frontmatter).toEqual({
     condition: 'hello', future: 'true <!-- note -->', description: 'A note <!-- literal -->',
     astCondition: ['return $VALUE;'], scope: ['tool:edit(**/*.ts)'], repeatMode: 'after-gap',
@@ -96,9 +100,11 @@ test('behavior file edits preserve native rule metadata, both fixed scopes, and 
     }
     const { revision } = await read();
     const content = 'Use a greeting.\n';
-    await h.operation({ action: 'behavior.write', request: {
-      kind: 'instruction', scope, name: 'greeting.instructions.md', content, expectedVersion: null, expectedRevision: revision, fields: { applyTo: '**/*.ts' },
-    } });
+    await h.operation({
+      action: 'behavior.write', request: {
+        kind: 'instruction', scope, name: 'greeting.instructions.md', content, expectedVersion: null, expectedRevision: revision, fields: { applyTo: '**/*.ts' },
+      }
+    });
     expect(parseFrontmatter(await readFile(join(base, 'instructions', 'greeting.instructions.md'), 'utf8'))).toEqual({
       body: 'Use a greeting.', frontmatter: { applyTo: '**/*.ts' },
     });
@@ -194,10 +200,12 @@ test('clearing a Behavior condition removes the native fallback triggers', async
   const initial = await h.operation({ action: 'behavior.read' });
   if (initial.kind !== 'behavior') throw new Error('Expected Behavior catalog');
   const entry = initial.catalog.files[0];
-  await h.operation({ action: 'behavior.write', request: {
-    kind: entry.kind, scope: entry.scope, name: entry.name, content, expectedVersion: entry.version,
-    expectedRevision: initial.catalog.revision, fields: { condition: null },
-  } });
+  await h.operation({
+    action: 'behavior.write', request: {
+      kind: entry.kind, scope: entry.scope, name: entry.name, content, expectedVersion: entry.version,
+      expectedRevision: initial.catalog.revision, fields: { condition: null },
+    }
+  });
   const saved = await readFile(path, 'utf8');
   expect(discoverRuleFromMarkdown('legacy.mdc', saved, path, source)?.condition).toBeUndefined();
   expect(entry.fields.condition).toBe('first');
@@ -367,7 +375,7 @@ test('foreign user discovery opt-ins can load resources independently of capabil
   const exposed = settings.state.settings.filter(({ id }) => [
     'commands.enableClaudeUser', 'commands.enableOpencodeUser', 'skills.enableClaudeUser', 'skills.enableCodexUser',
   ].includes(id));
-  expect(exposed.map(({ id, value }) => ({ id, value }))).toEqual([{ id: 'commands.enableOpencodeUser', value: false }]);
+  expect(exposed).toEqual([]);
 }, 60000);
 
 test('command editing preserves native side, raw keys and unrelated metadata', async () => {
@@ -382,14 +390,18 @@ test('command editing preserves native side, raw keys and unrelated metadata', a
   const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
   if (!command) throw new Error('Expected authored command');
   const { commandId, name, description, argumentHint } = command;
-  const updated = await h.operation({ action: 'commands.update', request: {
-    expectedRevision: read.catalog.revision, commandId, name, scope: 'workspace', description, argumentHint, content: 'Say hello again.\n',
-  } });
+  const updated = await h.operation({
+    action: 'commands.update', request: {
+      expectedRevision: read.catalog.revision, commandId, name, scope: 'workspace', description, argumentHint, content: 'Say hello again.\n',
+    }
+  });
   if (updated.kind !== 'commands') throw new Error('Expected updated command catalog');
   expect(await readFile(path, 'utf8')).toBe(header + 'Say hello again.\n');
-  await h.operation({ action: 'commands.update', request: {
-    expectedRevision: updated.catalog.revision, commandId, name, scope: 'workspace', description: 'A greeting', content: 'Say hello again.\n',
-  } });
+  await h.operation({
+    action: 'commands.update', request: {
+      expectedRevision: updated.catalog.revision, commandId, name, scope: 'workspace', description: 'A greeting', content: 'Say hello again.\n',
+    }
+  });
   const file = await readFile(path, 'utf8');
   expect(parseFrontmatter(file, { rawKeys: true }).frontmatter).toEqual({
     description: 'A greeting', side: true, argumentHint: 'a name', 'native-key': { 'inner-key': ['keep', true] }, openchamber: { 'future-key': 'keep' },
@@ -408,10 +420,12 @@ test('description edits preserve literal native metadata without OMP repair', as
   if (read.kind !== 'commands') throw new Error('Expected command catalog');
   const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
   if (!command) throw new Error('Expected authored command');
-  await h.operation({ action: 'commands.update', request: {
-    expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
-    description: 'Edited', content,
-  } });
+  await h.operation({
+    action: 'commands.update', request: {
+      expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
+      description: 'Edited', content,
+    }
+  });
   const text = await readFile(path, 'utf8');
   const prefix = '<!-- Header note -->\n';
   expect(text.startsWith(prefix)).toBe(true);
@@ -434,10 +448,12 @@ test.each([
   if (read.kind !== 'commands') throw new Error('Expected command catalog');
   const command = read.catalog.commands.find(entry => entry.name === 'hello' && entry.editable);
   if (!command) throw new Error('Expected authored command');
-  await h.operation({ action: 'commands.update', request: {
-    expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
-    description, content,
-  } });
+  await h.operation({
+    action: 'commands.update', request: {
+      expectedRevision: read.catalog.revision, commandId: command.commandId, name: command.name, scope: 'workspace',
+      description, content,
+    }
+  });
   const reloaded = await h.operation({ action: 'commands.read' });
   if (reloaded.kind !== 'commands') throw new Error('Expected command catalog');
   expect(parseFrontmatter(await readFile(path, 'utf8'), { level: 'fatal', rawKeys: true }).frontmatter).toEqual({
@@ -466,9 +482,11 @@ test('native delimiters separate metadata from the editable body', async () => {
     if (!command) throw new Error('Expected authored command');
     expect(command.content).toBe(body);
     const content = body.replace(/hello|starts/, 'again');
-    const updated = await h.operation({ action: 'commands.update', request: {
-      expectedRevision: revision, commandId: command.commandId, name, scope: 'workspace', content,
-    } });
+    const updated = await h.operation({
+      action: 'commands.update', request: {
+        expectedRevision: revision, commandId: command.commandId, name, scope: 'workspace', content,
+      }
+    });
     if (updated.kind !== 'commands') throw new Error('Expected updated command catalog');
     expect(await readFile(join(dir, `${name}.md`), 'utf8')).toBe(header + content);
     revision = updated.catalog.revision;
@@ -492,9 +510,11 @@ test('a native command with many leading comments and no frontmatter does not bl
 
 test('nested native prompt creation and body editing preserve the folder and native metadata', async () => {
   const h = await fixture();
-  const created = await h.operation({ action: 'templates.create', request: {
-    expectedRevision: '0', name: 'reviews/backend/hello', scope: 'workspace', content: 'Say hello.',
-  } });
+  const created = await h.operation({
+    action: 'templates.create', request: {
+      expectedRevision: '0', name: 'reviews/backend/hello', scope: 'workspace', content: 'Say hello.',
+    }
+  });
   if (created.kind !== 'templates') throw new Error('Expected template catalog');
   const entry = created.catalog.templates.find(template => template.editable);
   if (!entry) throw new Error('Expected authored template');
@@ -502,10 +522,12 @@ test('nested native prompt creation and body editing preserve the folder and nat
   const path = join(h.cwd, '.omp', 'prompts', 'reviews', 'backend', 'hello.md');
   const header = '---\ncustom-key: {inner-key: true}\n---\n';
   await writeFile(path, header + 'Say hello.');
-  await h.operation({ action: 'templates.update', request: {
-    expectedRevision: created.catalog.revision, templateId: entry.templateId, name: entry.name, scope: 'workspace',
-    description: entry.description, group: entry.group, content: 'Say hello again.',
-  } });
+  await h.operation({
+    action: 'templates.update', request: {
+      expectedRevision: created.catalog.revision, templateId: entry.templateId, name: entry.name, scope: 'workspace',
+      description: entry.description, group: entry.group, content: 'Say hello again.',
+    }
+  });
   expect(await readFile(path, 'utf8')).toBe(header + 'Say hello again.');
 }, 60000);
 

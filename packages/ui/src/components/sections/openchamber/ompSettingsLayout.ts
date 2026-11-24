@@ -185,6 +185,15 @@ export const OMP_SETTINGS_LAYOUT: readonly OmpLayoutTab[] = [
       {
         id: 'backgroundAndExecution',
         entries: [
+          'steeringMode',
+          'followUpMode',
+          'interruptMode',
+          'loop.mode',
+          'task.isolation.enabled',
+          'task.isolation.apply',
+          'task.isolation.merge',
+          'task.isolation.commits',
+          'isolation.backend',
           'async.widgets',
           'tools.speculativeExecution.enabled',
           'tools.speculativeExecution.maxInFlight',
@@ -211,7 +220,18 @@ export const OMP_SETTINGS_LAYOUT: readonly OmpLayoutTab[] = [
     groups: [
       {
         id: 'contextExperimental',
-        entries: ['tools.format', 'snapcompact.systemPrompt', 'snapcompact.toolResults'],
+        entries: [
+          'temperature',
+          'topP',
+          'topK',
+          'minP',
+          'presencePenalty',
+          'repetitionPenalty',
+          'textVerbosity',
+          'tools.format',
+          'snapcompact.systemPrompt',
+          'snapcompact.toolResults',
+        ],
       },
       {
         id: 'rules',

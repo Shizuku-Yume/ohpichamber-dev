@@ -5,6 +5,7 @@ import type { OmpSettingsChange } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
+  SettingsControlGroup,
   SettingsFieldRow,
   SettingsCheckboxRow,
   SettingsInset,
@@ -12,11 +13,14 @@ import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
+  SETTINGS_NUMBER_UNIT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { NumberInput } from '@/components/ui/number-input';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
 import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
+import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
+import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
 import { levelLabel, modelRoleChange, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { SessionWarmingField } from './SessionWarmingField';
@@ -26,7 +30,7 @@ import { ModelCompactionSettings } from './ModelCompactionSettings';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { toast } from '@/components/ui';
-import { reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
+import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -102,9 +106,7 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
 
   const setRole = React.useCallback(
     async (role: string, selector: string, also: OmpSettingsChange[] = []) => {
-      reportSettingsSaveState('saving');
       const saved = await updateSettings((state) => [modelRoleChange(state, role, selector), ...also]);
-      reportSettingsSaveState(saved ? 'saved' : 'error');
       if (saved) refreshDirectoryCatalogs();
       else toast.error(t('settings.omp.modelRoles.saveFailed'));
     },
@@ -121,12 +123,6 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
     }
   };
 
-  /** The walkthrough resolves its model through the native `slow` role. */
-  const setWalkthroughModel = React.useCallback(
-    (selector: string) => setRole('slow', selector || ''),
-    [setRole],
-  );
-
   /**
    * What a closed trigger shows for a selector. `SelectValue` otherwise prints
    * the raw value, so sentinels (`__inherit__`, `__none__`), raw mode ids and
@@ -140,16 +136,6 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
     return `${selector} (${t('settings.omp.modelRoles.customModel')})`;
   };
 
-  /**
-   * Small and walkthrough models are opt-outs: the toggle is what turns the
-   * native role on, so a user can uncheck it before any cheap model exists.
-   * The choice is local until it is written; the role remains unset meanwhile.
-   */
-  const [smallModelChoice, setSmallModelChoice] = React.useState<string | undefined>(undefined);
-  const usesOwnSmallModel = Boolean(roleSelectors.smol) || smallModelChoice !== undefined;
-  const [walkthroughChoice, setWalkthroughChoice] = React.useState<string | undefined>(undefined);
-  const usesOwnWalkthroughModel = Boolean(roleSelectors.slow) || walkthroughChoice !== undefined;
-
   const planModeAllowAgents = useUIStore((state) => state.planModeAllowAgents);
   const setPlanModeAllowAgents = useUIStore((state) => state.setPlanModeAllowAgents);
   const sessionGoalDefaultBudgetEnabled = useUIStore((state) => state.sessionGoalDefaultBudgetEnabled);
@@ -159,11 +145,7 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
 
   return (
     <>
-      {/* The section anchor is the model-roles record itself: the three editors
-          below all write `modelRoles`, and the OMP settings table names
-          `omp.modelRoles` as that record's owner. Stamping the record here is
-          what makes that claim name a real control rather than a search entry. */}
-      <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false} settingsItem="omp.modelRoles">
+      <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
         {ompStateFailed && (
           // A read failure is a notice, not a control: it carries no settings
           // anchor, because every anchor is a jump target the search index must
@@ -266,57 +248,19 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
 
       {/* Models the app runs on its own: summaries, titles, the walkthrough. */}
       <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
-        <SettingsCheckboxRow
-          settingsItem="sessions.small-model"
-          checked={!usesOwnSmallModel}
-          onChange={(useDefault) => {
-            if (useDefault) { setRole('smol', ''); setSmallModelChoice(undefined); return; }
-            // Off: write the `smol` role so the picker is usable at once. The
-            // local choice is the model the user picked; the session default
-            // seeds it, and it stays `''` until one exists.
-            setSmallModelChoice('__pending__');
-            setRole('smol', roleSelectors.default ?? '');
-          }}
-          label={t('settings.openchamber.defaults.smallModel.useDefault')}
-          ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
-          info={t('settings.openchamber.defaults.smallModel.description')}
+        <ModelRoleLinkRow
+          label={t('settings.omp.modelRoles.role.smol.label')}
+          info={t('settings.omp.modelRoles.role.smol.desc')}
+          value={roleSelectors.smol || t('settings.omp.modelRoles.inheritFallback')}
+          linkLabel={t('settings.omp.modelRoles.link.hub')}
+          onOpen={() => openModelRoleEditor('smol')}
         />
-        <ModelRoleEditor
-          role="smol"
-          roles={roleSelectors}
-          models={models}
-          directory={directory ?? undefined}
-          globalLevel={configuredThinkingLevel || undefined}
-          settingsItem="sessions.small-model"
-          disabled={!usesOwnSmallModel || isSavingOmp || !ompState}
-          loading={!ompState && !ompStateFailed}
-          label={t('settings.openchamber.defaults.smallModel.title')}
-          onChange={(selector) => setRole('smol', selector)}
-        />
-        <SettingsCheckboxRow
-          settingsItem="sessions.walkthrough-use-default"
-          checked={!usesOwnWalkthroughModel}
-          onChange={(useDefault) => {
-            if (useDefault) { setWalkthroughModel(''); setWalkthroughChoice(undefined); return; }
-            setWalkthroughChoice('__pending__');
-            setWalkthroughModel(roleSelectors.default ?? '');
-          }}
-          label={t('settings.openchamber.defaults.walkthroughModel.useDefault')}
-          ariaLabel={t('settings.openchamber.defaults.walkthroughModel.useDefault')}
-          info={t('settings.openchamber.defaults.walkthroughModel.useDefaultInfo')}
-        />
-        <ModelRoleEditor
-          role="slow"
-          roles={roleSelectors}
-          models={models}
-          directory={directory ?? undefined}
-          globalLevel={configuredThinkingLevel || undefined}
-          settingsItem="sessions.walkthrough-model"
-          disabled={!usesOwnWalkthroughModel || isSavingOmp || !ompState}
-          loading={!ompState && !ompStateFailed}
-          label={t('settings.openchamber.defaults.walkthroughModel.title')}
-          info={t('settings.openchamber.defaults.walkthroughModel.description')}
-          onChange={(selector) => setWalkthroughModel(selector)}
+        <ModelRoleLinkRow
+          label={t('settings.omp.modelRoles.role.slow.label')}
+          info={t('settings.omp.modelRoles.role.slow.desc')}
+          value={roleSelectors.slow || t('settings.omp.modelRoles.inheritFallback')}
+          linkLabel={t('settings.omp.modelRoles.link.hub')}
+          onOpen={() => openModelRoleEditor('slow')}
         />
       </SettingsSection>
 
@@ -330,21 +274,12 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
         settingsItem="sessions.plan-goal"
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
-          {/* The composer disables Plan when the workspace catalog says the
-              `plan` role is unresolvable; this is the one control that writes
-              that role, so it sits with the modes it unlocks. */}
-          <ModelRoleEditor
-            role="plan"
-            roles={roleSelectors}
-            models={models}
-            directory={directory ?? undefined}
-            globalLevel={configuredThinkingLevel || undefined}
-            settingsItem="sessions.default-plan"
-            disabled={isSavingOmp || !ompState}
-            loading={!ompState && !ompStateFailed}
-            label={t('settings.openchamber.defaults.planModel.title')}
-            info={t('settings.openchamber.defaults.planModel.description')}
-            onChange={(selector) => setRole('plan', selector)}
+          <ModelRoleLinkRow
+            label={t('settings.omp.modelRoles.role.plan.label')}
+            info={t('settings.omp.modelRoles.role.plan.desc')}
+            value={roleSelectors.plan || t('settings.omp.modelRoles.inheritFallback')}
+            linkLabel={t('settings.omp.modelRoles.link.hub')}
+            onOpen={() => openModelRoleEditor('plan')}
           />
           {getSectionRows('plan').map((s) => (
             <OmpRowControl
@@ -367,62 +302,49 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
             info={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
           />
           {ompState?.settings.find((s) => s.id === 'goal.enabled')?.value === true ? (
-            <div className={`ps-6 pt-2 ${SETTINGS_SPACE_ROW_CLASS}`}>
-              <SessionGoalCheckerField />
-              <SessionGoalMaxTurnsField />
-              <SettingsFieldRow
-                label={
-                  <SettingsCheckboxRow
-                    checked={sessionGoalDefaultBudgetEnabled}
-                    onChange={(checked) => {
-                      setSessionGoalDefaultBudgetEnabled(checked);
-                      void updateDesktopSettings({ sessionGoalDefaultBudgetEnabled: checked });
-                    }}
-                    label={t('settings.openchamber.visual.goal.budgetLabel')}
-                    ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
-                  />
-                }
-                settingsItem="chat.session-goal-budget"
-              >
-                <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
-                  <NumberInput
-                    value={sessionGoalDefaultBudget}
-                    onValueChange={(value) => {
-                      if (Number.isFinite(value) && value > 0) {
-                        setSessionGoalDefaultBudget(Math.floor(value));
-                        void updateDesktopSettings({ sessionGoalDefaultBudget: Math.floor(value) });
-                      }
-                    }}
-                    min={1000}
-                    max={100000000}
-                    step={50000}
-                    disabled={!sessionGoalDefaultBudgetEnabled}
-                    className={SETTINGS_WIDTH_NUMBER_CLASS}
-                    aria-label={t('settings.openchamber.visual.goal.budgetAria')}
-                  />
-                </div>
-              </SettingsFieldRow>
-            </div>
+            <SettingsControlGroup
+              title={t('settings.openchamber.visual.goal.sectionTitle')}
+              info={t('settings.openchamber.visual.goal.description')}
+            >
+              <div className={SETTINGS_SPACE_ROW_CLASS}>
+                <SessionGoalCheckerField />
+                <SessionGoalMaxTurnsField />
+                <SettingsCheckboxRow
+                  checked={sessionGoalDefaultBudgetEnabled}
+                  onChange={(checked) => {
+                    setSessionGoalDefaultBudgetEnabled(checked);
+                    void updateDesktopSettings({ sessionGoalDefaultBudgetEnabled: checked });
+                  }}
+                  label={t('settings.openchamber.visual.goal.budgetLabel')}
+                  ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
+                  settingsItem="chat.session-goal-budget"
+                />
+                {sessionGoalDefaultBudgetEnabled ? (
+                  <SettingsFieldRow label={t('settings.openchamber.visual.goal.budgetAmountLabel')}>
+                    <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                      <NumberInput
+                        value={sessionGoalDefaultBudget}
+                        onValueChange={(value) => {
+                          if (Number.isFinite(value) && value > 0) {
+                            setSessionGoalDefaultBudget(Math.floor(value));
+                            void updateDesktopSettings({ sessionGoalDefaultBudget: Math.floor(value) });
+                          }
+                        }}
+                        min={1000}
+                        max={100000000}
+                        step={50000}
+                        className={SETTINGS_WIDTH_NUMBER_CLASS}
+                        aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+                      />
+                      <span className={SETTINGS_NUMBER_UNIT_CLASS}>
+                        {t('settings.omp.unit.tokens')}
+                      </span>
+                    </div>
+                  </SettingsFieldRow>
+                ) : null}
+              </div>
+            </SettingsControlGroup>
           ) : null}
-        </div>
-      </SettingsSection>
-
-      {/* Sampling */}
-      <SettingsSection
-        title={t('settings.sessions.section.sampling.title')}
-        description={t('settings.sessions.section.sampling.description')}
-        settingsItem="sessions.sampling"
-      >
-        <div className={SETTINGS_SPACE_ROW_CLASS}>
-          {getSectionRows('sampling').map((s) => (
-            <OmpRowControl
-              key={s.id}
-              setting={s}
-              value={ompForm[s.id]}
-              disabled={isSavingOmp && s.type !== 'string'}
-              onChange={(val) => void handleOmpChange(s.id, val)}
-            />
-          ))}
         </div>
       </SettingsSection>
 
@@ -453,25 +375,6 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('general').map((s) => (
-            <OmpRowControl
-              key={s.id}
-              setting={s}
-              value={ompForm[s.id]}
-              disabled={isSavingOmp && s.type !== 'string'}
-              onChange={(val) => void handleOmpChange(s.id, val)}
-            />
-          ))}
-        </div>
-      </SettingsSection>
-
-      {/* Execution, Steering & Follow-up */}
-      <SettingsSection
-        title={t('settings.sessions.section.execution.title')}
-        description={t('settings.sessions.section.execution.description')}
-        settingsItem="sessions.execution"
-      >
-        <div className={SETTINGS_SPACE_ROW_CLASS}>
-          {getSectionRows('execution').map((s) => (
             <OmpRowControl
               key={s.id}
               setting={s}
@@ -524,14 +427,13 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
         </div>
       </SettingsSection>
 
-      {/* Worktree & Isolation */}
+      {/* Worktree */}
       <SettingsSection
         title={t('settings.sessions.section.isolation.title')}
         description={t('settings.sessions.section.isolation.description')}
-        settingsItem="sessions.isolation"
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
-          {[...getSectionRows('isolation'), ...getSectionRows('worktree')].map((s) => (
+          {getSectionRows('worktree').map((s) => (
             <OmpRowControl
               key={s.id}
               setting={s}
