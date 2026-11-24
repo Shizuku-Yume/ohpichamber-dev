@@ -68,7 +68,8 @@ route-registration	registerSessionWarmingRoutes	## 2026-10-29 - Delete upstream'
 route-registration	registerHttpResponseDiagnostics	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Diagnostic journal does not record HTTP 4xx/5xx responses; exported diagnostics lack server HTTP failure journal
 route-registration	registerAgentToolRoutes	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired OpenCode agent-tools endpoints; OMP tools execute through Agent Service worker
 route-registration	notificationEmitRoutes.registerPluginRoute	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Unauthenticated plugin notification route retired; only authenticated API route kept
-route-deps	registerOpenChamberRoutes.fetchFreeZenModels	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	GET /api/zen/models in openchamber-routes.js:545 throws TypeError: fetchFreeZenModels is not a function; no UI caller mounts this route
+route-deps	registerOpenChamberRoutes.fetchFreeZenModels	## 2026-11-24 - Retire OpenCode Zen, OpenCode Go, OpenCode Console budgets, and residual OpenCode surfaces	OpenCode Zen model catalog retired; fork does not pass or mount the zen reader
+route-deps	registerOpenChamberRoutes.getCachedZenModels	## 2026-11-24 - Retire OpenCode Zen, OpenCode Go, OpenCode Console budgets, and residual OpenCode surfaces	OpenCode Zen model catalog retired; fork does not pass or mount the zen reader
 route-deps	createOpenChamberControlService.secretFiles	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; agent secret tool was retired so secretFiles is unused in normal runtime
 unused-route-fn	createUnreadBaseline	## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities	Replaced by Host-persisted session unread watermarks in metadata (openchamber.workbench.lastIdleAt/viewedAt)
 unused-route-fn	createWorkNamer	## 2026-10-26 - OMP owns session titles	Replaced by OMP native session and worktree title generation
@@ -318,7 +319,6 @@ route-deps	registerSessionFoldersRoutes.onChanged	## 2026-11-10 - Merge upstream
 route-deps	registerFsRoutes.projectRealpath	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	registerServerStatusRoutes.readOpenCodeLoad	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	registerNotificationEmitRoutes.isAgentToolRequestAuthorized	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired or superseded in OMP architecture
-route-deps	registerOpenChamberRoutes.getCachedZenModels	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	registerOpenChamberRoutes.getOpenCodeCompatibility	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	createNotificationTriggerRuntime.buildOpenCodeUrl	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	createNotificationTriggerRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture

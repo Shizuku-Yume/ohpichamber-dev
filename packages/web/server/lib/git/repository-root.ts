@@ -57,9 +57,14 @@ const isVcsInitPath = (pathname: string) => {
 const requestDirectory = (query: URLSearchParams, headers: RequestHeaders | undefined) => {
   const fromQuery = query.get('location[directory]');
   if (fromQuery) return fromQuery;
-  const header = [headers?.['x-opencode-directory']].flat().find(Boolean);
-  if (!header) return null;
-  const unwrapped = headers?.['x-opencode-directory-encoding'] === 'uri' ? decodeOnce(String(header)) : String(header);
+  const primary = [headers?.['x-openchamber-directory']].flat().find(Boolean);
+  if (primary) {
+    const unwrapped = headers?.['x-openchamber-directory-encoding'] === 'uri' ? decodeOnce(String(primary)) : String(primary);
+    return decodeOnce(unwrapped);
+  }
+  const fallback = [headers?.['x-opencode-directory']].flat().find(Boolean);
+  if (!fallback) return null;
+  const unwrapped = headers?.['x-opencode-directory-encoding'] === 'uri' ? decodeOnce(String(fallback)) : String(fallback);
   return decodeOnce(unwrapped);
 };
 

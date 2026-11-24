@@ -27,7 +27,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -93,9 +92,9 @@ export const dict: Record<I18nKey, string> = {
   "chat.fileAttachment.actions.removeImage": "이미지 제거",
   "chat.fileAttachment.actions.removeNamed": "{name} 제거",
   "chat.fileAttachment.toast.attachFailed": "파일을 첨부하지 못했습니다. 다시 시도하세요.",
-  'quota.family.zen': 'Zen 모델',
   'quota.value.requests': '요청: {count}',
   'quota.value.spent': '{spent} 사용',
+  'quota.value.spentOf': '{limit} 중 {spent}',
   'quota.value.unknown': '알 수 없음',
   'quota.window.monthlyTotal': '월간 합계',
   'quota.window.monthlyByok': '월간 BYOK',
@@ -225,7 +224,6 @@ export const dict: Record<I18nKey, string> = {
   ...connectionHeartbeatI18n.ko,
   ...compactionSettingsI18n.ko,
   ...heapSnapshotI18n.ko,
-  ...consoleBudgetsI18n.ko,
   ...imageToolI18n.ko,
   ...sharePagesI18n.ko,
   ...receivedPagesI18n.ko,
@@ -4024,13 +4022,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.themeImport.error.conflict": "이 가져온 테마는 서버에서 편집되었습니다. 덮어쓰지 않았습니다.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "스크롤바 항상 표시",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "포인터가 스크롤 영역 밖에 있어도 스크롤바를 표시합니다. 이 기기에만 적용됩니다.",
-  "settings.providers.page.openCodeGo.workspaceId": "워크스페이스 ID",
-  "settings.providers.page.openCodeGo.apiKey": "API 키",
-  "settings.providers.page.openCodeGo.help": "대시보드 URL에서 워크스페이스 ID를, 브라우저 개발자 도구에서 auth 쿠키를 복사하세요. OhPiChamber는 브라우저 쿠키 저장소를 검색하지 않습니다.",
-  "settings.providers.page.openCodeGo.save": "저장 및 검증",
-  "settings.providers.page.openCodeGo.replace": "교체",
-  "settings.providers.page.openCodeGo.validate": "검증",
-  "settings.providers.page.openCodeGo.delete": "삭제",
   "settings.providers.page.quotaCredentials.saved": "{provider} 인증 정보를 저장했습니다.",
   "settings.providers.page.quotaCredentials.accessToken": "액세스 토큰",
   "settings.providers.page.quotaCredentials.usageToken": "사용량 API 토큰",
@@ -5553,7 +5544,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.providers.connect.recommended": "추천",
   "settings.providers.connect.customHint": "OpenAI 또는 Anthropic 호환 엔드포인트",
   "settings.providers.connect.note.openai": "GPT 모델, ChatGPT로 로그인",
-  "settings.providers.connect.note.opencodeGo": "저렴한 구독",
   "settings.providers.connect.note.openrouter": "키 하나로 모든 모델",
   "settings.providers.connect.note.anthropic": "API 키로 Claude 모델 사용",
   "settings.providers.connect.note.githubCopilot": "Copilot 요금제의 모델",
@@ -6616,7 +6606,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.extensions.add.placeholder": "/path/to/panel 또는 https://github.com/org/panel.git",
   "settings.extensions.add.action": "추가",
   "settings.extensions.add.aria": "폴더, ZIP, URL에서 확장 추가",
-  "settings.extensions.browse.label": "확장 기능 둘러보기",
   "settings.extensions.add.browseFolder": "폴더 찾아보기",
   "settings.extensions.add.browseFolder.aria": "폴더 찾아보기",
   "settings.extensions.add.browseZip": "ZIP 압축파일 찾아보기",
@@ -7114,12 +7103,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.classification.status.fallback": "선택한 항목을 지금 사용할 수 없어 Jev가 {provider}를 통해 동작합니다.",
   "settings.classification.source.off.name": "끔",
   "settings.classification.source.off.description": "아무것도 보내지 않습니다. 안전망과 Auto는 숨겨지고, 세션은 직접 옮길 때만 진행 중이 됩니다.",
-  "settings.classification.source.zenPromo.name": "OpenCode Zen 프로모션",
-  "settings.classification.source.zenPromo.description": "기간 한정 무료, 키가 필요 없습니다. 프로모션이 끝나면 키로 바꾸세요.",
-  "settings.classification.source.zenPromo.ended": "프로모션이 끝났습니다.",
-  "settings.classification.source.zenKey.name": "OpenCode Zen 키",
-  "settings.classification.source.zenKey.description": "OpenCode Zen에 설정된 API 키를 사용합니다. Zen 잔액에서 차감됩니다.",
-  "settings.classification.source.zenKey.missing": "OpenCode Zen에 사용할 수 있는 API 키가 없습니다. OpenCode 계정 로그인은 해당되지 않으니 설정 → 프로바이더에서 API 키를 추가하세요.",
   "settings.classification.source.openrouter.name": "OpenRouter 키",
   "settings.classification.source.openrouter.description": "프로바이더에 설정된 OpenRouter API 키를 사용합니다. OpenRouter 계정에 청구됩니다.",
   "settings.classification.source.openrouter.missing": "사용할 수 있는 OpenRouter API 키가 없습니다. 설정 → 프로바이더에서 추가하세요.",
@@ -7162,7 +7145,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.sessions.permissions.explain.safetyVia": "일상적인 작업은 알아서 실행되고, 위험하거나 되돌리기 어려운 작업은 기다립니다. {provider}를 통해 Jev가 판단합니다.",
   "settings.sessions.permissions.explain.auto": "모든 승인 요청이 묻지 않고 수락됩니다.",
   "settings.sessions.permissions.agentPermissionsLink": "에이전트 권한",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Jev가 필요하며, Jev에는 분류 제공자가 필요합니다: 무료 OpenCode Zen 프로모션, 설정 → 제공자에서의 Zen API 키, 또는 TypeSafe 키.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Jev가 필요하며, Jev에는 분류 제공자가 필요합니다: OpenRouter, Vercel, Gemini 또는 TypeSafe 키, 또는 사용자 지정 엔드포인트.",
   "chat.workStatus.sections.extensionBadge": "확장 프로그램",
   "chat.chatInput.toast.guestHasNoPanel": "이 확장 프로그램은 패널 없이 실행됩니다.",
   "header.mainSurface.backToChat": "채팅으로 돌아가기",

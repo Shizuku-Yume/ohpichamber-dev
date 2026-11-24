@@ -15,17 +15,17 @@ let activeRuntimeKey = "runtime-a"
 let respond: (call: FetchCall) => Response | Promise<Response> = () => new Response("{}", { status: 200 })
 
 environment.respond(async (url, init) => {
-    if (url.pathname === '/api/fs/home') return Response.json({ home: '/home/test', chatsRoot: '/chats' })
-    if (!url.pathname.startsWith('/api/message-queue')) throw new Error(`Unexpected request: ${url}`)
-    const call: FetchCall = {
-      path: `${url.pathname}${url.search}`,
-      method: init?.method ?? "GET",
-      body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
-    }
-    const directory = new Headers(init?.headers).get('x-opencode-directory')
-    if (directory) call.directory = decodeURIComponent(directory)
-    calls.push(call)
-    return respond(call)
+  if (url.pathname === '/api/fs/home') return Response.json({ home: '/home/test', chatsRoot: '/chats' })
+  if (!url.pathname.startsWith('/api/message-queue')) throw new Error(`Unexpected request: ${url}`)
+  const call: FetchCall = {
+    path: `${url.pathname}${url.search}`,
+    method: init?.method ?? "GET",
+    body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+  }
+  const directory = new Headers(init?.headers).get('x-openchamber-directory')
+  if (directory) call.directory = decodeURIComponent(directory)
+  calls.push(call)
+  return respond(call)
 })
 const activateRuntime = (key: string) => {
   activeRuntimeKey = key
@@ -51,10 +51,12 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 const deferredResponse = () => {
   let complete: ((response: Response) => void) | undefined
   const promise = new Promise<Response>((resolve) => { complete = resolve })
-  return { promise, resolve: (response: Response) => {
-    if (!complete) throw new Error("Deferred response was not initialized")
-    complete(response)
-  } }
+  return {
+    promise, resolve: (response: Response) => {
+      if (!complete) throw new Error("Deferred response was not initialized")
+      complete(response)
+    }
+  }
 }
 
 const target = createMessageQueueTarget("session-1", "/repo", "runtime-a")!

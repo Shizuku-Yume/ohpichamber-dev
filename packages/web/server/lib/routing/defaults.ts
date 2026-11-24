@@ -30,34 +30,6 @@ export const GEMINI_DECISIONS_MODEL = 'gemini-decision-1';
 export const JEV_LINGER_MS = 5 * 60_000;
 
 /**
- * OpenCode Zen serves the same System One endpoint and answers without any
- * credential while `jev-1.13-free` is free. Dax approved OpenChamber using it
- * (Slack, 2026-09-22) on terms this module keeps: the UI tells the user it is a
- * limited-time free model that will later need a Zen key, and every call names
- * OpenChamber so zen can see or throttle us. Zen rejects the `jev-latest`
- * alias, so the versioned free id is sent instead.
- */
-export const ZEN_JEV_API_URL = 'https://opencode.ai/zen/v1/systemone';
-export const ZEN_JEV_MODEL = 'jev-1.13-free';
-export const ZEN_CLIENT_ID = 'openchamber';
-
-/**
- * Whether the free promotion can be used. While false it is not offered; users
- * keep Jev through a key, or lose the safety net and Auto until they add one.
- *
- * See DOCUMENTATION.md for the 2026-10-27 outage that turned it off for a
- * few hours.
- */
-export const ZEN_JEV_PROMOTION_ACTIVE = true;
-
-/**
- * The paid model behind a Zen API key, same endpoint. Not verified live: an
- * OpenCode account sign-in (OAuth) is rejected there as "Invalid API key", so
- * only the native OpenCode Zen provider's API key is offered.
- */
-export const ZEN_JEV_PAID_MODEL = 'jev-1.13';
-
-/**
  * OpenRouter and Vercel AI Gateway serve TypeSafe's System One API under their
  * own base URLs and bill the account behind each native provider credential.
  * The Host resolves the selected workspace credential at execution. OpenRouter

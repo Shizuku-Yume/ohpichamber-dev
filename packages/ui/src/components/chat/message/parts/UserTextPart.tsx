@@ -25,7 +25,6 @@ import { useI18n } from '@/lib/i18n';
 import {
     INTERACTIVE_REFERENCE_CHIP_CLASS,
     REFERENCE_CHIP_LABEL_CLASS,
-    buildAgentMentionUrl,
     parseSkillHref,
     type AttachmentCitationLink,
 } from '@/lib/messages/inlineMessageLinks';
@@ -335,17 +334,14 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
             agentMentionUsed = true;
             return [
                 node.slice(0, idx),
-                <a
+                <span
                     key={`agent-${index}`}
-                    href={buildAgentMentionUrl(agentMention.name)}
+                    data-openchamber-agent-mention="true"
                     dir="ltr"
-                    className="text-primary hover:underline [unicode-bidi:isolate]"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(event) => event.stopPropagation()}
+                    className="text-primary [unicode-bidi:isolate]"
                 >
                     {agentMention.token}
-                </a>,
+                </span>,
                 node.slice(idx + agentMention.token.length),
             ];
         });

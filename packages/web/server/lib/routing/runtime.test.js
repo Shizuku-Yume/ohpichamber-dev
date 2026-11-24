@@ -63,7 +63,7 @@ const catalogModel = (model, variants) => ({
 // legacy auth/config readers, or mocked runtime methods participate.
 const makeRuntime = async ({
   config = readyConfig(), token = 'key', classifierSource = 'typesafe', customEndpoint = null,
-  credentials = {}, credentialError = null, providerError = null, zenPromotionActive = true, enterprise = false, pinned = null,
+  credentials = {}, credentialError = null, providerError = null, enterprise = false, pinned = null,
   catalog = [], history = historyPage(), answers = { category: { choice: 'hard', confidence: 0.97 } },
   askError = null, sessionScope = SCOPE, workspaceScope = SCOPE, nowMs = NOW,
 } = {}) => {
@@ -119,7 +119,6 @@ const makeRuntime = async ({
     resolveCredential,
     enterpriseMode: () => state.enterprise,
     readPinnedEndpoint: () => state.pinned,
-    zenPromotionActive,
     broadcastGlobalUiEvent: (event) => events.push(event),
     now: () => state.nowMs,
   });
@@ -129,7 +128,7 @@ const send = (extra = {}) => ({ sessionId: 's1', workspaceId: SCOPE.workspaceId,
 
 describe('Gemini classifier HTTP composition', () => {
   it('saves, uses and removes a key without returning it to the client', async () => {
-    const { runtime } = await makeRuntime({ token: null, classifierSource: 'off', zenPromotionActive: false });
+    const { runtime } = await makeRuntime({ token: null, classifierSource: 'off' });
     const app = express();
     registerRoutingRoutes(app, runtime);
     const saved = await request(app).put('/api/routing/classifier/gemini').send({ key: 'test-classifier-key' }).expect(200);
@@ -443,10 +442,37 @@ describe('permission safety', () => {
 
 describe('classifier policy and durable settings', () => {
   it('honors Off, unavailable picks and explicit native provider keys without a promotional fallback', () => {
-    expect(resolveClassifier({ selected: 'off', typesafeKey: 'key', openrouterKey: 'key', zenPromotionActive: true }).effective).toBeNull();
-    expect(resolveClassifier({ selected: 'typesafe', openrouterKey: 'key', zenPromotionActive: true }).effective).toBe('openrouter');
-    expect(resolveClassifier({ selected: 'typesafe', zenPromotionActive: true }).effective).toBeNull();
-    expect(resolveClassifier({ selected: 'openrouter', openrouterKey: 'key', typesafeKey: 'other', zenPromotionActive: true }).effective).toBe('openrouter');
+    expect(resolveClassifier({ selected: 'off', typesafeKey: 'key', openrouterKey: 'key' }).effective).toBeNull();
+    expect(resolveClassifier({ selected: 'typesafe', openrouterKey: 'key' }).effective).toBe('openrouter');
+    expect(resolveClassifier({ selected: 'typesafe' }).effective).toBeNull();
+    expect(resolveClassifier({ selected: 'openrouter', openrouterKey: 'key', typesafeKey: 'other' }).effective).toBe('openrouter');
+  });
+  it('normalizes legacy zen-promo and zen-key selections to the first configured fallback key or off', async () => {
+    expect(resolveClassifier({ selected: 'zen-promo' })).toMatchObject({ selected: 'off', effective: null });
+    expect(resolveClassifier({ selected: 'zen-key' })).toMatchObject({ selected: 'off', effective: null });
+    expect(resolveClassifier({ selected: 'zen-promo', openrouterKey: 'key', vercelKey: 'key' })).toMatchObject({ selected: 'openrouter', effective: 'openrouter' });
+    expect(resolveClassifier({ selected: 'zen-key', customEndpoint: { url: 'https://jev.example/decision', model: 'jev-latest' }, openrouterKey: 'key' })).toMatchObject({ selected: 'custom', effective: 'custom' });
+    expect(resolveClassifier({ selected: 'zen-promo', typesafeKey: 'ts', customEndpoint: { url: 'https://jev.example/decision', model: 'jev-latest' } })).toMatchObject({ selected: 'typesafe', effective: 'typesafe' });
+    for (const retired of ['zen-promo', 'zen-key']) {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'routing-legacy-'));
+      temporaryDirectories.push(dir);
+      await fs.writeFile(path.join(dir, 'classification.json'), JSON.stringify({ version: 1, source: retired }));
+      const store = createRoutingStore({ dataDir: dir });
+      const runtime = createRoutingRuntime({
+        dataDir: dir,
+        service: { getState: () => ({ phase: 'ready' }), request: async () => Response.json({ workspaceId: SCOPE.workspaceId, revision: '1', providers: [{ providerId: 'vercel-ai-gateway', name: 'Vercel AI Gateway', endpoint: null, protocol: null, authMethods: ['api-key'], auth: { status: 'configured', method: 'api-key', source: 'stored-credential', credentialRef: 'cred_vercel' } }] }) },
+        store,
+        resolveSessionScope: async () => SCOPE,
+        resolveWorkspaceScope: async () => SCOPE,
+        resolveCredential: async () => ({ type: 'api_key', key: 'v' }),
+      });
+      const withVercel = await runtime.describe(SCOPE.workspaceId);
+      expect(withVercel.classification).toMatchObject({ selected: 'vercel', effective: 'vercel' });
+      expect(withVercel.classification.sources.map((s) => s.id)).not.toContain(retired);
+      const withoutKeys = await runtime.describe();
+      expect(withoutKeys.classification).toMatchObject({ selected: 'off', effective: null });
+      await expect(runtime.setClassifierSource(retired)).rejects.toMatchObject({ status: 400 });
+    }
   });
   it('persists a chosen source and token so later reads observe the new selection', async () => {
     const { runtime, store } = await makeRuntime({ token: null, classifierSource: 'off' });

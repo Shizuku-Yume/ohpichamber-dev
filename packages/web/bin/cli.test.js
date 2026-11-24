@@ -668,16 +668,16 @@ describe('cli args', () => {
 
   it('formats model defaults and favorites compactly', () => {
     expect(formatModelsOutput({
-      defaultModel: 'opencode-go/deepseek-v4-flash',
+      defaultModel: 'openrouter/deepseek-v4-flash',
       defaultAgent: 'build',
       favoriteModels: [
         { providerID: 'openai', modelID: 'gpt-5.5' },
-        { providerID: 'opencode-go', modelID: 'deepseek-v4-pro' },
+        { providerID: 'openrouter', modelID: 'deepseek-v4-pro' },
       ],
       recentModels: [
         { providerID: 'zai-coding-plan', modelID: 'glm-5.2' },
       ],
-    }, formatModelRef)).toBe('Default: `opencode-go/deepseek-v4-flash` / `build`\n\nFavorites:\n- `openai/gpt-5.5`\n- `opencode-go/deepseek-v4-pro`\n\nRecent:\n- `zai-coding-plan/glm-5.2`\n');
+    }, formatModelRef)).toBe('Default: `openrouter/deepseek-v4-flash` / `build`\n\nFavorites:\n- `openai/gpt-5.5`\n- `openrouter/deepseek-v4-pro`\n\nRecent:\n- `zai-coding-plan/glm-5.2`\n');
   });
 
   it('formats compact session list lines', () => {
@@ -685,8 +685,8 @@ describe('cli args', () => {
       title: 'Default model smoke test',
       agent: 'build',
       directory: '/repo',
-      model: { providerID: 'opencode-go', id: 'deepseek-v4-flash', variant: 'default' },
-    }, formatModelRef)).toBe('- `Default model smoke test` — `opencode-go/deepseek-v4-flash`, `build` — `/repo`');
+      model: { providerID: 'openrouter', id: 'deepseek-v4-flash', variant: 'default' },
+    }, formatModelRef)).toBe('- `Default model smoke test` — `openrouter/deepseek-v4-flash`, `build` — `/repo`');
     expect(formatSessionLine({
       title: 'Working session',
       agent: 'build',

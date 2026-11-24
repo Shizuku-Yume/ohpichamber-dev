@@ -93,8 +93,7 @@ const probe = async (mcpUrl, register) => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       redirect_uris: [redirectUri],
-      client_name: 'opencode',
-      client_uri: 'https://opencode.ai',
+      client_name: 'ohpichamber',
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'none',

@@ -79,7 +79,7 @@ const usageWindow = {
 };
 
 describe('hasQuotaData', () => {
-  test('provider windows, model windows and console budgets each count as data', () => {
+  test('provider windows and model windows each count as data', () => {
     expect(hasQuotaData({ windows: { session: usageWindow } })).toBe(true);
     expect(hasQuotaData({ windows: {}, models: { 'gemini-3': { windows: { daily: usageWindow } } } })).toBe(true);
     expect(hasQuotaData({ windows: {}, models: { 'gemini-3': { windows: {} } } })).toBe(false);

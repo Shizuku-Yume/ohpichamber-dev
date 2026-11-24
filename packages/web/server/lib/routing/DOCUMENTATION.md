@@ -17,9 +17,9 @@ There is no env gate — the feature shipped dark behind
 
 ## Files
 
-- `defaults.js` — the Auto sentinel, the Jev endpoints and models, the
-  `ZEN_JEV_PROMOTION_ACTIVE` switch, built-in categories, the question wording
-  for routing and for the safety net, history excerpt limits.
+- `defaults.js` — the Auto sentinel, the Jev endpoints and models, built-in
+  categories, the question wording for routing and for the safety net, history
+  excerpt limits.
 - `classifier.js` — the classification providers: `resolveClassifier` (the
   user's pick, what is usable, and the source that actually answers) and
   `classifierEndpoint` (where a request for a source goes),
@@ -132,12 +132,6 @@ The user picks a classification provider in Settings → Providers →
 Classification providers:
 
 - `off`: no Jev at all. Every Jev feature takes its no-provider path.
-- `zen-promo`: `opencode.ai/zen/v1/systemone` as `jev-1.13-free`, which OpenCode
-  Zen answers with no credential at all. Usable while
-  `ZEN_JEV_PROMOTION_ACTIVE` is true; flip it when OpenCode ends the promotion.
-- `zen-key`: the same endpoint as `jev-1.13`, using native provider
-  `opencode-zen` with configured API-key authentication. OAuth presence is not
-  a usable key for this classifier.
 - `openrouter`: `openrouter.ai/api/v1/systemone` as `jev-latest`, using native
   provider `openrouter` with configured API-key authentication.
 - `vercel`: `ai-gateway.vercel.sh/typesafe/v1/systemone` as `typesafe-ai/jev`,
@@ -177,14 +171,12 @@ other pick allowed.
 
 Jev reads conversation excerpts, so it is opt-in. Without a stored pick the
 default is `typesafe` when a key is saved (saving a key is choosing it, and it
-always won before the pick existed) and `off` otherwise. Until v2.0.3 the
-default was `zen-promo`, which sent every message of users who never opened
-this page to zen (#4109); an install without a stored pick now reads as `off`
-with no conversion. A pick that cannot be used falls back to the first usable
-key (`typesafe`, `custom`, `openrouter`, `vercel`, `zen-key`: OpenChamber's
-own Jev settings before native workspace keys); none usable means no Jev.
-`zen-promo` needs no credential, so it is never a fallback: only an explicit
-pick sends anything there, and `off` never falls back.
+always won before the pick existed) and `off` otherwise. A retired saved pick
+(`zen-promo` or `zen-key`) normalizes on read to the first usable fallback key
+(`typesafe`, `custom`, `openrouter`, `vercel`) or `off`, never failing routing
+state. A pick that cannot be used falls back to the first usable key
+(`typesafe`, `custom`, `openrouter`, `vercel`: OpenChamber's own Jev settings
+before native workspace keys); none usable means no Jev.
 
 Native availability comes from
 `GET /api/agent/v1/workspaces/:workspaceId/providers`: configured API-key
@@ -194,16 +186,6 @@ agent-directory, provider ID, credential reference and purpose `routing`.
 Each execution rechecks presence and enterprise policy. No retired credential
 file, OpenCode config or Host environment key reader participates. Unscoped
 calls can use Host TypeSafe/custom settings but cannot borrow workspace keys.
-
-Every zen call is tagged `x-opencode-client: openchamber`. Dax approved the
-free use in Slack on 2026-09-22 on terms the code and the copy keep together:
-zen can identify and throttle our calls through that header, and the
-Classification providers page tells the user in plain words that the free model
-is a limited-time OpenCode promotion. Zen rejects the `jev-latest` alias, so
-versioned ids are sent.
-
-Never make the free tier the only path: the zen docs call it "available for a
-limited time", and the keys are what users fall back to when it ends.
 
 ## Events
 
@@ -218,9 +200,9 @@ left for the user (`../permission-auto-accept/DOCUMENTATION.md`).
 before the classifier pick and adds `jevAvailable`, `classifier` and
 `classification` (both `selected`, `effective`, `sources`). `classification`
 is the full picture. `classifier` is what v2.0.2 clients parse: their schema
-knows only `zen-promo`, `zen-key` and `typesafe` and rejects the whole state
-on any other id, so it lists only those and is null while OpenRouter,
-Vercel or a custom endpoint is picked or answering (`legacyClassifier`). Current clients read
+knows only `typesafe` among retained sources and rejects the whole state
+on any other id, so it lists only `typesafe` and is null while OpenRouter,
+Vercel, Gemini or a custom endpoint is picked or answering (`legacyClassifier`). Current clients read
 `classification` and drop source ids they do not know.
 
 ## UI

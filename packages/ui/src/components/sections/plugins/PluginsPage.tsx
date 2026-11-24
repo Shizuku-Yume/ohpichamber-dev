@@ -761,6 +761,36 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     </Button>
   );
 
+  const hasActiveWorkers = catalog.workers.length > 0;
+  // A mutation's own outcome, in the vocabulary of the thing the user
+  // did. Worker identities and engine checks stay out of this view.
+  const lastMutationLabel = lastMutation
+    ? t(lastMutation.status === 'applied'
+      ? 'settings.plugins.apply.applied'
+      : lastMutation.status === 'partial'
+        ? 'settings.plugins.apply.partial'
+        : lastMutation.status === 'failed'
+          ? 'settings.plugins.apply.failed'
+          : 'settings.plugins.apply.noActiveWorkers', { failedCount: lastMutation.workers.filter(worker => worker.outcome === 'failed').length })
+    : null;
+  const showLifecycleSection = hasActiveWorkers || lastMutationLabel !== null;
+  const lifecycleSection = showLifecycleSection ? (
+    <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+      {hasActiveWorkers ? (
+        <SettingsFieldRow
+          label={t('settings.plugins.runtime.title')}
+          description={lastMutationLabel ? <span role="status">{lastMutationLabel}</span> : undefined}
+        >
+          <Button variant="outline" size="sm" disabled={disabled} onClick={requestApply}>
+            {t('settings.plugins.action.apply')}
+          </Button>
+        </SettingsFieldRow>
+      ) : (
+        <p role="status" className="typography-meta text-muted-foreground">{lastMutationLabel}</p>
+      )}
+    </SettingsSection>
+  ) : null;
+
   if (plugin) {
     const details = [plugin.description, ...(plugin.enabledFeatures ?? [])].filter(Boolean).join(' · ');
     const update = updateFor(catalog.availableUpdates, plugin);
@@ -775,7 +805,8 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           headerEnd={deleteButton({ kind: 'plugin', plugin })}
           titleAccessory={<ScopeChip scope={plugin.scope} />}
         >
-          <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+          {lifecycleSection}
+          <SettingsSection divider={showLifecycleSection} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
             {update ? (
               <p className="typography-meta text-[var(--status-info)]">
@@ -798,13 +829,8 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               <Button variant="destructive" disabled={disabled} onClick={() => requestDelete({ kind: 'plugin', plugin })}>
                 {t('settings.plugins.action.uninstall')}
               </Button>
-              {catalog.workers.length > 0 ? (
-                <Button variant="outline" disabled={disabled} onClick={requestApply}>
-                  {t('settings.plugins.action.apply')}
-                </Button>
-              ) : null}
             </div>
-            {catalog.workers.length === 0 ? (
+            {!hasActiveWorkers ? (
               <p className="typography-meta text-muted-foreground">{t('settings.plugins.apply.nextSession')}</p>
             ) : null}
           </SettingsSection>
@@ -855,12 +881,16 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             </span>
           )}
         >
-          <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
-            {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
-          </SettingsSection>
+          {lifecycleSection}
+          {operationError ? (
+            <SettingsSection divider={showLifecycleSection} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+              <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p>
+            </SettingsSection>
+          ) : null}
 
           <SettingsSection
             title={t('settings.plugins.local.title')}
+            divider={showLifecycleSection || operationError !== null}
           >
             <SettingsFieldRow label={t('settings.plugins.page.field.fileName')}>
               <span className="min-w-0 truncate font-mono typography-meta text-foreground">{extension.relativePath}</span>
@@ -910,24 +940,12 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
         )}
       >
         {operationError ? <p role="alert" className="mb-4 typography-meta text-[var(--status-error)]">{operationError}</p> : null}
-        {/* A mutation's own outcome, in the vocabulary of the thing the user
-            did. Worker identities and engine checks stay out of this view. */}
-        {lastMutation ? (
-          <p role="status" className="mb-4 typography-meta text-muted-foreground">
-            {t(lastMutation.status === 'applied'
-              ? 'settings.plugins.apply.applied'
-              : lastMutation.status === 'partial'
-                ? 'settings.plugins.apply.partial'
-                : lastMutation.status === 'failed'
-                  ? 'settings.plugins.apply.failed'
-                  : 'settings.plugins.apply.noActiveWorkers', { failedCount: lastMutation.workers.filter(worker => worker.outcome === 'failed').length })}
-          </p>
-        ) : null}
+        {lifecycleSection}
 
         <SettingsSection
           title={t('settings.plugins.section.installed')}
-          description={installedCount > 0 && catalog.workers.length === 0 ? t('settings.plugins.apply.nextSession') : undefined}
-          divider={false}
+          description={installedCount > 0 && !hasActiveWorkers ? t('settings.plugins.apply.nextSession') : undefined}
+          divider={showLifecycleSection}
           settingsItem="plugins.installed"
           headerAction={(
             <div className="flex flex-wrap items-center gap-1">
@@ -935,11 +953,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                 <Icon name="add" className="size-3.5" />
                 {t('settings.plugins.sidebar.actions.addTitle')}
               </Button>
-              {catalog.workers.length > 0 ? (
-                <Button variant="ghost" size="sm" disabled={disabled} onClick={requestApply}>
-                  {t('settings.plugins.action.apply')}
-                </Button>
-              ) : null}
             </div>
           )}
         >

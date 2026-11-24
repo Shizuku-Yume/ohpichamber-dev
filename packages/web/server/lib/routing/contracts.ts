@@ -71,7 +71,6 @@ export interface CacheHoldInput extends SessionScope {
 }
 
 export interface ProviderKeys {
-  zenKey: string | null;
   openrouterKey: string | null;
   vercelKey: string | null;
   geminiKey: string | null;
@@ -84,7 +83,6 @@ export interface RoutingRuntimeOptions {
   store?: ReturnType<typeof createRoutingStore>;
   jev?: ReturnType<typeof createJevClient>;
   readProviderKeys?: () => ProviderKeys | Promise<ProviderKeys>;
-  zenPromotionActive?: boolean;
   enterpriseMode?: () => boolean;
   readPinnedEndpoint?: typeof readPinnedCustomEndpoint;
   listCatalogModels?: ((directory: SessionScope['directory']) => Promise<{ providerID: string; modelID: string; variants: { id: string }[] }[]>) | null;

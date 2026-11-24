@@ -163,15 +163,13 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
   const status = locked
     ? (customEndpoint?.pinned ? t('settings.classification.status.enterprisePinned') : t('settings.classification.status.enterprise'))
     : !classifier || classifier.selected === 'off'
-    ? null
-    : classifier.effective === null
-      ? t('settings.classification.status.none')
-      : classifier.effective !== classifier.selected && effectiveName
-        ? t('settings.classification.status.fallback', { provider: effectiveName })
-        : null;
+      ? null
+      : classifier.effective === null
+        ? t('settings.classification.status.none')
+        : classifier.effective !== classifier.selected && effectiveName
+          ? t('settings.classification.status.fallback', { provider: effectiveName })
+          : null;
 
-  const promoUsable = usable('zen-promo');
-  const zenKeyUsable = usable('zen-key');
   const openrouterUsable = usable('openrouter');
   const vercelUsable = usable('vercel');
   const geminiUsable = usable('gemini');
@@ -196,147 +194,121 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
         <p className={SETTINGS_DESCRIPTION_CLASS}>{t('settings.classification.unavailable')}</p>
       ) : (
         <>
-        <SettingsSection
-          title={t('settings.classification.model.title')}
-          info={t('settings.classification.model.info')}
-          settingsItem="providers.classification"
-        >
-          <div className={SETTINGS_SPACE_ROW_CLASS}>
-            {status ? <p className={SETTINGS_HELPER_CLASS}>{status}</p> : null}
-            <SettingsRadioGroup aria-label={t('settings.classification.model.title')}>
-              <SettingsRadioOption
-                selected={classifier.selected === 'off'}
-                onSelect={() => void pick('off')}
-                label={t('settings.classification.source.off.name')}
-                description={t('settings.classification.source.off.description')}
-              />
-              {locked ? null : (
-                <>
-                  {promoUsable || classifier.selected === 'zen-promo' ? (
-                    <SettingsRadioOption
-                      selected={classifier.selected === 'zen-promo'}
-                      onSelect={() => void pick('zen-promo')}
-                      disabled={!promoUsable}
-                      label={t('settings.classification.source.zenPromo.name')}
-                      description={promoUsable
-                        ? t('settings.classification.source.zenPromo.description')
-                        : t('settings.classification.source.zenPromo.unavailable')}
-                    />
-                  ) : null}
-                  <SettingsRadioOption
-                    selected={classifier.selected === 'zen-key'}
-                    onSelect={() => void pick('zen-key')}
-                    disabled={!zenKeyUsable}
-                    label={t('settings.classification.source.zenKey.name')}
-                    description={zenKeyUsable
-                      ? t('settings.classification.source.zenKey.description')
-                      : (
-                        <MissingKeyDescription
-                          text={t('settings.classification.source.zenKey.missing')}
-                          linkLabel={t('settings.classification.source.openProvider', { provider: 'OpenCode Zen' })}
-                          onOpen={() => onOpenProvider('opencode-zen')}
-                        />
-                      )}
-                  />
-                  <SettingsRadioOption
-                    selected={classifier.selected === 'openrouter'}
-                    onSelect={() => void pick('openrouter')}
-                    disabled={!openrouterUsable}
-                    label={t('settings.classification.source.openrouter.name')}
-                    description={openrouterUsable
-                      ? t('settings.classification.source.openrouter.description')
-                      : (
-                        <MissingKeyDescription
-                          text={t('settings.classification.source.openrouter.missing')}
-                          linkLabel={t('settings.classification.source.openProvider', { provider: 'OpenRouter' })}
-                          onOpen={() => onOpenProvider('openrouter')}
-                        />
-                      )}
-                  />
-                  <SettingsRadioOption
-                    selected={classifier.selected === 'vercel'}
-                    onSelect={() => void pick('vercel')}
-                    disabled={!vercelUsable}
-                    label={t('settings.classification.source.vercel.name')}
-                    description={vercelUsable
-                      ? t('settings.classification.source.vercel.description')
-                      : (
-                        <MissingKeyDescription
-                          text={t('settings.classification.source.vercel.missing')}
-                          linkLabel={t('settings.classification.source.openProvider', { provider: 'Vercel AI Gateway' })}
-                          onOpen={() => onOpenProvider('vercel-ai-gateway')}
-                        />
-                      )}
-                  />
-                  <SettingsRadioOption
-                    selected={classifier.selected === 'gemini'}
-                    onSelect={() => void pick('gemini')}
-                    disabled={!geminiUsable}
-                    label={t('settings.classification.source.gemini.name')}
-                    description={geminiUsable
-                      ? t('settings.classification.source.gemini.description')
-                      : `${t('settings.classification.source.gemini.description')} ${t('settings.classification.source.gemini.missing')}`}
-                  />
-                  <SettingsRadioOption
-                    selected={classifier.selected === 'typesafe'}
-                    onSelect={() => void pick('typesafe')}
-                    disabled={!tokenPresent}
-                    label={t('settings.classification.source.typesafe.name')}
-                    description={tokenPresent
-                      ? t('settings.classification.source.typesafe.description')
-                      : t('settings.classification.source.typesafe.missing')}
-                  />
-                </>
-              )}
-              {!locked || customEndpoint?.pinned ? (
+          <SettingsSection
+            title={t('settings.classification.model.title')}
+            info={t('settings.classification.model.info')}
+            settingsItem="providers.classification"
+          >
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
+              {status ? <p className={SETTINGS_HELPER_CLASS}>{status}</p> : null}
+              <SettingsRadioGroup aria-label={t('settings.classification.model.title')}>
                 <SettingsRadioOption
-                  selected={classifier.selected === 'custom'}
-                  onSelect={() => void pick('custom')}
-                  disabled={!customUsable}
-                  label={t('settings.classification.source.custom.name')}
-                  description={customEndpoint && customUsable
-                    ? t('settings.classification.source.custom.description', { url: customEndpoint.url })
-                    : t('settings.classification.source.custom.missing')}
+                  selected={classifier.selected === 'off'}
+                  onSelect={() => void pick('off')}
+                  label={t('settings.classification.source.off.name')}
+                  description={t('settings.classification.source.off.description')}
                 />
-              ) : null}
-            </SettingsRadioGroup>
-
-            {locked ? null : (
-              <SettingsFieldRow
-                label={t('settings.routing.token.label')}
-                info={t('settings.routing.token.info')}
-              >
-                <div className="flex w-full min-w-0 items-center gap-2">
-                  <Input
-                    type="password"
-                    autoComplete="off"
-                    value={tokenInput}
-                    onChange={(event) => setTokenInput(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === 'Enter') void handleSaveToken(); }}
-                    placeholder={tokenPresent ? t('settings.routing.token.replacePlaceholder') : t('settings.routing.token.placeholder')}
-                    aria-label={t('settings.routing.token.label')}
-                    className="h-8 rounded-md px-3 min-w-0 flex-1"
-                    disabled={tokenBusy}
+                {locked ? null : (
+                  <>
+                    <SettingsRadioOption
+                      selected={classifier.selected === 'openrouter'}
+                      onSelect={() => void pick('openrouter')}
+                      disabled={!openrouterUsable}
+                      label={t('settings.classification.source.openrouter.name')}
+                      description={openrouterUsable
+                        ? t('settings.classification.source.openrouter.description')
+                        : (
+                          <MissingKeyDescription
+                            text={t('settings.classification.source.openrouter.missing')}
+                            linkLabel={t('settings.classification.source.openProvider', { provider: 'OpenRouter' })}
+                            onOpen={() => onOpenProvider('openrouter')}
+                          />
+                        )}
+                    />
+                    <SettingsRadioOption
+                      selected={classifier.selected === 'vercel'}
+                      onSelect={() => void pick('vercel')}
+                      disabled={!vercelUsable}
+                      label={t('settings.classification.source.vercel.name')}
+                      description={vercelUsable
+                        ? t('settings.classification.source.vercel.description')
+                        : (
+                          <MissingKeyDescription
+                            text={t('settings.classification.source.vercel.missing')}
+                            linkLabel={t('settings.classification.source.openProvider', { provider: 'Vercel AI Gateway' })}
+                            onOpen={() => onOpenProvider('vercel-ai-gateway')}
+                          />
+                        )}
+                    />
+                    <SettingsRadioOption
+                      selected={classifier.selected === 'gemini'}
+                      onSelect={() => void pick('gemini')}
+                      disabled={!geminiUsable}
+                      label={t('settings.classification.source.gemini.name')}
+                      description={geminiUsable
+                        ? t('settings.classification.source.gemini.description')
+                        : `${t('settings.classification.source.gemini.description')} ${t('settings.classification.source.gemini.missing')}`}
+                    />
+                    <SettingsRadioOption
+                      selected={classifier.selected === 'typesafe'}
+                      onSelect={() => void pick('typesafe')}
+                      disabled={!tokenPresent}
+                      label={t('settings.classification.source.typesafe.name')}
+                      description={tokenPresent
+                        ? t('settings.classification.source.typesafe.description')
+                        : t('settings.classification.source.typesafe.missing')}
+                    />
+                  </>
+                )}
+                {!locked || customEndpoint?.pinned ? (
+                  <SettingsRadioOption
+                    selected={classifier.selected === 'custom'}
+                    onSelect={() => void pick('custom')}
+                    disabled={!customUsable}
+                    label={t('settings.classification.source.custom.name')}
+                    description={customEndpoint && customUsable
+                      ? t('settings.classification.source.custom.description', { url: customEndpoint.url })
+                      : t('settings.classification.source.custom.missing')}
                   />
-                  <Button size="sm" variant="outline" onClick={() => void handleSaveToken()} disabled={tokenBusy || tokenInput.trim().length === 0}>
-                    {t('settings.routing.token.save')}
-                  </Button>
-                  {tokenPresent ? (
-                    <Button size="sm" variant="ghost" onClick={() => void handleClearToken()} disabled={tokenBusy}>
-                      {t('settings.routing.token.remove')}
+                ) : null}
+              </SettingsRadioGroup>
+
+              {locked ? null : (
+                <SettingsFieldRow
+                  label={t('settings.routing.token.label')}
+                  info={t('settings.routing.token.info')}
+                >
+                  <div className="flex w-full min-w-0 items-center gap-2">
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      value={tokenInput}
+                      onChange={(event) => setTokenInput(event.target.value)}
+                      onKeyDown={(event) => { if (event.key === 'Enter') void handleSaveToken(); }}
+                      placeholder={tokenPresent ? t('settings.routing.token.replacePlaceholder') : t('settings.routing.token.placeholder')}
+                      aria-label={t('settings.routing.token.label')}
+                      className="h-8 rounded-md px-3 min-w-0 flex-1"
+                      disabled={tokenBusy}
+                    />
+                    <Button size="sm" variant="outline" onClick={() => void handleSaveToken()} disabled={tokenBusy || tokenInput.trim().length === 0}>
+                      {t('settings.routing.token.save')}
                     </Button>
-                  ) : null}
-                </div>
+                    {tokenPresent ? (
+                      <Button size="sm" variant="ghost" onClick={() => void handleClearToken()} disabled={tokenBusy}>
+                        {t('settings.routing.token.remove')}
+                      </Button>
+                    ) : null}
+                  </div>
+                </SettingsFieldRow>
+              )}
+              {tokenError ? <p className={SETTINGS_DESCRIPTION_CLASS}>{tokenError}</p> : null}
+              {locked ? null : <GeminiKeyField />}
+              <SettingsFieldRow label={null}>
+                <ClassifierTestButton disabled={classifier.effective === null} />
               </SettingsFieldRow>
-            )}
-            {tokenError ? <p className={SETTINGS_DESCRIPTION_CLASS}>{tokenError}</p> : null}
-            {locked ? null : <GeminiKeyField />}
-            <SettingsFieldRow label={null}>
-              <ClassifierTestButton disabled={classifier.effective === null} />
-            </SettingsFieldRow>
-          </div>
-        </SettingsSection>
-        {!locked || customEndpoint?.pinned ? <CustomEndpointFields /> : null}
+            </div>
+          </SettingsSection>
+          {!locked || customEndpoint?.pinned ? <CustomEndpointFields /> : null}
         </>
       )}
     </SettingsPageLayout>

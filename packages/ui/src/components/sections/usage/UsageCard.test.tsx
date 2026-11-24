@@ -61,7 +61,7 @@ test('changes the credits-used message when locale changes with the same quota s
   expect(window.creditsUsed).toBe(3233.27);
 });
 
-test('cached Zen values update when the locale changes without another quota request', async () => {
+test('cached structured quota values update when the locale changes without another quota request', async () => {
   const originalLocale = useI18nStore.getState();
   const ukDictionary = ukDict;
   const count = render({ ...balanceWindow, valueLabel: undefined, value: { kind: 'requests', count: 292 } });

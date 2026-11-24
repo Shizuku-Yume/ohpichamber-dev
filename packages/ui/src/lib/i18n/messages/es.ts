@@ -27,7 +27,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -93,9 +92,9 @@ export const dict: Record<I18nKey, string> = {
   "chat.fileAttachment.actions.removeImage": "Eliminar imagen",
   "chat.fileAttachment.actions.removeNamed": "Eliminar {name}",
   "chat.fileAttachment.toast.attachFailed": "No se pudo adjuntar el archivo. Inténtalo de nuevo.",
-  'quota.family.zen': 'Modelos Zen',
   'quota.value.requests': 'Solicitudes: {count}',
   'quota.value.spent': '{spent} gastados',
+  'quota.value.spentOf': '{spent} de {limit}',
   'quota.value.unknown': 'Desconocido',
   'quota.window.monthlyTotal': 'Total mensual',
   'quota.window.monthlyByok': 'BYOK mensual',
@@ -235,7 +234,6 @@ export const dict: Record<I18nKey, string> = {
   ...connectionHeartbeatI18n.es,
   ...compactionSettingsI18n.es,
   ...heapSnapshotI18n.es,
-  ...consoleBudgetsI18n.es,
   ...imageToolI18n.es,
   ...sharePagesI18n.es,
   ...receivedPagesI18n.es,
@@ -4024,13 +4022,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.themeImport.error.conflict": "Este tema importado se modificó en el servidor. No se sobrescribió.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "Mostrar siempre las barras de desplazamiento",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "Mantén las barras de desplazamiento visibles incluso cuando el puntero esté fuera del área desplazable. Solo se aplica en este dispositivo.",
-  "settings.providers.page.openCodeGo.workspaceId": "ID del espacio de trabajo",
-  "settings.providers.page.openCodeGo.apiKey": "Clave API",
-  "settings.providers.page.openCodeGo.help": "Copia el ID desde la URL del panel y la cookie auth desde las herramientas del navegador. OhPiChamber nunca examina las cookies del navegador.",
-  "settings.providers.page.openCodeGo.save": "Guardar y validar",
-  "settings.providers.page.openCodeGo.replace": "Reemplazar",
-  "settings.providers.page.openCodeGo.validate": "Validar",
-  "settings.providers.page.openCodeGo.delete": "Eliminar",
   "settings.providers.page.quotaCredentials.saved": "Credenciales de {provider} guardadas.",
   "settings.providers.page.quotaCredentials.accessToken": "Token de acceso",
   "settings.providers.page.quotaCredentials.usageToken": "Token de API de uso",
@@ -5553,7 +5544,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.providers.connect.recommended": "Recomendado",
   "settings.providers.connect.customHint": "Cualquier endpoint compatible con OpenAI o Anthropic",
   "settings.providers.connect.note.openai": "Modelos GPT, inicia sesión con ChatGPT",
-  "settings.providers.connect.note.opencodeGo": "Suscripción económica",
   "settings.providers.connect.note.openrouter": "Todos los modelos con una sola clave",
   "settings.providers.connect.note.anthropic": "Modelos Claude con una clave de API",
   "settings.providers.connect.note.githubCopilot": "Modelos de tu plan de Copilot",
@@ -6616,7 +6606,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.extensions.add.placeholder": "/ruta/al/panel o https://github.com/org/panel.git",
   "settings.extensions.add.action": "Añadir",
   "settings.extensions.add.aria": "Añadir extensión desde una carpeta, un ZIP o una URL",
-  "settings.extensions.browse.label": "Explorar extensiones",
   "settings.extensions.add.browseFolder": "Examinar carpeta",
   "settings.extensions.add.browseFolder.aria": "Examinar carpeta",
   "settings.extensions.add.browseZip": "Examinar archivo ZIP",
@@ -7114,12 +7103,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.classification.status.fallback": "Tu elección no se puede usar ahora mismo, así que Jev funciona a través de {provider}.",
   "settings.classification.source.off.name": "Desactivado",
   "settings.classification.source.off.description": "No se envía nada a ningún sitio. La red de seguridad y Auto están ocultos, y las sesiones pasan a en curso solo cuando tú las mueves.",
-  "settings.classification.source.zenPromo.name": "Promoción de OpenCode Zen",
-  "settings.classification.source.zenPromo.description": "Gratis por tiempo limitado, sin clave. Cuando termine la promoción, cambia a una clave.",
-  "settings.classification.source.zenPromo.ended": "La promoción ha terminado.",
-  "settings.classification.source.zenKey.name": "Clave de OpenCode Zen",
-  "settings.classification.source.zenKey.description": "Usa la clave API configurada para OpenCode Zen. Con cargo a tu saldo de Zen.",
-  "settings.classification.source.zenKey.missing": "No hay ninguna clave API disponible para OpenCode Zen. Iniciar sesión con una cuenta de OpenCode no cuenta; añade una clave API en Ajustes → Proveedores.",
   "settings.classification.source.openrouter.name": "Clave de OpenRouter",
   "settings.classification.source.openrouter.description": "Usa una clave API de OpenRouter configurada en Proveedores. Con cargo a tu cuenta de OpenRouter.",
   "settings.classification.source.openrouter.missing": "No hay ninguna clave API de OpenRouter disponible. Añade una en Ajustes → Proveedores.",
@@ -7162,7 +7145,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.sessions.permissions.explain.safetyVia": "Las acciones rutinarias se ejecutan solas; lo arriesgado o difícil de deshacer te espera. Decide Jev, a través de {provider}.",
   "settings.sessions.permissions.explain.auto": "Cada solicitud de permiso se acepta sin preguntar.",
   "settings.sessions.permissions.agentPermissionsLink": "Permisos del agente",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Necesita Jev, que necesita un proveedor de clasificación: la promoción gratuita de OpenCode Zen, una clave API de Zen en Ajustes → Proveedores o una clave de TypeSafe.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Necesita Jev, que necesita un proveedor de clasificación: una clave de OpenRouter, Vercel, Gemini o TypeSafe, o un endpoint personalizado.",
   "chat.workStatus.sections.extensionBadge": "Extensión",
   "chat.chatInput.toast.guestHasNoPanel": "Esta extensión funciona sin panel.",
   "header.mainSurface.backToChat": "Volver al chat",

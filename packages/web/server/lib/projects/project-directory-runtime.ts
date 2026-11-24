@@ -37,6 +37,19 @@ const safeDecodeMarkedURIComponent = (value: string | string[], encoding: string
   try { return decodeURIComponent(String(value)); } catch { return value; }
 };
 
+const readDirectoryHeader = (req: ProjectDirectoryRequest): string | string[] | null => {
+  if (!req.get) return null;
+  const primary = req.get('x-openchamber-directory');
+  if (primary) {
+    return safeDecodeMarkedURIComponent(primary, req.get('x-openchamber-directory-encoding'));
+  }
+  const fallback = req.get('x-opencode-directory');
+  if (fallback) {
+    return safeDecodeMarkedURIComponent(fallback, req.get('x-opencode-directory-encoding'));
+  }
+  return null;
+};
+
 export const createProjectDirectoryRuntime = (dependencies: ProjectDirectoryDependencies) => {
   const {
     fsPromises,
@@ -92,9 +105,7 @@ export const createProjectDirectoryRuntime = (dependencies: ProjectDirectoryDepe
   };
 
   const resolveProjectDirectory = async (req: ProjectDirectoryRequest): Promise<ProjectDirectoryResolution> => {
-    const rawHeaderDirectory = req.get ? req.get('x-opencode-directory') : null;
-    const headerEncoding = req.get ? req.get('x-opencode-directory-encoding') : null;
-    const headerDirectory = rawHeaderDirectory ? safeDecodeMarkedURIComponent(rawHeaderDirectory, headerEncoding) : null;
+    const headerDirectory = readDirectoryHeader(req);
     const queryDirectory = Array.isArray(req.query?.directory)
       ? req.query.directory[0]
       : req.query?.directory;
@@ -144,9 +155,7 @@ export const createProjectDirectoryRuntime = (dependencies: ProjectDirectoryDepe
   };
 
   const resolveOptionalProjectDirectory = async (req: ProjectDirectoryRequest): Promise<ProjectDirectoryResolution> => {
-    const rawHeaderDirectory = req.get ? req.get('x-opencode-directory') : null;
-    const headerEncoding = req.get ? req.get('x-opencode-directory-encoding') : null;
-    const headerDirectory = rawHeaderDirectory ? safeDecodeMarkedURIComponent(rawHeaderDirectory, headerEncoding) : null;
+    const headerDirectory = readDirectoryHeader(req);
     const queryDirectory = Array.isArray(req.query?.directory)
       ? req.query.directory[0]
       : req.query?.directory;

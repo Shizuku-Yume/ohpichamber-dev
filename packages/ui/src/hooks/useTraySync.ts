@@ -171,8 +171,7 @@ const buildUsage = (): TrayUsage => {
       : rows.length === 0
         ? translateQuota('header.services.noRateLimitsReported')
         : null;
-    const account = meta.id === 'opencode-go' ? result.accountLabel?.trim() || null : null;
-    groups.push({ provider: meta.name, account, rows, status });
+    groups.push({ provider: meta.name, account: null, rows, status });
   }
   return { mode, groups };
 };

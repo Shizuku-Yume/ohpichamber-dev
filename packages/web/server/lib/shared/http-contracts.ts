@@ -18,7 +18,7 @@ export interface Request<Body = unknown, Params = Record<string, string>, Search
   ips: string[];
   secure: boolean;
   get(name: 'set-cookie'): string[] | undefined;
-  get(name: 'x-opencode-directory' | 'x-opencode-directory-encoding'): string | undefined;
+  get(name: 'x-openchamber-directory' | 'x-openchamber-directory-encoding' | 'x-opencode-directory' | 'x-opencode-directory-encoding'): string | undefined;
   get(name: string): string | string[] | undefined;
   header(name: 'set-cookie'): string[] | undefined;
   header(name: string): string | string[] | undefined;

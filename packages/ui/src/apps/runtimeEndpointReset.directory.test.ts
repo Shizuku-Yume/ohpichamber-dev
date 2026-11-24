@@ -63,7 +63,7 @@ const stubFetch = (): void => {
   const respond = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const url = new URL(request.url);
-    const header = request.headers.get('x-opencode-directory');
+    const header = request.headers.get('x-openchamber-directory') ?? request.headers.get('x-opencode-directory');
     seen.push({ origin: url.origin, path: url.pathname, directory: header ? decodeURIComponent(header) : url.searchParams.get('directory') });
     if (url.pathname === '/api/fs/home') {
       return Response.json(url.origin === REMOTE

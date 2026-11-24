@@ -123,7 +123,7 @@ describe('project directory runtime', () => {
   });
 
   describe('resolveProjectDirectory', () => {
-    it('resolves symlinks in x-opencode-directory header', async () => {
+    it('resolves symlinks in x-openchamber-directory header', async () => {
       const runtime = createTestRuntime({
         fsPromises: {
           stat: async () => ({ isDirectory: () => true }),
@@ -132,7 +132,7 @@ describe('project directory runtime', () => {
       });
 
       const req = {
-        get: (header) => header === 'x-opencode-directory' ? '/home/user/workspace/project' : null,
+        get: (header) => header === 'x-openchamber-directory' ? '/home/user/workspace/project' : null,
         query: {},
       };
 
@@ -145,7 +145,7 @@ describe('project directory runtime', () => {
       });
     });
 
-    it('decodes marked x-opencode-directory header values', async () => {
+    it('decodes marked x-openchamber-directory header values', async () => {
       const pathWithUnicode = '/home/user/测试项目';
       let validatedPath = null;
       const runtime = createTestRuntime({
@@ -160,8 +160,8 @@ describe('project directory runtime', () => {
 
       const req = {
         get: (header) => {
-          if (header === 'x-opencode-directory') return encodeURIComponent(pathWithUnicode);
-          if (header === 'x-opencode-directory-encoding') return 'uri';
+          if (header === 'x-openchamber-directory') return encodeURIComponent(pathWithUnicode);
+          if (header === 'x-openchamber-directory-encoding') return 'uri';
           return null;
         },
         query: {},
@@ -187,7 +187,7 @@ describe('project directory runtime', () => {
       });
 
       const req = {
-        get: (header) => header === 'x-opencode-directory' ? rawPath : null,
+        get: (header) => header === 'x-openchamber-directory' ? rawPath : null,
         query: {},
       };
 
@@ -210,13 +210,39 @@ describe('project directory runtime', () => {
       });
 
       const req = {
-        get: (header) => header === 'x-opencode-directory' ? encodeURIComponent(validPath) : null,
+        get: (header) => header === 'x-openchamber-directory' ? encodeURIComponent(validPath) : null,
         query: { directory: validPath },
       };
 
       const result = await runtime.resolveProjectDirectory(req);
 
       expect(result).toEqual({ directory: validPath, requestedDirectory: validPath, error: null });
+      expect(result).toEqual({ directory: validPath, requestedDirectory: validPath, error: null });
+    });
+
+    it('prefers x-openchamber-directory over x-opencode-directory and falls back to x-opencode-directory', async () => {
+      const runtime = createTestRuntime({
+        fsPromises: {
+          stat: async () => ({ isDirectory: () => true }),
+          realpath: async (p) => p,
+        },
+      });
+
+      const both = await runtime.resolveProjectDirectory({
+        get: (header) => {
+          if (header === 'x-openchamber-directory') return '/primary/dir';
+          if (header === 'x-opencode-directory') return '/legacy/dir';
+          return null;
+        },
+        query: {},
+      });
+      expect(both).toEqual({ directory: '/primary/dir', requestedDirectory: '/primary/dir', error: null });
+
+      const fallback = await runtime.resolveProjectDirectory({
+        get: (header) => (header === 'x-opencode-directory' ? '/legacy/dir' : null),
+        query: {},
+      });
+      expect(fallback).toEqual({ directory: '/legacy/dir', requestedDirectory: '/legacy/dir', error: null });
     });
 
     it('resolves symlinks in query directory parameter', async () => {
@@ -317,7 +343,7 @@ describe('project directory runtime', () => {
       });
 
       const req = {
-        get: (header) => header === 'x-opencode-directory' ? '/symlink/workspace/project' : null,
+        get: (header) => header === 'x-openchamber-directory' ? '/symlink/workspace/project' : null,
         query: {},
       };
 
@@ -344,7 +370,7 @@ describe('project directory runtime', () => {
       });
 
       const req = {
-        get: (header) => header === 'x-opencode-directory' ? rawPath : null,
+        get: (header) => header === 'x-openchamber-directory' ? rawPath : null,
         query: {},
       };
 
