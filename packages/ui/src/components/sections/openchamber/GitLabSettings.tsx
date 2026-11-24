@@ -27,11 +27,6 @@ import { DeviceFlowCode } from './DeviceFlowCode';
 
 const DEFAULT_GITLAB_IDENTITY: SourceControlIdentity = { provider: 'gitlab', instance: 'https://gitlab.com' };
 
-/** Sub-block inside the card body, same row chrome the Linear card uses for its workspaces. */
-const INSTANCE_BLOCK_CLASS = 'overflow-hidden rounded-md border border-[var(--surface-subtle)] bg-[var(--surface-muted)]';
-const INSTANCE_ROW_CLASS = 'px-3 py-3';
-const INSTANCE_ROW_DIVIDER_CLASS = 'border-t border-[var(--surface-subtle)]';
-
 const normalizeGitLabIdentity = (value: string): SourceControlIdentity | null => {
   try {
     const url = new URL(value.includes('://') ? value : `https://${value}`);
@@ -272,10 +267,10 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
   }
 
   return (
-    <div className={INSTANCE_BLOCK_CLASS}>
-      <div className={cn(INSTANCE_ROW_CLASS, 'flex items-start justify-between gap-4')}>
+    <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'py-4 first:pt-0 last:pb-0')}>
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="typography-ui-label truncate text-foreground">{identity.instance}</div>
+          <div className="typography-ui-label truncate font-medium text-foreground">{identity.instance}</div>
           {statusMessage ? (
             <div className="typography-meta mt-0.5 text-muted-foreground">
               {statusMessage}
@@ -290,7 +285,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
       </div>
 
       {accounts.length > 0 ? (
-        <div className={cn(INSTANCE_ROW_CLASS, INSTANCE_ROW_DIVIDER_CLASS)}>
+        <div>
           <SourceControlAccountList
             accounts={accounts}
             avatarAlt={(username) => username}
@@ -321,7 +316,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
       ) : null}
 
       {connected && !isAddingAccount && (
-        <div className={cn(INSTANCE_ROW_CLASS, INSTANCE_ROW_DIVIDER_CLASS)}>
+        <div>
           <Button size="sm" variant="outline" onClick={() => setIsAddingAccount(true)} disabled={busy}>
             {t('settings.github.page.actions.addAccount')}
           </Button>
@@ -329,7 +324,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
       )}
 
       {showConnectionMethods && (
-        <div className={cn(SETTINGS_SPACE_ROW_CLASS, INSTANCE_ROW_CLASS, INSTANCE_ROW_DIVIDER_CLASS)}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {capabilities?.authenticationMethods.device.available && !flow && (
             <SettingsFieldRow label={t('settings.gitlab.device.label')}>
               <Button size="sm" onClick={startDeviceFlow} disabled={busy}>{t('settings.gitlab.actions.connect')}</Button>
@@ -369,13 +364,11 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
       )}
 
       {(connected || cli?.disabled) && cli && (cli.available || cli.disabled) && (
-        <div className={cn(INSTANCE_ROW_CLASS, INSTANCE_ROW_DIVIDER_CLASS)}>
-          <SettingsFieldRow label={t('settings.gitlab.cli.label')} info={t('settings.gitlab.cli.info')}>
-            <Button size="sm" variant="outline" onClick={toggleCli} disabled={busy}>
-              {cli.disabled ? t('settings.gitlab.actions.enableCli') : t('settings.gitlab.actions.disableCli')}
-            </Button>
-          </SettingsFieldRow>
-        </div>
+        <SettingsFieldRow label={t('settings.gitlab.cli.label')} info={t('settings.gitlab.cli.info')}>
+          <Button size="sm" variant="outline" onClick={toggleCli} disabled={busy}>
+            {cli.disabled ? t('settings.gitlab.actions.enableCli') : t('settings.gitlab.actions.disableCli')}
+          </Button>
+        </SettingsFieldRow>
       )}
     </div>
   );
@@ -493,35 +486,35 @@ export const GitLabSettings: React.FC = () => {
             ))}
 
             {isAddingInstance ? (
-              <div className={cn(INSTANCE_BLOCK_CLASS, INSTANCE_ROW_CLASS)}>
-                <SettingsFieldRow
-                  label={t('settings.gitlab.instance.customLabel')}
-                  info={t('settings.gitlab.instance.customInfo')}
-                  description={instanceFailed ? t('settings.gitlab.status.operationFailed') : undefined}
-                >
-                  <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
-                    <Input
-                      className="h-8 w-full min-w-0 rounded-md"
-                      value={instanceInput}
-                      onChange={(event) => setInstanceInput(event.target.value)}
-                      placeholder="https://gitlab.example.com"
-                      aria-label={t('settings.gitlab.instance.customLabel')}
-                    />
-                    <Button size="sm" onClick={applyInstance}>{t('settings.gitlab.actions.useInstance')}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => {
-                      setInstanceInput('');
-                      setIsAddingInstance(false);
-                      setInstanceFailed(false);
-                    }}>
-                      {t('settings.common.actions.cancel')}
-                    </Button>
-                  </div>
-                </SettingsFieldRow>
-              </div>
+              <SettingsFieldRow
+                label={t('settings.gitlab.instance.customLabel')}
+                info={t('settings.gitlab.instance.customInfo')}
+                description={instanceFailed ? t('settings.gitlab.status.operationFailed') : undefined}
+              >
+                <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+                  <Input
+                    className="h-8 w-full min-w-0 rounded-md"
+                    value={instanceInput}
+                    onChange={(event) => setInstanceInput(event.target.value)}
+                    placeholder="https://gitlab.example.com"
+                    aria-label={t('settings.gitlab.instance.customLabel')}
+                  />
+                  <Button size="sm" onClick={applyInstance}>{t('settings.gitlab.actions.useInstance')}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => {
+                    setInstanceInput('');
+                    setIsAddingInstance(false);
+                    setInstanceFailed(false);
+                  }}>
+                    {t('settings.common.actions.cancel')}
+                  </Button>
+                </div>
+              </SettingsFieldRow>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => setIsAddingInstance(true)}>
-                {t('settings.gitlab.actions.addInstance')}
-              </Button>
+              <div>
+                <Button size="sm" variant="outline" onClick={() => setIsAddingInstance(true)}>
+                  {t('settings.gitlab.actions.addInstance')}
+                </Button>
+              </div>
             )}
           </SettingsControlGroup>
         </CollapsibleContent>

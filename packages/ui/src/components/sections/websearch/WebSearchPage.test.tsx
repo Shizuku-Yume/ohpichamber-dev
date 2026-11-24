@@ -255,10 +255,9 @@ describe('WebSearchPage', () => {
     // sibling list of ordinal, icon, name, optional pill and remove button.
     const rows = () => handles().map((handle) => handle.parentElement).filter((row): row is HTMLElement => row !== null);
     const rowNames = () => rows().map((row) => row.querySelector('.typography-ui-label.text-foreground')?.textContent);
-    const rowOrdinals = () => rows().map((row) => row.querySelector('.oc-tile-inset.tabular-nums')?.textContent);
-    // Both static `SettingsCardPill` spans and interactive warning setup
-    // buttons carry `rounded-full` inside a row, so this counts status pills
-    // structurally instead of matching their copy.
+    const rowOrdinals = () => rows().map((row) => row.querySelector('.tabular-nums')?.textContent);
+    // Both static and interactive `SettingsCardPill` badges carry
+    // `rounded-full` inside a row, so this counts status pills structurally.
     const rowPillCounts = () => rows().map((row) => row.querySelectorAll('.rounded-full').length);
     const helperLines = () => Array.from(getSection().querySelectorAll('p.typography-meta')).map((line) => line.textContent);
     const addButton = () => [...getSection().querySelectorAll<HTMLButtonElement>('button')]
@@ -328,13 +327,13 @@ describe('WebSearchPage', () => {
     const page = await renderWithSnapshot(fallbackSnapshot(['brave', 'serper']));
 
     const rows = page.rows();
-    expect(rows[0]?.parentElement?.classList.contains('gap-2')).toBe(true);
+    expect(rows[0]?.parentElement?.classList.contains('divide-y')).toBe(false);
     rows.forEach((row, index) => {
-      expect(row.classList.contains('oc-tile')).toBe(true);
-      expect(row.classList.contains('oc-tile-hover')).toBe(true);
-      expect(row.classList.contains('rounded-xl')).toBe(true);
-      expect(row.querySelector('.oc-tile-inset.tabular-nums')?.textContent).toBe(String(index + 1));
-      expect(row.querySelector('.oc-tile-inset svg')).not.toBeNull();
+      expect(row.classList.contains('oc-tile')).toBe(false);
+      expect(row.classList.contains('oc-tile-hover')).toBe(false);
+      expect(row.classList.contains('rounded-xl')).toBe(false);
+      expect(row.querySelector('.tabular-nums')?.textContent).toBe(String(index + 1));
+      expect(row.querySelector('svg')).not.toBeNull();
     });
 
     expect(page.rowNames()).toEqual(['Brave Search', 'Serper']);
@@ -342,6 +341,7 @@ describe('WebSearchPage', () => {
     const [keyRow, setupRow] = rows;
     expect(keyRow?.textContent).toContain(en['settings.webSearch.card.needsKey']);
     expect(keyRow?.querySelector(`button[aria-label="${configureLabel('Brave Search')}"]`)).toBeInstanceOf(HTMLButtonElement);
+    expect(keyRow?.querySelector(`button[aria-label="${configureLabel('Brave Search')}"]`)?.classList.contains('max-w-40')).toBe(false);
     expect(setupRow?.textContent).toContain(en['settings.webSearch.card.needsSetup']);
     expect(setupRow?.querySelector(`button[aria-label="${configureLabel('Serper')}"]`)).toBeInstanceOf(HTMLButtonElement);
 
