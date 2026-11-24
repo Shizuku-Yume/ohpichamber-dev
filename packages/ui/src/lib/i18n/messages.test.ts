@@ -1,4 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 
 import { dict as enDict } from './messages/en';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
@@ -16,6 +20,7 @@ import { dict as zhTwDict } from './messages/zh-TW';
 import { dict as trDict } from './messages/tr';
 import { dict as arDict } from './messages/ar';
 import { dict as heDict } from './messages/he';
+import { ompSettingsI18n } from './messages/omp-settings.i18n';
 
 const localeDictionaries = {
   en: enDict,
@@ -322,5 +327,123 @@ describe('i18n dictionaries', () => {
       .filter(([key, value]) => /opencode/i.test(value) && !auditedOpenCodeKeys.has(key))
       .map(([key, value]) => `${key}: "${value}"`);
     expect(unaudited).toEqual([]);
+  });
+  test('every exposed OMP setting id has a non-empty translated label in omp-settings.i18n.ts across all 15 locales', () => {
+    const agentServiceDir = join(dirname(fileURLToPath(import.meta.url)), '../../../../agent-service');
+    const rawExposedIds = execFileSync(
+      process.execPath,
+      ['-e', "import { OMP_SETTING_EXPOSED_IDS } from './src/worker/settings-ui.ts'; process.stdout.write(JSON.stringify([...OMP_SETTING_EXPOSED_IDS]));"],
+      { cwd: agentServiceDir, encoding: 'utf8' },
+    );
+    const exposedIds = z.array(z.string()).parse(JSON.parse(rawExposedIds));
+    expect(exposedIds.length).toBeGreaterThan(250);
+
+    const allLocales = Object.keys(localeDictionaries);
+    const ompEntries = new Map<string, ReadonlyMap<string, string>>(
+      Object.entries(ompSettingsI18n).map(([locale, dict]) => [locale, new Map(Object.entries(dict))]),
+    );
+    expect([...ompEntries.keys()].sort()).toEqual([...allLocales].sort());
+
+    const nonEnglishLocales = allLocales.filter((locale) => locale !== 'en');
+    const cjkAndRtlLocales = nonEnglishLocales.filter((locale) => locale !== 'zh-CN' && locale !== 'zh-TW');
+    const identicalToEnglishAllowlist = {
+      topP: nonEnglishLocales,
+      topK: nonEnglishLocales,
+      minP: nonEnglishLocales,
+      'glob.enabled': nonEnglishLocales,
+      'grep.enabled': nonEnglishLocales,
+      'ratchet.enabled': nonEnglishLocales,
+      'prewalk.enabled': cjkAndRtlLocales,
+      'magicKeywords.ultrathink': nonEnglishLocales,
+      'magicKeywords.chillax': nonEnglishLocales,
+      'magicKeywords.jevify': nonEnglishLocales,
+      'magicKeywords.orchestrate': nonEnglishLocales.filter((locale) => locale !== 'he'),
+      'magicKeywords.workflow': nonEnglishLocales.filter((locale) => locale !== 'he'),
+      'skills.enabled': ['de'],
+      'debug.enabled': ['de', 'nl', 'pl'],
+      'skills.enablePiUser': ['es'],
+      'skills.enableAgentsUser': ['es'],
+      'skills.enableClaudeProject': ['nl'],
+      'skills.enablePiProject': ['nl'],
+      'skills.enableAgentsProject': ['nl'],
+      'commands.enableClaudeProject': ['nl'],
+    } satisfies Record<string, readonly string[]>;
+
+    const englishMap = ompEntries.get('en')!;
+    const missing: string[] = [];
+    const empty: string[] = [];
+    const rawFallback: string[] = [];
+    const untranslated: string[] = [];
+
+    for (const id of exposedIds) {
+      const key = `settings.omp.items.${id}.label`;
+      const englishValue = englishMap.get(key);
+      const rawIdFallback = id.replace(/\./g, ' ');
+      const allowed = Object.hasOwn(identicalToEnglishAllowlist, id)
+        ? Object.entries(identicalToEnglishAllowlist).find(([entryId]) => entryId === id)?.[1] ?? []
+        : [];
+      const allowedLocales = new Set(allowed);
+
+      for (const locale of allLocales) {
+        const localeMap = ompEntries.get(locale);
+        const value = localeMap?.get(key);
+        if (value === undefined) {
+          missing.push(`${locale}: ${key}`);
+          continue;
+        }
+        if (value.trim().length === 0) {
+          empty.push(`${locale}: ${key}`);
+          continue;
+        }
+        if (value === id || value === rawIdFallback) {
+          rawFallback.push(`${locale}: ${key} = "${value}"`);
+          continue;
+        }
+        if (locale !== 'en' && value === englishValue && !allowedLocales.has(locale)) {
+          untranslated.push(`${locale}: ${key} = "${value}"`);
+        }
+      }
+    }
+
+    const exposedSet = new Set(exposedIds);
+    const staleAllowlist: string[] = [];
+    for (const [id, locales] of Object.entries(identicalToEnglishAllowlist)) {
+      if (!exposedSet.has(id)) {
+        staleAllowlist.push(`${id} (not exposed)`);
+        continue;
+      }
+      const key = `settings.omp.items.${id}.label`;
+      const englishValue = englishMap.get(key);
+      for (const locale of locales) {
+        if (ompEntries.get(locale)?.get(key) !== englishValue) {
+          staleAllowlist.push(`${id}:${locale}`);
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
+    expect(empty).toEqual([]);
+    expect(rawFallback).toEqual([]);
+    expect(untranslated).toEqual([]);
+    expect(staleAllowlist).toEqual([]);
+  });
+
+  test('OMP number unit labels for minutes and hours are translated across all 15 locales', () => {
+    const allLocales = Object.keys(localeDictionaries);
+    const ompEntries = new Map<string, ReadonlyMap<string, string>>(
+      Object.entries(ompSettingsI18n).map(([locale, dict]) => [locale, new Map(Object.entries(dict))]),
+    );
+    const enUnits = ompEntries.get('en')!;
+    for (const unitKey of ['settings.omp.unit.minutes', 'settings.omp.unit.hours'] as const) {
+      const enValue = enUnits.get(unitKey);
+      expect(enValue).toBeTruthy();
+      for (const locale of allLocales) {
+        const value = ompEntries.get(locale)?.get(unitKey);
+        expect(value?.trim().length ?? 0, `${locale} ${unitKey}`).toBeGreaterThan(0);
+        if (locale !== 'en' && !(unitKey === 'settings.omp.unit.minutes' && locale === 'fr')) {
+          expect(value, `${locale} ${unitKey}`).not.toBe(enValue);
+        }
+      }
+    }
   });
 });

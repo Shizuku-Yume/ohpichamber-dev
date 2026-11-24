@@ -21,6 +21,8 @@ type Translate = (key: I18nKey, params?: I18nParams) => string;
 const UNIT_LABEL_KEYS = {
   percent: 'settings.omp.unit.percent',
   seconds: 'settings.omp.unit.seconds',
+  minutes: 'settings.omp.unit.minutes',
+  hours: 'settings.omp.unit.hours',
   tokens: 'settings.omp.unit.tokens',
   milliseconds: 'settings.omp.unit.milliseconds',
   kilobytes: 'settings.omp.unit.kilobytes',

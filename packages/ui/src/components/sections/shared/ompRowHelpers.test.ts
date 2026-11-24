@@ -30,6 +30,14 @@ describe('inferUnit', () => {
     expect(inferUnit('tools.artifactTailBytes')).toBe('kilobytes');
     expect(inferUnit('tools.artifactHeadBytes')).toBe('kilobytes');
     expect(inferUnit('read.summarize.minBodyLines')).toBe('lines');
+    expect(inferUnit('codexResets.minBlockedMinutes')).toBe('minutes');
+    expect(inferUnit('claudeResets.minBlockedMinutes')).toBe('minutes');
+    expect(inferUnit('sharpshooter.intervalMinutes')).toBe('minutes');
+    expect(inferUnit('codexResets.salvageHorizonHours')).toBe('hours');
+    expect(inferUnit('claudeResets.salvageHorizonHours')).toBe('hours');
+    expect(inferUnit('memories.minRolloutIdleHours')).toBe('hours');
+    expect(inferUnit('some.MinutesThing')).toBeUndefined();
+    expect(inferUnit('some.HoursThing')).toBeUndefined();
   });
 
   test('a Bytes suffix alone does not decide the unit: MB and a byte cap stay unlabelled', () => {

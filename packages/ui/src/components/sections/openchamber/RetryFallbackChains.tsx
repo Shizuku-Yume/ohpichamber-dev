@@ -1,11 +1,12 @@
 import React from 'react';
+import { flushSync } from 'react-dom';
 import { z } from 'zod';
 import {
   THINKING_LEVELS,
   formatModelRef,
   parseModelSelector,
-  type JsonValue,
   type Model,
+  type WebSearchProviderEntry,
 } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
@@ -30,7 +31,7 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
 } from '@/components/sections/shared/SettingsSection';
-import { SettingsSortableList, type SettingsSortableListItem } from '@/components/sections/shared/SettingsSortableList';
+import { SettingsSortableList } from '@/components/sections/shared/SettingsSortableList';
 import type { UseOmpPageSettingsResult } from '@/components/sections/shared/useOmpPageSettings';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,67 +44,25 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import {
+  CHAIN_ROLE_OPTIONS,
+  buildTargetItems,
+  chainKeyDisplayLabel,
+  formatWebFallbackPreview,
+  isChain,
+  isValidWildcardSelector,
+  type ChainKeyKind,
+  type TargetKind,
+} from './retryFallbackHelpers';
+import { getWebSearchScopeKey, useWebSearchStore } from '@/stores/useWebSearchStore';
 import { useUIStore } from '@/stores/useUIStore';
 
 const WEB_CHAIN = 'web';
+const EMPTY_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderEntry[] = [];
 const INHERIT_EFFORT = '__inherit__';
 const FALLBACK_EFFORT_LEVELS = [...THINKING_LEVELS.filter((level) => level !== 'inherit'), 'auto'] as const;
-
-const CHAIN_ROLE_OPTIONS: readonly { role: string; labelKey: I18nKey }[] = [
-  { role: 'default', labelKey: 'settings.omp.modelRoles.role.default.label' },
-  { role: 'smol', labelKey: 'settings.omp.modelRoles.role.smol.label' },
-  { role: 'slow', labelKey: 'settings.omp.modelRoles.role.slow.label' },
-  { role: 'vision', labelKey: 'settings.omp.modelRoles.role.vision.label' },
-  { role: 'plan', labelKey: 'settings.omp.modelRoles.role.plan.label' },
-  { role: 'commit', labelKey: 'settings.omp.modelRoles.role.commit.label' },
-  { role: 'tiny', labelKey: 'settings.omp.modelRoles.role.tiny.label' },
-  { role: 'memory', labelKey: 'settings.omp.modelRoles.role.memory.label' },
-  { role: 'task', labelKey: 'settings.omp.modelRoles.role.task.label' },
-  { role: 'advisor', labelKey: 'settings.omp.modelRoles.role.advisor.label' },
-  { role: 'widget', labelKey: 'settings.omp.modelRoles.role.widget.label' },
-  { role: 'judge', labelKey: 'settings.omp.modelRoles.role.judge.label' },
-  { role: 'image', labelKey: 'settings.omp.modelRoles.role.image.label' },
-  { role: 'speech', labelKey: 'settings.omp.modelRoles.role.speech.label' },
-  { role: 'dictation', labelKey: 'settings.omp.modelRoles.role.dictation.label' },
-];
-
-type ChainKeyKind = 'role' | 'model' | 'wildcard';
-type TargetKind = 'model' | 'wildcard';
-
-interface FallbackTargetItem extends SettingsSortableListItem {
-  selector: string;
-}
-
-function isChain(value: JsonValue): value is string[] {
-  return z.array(z.string()).safeParse(value).success;
-}
-
-function isValidWildcardSelector(raw: string): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed || /\s/.test(trimmed) || !trimmed.endsWith('/*')) return false;
-  const prefix = trimmed.slice(0, -2);
-  return prefix.length > 0 && !prefix.startsWith('/') && !prefix.endsWith('/');
-}
-
-function buildTargetItems(chain: readonly string[]): FallbackTargetItem[] {
-  const counts = new Map<string, number>();
-  return chain.map((selector) => {
-    const occurrence = counts.get(selector) ?? 0;
-    counts.set(selector, occurrence + 1);
-    return {
-      id: `${selector}::${occurrence}`,
-      label: selector,
-      selector,
-    };
-  });
-}
-
-function chainKeyDisplayLabel(key: string, translate: (key: I18nKey) => string): string {
-  const roleOption = CHAIN_ROLE_OPTIONS.find((option) => option.role === key);
-  return roleOption ? translate(roleOption.labelKey) : key;
-}
 
 type SaveChainFn = (
   key: string,
@@ -718,6 +677,12 @@ export function RetryFallbackChains({
   const { t } = useI18n();
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
+  const webSearchScope = getWebSearchScopeKey();
+  const webSearchProviders = useWebSearchStore((store) =>
+    store.state.kind === 'ready' && store.state.snapshot.scope === webSearchScope
+      ? store.state.snapshot.providers
+      : EMPTY_WEB_SEARCH_PROVIDERS,
+  );
 
   const setting = state?.settings.find(({ id }) => id === 'retry.fallbackChains');
   if (!setting) return null;
@@ -758,6 +723,14 @@ export function RetryFallbackChains({
     return saved;
   };
 
+  const handleJumpToWebSearch = () => {
+    flushSync(() => {
+      setAddOpen(false);
+      setExpandedKey(null);
+    });
+    useUIStore.getState().requestSettingsJump('web-search', 'web-search.fallbacks');
+  };
+
   return (
     <SettingsControlGroup
       settingsItem="sessions.fallback-model"
@@ -771,9 +744,10 @@ export function RetryFallbackChains({
         <ModelRoleLinkRow
           key={key}
           label={t('settings.omp.modelRoles.role.web.label')}
-          value={chain.length > 0 ? chain.join(' → ') : t('settings.retryFallback.emptyChain')}
+          value={<>{formatWebFallbackPreview(chain, models, webSearchProviders, t)}</>}
+          models={models}
           linkLabel={t('settings.omp.modelRoles.link.webSearch')}
-          onOpen={() => useUIStore.getState().requestSettingsJump('web-search', 'web-search.fallbacks')}
+          onOpen={handleJumpToWebSearch}
         />
       ) : (
         <ChainEditorRow

@@ -34,12 +34,14 @@ Object.assign(globalThis, {
 // React DOM must evaluate after happy-dom installs browser globals into globalThis.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
+const { dict: zhCn } = await import('@/lib/i18n/messages/zh-CN');
 const { dict: en } = await import('@/lib/i18n/messages/en');
 const { useConfigStore } = await import('@/stores/useConfigStore');
 const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { useUIStore } = await import('@/stores/useUIStore');
+const { getWebSearchScopeKey, useWebSearchStore } = await import('@/stores/useWebSearchStore');
 const { RetryFallbackChains } = await import('./RetryFallbackChains');
 
 const TEST_MODELS: Model[] = [
@@ -132,6 +134,7 @@ describe('RetryFallbackChains', () => {
     root = createRoot(host);
     useProjectsStore.setState({ projects: [], activeProjectId: null });
     useDirectoryStore.setState({ currentDirectory: '' });
+    useWebSearchStore.setState({ state: { kind: 'idle' } });
     useConfigStore.setState({
       activeDirectoryKey: '__global__',
       providersLoaded: true,
@@ -162,6 +165,7 @@ describe('RetryFallbackChains', () => {
     await act(async () => root.unmount());
     host.remove();
     document.body.innerHTML = '';
+    useWebSearchStore.setState({ state: { kind: 'idle' } });
   });
 
   function mountHarness(
@@ -235,7 +239,7 @@ describe('RetryFallbackChains', () => {
     expect(host.textContent).not.toMatch(/\bweb\b(?!\/)/);
   });
 
-  test('renders the web chain with ModelRoleLinkRow jumping to web-search', async () => {
+  test('renders the web chain with ModelRoleLinkRow friendly labels and outline button jumping to web-search', async () => {
     const jump = spyOn(useUIStore.getState(), 'requestSettingsJump');
     try {
       const { Harness } = mountHarness({ web: ['web/exa', 'web/tavily'] });
@@ -243,12 +247,176 @@ describe('RetryFallbackChains', () => {
 
       const group = host.querySelector('[data-settings-item="sessions.fallback-model"]');
       expect(group?.textContent).toContain(en['settings.omp.modelRoles.role.web.label']);
-      expect(group?.textContent).toContain('web/exa → web/tavily');
+      expect(group?.textContent).toContain('exa +1');
+      expect(group?.textContent).not.toContain('web/exa');
+      expect(group?.textContent).not.toContain('web/tavily');
+      const link = [...group?.querySelectorAll('button') ?? []]
+        .find((button) => button.textContent === en['settings.omp.modelRoles.link.webSearch']);
+      expect(link).toBeDefined();
+      expect(link?.getAttribute('data-slot')).toBe('button');
+      expect(link?.getAttribute('data-size')).toBe('xs');
+      expect(link?.className).not.toContain('underline');
+      expect(link?.querySelector('svg')).not.toBeNull();
+      await act(async () => link?.click());
+      expect(jump).toHaveBeenCalledWith('web-search', 'web-search.fallbacks');
+    } finally {
+      jump.mockRestore();
+    }
+  });
+
+  test('renders friendly provider names in web chain preview when web search providers are loaded', async () => {
+    useWebSearchStore.setState({
+      state: {
+        kind: 'ready',
+        snapshot: {
+          workspaceId: 'ws_1',
+          scope: getWebSearchScopeKey(),
+          revision: '1',
+          enabled: true,
+          selectedProviderId: 'web/hosted',
+          fallbackProviderIds: ['web/exa', 'web/tavily'],
+          timeoutSeconds: 60,
+          providers: [
+            {
+              providerId: 'web/hosted',
+              name: 'Hosted',
+              configured: true,
+              requiresCredential: false,
+              isSelfHosted: false,
+              credentialWritable: false,
+              credentialConfigured: false,
+            },
+            {
+              providerId: 'web/exa',
+              name: 'Exa',
+              configured: true,
+              requiresCredential: true,
+              isSelfHosted: false,
+              credentialWritable: true,
+              credentialConfigured: true,
+            },
+            {
+              providerId: 'web/tavily',
+              name: 'Tavily',
+              configured: false,
+              requiresCredential: true,
+              isSelfHosted: false,
+              credentialWritable: true,
+              credentialConfigured: false,
+            },
+          ],
+        },
+      },
+    });
+
+    const { Harness } = mountHarness({ web: ['web/exa', 'web/tavily'] });
+    await act(async () => root.render(<Harness />));
+
+    const group = host.querySelector('[data-settings-item="sessions.fallback-model"]');
+    expect(group?.textContent).toContain('Exa +1');
+    expect(group?.textContent).not.toContain('web/exa');
+
+    const hostedHarness = mountHarness({ web: ['web/hosted', 'web/exa'] });
+    await act(async () => root.render(<hostedHarness.Harness />));
+    expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')?.textContent).toContain('Session model +1');
+
+    const previousI18n = useI18nStore.getState();
+    try {
+      await act(async () => {
+        useI18nStore.setState({ locale: 'zh-CN', dictionary: zhCn });
+      });
+      expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')?.textContent).toContain(
+        `${zhCn['settings.webSearch.provider.hosted']} +1`,
+      );
+    } finally {
+      await act(async () => {
+        useI18nStore.setState({ locale: previousI18n.locale, dictionary: previousI18n.dictionary });
+      });
+    }
+
+    const modelHarness = mountHarness({ web: ['openai/o3-mini:high', 'anthropic/claude-sonnet-4'] });
+    await act(async () => root.render(<modelHarness.Harness />));
+    expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')?.textContent).toContain('o3-mini · High +1');
+
+    const emptyHarness = mountHarness({ web: [] });
+    await act(async () => root.render(<emptyHarness.Harness />));
+    expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')?.textContent).toContain(
+      en['settings.retryFallback.emptyChain'],
+    );
+
+    await act(async () => {
+      useWebSearchStore.setState({
+        state: {
+          kind: 'ready',
+          snapshot: {
+            workspaceId: 'ws_other',
+            scope: JSON.stringify(['other-runtime', '/other-dir']),
+            revision: '1',
+            enabled: true,
+            selectedProviderId: 'web/exa',
+            fallbackProviderIds: [],
+            timeoutSeconds: 60,
+            providers: [
+              {
+                providerId: 'web/exa',
+                name: 'Other Directory Exa',
+                configured: true,
+                requiresCredential: true,
+                isSelfHosted: false,
+                credentialWritable: true,
+                credentialConfigured: true,
+              },
+            ],
+          },
+        },
+      });
+    });
+    const staleHarness = mountHarness({ web: ['web/exa'] });
+    await act(async () => root.render(<staleHarness.Harness />));
+    expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')?.textContent).not.toContain('Other Directory Exa');
+    expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')?.textContent).toContain('exa');
+  });
+
+  test('closes open Add chain dialog and expanded editor before invoking requestSettingsJump', async () => {
+    const { Harness } = mountHarness({
+      default: ['openai/o3-mini:high'],
+      web: ['web/exa', 'web/tavily'],
+    });
+    await act(async () => root.render(<Harness />));
+
+    const defaultTrigger = [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')]
+      .find((button) => button.textContent?.startsWith('Default'));
+    expect(defaultTrigger).toBeDefined();
+    await act(async () => defaultTrigger?.click());
+    expect(defaultTrigger?.getAttribute('aria-expanded')).toBe('true');
+
+    const addButton = [...host.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes(en['settings.retryFallback.addChain']));
+    expect(addButton).toBeDefined();
+    await act(async () => addButton?.click());
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+
+    const events: string[] = [];
+    let dialogOpenDuringJump: boolean | null = null;
+    let expandedDuringJump: string | null = null;
+    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump').mockImplementation(() => {
+      dialogOpenDuringJump = document.body.querySelector('[role="dialog"]') !== null;
+      expandedDuringJump = defaultTrigger?.getAttribute('aria-expanded') ?? null;
+      events.push('jump');
+    });
+
+    try {
+      const group = host.querySelector('[data-settings-item="sessions.fallback-model"]');
       const link = [...group?.querySelectorAll('button') ?? []]
         .find((button) => button.textContent === en['settings.omp.modelRoles.link.webSearch']);
       expect(link).toBeDefined();
       await act(async () => link?.click());
+
+      expect(events).toEqual(['jump']);
       expect(jump).toHaveBeenCalledWith('web-search', 'web-search.fallbacks');
+      expect(dialogOpenDuringJump).toBe(false);
+      expect(expandedDuringJump).toBe('false');
+      expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     } finally {
       jump.mockRestore();
     }
