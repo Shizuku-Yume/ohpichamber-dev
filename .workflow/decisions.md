@@ -2096,6 +2096,8 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Deferred:** Leads needs an OMP orchestration design; its UI, server and SDK implementation are excluded. OpenCode service/plugin bridges, OpenCode named-agent workflow forks, OpenCode engine, VS Code extension and retired verification stand remain excluded.
 - **Settled:** `secret.request` disk persistence is still refused; command-scoped `secret.run` remains supported without a saved-secret authority. Electron keeps its restrictive remote IPC allowlist, Host browser ownership and separate Agent Service lifecycle. Do not import `changelog/2.8.0.md`: fork release notes remain maintainer-owned. Exclude upstream `scripts/perf` additions; retain existing fork OMP-aware perf tooling.
 - **Tracking:** pin the drift script and baseline metadata to v2.8.0. The delta ledger lists every remaining differing path and actual state, preserving earlier applicable decisions and naming this decision for merged adaptations and exclusions. Historical comparison and toolchain evidence in the baseline JSON is not current runtime certification.
+- **Instead of:** cherry-picking upstream files, adopting OpenCode 2.3 runtime bridges, or letting upstream overwrite OMP 19.1 Agent Service contracts.
+- **Because:** real git merges preserve adoption history while keeping Canonical `/api/agent/v1` and Host Gateway ownership intact.
 - **Mine:** yes (maintainer-directed merge and explicitly settled choices).
 - **Revisit when:** an OMP orchestration design is approved, the Guest protocol or Electron trust boundary changes intentionally, or the maintainer changes release-history/perf ownership.
 
@@ -2104,6 +2106,8 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Decided:** remove the `cycle_agent` shortcut (default Tab) from the composer, the global shortcut handler, the model picker, the Help dialog and the shortcut schema, together with the unreachable pinned-chat `agentSelectable` branch of `ModelControls` and its locale keys. Root prompts are admitted with `agentId: null` (`prompt-admission.js`) and the main composer submits `agent: undefined`, so the shortcut only switched hidden UI agent state and the agent's remembered model, misleading the user about which agent runs.
 - **Kept:** agent profiles for `task` subagents, `/agent`, the Agents page and command/prompt `agentId` bindings. The store-level agent memory (`currentAgentName`, `setAgent`, per-session agent/model memory, `favoriteAgents` and `pickSessionAgent`) still keys model and effort memory and is a follow-up, not part of this change. Saved `shortcutOverrides.cycle_agent` values stay accepted by the Host settings sanitizer and are ignored because the schema no longer lists the action.
 - **Audit corrections to the remediation plan:** `permissionDefaultMode` (`ask`/`safety`/`auto`) is still a live Host policy (`permission-auto-accept` runtime and routes, new-session enrollment), and `sessionGoalChecker` still selects the worker goal checker through `OPENCHAMBER_SESSION_GOAL_CHECKER`. The 2026-11-05 retirement entry for `SET-02` does not describe current source. Both controls stay until their runtime authority is retired with a migration; removing the UI alone would leave an unreachable live policy. Routing already labels the category control "Thinking" and Tools already separates Host-injected tools, so neither needs a change. OMP-native `tools.approvalMode`, `tools.approval`, `bash.patterns` and `tools.restrictedFolders` stay config-only: no existing settings authorization covers editing approval policy from the GUI.
+- **Instead of:** keeping a misleading root composer agent switcher or deleting UI controls whose Host runtime policies still execute.
+- **Because:** OMP root sessions admit `agentId: null` only, while live Host policies require runtime retirement before removing their controls.
 - **Mine:** no (W10 of the maintainer-approved OMP 19 remediation plan; audit corrections recorded for maintainer review).
 - **Revisit when:** the Host permission policy or the goal checker is retired at runtime, or a GUI authorization model for approval policy is approved.
 
@@ -2111,6 +2115,8 @@ Later successful listings also retire stale failures: global head polls replace 
 
 - **Decided:** delete the 177 English keys (and their 14 translations) whose copy names OpenCode or its `{env:VAR}`/`opencode.json` syntax and that no source file references by literal, template prefix or key base, plus the unused `SettingsLegacyFormatNote` component and its `settings.common.legacyFormat.note` key. Reword three live keys that named OpenCode as the runtime to OMP (Behavior page AGENTS.md note, document attach hint, web search missing provider). `messages.test.ts` now rejects `{env:`, `{file:` and `opencode.json(c)` in every locale and requires every English key naming OpenCode to be on an audited list.
 - **Kept (audited, still named OpenCode):** OpenCode Zen provider and promotion sources; OMP skills discovery locations for `.opencode`; `opencode-snippets` compatibility; the legacy OpenCode data notice; OpenCode plugin catalog entries and the extension `opencodePlugin` contribution and quota-credential wording, whose runtime contract is not settled; Gemini key lookup wording, the SSH passphrase storage hint, the remote-instance missing-CLI remedy, OpenCode Console budgets and the unreleased isolated-spaces key note, whose current storage or runtime is not verified.
+- **Instead of:** leaving dead `{env:VAR}` and `opencode.json` strings in locale bundles without a regression check.
+- **Because:** OMP reads `models.yml`, `mcp.json`, and `config.yml`, so OpenCode config syntax misleads users on live OMP surfaces.
 - **Mine:** no (W12 of the maintainer-approved OMP 19 remediation plan).
 - **Revisit when:** the plugin, extension `opencodePlugin`, classification key lookup or SSH credential storage contracts move to OMP, or isolated spaces are released.
 
@@ -2120,5 +2126,45 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Linked, not duplicated:** default, smol, slow and plan stay on Defaults beside the session toggles and Plan & Goal controls they drive; web stays with Web search, which writes it through its catalog with fallbacks; speech links to Voice for Host playback. The hub shows their value and jumps to the owner.
 - **Project overrides:** the settings route writes the shared `config.yml`, and a role the project's `.omp/config.yml` sets shadows it. A `modelRoles` write that changes such a role is now refused with 409 instead of saving a value no session in the project reads. Because the route reads the merged record, every other write puts project roles back to the shared layer's own entries, so one project's roles never leak into the shared config; a project entry cleared to `null` falls back to the shared one and does not block edits, as in OMP's own merge.
 - **Not covered yet:** judge-kind, tiny-kind, TTS and STT models are absent from the existing catalogs, so judge and tiny list chat models only and speech has no GUI picker; a distinct capability endpoint would close this. `dictation` is omitted because only the terminal's speech input reads it. `modelTags` custom roles, `cycleOrder` and `modelPresets` stay terminal-only for a follow-up. Retry fallback chains and per-model compaction stay with their #148/#145 owners.
+- **Instead of:** leaving seven OMP 19.1 built-in roles without GUI controls or expanding strict catalog schemas prematurely.
+- **Because:** a central role page exposes the missing roles over existing chat and image catalogs while blocking shadowed shared writes with 409.
 - **Mine:** no (W5 of the maintainer-approved OMP 19 remediation plan).
 - **Revisit when:** a capability endpoint for non-chat model kinds exists, or project-scoped role writes are added to the settings route.
+
+## 2026-11-24 - Make Model roles the single editable role hub and return engine tuning to the OMP page
+
+- **Effort:** ux-v280-omp19-alignment
+- **Supersedes:** 2026-11-23 - One Model roles page over OMP 19.1's native roles (OMP 19 remediation W5)
+- **Decided:** `ModelRolesPage` directly edits every GUI-supported OMP model role in one place (including `default`, `smol`, `slow`, `plan`, and `image` via shared searchable role pickers), while `Git`, `Memory`, `Agents`, `Tools`, and `WebSearch` render read-only role summaries with jump links and `DefaultsSettings` keeps only the primary default model and thinking quick-pickers (dropping its duplicate `omp.modelRoles` anchor claim). Move `sessions:sampling` parameters and low-level execution/isolation knobs from `DefaultsSettings` to `OmpSettingsPage` tabs, and report `useOmpPageSettings` saves through `reportSettingsSaveState` so `SettingsPageLayout showSaveStatus` displays `Saving…` and `Save failed`.
+- **Instead of:** splitting editable `modelRoles` controls across `ModelRolesPage` and `DefaultsSettings` behind bidirectional links, keeping ~15 sections on `Sessions`, or logging OMP settings write failures only to `console.warn`.
+- **Because:** users need one authoritative place to inspect and assign model roles without cross-page bouncing, `Sessions` should hold session-workflow settings rather than engine tuning, and silent write failures violate `PATTERNS.md`.
+- **Decided by:** user.
+- **Revisit when:** OMP exposes capability catalogs for TTS, STT, tiny-only, or judge-only models, or adds project-scoped `modelRoles` mutations.
+
+## 2026-11-24 - Use structured entity editors and shared settings primitives across Behavior, Sessions, and discovery controls
+
+- **Effort:** ux-v280-omp19-alignment
+- **Decided:** replace `BehaviorPage` and `NativeBehaviorFiles` with a unified sidebar/list and detail editor governed by `SettingsAutosave` (grouped Global and Project entries for `AGENTS.md`, `RULES.md`, `SYSTEM.md`, `.omp/rules/*`, and `.omp/instructions/*`, creation dialog for drafts, localized field labels, `SettingsCheckboxRow` booleans, localized enum selects, and structured multi-value inputs, with Prompt & Personality in a clean `showSaveStatus` section). Rebuild `ModelCompactionSettings` and `RetryFallbackChains` with creation dialogs, `ModelSelector` pickers, `@dnd-kit` `SettingsSortableList` reordering, and immediate CAS saves instead of manual `<form>` Save buttons and raw `<Textarea>`s. Move global `Commands` and `Skills` discovery switches out of the per-entity editor pane, migrate `SnippetsPage` to `SettingsAutosave`, replace raw HTML inputs/buttons and bespoke row chrome across Settings, and enforce these invariants in `settingsLayoutGuard.test.ts`.
+- **Instead of:** keeping `NativeBehaviorFiles`'s single-dropdown manual-save form with raw camelCase schema labels and `JSON.stringify` text inputs, or restricting GUI authoring to Markdown-only files.
+- **Because:** bespoke `<form>`s, raw schema keys, manual Save buttons on autosave pages, and global discovery blocks above empty entity editors violate `PATTERNS.md`, `STYLING.md`, and `sections/DOCUMENTATION.md`.
+- **Decided by:** user.
+- **Revisit when:** OMP changes its rule or instruction frontmatter schema.
+
+## 2026-11-24 - Adopt OpenChamber v2.8.0 SubagentsPanel and SubagentStatusRow over OMP 19.1 async subagent state
+
+- **Effort:** ux-v280-omp19-alignment
+- **Decided:** restore upstream OpenChamber v2.8.0's Context Panel `SubagentsPanel` (inline expandable cards with pending `PermissionCard` and `FormCard` blockers, Markdown report, collapsible task prompt, and `openChildSession`) and shared two-line `SubagentStatusRow` across `WorkStatusSubagentsSection` and `SubagentsPanel`, retiring `SubagentHudTray` and `AgentHubModal`. Adapt the Canonical pipeline to OMP 19.1's detached async `task` execution by projecting `CustomMessage` (`customType: "async-result"`) deliveries in `WorkerProjection`, unifying live `subagent.updated` and persisted `listSubagents` identities (`childSessionId`, subagent `name`, `role`, `solutionSpace`, and pre-lifecycle tool events), and rendering live store-backed subagent rows on timeline `task` cards for both single and batch `tasks[]` calls.
+- **Instead of:** keeping the 25-line `SubagentsPanel` merge stub alongside `SubagentHudTray` and `AgentHubModal`, or dropping `async-result` deliveries in `WorkerProjection`.
+- **Because:** the side-by-side Context Panel surface avoids modal chat occlusion, shares one row representation with Work Status, and requires Canonical projection of OMP 19.1's detached `tasks[]` spawns and `async-result` reports.
+- **Decided by:** user.
+- **Revisit when:** OMP changes its `task` batch or `async-result` delivery contracts.
+
+## 2026-11-24 - Retire OpenCode Zen, OpenCode Go, OpenCode Console budgets, and residual OpenCode surfaces
+
+- **Effort:** ux-v280-omp19-alignment
+- **Supersedes:** 2026-11-23 - Purge dead OpenCode locale copy and guard OMP config syntax (OMP 19 remediation W12)
+- **Decided:** remove OpenCode Go (`opencode-go` connect entry, Host quota scraper, `ConsoleBudgetsSection`, tray sync, and 15-locale copy) and OpenCode Zen (`zen-promo` and `zen-key` routing classifier sources, `opencode.ai` endpoints, Host quota scrapers, `private-credential.js` handoff, provider catalog exposure, and product docs), falling back stored `zen-promo` or `zen-key` selections to `off` or the first configured classifier. Reclassify `commands.enableOpencode*` to `config-only`, remove remaining `opencode.ai` and `openchamber.dev` UI/probe URLs, switch client directory headers from `x-opencode-directory` to `x-openchamber-directory`, and shrink `messages.test.ts`'s `auditedOpenCodeKeys` allowlist.
+- **Instead of:** retaining OpenCode Zen, OpenCode Go, OpenCode Console budgets, GUI OpenCode discovery toggles, and `x-opencode-directory` as legacy or external-provider exceptions.
+- **Because:** OhPiChamber is an OMP-only product and must not ship retired OpenCode SaaS promotions, scrapers, endpoints, or OpenCode-branded UI controls and request headers.
+- **Decided by:** user.
+- **Revisit when:** never for OpenCode SaaS services; revisit Host acceptance of incoming `x-opencode-directory` only if external local scripts require deprecation removal.
