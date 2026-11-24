@@ -6,6 +6,7 @@ import { getSettingsPageMeta } from './metadata';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
 import { ompLayoutSettingIds } from '@/components/sections/openchamber/ompSettingsLayout';
 import { CHAT_SENDING_SEARCH_ITEMS } from './search-chat-sending';
+import { MODEL_ROLES_CUSTOM_SECTION_SEARCH_ITEM, usageResetsSearchItems } from './search-usage-resets';
 
 /** The search anchor of one shortcut's row: the id the Shortcuts page names it by. */
 export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
@@ -116,12 +117,6 @@ const OMP_PAGE_SETTINGS: ReadonlyArray<readonly [page: SettingsPageSlug, setting
     'github.cache.enabled', 'github.cache.softTtlSec', 'github.cache.hardTtlSec',
     'browser.headless', 'browser.cmux', 'browser.tern', 'browser.freezeOnTurnEnd', 'browser.idleCloseSec',
   ]],
-  ['usage', [
-    'codexResets.autoRedeem5h', 'codexResets.autoRedeemWeekly',
-    'codexResets.minBlockedMinutes', 'codexResets.keepCredits', 'codexResets.salvageHorizonHours',
-    'claudeResets.autoRedeem5h', 'claudeResets.autoRedeemWeekly', 'claudeResets.autoRedeemFable',
-    'claudeResets.minBlockedMinutes', 'claudeResets.keepCredits', 'claudeResets.salvageHorizonHours',
-  ]],
 ];
 
 const OMP_PAGE_SETTING_KEYWORDS: Readonly<Record<string, string[]>> = {
@@ -161,6 +156,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
       };
     })
   )),
+  ...usageResetsSearchItems(),
   {
     id: 'omp.modelRoles.default',
     page: 'model-roles',
@@ -1755,13 +1751,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.omp.modelRoles.section.kind.description',
     keywords: ['roles', 'specialized', 'vision', 'image'],
   },
-  {
-    id: 'model-roles.section.custom',
-    page: 'model-roles',
-    titleKey: 'settings.omp.modelRoles.section.custom.title',
-    descriptionKey: 'settings.omp.modelRoles.section.custom.description',
-    keywords: ['roles', 'custom', 'tags', 'model tags', 'add role'],
-  },
+  MODEL_ROLES_CUSTOM_SECTION_SEARCH_ITEM,
   {
     id: 'chat.section.thinking',
     page: 'chat',
