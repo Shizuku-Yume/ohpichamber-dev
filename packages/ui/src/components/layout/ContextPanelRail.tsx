@@ -46,6 +46,8 @@ import { useSourceControlAuthEntry, useSourceControlAuthStore } from '@/stores/u
 import { GITHUB_SOURCE_CONTROL_IDENTITY } from '@/lib/source-control/identity';
 import { useRepositoryReferenceProvider } from '@/components/references/referenceSources';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSubagentsSurfaceShown } from '@/components/chat/work-status/useSubagentRows';
 import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
 import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { useGuestListeningStore } from '@/lib/guests/microphone';
@@ -291,6 +293,8 @@ export const ContextPanelRail: React.FC = () => {
   );
   const changedFilesCount = gitStatus?.files.length ?? 0;
   const workflowsShown = useWorkflowsSurfaceShown(tabs, effectiveDirectory || null);
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const subagentsShown = useSubagentsSurfaceShown(tabs, currentSessionId);
   const receivedPagesShown = hasReceivedPages(useReceivedPages());
   const surfaces = React.useMemo(() => {
     return getVisibleContextRailSurfaces({
@@ -301,11 +305,11 @@ export const ContextPanelRail: React.FC = () => {
       tabs,
       sourceControlConnected,
       workflowsShown,
+      subagentsShown,
       receivedPagesShown,
       extras: guestSurfaces,
     }).map((surface) => (surface.id === 'pr' && repositoryProvider === 'gitlab' ? { ...surface, icon: 'gitlab' as const } : surface));
-  }, [contextRailHiddenSurfaces, contextRailOrder, guestSurfaces, receivedPagesShown, repositoryProvider, screenWidth, sourceControlConnected, tabs, workflowsShown]);
-
+  }, [contextRailHiddenSurfaces, contextRailOrder, guestSurfaces, receivedPagesShown, repositoryProvider, screenWidth, sourceControlConnected, subagentsShown, tabs, workflowsShown]);
   // A surface whose integration disconnected closes rather than lingering as
   // an active panel with no rail icon.
   React.useEffect(() => {

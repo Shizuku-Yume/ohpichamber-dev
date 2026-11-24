@@ -60,6 +60,50 @@ const SubagentEventObservationSchema = z.object({
 export type SubagentEventObservation = z.infer<typeof SubagentEventObservationSchema>;
 export const SubagentEventSchema = SubagentEventObservationSchema;
 
+export interface VibeSpawnCorrelation {
+  subagentId: string;
+  toolCallId: string;
+  prompt?: string;
+  name?: string;
+  cli?: string;
+}
+
+const GENERIC_VIBE_DESCRIPTION_RE = /^vibe\s+(?:fast|good)\s+session$/i;
+const CONCISE_VIBE_DESCRIPTION_MAX = 80;
+
+function nonEmptyString(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? value : undefined;
+}
+
+function isGenericVibeDescription(description: string | undefined): boolean {
+  const trimmed = description?.trim();
+  return !trimmed || GENERIC_VIBE_DESCRIPTION_RE.test(trimmed);
+}
+
+function concisePromptFirstLine(prompt: string | undefined): string | undefined {
+  if (!prompt) return undefined;
+  for (const line of prompt.split(/\r?\n/)) {
+    const normalized = line.trim().replace(/\s+/g, ' ');
+    if (!normalized) continue;
+    if (normalized.length <= CONCISE_VIBE_DESCRIPTION_MAX) return normalized;
+    return `${normalized.slice(0, CONCISE_VIBE_DESCRIPTION_MAX - 1).trimEnd()}…`;
+  }
+  return undefined;
+}
+
+function resolveSubagentDescription(
+  incoming: string | undefined,
+  existing: string | undefined,
+  pendingPrompt: string | undefined,
+): string | undefined {
+  if (incoming && !isGenericVibeDescription(incoming)) return incoming;
+  if (existing && !isGenericVibeDescription(existing)) return existing;
+  const fromPrompt = concisePromptFirstLine(pendingPrompt);
+  if (fromPrompt) return fromPrompt;
+  return nonEmptyString(incoming) ?? nonEmptyString(existing);
+}
+
 /**
  * Live `subagent.updated` projection for `task` `tasks[]` children observed on
  * the subagent event bus. Owns the running/terminal map transitions and the
@@ -70,6 +114,9 @@ export const SubagentEventSchema = SubagentEventObservationSchema;
  * after the emit gate has shut.
  */
 export class SubagentProjector {
+  private readonly pendingVibeSpawns = new Map<string, VibeSpawnCorrelation>();
+  private readonly lastLifecyclePayloads = new Map<string, SubagentLifecyclePayload>();
+
   constructor(
     private readonly sessionId: string,
     private readonly liveSubagents: Map<string, Subagent>,
@@ -77,10 +124,13 @@ export class SubagentProjector {
     private readonly toolCallToSubagentId: Map<string, string>,
     private readonly emit: (inputs: ProjectionInput[]) => void,
     private readonly publish: (inputs: ProjectionInput[]) => void,
+    private readonly onLifecycleBackfill?: (payload: SubagentLifecyclePayload & { assignment?: string; task?: string }) => void,
   ) { }
 
-  handleSubagentLifecycle(payload: SubagentLifecyclePayload): void {
+  handleSubagentLifecycle(payload: SubagentLifecyclePayload): Subagent {
+    this.lastLifecyclePayloads.set(payload.id, payload);
     const existing = this.liveSubagents.get(payload.id);
+    const pending = this.pendingVibeSpawns.get(payload.id);
     const status: Subagent['status'] = payload.status === 'started' ? 'running'
       : payload.status === 'completed' ? 'completed'
         : payload.status === 'aborted' ? 'cancelled'
@@ -102,7 +152,7 @@ export class SubagentProjector {
       // child's JSONL header; payload.id is the allocated subagent name, not a
       // session id, so a live frame must not present it as one.
       childSessionId: existing?.childSessionId,
-      toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      toolCallId: nonEmptyString(payload.parentToolCallId)?.trim() ?? existing?.toolCallId ?? pending?.toolCallId,
       name: payload.id,
       role: payload.agent,
       solutionSpace: existing?.solutionSpace,
@@ -119,8 +169,8 @@ export class SubagentProjector {
       retryCountdown: status === 'running' ? existing?.retryCountdown : undefined,
       depth,
       parentSubagentId,
-      description: payload.description ?? existing?.description,
-      task: existing?.task,
+      description: resolveSubagentDescription(payload.description, existing?.description, pending?.prompt),
+      task: nonEmptyString(existing?.task) ?? nonEmptyString(pending?.prompt),
       lastIntent: existing?.lastIntent,
       stage: existing?.stage,
       completionPercent: existing?.completionPercent,
@@ -130,6 +180,7 @@ export class SubagentProjector {
     this.liveSubagents.set(payload.id, subagent);
     this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
     this.flushPendingSubagentEvents(payload.id);
+    return subagent;
   }
 
   /**
@@ -159,6 +210,7 @@ export class SubagentProjector {
     const p = payload.progress;
     if (!p) return;
     const existing = this.liveSubagents.get(p.id);
+    const pending = this.pendingVibeSpawns.get(p.id);
     let parentSubagentId = existing?.parentSubagentId;
     let depth = existing?.depth ?? 0;
     if (!parentSubagentId && payload.parentToolCallId) {
@@ -178,11 +230,12 @@ export class SubagentProjector {
       : p.status === 'aborted' ? 'cancelled'
         : p.status === 'failed' ? 'failed'
           : 'running';
+    const incomingTask = nonEmptyString(p.task) ?? nonEmptyString(payload.task);
     const subagent: Subagent = {
       subagentId: p.id,
       parentSessionId: this.sessionId,
       childSessionId: existing?.childSessionId,
-      toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      toolCallId: nonEmptyString(payload.parentToolCallId)?.trim() ?? existing?.toolCallId ?? pending?.toolCallId,
       name: p.id,
       role: p.agent || payload.agent,
       solutionSpace: payload.assignment ?? existing?.solutionSpace,
@@ -199,8 +252,8 @@ export class SubagentProjector {
       retryCountdown: status === 'running' ? retryCountdown : undefined,
       depth,
       parentSubagentId,
-      description: p.description ?? existing?.description,
-      task: p.task ?? payload.task ?? existing?.task,
+      description: resolveSubagentDescription(p.description, existing?.description, pending?.prompt),
+      task: nonEmptyString(existing?.task) ?? incomingTask ?? nonEmptyString(pending?.prompt),
       lastIntent: p.currentToolIntent ?? p.lastIntent ?? existing?.lastIntent,
       stage: p.stage ?? existing?.stage,
       completionPercent: p.completionPercent ?? existing?.completionPercent,
@@ -210,6 +263,48 @@ export class SubagentProjector {
     this.liveSubagents.set(p.id, subagent);
     this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
     this.flushPendingSubagentEvents(p.id);
+  }
+
+  correlateVibeSpawn(correlation: VibeSpawnCorrelation): Subagent | undefined {
+    const subagentId = correlation.subagentId.trim();
+    const toolCallId = correlation.toolCallId.trim();
+    if (!subagentId || !toolCallId) return undefined;
+    const previous = this.pendingVibeSpawns.get(subagentId);
+    const merged: VibeSpawnCorrelation = {
+      ...previous,
+      ...correlation,
+      subagentId,
+      toolCallId,
+      prompt: nonEmptyString(correlation.prompt) ?? previous?.prompt,
+    };
+    this.pendingVibeSpawns.set(subagentId, merged);
+    const existing = this.liveSubagents.get(subagentId);
+    if (!existing) return undefined;
+    const nextToolCallId = nonEmptyString(existing.toolCallId)?.trim() ?? toolCallId;
+    const nextTask = nonEmptyString(existing.task) ?? merged.prompt;
+    const nextDescription = resolveSubagentDescription(undefined, existing.description, merged.prompt) ?? existing.description;
+    const toolCallChanged = nextToolCallId !== existing.toolCallId;
+    const taskChanged = nextTask !== existing.task;
+    const descriptionChanged = nextDescription !== existing.description;
+    if (!toolCallChanged && !taskChanged && !descriptionChanged) return existing;
+    const updated: Subagent = { ...existing };
+    if (nextToolCallId !== undefined) updated.toolCallId = nextToolCallId;
+    if (nextTask !== undefined) updated.task = nextTask;
+    if (nextDescription !== undefined) updated.description = nextDescription;
+    this.liveSubagents.set(subagentId, updated);
+    this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...updated } } }]);
+    if (toolCallChanged || taskChanged || descriptionChanged) {
+      const lastLifecycle = this.lastLifecyclePayloads.get(subagentId);
+      if (lastLifecycle) {
+        const backfill: SubagentLifecyclePayload & { assignment?: string; task?: string } = { ...lastLifecycle };
+        if (updated.toolCallId !== undefined) backfill.parentToolCallId = updated.toolCallId;
+        if (updated.description !== undefined) backfill.description = updated.description;
+        if (updated.task !== undefined) backfill.task = updated.task;
+        if (updated.solutionSpace !== undefined) backfill.assignment = updated.solutionSpace;
+        this.onLifecycleBackfill?.(backfill);
+      }
+    }
+    return updated;
   }
 
   handleSubagentEvent(payload: SubagentEventObservation): void {

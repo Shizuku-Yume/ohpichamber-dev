@@ -215,6 +215,7 @@ type VisibleRailSurfacesOptions = {
       or a Workflows tab is open, and never in a build without workflows. Runs
       start from the chat, so hiding it removes no entry point. */
   workflowsShown?: boolean;
+  subagentsShown?: boolean;
   receivedPagesShown?: boolean;
   /** Installed guest panels. Unavailable when the catalog has not
       loaded or failed. */
@@ -244,6 +245,9 @@ export const getVisibleContextRailSurfaces = (options: VisibleRailSurfacesOption
     }
     if (surface.id === 'workflows' && (options.isVSCode || !options.workflowsShown && options.workflowsShown !== undefined)) {
       return false;
+    }
+    if (surface.id === 'subagents' && options.subagentsShown) {
+      return true;
     }
     if (surface.id === 'pages' && options.receivedPagesShown) {
       return true;

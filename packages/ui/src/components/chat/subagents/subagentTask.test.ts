@@ -116,6 +116,134 @@ describe('findSubagentTask', () => {
     ).toBe('Do the thing');
   });
 
+
+  test('reads vibe_spawn prompt matched by toolCallId', () => {
+    const parent = [
+      assistant('a1', 'parent', [
+        {
+          type: 'tool_call',
+          partId: 'p1',
+          toolCallId: 'call-vibe-1',
+          toolName: 'vibe_spawn',
+          status: 'completed',
+          input: { cli: 'fast', name: 'home-disk-usage', prompt: 'Inspect disk usage under $HOME' },
+        },
+      ]),
+    ];
+    expect(
+      findSubagentTask(parent, undefined, {
+        subagentId: 'home-disk-usage-2',
+        toolCallId: 'call-vibe-1',
+        name: 'home-disk-usage-2',
+        role: 'sonic',
+      }),
+    ).toBe('Inspect disk usage under $HOME');
+  });
+
+  test('reads vibe_spawn prompt matched by details.spawned.id when toolCallId is missing', () => {
+    const parent = [
+      assistant('a1', 'parent', [
+        {
+          type: 'tool_call',
+          partId: 'p1',
+          toolCallId: 'call-vibe-first',
+          toolName: 'vibe_spawn',
+          status: 'completed',
+          input: { cli: 'fast', name: 'home-disk-usage', prompt: 'First worker prompt' },
+        },
+        {
+          type: 'tool_result',
+          partId: 'r1',
+          toolCallId: 'call-vibe-first',
+          toolName: 'vibe_spawn',
+          isError: false,
+          output: {
+            content: [{ type: 'text', text: 'Spawned fast session `home-disk-usage`.' }],
+            details: { op: 'spawn', spawned: { id: 'home-disk-usage', cli: 'fast', jobId: 'j1' } },
+          },
+        },
+        {
+          type: 'tool_call',
+          partId: 'p2',
+          toolCallId: 'call-vibe-second',
+          toolName: 'vibe_spawn',
+          status: 'completed',
+          input: { cli: 'fast', name: 'home-disk-usage', prompt: 'Second worker prompt' },
+        },
+        {
+          type: 'tool_result',
+          partId: 'r2',
+          toolCallId: 'call-vibe-second',
+          toolName: 'vibe_spawn',
+          isError: false,
+          output: {
+            content: [{ type: 'text', text: 'Spawned fast session `home-disk-usage-2`.' }],
+            details: { op: 'spawn', spawned: { id: 'home-disk-usage-2', cli: 'fast', jobId: 'j2' } },
+          },
+        },
+      ]),
+    ];
+    expect(
+      findSubagentTask(parent, undefined, {
+        subagentId: 'home-disk-usage-2',
+        name: 'home-disk-usage-2',
+        role: 'sonic',
+      }),
+    ).toBe('Second worker prompt');
+  });
+
+  test('reads vibe_spawn prompt matched by input.name when result is not yet attached', () => {
+    const parent = [
+      assistant('a1', 'parent', [
+        {
+          type: 'tool_call',
+          partId: 'p1',
+          toolCallId: 'call-vibe-pending',
+          toolName: 'vibe_spawn',
+          status: 'running',
+          input: { cli: 'good', name: 'audit-auth', prompt: 'Review auth middleware' },
+        },
+      ]),
+    ];
+    expect(
+      findSubagentTask(parent, undefined, {
+        subagentId: 'audit-auth',
+        name: 'audit-auth',
+        role: 'task',
+      }),
+    ).toBe('Review auth middleware');
+  });
+
+  test('reads vibe_send message matched by input.session or details.send.id', () => {
+    const parent = [
+      assistant('a1', 'parent', [
+        {
+          type: 'tool_call',
+          partId: 'p1',
+          toolCallId: 'call-vibe-send-1',
+          toolName: 'vibe_send',
+          status: 'completed',
+          input: { session: 'home-disk-usage-2', message: 'Check /var/log too' },
+        },
+      ]),
+    ];
+    expect(
+      findSubagentTask(parent, undefined, {
+        subagentId: 'home-disk-usage-2',
+        name: 'home-disk-usage-2',
+        role: 'sonic',
+      }),
+    ).toBe('Check /var/log too');
+  });
+
+  test('ignores generic vibe session description placeholder when falling back to stored task', () => {
+    expect(
+      findSubagentTask([], [user('u1', 'child', 'Actual vibe prompt')], {
+        subagentId: 'home-disk-usage-2',
+        task: 'vibe fast session',
+      }),
+    ).toBe('Actual vibe prompt');
+  });
   test('returns null when neither parent tool call, stored task, nor child message exists', () => {
     expect(findSubagentTask(undefined, undefined, { subagentId: 'missing' })).toBeNull();
   });

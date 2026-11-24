@@ -2,6 +2,8 @@ import React from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { SidebarTopBar } from './SidebarTopBar';
+import { useSidebarPeek } from './useSidebarPeek';
+import { useLayoutAnimationMs } from '@/hooks/useLayoutAnimationMs';
 import { TitlebarLeftControls } from './TitlebarLeftControls';
 import { ContextPanel } from './ContextPanel';
 import { ContextSurfacePanes } from './ContextSurfacePanes';
@@ -32,6 +34,7 @@ import { useTerminalSessionKeepalive } from '@/hooks/useTerminalSessionKeepalive
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { useOnDemandComponent } from '@/hooks/useOnDemandComponent';
+import { usePaletteShortcuts } from '@/hooks/usePaletteShortcuts';
 import { useSessionListSync } from '@/components/session/sidebar/list/useSessionListSync';
 import { setChatCovered } from './rightSlot';
 
@@ -72,6 +75,7 @@ const OnDemand: React.FC<{
 
 const LeftSidebar = React.memo<{ isMobile: boolean }>(({ isMobile }) => {
  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+ const peek = useSidebarPeek({ enabled: !isSidebarOpen && !isMobile, layoutAnimationMs: useLayoutAnimationMs() });
  const [listControlsSlot, setListControlsSlot] = React.useState<HTMLDivElement | null>(null);
     return (
   <Sidebar
@@ -79,8 +83,9 @@ const LeftSidebar = React.memo<{ isMobile: boolean }>(({ isMobile }) => {
    isMobile={isMobile}
    className="border-border"
    topBar={<SidebarTopBar actionsSlotRef={setListControlsSlot} />}
+   peek={peek}
   >
-   <SessionSidebar isVisible={isSidebarOpen} listControlsSlot={listControlsSlot} />
+   <SessionSidebar isVisible={isSidebarOpen || peek.state !== false} listControlsSlot={listControlsSlot} />
   </Sidebar>
  );
 });
@@ -90,6 +95,7 @@ export const MainLayout: React.FC = () => {
  const fileTabCloseGuard = React.useRef<FileTabCloseGuard | null>(null);
  const fileTabSelectionGuard = React.useRef<FileTabSelectionGuard | null>(null);
  useSessionListSync({ isVSCode: false });
+ usePaletteShortcuts();
  useTerminalSessionKeepalive();
  // The grant dialog of isolated spaces.
  const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);

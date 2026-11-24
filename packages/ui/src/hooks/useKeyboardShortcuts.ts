@@ -33,7 +33,10 @@ import { enabledGuestSurfaces } from '@/lib/guests/surfaces';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useGuestsStore } from '@/lib/guests/store';
 import { getVisibleContextRailSurfaces } from '@/lib/surfaces/registry';
+import { isSubagentsSurfaceShown } from '@/components/chat/work-status/useSubagentRows';
+import { getAllSyncSessions } from '@/sync/sync-refs';
 import { isWorkflowsSurfaceShown } from '@/lib/workflows/panel';
+import { hasReceivedPages, useReceivedPagesStore } from '@/components/chat/sharePages/received/receivedPagesStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
@@ -488,6 +491,8 @@ export const useKeyboardShortcuts = () => {
             hiddenSurfaces: state.contextRailHiddenSurfaces,
             isVSCode: false,
             workflowsShown: isWorkflowsSurfaceShown(panel?.tabs ?? [], effectiveDirectory),
+            receivedPagesShown: hasReceivedPages(useReceivedPagesStore.getState()),
+            subagentsShown: isSubagentsSurfaceShown(panel?.tabs ?? [], currentSessionId, getAllSyncSessions()),
             screenWidth: window.innerWidth,
             tabs: panel?.tabs ?? [],
             sourceControlConnected: Object.values(useSourceControlAuthStore.getState().entries).some((entry) => entry.status?.status === 'connected'),

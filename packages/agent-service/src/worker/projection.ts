@@ -11,6 +11,7 @@ import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSch
 import type { AsyncJobResultJob, CompactionMethod, EditPreview, EditPreviewFile, HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionCompacting, SessionMention, StepTiming, TodoPhase, TodoStatus, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
+import type { VibeSpawnCorrelation } from './subagent-projection.ts';
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 type NoticePartInput = DistributiveOmit<NoticePart, 'partId'>;
 
@@ -247,6 +248,20 @@ const CompactionResultExtrasSchema = z.looseObject({
   warning: z.string().optional(),
 });
 const TodoToolResultDetailsSchema = z.looseObject({ op: z.string().optional(), phases: z.array(z.unknown()).optional() });
+const VibeSpawnArgsSchema = z.looseObject({
+  prompt: z.string().optional().catch(undefined),
+  name: z.string().optional().catch(undefined),
+  cli: z.string().optional().catch(undefined),
+});
+type VibeSpawnArgs = z.infer<typeof VibeSpawnArgsSchema>;
+const VibeSpawnDetailsSchema = z.looseObject({
+  spawned: z.looseObject({
+    id: z.string().min(1),
+  }).optional(),
+});
+const VibeSpawnEventArgsSchema = z.looseObject({
+  args: VibeSpawnArgsSchema.optional(),
+});
 
 type NativeTodoPhaseInput = {
   readonly name: string;
@@ -546,6 +561,7 @@ export class WorkerProjection {
   private readonly publishedResultParts = new Set<string>();
   private readonly completedResultParts = new Set<string>();
   private readonly toolCallPreviews = new Map<string, EditPreview>();
+  private readonly vibeSpawnArgsByCallId = new Map<string, VibeSpawnArgs>();
 
   private ownToolCall(toolCallId: string, messageId: string | undefined, contentIndex: number | undefined): void {
     if (!messageId || contentIndex === undefined) return;
@@ -630,6 +646,7 @@ export class WorkerProjection {
     privateRoots: readonly PrivateRoot[] = [],
     private readonly readLiveTodos?: () => readonly NativeTodoPhaseInput[],
     private readonly sanitizeProviderError: (text: string) => string = text => text,
+    private readonly onVibeSpawn?: (correlation: VibeSpawnCorrelation) => void,
   ) {
     this.entryOffset = manager.getBranch().length;
     const roots = new Map(nativePrivateRootContext(manager).map((value) => [value.root, value]));
@@ -639,6 +656,18 @@ export class WorkerProjection {
     if (cwd) roots.set(cwd, { root: cwd, label: 'workspace' });
     this.privateRoots = [...roots.values()].sort((left, right) => right.root.length - left.root.length);
     this.lastProjectedTodosJson = JSON.stringify(this.currentTodos());
+  }
+
+  private emitVibeSpawnCorrelation(toolCallId: string, spawnedId: string, args: VibeSpawnArgs | undefined): void {
+    if (!this.onVibeSpawn) return;
+    const correlation: VibeSpawnCorrelation = {
+      subagentId: spawnedId,
+      toolCallId: this.publicText(toolCallId),
+    };
+    if (args?.prompt !== undefined) correlation.prompt = this.publicText(args.prompt);
+    if (args?.name !== undefined) correlation.name = this.publicText(args.name);
+    if (args?.cli !== undefined) correlation.cli = args.cli;
+    this.onVibeSpawn(correlation);
   }
 
   publicText(text: string, context = ''): string {
@@ -1166,6 +1195,10 @@ export class WorkerProjection {
             };
             current.toolCallIndexById.set(call.id, update.contentIndex);
             this.ownToolCall(call.id, current.messageId, update.contentIndex);
+            if (call.name === 'vibe_spawn') {
+              const parsedArgs = VibeSpawnArgsSchema.safeParse(input);
+              if (parsedArgs.success) this.vibeSpawnArgsByCallId.set(call.id, parsedArgs.data);
+            }
             if (!current.started.has(update.contentIndex)) {
               current.started.add(update.contentIndex);
               emit({ type: 'part.started', messageId: current.messageId, part });
@@ -1201,6 +1234,10 @@ export class WorkerProjection {
           this.textSuffixes.delete(part.partId);
           if (part.type === 'tool_call') {
             this.ownToolCall(part.toolCallId, current.messageId, index);
+            if (part.toolName === 'vibe_spawn' && !this.vibeSpawnArgsByCallId.has(part.toolCallId)) {
+              const parsedArgs = VibeSpawnArgsSchema.safeParse(part.input);
+              if (parsedArgs.success) this.vibeSpawnArgsByCallId.set(part.toolCallId, parsedArgs.data);
+            }
             const preview = this.toolCallPreviews.get(part.toolCallId) ?? current.editPreviewsByToolCallId.get(part.toolCallId);
             if (preview) part.editPreview = preview;
           }
@@ -1259,16 +1296,36 @@ export class WorkerProjection {
         this.message = undefined;
         break;
       }
-      case 'tool_execution_start':
+      case 'tool_execution_start': {
         this.ownToolCall(event.toolCallId, this.message?.messageId, this.message?.toolCallIndexById.get(event.toolCallId));
-        emit({ type: 'tool.started', toolCallId: event.toolCallId, toolName: event.toolName, input: toolInput(JSON.parse(JSON.stringify(event.args))) });
+        const input = toolInput(JSON.parse(JSON.stringify(event.args ?? {})));
+        if (event.toolName === 'vibe_spawn') {
+          const parsedArgs = VibeSpawnArgsSchema.safeParse(this.publicJsonObject(input));
+          if (parsedArgs.success) this.vibeSpawnArgsByCallId.set(event.toolCallId, parsedArgs.data);
+        }
+        emit({ type: 'tool.started', toolCallId: event.toolCallId, toolName: event.toolName, input });
         break;
+      }
       case 'tool_execution_update': {
         // A long tool reports what it has produced so far. The live row reads
         // it from the result part, so a running call shows output instead of
         // waiting for its end.
         const payload = resultPayload(event.partialResult);
         this.publishToolResult({ ...payload, toolCallId: event.toolCallId, toolName: event.toolName }, false, emit);
+        if (event.toolName === 'vibe_spawn') {
+          const rawArgs = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(event.args ?? {}))));
+          const parsedArgs = VibeSpawnArgsSchema.safeParse(rawArgs);
+          if (parsedArgs.success && (parsedArgs.data.prompt !== undefined || parsedArgs.data.name !== undefined || parsedArgs.data.cli !== undefined)) {
+            this.vibeSpawnArgsByCallId.set(event.toolCallId, parsedArgs.data);
+          }
+          const parsedDetails = VibeSpawnDetailsSchema.safeParse(payload.details);
+          if (parsedDetails.success && parsedDetails.data.spawned) {
+            const args = parsedArgs.success && parsedArgs.data.prompt !== undefined
+              ? parsedArgs.data
+              : this.vibeSpawnArgsByCallId.get(event.toolCallId);
+            this.emitVibeSpawnCorrelation(event.toolCallId, parsedDetails.data.spawned.id, args);
+          }
+        }
         break;
       }
       case 'tool_execution_end': {
@@ -1284,6 +1341,19 @@ export class WorkerProjection {
           ...(part.type === 'tool_result' && part.errorKind !== undefined ? { errorKind: part.errorKind } : {}),
         });
         this.toolCallPreviews.delete(event.toolCallId);
+        if (event.toolName === 'vibe_spawn') {
+          const inlineArgs = VibeSpawnEventArgsSchema.safeParse(event);
+          const parsedInlineArgs = inlineArgs.success ? inlineArgs.data.args : undefined;
+          const savedArgs = this.vibeSpawnArgsByCallId.get(event.toolCallId);
+          this.vibeSpawnArgsByCallId.delete(event.toolCallId);
+          if (!outcome.isError) {
+            const parsedDetails = VibeSpawnDetailsSchema.safeParse(outcome.details);
+            if (parsedDetails.success && parsedDetails.data.spawned) {
+              const effectiveArgs = parsedInlineArgs?.prompt !== undefined ? parsedInlineArgs : (savedArgs ?? parsedInlineArgs);
+              this.emitVibeSpawnCorrelation(event.toolCallId, parsedDetails.data.spawned.id, effectiveArgs);
+            }
+          }
+        }
         if (event.toolName === 'todo' && !outcome.isError) {
           const details = TodoToolResultDetailsSchema.safeParse(outcome.details);
           if (!details.success || details.data.op !== 'view') {

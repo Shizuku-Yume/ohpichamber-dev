@@ -17,7 +17,7 @@ import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectoryStore, useDirectorySync } from '@/sync/sync-context';
+import { useDirectorySync } from '@/sync/sync-context';
 import type { State } from '@/sync/types';
 import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import { findSubagentTask } from './subagentTask';
@@ -31,10 +31,16 @@ const useSubagentTask = (
   directory: string | null,
   target: { subagentId: string; name: string | null; role: string | null; task: string | undefined; solutionSpace: string | undefined; toolCallId: string | undefined },
 ): string | null => {
-  const store = useDirectoryStore(directory ?? undefined);
+  const parentMessages = useDirectorySync(
+    React.useCallback((state: State) => state.message[parentId], [parentId]),
+    directory ?? undefined,
+  );
+  const childMessages = useDirectorySync(
+    React.useCallback((state: State) => (childId ? state.message[childId] : undefined), [childId]),
+    directory ?? undefined,
+  );
   return React.useMemo(() => {
-    const state = store.getState();
-    return findSubagentTask(state.message[parentId], childId ? state.message[childId] : undefined, {
+    return findSubagentTask(parentMessages, childMessages, {
       subagentId: target.subagentId,
       childSessionId: childId,
       name: target.name,
@@ -43,9 +49,7 @@ const useSubagentTask = (
       solutionSpace: target.solutionSpace,
       toolCallId: target.toolCallId,
     });
-    // The task prompt is read once when the card opens; streaming it live would
-    // re-render the card on every parent token.
-  }, [childId, parentId, store, target.subagentId, target.name, target.role, target.task, target.solutionSpace, target.toolCallId]);
+  }, [childId, childMessages, parentMessages, target.subagentId, target.name, target.role, target.task, target.solutionSpace, target.toolCallId]);
 };
 
 const SubagentDetails: React.FC<{
@@ -158,7 +162,13 @@ const SubagentDetails: React.FC<{
           <div className="mt-1">
             {report?.output.trim() ? (
               <div style={reportFailed ? { color: 'var(--status-error)' } : undefined}>
-                <SimpleMarkdownRenderer content={report.output} singleTilde={false} className="typography-markdown-body" enableFileReferences={false} />
+                <SimpleMarkdownRenderer
+                  content={report.output}
+                  singleTilde={false}
+                  className="typography-markdown-body"
+                  enableFileReferences={false}
+                  fallbackContent={<div className="whitespace-pre-wrap typography-markdown-body">{report.output}</div>}
+                />
               </div>
             ) : (
               <p className="typography-meta text-muted-foreground">{t('subagents.panel.noReport')}</p>

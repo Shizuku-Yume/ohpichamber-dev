@@ -286,4 +286,44 @@ describe('subagent status rows', () => {
     const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
     expect(tabs.some((tab) => tab.mode === 'subagents')).toBe(true);
   });
+
+  test('renders vibe workers and opens their chat tab in the right context panel on click', async () => {
+    const vibeSession = session('vibe-child-uuid', {
+      parentSessionId: parent.sessionId,
+      createdAt: 5,
+      updatedAt: 9,
+      title: 'home-disk-usage-2',
+      metadata: {},
+      metadataRevision: '1',
+    });
+    await act(async () => useSubagentsStore.getState().setSubagents(parent.sessionId, [{
+      subagentId: 'home-disk-usage-2',
+      parentSessionId: parent.sessionId,
+      childSessionId: vibeSession.sessionId,
+      name: 'home-disk-usage-2',
+      role: 'sonic',
+      model: 'openai/gpt-5.4-mini',
+      status: 'running',
+      activeTool: 'bash',
+      tokens: 3100,
+      cost: 0.0021,
+    }]));
+    await publish({
+      session: [parent, vibeSession],
+      sessionStatusReady: true,
+      session_status: { [vibeSession.sessionId]: 'running' },
+    });
+    expect(rowContent().textContent).toContain('home-disk-usage-2');
+    expect(rowContent().textContent).toContain('sonic · GPT-5.4 Mini');
+    expect(rowContent().textContent).toContain('3.1K');
+    expect(rowContent().textContent).toContain('$0.0021');
+    await act(async () => row().click());
+    const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
+    expect(tabs).toContainEqual(expect.objectContaining({
+      mode: 'chat',
+      dedupeKey: 'session:vibe-child-uuid',
+      label: 'home-disk-usage-2',
+      readOnly: true,
+    }));
+  });
 });

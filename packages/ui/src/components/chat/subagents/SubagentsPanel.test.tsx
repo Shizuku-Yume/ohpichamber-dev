@@ -163,4 +163,106 @@ describe('SubagentsPanel', () => {
     expect(rowButton?.getAttribute('aria-expanded')).toBe('true');
     expect(container.textContent).toContain('Which target?');
   });
+
+  test('renders a vibe_spawn worker with prompt, report, tokens/cost/duration, and opens chat tab on click', async () => {
+    const vibeWorker = liveSubagent({
+      subagentId: 'home-disk-usage-2',
+      childSessionId: 'vibe-child-uuid',
+      name: 'home-disk-usage-2',
+      role: 'sonic',
+      model: 'openai/gpt-5.4-mini',
+      status: 'completed',
+      tokens: 4200,
+      cost: 0.0042,
+      durationMs: 3200,
+      toolCallId: undefined,
+    });
+    const vibeParentMsg = {
+      messageId: 'm-vibe',
+      sessionId: parent.sessionId,
+      turnId: 'turn-1',
+      role: 'assistant' as const,
+      createdAt: 1,
+      parts: [
+        {
+          type: 'tool_call' as const,
+          partId: 'tc-vibe',
+          toolCallId: 'call-vibe-spawn',
+          toolName: 'vibe_spawn',
+          status: 'completed' as const,
+          input: { cli: 'fast', name: 'home-disk-usage', prompt: 'Inspect $HOME disk usage' },
+        },
+        {
+          type: 'tool_result' as const,
+          partId: 'tr-vibe',
+          toolCallId: 'call-vibe-spawn',
+          toolName: 'vibe_spawn',
+          isError: false,
+          output: {
+            content: [{ type: 'text', text: 'Spawned fast session `home-disk-usage-2`.' }],
+            details: { op: 'spawn', spawned: { id: 'home-disk-usage-2', cli: 'fast', jobId: 'j2' } },
+          },
+        },
+      ],
+    };
+    const vibeReportMsg = {
+      messageId: 'm-vibe-report',
+      sessionId: parent.sessionId,
+      turnId: 'turn-2',
+      role: 'system' as const,
+      createdAt: 2,
+      parts: [
+        {
+          type: 'notice' as const,
+          partId: 'np-vibe',
+          noticeType: 'async_job_result' as const,
+          level: 'info' as const,
+          details: {
+            jobs: [{
+              jobId: 'home-disk-usage-2-t1',
+              subagentId: 'home-disk-usage-2',
+              childSessionId: 'vibe-child-uuid',
+              type: 'task',
+              status: 'completed' as const,
+              durationMs: 3200,
+              reportText: '<vibe-turn session="home-disk-usage-2" cli="fast" turn="1" status="completed" duration="3.2s"><response>### Summary\nFound 10 GB.</response></vibe-turn>',
+            }],
+          },
+        },
+      ],
+    };
+
+    await act(async () => useSubagentsStore.setState({ byParent: { [parent.sessionId]: [vibeWorker] } }));
+    await publish({ message: { [parent.sessionId]: [vibeParentMsg, vibeReportMsg] } });
+
+    expect(container.textContent).toContain('home-disk-usage-2');
+    expect(container.textContent).toContain('sonic · GPT-5.4 Mini');
+    expect(container.textContent).toContain('4.2K');
+    expect(container.textContent).toContain('$0.0042');
+
+    const rowButton = container.querySelector<HTMLButtonElement>('button[aria-label*="home-disk-usage-2"]');
+    if (!rowButton) throw new Error('Expected vibe worker row button');
+    await act(async () => rowButton.click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Found 10 GB.');
+    const taskToggle = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Task'));
+    if (!taskToggle) throw new Error('Expected Task toggle');
+    await act(async () => taskToggle.click());
+    expect(container.textContent).toContain('Inspect $HOME disk usage');
+
+    const openSessionBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open session'));
+    if (!openSessionBtn) throw new Error('Expected Open session button');
+    await act(async () => openSessionBtn.click());
+
+    const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
+    expect(tabs).toContainEqual(expect.objectContaining({
+      mode: 'chat',
+      dedupeKey: 'session:vibe-child-uuid',
+      label: 'home-disk-usage-2',
+      readOnly: true,
+    }));
+  });
 });
