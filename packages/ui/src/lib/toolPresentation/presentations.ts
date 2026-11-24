@@ -1,10 +1,14 @@
-import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
+import { modelRefKey, type JsonObject, type JsonValue } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 import type { ToolGroup, ToolPresentation } from './types';
 import { evalResultSummary } from './toolView';
 import { parseEditInputPaths } from './editInputPaths';
 import { normalizeIntent } from './intent';
+import { formatMessage, useI18nStore, type I18nKey, type I18nParams } from '@/lib/i18n/store';
+
+const tt = (key: I18nKey, params?: I18nParams): string =>
+    formatMessage(useI18nStore.getState().dictionary, key, params);
 
 /** A JSON field's non-blank text. */
 const text = (value: JsonValue | undefined, max = 160): string | null => {
@@ -375,6 +379,159 @@ const bashSummary: ToolPresentation['describeResult'] = (result) => {
     return parts.length > 0 ? parts.join(' · ') : null;
 };
 
+export const vibeScreenSnapshotSchema = z.object({
+    id: z.string(),
+    cli: z.string(),
+    state: z.string(),
+    killed: z.boolean().optional(),
+    model: z.string().optional(),
+    turns: z.number(),
+    queued: z.number(),
+    turnStartedAt: z.number().optional(),
+    turnMessage: z.string().optional(),
+    currentTool: z.string().optional(),
+    currentToolArgs: z.string().optional(),
+    lastIntent: z.string().optional(),
+    trace: z.array(z.string()).default([]),
+    outputTail: z.array(z.string()).default([]),
+    lastActivity: z.string().optional(),
+    lastActivityAt: z.number().optional(),
+});
+
+export const vibeToolDetailsSchema = z.object({
+    op: z.enum(['spawn', 'send', 'wait', 'kill', 'list']).optional(),
+    screens: z.array(vibeScreenSnapshotSchema).default([]),
+    hiddenKilled: z.array(z.string()).optional(),
+    spawned: z.object({
+        id: z.string(),
+        cli: z.string(),
+        jobId: z.string(),
+    }).optional(),
+    send: z.object({
+        id: z.string(),
+        mode: z.enum(['turn', 'steered', 'queued']),
+        jobId: z.string().optional(),
+    }).optional(),
+    wait: z.object({
+        settled: z.array(z.object({
+            id: z.string(),
+            jobId: z.string(),
+            status: z.enum(['completed', 'failed', 'cancelled']),
+        })),
+        stillRunning: z.array(z.string()),
+        timedOut: z.boolean(),
+        waiting: z.boolean().optional(),
+    }).optional(),
+    killed: z.object({
+        id: z.string(),
+        cancelledTurn: z.boolean(),
+    }).optional(),
+});
+
+export type VibeToolDetails = z.infer<typeof vibeToolDetailsSchema>;
+export type VibeScreenSnapshot = z.infer<typeof vibeScreenSnapshotSchema>;
+
+const yieldTypeSchema = z.union([z.string(), z.array(z.string())]);
+const yieldDetailsSchema = z.object({
+    status: z.string().optional(),
+    type: yieldTypeSchema.optional(),
+    error: z.string().optional(),
+});
+
+const thinkDetailsSchema = z.object({
+    recorded: z.boolean().optional(),
+});
+
+const newContextDetailsSchema = z.object({
+    requested: z.boolean().optional(),
+});
+
+const imageGenDetailsSchema = z.object({
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    imageCount: z.number().optional(),
+    imagePaths: z.array(z.string()).optional(),
+});
+
+const debugDetailsSchema = z.object({
+    action: z.string().optional(),
+    success: z.boolean().optional(),
+    snapshot: z.object({
+        status: z.string().optional(),
+        stopReason: z.string().optional(),
+    }).optional(),
+});
+
+const githubDetailsSchema = z.object({
+    status: z.string().optional(),
+    conclusion: z.string().optional(),
+    failedJobs: z.array(z.string()).optional(),
+});
+
+const goalDetailsSchema = z.object({
+    op: z.string().optional(),
+    goal: z.object({
+        status: z.string().optional(),
+        objective: z.string().optional(),
+    }).nullable().optional(),
+});
+
+const securityScanDetailsSchema = z.object({
+    action: z.string().optional(),
+    cancelled: z.boolean().optional(),
+    operation: z.object({
+        status: z.string().optional(),
+    }).optional(),
+    finding: z.object({
+        validationStatus: z.string().optional(),
+    }).optional(),
+    importedScan: z.object({
+        findingCount: z.number().optional(),
+    }).optional(),
+});
+
+const mcpDetailsSchema = z.object({
+    serverName: z.string().trim().min(1),
+    mcpToolName: z.string().trim().min(1),
+});
+
+const mcpProgressSchema = z.object({
+    progress: z.object({
+        progress: z.number(),
+        total: z.number().optional(),
+        message: z.string().optional(),
+    }).optional(),
+});
+
+const formatYieldType = (value: string | string[] | undefined): string | null => {
+    const single = z.string().safeParse(value).data;
+    if (single !== undefined) return text(single);
+    if (Array.isArray(value)) {
+        const joined = value.map((entry) => entry.trim()).filter(Boolean).join(', ');
+        return joined ? text(joined) : null;
+    }
+    return null;
+};
+
+export const formatMcpToolLabel = (toolName: string, details?: JsonValue): string | null => {
+    const parsedDetails = mcpDetailsSchema.safeParse(details).data;
+    if (parsedDetails) {
+        return `${parsedDetails.serverName}: ${parsedDetails.mcpToolName}`;
+    }
+    if (!toolName.startsWith('mcp__')) return null;
+    const rest = toolName.slice('mcp__'.length);
+    if (!rest) return null;
+    const doubleIdx = rest.indexOf('__');
+    if (doubleIdx > 0 && doubleIdx < rest.length - 2) {
+        return `${rest.slice(0, doubleIdx)}: ${rest.slice(doubleIdx + 2)}`;
+    }
+    const singleIdx = rest.indexOf('_');
+    if (singleIdx > 0 && singleIdx < rest.length - 1) {
+        return `${rest.slice(0, singleIdx)}: ${rest.slice(singleIdx + 1)}`;
+    }
+    return rest;
+};
+
 const hostCall: ToolPresentation['describeCall'] = (input) => {
     const action = z.object({ action: z.string().optional(), input: z.record(z.string(), z.unknown()).optional() }).safeParse(input).data;
     if (!action?.action) return null;
@@ -451,15 +608,52 @@ export const TOOL_PRESENTATIONS = {
         },
         describeResult: askSummary,
     },
-    debug: plainTool('Debug', 'bug', ['action', 'program']),
+    debug: {
+        label: 'Debug', icon: 'bug', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'action', 'program', 'file', 'expression'),
+        describeResult: (result) => {
+            const snapshot = debugDetailsSchema.safeParse(result).data?.snapshot;
+            if (!snapshot) return null;
+            const parts = [text(snapshot.status), text(snapshot.stopReason)].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
+        },
+    },
     ida: plainTool('IDA', 'bug', ['action', 'target']),
     eval: {
         label: 'Eval', icon: 'code', group: 'call', outputLanguage: 'text',
         describeCall: (input) => inputText(input, 'title', 'language', 'code'),
         describeResult: evalResultSummary,
     },
-    github: plainTool('GitHub', 'github', ['op', 'repo', 'query']),
-    glob: queryTool('Glob', 'file-search', ['path', 'pattern']),
+    github: {
+        label: 'GitHub', icon: 'github', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const op = inputText(input, 'op');
+            const target = inputText(input, 'repo', 'query', 'branch');
+            const parts = [op, target].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
+        },
+        describeResult: (result) => {
+            const parsed = githubDetailsSchema.safeParse(result).data;
+            if (!parsed) return null;
+            const state = text(parsed.conclusion) ?? text(parsed.status);
+            const failedCount = parsed.failedJobs?.length ?? 0;
+            const failedPart = failedCount > 0 ? tt('chat.toolPart.summary.failedCount', { count: failedCount }) : null;
+            const parts = [state, failedPart].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
+        },
+    },
+    glob: {
+        label: 'Glob', icon: 'file-search', group: 'search', outputLanguage: 'text',
+        describeCall: (input) => {
+            const pattern = inputText(input, 'pattern');
+            const path = inputText(input, 'path');
+            if (pattern && path && pattern !== path) {
+                return text(tt('chat.toolPart.summary.patternInPath', { pattern, path }));
+            }
+            return pattern ?? path;
+        },
+        describeResult: searchResultSummary,
+    },
     grep: queryTool('Grep', 'menu-search', ['pattern']),
     search: queryTool('Grep', 'menu-search', ['pattern']),
     find: queryTool('Find', 'compass-3', ['query']),
@@ -484,17 +678,17 @@ export const TOOL_PRESENTATIONS = {
     },
     resolve: {
         label: 'Resolve', icon: 'checkbox', group: 'call', outputLanguage: 'text',
-        describeCall: (input) => inputText(input, 'action', 'id'),
+        describeCall: (input) => inputText(input, 'reason'),
         describeResult: (result) => detailText(result, 'action'),
     },
     propose: {
         label: 'Propose', icon: 'checkbox', group: 'call', outputLanguage: 'text',
-        describeCall: (input) => inputText(input, 'action', 'id'),
-        describeResult: (result) => detailText(result, 'action'),
+        describeCall: (input) => inputText(input, 'title'),
+        describeResult: (result) => detailText(result, 'action') ?? detailText(result, 'title'),
     },
     reject: {
-        label: 'Resolve', icon: 'checkbox', group: 'call', outputLanguage: 'text',
-        describeCall: (input) => inputText(input, 'action', 'id'),
+        label: 'Reject', icon: 'checkbox', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'reason'),
         describeResult: (result) => detailText(result, 'action'),
     },
     context_notes: {
@@ -502,8 +696,29 @@ export const TOOL_PRESENTATIONS = {
         describeCall: (input) => inputText(input, 'text'),
         describeResult: (result) => detailNumber(result, 'bytes') !== null ? `${detailNumber(result, 'bytes')} bytes` : null,
     },
-    new_context: plainTool('New context', 'book-open'),
-    security_scan: plainTool('Security scan', 'shield-check', ['action', 'plan_id']),
+    new_context: {
+        label: 'New context', icon: 'book-open', group: 'call', outputLanguage: 'text',
+        describeCall: () => null,
+        describeResult: (result) => newContextDetailsSchema.safeParse(result).data?.requested === true
+            ? tt('chat.toolPart.summary.requested')
+            : null,
+    },
+    security_scan: {
+        label: 'Security scan', icon: 'shield-check', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const action = inputText(input, 'action');
+            const target = inputText(input, 'plan_id', 'operation_id', 'scan_id', 'finding_id');
+            const parts = [action, target].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
+        },
+        describeResult: (result) => {
+            const parsed = securityScanDetailsSchema.safeParse(result).data;
+            if (!parsed) return null;
+            return text(parsed.operation?.status)
+                ?? text(parsed.finding?.validationStatus)
+                ?? (parsed.cancelled === true ? 'cancelled' : null);
+        },
+    },
     task: {
         label: 'Task', icon: 'ai-agent', group: 'call', outputLanguage: 'text',
         describeCall: taskCallDescription,
@@ -538,10 +753,21 @@ export const TOOL_PRESENTATIONS = {
     },
     generate_image: {
         label: 'Generate image', icon: 'image', group: 'call', outputLanguage: 'text',
-        describeCall: (input) => inputText(input, 'prompt', 'subject'),
+        describeCall: (input) => inputText(input, 'subject', 'prompt', 'action'),
         describeResult: (result) => {
-            const count = detailNumber(result, 'imageCount') ?? (Array.isArray(detailValue(result, 'imagePaths')) ? (detailValue(result, 'imagePaths') as unknown[]).length : null);
-            return count !== null ? `${count} ${count === 1 ? 'image' : 'images'}` : null;
+            const parsed = imageGenDetailsSchema.safeParse(result).data;
+            if (!parsed) return null;
+            const count = parsed.imageCount ?? parsed.imagePaths?.length ?? null;
+            const countPart = count !== null
+                ? (count === 1
+                    ? tt('chat.toolPart.summary.imageSingle', { count })
+                    : tt('chat.toolPart.summary.imagePlural', { count }))
+                : null;
+            const provider = parsed.provider?.trim();
+            const model = parsed.model?.trim();
+            const modelPart = provider && model ? modelRefKey(provider, model) : (model || provider || null);
+            const parts = [countPart, modelPart].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
         },
     },
     tts: {
@@ -581,20 +807,137 @@ export const TOOL_PRESENTATIONS = {
         describeCall: (input) => inputText(input, 'action', 'name'),
         describeResult: (result) => detailText(result, 'name'),
     },
-    yield: plainTool('Yield', 'send-plane'),
-    goal: plainTool('Goal', 'flag', ['op']),
-    report_issue: plainTool('Report issue', 'bug', ['title', 'description']),
-    think: plainTool('Think', 'brain-ai-3'),
+    yield: {
+        label: 'Yield', icon: 'send-plane', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const typeLabel = formatYieldType(yieldTypeSchema.safeParse(input.type).data);
+            if (typeLabel) return typeLabel;
+            const keyNum = z.number().safeParse(input.key).data;
+            if (keyNum !== undefined) return `#${keyNum}`;
+            return inputText(input, 'key');
+        },
+        describeResult: (result) => {
+            const parsed = yieldDetailsSchema.safeParse(result).data;
+            if (!parsed) return null;
+            const parts = [text(parsed.status), formatYieldType(parsed.type)].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
+        },
+    },
+    goal: {
+        label: 'Goal', icon: 'flag', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const op = inputText(input, 'op');
+            const objective = inputText(input, 'objective');
+            const parts = [op, objective].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
+        },
+        describeResult: (result) => text(goalDetailsSchema.safeParse(result).data?.goal?.status),
+    },
+    report_issue: {
+        label: 'Report issue', icon: 'bug', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'report'),
+        describeResult: () => null,
+    },
+    think: {
+        label: 'Think', icon: 'brain-ai-3', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'thoughts'),
+        describeResult: (result) => thinkDetailsSchema.safeParse(result).data?.recorded === true
+            ? tt('chat.toolPart.summary.recorded')
+            : null,
+    },
     advise: {
         label: 'Advise', icon: 'lightbulb', group: 'call', outputLanguage: 'text',
         describeCall: (input) => inputText(input, 'note'),
         describeResult: (result) => detailText(result, 'severity'),
     },
-    vibe_spawn: plainTool('Vibe spawn', 'ai-agent', ['cli', 'prompt']),
-    vibe_send: plainTool('Vibe send', 'send-plane', ['id', 'message']),
-    vibe_wait: plainTool('Vibe wait', 'time', ['id']),
-    vibe_kill: plainTool('Vibe kill', 'close', ['id']),
-    vibe_list: plainTool('Vibe list', 'layout'),
+    vibe_spawn: {
+        label: 'Vibe spawn', icon: 'ai-agent', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const cli = inputText(input, 'cli');
+            const target = inputText(input, 'name', 'prompt');
+            const parts = [cli, target].filter(Boolean);
+            return parts.length > 0 ? text(parts.join(' · ')) : null;
+        },
+        describeResult: (result) => {
+            const spawned = vibeToolDetailsSchema.safeParse(result).data?.spawned;
+            if (!spawned) return null;
+            return text(`${spawned.id} · ${spawned.cli}`);
+        },
+    },
+    vibe_send: {
+        label: 'Vibe send', icon: 'send-plane', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const session = inputText(input, 'session');
+            const snippet = text(input.message, 80);
+            if (session && snippet) return text(`→ ${session} · ${snippet}`);
+            if (session) return text(`→ ${session}`);
+            return snippet;
+        },
+        describeResult: (result) => {
+            const send = vibeToolDetailsSchema.safeParse(result).data?.send;
+            if (!send) return null;
+            return text(`${send.id} · ${send.mode}`);
+        },
+    },
+    vibe_wait: {
+        label: 'Vibe wait', icon: 'time', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const sessions = z.array(z.string()).safeParse(input.sessions).data
+                ?.map((entry) => entry.trim())
+                .filter(Boolean);
+            if (sessions && sessions.length > 0) {
+                return text(sessions.join(', '));
+            }
+            const timeout = z.number().safeParse(input.timeout).data;
+            return timeout !== undefined ? `${timeout}s` : null;
+        },
+        describeResult: (result) => {
+            const parsed = vibeToolDetailsSchema.safeParse(result).data;
+            const wait = parsed?.wait;
+            if (!wait) return null;
+            if (wait.waiting === true && wait.settled.length === 0 && wait.stillRunning.length === 0 && !wait.timedOut) {
+                const runningScreens = parsed.screens.filter((screen) => screen.state === 'running' || screen.state === 'starting').length;
+                return runningScreens > 0 ? tt('chat.toolPart.summary.vibeRunning', { count: runningScreens }) : null;
+            }
+            const parts = [
+                tt('chat.toolPart.summary.vibeSettled', { count: wait.settled.length }),
+                tt('chat.toolPart.summary.vibeRunning', { count: wait.stillRunning.length }),
+                wait.timedOut ? tt('chat.toolPart.summary.timedOut') : null,
+            ].filter(Boolean);
+            return parts.join(' · ');
+        },
+    },
+    vibe_kill: {
+        label: 'Vibe kill', icon: 'close', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'session'),
+        describeResult: (result) => {
+            const killed = vibeToolDetailsSchema.safeParse(result).data?.killed;
+            if (!killed) return null;
+            const parts = [
+                killed.id,
+                tt('chat.toolPart.summary.killed'),
+                killed.cancelledTurn ? tt('chat.toolPart.summary.cancelledTurn') : null,
+            ].filter(Boolean);
+            return parts.join(' · ');
+        },
+    },
+    vibe_list: {
+        label: 'Vibe list', icon: 'layout', group: 'call', outputLanguage: 'text',
+        describeCall: () => '',
+        describeResult: (result) => {
+            const parsed = vibeToolDetailsSchema.safeParse(result).data;
+            if (!parsed) return null;
+            const total = parsed.screens.length;
+            const active = parsed.screens.filter((screen) => screen.state === 'running' || screen.state === 'starting').length;
+            const countLabel = total === 1
+                ? tt('chat.toolPart.summary.sessionSingle', { count: total })
+                : tt('chat.toolPart.summary.sessionsPlural', { count: total });
+            if (active > 0) {
+                return `${countLabel} · ${tt('chat.toolPart.summary.activeCount', { count: active })}`;
+            }
+            return countLabel;
+        },
+    },
     openchamber: {
         label: 'OhPiChamber', icon: 'openchamber', group: 'call', outputLanguage: 'text',
         describeCall: hostCall,
@@ -625,6 +968,11 @@ export const TOOL_PRESENTATIONS = {
         describeCall: hostCall,
         describeResult: jsonSummary,
     },
+    openchamber_usage: {
+        label: 'Usage', icon: 'bar-chart', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
     reasoning: {
         label: 'Reasoning', icon: 'brain-ai-3', group: 'call', outputLanguage: 'text',
         describeCall: () => null, describeResult: () => null,
@@ -649,11 +997,17 @@ export type KnownToolName = keyof typeof TOOL_PRESENTATIONS;
 export const KNOWN_TOOL_NAMES = Object.keys(TOOL_PRESENTATIONS) as KnownToolName[];
 
 /** The generic row for an extension, MCP or plugin tool the registry has never seen. */
-export const fallbackPresentation = (toolName: string): ToolPresentation => ({
-    label: toolName || 'Tool',
+export const fallbackPresentation = (toolName: string, details?: JsonValue): ToolPresentation => ({
+    label: formatMcpToolLabel(toolName, details) ?? (toolName || 'Tool'),
     icon: 'tools',
     group: 'call',
     outputLanguage: 'text',
     describeCall: () => null,
-    describeResult: () => null,
+    describeResult: (detailsValue) => {
+        const progress = mcpProgressSchema.safeParse(detailsValue).data?.progress;
+        if (!progress) return null;
+        const amount = progress.total !== undefined ? `${progress.progress}/${progress.total}` : `${progress.progress}`;
+        const message = progress.message?.trim();
+        return message ? text(`${message} (${amount})`) : amount;
+    },
 });

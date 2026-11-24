@@ -1,6 +1,6 @@
 # Maintainer UX Audit & OMP 19.1 Alignment Remediation (2026-11-24)
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
 **Integration branch:** ux-audit-remediation/integration
 

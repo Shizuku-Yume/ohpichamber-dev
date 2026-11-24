@@ -381,8 +381,8 @@ test('running hashline edit shows target path, supports quick-open, and expands 
     });
 });
 
-test('tool intent i surfaces on collapsed row and is omitted from expanded JSON input', async () => {
-    const call: ToolCallPart = {
+test('tool intent i surfaces on collapsed row and is omitted from key-value rows and nested JSON input', async () => {
+    const flatCall: ToolCallPart = {
         type: 'tool_call',
         partId: 'custom-intent',
         toolCallId: 'custom-intent',
@@ -390,12 +390,27 @@ test('tool intent i surfaces on collapsed row and is omitted from expanded JSON 
         status: 'completed',
         input: { i: 'Inspect health...', target: 'api' },
     };
+    const nestedCall: ToolCallPart = {
+        type: 'tool_call',
+        partId: 'custom-intent-nested',
+        toolCallId: 'custom-intent-nested',
+        toolName: 'custom_probe',
+        status: 'completed',
+        input: { i: 'Inspect nested health...', target: { env: 'api' } },
+    };
 
     await withToolHarness(async ({ container, render }) => {
-        await render(call, { expanded: true });
+        await render(flatCall, { expanded: true });
         expect(container.textContent).toContain('Inspect health');
+        const kvRows = container.querySelector('[data-testid="tool-input-kv-rows"]');
+        expect(kvRows?.textContent).toContain('target');
+        expect(kvRows?.textContent).toContain('api');
+        expect(kvRows?.textContent).not.toContain('Inspect health');
+        expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+
+        await render(nestedCall, { expanded: true });
         const inputBlock = container.querySelector('blockquote.tool-input-text');
-        expect(inputBlock?.textContent).toContain('"target": "api"');
+        expect(inputBlock?.textContent).toContain('"env": "api"');
         expect(inputBlock?.textContent).not.toContain('"i"');
     });
 });

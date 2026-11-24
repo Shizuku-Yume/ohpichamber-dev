@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { ToolCallPartSchema } from '@openchamber/agent-contract';
 import {
-  detectToolOutputLanguage, formatToolInput,
+  detectToolOutputLanguage, flatScalarInputRows, formatToolInput,
   isEvalTool,
-  isFileChangeTool, isQuestionTool, isShellTool, isSubagentTool, normalizeToolName,
+  isFileChangeTool, isQuestionTool, isRawInputSuppressedTool, isShellTool, isSubagentTool, isVibeSubagentTool, normalizeToolName,
   parseNativeReadPath, toolBaseName, toolInputPath, toolInputPaths,
 } from './toolHelpers';
 import { describeToolCall } from './toolPresentation';
@@ -23,7 +23,11 @@ describe('native tool helpers', () => {
     expect(isEvalTool('runtime.eval:1')).toBe(true);
     expect(isEvalTool('bash')).toBe(false);
     expect(isSubagentTool('task')).toBe(true);
+    expect(isSubagentTool('vibe_spawn')).toBe(false);
+    expect(isVibeSubagentTool('vibe_spawn')).toBe(true);
     expect(isSubagentTool('subagent')).toBe(false);
+    expect(isRawInputSuppressedTool('vibe_wait')).toBe(true);
+    expect(flatScalarInputRows({ a: 'x', b: 1 })).toEqual([{ key: 'a', value: 'x' }, { key: 'b', value: '1' }]);
     expect(isQuestionTool('ask')).toBe(true);
     expect(isFileChangeTool('patch')).toBe(false);
     expect(normalizeToolName('mcp.bash:2')).toBe('mcp.bash:2');

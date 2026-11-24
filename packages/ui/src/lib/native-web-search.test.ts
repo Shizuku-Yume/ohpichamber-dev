@@ -26,4 +26,16 @@ describe('native web search result boundary', () => {
     const result = parseNativeSearchOutput({ ...native, details: { ...native.details, error: 'Provider refused the request' } });
     expect(result?.details.error).toBe('Provider refused the request');
   });
+  test('provider fallback failures are preserved on details.failures', () => {
+    const result = parseNativeSearchOutput({
+      ...native,
+      details: {
+        ...native.details,
+        failures: [{ provider: 'brave', label: 'Brave', reason: 'HTTP 429 rate limited', status: 429 }],
+      },
+    });
+    expect(result?.details.failures).toEqual([
+      { provider: 'brave', label: 'Brave', reason: 'HTTP 429 rate limited', status: 429 },
+    ]);
+  });
 });

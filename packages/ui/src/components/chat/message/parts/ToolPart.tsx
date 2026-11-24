@@ -17,15 +17,18 @@ import {
     askAnswers,
     isAstEditTool,
     detectToolOutputLanguage,
+    flatScalarInputRows,
     formatToolInput,
     isEditTool,
     isEvalTool,
     isFindTool,
     isQuestionTool,
+    isRawInputSuppressedTool,
     isReadTool,
     isShellTool,
     isSubagentTool,
     isTodoTool,
+    isVibeSubagentTool,
     isWebSearchTool,
     isWriteTool,
     toolInputPaths,
@@ -36,6 +39,10 @@ import {
     toolPresentation,
 } from '@/lib/toolHelpers';
 import { describeTaskResultWithSubagents, describeToolCall, describeToolResult, evalResultSummary, isMemoryTool, normalizeIntent, type TaskSubagentStatusEntry } from '@/lib/toolPresentation';
+import { VibeToolCard } from './VibeToolCard';
+import { WaitToolCard } from './WaitToolCard';
+import { StructuredToolCard } from './StructuredToolCards';
+import { isStructuredCardTool, preferredDisplayContent } from './toolDisplayContent';
 import { TodoCard } from './TodoCard';
 import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
@@ -104,6 +111,54 @@ import { WritePreview } from '../../DiffPreview';
 
 const EMPTY_SUBAGENTS: Subagent[] = [];
 const EMPTY_STRING_ARRAY: readonly string[] = [];
+
+const DISPLAY_CONTENT_TOOL_NAMES = {
+    read: true,
+    grep: true,
+    ast_grep: true,
+} as const;
+
+const VIBE_TOOL_NAMES = {
+    vibe_spawn: true,
+    vibe_send: true,
+    vibe_wait: true,
+    vibe_kill: true,
+    vibe_list: true,
+} as const;
+
+const WAIT_TOOL_NAMES = {
+    wait: true,
+} as const;
+
+
+const vibeSpawnInputSchema = z.object({
+    name: z.string().trim().min(1).optional(),
+});
+
+const vibeSpawnDetailsSchema = z.object({
+    spawned: z.object({
+        id: z.string().trim().min(1),
+    }).optional(),
+});
+
+const serializeVibeSpawnSubagent = (
+    list: readonly Subagent[] | undefined,
+    parentSessionId: string,
+    toolCallId: string,
+    workerId: string,
+): string => {
+    if (!list || list.length === 0) return '';
+    const byToolCall = toolCallId
+        ? list.find((child) => child.parentSessionId === parentSessionId && child.toolCallId === toolCallId && Boolean(child.childSessionId))
+        : undefined;
+    const byWorker = !byToolCall && workerId
+        ? list.find((child) => child.parentSessionId === parentSessionId && (child.name === workerId || child.subagentId === workerId) && Boolean(child.childSessionId))
+        : undefined;
+    const matched = byToolCall ?? byWorker;
+    if (!matched?.childSessionId) return '';
+    const label = matched.name?.trim() || workerId || matched.role;
+    return [matched.childSessionId, matched.role, label].join('\u0000');
+};
 
 const taskCallExpectedIdsSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -1088,12 +1143,21 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const writeContent = writeInput?.content;
     const writePath = writeInput?.path;
 
+    const suppressRawInput = isRawInputSuppressedTool(toolName);
+    const scalarInputRows = React.useMemo(() => {
+        if (!input || Object.keys(input).length === 0) return null;
+        if (isWrite || isShellTool(toolName) || isEvalTool(toolName) || isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch' || isQuestionTool(toolName) || suppressRawInput) {
+            return null;
+        }
+        return flatScalarInputRows(input);
+    }, [input, isWrite, suppressRawInput, toolName]);
     const inputTextContent = React.useMemo(() => {
         if (!input || Object.keys(input).length === 0) return '';
-        if (isWrite) return '';
+        if (isWrite || suppressRawInput || scalarInputRows !== null) return '';
         return formatToolInput(input, toolName);
-    }, [input, isWrite, toolName]);
+    }, [input, isWrite, scalarInputRows, suppressRawInput, toolName]);
     const hasInputText = !hideToolInputPreview && !writeContent && inputTextContent.trim().length > 0;
+    const hasScalarInputRows = !hideToolInputPreview && !writeContent && scalarInputRows !== null && scalarInputRows.length > 0;
 
     const webSearchOutput = React.useMemo(
         () => (isWebSearchTool(toolName) && part.type === 'tool_result' && !part.isError && hasStringOutput
@@ -1468,6 +1532,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         return parsed.data;
     }, [resultContent.details, toolName]);
     const hasExpandedBody = hasInputText
+        || hasScalarInputRows
         || Boolean(writeContent && !hasVisualDiffEntry)
         || shouldRenderResult
         || resultContent.images.length > 0
@@ -1500,9 +1565,98 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                 />
             ) : isQuestionTool(toolName) ? (
                 renderResultContent()
+            ) : Object.hasOwn(VIBE_TOOL_NAMES, toolBaseName(toolName)) ? (
+                <>
+                    <VibeToolCard
+                        toolName={toolName}
+                        toolCallId={call?.toolCallId ?? part.toolCallId}
+                        input={input}
+                        details={resultContent.details}
+                        outputText={outputString}
+                        sessionId={sessionId}
+                        directory={currentDirectory}
+                        isMobile={isMobile}
+                        isError={part.type === 'tool_result' ? part.isError : false}
+                    />
+                    {part.type === 'tool_result' && part.error && part.error !== outputString.trim() ? (
+                        <div>
+                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
+                            <div className="typography-meta p-2 rounded-xl border" style={{
+                                backgroundColor: 'var(--status-error-background)',
+                                color: 'var(--status-error)',
+                                borderColor: 'var(--status-error-border)',
+                            }}>
+                                {part.error}
+                            </div>
+                        </div>
+                    ) : null}
+                </>
+            ) : Object.hasOwn(WAIT_TOOL_NAMES, toolBaseName(toolName)) ? (
+                <>
+                    {resultContent.details !== undefined || outputString.trim().length > 0 ? (
+                        <WaitToolCard
+                            details={resultContent.details}
+                            outputText={outputString}
+                            isError={part.type === 'tool_result' ? part.isError : false}
+                        />
+                    ) : (
+                        <div className="typography-meta text-muted-foreground/70">{t('chat.toolPart.awaitingResponse')}</div>
+                    )}
+                    {part.type === 'tool_result' && part.error && part.error !== outputString.trim() ? (
+                        <div>
+                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
+                            <div className="typography-meta p-2 rounded-xl border" style={{
+                                backgroundColor: 'var(--status-error-background)',
+                                color: 'var(--status-error)',
+                                borderColor: 'var(--status-error-border)',
+                            }}>
+                                {part.error}
+                            </div>
+                        </div>
+                    ) : null}
+                </>
+            ) : isStructuredCardTool(toolName) ? (
+                <>
+                    <StructuredToolCard
+                        toolName={toolName}
+                        input={input}
+                        details={resultContent.details}
+                        output={outputString}
+                        onShowPopup={onShowPopup}
+                    />
+                    {part.type === 'tool_result' && part.error && part.error !== outputString.trim() ? (
+                        <div>
+                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
+                            <div className="typography-meta p-2 rounded-xl border" style={{
+                                backgroundColor: 'var(--status-error-background)',
+                                color: 'var(--status-error)',
+                                borderColor: 'var(--status-error-border)',
+                            }}>
+                                {part.error}
+                            </div>
+                        </div>
+                    ) : null}
+                </>
             ) : (
                 <>
-                    {hasInputText ? (
+                    {hasScalarInputRows && scalarInputRows ? (
+                        <div className="my-1">
+                            {renderScrollableBlock(
+                                <dl data-testid="tool-input-kv-rows" className="space-y-1">
+                                    {scalarInputRows.map((row) => (
+                                        <div key={row.key} className="grid grid-cols-[minmax(5.5rem,auto)_minmax(0,1fr)] items-baseline gap-x-3 typography-meta">
+                                            <dt dir="auto" className="truncate font-mono typography-micro text-muted-foreground">{row.key}</dt>
+                                            <dd dir="auto" className="min-w-0 whitespace-pre-wrap break-words text-foreground">{row.value}</dd>
+                                        </div>
+                                    ))}
+                                </dl>,
+                                {
+                                    maxHeightClass: 'max-h-60',
+                                    className: 'tool-input-surface',
+                                }
+                            )}
+                        </div>
+                    ) : hasInputText ? (
                         <div className="my-1">
                             {renderScrollableBlock(
                                 isShellTool(toolName) ? (
@@ -1521,7 +1675,6 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                             )}
                         </div>
                     ) : null}
-
                     {writeContent && !hasVisualDiffEntry ? (
                         <div className="my-1">
                             {renderScrollableBlock(
@@ -1716,10 +1869,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
         : pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
     const result = part.type === 'tool_result' ? part : undefined;
     const presentation = useGuestToolPresentation(part.toolName);
-    const toolRow = toolPresentation(toolName);
+    const rawResultContent = React.useMemo(() => nativeToolResultContent(result), [result]);
+    const resultContent = React.useMemo(() => {
+        if (!result || result.isError || !Object.hasOwn(DISPLAY_CONTENT_TOOL_NAMES, toolBaseName(toolName))) return rawResultContent;
+        const preferred = preferredDisplayContent(rawResultContent.details, rawResultContent.text);
+        return preferred === rawResultContent.text ? rawResultContent : { ...rawResultContent, text: preferred };
+    }, [rawResultContent, result, toolName]);
+    const toolRow = toolPresentation(toolName, resultContent.details);
     const displayName = toolRow.label;
-
-    const resultContent = React.useMemo(() => nativeToolResultContent(result), [result]);
     const fileChanges = React.useMemo(() => getToolFileChanges(part, call), [part, call]);
     const diffs = React.useMemo(() => getToolDiffs(part, call), [part, call]);
     const guestHeader = React.useMemo(() => presentation ? renderGuestToolHeader(presentation, {
@@ -1748,9 +1905,30 @@ const ToolPart: React.FC<ToolPartProps> = ({
         return { text: describeToolCall(call.input, toolName) ?? '', path: null };
     }, [call, currentDirectory, t, toolName]);
     const isSubagent = isSubagentTool(toolName);
+    const isVibeSpawn = isVibeSubagentTool(toolName);
     const taskSessionId = sessionId ?? selection.sessionId;
     const taskToolCallId = call?.toolCallId ?? part.toolCallId;
     const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+    const vibeSpawnWorkerId = React.useMemo(() => {
+        if (!isVibeSpawn) return '';
+        const fromDetails = vibeSpawnDetailsSchema.safeParse(resultContent.details).data?.spawned?.id;
+        if (fromDetails) return fromDetails;
+        return vibeSpawnInputSchema.safeParse(call?.input).data?.name ?? '';
+    }, [call?.input, isVibeSpawn, resultContent.details]);
+    const vibeSubtaskKey = useSubagentsStore(
+        React.useCallback(
+            (state) => (isVibeSpawn && taskSessionId
+                ? serializeVibeSpawnSubagent(state.byParent[taskSessionId], taskSessionId, taskToolCallId, vibeSpawnWorkerId)
+                : ''),
+            [isVibeSpawn, taskSessionId, taskToolCallId, vibeSpawnWorkerId],
+        ),
+    );
+    const vibeSubtask = React.useMemo(() => {
+        if (!vibeSubtaskKey) return null;
+        const [childSessionId = '', role = '', label = ''] = vibeSubtaskKey.split('\u0000');
+        if (!childSessionId) return null;
+        return { childSessionId, role: role || 'subagent', label: label || role || 'subagent' };
+    }, [vibeSubtaskKey]);
     const parsedTaskDetails = React.useMemo(
         () => (isSubagent ? taskResultDetailsSchema.safeParse(resultContent.details).data : undefined),
         [isSubagent, resultContent.details],
@@ -1820,10 +1998,12 @@ const ToolPart: React.FC<ToolPartProps> = ({
     );
 
     React.useEffect(() => {
-        if (!isSubagent || !taskSessionId) return;
-        if (parsedTaskDetails?.async?.state !== 'running') return;
+        if (!taskSessionId) return;
+        const shouldHydrateTask = isSubagent && parsedTaskDetails?.async?.state === 'running';
+        const shouldHydrateVibe = isVibeSpawn && !vibeSubtaskKey;
+        if (!shouldHydrateTask && !shouldHydrateVibe) return;
         void useSubagentsStore.getState().hydrateParent(taskSessionId);
-    }, [isSubagent, parsedTaskDetails?.async?.state, runtimeKey, taskSessionId]);
+    }, [isSubagent, isVibeSpawn, parsedTaskDetails?.async?.state, runtimeKey, taskSessionId, vibeSubtaskKey]);
 
     // The result's own one-line summary (match counts, exit status, diff stats,
     // todo progress) sits beside the call's target, unless it repeats it.
@@ -1871,7 +2051,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         absolutePath: string;
         line?: number;
     } | null>(() => {
-        if (isSubagentTool(toolName)) return null;
+        if (isSubagentTool(toolName) || isVibeSubagentTool(toolName)) return null;
         const target = resolveToolQuickOpenTarget(part, call);
         if (!target) return null;
         return {
@@ -1907,7 +2087,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
     };
 
     const handleMainClick = () => {
-        if (isSubagentTool(toolName) || !runtime?.editor || !quickOpenTarget) {
+        if (isSubagentTool(toolName) || isVibeSubagentTool(toolName) || !runtime?.editor || !quickOpenTarget) {
             toggleRow();
             return;
         }
@@ -1985,7 +2165,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 </span>
                             </button>
                         </div>
-                        <div className={cn('flex items-center min-w-0 flex-1', quickOpenTarget ? 'gap-1' : 'gap-2')}>
+                        <div className={cn('flex items-center min-w-0 flex-1', (quickOpenTarget || vibeSubtask) ? 'gap-1' : 'gap-2')}>
                             <MinDurationShineText
                                 active={Boolean(running && !failed)}
                                 minDurationMs={300}
@@ -2009,6 +2189,15 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 >
                                     <Icon name="external-link" className="h-3 w-3" />
                                 </button>
+                            ) : null}
+                            {vibeSubtask ? (
+                                <OpenSubtaskButton
+                                    sessionId={vibeSubtask.childSessionId}
+                                    agent={vibeSubtask.role}
+                                    label={vibeSubtask.label}
+                                    directory={currentDirectory}
+                                    isMobile={isMobile}
+                                />
                             ) : null}
                         </div>
                     </div>

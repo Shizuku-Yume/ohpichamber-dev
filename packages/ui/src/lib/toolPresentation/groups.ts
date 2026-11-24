@@ -101,6 +101,12 @@ const TOOL_ONE_LINE_DESCRIPTIONS = {
   openchamber_render: 'Render interactive UI components and views',
   openchamber_knowledge: 'Query project documentation and knowledge context',
   openchamber_workflow: 'Run and manage OhPiChamber workflows',
+  openchamber_usage: 'Read provider usage limits in this workspace',
+  vibe_spawn: 'Start a persistent fast or good worker session',
+  vibe_send: 'Message or steer a vibe worker session',
+  vibe_wait: 'Wait for running vibe worker sessions to finish a turn',
+  vibe_kill: 'Terminate a vibe worker session',
+  vibe_list: 'List vibe worker sessions and their states',
 } as const;
 export function getToolOneLineDescription(name: string): string {
   if (Object.hasOwn(TOOL_ONE_LINE_DESCRIPTIONS, name)) {

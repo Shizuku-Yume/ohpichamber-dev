@@ -15,11 +15,18 @@ const response = z.object({
   usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional(), searchRequests: z.number().optional(), totalTokens: z.number().optional() }).optional(),
   model: z.string().optional(), requestId: z.string().optional(), authMode: z.string().optional(),
 });
+const failure = z.object({
+  provider: z.string(),
+  label: z.string(),
+  reason: z.string(),
+  status: z.number().optional(),
+});
 const output = z.object({
   content: z.array(z.object({ type: z.literal('text'), text: z.string() })),
-  details: z.object({ response, error: z.string().optional() }),
+  details: z.object({ response, error: z.string().optional(), failures: z.array(failure).optional() }),
 });
 export type NativeSearchSource = z.infer<typeof source>;
+export type NativeSearchFailure = z.infer<typeof failure>;
 export type NativeSearchOutput = z.infer<typeof output>;
 export const parseNativeSearchOutput = (value: JsonValue | undefined): NativeSearchOutput | null => {
   try {

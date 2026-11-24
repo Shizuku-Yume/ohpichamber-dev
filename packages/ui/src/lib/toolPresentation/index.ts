@@ -6,7 +6,16 @@ import type { ToolGroup, ToolPresentation } from './types';
 
 export { normalizeIntent } from './intent';
 export { parseEditInputPaths } from './editInputPaths';
-export { KNOWN_TOOL_NAMES, describeTaskResultWithSubagents, type TaskSubagentStatusEntry } from './presentations';
+export {
+    KNOWN_TOOL_NAMES,
+    describeTaskResultWithSubagents,
+    formatMcpToolLabel,
+    vibeScreenSnapshotSchema,
+    vibeToolDetailsSchema,
+    type TaskSubagentStatusEntry,
+    type VibeScreenSnapshot,
+    type VibeToolDetails,
+} from './presentations';
 export {
     categorizeTool,
     TOOL_PERMISSION_GROUPS,
@@ -24,9 +33,9 @@ export const toolBaseName = (toolName: string | undefined): string => {
 const isKnownToolName = (name: string): name is KnownToolName => Object.hasOwn(TOOL_PRESENTATIONS, name);
 
 /** The registry entry for a tool name, falling back to its own words. */
-export const toolPresentation = (toolName: string | undefined): ToolPresentation => {
+export const toolPresentation = (toolName: string | undefined, details?: JsonValue): ToolPresentation => {
     const name = toolBaseName(toolName);
-    return isKnownToolName(name) ? TOOL_PRESENTATIONS[name] : fallbackPresentation(name);
+    return isKnownToolName(name) ? TOOL_PRESENTATIONS[name] : fallbackPresentation(name, details);
 };
 
 /** The OMP tool names a native call can claim; extension and MCP names stay opaque. */
@@ -46,6 +55,52 @@ export const toolGrouping = (toolName: string | undefined): ToolGroup => toolPre
 /** Whether the tool's result body shares the same activity row as its call. */
 /** A tool that runs subagent sessions of its own. */
 export const isSubagentTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'task';
+
+export const isVibeSubagentTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'vibe_spawn';
+
+const RAW_INPUT_SUPPRESSED_TOOLS = [
+    'vibe_spawn',
+    'vibe_send',
+    'vibe_wait',
+    'vibe_kill',
+    'vibe_list',
+    'wait',
+    'yield',
+    'think',
+    'report_issue',
+    'resolve',
+    'reject',
+    'propose',
+    'checkpoint',
+    'rewind',
+    'goal',
+    'debug',
+    'github',
+    'security_scan',
+    'new_context',
+] as const;
+
+const RAW_INPUT_SUPPRESSED_TOOL_SET: ReadonlySet<string> = new Set(RAW_INPUT_SUPPRESSED_TOOLS);
+
+export const isRawInputSuppressedTool = (toolName: string | undefined): boolean => {
+    const base = toolBaseName(toolName);
+    return base.startsWith('vibe_') || RAW_INPUT_SUPPRESSED_TOOL_SET.has(base);
+};
+
+const flatScalarValueSchema = z.union([z.string(), z.number(), z.boolean()]);
+
+export const flatScalarInputRows = (input: JsonObject | undefined): Array<{ key: string; value: string }> | null => {
+    if (!input || Array.isArray(input)) return null;
+    const rows: Array<{ key: string; value: string }> = [];
+    for (const [key, rawValue] of Object.entries(input)) {
+        if (key === 'i') continue;
+        if (rawValue === undefined) continue;
+        const parsed = flatScalarValueSchema.safeParse(rawValue);
+        if (!parsed.success) return null;
+        rows.push({ key, value: String(parsed.data) });
+    }
+    return rows.length > 0 ? rows : null;
+};
 
 /** A tool that asks the user a question. */
 export const isQuestionTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'ask';

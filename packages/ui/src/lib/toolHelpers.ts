@@ -13,6 +13,9 @@ import {
  isEvalTool as registryEval,
  isStaticTool as registryStaticTool,
  isSubagentTool as registrySubagent,
+ isVibeSubagentTool as registryVibeSubagent,
+ isRawInputSuppressedTool as registryRawInputSuppressed,
+ flatScalarInputRows as registryFlatScalarInputRows,
  isTodoTool as registryTodo,
  isWebTool as registryWeb,
  isEditTool as registryEdit,
@@ -37,6 +40,9 @@ export const isShellTool = registryShell;
 export const isFileChangeTool = registryFileChange;
 export const isEvalTool = registryEval;
 export const isSubagentTool = registrySubagent;
+export const isVibeSubagentTool = registryVibeSubagent;
+export const isRawInputSuppressedTool = registryRawInputSuppressed;
+export const flatScalarInputRows = registryFlatScalarInputRows;
 export const isQuestionTool = registryQuestion;
 export const isExplorationTool = registryExploration;
 export const isWebTool = registryWeb;

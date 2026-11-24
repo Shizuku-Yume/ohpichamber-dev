@@ -41,7 +41,12 @@ const SiteIcon: React.FC<{ url: string }> = ({ url }) => {
 
 const ResultCard: React.FC<{ result: NativeSearchSource }> = ({ result }) => {
     const published = result.publishedDate ? formatPublished(result.publishedDate) ?? result.publishedDate : null;
-    const host = new URL(result.url).hostname;
+    let host = result.url;
+    try {
+        host = new URL(result.url).hostname;
+    } catch {
+        // Keep raw url as fallback display label.
+    }
     const snippet = result.snippet?.replace(/\s+/g, ' ').trim() ?? '';
 
     // Plain primary clicks use the retained runtime's external URL opener;
@@ -86,6 +91,8 @@ export const WebSearchResults: React.FC<{ output: NativeSearchOutput }> = ({ out
     const { t } = useI18n();
     const response = output.details.response;
     const providerId = response.provider;
+    const answer = response.answer?.trim() ?? '';
+    const failures = output.details.failures ?? [];
     // Name the provider when Settings already read the list; the id otherwise.
     const providerName = useWebSearchStore((store) => {
         if (!providerId) return null;
@@ -95,20 +102,95 @@ export const WebSearchResults: React.FC<{ output: NativeSearchOutput }> = ({ out
     });
 
     return (
-        <div className="w-full min-w-0 space-y-1">
-            {output.details.error ? <p role="alert">{output.details.error}</p> : null}
-            {response.answer ? <SimpleMarkdownRenderer content={response.answer} variant="tool" /> : null}
-            {response.sources.length === 0 && !response.answer ? (
-                <div className="px-2 typography-meta text-muted-foreground">{t('chat.webSearch.noResults')}</div>
-            ) : (
+        <div className="w-full min-w-0 space-y-2">
+            {output.details.error ? (
+                <p
+                    role="alert"
+                    className="rounded-lg border px-2.5 py-1.5 typography-meta"
+                    style={{
+                        color: 'var(--status-error-text)',
+                        backgroundColor: 'var(--status-error-background)',
+                        borderColor: 'var(--status-error-border)',
+                    }}
+                >
+                    {output.details.error}
+                </p>
+            ) : null}
+            {failures.length > 0 ? (
+                <div
+                    data-testid="web-search-failures"
+                    className="rounded-lg border px-2.5 py-1.5 space-y-1 typography-micro"
+                    style={{
+                        color: 'var(--status-warning-text)',
+                        backgroundColor: 'var(--status-warning-background)',
+                        borderColor: 'var(--status-warning-border)',
+                    }}
+                >
+                    <div className="flex items-center gap-1.5 font-medium">
+                        <Icon name="alert" className="size-3.5 shrink-0" style={{ color: 'var(--status-warning)' }} />
+                        <span>
+                            {failures.length === 1
+                                ? t('chat.webSearch.failuresSingle')
+                                : t('chat.webSearch.failuresPlural', { count: failures.length })}
+                        </span>
+                    </div>
+                    <ul className="space-y-0.5 ps-5">
+                        {failures.map((item, index) => (
+                            <li key={`${index}:${item.provider}`} className="break-words">
+                                <span className="font-medium">{item.label || item.provider}</span>
+                                {item.status !== undefined ? <span className="opacity-80"> ({item.status})</span> : null}
+                                {item.reason ? <span>: {item.reason}</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+            {answer ? (
+                <div
+                    data-testid="web-search-answer"
+                    className="rounded-lg border border-border/50 bg-[var(--surface-elevated)]/60 px-3 py-2 space-y-1"
+                >
+                    <div className="flex items-center gap-1.5 typography-micro font-medium text-muted-foreground">
+                        <Icon name="sparkling-2" className="size-3.5 shrink-0" />
+                        <span>{t('chat.webSearch.answer')}</span>
+                    </div>
+                    <SimpleMarkdownRenderer
+                        content={answer}
+                        variant="tool"
+                        fallbackContent={<div className="typography-meta whitespace-pre-wrap break-words text-foreground/90">{answer}</div>}
+                    />
+                </div>
+            ) : null}
+            {response.sources.length > 0 ? (
                 <ul className="space-y-0.5">
                     {response.sources.map((result, index) => (
                         <ResultCard key={`${index}:${result.url}`} result={result} />
                     ))}
                 </ul>
-            )}
-            {response.citations?.map((citation, index) => <a key={`${index}:${citation.url}`} href={citation.url} target="_blank" rel="noopener noreferrer" className="block typography-meta underline">{citation.title || citation.url}{citation.citedText ? ` — ${citation.citedText}` : ''}</a>)}
-            {output.content.length > 0 ? <details className="typography-meta"><summary>{t('chat.toolPart.output')}</summary><SimpleMarkdownRenderer content={output.content.map((part) => part.text).join('\n')} variant="tool" /></details> : null}
+            ) : !answer && !output.details.error ? (
+                <div className="px-2 typography-meta text-muted-foreground">{t('chat.webSearch.noResults')}</div>
+            ) : null}
+            {response.citations?.map((citation, index) => (
+                <a
+                    key={`${index}:${citation.url}`}
+                    href={citation.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block typography-meta underline"
+                >
+                    {citation.title || citation.url}{citation.citedText ? ` — ${citation.citedText}` : ''}
+                </a>
+            ))}
+            {output.content.length > 0 ? (
+                <details className="typography-meta">
+                    <summary>{t('chat.toolPart.output')}</summary>
+                    <SimpleMarkdownRenderer
+                        content={output.content.map((part) => part.text).join('\n')}
+                        variant="tool"
+                        fallbackContent={<div className="typography-meta whitespace-pre-wrap break-words text-foreground/90">{output.content.map((part) => part.text).join('\n')}</div>}
+                    />
+                </details>
+            ) : null}
             {providerName ? (
                 <div className="px-2 typography-micro text-muted-foreground/80">
                     {t('chat.webSearch.provider', { provider: providerName })}
