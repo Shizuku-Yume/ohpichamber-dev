@@ -32,13 +32,13 @@ export const OMITTED_ROLES: Readonly<Record<string, string>> = {
   dictation: 'Only the terminal speech input reads it; the app dictates through Voice.',
 };
 
-export const BUILTIN_ROLE_IDS: ReadonlySet<string> = new Set([
+const BUILTIN_ROLE_IDS: ReadonlySet<string> = new Set([
   ...CHAT_ROLES,
   ...KIND_ROLES,
   ...Object.keys(OMITTED_ROLES),
 ]);
 
-export const CUSTOM_ROLE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
+const CUSTOM_ROLE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
 const ModelTagFieldsSchema = z.object({
   name: z.string().optional(),
@@ -46,7 +46,7 @@ const ModelTagFieldsSchema = z.object({
   hidden: z.boolean().optional(),
 });
 
-export const ModelTagsRecordSchema = z.record(z.string(), JsonObjectSchema);
+const ModelTagsRecordSchema = z.record(z.string(), JsonObjectSchema);
 export type ModelTagsRecord = z.infer<typeof ModelTagsRecordSchema>;
 
 export function parseModelTagsRecord(value: JsonValue | undefined): ModelTagsRecord {
