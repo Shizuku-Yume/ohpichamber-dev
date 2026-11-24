@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+
+import { OMP_SETTING_PLACEMENTS } from '../../../../../agent-service/src/worker/settings-ui';
 
 import { dict as enDict } from '@/lib/i18n/messages/en';
 import { dict as esDict } from '@/lib/i18n/messages/es';
@@ -30,7 +29,6 @@ import {
   type OmpSettingsTab,
 } from './ompSettingsLayout';
 
-const SECTIONS_ROOT = dirname(fileURLToPath(import.meta.url));
 const OMP_SETTING_IDS = ompLayoutSettingIds();
 
 const localeDictionaries = {
@@ -52,12 +50,8 @@ const localeDictionaries = {
 } satisfies Record<string, Record<string, string>>;
 
 /** Engine ids the agent service places on the OMP page, read from its placement table. */
-const exposedEngineIds = (): string[] => {
-  const source = readFileSync(join(SECTIONS_ROOT, '../../../../../agent-service/src/worker/settings-ui.ts'), 'utf8');
-  const match = source.match(/const RAW_PLACEMENTS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
-  if (!match) throw new Error('RAW_PLACEMENTS not found in settings-ui.ts');
-  return [...match[1].matchAll(/^\s*'([^']+)': 'engine',$/gm)].map((entry) => entry[1]);
-};
+const ENGINE_PLACED_IDS = Object.entries(OMP_SETTING_PLACEMENTS)
+  .flatMap(([id, placement]) => (placement.type === 'engine' ? [id] : []));
 
 const groupSettingIds = (group: OmpLayoutGroup): string[] => group.entries.map(
   (entry) => (isPresetEntry(entry) ? 'read.summarize.enabled' : entry),
@@ -71,9 +65,8 @@ const tabOf = (settingId: string): OmpSettingsTab | null => (
 
 describe('OMP settings layout', () => {
   test('the layout covers each engine row the agent service exposes exactly once', () => {
-    const engine = exposedEngineIds();
-    expect(engine.length).toBe(102);
-    expect([...OMP_SETTING_IDS].sort()).toEqual([...engine].sort());
+    expect(ENGINE_PLACED_IDS.length).toBe(102);
+    expect([...OMP_SETTING_IDS].sort()).toEqual([...ENGINE_PLACED_IDS].sort());
   });
 
   test('no setting appears twice across the four tabs or twice inside one tab', () => {

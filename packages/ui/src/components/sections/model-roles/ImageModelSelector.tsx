@@ -94,7 +94,7 @@ export const ImageModelSelector: React.FC<ImageModelSelectorProps> = ({
       return placeholder || t('settings.agents.modelSelector.notSelected');
     }
     const matched = imageModels?.find((entry) => entry.provider === providerId && entry.modelId === modelId);
-    return (typeof matched?.name === 'string' && matched.name.trim()) || modelId;
+    return (matched?.name && matched.name.trim()) || modelId;
   }, [imageModels, modelId, placeholder, providerId, t]);
 
   const handleSelect = React.useCallback((entry: ModelPickerEntry<ImageModel>) => {

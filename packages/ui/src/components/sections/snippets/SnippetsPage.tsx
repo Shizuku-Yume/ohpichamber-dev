@@ -202,7 +202,7 @@ export const SnippetsPage: React.FC = () => {
     >
       <SettingsSection divider={false}>
         {isNew ? (
-          <SettingsFieldRow label={t('settings.promptTemplates.page.field.name')}>
+          <SettingsFieldRow label={t('settings.promptTemplates.page.field.name')} controlClassName="flex-wrap">
             <div className={cn('relative min-w-0', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
               <span
                 aria-hidden="true"

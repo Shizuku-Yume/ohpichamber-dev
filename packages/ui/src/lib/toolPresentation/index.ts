@@ -108,13 +108,21 @@ const askNoteSchema = z.object({
     text: z.string(),
 });
 
+const scalarSchema = z.union([z.string(), z.number(), z.boolean()]);
+
 const formatAskFormValue = (value: JsonValue): string => {
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
     if (value === null) return '';
+    const scalar = scalarSchema.safeParse(value).data;
+    if (scalar !== undefined) {
+        return z.string().safeParse(scalar).data ?? String(scalar);
+    }
     if (Array.isArray(value)) {
         return value
-            .map((item) => (typeof item === 'string' ? item : typeof item === 'number' || typeof item === 'boolean' ? String(item) : JSON.stringify(item)))
+            .map((item) => {
+                if (item === null) return 'null';
+                const inner = scalarSchema.safeParse(item).data;
+                return inner === undefined ? JSON.stringify(item) : (z.string().safeParse(inner).data ?? String(inner));
+            })
             .join(', ');
     }
     return JSON.stringify(value);
@@ -126,7 +134,7 @@ const formatAskFormValue = (value: JsonValue): string => {
  * multi-question `results` and single-question objects.
  */
 export const askAnswers = (details: JsonValue | undefined): AskAnswerEntry[] => {
-    const root = details && typeof details === 'object' && !Array.isArray(details) ? details : undefined;
+    const root = z.record(z.string(), z.unknown()).safeParse(details).data;
     if (!root) return [];
     const timedOut = root.timedOut === true;
     const notes = z.array(askNoteSchema).safeParse(root.notes).data ?? [];
@@ -146,17 +154,15 @@ export const askAnswers = (details: JsonValue | undefined): AskAnswerEntry[] => 
                 .map((note) => (note.option ? `${note.option}: ${note.text}` : note.text))
                 .filter(Boolean)
                 .join('; ');
-            return {
-                question: entry.question,
-                answer: entry.answer,
-                ...(noteText ? { note: noteText } : {}),
-                ...(timedOut ? { timedOut: true } : {}),
-            };
+            const answerEntry: AskAnswerEntry = { question: entry.question, answer: entry.answer };
+            if (noteText) answerEntry.note = noteText;
+            if (timedOut) answerEntry.timedOut = true;
+            return answerEntry;
         });
     }
 
-    const rawData = root.data;
-    if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+    const rawData = z.record(z.string(), z.json()).safeParse(root.data).data;
+    if (rawData) {
         const matchedNoteIndices = new Set<number>();
         const rows: AskAnswerEntry[] = Object.entries(rawData).map(([key, value]) => {
             const matchedNotes: Array<z.infer<typeof askNoteSchema>> = [];
@@ -171,20 +177,19 @@ export const askAnswers = (details: JsonValue | undefined): AskAnswerEntry[] => 
                 .map((note) => (note.option ? `${note.option}: ${note.text}` : note.text))
                 .filter(Boolean)
                 .join('; ');
-            return {
-                question: questionLabel,
-                answer: formatAskFormValue(value),
-                ...(noteText ? { note: noteText } : {}),
-                ...(timedOut ? { timedOut: true } : {}),
-            };
+            const answerEntry: AskAnswerEntry = { question: questionLabel, answer: formatAskFormValue(value) };
+            if (noteText) answerEntry.note = noteText;
+            if (timedOut) answerEntry.timedOut = true;
+            return answerEntry;
         });
         notes.forEach((note, index) => {
             if (matchedNoteIndices.has(index)) return;
-            rows.push({
+            const noteEntry: AskAnswerEntry = {
                 question: note.question || note.name || note.option || 'Note',
                 answer: note.option ? `${note.option}: ${note.text}` : note.text,
-                ...(timedOut ? { timedOut: true } : {}),
-            });
+            };
+            if (timedOut) noteEntry.timedOut = true;
+            rows.push(noteEntry);
         });
         return rows;
     }
@@ -201,7 +206,10 @@ export const askAnswers = (details: JsonValue | undefined): AskAnswerEntry[] => 
     if (questions?.length) {
         return questions.flatMap((item) => {
             const answer = answerOf(item);
-            return answer ? [{ question: item.question, answer, ...(item.timedOut ? { timedOut: true } : {}) }] : [];
+            if (!answer) return [];
+            const answerEntry: AskAnswerEntry = { question: item.question, answer };
+            if (item.timedOut) answerEntry.timedOut = true;
+            return [answerEntry];
         });
     }
     const single = z.object({
@@ -213,7 +221,10 @@ export const askAnswers = (details: JsonValue | undefined): AskAnswerEntry[] => 
     }).safeParse(root).data;
     if (!single) return [];
     const answer = answerOf(single);
-    return answer ? [{ question: single.question, answer, ...(single.timedOut ? { timedOut: true } : {}) }] : [];
+    if (!answer) return [];
+    const singleEntry: AskAnswerEntry = { question: single.question, answer };
+    if (single.timedOut) singleEntry.timedOut = true;
+    return [singleEntry];
 };
 
 /** A tool that mutates project files. */

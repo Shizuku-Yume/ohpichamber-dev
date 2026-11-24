@@ -1,4 +1,5 @@
 import React from 'react';
+import { z } from 'zod';
 import {
   THINKING_LEVELS,
   formatModelRef,
@@ -76,7 +77,7 @@ interface FallbackTargetItem extends SettingsSortableListItem {
 }
 
 function isChain(value: JsonValue): value is string[] {
-  return Array.isArray(value) && value.every((selector) => typeof selector === 'string');
+  return z.array(z.string()).safeParse(value).success;
 }
 
 function isValidWildcardSelector(raw: string): boolean {
@@ -722,7 +723,7 @@ export function RetryFallbackChains({
   if (!setting) return null;
 
   const thinkingSetting = state?.settings.find(({ id }) => id === 'defaultThinkingLevel');
-  const globalLevel = typeof thinkingSetting?.value === 'string' ? thinkingSetting.value : undefined;
+  const globalLevel = z.string().safeParse(thinkingSetting?.value).data;
 
   const entries = parseRolesRecord(setting.value);
   const keys = Object.keys(entries);

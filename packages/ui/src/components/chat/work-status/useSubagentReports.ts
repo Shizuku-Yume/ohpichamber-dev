@@ -65,9 +65,7 @@ const collectForegroundTaskReports = (
     const result = resultsByCallId.get(call.toolCallId);
     if (!result) continue;
 
-    const rawText = typeof result.output === 'string'
-      ? result.output
-      : (result.error ?? '');
+    const rawText = z.string().safeParse(result.output).data ?? (result.error ?? '');
     if (!rawText.trim()) continue;
 
     let matchedBlocks = false;

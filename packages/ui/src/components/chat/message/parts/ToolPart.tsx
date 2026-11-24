@@ -56,6 +56,7 @@ import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { JsonSummaryView } from './JsonSummaryView';
 import { JsonTreeViewer } from '@/components/ui/JsonTreeViewer';
 import { Icon } from '@/components/icon/Icon';
+import type { IconName } from '@/components/icon/icons';
 import { DiffViewToggle, type DiffViewMode } from '../DiffViewToggle';
 import { EvalPresenter } from './EvalPresenter';
 import { MinDurationShineText } from './MinDurationShineText';
@@ -294,7 +295,8 @@ function findScoreBadgeStyle(score: number): React.CSSProperties {
 const isActiveCallStatus = (status: ToolCallPart['status'] | undefined): boolean =>
     status === 'running' || status === 'approved' || status === 'pending_approval';
 
-const subagentStatusIcon = (status: string | undefined): { name: 'record-circle' | 'checkbox-circle' | 'close-circle' | 'time'; color?: string } => {
+interface SubagentStatusIcon { name: IconName; color?: string }
+const subagentStatusIcon = (status: string | undefined): SubagentStatusIcon => {
     switch (status) {
         case 'running':
             return { name: 'record-circle', color: 'var(--status-info)' };
@@ -1088,12 +1090,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const renderQuestionContent = () => {
         if (part.type === 'tool_result' && !part.isError) {
             const parsedQA = askAnswers(resultContent.details);
-            const askTimedOut = Boolean(
-                resultContent.details
-                && typeof resultContent.details === 'object'
-                && !Array.isArray(resultContent.details)
-                && resultContent.details.timedOut === true,
-            );
+            const askTimedOut = z.looseObject({ timedOut: z.literal(true) }).safeParse(resultContent.details).success;
             if (parsedQA.length > 0 || askTimedOut) {
                 return renderScrollableBlock(
                     <div className="space-y-2">
@@ -1697,8 +1694,8 @@ const ToolPart: React.FC<ToolPartProps> = ({
         return summary && summary !== described.text ? summary : null;
     }, [described.text, result, resultContent.details, t, toolName]);
     const intent = React.useMemo(() => {
-        if (!call || typeof call.input.i !== 'string') return null;
-        return normalizeIntent(call.input.i);
+        const rawIntent = call ? z.string().safeParse(call.input.i).data : undefined;
+        return rawIntent === undefined ? null : normalizeIntent(rawIntent);
     }, [call]);
     const primaryDescription = guestHeader?.subtitle ?? (described.text || intent || '');
     const secondaryIntent = intent && primaryDescription && intent !== primaryDescription && !guestHeader?.subtitle

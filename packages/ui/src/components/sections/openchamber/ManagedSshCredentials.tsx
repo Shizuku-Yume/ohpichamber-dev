@@ -83,8 +83,10 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
       }
       if (result.status === 'discovered') {
         setConfirmedCandidateId('');
-        setState((current) => ({ ...current, status: 'ready', candidates: result.candidates,
-          truncated: result.truncated, discoveryAttempted: true }));
+        setState((current) => ({
+          ...current, status: 'ready', candidates: result.candidates,
+          truncated: result.truncated, discoveryAttempted: true
+        }));
         return;
       }
       if (result.status === 'rejected') {
@@ -144,13 +146,13 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
   const statusLine = rejection
     ? status(rejection, 'error')
     : state.status === 'error' ? status(t('settings.sourceControl.ssh.operationFailed'), 'error')
-    : state.status === 'loading' ? status(t('settings.sourceControl.transport.loading'), 'neutral')
-    : hostSetup || !git.managedSshCredentials ? status(t('settings.sourceControl.ssh.hostSetup'), 'neutral')
-    : state.truncated ? status(t('settings.sourceControl.ssh.discoveryTruncated'), 'warning')
-    : state.imported ? status(t('settings.sourceControl.ssh.imported'), 'success')
-    : state.status === 'ready' && state.discoveryAttempted && !state.candidates.length ? status(t('settings.sourceControl.ssh.discoveredEmpty'), 'neutral')
-    : state.status === 'ready' && !state.credentials.length ? status(t('settings.sourceControl.ssh.empty'), 'neutral')
-    : null;
+      : state.status === 'loading' ? status(t('settings.sourceControl.transport.loading'), 'neutral')
+        : hostSetup || !git.managedSshCredentials ? status(t('settings.sourceControl.ssh.hostSetup'), 'neutral')
+          : state.truncated ? status(t('settings.sourceControl.ssh.discoveryTruncated'), 'warning')
+            : state.imported ? status(t('settings.sourceControl.ssh.imported'), 'success')
+              : state.status === 'ready' && state.discoveryAttempted && !state.candidates.length ? status(t('settings.sourceControl.ssh.discoveredEmpty'), 'neutral')
+                : state.status === 'ready' && !state.credentials.length ? status(t('settings.sourceControl.ssh.empty'), 'neutral')
+                  : null;
 
   return <div className="flex min-w-0 flex-1 flex-col gap-2">
     <SettingsStackedField label={t('settings.sourceControl.ssh.passphrase')}
@@ -184,7 +186,7 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
       </Button>
     </div>
     {state.candidates.length ? <div className={SETTINGS_SPACE_ROW_CLASS}>
-      {state.candidates.map((candidate, index) => 'candidateId' in candidate ? <div key={candidate.candidateId} className="space-y-2 border-t border-edge pt-3">
+      {state.candidates.map((candidate, index) => 'candidateId' in candidate ? <div key={candidate.candidateId} className="space-y-2">
         <p className="typography-settings-field-label text-foreground">{candidate.label}</p>
         <p className={cn(SETTINGS_HELPER_CLASS, 'break-all')}>{candidate.fingerprint}</p>
         <SettingsCheckboxRow
@@ -196,8 +198,10 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
           ariaLabel={t('settings.sourceControl.ssh.confirmFingerprint', { fingerprint: candidate.fingerprint })}
         />
         <Button size="sm" variant="default" disabled={disabled || state.status === 'loading' || confirmedCandidateId !== candidate.candidateId}
-          onClick={() => void send({ operation: 'import', candidateId: candidate.candidateId, expectedFingerprint: candidate.fingerprint, confirmed: true,
-            passphrase: passphrase || undefined })}>
+          onClick={() => void send({
+            operation: 'import', candidateId: candidate.candidateId, expectedFingerprint: candidate.fingerprint, confirmed: true,
+            passphrase: passphrase || undefined
+          })}>
           {t('settings.sourceControl.ssh.import')}
         </Button>
       </div> : <p key={`${candidate.label}-${index}`} className={SETTINGS_HELPER_CLASS}>

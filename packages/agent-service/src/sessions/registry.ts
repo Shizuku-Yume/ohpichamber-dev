@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { access, lstat, readFile, realpath, rm } from 'node:fs/promises';
+import { access, lstat, realpath, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { isEmptySession, listSessionsReadOnly } from '@oh-my-pi/pi-coding-agent/session/session-listing';
@@ -21,9 +21,7 @@ import { assertArchiveActive, exportNativeArchive, importNativeArchive, type Arc
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference, SessionRelocationIntent } from './references.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
-type SubagentLifecycleInput = { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; description?: string; solutionSpace?: string; sessionFile?: string };
-const SessionFileIdentitySchema = z.object({ type: z.literal('session'), id: z.string().min(1), parentSession: z.string().min(1).optional() });
-type ChildRecord = Subagent & { childSessionId: string; rootSessionId: string; workspaceId: string; projectId: string; sessionFile: string };
+import { hasRunningSubagent, queueSubagentLifecycle, readSubagentIdentity, settleSubagentsForExit, type ChildRecord, type Opened, type SubagentLifecycleInput } from './subagent-lifecycle.ts';
 type RelocationAdmission = (input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<RuntimeSession>) => Promise<RuntimeSession>;
 type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 type ColdRoot = { reference: SessionReference; child?: ChildRecord };
@@ -33,7 +31,6 @@ export interface SessionList { items: RuntimeSession[]; errors: { sessionId: str
 export type SessionWorkspaceScope = Readonly<{ workspaceId: string; projectId: string; cwd: string; agentDirectory: string; agentDirectoryId?: string }>;
 export type SessionWarmingScope = Readonly<{ rootSessionId: string; workspaceId: string }>;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
-type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 export interface SessionForkResult { sessionId: string; rootSessionId: string; sessionFile: string; sourceSessionId: string; entryId: string | null; mode: 'selected' | 'full' }
 export interface NativeEntryResult { entryId: string }
 export interface NativeArchiveInventory { chats: { id: string; title?: string; parentSessionId?: string }[]; complete: true }
@@ -42,7 +39,7 @@ export interface IdleSessionRestartTarget { rootSessionId: string; workerGenerat
 export type IdleSessionRestartOutcome =
   | { rootSessionId: string; previousGeneration: string; outcome: 'restarted'; workerGeneration: string }
   | { rootSessionId: string; previousGeneration: string; outcome: 'failed'; error: { status: number; code: ProblemCode } };
-type Entry =
+export type Entry =
   | { state: 'unloaded'; reference: SessionReference; runtime: RuntimeSession }
   | { state: 'opening'; input: SessionBootstrap; opened?: Opened }
   | { state: 'live'; input: SessionBootstrap; opened: Opened };
@@ -524,74 +521,15 @@ export class SessionRegistry {
   }
 
   async onSubagent(rootSessionId: string, generation: string, input: SubagentLifecycleInput): Promise<void> {
-    if (this.deleting.has(rootSessionId) || this.controls.has(rootSessionId) || !this.isCurrentSubagentOwner(rootSessionId, generation)) return;
-    const previous = this.subagentLifecycleTails.get(rootSessionId) ?? Promise.resolve();
-    const operation = previous.then(() => this.persistSubagent(rootSessionId, generation, input));
-    const settled = operation.catch(() => { });
-    this.subagentLifecycleTails.set(rootSessionId, settled);
-    try { await operation; }
-    finally { if (this.subagentLifecycleTails.get(rootSessionId) === settled) this.subagentLifecycleTails.delete(rootSessionId); }
+    if (this.deleting.has(rootSessionId) || this.controls.has(rootSessionId)) return;
+    return queueSubagentLifecycle(this.subagentDeps(), rootSessionId, generation, input);
   }
 
-  private isCurrentSubagentOwner(rootSessionId: string, generation: string): boolean {
-    const entry = this.entries.get(rootSessionId);
-    return !this.closing && entry?.state === 'live' && entry.opened.generation === generation;
-  }
-
-  private async readSubagentIdentity(sessionFile: string): Promise<{ childSessionId: string; parentSessionFile?: string } | undefined> {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      try {
-        const content = await readFile(sessionFile, 'utf8');
-        for (const line of content.split('\n')) {
-          if (!line) continue;
-          try {
-            const parsed = SessionFileIdentitySchema.safeParse(JSON.parse(line));
-            if (parsed.success) {
-              return parsed.data.parentSession
-                ? { childSessionId: parsed.data.id, parentSessionFile: parsed.data.parentSession }
-                : { childSessionId: parsed.data.id };
-            }
-          } catch { /* an unreadable parent-session line names no parent; keep scanning */ }
-        }
-      } catch { /* the session file is still being written; retry below */ }
-      if (attempt < 9) await new Promise<void>(resolve => setTimeout(resolve, 10));
-    }
-    return undefined;
-  }
-
-  private async persistSubagent(rootSessionId: string, generation: string, input: SubagentLifecycleInput): Promise<void> {
-    const entry = this.entries.get(rootSessionId);
-    if (!this.isCurrentSubagentOwner(rootSessionId, generation) || !entry || entry.state !== 'live' || !input.sessionFile) return;
-    const identity = await this.readSubagentIdentity(input.sessionFile);
-    if (!identity || !this.isCurrentSubagentOwner(rootSessionId, generation) || this.entries.get(rootSessionId) !== entry) return;
-    const existing = this.subagents.get(input.subagentId);
-    let parentSessionId = existing?.parentSessionId;
-    if (!parentSessionId) {
-      if (!identity.parentSessionFile) return;
-      if (identity.parentSessionFile === entry.opened.sessionFile) parentSessionId = rootSessionId;
-      else {
-        const parent = [...this.subagents.values()].find(record => record.rootSessionId === rootSessionId && record.sessionFile === identity.parentSessionFile);
-        if (!parent) return;
-        parentSessionId = parent.childSessionId;
-      }
-    }
-    const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'cancelled' : input.status;
-    const record: ChildRecord = { subagentId: input.subagentId, parentSessionId, childSessionId: identity.childSessionId, name: input.subagentId, role: input.role, status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
-    const toolCallId = input.toolCallId ?? existing?.toolCallId;
-    if (toolCallId) record.toolCallId = toolCallId;
-    const description = input.description ?? existing?.description;
-    if (description) record.description = description;
-    const solutionSpace = input.solutionSpace ?? existing?.solutionSpace;
-    if (solutionSpace) record.solutionSpace = solutionSpace;
-    await this.references.putSubagent(record);
-    if (this.isCurrentSubagentOwner(rootSessionId, generation) && this.entries.get(rootSessionId) === entry) {
-      this.subagents.set(input.subagentId, record);
-      // The live worker frame cannot know the child's session id — that UUID
-      // only exists once this file's header resolves. Reconcile the row the UI
-      // already renders so it never keys a native name as a session id.
-      const { rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...subagent } = record;
-      entry.opened.journal.append([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: SubagentSchema.parse(subagent) } }]);
-    }
+  private subagentDeps() {
+    return {
+      entries: this.entries, subagents: this.subagents, tails: this.subagentLifecycleTails,
+      references: this.references, isClosing: () => this.closing,
+    };
   }
 
 
@@ -876,7 +814,7 @@ export class SessionRegistry {
         if (!rootExists && !saved) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The root session file and its record are both gone');
         if (rootExists) {
           if (await realpath(rootFile) !== rootFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The session file path is not canonical');
-          const rootIdentity = await this.readSubagentIdentity(rootFile);
+          const rootIdentity = await readSubagentIdentity(rootFile);
           if (!rootIdentity || (saved && rootIdentity.childSessionId !== saved.nativeSessionId)
             || this.references.list().items.some(other => other.rootSessionId !== sessionId && other.sessionFile === rootFile))
             throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The root session identity does not match its recorded reference');
@@ -886,7 +824,7 @@ export class SessionRegistry {
             const childRelative = relative(artifacts, child.sessionFile);
             if (!childRelative || childRelative === '..' || childRelative.startsWith(`..${sep}`) || isAbsolute(childRelative)
               || await realpath(child.sessionFile) !== child.sessionFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The subagent session file is outside the artifact directory or not canonical');
-            const identity = await this.readSubagentIdentity(child.sessionFile);
+            const identity = await readSubagentIdentity(child.sessionFile);
             if (!identity || identity.childSessionId !== child.childSessionId || identity.parentSessionFile !== paths.get(child.parentSessionId))
               throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The subagent identity does not match its recorded reference');
           }
@@ -1496,7 +1434,8 @@ export class SessionRegistry {
   isIdleForEviction(sessionId: string): boolean {
     if (this.closing || this.deleting.has(sessionId) || this.openings.has(sessionId)
       || this.controls.has(sessionId) || this.pendingRuns.has(sessionId)
-      || this.subagentLifecycleTails.has(sessionId)) return false;
+      || this.subagentLifecycleTails.has(sessionId)
+      || hasRunningSubagent(this.subagents, sessionId)) return false;
     const entry = this.entries.get(sessionId);
     if (!entry || entry.state === 'unloaded') return true;
     if (entry.state === 'opening') return false;
@@ -1677,6 +1616,7 @@ export class SessionRegistry {
     this.interactions.invalidate(sessionId, generation);
     const entry = this.entries.get(sessionId);
     if (entry?.state === 'unloaded' || entry?.opened?.generation !== generation) return;
+    settleSubagentsForExit(this.subagentDeps(), sessionId, entry.opened);
     entry.opened.journal.unavailable();
   }
   /** A catalog registration that failed after admission ends the runtime with its cause, so the active run reports it. */

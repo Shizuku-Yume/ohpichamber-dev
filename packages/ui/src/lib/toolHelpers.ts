@@ -2,7 +2,8 @@
 
 
 
-import type { ToolCallPart } from '@openchamber/agent-contract';
+import type { JsonValue, ToolCallPart } from '@openchamber/agent-contract';
+import { z } from 'zod';
 
 import {
  isExplorationTool as registryExploration,
@@ -65,11 +66,13 @@ export function parseNativeReadPath(rawPath: string): { path: string; line?: num
  return { path: rawPath.slice(0, selectorIndex), ...(firstLine ? { line: Number(firstLine[1]) } : {}) };
 }
 
+const jsonString = (value: JsonValue | undefined): string | undefined => z.string().safeParse(value).data;
+
 const inputPathOf = (input: ToolCallPart['input'] | undefined): string | null => {
- const path = input?.path;
- if (typeof path === 'string' && path.trim()) return path;
- const filePath = input?.file_path;
- return typeof filePath === 'string' && filePath.trim() ? filePath : null;
+ const path = jsonString(input?.path);
+ if (path && path.trim()) return path;
+ const filePath = jsonString(input?.file_path);
+ return filePath && filePath.trim() ? filePath : null;
 };
 
 export const toolInputPath = inputPathOf;
@@ -81,21 +84,25 @@ export function toolInputPaths(call: ToolCallPart): string[] {
  if (isEditTool(call.toolName) || baseName === 'apply_patch') {
   if (Array.isArray(call.input.edits)) {
    for (const edit of call.input.edits) {
-    if (edit && typeof edit === 'object' && !Array.isArray(edit) && typeof edit.rename === 'string' && !paths.includes(edit.rename)) paths.push(edit.rename);
+    const rename = z.looseObject({ rename: z.string().optional() }).safeParse(edit).data?.rename;
+    if (rename && !paths.includes(rename)) paths.push(rename);
    }
   }
-  if (typeof call.input.input === 'string') {
-   for (const extracted of parseEditInputPaths(call.input.input)) {
+  const rawProgram = jsonString(call.input.input);
+  if (rawProgram) {
+   for (const extracted of parseEditInputPaths(rawProgram)) {
     if (!paths.includes(extracted)) paths.push(extracted);
    }
   }
  } else if (isAstEditTool(call.toolName)) {
   if (Array.isArray(call.input.paths)) {
    for (const candidate of call.input.paths) {
-    if (typeof candidate === 'string' && !paths.includes(candidate)) paths.push(candidate);
+    const candidatePath = jsonString(candidate);
+    if (candidatePath && !paths.includes(candidatePath)) paths.push(candidatePath);
    }
-  } else if (typeof call.input.path === 'string' && !paths.includes(call.input.path)) {
-   paths.push(call.input.path);
+  } else {
+   const singlePath = jsonString(call.input.path);
+   if (singlePath && !paths.includes(singlePath)) paths.push(singlePath);
   }
  }
  return paths;
@@ -674,12 +681,16 @@ export function getImageMimeType(filePath: string): string {
 }
 
 export function formatToolInput(input: ToolCallPart['input'], toolName: string): string {
- if (isShellTool(toolName) && typeof input.command === 'string') return input.command;
- if (isWriteTool(toolName) && typeof input.content === 'string') return input.content;
- if (isEvalTool(toolName) && typeof input.code === 'string') return input.code;
- if ((isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch') && typeof input.input === 'string') return input.input;
+ const shellCommand = jsonString(input.command);
+ if (isShellTool(toolName) && shellCommand !== undefined) return shellCommand;
+ const writeContent = jsonString(input.content);
+ if (isWriteTool(toolName) && writeContent !== undefined) return writeContent;
+ const evalCode = jsonString(input.code);
+ if (isEvalTool(toolName) && evalCode !== undefined) return evalCode;
+ const editProgram = jsonString(input.input);
+ if ((isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch') && editProgram !== undefined) return editProgram;
  const { i: _intent, ...rest } = input;
- if (Object.keys(rest).length === 0) return '';
+ if (Object.keys(rest).length === 0 && _intent !== undefined) return '';
  // Keep complete structured native edit/task/custom-tool inputs visible without duplicating `i` intent.
  return JSON.stringify(rest, null, 2);
 }

@@ -108,17 +108,17 @@ function setInputValue(input: HTMLInputElement, nextValue: string) {
   const setter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
   if (!setter) throw new Error('Missing HTMLInputElement value setter');
   setter.call(input, nextValue);
-  input.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 const pressKey = (target: EventTarget, code: string) => {
   target.dispatchEvent(
-    new browser.KeyboardEvent('keydown', {
+    new KeyboardEvent('keydown', {
       bubbles: true,
       cancelable: true,
       code,
       key: code === 'Space' ? ' ' : code,
-    }) as unknown as KeyboardEvent,
+    }),
   );
 };
 
@@ -271,7 +271,7 @@ describe('RetryFallbackChains', () => {
       .find((entry) => entry.textContent?.includes(en['settings.retryFallback.selectModelPlaceholder']));
     expect(modelTrigger).toBeDefined();
     await act(async () => {
-      modelTrigger?.dispatchEvent(new browser.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }) as unknown as Event);
+      modelTrigger?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }));
       (modelTrigger as HTMLElement | undefined)?.click();
     });
 
@@ -370,7 +370,7 @@ describe('RetryFallbackChains', () => {
 
     handles().forEach((handle, index) => {
       if (handle.parentElement) {
-        handle.parentElement.getBoundingClientRect = () => new browser.DOMRect(0, index * 40, 400, 36) as unknown as DOMRect;
+        handle.parentElement.getBoundingClientRect = () => new DOMRect(0, index * 40, 400, 36);
       }
     });
 
@@ -427,7 +427,7 @@ describe('RetryFallbackChains', () => {
     // Update effort on openai/o3-mini:high -> low
     const effortTrigger = host.querySelector(`[role="combobox"][aria-label="${en['settings.retryFallback.targetEffortAria'].replace('{target}', 'openai/o3-mini:high')}"]`);
     await act(async () => {
-      effortTrigger?.dispatchEvent(new browser.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }) as unknown as Event);
+      effortTrigger?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
     });
     const lowOption = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find((option) => option.textContent === 'Low');
     await act(async () => lowOption?.click());

@@ -841,7 +841,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         ) : null}
 
         {form.models.length > 0 ? (
-          <div className={SETTINGS_WIDTH_LONG_TEXT_CLASS}>
+          <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'divide-y divide-border/50')}>
             {form.models.map((model, index) => {
               const query = modelSearch.trim().toLowerCase();
               const resolvedApi = model.api || form.api || 'inherited';
@@ -915,7 +915,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       >
         <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.omp.overrides.description')}</p>
         {form.modelOverrides.length > 0 ? (
-          <div className={SETTINGS_WIDTH_LONG_TEXT_CLASS}>
+          <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'divide-y divide-border/50')}>
             {form.modelOverrides.map((override, index) => (
               <CustomProviderModelRow
                 key={override.row}

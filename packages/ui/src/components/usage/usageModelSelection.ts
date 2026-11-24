@@ -10,7 +10,7 @@ export const selectVisibleModelEntries = <T>(
   if (selectedModels.length === 0) return modelEntries;
   return modelEntries.filter(([modelName]) => selectedModels.includes(modelName));
 };
-export const selectVisibleModelNames = (
+const selectVisibleModelNames = (
   providerId: string,
   modelNames: readonly string[],
   selectedModels: readonly string[],

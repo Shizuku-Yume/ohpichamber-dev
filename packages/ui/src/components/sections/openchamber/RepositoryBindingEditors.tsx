@@ -319,68 +319,68 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
         <Icon name={open ? 'arrow-up-s' : 'arrow-down-s'} className="h-4 w-4 text-muted-foreground" />
       </CollapsibleTrigger>
       <CollapsibleContent>
-    <SettingsControlGroup
-      description={t('gitView.hydration.description')}
-      className="min-w-0 pt-2"
-      contentClassName={SETTINGS_SPACE_ROW_CLASS}
-    >
-      <SettingsStackedField label={t('gitView.hydration.parentRemote')} controlClassName={EDITOR_CONTROL_CLASS}>
-        <Select value={parentRemote} onValueChange={(value) => {
-          setParentRemote(value);
-          setSelectedRequirement('');
-          setIdentityChoice(null);
-        }} disabled={!read?.binding || saving || recovery.blocked}>
-          <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('gitView.hydration.parentRemote')}>
-            <SelectValue placeholder={t('settings.sourceControl.transport.remoteLabel')} />
-          </SelectTrigger>
-          <SelectContent>{read?.binding?.remotes.filter((entry) => entry.readiness === 'ready').map((entry) => (
-            <SelectItem key={entry.name} value={entry.name}>{entry.name}</SelectItem>
-          ))}</SelectContent>
-        </Select>
-      </SettingsStackedField>
-      <GitOperationStatus entry={recovery.entry} onRefresh={() => void recovery.refresh()} onCancel={() => void recovery.cancel()} />
-      {authorizationNeeded ? <p className={SETTINGS_HELPER_CLASS}>{t('gitView.hydration.authorizationNeeded')}</p> : null}
-      {requirements.length ? <SettingsStackedField label={t('gitView.hydration.endpoint')} controlClassName={EDITOR_CONTROL_CLASS}>
-        <Select value={selectedRequirement} onValueChange={setSelectedRequirement} disabled={saving}>
-          <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('gitView.hydration.endpoint')}>
-            <SelectValue placeholder={t('gitView.hydration.chooseEndpoint')}>
-              {selected ? `${selected.path} · ${kindLabel(selected.kind)} · ${selected.endpoint.displayUrl}` : undefined}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>{requirements.map((entry) => {
-            const key = JSON.stringify([entry.kind, entry.path, entry.endpoint.fingerprint]);
-            return <SelectItem key={key} value={key}>{entry.path} · {kindLabel(entry.kind)} · {entry.endpoint.displayUrl}</SelectItem>;
-          })}</SelectContent>
-        </Select>
-      </SettingsStackedField> : null}
-      {selected ? <>
-        <SettingsStackedField label={t('gitView.hydration.identity')} controlClassName={EDITOR_CONTROL_CLASS}>
-          <IdentityDropdown
-            activeProfile={identity}
-            identities={availableIdentities}
-            onSelect={(profile) => setIdentityChoice({ endpoint: selected.endpoint.fingerprint, id: profile.id })}
-            isApplying={saving}
-            applicability={applicabilityOf}
-            triggerClassName="w-full max-w-none border border-border"
-            menuAlign="start"
-            onOpen={() => void refreshIdentityAccounts(sourceControl, gitIdentityProfiles.map((profile) => profile.account))}
-          />
-        </SettingsStackedField>
-      </> : null}
-      {latest?.hydration?.status === 'client-missing' ? <p role="alert" className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-warning)]')}>
-        {t('gitView.hydration.lfsMissing')}
-      </p> : null}
-      {error ? <EditorStatus error>{t('settings.sourceControl.instance.status.operationFailed')}</EditorStatus> : null}
-      <div className={EDITOR_ACTIONS_CLASS}>
-        <Button size="sm" variant="outline" disabled={!parentRemote || recovery.blocked || saving} onClick={() => void retryHydration()}>
-          {t('gitView.hydration.retry')}
-        </Button>
-        {selected ? <>
-          <Button size="sm" disabled={!canSave} onClick={() => void save('configure')}>{t('settings.common.actions.saveChanges')}</Button>
-          {currentGrant ? <Button size="sm" variant="ghost" disabled={!canRemove} onClick={() => void save('remove')}>{t('settings.common.actions.delete')}</Button> : null}
-        </> : null}
-      </div>
-    </SettingsControlGroup>
+        <SettingsControlGroup
+          description={t('gitView.hydration.description')}
+          className="min-w-0"
+          contentClassName={SETTINGS_SPACE_ROW_CLASS}
+        >
+          <SettingsStackedField label={t('gitView.hydration.parentRemote')} controlClassName={EDITOR_CONTROL_CLASS}>
+            <Select value={parentRemote} onValueChange={(value) => {
+              setParentRemote(value);
+              setSelectedRequirement('');
+              setIdentityChoice(null);
+            }} disabled={!read?.binding || saving || recovery.blocked}>
+              <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('gitView.hydration.parentRemote')}>
+                <SelectValue placeholder={t('settings.sourceControl.transport.remoteLabel')} />
+              </SelectTrigger>
+              <SelectContent>{read?.binding?.remotes.filter((entry) => entry.readiness === 'ready').map((entry) => (
+                <SelectItem key={entry.name} value={entry.name}>{entry.name}</SelectItem>
+              ))}</SelectContent>
+            </Select>
+          </SettingsStackedField>
+          <GitOperationStatus entry={recovery.entry} onRefresh={() => void recovery.refresh()} onCancel={() => void recovery.cancel()} />
+          {authorizationNeeded ? <p className={SETTINGS_HELPER_CLASS}>{t('gitView.hydration.authorizationNeeded')}</p> : null}
+          {requirements.length ? <SettingsStackedField label={t('gitView.hydration.endpoint')} controlClassName={EDITOR_CONTROL_CLASS}>
+            <Select value={selectedRequirement} onValueChange={setSelectedRequirement} disabled={saving}>
+              <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('gitView.hydration.endpoint')}>
+                <SelectValue placeholder={t('gitView.hydration.chooseEndpoint')}>
+                  {selected ? `${selected.path} · ${kindLabel(selected.kind)} · ${selected.endpoint.displayUrl}` : undefined}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>{requirements.map((entry) => {
+                const key = JSON.stringify([entry.kind, entry.path, entry.endpoint.fingerprint]);
+                return <SelectItem key={key} value={key}>{entry.path} · {kindLabel(entry.kind)} · {entry.endpoint.displayUrl}</SelectItem>;
+              })}</SelectContent>
+            </Select>
+          </SettingsStackedField> : null}
+          {selected ? <>
+            <SettingsStackedField label={t('gitView.hydration.identity')} controlClassName={EDITOR_CONTROL_CLASS}>
+              <IdentityDropdown
+                activeProfile={identity}
+                identities={availableIdentities}
+                onSelect={(profile) => setIdentityChoice({ endpoint: selected.endpoint.fingerprint, id: profile.id })}
+                isApplying={saving}
+                applicability={applicabilityOf}
+                triggerClassName="w-full max-w-none border border-border"
+                menuAlign="start"
+                onOpen={() => void refreshIdentityAccounts(sourceControl, gitIdentityProfiles.map((profile) => profile.account))}
+              />
+            </SettingsStackedField>
+          </> : null}
+          {latest?.hydration?.status === 'client-missing' ? <p role="alert" className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-warning)]')}>
+            {t('gitView.hydration.lfsMissing')}
+          </p> : null}
+          {error ? <EditorStatus error>{t('settings.sourceControl.instance.status.operationFailed')}</EditorStatus> : null}
+          <div className={EDITOR_ACTIONS_CLASS}>
+            <Button size="sm" variant="outline" disabled={!parentRemote || recovery.blocked || saving} onClick={() => void retryHydration()}>
+              {t('gitView.hydration.retry')}
+            </Button>
+            {selected ? <>
+              <Button size="sm" disabled={!canSave} onClick={() => void save('configure')}>{t('settings.common.actions.saveChanges')}</Button>
+              {currentGrant ? <Button size="sm" variant="ghost" disabled={!canRemove} onClick={() => void save('remove')}>{t('settings.common.actions.delete')}</Button> : null}
+            </> : null}
+          </div>
+        </SettingsControlGroup>
       </CollapsibleContent>
     </Collapsible>
   );

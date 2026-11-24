@@ -154,7 +154,6 @@ export function ThemeAppearancePicker() {
 
       <SettingsSection
         title={t('settings.openchamber.visual.section.themes')}
-        className="pt-4"
         info={(
           <>
             <span className="block">{t('settings.openchamber.visual.field.themeImportInfoTooltip')}</span>
@@ -165,39 +164,39 @@ export function ThemeAppearancePicker() {
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-          <SettingsChipGroup<ThemeVariant>
-            value={variant}
-            onChange={setVariant}
-            aria-label={t('settings.openchamber.visual.section.themes')}
-            className="max-w-full"
-            options={[
-              {
-                value: 'light',
-                label: (
-                  <span className="inline-flex min-w-0 items-center gap-1.5" data-settings-item="appearance.light-theme">
-                    <Icon name="sun" className="size-3.5 shrink-0" />
-                    {t('settings.openchamber.visual.option.themeMode.light')}
-                  </span>
-                ),
-              },
-              {
-                value: 'dark',
-                label: (
-                  <span className="inline-flex min-w-0 items-center gap-1.5" data-settings-item="appearance.dark-theme">
-                    <Icon name="moon" className="size-3.5 shrink-0" />
-                    {t('settings.openchamber.visual.option.themeMode.dark')}
-                  </span>
-                ),
-              },
-            ]}
-          />
-          <SettingsCardSearch
-            value={query}
-            onChange={setQuery}
-            placeholder={t('settings.themeImport.search')}
-            compact
-            className="mb-0 min-w-0 flex-1"
-          />
+            <SettingsChipGroup<ThemeVariant>
+              value={variant}
+              onChange={setVariant}
+              aria-label={t('settings.openchamber.visual.section.themes')}
+              className="max-w-full"
+              options={[
+                {
+                  value: 'light',
+                  label: (
+                    <span className="inline-flex min-w-0 items-center gap-1.5" data-settings-item="appearance.light-theme">
+                      <Icon name="sun" className="size-3.5 shrink-0" />
+                      {t('settings.openchamber.visual.option.themeMode.light')}
+                    </span>
+                  ),
+                },
+                {
+                  value: 'dark',
+                  label: (
+                    <span className="inline-flex min-w-0 items-center gap-1.5" data-settings-item="appearance.dark-theme">
+                      <Icon name="moon" className="size-3.5 shrink-0" />
+                      {t('settings.openchamber.visual.option.themeMode.dark')}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+            <SettingsCardSearch
+              value={query}
+              onChange={setQuery}
+              placeholder={t('settings.themeImport.search')}
+              compact
+              className="mb-0 min-w-0 flex-1"
+            />
           </div>
           <ThemeList
             key={variant}

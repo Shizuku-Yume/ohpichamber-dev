@@ -2168,3 +2168,12 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** OhPiChamber is an OMP-only product and must not ship retired OpenCode SaaS promotions, scrapers, endpoints, or OpenCode-branded UI controls and request headers.
 - **Decided by:** user.
 - **Revisit when:** never for OpenCode SaaS services; revisit Host acceptance of incoming `x-opencode-directory` only if external local scripts require deprecation removal.
+
+## 2026-11-24 - Align the settings search index and data-settings-item anchors bidirectionally
+
+- **Effort:** ux-v280-omp19-alignment
+- **Decided:** enforce Rule A in `settingsSearchAnchors.test.ts`: every literal or template-resolved `settingsItem`/`data-settings-item` anchor must be indexed in `SETTINGS_SEARCH_ITEMS` (or carry a reasoned allowlist row), and every registry id must resolve to an anchor on its page through literals, template namespaces, `prepareSettingsSearchTarget` redirects, or placement-driven `OmpRowControl` (`omp.${setting.id}`) rows. Index previously-orphaned section and field anchors by reusing their existing localized labels; delete registry entries whose controls were removed (`agents.mode|color|variant|temperature|top-p|steps`, `projects.accent-color`, `projects.worktree.directory`, `integrations.third-party*`, dead `git.github/gitlab-*` anchors); repoint connect entries to the real `integrations.source-control.*` card anchors; drop the unrendered `GitHubSettings`/`GitLabSettings` components and their tests; keep `routing.token` indexed on the providers page where its control lives; keep `sessions.small-model`/`sessions.walkthrough-model` absent (removed controls, asserted null in `DefaultsSettings.test`).
+- **Instead of:** leaving unindexed anchors and unanchored registry entries as permanent drift, or allowlisting stale search entries that highlight nothing.
+- **Because:** a search result scrolls to `[data-settings-item="<id>"]`, so either direction of drift produces an invisible or unreachable target; upstream v2.8.0 keeps upstream-only model pickers that the OMP roles hub replaced.
+- **Decided by:** agent (ux-v280-omp19-alignment task07).
+- **Revisit when:** a new settings surface adds anchors, a control moves pages, or the placement table moves to a shared contract module.

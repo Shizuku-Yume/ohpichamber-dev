@@ -81,7 +81,7 @@ function setInputValue(input: HTMLInputElement, nextValue: string) {
   const setter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
   if (!setter) throw new Error('Missing HTMLInputElement value setter');
   setter.call(input, nextValue);
-  input.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 describe('ModelCompactionSettings', () => {
@@ -307,7 +307,7 @@ describe('ModelCompactionSettings', () => {
     const modelTrigger = Array.from(dialog?.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-trigger"]') ?? [])[0];
     expect(modelTrigger?.textContent).toContain('Choose a model');
     await act(async () => {
-      modelTrigger?.dispatchEvent(new browser.PointerEvent('pointerdown', { bubbles: true, button: 0 }) as unknown as Event);
+      modelTrigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
       modelTrigger?.click();
     });
     const modelOption = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(
@@ -342,7 +342,7 @@ describe('ModelCompactionSettings', () => {
     await act(async () => {
       if (thresholdInput) {
         setInputValue(thresholdInput, '65');
-        thresholdInput.dispatchEvent(new browser.FocusEvent('focusout', { bubbles: true }) as unknown as Event);
+        thresholdInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
       }
     });
 
@@ -378,7 +378,7 @@ describe('ModelCompactionSettings', () => {
     await act(async () => {
       if (tokenInput) {
         setInputValue(tokenInput, '85000');
-        tokenInput.dispatchEvent(new browser.FocusEvent('focusout', { bubbles: true }) as unknown as Event);
+        tokenInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
       }
     });
     expect(writes).toHaveLength(2);

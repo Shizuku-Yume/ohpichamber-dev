@@ -104,7 +104,7 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
 
     return (
       <div key={scopeKey} className="pt-2">
-        <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="px-2 pb-1 pt-2 text-xs font-semibold tracking-wide text-muted-foreground">
           {groupLabel}
         </div>
 

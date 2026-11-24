@@ -79,8 +79,8 @@ export function selectionKey(selection: BehaviorSelection): string {
 
 export function toStringList(value: string | string[] | null | undefined): string[] {
   if (value == null) return [];
-  if (typeof value === 'string') return value === '' ? [] : [value];
-  return [...value];
+  if (Array.isArray(value)) return [...value];
+  return value === '' ? [] : [value];
 }
 
 export function stringListsEqual(left: readonly string[], right: readonly string[]): boolean {

@@ -131,7 +131,8 @@ describe('settings search', () => {
         t,
         getPageTitle: (page) => page,
       });
-      expect(results.find((result) => result.id === 'appearance.scrollbars')?.page).toBe('appearance');
+      expect(results.find((result) => result.id === 'appearance.scrollbars')?.page).toBe('general');
+      expect(results.find((result) => result.id === 'appearance.scrollbars-vscode')?.page).toBe('appearance');
     }
   });
   test('finds Linear connect on the integrations page', () => {
@@ -187,8 +188,8 @@ describe('settings search', () => {
       t,
       getPageTitle: (page) => page,
     });
-    expect(connectResults.some((result) => result.id === 'git.github-connect')).toBe(true);
-    expect(connectResults.some((result) => result.id === 'git.gitlab-connect')).toBe(true);
+    expect(connectResults.some((result) => result.id === 'integrations.source-control.github.connect')).toBe(true);
+    expect(connectResults.some((result) => result.id === 'integrations.source-control.gitlab.connect')).toBe(true);
   });
 
 

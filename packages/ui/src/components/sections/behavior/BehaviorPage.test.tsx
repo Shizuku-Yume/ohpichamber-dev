@@ -1,5 +1,5 @@
 import type { OmpSettingsState } from '@openchamber/agent-contract';
-import { afterEach, expect, spyOn, test } from 'bun:test';
+import { afterEach, expect, jest, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
 const browser = new Window({ url: 'http://localhost/' });
@@ -113,7 +113,7 @@ test('a slow prompt save preserves and then persists the newer blurred draft', a
 
   const settle = async () => {
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await Promise.resolve();
     });
   };
   useProjectsStore.setState({
@@ -151,9 +151,14 @@ test('a slow prompt save preserves and then persists the newer blurred draft', a
   expect(prompt.value).toBe('newer');
 
   // AGENTS.md is the sole authority; prompt edits never write settings.
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 350));
-  });
+  jest.useFakeTimers();
+  try {
+    await act(async () => {
+      jest.advanceTimersByTime(350);
+    });
+  } finally {
+    jest.useRealTimers();
+  }
   expect(settingsWrites).toHaveLength(0);
   await settle();
   expect(writes.map((write) => write.content)).toEqual(['older\n', 'newer\n']);
@@ -226,7 +231,7 @@ test('sidebar groups Global and Project entries, keeps Prompt & Personality acce
     root.render(<ThemeSystemProvider><I18nProvider><BehaviorPage /></I18nProvider></ThemeSystemProvider>);
   });
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
   });
 
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('could not be loaded');
@@ -300,7 +305,7 @@ test('an OMP prompt write failure reports error state instead of saved', async (
       root.render(<ThemeSystemProvider><I18nProvider><BehaviorPage /></I18nProvider></ThemeSystemProvider>);
     });
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await Promise.resolve();
     });
 
     const promptNav = [...container.querySelectorAll('button')].find(
@@ -310,14 +315,14 @@ test('an OMP prompt write failure reports error state instead of saved', async (
       promptNav?.click();
     });
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await Promise.resolve();
     });
 
     const checkbox = container.querySelector<HTMLElement>('[data-settings-item="behavior.prompt-personality"] [role="checkbox"]');
     expect(checkbox).not.toBeNull();
     await act(async () => {
       checkbox?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await Promise.resolve();
     });
 
     expect(updateSettingsSpy).toHaveBeenCalled();

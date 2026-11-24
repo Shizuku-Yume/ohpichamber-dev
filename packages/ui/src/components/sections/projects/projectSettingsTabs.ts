@@ -11,8 +11,6 @@ export const useProjectSettingsTabStore = create<{
 }));
 
 const SEARCH_TARGET_TABS = new Map<string, ProjectSettingsTab>([
-  ['projects.accent-color', 'general'],
-  ['projects.worktree.directory', 'worktrees'],
   ['projects.default-agent', 'general'],
   ['projects.default-model', 'general'],
   ['projects.default-thinking', 'general'],

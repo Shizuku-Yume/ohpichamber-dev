@@ -284,7 +284,7 @@ const PluginSettingsEditor: React.FC<{
 
   return (
     <div onBlurCapture={autosave.onBlurCapture} className={SETTINGS_SPACE_ROW_CLASS}>
-      <div className="space-y-1">
+      <div className="space-y-1" data-settings-item="plugins.options">
         <Textarea
           id={scope === 'global' ? 'native-plugin-settings' : 'native-plugin-project-settings'}
           value={text}

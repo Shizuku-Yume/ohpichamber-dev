@@ -4,7 +4,7 @@ import { dirname, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
-import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
+import type { CustomMessageEntry, SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { getLatestTodoPhasesFromEntries, getTodoHudVisibility, isTodoPhase } from '@oh-my-pi/pi-coding-agent/tools/todo';
 import { isClosedTodo } from '@oh-my-pi/pi-tui/tools/todo';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema, parseModelString } from '@openchamber/agent-contract';
@@ -389,11 +389,11 @@ function asyncJobReportText(job: AsyncResultJobDetails, body: string, single: bo
  * with each job's report extracted from the rendered batch text, harness
  * `<system-notice>`/`<task-result>` envelopes already removed.
  */
-function asyncJobResultJobs(content: unknown, details: unknown): AsyncJobResultJob[] {
+function asyncJobResultJobs(content: CustomMessageEntry['content'], details: CustomMessageEntry['details']): AsyncJobResultJob[] {
   const parsed = AsyncResultDetailsSchema.safeParse(details ?? {});
   const jobs = parsed.success ? parsed.data.jobs : [];
   if (jobs.length === 0) return [];
-  const raw = typeof content === 'string' ? content : toolResultText(content);
+  const raw = Array.isArray(content) ? toolResultText(content) : content;
   const notice = /<system-notice[^>]*>([\s\S]*?)<\/system-notice>/.exec(raw);
   const body = (notice?.[1] ?? raw).trim();
   const taskResults = new Map<string, string>();
@@ -407,19 +407,17 @@ function asyncJobResultJobs(content: unknown, details: unknown): AsyncJobResultJ
     const status = job.status === 'running' || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'
       ? job.status : undefined;
     const subagentId = job.type === 'task' ? job.agentId ?? job.jobId : job.agentId;
-    return {
-      jobId: job.jobId,
-      ...(subagentId !== undefined ? { subagentId } : {}),
-      ...(job.type !== undefined ? { type: job.type } : {}),
-      ...(status !== undefined ? { status } : {}),
-      ...(job.label !== undefined ? { label: job.label } : {}),
-      ...(job.durationMs !== undefined ? { durationMs: job.durationMs } : {}),
-      reportText,
-    };
+    const result: AsyncJobResultJob = { jobId: job.jobId, reportText };
+    if (subagentId !== undefined) result.subagentId = subagentId;
+    if (job.type !== undefined) result.type = job.type;
+    if (status !== undefined) result.status = status;
+    if (job.label !== undefined) result.label = job.label;
+    if (job.durationMs !== undefined) result.durationMs = job.durationMs;
+    return result;
   });
 }
 
-function asyncJobResultNotice(content: unknown, details: unknown, partIdValue: string): NoticePart | undefined {
+function asyncJobResultNotice(content: CustomMessageEntry['content'], details: CustomMessageEntry['details'], partIdValue: string): NoticePart | undefined {
   const jobs = asyncJobResultJobs(content, details);
   if (jobs.length === 0) return undefined;
   const failed = jobs.some(job => job.status === 'failed');

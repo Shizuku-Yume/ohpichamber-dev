@@ -1,5 +1,6 @@
 import React from 'react';
-import { formatModelRef, parseModelSelector, type OmpSettingsState, type OmpSettingValue } from '@openchamber/agent-contract';
+import { formatModelRef, parseModelSelector, OmpSettingValueSchema, type OmpSettingsState, type OmpSettingValue } from '@openchamber/agent-contract';
+import { z } from 'zod';
 import { Icon } from '@/components/icon/Icon';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import {
@@ -47,12 +48,15 @@ function isThresholdMode(value: string): value is ThresholdMode {
   return value === 'percent' || value === 'tokens' || value === 'fixed';
 }
 
+const thresholdMapSchema = z.record(z.string(), OmpSettingValueSchema);
+const tokenThresholdSchema = z.union([z.number(), z.string().regex(/^f\d+$/i)]);
+
 function modelThresholds(value: OmpSettingValue | undefined) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return thresholdMapSchema.safeParse(value).data ?? {};
 }
 
 function isTokenThreshold(value: OmpSettingValue | undefined): boolean {
-  return typeof value === 'number' || (typeof value === 'string' && /^f\d+$/i.test(value));
+  return tokenThresholdSchema.safeParse(value).success;
 }
 
 function validateModelSelectorKey(raw: string): boolean {
@@ -65,12 +69,16 @@ function validateModelSelectorKey(raw: string): boolean {
   return true;
 }
 
-function parseThreshold(value: string | number | undefined): { mode: ThresholdMode; numeric: number } {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-    return { mode: 'tokens', numeric: Math.round(value) };
+interface ParsedThreshold { mode: ThresholdMode; numeric: number }
+
+function parseThreshold(value: string | number | undefined): ParsedThreshold {
+  const numericValue = z.number().safeParse(value).data;
+  if (numericValue !== undefined && Number.isFinite(numericValue) && numericValue > 0) {
+    return { mode: 'tokens', numeric: Math.round(numericValue) };
   }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
+  const stringValue = z.string().safeParse(value).data;
+  if (stringValue !== undefined) {
+    const trimmed = stringValue.trim();
     const fixedMatch = /^f(\d+)$/i.exec(trimmed);
     if (fixedMatch) {
       const tokens = Number(fixedMatch[1]);
@@ -422,8 +430,11 @@ export function ModelCompactionSettings({
   if (!mapSetting || !enabledSetting) return null;
 
   const entries = modelThresholds(mapSetting.value);
-  const rules = Object.entries(entries).filter((entry): entry is [string, string | number] =>
-    typeof entry[1] === 'number' || typeof entry[1] === 'string');
+  const thresholdRuleSchema = z.union([z.string(), z.number()]);
+  const rules = Object.entries(entries).flatMap(([selector, threshold]): Array<readonly [string, string | number]> => {
+    const parsed = thresholdRuleSchema.safeParse(threshold).data;
+    return parsed === undefined ? [] : [[selector, parsed]];
+  });
   const selectors = rules.map(([selector]) => selector);
   const enabled = enabledSetting.value === true;
   const overridden = mapSetting.conditionActive === false;

@@ -3,6 +3,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { OMP_SETTING_PLACEMENTS } from '../../../../agent-service/src/worker/settings-ui';
+
 /**
  * One settings item id, one owning page.
  *
@@ -20,7 +22,7 @@ const SECTIONS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * under one page. They cannot send a reader to the wrong page because the page
  * is the same, and the pair is deliberately two views of one concept.
  */
-const SAME_PAGE_CLAIMS: Readonly<Record<string, string>> = {
+const SAME_PAGE_CLAIMS = new Map(Object.entries({
   'commands.argument-hint': 'CommandsPage shows the hint in the list row and in the editor',
   'plugins.content': 'PluginsPage lists the plugin; AddPluginDialog edits one',
   'projects.worktree': 'The project tab and its worktree list both name the worktree setting',
@@ -28,7 +30,7 @@ const SAME_PAGE_CLAIMS: Readonly<Record<string, string>> = {
   'providers.connect': 'ProviderConnectPicker opens the form ProviderGrid resells',
   'providers.custom': 'ProviderConnectPicker offers custom setup; CustomProviderForm is it',
   'providers.logo': 'ProvidersPage lists custom provider logos; CustomProviderForm edits them',
-};
+}));
 
 interface Claim {
   readonly id: string;
@@ -98,7 +100,7 @@ describe('settings item ownership', () => {
       const pages = new Set([claim.page, ...others.map((other) => other.page)]);
       // Same page: allowed only when the pair is named here with its reason,
       // so a second control on one page is still a deliberate decision.
-      if (pages.size === 1 && SAME_PAGE_CLAIMS[claim.id] !== undefined) continue;
+      if (pages.size === 1 && SAME_PAGE_CLAIMS.has(claim.id)) continue;
       offenders.push(`${claim.id}: ${[claim.file, ...others.map((other) => other.file)].join(', ')}`);
     }
     expect([...new Set(offenders)].sort()).toEqual([]);
@@ -106,7 +108,7 @@ describe('settings item ownership', () => {
 
   test('the same-page allowlist names a claim that still exists, and says why', () => {
     const ids = new Set(collectClaims().map((claim) => claim.id));
-    for (const [id, reason] of Object.entries(SAME_PAGE_CLAIMS)) {
+    for (const [id, reason] of SAME_PAGE_CLAIMS) {
       expect(`${id} claimed: ${ids.has(id)}`).toBe(`${id} claimed: true`);
       expect(`${id} reason: ${reason.length > 0}`).toBe(`${id} reason: true`);
     }
@@ -115,27 +117,26 @@ describe('settings item ownership', () => {
   test('every owned-by row names a control that writes its OMP key', () => {
     const claims = collectClaims();
     const claimsByOwner = new Map(claims.map((claim) => [claim.id, claim]));
-    const settingsUiPath = join(SECTIONS_ROOT, '../../../../packages/agent-service/src/worker/settings-ui.ts');
-    const settingsUiSource = readFileSync(settingsUiPath, 'utf8');
-    const rawPlacementsMatch = settingsUiSource.match(/const RAW_PLACEMENTS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
-    if (!rawPlacementsMatch) throw new Error('RAW_PLACEMENTS not found');
-    const lines = rawPlacementsMatch[1].split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("'"))
-      .map((l) => {
-        const m = l.match(/'([^']+)':\s*'([^']+)'/);
-        return m ? [m[1], m[2]] : null;
-      }).filter((entry): entry is [string, string] => entry !== null);
-
-    const ownedByEntries = lines.filter(([, raw]) => raw.startsWith('owned-by '));
+    const ownedByEntries = Object.entries(OMP_SETTING_PLACEMENTS)
+      .flatMap((entry): Array<readonly [string, string]> => {
+        const [id, placement] = entry;
+        return placement.type === 'owned-by' ? [[id, placement.owner]] : [];
+      });
     expect(ownedByEntries.length).toBeGreaterThan(0);
 
-    for (const [id, raw] of ownedByEntries) {
-      const owner = raw.slice('owned-by '.length).trim();
+    for (const [id, owner] of ownedByEntries) {
       const claim = claimsByOwner.get(owner);
       expect(claim !== undefined, `Owner "${owner}" for OMP setting "${id}" must exist in UI claims`).toBe(true);
       const claimFileSource = readFileSync(join(SECTIONS_ROOT, claim!.file), 'utf8');
-      const writesOmpKeyPattern = new RegExp(`(?:updateOmpSettings|updateSettings)[\\s\\S]*?id:\\s*['"]${id.replace('.', '\\.')}['"]`);
+      // A write may name the key literally (`id: 'compaction.modelThresholds'`)
+      // or through a same-file const alias (`const MODEL_THRESHOLDS = '…'`).
+      const alias = new RegExp(`const\\s+[A-Z0-9_]+\\s*=\\s*'${id.replace(/\./g, '\\.')}'`, 'g');
+      const aliases = [...claimFileSource.matchAll(alias)].map((match) => {
+        const constMatch = match[0].match(/const\s+([A-Z0-9_]+)/);
+        return constMatch ? constMatch[1] : null;
+      }).filter((name): name is string => name !== null);
+      const idPattern = `(?:'${id.replace(/\./g, '\\.')}'${aliases.length > 0 ? `|${aliases.join('|')}` : ''})`;
+      const writesOmpKeyPattern = new RegExp(`(?:updateOmpSettings|updateSettings)[\\s\\S]*?id:\\s*${idPattern}`);
       const writesModelRoles = id === 'modelRoles'
         && claimFileSource.includes('useOmpPageSettings(')
         && /updateSettings\(\(state\) => \[modelRoleChange\(state,/.test(claimFileSource);

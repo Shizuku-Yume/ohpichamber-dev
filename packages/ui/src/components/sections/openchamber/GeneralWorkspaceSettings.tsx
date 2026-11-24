@@ -98,7 +98,6 @@ const FilesAndEditorSection: React.FC = () => {
               : undefined}
             descriptionPlacement="after"
             settingsItem="appearance.file-editor-vim-mappings"
-            className="pt-1 pb-2"
           >
             <Textarea
               dir="ltr"
@@ -321,14 +320,15 @@ const PanelsAndLinksSection: React.FC = () => {
         />
       ) : null}
       {!isMobile && sessionTabsEnabled ? (
-        <SettingsCheckboxRow
-          checked={sessionTabsPerWorkspace}
-          onChange={setSessionTabsPerWorkspace}
-          label={t('settings.openchamber.visual.field.sessionTabsPerWorkspace')}
-          ariaLabel={t('settings.openchamber.visual.field.sessionTabsPerWorkspaceAria')}
-          info={t('settings.openchamber.visual.field.sessionTabsPerWorkspaceInfo')}
-          className="ps-6"
-        />
+        <div className="ps-6">
+          <SettingsCheckboxRow
+            checked={sessionTabsPerWorkspace}
+            onChange={setSessionTabsPerWorkspace}
+            label={t('settings.openchamber.visual.field.sessionTabsPerWorkspace')}
+            ariaLabel={t('settings.openchamber.visual.field.sessionTabsPerWorkspaceAria')}
+            info={t('settings.openchamber.visual.field.sessionTabsPerWorkspaceInfo')}
+          />
+        </div>
       ) : null}
       {!isMobile ? (
         <SettingsCheckboxRow

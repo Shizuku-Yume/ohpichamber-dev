@@ -165,8 +165,36 @@ the offending `file:line` for:
   values (`m-0`, `gap-0`, `space-y-0`) pass, and a generic `div` wrapper may
   carry its own gap.
 
+- F — a lowercase `<input>`, `<button>`, `<select>`, `<textarea>` or `<form>`
+  where a shared `Input`/`Button`/`Select`/`Textarea`/disclosure primitive
+  belongs. Exempt per file: hidden `type="file"`/`type="color"` pickers and
+  `type="range"` sliders (no shared primitive), bespoke entity-selection
+  sidebar rows and picker/disclosure toggles (no shared list-item primitive),
+  and explicit non-autosave submit `<form>`s. An `input` exemption is further
+  narrowed to the declared `type` so a raw text input in the same file still
+  fails.
+- M — on an autosave page (`useAutosave`/`useOmpPageSettings`/
+  `reportSettingsSaveState`) a manual Save/Apply `Button` or a
+  `toast.success` reintroduces the save chrome the contract removed: saves
+  are silent and only failures toast. Exempt per file: entity/credential
+  lifecycle toasts (create/connect/delete/install/import) matched by their
+  i18n key, and explicit draft-buffer saves such as the plugins Apply or the
+  MCP key/value env-header commit.
+- T — a `SettingsFieldRow`/`SettingsCheckboxRow` `label` bound to a bare
+  identifier or a hardcoded literal instead of `t(...)` or a JSX label
+  carrying `t()`. Exempt per file: labels resolved from a `t()` alias, a
+  deliberately unlabeled continuation row (`label={null}`), and dynamic
+  model/entity keys (role names, tracker teams, modality enums, caller-
+  supplied `item.label`).
+- X — box chrome (`border`, `rounded-*`, `bg-surface-*`, `oc-tile`) on a
+  container tag that wraps a flat row primitive, or a `p-*` padding utility
+  on a row/control primitive whose own band owns the inset. Chrome inside a
+  `SettingsCard` grid or a status callout, and on non-container tags, passes.
+
 File exceptions stay narrow: sidebar/navigation chrome (the Responsiveness
 exception above), the project settings dialog shell, and two shared editors
 that are not settings field rows (`SettingsColorField` for widths,
 `EnvironmentVariablesEditor` for widths). `shared/SettingsSection.tsx` is
-excluded because it defines the vocabulary.
+excluded because it defines the vocabulary. F/M/T/X exemptions are keyed
+per file (and, for `input`s, per `type`/`key`) so a new violation beside a
+documented one still fails; every entry carries a `reason`.

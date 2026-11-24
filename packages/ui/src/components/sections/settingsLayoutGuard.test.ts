@@ -72,61 +72,380 @@ const PANE_VIEW_SOURCES: readonly string[] = [
   'update/ReleaseNotesBody.tsx',
 ];
 
-const RULES = ['W', 'S', 'P', 'B', 'N', 'G'] as const;
+const RULES = ['W', 'S', 'P', 'B', 'N', 'G', 'F', 'M', 'T', 'X', 'A'] as const;
 type Rule = (typeof RULES)[number];
 
 /** Attributes that carry class names for a control or its wrapper. */
-const CLASS_ATTRS: Record<string, true> = {
-  className: true,
-  controlClassName: true,
-  containerClassName: true,
-  triggerClassName: true,
-  contentClassName: true,
-};
+const CLASS_ATTRS = new Set([
+  'className',
+  'controlClassName',
+  'containerClassName',
+  'triggerClassName',
+  'contentClassName',
+]);
 
 /** Components that are settings controls (or the trigger of one). */
-const CONTROL_TAGS: Record<string, true> = {
-  Input: true,
-  Textarea: true,
-  NumberInput: true,
-  Select: true,
-  SelectTrigger: true,
-  ModelSelector: true,
-  AgentSelector: true,
-  SettingsProjectSelector: true,
-  SettingsColorField: true,
-  SortableTabsStrip: true,
-};
+const CONTROL_TAGS = new Set([
+  'Input',
+  'Textarea',
+  'NumberInput',
+  'Select',
+  'SelectTrigger',
+  'ModelSelector',
+  'AgentSelector',
+  'SettingsProjectSelector',
+  'SettingsColorField',
+  'SortableTabsStrip',
+]);
 /** Row primitives: their own padding/stack is the row contract, not the page's. */
-const ROW_TAGS: Record<string, true> = {
-  SettingsFieldRow: true,
-  SettingsStackedField: true,
-  SettingsCheckboxRow: true,
-};
+const ROW_TAGS = new Set([
+  'SettingsFieldRow',
+  'SettingsStackedField',
+  'SettingsCheckboxRow',
+]);
 
 /** Clusters whose content stack is a named `SETTINGS_SPACE_*` decision. */
-const CONTENT_STACK_TAGS: Record<string, true> = {
-  SettingsSection: true,
-  SettingsControlGroup: true,
-};
+const CONTENT_STACK_TAGS = new Set([
+  'SettingsSection',
+  'SettingsControlGroup',
+]);
 
 /** Width tokens that only say "fill", "may shrink" or "stay in the column". */
-const NEUTRAL_WIDTH_TOKENS: Record<string, true> = {
-  'w-full': true,
-  'min-w-0': true,
-  'max-w-none': true,
-  'max-w-full': true,
-};
+const NEUTRAL_WIDTH_TOKENS = new Set([
+  'w-full',
+  'min-w-0',
+  'max-w-none',
+  'max-w-full',
+]);
+
+/**
+ * Sanctioned raw-HTML form tags (rule F): file/colour pickers and range
+ * sliders have no shared primitive; bespoke list-row, disclosure, swatch and
+ * entity-selection toggles and explicit non-autosave submit `<form>`s keep a
+ * documented exemption each. Every other lowercase `<input>`, `<button>`,
+ * `<select>`, `<textarea>` or `<form>` in a settings section must use the
+ * shared control primitives.
+ */
+const RAW_FORM_EXEMPTIONS = new Map(Object.entries({
+  // Hidden pickers / sliders with no shared primitive.
+  'openchamber/ThemeImportButton.tsx': {
+    tags: ['input'], inputTypes: ['file'],
+    reason: 'hidden <input type="file"> theme file picker; no shared primitive exists',
+  },
+  'openchamber/TunnelSettings.tsx': {
+    tags: ['button', 'input'], inputTypes: ['file'],
+    reason: 'managed-local <input type="file"> config picker and inline text-link toggles; no shared primitive',
+  },
+  'openchamber/VoiceSettings.tsx': {
+    tags: ['input'], inputTypes: ['range'],
+    reason: '<input type="range"> sliders for speech rate/pitch/volume; the shared kit has no slider',
+  },
+  'extensions/ExtensionsPage.tsx': {
+    tags: ['input'], inputTypes: ['file'],
+    reason: 'hidden <input type="file"> extension .zip picker; no shared primitive exists',
+  },
+  'providers/ProviderLogoImageControl.tsx': {
+    tags: ['input'], inputTypes: ['file'],
+    reason: 'hidden <input type="file"> provider logo picker; no shared primitive exists',
+  },
+  'shared/SettingsColorField.tsx': {
+    tags: ['button', 'input'], inputTypes: ['color'],
+    reason: 'colour-swatch picker: button swatches + hidden <input type="color">; a bespoke widget, not a field row',
+  },
+  // Bespoke toggle/disclosure/picker widgets shared primitives do not cover.
+  'shared/SettingsCards.tsx': {
+    tags: ['button'],
+    reason: 'SettingsCard/AddCard card-toggle: the whole card is the hit target, not a form field',
+  },
+  'shared/SettingsInfoHint.tsx': {
+    tags: ['button'],
+    reason: 'info-hint icon toggle: a disclosure trigger, not a form field',
+  },
+  'shared/SettingsProjectSelector.tsx': {
+    tags: ['button'],
+    reason: 'project switcher chip toggle: a bespoke picker control, not a form field',
+  },
+  'shared/SettingsSidebarItem.tsx': {
+    tags: ['button'],
+    reason: 'navigation list-item toggle in the settings nav column, not pane content',
+  },
+  'shared/EnvironmentVariablesEditor.tsx': {
+    tags: ['form'],
+    reason: 'bespoke name/value row editor: each row is an explicit non-autosave submit, not a settings form',
+  },
+  // Entity list-row selection toggles (no shared sidebar list-item primitive exists).
+  'agents/AgentsSidebar.tsx': {
+    tags: ['button'],
+    reason: 'sidebar entity-list selection row; matches the Commands/Skills/Snippets sidebar pattern',
+  },
+  'agents/ModelSelector.tsx': {
+    tags: ['button'],
+    reason: 'mobile model-picker dropdown trigger toggle; a bespoke picker, not a form field',
+  },
+  'model-roles/ImageModelSelector.tsx': {
+    tags: ['button'],
+    reason: 'mobile image-model dropdown trigger toggle; a bespoke picker, not a form field',
+  },
+  'commands/CommandsSidebar.tsx': {
+    tags: ['button'],
+    reason: 'sidebar entity-list selection row; matches the sibling sidebar pattern',
+  },
+  'magic-prompts/MagicPromptsSidebar.tsx': {
+    tags: ['button'],
+    reason: 'sidebar entity-list selection row; matches the sibling sidebar pattern',
+  },
+  'skills/SkillsSidebar.tsx': {
+    tags: ['button'],
+    reason: 'sidebar entity-list selection row; matches the sibling sidebar pattern',
+  },
+  'skills/catalog/SkillsCatalogPage.tsx': {
+    tags: ['button'],
+    reason: 'catalog entry/disclosure toggles inside the skills browser, not form fields',
+  },
+  'snippets/SnippetsSidebar.tsx': {
+    tags: ['button'],
+    reason: 'sidebar entity-list selection row; matches the sibling sidebar pattern',
+  },
+  'usage/UsageSidebar.tsx': {
+    tags: ['button'],
+    reason: 'sidebar list-item selection row, not pane content',
+  },
+  'snippets/SnippetAliasesField.tsx': {
+    tags: ['button', 'input'], inputTypes: ['text'],
+    reason: 'alias tag-input widget: inline draft input + chip remove toggles; a bespoke multi-value editor',
+  },
+  'update/ReleaseNotesBody.tsx': {
+    tags: ['button'],
+    reason: 'changelog show-more/show-less text toggles, not form fields',
+  },
+  // Explicit non-autosave submit lifecycles.
+  'providers/CustomProviderForm.tsx': {
+    tags: ['form'],
+    reason: 'explicit connect-form submit lifecycle (not an autosave page)',
+  },
+  'providers/ProviderAccounts.tsx': {
+    tags: ['form'],
+    reason: 'account add/edit runs an explicit submit lifecycle, not autosave',
+  },
+  'providers/ProviderOAuthMethods.tsx': {
+    tags: ['form'],
+    reason: 'OAuth manual-input code entry runs an explicit submit lifecycle',
+  },
+  'providers/CanonicalProviderPicker.tsx': {
+    tags: ['button'],
+    reason: 'provider list-row selection toggle, not a form field',
+  },
+  'providers/CustomProviderModelRow.tsx': {
+    tags: ['button'],
+    reason: 'per-model disclosure expander row; a bespoke list item, not a form field',
+  },
+  'providers/ProviderConnectPicker.tsx': {
+    tags: ['button'],
+    reason: 'provider connect grid rows: one labelled toggle per provider, not a form field',
+  },
+  'routing/CreateRoutingCategoryDialog.tsx': {
+    tags: ['form'],
+    reason: 'category create form runs an explicit dialog submit lifecycle',
+  },
+  'projects/ProjectEnvironmentSection.tsx': {
+    tags: ['form'],
+    reason: 'environment variable add runs an explicit submit lifecycle',
+  },
+  'projects/ProjectActionsTab.tsx': {
+    tags: ['button'],
+    reason: 'project action list-row edit toggle, not a form field',
+  },
+  'projects/ProjectActionEditorDialog.tsx': {
+    tags: ['button'],
+    reason: 'editor dialog disclosure/control toggles, not form fields',
+  },
+  // Feature-specific bespoke toggles.
+  'classification/JevAccessNote.tsx': {
+    tags: ['button'],
+    reason: 'inline access-note acknowledge link, not a form field',
+  },
+  'openchamber/InstanceServiceUrls.tsx': {
+    tags: ['button'],
+    reason: 'service-URL external-link chips, not form fields',
+  },
+  'openchamber/WorktreeSectionContent.tsx': {
+    tags: ['button'],
+    reason: 'worktree list-row action toggles, not form fields',
+  },
+  'plugins/ExtensionControlCenter.tsx': {
+    tags: ['button'],
+    reason: 'extension permission/control toggles, not form fields',
+  },
+  'git-identities/GitIdentityEditorDialog.tsx': {
+    tags: ['button'],
+    reason: 'identity colour/scope picker toggles inside the editor dialog, not form fields',
+  },
+  'remote-instances/RemoteInstancesPage.tsx': {
+    tags: ['form', 'button'],
+    reason: 'pairing/SSH host dialogs run an explicit submit lifecycle outside the autosave contract',
+  },
+}));
+
+/**
+ * Rule F exempts a tag only when it is one of the sanctioned kinds listed
+ * for the file: `<input type="file">`, `<input type="range">` and
+ * `<input type="color">` pass, while any other raw control in the same file
+ * still fails.
+ */
+const RAW_FORM_SANCTIONED_INPUT_TYPES = new Set(['file', 'range', 'color']);
+
+/** Autosave contract sources: these pages save silently; a success toast or a
+ * manual Save/Apply button reintroduces the chrome the contract removed. */
+const AUTOSAVE_SOURCE_MARKERS = ['useAutosave', 'useOmpPageSettings', 'reportSettingsSaveState'];
+
+/**
+ * Rule M exemptions: lifecycle confirmation buttons that are not ordinary
+ * saves (a Create draft, a write-only secret confirmation, the Plugins page's
+ * single Apply), each documented. A file pattern matches the element when its
+ * rendered text names one of `actions`.
+ */
+const SAVE_BUTTON_EXEMPTIONS: ReadonlyArray<{ file: RegExp; actions: readonly string[]; reason: string }> = [
+  {
+    file: /(^|\/)plugins\/PluginsPage\.tsx$/,
+    actions: ['settings.plugins.action.apply'],
+    reason: 'one explicit Apply lifecycle action for pending plugin/extension changes',
+  },
+  {
+    file: /(^|\/)mcp\/McpPage\.tsx$/,
+    actions: ['settings.common.actions.saveChanges'],
+    reason: 'key/value env+header editors hold a local pending buffer; saveChanges commits the buffer, not an autosaved field',
+  },
+];
+
+/**
+ * Rule M toast exemptions: an entity/credential lifecycle confirmation is not
+ * the redundant "settings saved" toast the rule bans. Each entry keys on the
+ * i18n key inside the `toast.success(...)` call so a new non-lifecycle toast
+ * in the same file still fails.
+ */
+const TOAST_EXEMPTIONS: ReadonlyArray<{ file: RegExp; keys: RegExp; reason: string }> = [
+  {
+    file: /(^|\/)agents\/AgentsPage\.tsx$/,
+    keys: /\.created'/,
+    reason: 'agent create lifecycle confirmation, not a settings-field save',
+  },
+  {
+    file: /(^|\/)commands\/CommandsPage\.tsx$/,
+    keys: /\.created'/,
+    reason: 'command create lifecycle confirmation',
+  },
+  {
+    file: /(^|\/)integrations\/GuestIntegrationsSection\.tsx$/,
+    keys: /\.(?:connected|disconnected)'/,
+    reason: 'guest connect/disconnect lifecycle confirmation',
+  },
+  {
+    file: /(^|\/)integrations\/NotificationChannelCard\.tsx$/,
+    keys: /\.(?:connected|disconnected)'/,
+    reason: 'notification channel connect/disconnect lifecycle confirmation',
+  },
+  {
+    file: /(^|\/)integrations\/TrackerSettings\.tsx$/,
+    keys: /toast(?:Connected|AccountSwitched|Disconnected)\b/,
+    reason: 'tracker account connect/switch/disconnect lifecycle confirmation',
+  },
+  {
+    file: /(^|\/)mcp\/McpPage\.tsx$/,
+    keys: /\.configImported'/,
+    reason: 'config import lifecycle confirmation',
+  },
+  {
+    file: /(^|\/)plugins\/PluginsPage\.tsx$/,
+    keys: /\.(?:deleted|installed|done|none)'/,
+    reason: 'plugin install/update/upgrade/delete lifecycle confirmation',
+  },
+  {
+    file: /(^|\/)skills\/SkillsPage\.tsx$/,
+    keys: /(?:skillCreated|fileUpdated|fileAdded|fileRemoved|fileDeleted|fileCreated)'/,
+    reason: 'skill create and supporting-file entity lifecycle confirmation',
+  },
+  {
+    file: /(^|\/)websearch\/WebSearchPage\.tsx$/,
+    keys: /\.keySaved'/,
+    reason: 'provider API-key credential write confirmation, not a settings-field save',
+  },
+];
+
+/**
+ * Rule T exemptions: a `label` bound to a model/entity key rather than a
+ * fixed `t(...)` literal. Each names the file and the prop expression.
+ */
+const LABEL_EXEMPTIONS: ReadonlyArray<{ file: RegExp; reason: string }> = [
+  {
+    file: /(^|\/)model-roles\/ModelRolesPage\.tsx$/,
+    reason: 'role label comes from settings.omp.modelRoles.role.<role>.label, keyed by the rendered role',
+  },
+  {
+    file: /(^|\/)shared\/(?:ModelRoleEditor|ModelRoleLinkRow|OmpRowControl)\.tsx$/,
+    reason: 'shared row primitive receives an already-translated label from the caller',
+  },
+  {
+    file: /(^|\/)openchamber\/(?:ModelCompactionSettings|InstanceServiceUrls)\.tsx$/,
+    reason: 'label resolves a t() call assigned to a named variable just above the row',
+  },
+  {
+    file: /(^|\/)shared\/OmpReadSummaryPresetRow\.tsx$/,
+    reason: 'label resolves a t() call assigned to a named variable just above the row',
+  },
+  {
+    file: /(^|\/)integrations\/TrackerProjectMapping\.tsx$/,
+    reason: 'label renders the remote tracker team name (entity data, not translatable copy)',
+  },
+  {
+    file: /(^|\/)providers\/CustomProviderModelRow\.tsx$/,
+    reason: 'label renders a fixed modality enum (text/image/audio/…) entity key, not translatable copy',
+  },
+  {
+    file: /(^|\/)shared\/SettingsSortableVisibilityList\.tsx$/,
+    reason: 'label is item.label supplied already-translated by each caller',
+  },
+  {
+    file: /(^|\/)classification\/(?:ClassificationProvidersPage|CustomEndpointFields)\.tsx$/,
+    reason: 'label={null} deliberately renders an unlabeled continuation row',
+  },
+  {
+    file: /(^|\/)plugins\/PluginsPage\.tsx$/,
+    reason: 'feature flags are plugin-declared capability names, not translatable copy',
+  },
+  {
+    file: /(^|\/)remote-instances\/RemoteInstancesPage\.tsx$/,
+    reason: 'deferred: SSH port-forward local/remote labels are untranslated strings (W7 follow-up)',
+  },
+];
+
+/**
+ * Rule X exemptions: elements whose chrome is the documented exception —
+ * `SettingsCard`/`SettingsCardPill` grids, a status callout, an icon badge, a
+ * `kbd` shortcut chip, a `pre`/`code` preview block, or a native `<input>`
+ * slider (rule F) — keep their token.
+ */
+const CHROME_ALLOWED_TAGS = new Set([
+  'SettingsCard',
+  'SettingsCardPill',
+  'SettingsCardChip',
+  'SettingsAddCard',
+  'IntegrationCatalogCard',
+  'kbd',
+  'pre',
+  'code',
+  'input',
+]);
+
 
 /** Row-level primitives: a number stepper belongs inside the row's own band. */
-const ROW_BOUNDARY_TAGS: Record<string, true> = {
-  SettingsSection: true,
-  SettingsFieldRow: true,
-  SettingsStackedField: true,
-  SettingsControlGroup: true,
-  SettingsTwoColumn: true,
-  SettingsPageLayout: true,
-};
+const ROW_BOUNDARY_TAGS = new Set([
+  'SettingsSection',
+  'SettingsFieldRow',
+  'SettingsStackedField',
+  'SettingsControlGroup',
+  'SettingsTwoColumn',
+  'SettingsPageLayout',
+]);
 
 const NUMBER_WIDTH_CLASS = 'SETTINGS_WIDTH_NUMBER_CLASS';
 const NUMBER_STEPPER_ROW_CLASS = 'SETTINGS_NUMBER_STEPPER_ROW_CLASS';
@@ -146,10 +465,12 @@ interface FileException {
 const FILE_EXCEPTIONS: readonly FileException[] = [
   {
     match: /(^|\/)[A-Za-z0-9]*Sidebar\.tsx$/,
-    reason: 'navigation chrome outside the pane (layout.md Exception)',
+    rules: ['W', 'S', 'P', 'B', 'N', 'G', 'T', 'X', 'A'],
+    reason: 'navigation chrome outside the pane (layout.md Exception); its bespoke list-toggle `<button>` is still rejected by F',
   },
   {
     match: /(^|\/)SettingsSidebar(?:Item|Layout|Search)?\.tsx$/,
+    rules: ['W', 'S', 'P', 'B', 'N', 'G', 'T', 'X', 'A'],
     reason: 'navigation chrome outside the pane (layout.md Exception)',
   },
   {
@@ -165,6 +486,11 @@ const FILE_EXCEPTIONS: readonly FileException[] = [
     match: /(^|\/)shared\/EnvironmentVariablesEditor\.tsx$/,
     rules: ['W'],
     reason: 'bespoke name/value row editor, not a settings field row',
+  },
+  {
+    match: /(^|\/)shared\/SettingsCards\.tsx$/,
+    rules: ['X'],
+    reason: 'SettingsCard grid is the sanctioned card-chrome owner (PATTERNS.md)',
   },
 ];
 
@@ -631,7 +957,7 @@ function baseUtility(token: string): string {
 
 function isRawWidthToken(token: string): boolean {
   const utility = baseUtility(token);
-  if (NEUTRAL_WIDTH_TOKENS[utility] === true) return false;
+  if (NEUTRAL_WIDTH_TOKENS.has(utility)) return false;
   return /^w-(\d+(?:\.\d+)?|px|fit|auto|min|max|screen|\[\S+\]|\d+\/\d+)$/.test(utility)
     || /^max-w-/.test(utility)
     || /^min-w-/.test(utility);
@@ -651,6 +977,152 @@ function isVerticalStackUtility(token: string): boolean {
   return /^space-y-/.test(utility) && utility !== 'space-y-0';
 }
 
+/** Lowercase form tags rule F rejects outside the sanctioned file/tag pairs. */
+const RAW_FORM_TAGS = new Set([
+  'input',
+  'button',
+  'select',
+  'textarea',
+  'form',
+]);
+
+function rawFormExempted(file: string, element: JsxElement): string | null {
+  const entry = RAW_FORM_EXEMPTIONS.get(file);
+  if (entry === undefined || !entry.tags.includes(element.tag)) return null;
+  if (element.tag === 'input') {
+    const type = element.attrs.find((attr) => attr.name === 'type');
+    const typeValue = type === undefined || type.raw.replace(/["'{}]/g, '') === '' ? 'text' : type.raw.replace(/["'{}]/g, '');
+    const allowed = entry.inputTypes ?? [...RAW_FORM_SANCTIONED_INPUT_TYPES];
+    if (!allowed.includes(typeValue)) return null;
+  }
+  return entry.reason;
+}
+
+/** A `<Button>` counts as a manual save when its text names a save/apply action. */
+const SAVE_ACTION_PATTERN = /actions\.(?:save|apply|saveChanges)|\.action\.apply\b/i;
+
+function saveButtonExempted(file: string, element: JsxElement, source: string): string | null {
+  for (const exemption of SAVE_BUTTON_EXEMPTIONS) {
+    if (!exemption.file.test(file)) continue;
+    const labelAttr = element.attrs.find((attr) => attr.name === 'children');
+    const text = source.slice(element.start, element.start + 400);
+    if (exemption.actions.some((action) => text.includes(action))) return exemption.reason;
+    void labelAttr;
+  }
+  return null;
+}
+/**
+ * A `toast.success(...)` is exempt when the file entry's `keys` pattern matches
+ * the i18n key inside that call, so an unrelated non-lifecycle toast in the
+ * same file still fails.
+ */
+function toastExempted(file: string, source: string, index: number): string | null {
+  for (const exemption of TOAST_EXEMPTIONS) {
+    if (!exemption.file.test(file)) continue;
+    const call = source.slice(index, index + 260);
+    if (exemption.keys.test(call)) return exemption.reason;
+  }
+  return null;
+}
+
+
+/** Label props rule T inspects on the two row primitives. */
+const LABEL_INSPECTED_TAGS = new Set([
+  'SettingsFieldRow',
+  'SettingsCheckboxRow',
+]);
+
+/** A `label` value routed through `t(...)` (or `null`/`undefined` for a
+ * deliberately unlabeled continuation row) passes; a bare identifier does not. */
+function labelIsTranslated(attr: JsxAttr): boolean {
+  const raw = attr.raw.trim();
+  if (raw === 'null' || raw === 'undefined') return true;
+  // A label routed through `t(...)` anywhere in its expression passes, and so
+  // does a JSX label (which carries its own `t()`). The violation is a bare
+  // identifier or a non-t, non-JSX expression.
+  if (raw.includes('t(')) return true;
+  if (/^\{?\s*\(?\s*</.test(raw)) return true;
+  return /^\{?\s*t\(/.test(raw) || /^t\(/.test(raw);
+}
+
+function labelExempted(file: string): string | null {
+  for (const exemption of LABEL_EXEMPTIONS) {
+    if (exemption.file.test(file)) return exemption.reason;
+  }
+  return null;
+}
+
+/** Row primitives may not carry `p*` padding; their own row band owns the
+ * inset. A control (`Input`, `Select`) keeps the padding its chrome needs
+ * (an icon affordance, a ring offset), so only the rows are inspected. */
+const ROW_PADDING_TAGS = new Set([
+  'SettingsFieldRow',
+  'SettingsStackedField',
+  'SettingsCheckboxRow',
+  'SettingsSection',
+  'SettingsControlGroup',
+]);
+
+const PADDING_TOKEN = /^(?:p|px|py|ps|pe|pt|pb|pl|pr)-/;
+
+/** Container tags that can carry an unsanctioned box around settings rows. */
+const CHROME_CONTAINER_TAGS = new Set([
+  'div',
+  'section',
+  'label',
+  'details',
+  'form',
+  'ul',
+  'li',
+]);
+
+/** Chrome a container may not wrap a settings row in: a filled box, an inset
+ * tile, or a bordered rounded frame. Badges and pills keep their own chrome. */
+const CONTAINER_CHROME_TOKEN = /^(?:border(?:-(?:[trblxyse]))?(?:\/\d+)?$|rounded(?:-(?:[0-9a-z]+|\[[^\]]+\]))$|bg-surface-[a-z-]+$|oc-tile(?:-hover|-inset)?$)/;
+
+function isContainerChromeToken(token: string): boolean {
+  return CONTAINER_CHROME_TOKEN.test(baseUtility(token));
+}
+
+/** Chrome is sanctioned inside a `SettingsCard` grid or a status callout; it
+ * is unsanctioned on a generic wrapper inside `SettingsSection` content. */
+function insideCardOrCallout(element: JsxElement): boolean {
+  let current: JsxElement | null = element.parent;
+  while (current !== null) {
+    if (CHROME_ALLOWED_TAGS.has(current.tag)) return true;
+    if (DIALOG_CHROME_TAG.test(current.tag)) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+/** A status callout advertises itself with a `var(--status-…)` token. */
+function isStatusCallout(tokens: readonly string[]): boolean {
+  return tokens.some((token) => token.includes('--status-') || token.includes('[var(--status-'));
+}
+
+/** Tags that are a flat settings row; boxing them in chrome is the violation. */
+const ROW_PRIMITIVE_TAGS = new Set([
+  'SettingsFieldRow',
+  'SettingsStackedField',
+  'SettingsCheckboxRow',
+  'SettingsControlGroup',
+  'OmpRowControl',
+  'SettingsRadioOption',
+  'SettingsChipGroup',
+]);
+
+/** True when any descendant element is a settings row the chrome would box. */
+function wrapsRowPrimitive(element: JsxElement): boolean {
+  const pending = [...element.children];
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (ROW_PRIMITIVE_TAGS.has(current.tag)) return true;
+    pending.push(...current.children);
+  }
+  return false;
+}
+
 function lineOf(source: string, offset: number): number {
   let line = 1;
   for (let index = 0; index < offset && index < source.length; index += 1) {
@@ -661,7 +1133,7 @@ function lineOf(source: string, offset: number): number {
 
 /** Every class-bearing attribute on the element. */
 function classAttrs(element: JsxElement): JsxAttr[] {
-  return element.attrs.filter((attr) => CLASS_ATTRS[attr.name] === true);
+  return element.attrs.filter((attr) => CLASS_ATTRS.has(attr.name));
 }
 
 function exceptionReason(file: string, rule: Rule): string | null {
@@ -714,7 +1186,7 @@ function scanSourceDetailed(file: string, source: string): ScanDetail {
       const inspected = attr.name === 'controlClassName'
         || attr.name === 'containerClassName'
         || attr.name === 'triggerClassName'
-        || (attr.name === 'className' && CONTROL_TAGS[element.tag] === true);
+        || (attr.name === 'className' && CONTROL_TAGS.has(element.tag));
       if (!inspected) continue;
       for (const token of classTokens(attr.raw)) {
         if (!isRawWidthToken(token)) continue;
@@ -778,7 +1250,7 @@ function scanSourceDetailed(file: string, source: string): ScanDetail {
           inStepperRow = true;
           break;
         }
-        if (ROW_BOUNDARY_TAGS[ancestor.tag] === true) break;
+        if (ROW_BOUNDARY_TAGS.has(ancestor.tag)) break;
         ancestor = ancestor.parent;
       }
       if (!inStepperRow) {
@@ -791,9 +1263,9 @@ function scanSourceDetailed(file: string, source: string): ScanDetail {
     }
 
     // G: spacing utilities where a named class owns the decision.
-    const controlSpacing = element.tag !== '' && CONTROL_TAGS[element.tag] === true;
-    const rowSpacing = ROW_TAGS[element.tag] === true;
-    const contentStack = CONTENT_STACK_TAGS[element.tag] === true;
+    const controlSpacing = element.tag !== '' && CONTROL_TAGS.has(element.tag);
+    const rowSpacing = ROW_TAGS.has(element.tag);
+    const contentStack = CONTENT_STACK_TAGS.has(element.tag);
     for (const attr of classAttrs(element)) {
       const checksSpacing = (attr.name === 'className' && controlSpacing)
         || (rowSpacing && (attr.name === 'className' || attr.name === 'controlClassName'));
@@ -817,14 +1289,93 @@ function scanSourceDetailed(file: string, source: string): ScanDetail {
         );
       }
     }
+
+    // F: raw lowercase form elements bypass the shared control primitives.
+    if (RAW_FORM_TAGS.has(element.tag)) {
+      if (rawFormExempted(file, element) === null) {
+        report(
+          element.start,
+          'F',
+          `<${element.tag}> is a raw HTML form element (use the shared Input/Button/Select/Textarea primitives or a documented exemption)`,
+        );
+      }
+    }
+
+    // X: box/row chrome (border, rounded-*, bg-surface-*, oc-tile) outside a
+    // SettingsCard grid or a status callout, and p* padding on a row/control
+    // primitive whose own band owns the inset.
+    for (const attr of classAttrs(element)) {
+      const tokens = classTokens(attr.raw);
+      if (tokens.length === 0) continue;
+      const rowPrimitive = ROW_PADDING_TAGS.has(element.tag);
+      for (const token of tokens) {
+        const utility = baseUtility(token);
+        if (rowPrimitive && PADDING_TOKEN.test(utility)) {
+          report(
+            attr.start,
+            'X',
+            `<${element.tag}> ${attr.name} carries the padding utility "${token}" (row/control primitives own their inset)`,
+          );
+          continue;
+        }
+        // Only a container tag can wrap rows in a box; a leaf badge, input or
+        // pill keeps its own chrome.
+        if (!CHROME_CONTAINER_TAGS.has(element.tag)) continue;
+        if (!isContainerChromeToken(utility)) continue;
+        if (insideCardOrCallout(element)) continue;
+        if (isStatusCallout(tokens)) continue;
+        // The box is a violation only when it packages a flat settings row;
+        // a rich widget, tile, table or editor keeps its own chrome.
+        if (!wrapsRowPrimitive(element)) continue;
+        report(
+          attr.start,
+          'X',
+          `<${element.tag}> ${attr.name} carries the box chrome "${token}" outside a SettingsCard grid or status callout`,
+        );
+      }
+    }
+
+    // T: a field/checkbox row label must route through t(...); a bare
+    // identifier would render an untranslated string.
+    if (LABEL_INSPECTED_TAGS.has(element.tag)) {
+      const label = element.attrs.find((attr) => attr.name === 'label');
+      if (label !== undefined && !labelIsTranslated(label) && labelExempted(file) === null) {
+        report(
+          label.start,
+          'T',
+          `<${element.tag}> label is bound to a raw identifier (route it through t(...) or document the dynamic key)`,
+        );
+      }
+    }
+  }
+
+  // M: a manual Save/Apply button or a success toast reintroduces save chrome
+  // the autosave/showSaveStatus contract removed.
+  if (AUTOSAVE_SOURCE_MARKERS.some((marker) => source.includes(marker))) {
+    for (const element of parse.elements) {
+      if (element.tag === 'Button' || element.tag === 'button') {
+        const slice = source.slice(element.start, element.start + 400);
+        if (SAVE_ACTION_PATTERN.test(slice) && saveButtonExempted(file, element, source) === null) {
+          report(
+            element.start,
+            'M',
+            `<${element.tag}> renders a manual Save/Apply action on an autosave page`,
+          );
+        }
+      }
+    }
+    for (const match of source.matchAll(/toast\.success\s*\(/g)) {
+      if (toastExempted(file, source, match.index ?? 0) !== null) continue;
+      report(match.index, 'M', 'toast.success on an autosave page (saves are silent; only failures toast)');
+    }
   }
 
   return { violations, parse };
 }
 
-const EXCLUDED_SOURCES: Record<string, true> = {
-  'shared/SettingsSection.tsx': true,
-};
+const EXCLUDED_SOURCES = new Set([
+  'shared/SettingsSection.tsx',
+]);
 
 const sectionPath = (file: string): string => relative(SECTIONS_ROOT, file).split(sep).join('/');
 
@@ -837,7 +1388,7 @@ function walkSources(directory: string, files: string[] = []): string[] {
       continue;
     }
     if (!entry.name.endsWith('.tsx') || entry.name.endsWith('.test.tsx')) continue;
-    if (EXCLUDED_SOURCES[sectionPath(full)] === true) continue;
+    if (EXCLUDED_SOURCES.has(sectionPath(full))) continue;
     files.push(full);
   }
   return files;
@@ -883,10 +1434,10 @@ describe('settings layout guard', () => {
         <SettingsPageLayout title="OMP">
           <div className="space-y-6">
             <SettingsSection title="A">
-              <SettingsFieldRow label="Model">
+              <SettingsFieldRow label={t('settings.fixture.model')}>
                 <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
               </SettingsFieldRow>
-              <SettingsFieldRow label="Budget" controlClassName="max-w-md">
+              <SettingsFieldRow label={t('settings.fixture.budget')} controlClassName="max-w-md">
                 <Input className="h-7 w-44" />
                 <ModelSelector className="w-48" />
               </SettingsFieldRow>
@@ -910,16 +1461,16 @@ describe('settings layout guard', () => {
           <div className="space-y-0">
             <SettingsSection title="A">
               <div className={SETTINGS_SPACE_ROW_CLASS}>
-                <SettingsFieldRow label="Model">
+                <SettingsFieldRow label={t('settings.fixture.model')}>
                   <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}><SelectValue /></SelectTrigger>
                 </SettingsFieldRow>
-                <SettingsFieldRow label="Budget">
+                <SettingsFieldRow label={t('settings.fixture.budget')}>
                   <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
                     <NumberInput className={SETTINGS_WIDTH_NUMBER_CLASS} />
                     <span className={SETTINGS_NUMBER_UNIT_CLASS}>s</span>
                   </div>
                 </SettingsFieldRow>
-                <SettingsFieldRow label="Notes" controlClassName="w-full max-w-none">
+                <SettingsFieldRow label={t('settings.fixture.notes')} controlClassName="w-full max-w-none">
                   <Textarea className="min-w-0" />
                 </SettingsFieldRow>
               </div>
@@ -936,7 +1487,7 @@ describe('settings layout guard', () => {
       const page = (
         <SettingsPageLayout className="px-4 @xl:px-6" title="Git">
           <SettingsSection title="A">
-            <SettingsFieldRow label="Limit">
+            <SettingsFieldRow label={t('settings.fixture.limit')}>
               <NumberInput className={SETTINGS_WIDTH_NUMBER_CLASS} />
             </SettingsFieldRow>
             <div className="flex flex-col gap-2 md:flex-row">
@@ -956,12 +1507,12 @@ describe('settings layout guard', () => {
     const source = `
       <SettingsPageLayout title="A">
         <SettingsSection title="B" contentClassName="space-y-4">
-          <SettingsFieldRow label="C" className="mt-2" controlClassName="gap-3">
+          <SettingsFieldRow label={t('settings.fixture.c')} className="mt-2" controlClassName="gap-3">
             <Input className="mb-4 w-full" />
             <SelectTrigger className="space-x-2" />
           </SettingsFieldRow>
-          <SettingsStackedField label="D" controlClassName="mx-auto" />
-          <SettingsCheckboxRow label="E" className="my-3" />
+          <SettingsStackedField label={t('settings.fixture.d')} controlClassName="mx-auto" />
+          <SettingsCheckboxRow label={t('settings.fixture.e')} className="my-3" />
           <SettingsControlGroup title="F" contentClassName="space-y-6" />
           <div className="space-y-4 gap-2 mt-6">
             <Input className="m-0 p-0" />
@@ -1003,7 +1554,7 @@ describe('settings layout guard', () => {
     const nestedRow = `
       <Dialog open>
         <DialogContent className="sm:max-w-4xl">
-          <SettingsFieldRow label="Limit">
+          <SettingsFieldRow label={t('settings.fixture.limit')}>
             <Input className="h-7 md:max-w-sm" />
           </SettingsFieldRow>
         </DialogContent>
@@ -1020,7 +1571,7 @@ describe('settings layout guard', () => {
         headerAction={(<Input className="w-44" />)}
         headerEnd={<SelectTrigger className="max-w-[10rem]" />}
       >
-        <SettingsFieldRow label="B" />
+        <SettingsFieldRow label={t('settings.fixture.b')} />
       </SettingsSection>
     `;
     const violations = scanSource('fixture/HeaderAction.tsx', source);
@@ -1058,7 +1609,7 @@ describe('settings layout guard', () => {
       if (exceptionReason(file, 'W') !== null) continue;
       const source = readFileSync(fullPath, 'utf8');
       const { elements } = parseJsx(source);
-      const controls = elements.filter((element) => CONTROL_TAGS[element.tag] === true);
+      const controls = elements.filter((element) => CONTROL_TAGS.has(element.tag));
       if (controls.length === 0) continue;
       probed += 1;
 
@@ -1131,6 +1682,80 @@ describe('settings layout guard', () => {
       '<SortableTabsStrip className="flex-none max-w-full" />',
     );
     expect(intrinsicTabs).toEqual([]);
+  });
+
+  test('flags raw form elements, save chrome, untranslated labels and boxed row chrome (F/M/T/X)', () => {
+    // F: each raw form tag must trip unless a file documents an exemption.
+    const cases: ReadonlyArray<[string, string]> = [
+      ['input', '<input type="text" />'],
+      ['button', '<button type="button">x</button>'],
+      ['select', '<select>x</select>'],
+      ['textarea', '<textarea />'],
+      ['form', '<form onSubmit={f}>x</form>'],
+    ];
+    for (const [tag, source] of cases) {
+      const hits = scanSource('fixture/RawFormPage.tsx', source);
+      expect(hits.filter((violation) => violation.rule === 'F').length, `<${tag}>`).toBeGreaterThan(0);
+    }
+
+    // M: on an autosave page a manual Save/Apply button or a non-lifecycle
+    // toast.success reintroduces the save chrome the contract removed.
+    const autosave = `
+      const page = useAutosave();
+      const view = <Button onClick={actions.saveChanges}>{t('settings.common.actions.saveChanges')}</Button>;
+      toast.success(t('settings.fixture.toast.saved'));
+    `;
+    const manualHits = scanSource('fixture/AutosavePage.tsx', autosave);
+    expect(manualHits.filter((violation) => violation.rule === 'M').length).toBe(2);
+
+    // T: a SettingsFieldRow/SettingsCheckboxRow label bound to a bare
+    // identifier or a hardcoded literal is not routed through t(...).
+    const rows = `
+      const view = (
+        <div>
+          <SettingsFieldRow label="Model" />
+          <SettingsFieldRow label={field} />
+          <SettingsCheckboxRow label={item.label} />
+        </div>
+      );
+    `;
+    const labelHits = scanSource('fixture/LabelsPage.tsx', rows);
+    expect(labelHits.filter((violation) => violation.rule === 'T')).toHaveLength(3);
+
+    // X: box chrome on a container that wraps a row primitive is a boxed row.
+    const boxed = `
+      const view = (
+        <div className="rounded-lg border border-edge bg-surface-1">
+          <SettingsFieldRow label={t('settings.fixture.model')} />
+        </div>
+      );
+    `;
+    const chromeHits = scanSource('fixture/BoxedPage.tsx', boxed);
+    expect(chromeHits.some((violation) => violation.rule === 'X')).toBe(true);
+
+    // A row-level p-* utility on a row primitive is a layout override (X).
+    const padded = `<SettingsFieldRow label={t('settings.fixture.model')} className="p-4" />`;
+    expect(scanSource('fixture/PaddedPage.tsx', padded).some((violation) => violation.rule === 'X')).toBe(true);
+  });
+
+  test('sanctioned form widgets and lifecycle toasts pass rule F and M', () => {
+    // A hidden file picker and a range slider have no shared primitive.
+    expect(
+      scanSource('openchamber/ThemeImportButton.tsx', '<input type="file" className="hidden" />')
+        .filter((violation) => violation.rule === 'F'),
+    ).toEqual([]);
+    expect(
+      scanSource('openchamber/VoiceSettings.tsx', '<input type="range" />')
+        .filter((violation) => violation.rule === 'F'),
+    ).toEqual([]);
+    // A lifecycle toast in a documented file does not count as save chrome.
+    const lifecycle = `
+      const s = useAutosave();
+      toast.success(t('settings.plugins.marketplace.toast.installed', { name }));
+    `;
+    expect(
+      scanSource('plugins/PluginsPage.tsx', lifecycle).filter((violation) => violation.rule === 'M'),
+    ).toEqual([]);
   });
 
   test('the lexer reaches the end of every settings source file', () => {

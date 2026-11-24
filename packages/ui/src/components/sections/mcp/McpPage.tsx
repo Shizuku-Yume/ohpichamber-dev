@@ -417,7 +417,8 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
   );
 };
 
-const statusPillProps = (status: McpRuntimeStatus, enabled: boolean, t: (key: I18nKey) => string): { tone: SettingsCardTone; label: string } => {
+interface McpStatusPill { tone: SettingsCardTone; label: string }
+const statusPillProps = (status: McpRuntimeStatus, enabled: boolean, t: (key: I18nKey) => string): McpStatusPill => {
   if (!enabled) return { tone: 'neutral', label: t('settings.mcp.grid.status.disabled') };
   if (status === 'ready') return { tone: 'success', label: t('settings.mcp.page.status.label.connected') };
   if (status === 'unavailable') return { tone: 'error', label: t('settings.mcp.page.status.label.failed') };
@@ -1082,7 +1083,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         )}
 
         {created && draft.transport.type !== 'stdio' ? (
-          <SettingsSection title={t('settings.mcp.page.advanced.oauth')}>
+          <SettingsSection title={t('settings.mcp.page.advanced.oauth')} settingsItem="mcp.advanced">
             <McpOAuthSignIn
               serverId={initial.serverId}
               directory={directory}

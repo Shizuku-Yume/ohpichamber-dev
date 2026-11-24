@@ -11,7 +11,7 @@ import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
-import { SETTINGS_WIDTH_SHORT_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_WIDTH_SHORT_TEXT_CLASS, SettingsRadioGroup, SettingsRadioOption } from '@/components/sections/shared/SettingsSection';
 import {
   SETTINGS_CARD_GRID_CLASS,
   SettingsAddCard,
@@ -240,30 +240,18 @@ export const McpGrid: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{t('settings.mcp.dialog.add.title')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <label className="flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3 cursor-pointer hover:bg-[var(--surface-hover)]">
-              <input
-                type="radio"
-                name="mcp-add-scope"
-                value="project"
-                checked={addScope === 'project'}
-                onChange={() => setAddScope('project')}
-                className="size-4"
-              />
-              <span className="text-sm font-medium text-foreground">{t('settings.mcp.dialog.add.scope.project')}</span>
-            </label>
-            <label className="flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3 cursor-pointer hover:bg-[var(--surface-hover)]">
-              <input
-                type="radio"
-                name="mcp-add-scope"
-                value="user"
-                checked={addScope === 'user'}
-                onChange={() => setAddScope('user')}
-                className="size-4"
-              />
-              <span className="text-sm font-medium text-foreground">{t('settings.mcp.dialog.add.scope.user')}</span>
-            </label>
-          </div>
+          <SettingsRadioGroup aria-label={t('settings.mcp.dialog.add.title')} className="py-2">
+            <SettingsRadioOption
+              selected={addScope === 'project'}
+              onSelect={() => setAddScope('project')}
+              label={t('settings.mcp.dialog.add.scope.project')}
+            />
+            <SettingsRadioOption
+              selected={addScope === 'user'}
+              onSelect={() => setAddScope('user')}
+              label={t('settings.mcp.dialog.add.scope.user')}
+            />
+          </SettingsRadioGroup>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>
               {t('settings.common.actions.cancel')}

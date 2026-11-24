@@ -146,7 +146,7 @@ const ProviderCard: React.FC<{ provider: WebSearchProviderEntry; snapshot: WebSe
 
   const footer = provider.credentialConfigured
     ? t('settings.webSearch.keys.saved')
-    : !provider.requiresCredential
+    : provider.configured && !provider.requiresCredential
       ? t('settings.webSearch.card.keyOptional')
       : null;
 

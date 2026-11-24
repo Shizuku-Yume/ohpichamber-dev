@@ -24,12 +24,10 @@ const inputText = (input: JsonObject, ...keys: readonly string[]): string | null
 };
 
 const detailValue = (value: JsonValue | undefined, key: string): JsonValue | undefined =>
-    value && typeof value === 'object' && !Array.isArray(value) ? value[key] : undefined;
+    z.record(z.string(), z.json()).safeParse(value).data?.[key];
 
-const detailNumber = (value: JsonValue | undefined, key: string): number | null => {
-    const field = detailValue(value, key);
-    return typeof field === 'number' ? field : null;
-};
+const detailNumber = (value: JsonValue | undefined, key: string): number | null =>
+    z.number().safeParse(detailValue(value, key)).data ?? null;
 
 const detailText = (value: JsonValue | undefined, key: string): string | null => text(detailValue(value, key));
 
@@ -74,8 +72,9 @@ const diffStats = (diff: string): string | null => {
 const editCallDescription: ToolPresentation['describeCall'] = (input) => {
     const direct = inputText(input, 'path', 'file_path');
     if (direct) return direct;
-    if (typeof input.input !== 'string') return null;
-    const paths = parseEditInputPaths(input.input);
+    const program = z.string().safeParse(input.input).data;
+    if (program === undefined) return null;
+    const paths = parseEditInputPaths(program);
     if (paths.length === 0) return null;
     return paths.length === 1 ? text(paths[0]) : text(`${paths[0]} (+${paths.length - 1})`);
 };
@@ -84,7 +83,7 @@ const editSummary: ToolPresentation['describeResult'] = (result) =>
     diffStats(detailText(result, 'diff') ?? '') ?? detailText(result, 'message');
 
 const jsonSummary: ToolPresentation['describeResult'] = (result) => {
-    const root = result && typeof result === 'object' && !Array.isArray(result) ? result : null;
+    const root = z.record(z.string(), z.json()).safeParse(result).data;
     if (!root) return null;
     const keys = Object.keys(root);
     return keys.length > 0 ? `${keys.length} fields` : null;
@@ -106,13 +105,14 @@ const askSummary: ToolPresentation['describeResult'] = (result) => {
         const answered = answers.filter((item) => Boolean(item.answer?.trim())).length;
         return timedOut ? `timed out · ${answered}/${answers.length} answered` : `${answered}/${answers.length} answered`;
     }
-    const rawData = detailValue(result, 'data');
-    if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+    const rawData = z.record(z.string(), z.json()).safeParse(detailValue(result, 'data')).data;
+    if (rawData) {
         const entries = Object.entries(rawData);
         if (entries.length > 0) {
             const answered = entries.filter(([, value]) => {
                 if (value === null || value === undefined) return false;
-                if (typeof value === 'string') return value.trim().length > 0;
+                const stringValue = z.string().safeParse(value).data;
+                if (stringValue !== undefined) return stringValue.trim().length > 0;
                 if (Array.isArray(value)) return value.length > 0;
                 return true;
             }).length;
@@ -130,7 +130,7 @@ const askSummary: ToolPresentation['describeResult'] = (result) => {
         const answered = multi.filter((item) => (item.selectedOptions?.length ?? 0) > 0 || item.customInput || item.timedOut).length;
         return `${answered}/${multi.length} answered`;
     }
-    if (typeof detailValue(result, 'chatRedirect') === 'boolean' && detailValue(result, 'chatRedirect') === true) return 'sent to chat';
+    if (detailValue(result, 'chatRedirect') === true) return 'sent to chat';
     if (timedOut) return 'timed out';
     const selected = z.array(z.string()).safeParse(detailValue(result, 'selectedOptions')).data;
     return selected?.length ? text(selected.join(', ')) : detailText(result, 'customInput');
@@ -284,8 +284,11 @@ const bashSummary: ToolPresentation['describeResult'] = (result) => {
 const hostCall: ToolPresentation['describeCall'] = (input) => {
     const action = z.object({ action: z.string().optional(), input: z.record(z.string(), z.unknown()).optional() }).safeParse(input).data;
     if (!action?.action) return null;
-    const salient = action.input ? Object.values(action.input).find((item) => typeof item === 'string') : undefined;
-    return typeof salient === 'string' && salient.trim() ? `${action.action}: ${salient.trim().slice(0, 120)}` : action.action;
+    const salient = action.input ? Object.values(action.input).flatMap((item) => {
+        const stringItem = z.string().safeParse(item).data;
+        return stringItem === undefined ? [] : [stringItem];
+    })[0] : undefined;
+    return salient !== undefined && salient.trim() ? `${action.action}: ${salient.trim().slice(0, 120)}` : action.action;
 };
 
 const readPresentation: ToolPresentation = {

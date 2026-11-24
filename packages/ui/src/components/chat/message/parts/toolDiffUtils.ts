@@ -142,31 +142,50 @@ function parseDiffHunks(path: string, text: string): Omit<ToolDiff, 'path'> | un
 
 const AST_EDIT_CHANGE_LINE_RE = /^([+\- ])\s*(\d+)\s*(?:│|[:|])\s*(.*)$/;
 
+const astPerFileSchema = z.looseObject({
+    details: z.looseObject({
+        perFileResults: z.array(z.unknown()),
+    }),
+});
+const astPerFileItemSchema = z.looseObject({ path: z.string(), diff: z.string().optional() });
+const astDisplayContentSchema = z.looseObject({
+    details: z.looseObject({ displayContent: z.string() }),
+});
+const astContentBlocksSchema = z.looseObject({
+    content: z.array(z.looseObject({ type: z.string(), text: z.string().optional() })),
+});
+const astFileReplacementsSchema = z.looseObject({
+    details: z.looseObject({
+        fileReplacements: z.array(z.unknown()),
+    }),
+});
+const astReplacementItemSchema = z.looseObject({ path: z.string(), count: z.number().optional() });
+
 function parseAstEditOutput(output: unknown): ToolFileChange[] {
-    if (!output || typeof output !== 'object') return [];
-    if ('details' in output && output.details && typeof output.details === 'object') {
-        const details = output.details;
-        if ('perFileResults' in details && Array.isArray(details.perFileResults)) {
-            return details.perFileResults.flatMap((file: unknown): ToolFileChange[] => {
-                if (!file || typeof file !== 'object' || !('path' in file) || typeof file.path !== 'string') return [];
-                const diffText = 'diff' in file && typeof file.diff === 'string' ? file.diff : '';
-                const parsed = parseNativeDiff(file.path, diffText);
-                return [{
-                    path: normalizeWorkspaceToolPath(file.path),
-                    op: 'update',
-                    ...parsed,
-                }];
-            });
-        }
+    const perFile = astPerFileSchema.safeParse(output).data;
+    if (perFile) {
+        return perFile.details.perFileResults.flatMap((item): ToolFileChange[] => {
+            const file = astPerFileItemSchema.safeParse(item).data;
+            if (!file) return [];
+            const parsed = parseNativeDiff(file.path, file.diff ?? '');
+            return [{
+                path: normalizeWorkspaceToolPath(file.path),
+                op: 'update',
+                ...parsed,
+            }];
+        });
     }
     let text = '';
-    if ('details' in output && output.details && typeof output.details === 'object' && 'displayContent' in output.details && typeof output.details.displayContent === 'string') {
-        text = output.details.displayContent;
-    } else if ('content' in output && Array.isArray(output.content)) {
-        text = output.content
-            .filter((block: unknown) => Boolean(block && typeof block === 'object' && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string'))
-            .map((block: { text: string }) => block.text)
-            .join('\n');
+    const displayContent = astDisplayContentSchema.safeParse(output).data;
+    if (displayContent) {
+        text = displayContent.details.displayContent;
+    } else {
+        const blocks = astContentBlocksSchema.safeParse(output).data;
+        if (blocks) {
+            text = blocks.content
+                .flatMap((block) => (block.type === 'text' && block.text !== undefined ? [block.text] : []))
+                .join('\n');
+        }
     }
     if (text) {
         const files: ToolFileChange[] = [];
@@ -223,22 +242,19 @@ function parseAstEditOutput(output: unknown): ToolFileChange[] {
         flushCurrent();
         if (files.length > 0) return files;
     }
-    if ('details' in output && output.details && typeof output.details === 'object') {
-        const details = output.details;
-        if ('fileReplacements' in details && Array.isArray(details.fileReplacements)) {
-            return details.fileReplacements.flatMap((item: unknown): ToolFileChange[] => {
-                if (item && typeof item === 'object' && 'path' in item && typeof item.path === 'string') {
-                    const count = 'count' in item && typeof item.count === 'number' ? item.count : 0;
-                    return [{
-                        path: normalizeWorkspaceToolPath(item.path),
-                        op: 'update',
-                        additions: count,
-                        deletions: count,
-                    }];
-                }
-                return [];
-            });
-        }
+    const replacements = astFileReplacementsSchema.safeParse(output).data;
+    if (replacements) {
+        return replacements.details.fileReplacements.flatMap((raw): ToolFileChange[] => {
+            const item = astReplacementItemSchema.safeParse(raw).data;
+            if (!item) return [];
+            const count = item.count ?? 0;
+            return [{
+                path: normalizeWorkspaceToolPath(item.path),
+                op: 'update',
+                additions: count,
+                deletions: count,
+            }];
+        });
     }
     return [];
 }
@@ -323,8 +339,9 @@ export function getPrimaryToolPath(part: ToolPart, pairedCall?: ToolCallPart): s
     if ((isEditLikeTool(part.toolName) || isWriteTool(part.toolName)) && path && workspaceRelativePath(path) !== null)
         return normalizeWorkspaceToolPath(path);
     if (isEditLikeTool(part.toolName)) {
-        if (typeof part.input.input === 'string') {
-            for (const candidate of parseEditInputPaths(part.input.input)) {
+        const rawProgram = pathValueSchema.safeParse(part.input.input).data;
+        if (rawProgram !== undefined) {
+            for (const candidate of parseEditInputPaths(rawProgram)) {
                 if (workspaceRelativePath(candidate) !== null) return normalizeWorkspaceToolPath(candidate);
             }
         }
@@ -333,8 +350,7 @@ export function getPrimaryToolPath(part: ToolPart, pairedCall?: ToolCallPart): s
     }
     if (isAstEditTool(part.toolName)) {
         if (path && workspaceRelativePath(path) !== null) return normalizeWorkspaceToolPath(path);
-        const paths = Array.isArray(part.input.paths) && typeof part.input.paths[0] === 'string'
-            ? part.input.paths[0] : null;
+        const paths = Array.isArray(part.input.paths) ? pathValueSchema.safeParse(part.input.paths[0]).data ?? null : null;
         if (paths && workspaceRelativePath(paths) !== null) return normalizeWorkspaceToolPath(paths);
     }
     return null;

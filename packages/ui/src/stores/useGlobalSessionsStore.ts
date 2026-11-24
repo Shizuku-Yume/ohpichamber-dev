@@ -6,7 +6,6 @@ import { isSessionDiscoveryFailed, registerWorkspaceDirectory, resetWorkspaceDir
 import { normalizePath } from '@/lib/pathNormalization';
 import { raiseSessionOrderingBaselines } from '@/sync/session-ordering';
 import { mapWithConcurrency } from '@/lib/concurrency';
-import { omitKeys } from '@/lib/omitKeys';
 import {
   persistGlobalSessionSnapshot,
   persistManagedChatSessions,
@@ -285,18 +284,6 @@ const buildSessionsByDirectory = (sessions: Session[]): Map<string, Session[]> =
 };
 
 const getSessionSignature = (session: Session): string => JSON.stringify(session);
-
-const getSessionStructuralSignature = (session: Session): string => {
-  const structural = omitKeys(session, ['updatedAt']);
-  return JSON.stringify(structural);
-};
-
-export const isGlobalSessionDeferrableUpdate = (existing: Session, incoming: Session): boolean => {
-  const merged = mergeSessionDirectoryMetadata(incoming, existing);
-  return existing.updatedAt !== merged.updatedAt
-    && getSessionStructuralSignature(existing) === getSessionStructuralSignature(merged);
-};
-
 
 const readPersistedSessionSeed = (): Session[] => {
   const chats = readManagedChatSessions();

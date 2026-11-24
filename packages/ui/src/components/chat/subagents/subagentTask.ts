@@ -41,8 +41,10 @@ const matchesBatchItem = (
   items: readonly z.infer<typeof singleTaskSchema>[],
 ): boolean => {
   const candidates = [target.name, target.subagentId]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .map((value) => value.trim());
+    .flatMap((value) => {
+      const text = z.string().safeParse(value).data?.trim();
+      return text ? [text] : [];
+    });
   if (item.name) {
     if (candidates.includes(item.name)) return true;
     // OutputManager disambiguates colliding names with a numeric suffix (e.g. `Scout-2`).

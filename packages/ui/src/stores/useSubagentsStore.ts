@@ -86,7 +86,7 @@ const bumpMutationRevision = (parentSessionId: string): number => {
   return next;
 };
 
-const withoutParentKey = (record: Record<string, string>, parentSessionId: string): Record<string, string> => {
+const withoutParentKey = (record: Record<string, string>, parentSessionId: string) => {
   if (!(parentSessionId in record)) return record;
   const next = { ...record };
   delete next[parentSessionId];

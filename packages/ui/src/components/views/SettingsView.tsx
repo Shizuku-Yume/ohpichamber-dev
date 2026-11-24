@@ -430,6 +430,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return 'extensions.add';
     }
 
+    // The Claude integration has no dedicated card; its search result opens
+    // the extension catalog section that lists the bundled integrations.
+    if (result.id === 'integrations.third-party.opencode-claude') {
+      return 'integrations.extensions';
+    }
+
+
     const projectTab = projectSettingsTabForSearchTarget(result.id);
     if (projectTab) {
       useProjectSettingsTabStore.getState().setTab(projectTab);
@@ -1046,103 +1053,103 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   return (
     <SettingsAvailabilityProvider value={searchAvailabilityCtx}>
-    <div ref={containerRef} data-settings-view="true" className={cn('relative flex h-full min-h-0 flex-col overflow-hidden bg-background')}>
-      {isMobile ? (
-        <div
-          className={cn(
-            MOBILE_HEADER_CLASS,
-            mobileStage !== 'nav' && 'border-b border-edge',
-            'bg-background'
-          )}
-        >
-          {showBackButton ? (
-            <button
-              type="button"
-              onClick={handleBack}
-              aria-label={mobileBackButtonLabel}
-              className={MOBILE_HEADER_BUTTON_CLASS}
-            >
-              <Icon name="arrow-left" className="h-5 w-5" />
-            </button>
-          ) : null}
-
-          <div className={cn('flex min-w-0 flex-1 items-center gap-2 truncate px-1', MOBILE_HEADER_TITLE_CLASS)}>
-            <span className="truncate">
-              {mobileStage === 'nav'
-                ? t('settings.view.home.title')
-                : (activePageMeta ? getPageTitle(activePageMeta.slug) : t('settings.view.home.title'))}
-            </span>
-            {(mobileStage === 'nav' && hasNewSettings) && (
-              <SettingsBadge>{t('settings.view.badge.new')}</SettingsBadge>
+      <div ref={containerRef} data-settings-view="true" className={cn('relative flex h-full min-h-0 flex-col overflow-hidden bg-background')}>
+        {isMobile ? (
+          <div
+            className={cn(
+              MOBILE_HEADER_CLASS,
+              mobileStage !== 'nav' && 'border-b border-edge',
+              'bg-background'
             )}
-          </div>
-
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={t('settings.view.actions.closeSettings')}
-              title={closeSettingsTitle}
-              className={MOBILE_HEADER_BUTTON_CLASS}
-            >
-              <Icon name="close" className="h-5 w-5" />
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          {showBackButton && (
-            <div className={cn('absolute left-3 z-50', isWindowed ? 'top-2' : 'top-3')}>
+          >
+            {showBackButton ? (
               <button
                 type="button"
                 onClick={handleBack}
-                aria-label={t('settings.view.actions.back')}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={mobileBackButtonLabel}
+                className={MOBILE_HEADER_BUTTON_CLASS}
               >
-                <Icon name="arrow-left-s" className="h-5 w-5" />
+                <Icon name="arrow-left" className="h-5 w-5" />
               </button>
-            </div>
-          )}
+            ) : null}
 
-          {onClose && (
-            <div className={cn('absolute right-0.5 z-50', isWindowed ? 'top-0.5' : 'top-1')}>
+            <div className={cn('flex min-w-0 flex-1 items-center gap-2 truncate px-1', MOBILE_HEADER_TITLE_CLASS)}>
+              <span className="truncate">
+                {mobileStage === 'nav'
+                  ? t('settings.view.home.title')
+                  : (activePageMeta ? getPageTitle(activePageMeta.slug) : t('settings.view.home.title'))}
+              </span>
+              {(mobileStage === 'nav' && hasNewSettings) && (
+                <SettingsBadge>{t('settings.view.badge.new')}</SettingsBadge>
+              )}
+            </div>
+
+            {onClose && (
               <button
                 type="button"
                 onClick={onClose}
                 aria-label={t('settings.view.actions.closeSettings')}
                 title={closeSettingsTitle}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md p-0.5 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={MOBILE_HEADER_BUTTON_CLASS}
               >
                 <Icon name="close" className="h-5 w-5" />
               </button>
-            </div>
-          )}
-        </>
-      )}
-
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {isMobile ? (
-          renderMobileStage()
+            )}
+          </div>
         ) : (
           <>
-            <div
-              className="relative flex h-full min-h-0 w-36 min-w-36 flex-col overflow-hidden border-r bg-sidebar sm:w-64 sm:min-w-64"
-              style={{
-                borderColor: 'var(--interactive-border)',
-              }}
-            >
-              <ErrorBoundary>
-                {renderSettingsNav()}
-              </ErrorBoundary>
-            </div>
+            {showBackButton && (
+              <div className={cn('absolute left-3 z-50', isWindowed ? 'top-2' : 'top-3')}>
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  aria-label={t('settings.view.actions.back')}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Icon name="arrow-left-s" className="h-5 w-5" />
+                </button>
+              </div>
+            )}
 
-            <div className="flex-1 overflow-hidden bg-background">
-              {renderDesktopContent()}
-            </div>
+            {onClose && (
+              <div className={cn('absolute right-0.5 z-50', isWindowed ? 'top-0.5' : 'top-1')}>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label={t('settings.view.actions.closeSettings')}
+                  title={closeSettingsTitle}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md p-0.5 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Icon name="close" className="h-5 w-5" />
+                </button>
+              </div>
+            )}
           </>
         )}
+
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {isMobile ? (
+            renderMobileStage()
+          ) : (
+            <>
+              <div
+                className="relative flex h-full min-h-0 w-36 min-w-36 flex-col overflow-hidden border-r bg-sidebar sm:w-64 sm:min-w-64"
+                style={{
+                  borderColor: 'var(--interactive-border)',
+                }}
+              >
+                <ErrorBoundary>
+                  {renderSettingsNav()}
+                </ErrorBoundary>
+              </div>
+
+              <div className="flex-1 overflow-hidden bg-background">
+                {renderDesktopContent()}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
     </SettingsAvailabilityProvider>
   );
 };

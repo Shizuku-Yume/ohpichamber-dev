@@ -145,7 +145,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   ].filter(Boolean).length;
 
   return (
-    <div className="border-b border-border/50 last:border-b-0">
+    <div>
       <div className="flex items-center gap-1 py-1">
         <button
           type="button"

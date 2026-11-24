@@ -153,7 +153,7 @@ export const CommandsPage: React.FC = () => {
     onBlurCapture={autosave.onBlurCapture}>
     <fieldset className="min-w-0">
       <SettingsSection title={t('settings.commands.page.section.identity')} divider={false}>
-        {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')}>
+        {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')} controlClassName="flex-wrap">
           <div className="flex items-center">
             <span className="typography-ui-label text-muted-foreground mr-1">/</span>
             <Input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })}
@@ -184,7 +184,7 @@ export const CommandsPage: React.FC = () => {
             </SelectContent>
           </Select>
         </SettingsFieldRow>}
-        <SettingsStackedField className="py-1.5" label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
+        <SettingsStackedField label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
           <Textarea value={form.description} onChange={event => setForm({ ...form, description: event.target.value })}
             placeholder={t('settings.commands.page.field.descriptionPlaceholder')} rows={2}
             className="w-full resize-none min-h-[60px] bg-transparent" />
