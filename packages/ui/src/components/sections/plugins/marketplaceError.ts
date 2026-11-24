@@ -10,13 +10,13 @@ import type { I18nKey } from '@/lib/i18n';
 
 export type MarketplaceTranslateFn = (key: I18nKey, params?: Record<string, string | number>) => string;
 
-export interface ParsedMarketplaceProblem {
+interface ParsedMarketplaceProblem {
   code: MarketplaceErrorCode;
   details: MarketplaceErrorDetails | null;
   detail: string;
 }
 
-export function parseMarketplaceProblem(problem: ProblemDetails | null): ParsedMarketplaceProblem | null {
+function parseMarketplaceProblem(problem: ProblemDetails | null): ParsedMarketplaceProblem | null {
   if (!problem) return null;
   const code = MarketplaceErrorCodeSchema.safeParse(problem.code);
   if (!code.success) return null;
@@ -30,7 +30,7 @@ export function parseMarketplaceProblem(problem: ProblemDetails | null): ParsedM
   };
 }
 
-export function translateMarketplaceCode(
+function translateMarketplaceCode(
   code: MarketplaceErrorCode,
   target: string | undefined,
   t: MarketplaceTranslateFn,
