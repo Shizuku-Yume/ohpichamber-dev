@@ -47,20 +47,9 @@ const ANTIGRAVITY_MODEL_FAMILIES: ModelFamily[] = [
   },
 ];
 
-const OPENCODE_MODEL_FAMILIES: ModelFamily[] = [
-  {
-    id: 'opencode-models',
-    label: 'Zen',
-    labelKey: 'quota.family.zen',
-    matcher: () => true,
-    order: 1,
-  },
-];
-
 const PROVIDER_MODEL_FAMILIES: Partial<Record<QuotaProviderId, ModelFamily[]>> = {
   google: GOOGLE_MODEL_FAMILIES,
   antigravity: ANTIGRAVITY_MODEL_FAMILIES,
-  opencode: OPENCODE_MODEL_FAMILIES,
 };
 
 function getModelFamily(modelName: string, providerId: QuotaProviderId): ModelFamily | null {
@@ -110,7 +99,6 @@ export function getDefaultModels(
 ): string[] {
   return availableModels.filter((model) => {
     if (providerId === 'claude') return true;
-    if (providerId === 'opencode') return true;
     // A quota row may name its auth source as a `provider/model` prefix.
     const modelName = getDisplayModelName(model).toLowerCase();
     // Gemini 3.x, including the dotted (gemini-3.6-flash) and hyphenated

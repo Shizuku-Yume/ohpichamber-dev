@@ -107,11 +107,15 @@ describe('routing store', () => {
     expect(await store.readToken()).toBeNull();
   });
 
-  it('round-trips the classifier pick and reads a broken file as no pick', async () => {
+  it('round-trips the classifier pick, preserves retired picks for normalization, and reads a broken file as no pick', async () => {
     const dir = await tempDir();
     const store = createRoutingStore({ dataDir: dir });
     expect(await store.readClassifierSource()).toBeNull();
-    await store.writeClassifierSource('zen-key');
+    await store.writeClassifierSource('openrouter');
+    expect(await store.readClassifierSource()).toBe('openrouter');
+    await fs.writeFile(path.join(dir, 'classification.json'), '{"version":1,"source":"zen-promo"}');
+    expect(await store.readClassifierSource()).toBe('zen-promo');
+    await fs.writeFile(path.join(dir, 'classification.json'), '{"version":1,"source":"zen-key"}');
     expect(await store.readClassifierSource()).toBe('zen-key');
     await fs.writeFile(path.join(dir, 'classification.json'), '{"version":1,"source":"cloudflare"}');
     expect(await store.readClassifierSource()).toBeNull();

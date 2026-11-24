@@ -44,7 +44,7 @@ beforeEach(() => {
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
-    const directory = request.headers.get('x-opencode-directory');
+    const directory = request.headers.get('x-openchamber-directory');
     seen.push({ method: request.method, path: url.pathname, directory: directory === null ? null : decodeURIComponent(directory) });
     return answer(request);
   };

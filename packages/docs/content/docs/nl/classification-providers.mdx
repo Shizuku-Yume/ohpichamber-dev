@@ -22,22 +22,7 @@ Zonder provider zijn het vangnet en Auto verborgen. Sessies in uitvoering krijge
 
 ## Instellen
 
-Jev staat uit totdat u het inschakelt. Er gaat niets uit uw gesprekken naar een classificatieprovider voordat u er een kiest. Open **Instellingen → Providers → Classificatieproviders** en kies waar Jev-verzoeken naartoe gaan. Naast **Uit** zijn er zeven opties.
-
-### OpenCode Zen-actie
-
-Tijdelijk gratis, zonder sleutel. Tijdens de actie laat OpenCode Zen OhPiChamber kosteloos gebruikmaken van Jev.
-
-Als de actie eindigt, verdwijnt deze optie en schakelt OhPiChamber over op een van de onderstaande sleutels, als u die hebt.
-
-### OpenCode Zen-sleutel
-
-Deze optie gebruikt de voor OpenCode Zen opgeslagen API-sleutel. De kosten worden van uw Zen-saldo afgeschreven. Jev-classificatie vereist opgeslagen toegangsgegevens in plaats van een omgevingsvariabele.
-
-1. Open **Instellingen → Providers** en voeg een API-sleutel toe aan **OpenCode Zen**. Zie [Providers, modellen en agents](/nl/providers/).
-2. Ga terug naar **Classificatieproviders** en kies **OpenCode Zen-sleutel**.
-
-Voor Jev accepteert Zen alleen een API-sleutel.
+Jev staat uit totdat u het inschakelt. Er gaat niets uit uw gesprekken naar een classificatieprovider voordat u er een kiest. Open **Instellingen → Providers → Classificatieproviders** en kies waar Jev-verzoeken naartoe gaan. Naast **Uit** zijn er vijf opties.
 
 ### OpenRouter-sleutel
 
@@ -101,7 +86,7 @@ De kaart bij **Instellingen → Providers** toont **Gereed** zodra een provider 
 
 ## Als uw keuze niet meer werkt
 
-Kan de gekozen provider niet worden gebruikt, bijvoorbeeld omdat de actie is afgelopen of een sleutel is verwijderd, dan kiest OhPiChamber de eerste bruikbare eigen optie in deze volgorde: TypeSafe-sleutel, uw aangepaste adres, OpenRouter, Vercel AI Gateway en Zen-sleutel. Het valt nooit terug op de actie of op Google Gemini, en **Uit** blijft uit. De pagina laat zien welke provider momenteel wordt gebruikt.
+Kan de gekozen provider niet worden gebruikt, bijvoorbeeld omdat een sleutel is verwijderd, dan kiest OhPiChamber de eerste bruikbare eigen optie in deze volgorde: TypeSafe-sleutel, uw aangepaste adres, OpenRouter en Vercel AI Gateway. Het valt nooit terug op Google Gemini, en **Uit** blijft uit. De pagina laat zien welke provider momenteel wordt gebruikt.
 
 Als Jev bij één verzoek traag is of faalt, blijft de app werken. Elke functie heeft daarvoor een veilige terugval:
 
@@ -114,7 +99,7 @@ Als Jev bij één verzoek traag is of faalt, blijft de app werken. Elke functie 
 
 Jev ontvangt uw laatste bericht en, ter context, fragmenten uit het recente gesprek: maximaal drie eerdere beurten, elk ingekort tot een paar honderd tekens, en aan het einde van een beurt het begin en het einde van het antwoord van de agent. Voor het vangnet ontvangt het ook de actie waarvoor de agent toestemming vraagt, zoals OMP die beschrijft: de opdracht die de agent wil uitvoeren, of het bestand en de wijziging bij een bewerking. Maakt de agent een bestand aan, dan is die wijziging het volledige bestand, ook een afbeelding die als tekst is geschreven, zoals SVG. Controleert Jev een doel, dan ontvangt het het doel en het laatste antwoord van de agent, tot 10.000 tekens daarvan.
 
-Verzoeken gaan rechtstreeks van de OhPiChamber-server naar OpenCode Zen, OpenRouter, Vercel AI Gateway, Google, TypeSafe of uw aangepaste adres, afhankelijk van uw keuze.
+Verzoeken gaan rechtstreeks van de OhPiChamber-server naar OpenRouter, Vercel AI Gateway, Google, TypeSafe of uw aangepaste adres, afhankelijk van uw keuze.
 
 ## Waar werkt het?
 
@@ -122,5 +107,5 @@ Jev draait op de OhPiChamber-server. Het werkt dus in de desktopapp, de webapp e
 
 ## Zie ook
 
-- [Providers, modellen en agents](/nl/providers/) voor de sleutels van OpenCode Zen, OpenRouter en Vercel AI Gateway
+- [Providers, modellen en agents](/nl/providers/) voor de sleutels van OpenRouter en Vercel AI Gateway
 - [Beveiliging](/nl/security/) voor de omgang met sleutels en toegang

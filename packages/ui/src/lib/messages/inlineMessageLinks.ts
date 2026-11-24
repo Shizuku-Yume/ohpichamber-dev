@@ -24,11 +24,6 @@ export type AttachmentCitationLink = {
     openable?: boolean;
 };
 
-export const buildAgentMentionUrl = (name: string): string => {
-    const encoded = encodeURIComponent(name);
-    return `https://opencode.ai/docs/agents/#${encoded}`;
-};
-
 export const buildSkillHref = (name: string): string => `${SKILL_LINK_PREFIX}${encodeURIComponent(name)}`;
 
 export const buildAgentHref = (name: string): string => `${AGENT_LINK_PREFIX}${encodeURIComponent(name)}`;

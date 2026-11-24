@@ -43,7 +43,7 @@ Live quota fetches resolve provider credentials dynamically from the selected wo
    - `minimax-code-cn` -> `minimax-cn-coding-plan`
    - `wafer-serverless` -> `wafer`
    - `xai-oauth` (method `oauth`) -> `xai`
-   - Native providers without an explicit alias mapping retain their native `providerId` (for example, `cline-pass`, `cursor`, `deepinfra`, `deepseek`, `openrouter`, `opencode-go`, `neuralwatt`, `kilo`, `zenmux`).
+   - Native providers without an explicit alias mapping retain their native `providerId` (for example, `cline-pass`, `cursor`, `deepinfra`, `deepseek`, `openrouter`, `neuralwatt`, `kilo`, `zenmux`).
    Selections are filtered against `listConfiguredQuotaProviders` in `providers/index.js` to ensure the registry supports each logical quota provider ID.
 3. **Secret resolution:**
    `fetchQuotaForProvider` invokes `requireSelectedCredential({ ...selection, purpose: 'quota', resolveCredential })` in `providers/selected-credential.js`. Host `resolveCredential` calls the Agent Service internal endpoint `POST /internal/workspaces/:workspaceId/credentials/resolve`. A missing selected record (`CREDENTIAL_UNAVAILABLE`) becomes an unconfigured result; every other resolution failure keeps the provider configured and returns a sanitized error.
@@ -80,7 +80,6 @@ These provider IDs are registered in `packages/web/server/lib/quota/providers/in
 | `minimax-cn-coding-plan` | MiniMax Coding Plan (minimaxi.com) | `providers/minimax-cn-coding-plan.js` / `providers/minimax-shared.js` | Native provider `minimax-code-cn`, API key via Agent Service `AuthStorage`. |
 | `ollama-cloud` | Ollama Cloud | `providers/ollama-cloud.js` | Unsupported for selected credential quota (`isConfigured: () => false`). |
 | `wafer` | Wafer.ai | `providers/wafer.js` | Native provider `wafer-serverless`, API key via Agent Service `AuthStorage`. |
-| `opencode-go` | OpenCode Go | `providers/opencode-go.js` | Selected API key via Agent Service `AuthStorage` for external OpenCode Go subscription API. Native OAuth is unsupported. |
 | `neuralwatt` | NeuralWatt | `providers/neuralwatt.js` | Selected API key via Agent Service `AuthStorage`. |
 | `kilo` | Kilo Code | `providers/kilo.js` | Selected API key via Agent Service `AuthStorage`. |
 | `zenmux` | ZenMux | `providers/zenmux.js` | Selected API key via Agent Service `AuthStorage`. |
@@ -118,11 +117,6 @@ Reports subscription limits from Anthropic's OAuth usage API:
 - **Authentication:** Selected native `anthropic` OAuth credential from Agent Service `AuthStorage`. Checks `selectedCredential.expires` before sending requests.
 - **Rate limiting:** Anthropic rate limits aggressively. Successful usage payloads are cached in memory and served during 429 cooldowns (`Retry-After` header or 5 minutes up to 1 hour). The cache is keyed by sha256 fingerprint of access and refresh tokens.
 - **Refresh ownership:** OpenChamber does not initiate OAuth refresh or rotate tokens directly; token refresh is owned by Agent Service `AuthStorage`.
-
-### OpenCode Go
-OpenCode Go is an external subscription service (`https://opencode.ai/zen/go/v1/usage`), distinct from the retired OpenCode engine:
-- **Authentication:** Requires an API key bearer token with header `x-opencode-session: openchamber-usage`. Native OAuth credentials are explicitly rejected.
-- **Meters:** Parses `payload.usage` into rolling `5h`, `weekly`, and `monthly` windows based on percent and reset timestamp fields.
 
 ### xAI
 Reports SuperGrok billing configuration:

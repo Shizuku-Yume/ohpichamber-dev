@@ -20,7 +20,6 @@ interface PopularProvider {
  */
 const POPULAR_PROVIDERS: readonly PopularProvider[] = [
   { id: 'openai', noteKey: 'settings.providers.connect.note.openai', recommended: true },
-  { id: 'opencode-go', noteKey: 'settings.providers.connect.note.opencodeGo', recommended: true },
   { id: 'openrouter', noteKey: 'settings.providers.connect.note.openrouter', recommended: true },
   { id: 'anthropic', noteKey: 'settings.providers.connect.note.anthropic', recommended: false },
   { id: 'github-copilot', noteKey: 'settings.providers.connect.note.githubCopilot', recommended: false },

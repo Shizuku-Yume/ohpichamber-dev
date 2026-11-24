@@ -134,8 +134,10 @@ export const OmpRowControl: React.FC<{
   setting: OmpSetting;
   value: OmpSettingValue;
   disabled?: boolean;
+  description?: React.ReactNode;
+  info?: React.ReactNode;
   onChange: (value: OmpSettingValue) => void;
-}> = ({ setting, value, disabled, onChange }) => {
+}> = ({ setting, value, disabled, description: descriptionProp, info: infoProp, onChange }) => {
   const { t } = useI18n();
   // SAFETY: `settings.omp.items.<id>.label` keys are generated for every
   // exposed row id, and `settings-ui.test.ts` fails when one is missing; the
@@ -150,7 +152,8 @@ export const OmpRowControl: React.FC<{
   // and belongs to the same generated row entry, so it is a locale key exactly
   // when the label one is.
   const descriptionKey = `settings.omp.items.${setting.id}.description` as I18nKey;
-  const description = t(descriptionKey) === descriptionKey ? setting.description : t(descriptionKey);
+  const settingInfo = t(descriptionKey) === descriptionKey ? setting.description : t(descriptionKey);
+  const info = infoProp ?? settingInfo;
   const anchor = `omp.${setting.id}`;
 
   if (setting.type === 'boolean') {
@@ -161,7 +164,8 @@ export const OmpRowControl: React.FC<{
         onChange={onChange}
         disabled={disabled}
         label={label}
-        info={description}
+        description={descriptionProp}
+        info={info}
         ariaLabel={label}
       />
     );
@@ -188,8 +192,8 @@ export const OmpRowControl: React.FC<{
       return (
         <SettingsFieldRow
           label={label}
-          description={selectedChoice?.description}
-          info={description}
+          description={descriptionProp ?? selectedChoice?.description}
+          info={info}
           settingsItem={anchor}
         >
           <OmpOptionSelect
@@ -219,7 +223,7 @@ export const OmpRowControl: React.FC<{
     const stored = storedNumber(value);
     const stepperValue = stored !== undefined && stored !== -1 ? stored : undefined;
     return (
-      <SettingsFieldRow label={label} info={description} settingsItem={anchor}>
+      <SettingsFieldRow label={label} description={descriptionProp} info={info} settingsItem={anchor}>
         <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
           {/* The chip goes first so the stepper is the trailing element: the
               control column packs to the row's inline end, so the stepper ends
@@ -242,7 +246,7 @@ export const OmpRowControl: React.FC<{
 
   if (setting.type === 'string') {
     return (
-      <SettingsFieldRow label={label} info={description} settingsItem={anchor}>
+      <SettingsFieldRow label={label} description={descriptionProp} info={info} settingsItem={anchor}>
         <Input
           value={value === null || value === undefined ? '' : String(value)}
           onChange={(e) => onChange(e.target.value)}
@@ -260,7 +264,7 @@ export const OmpRowControl: React.FC<{
   const explained = choices.some((choice) => choice.description !== undefined);
   if (choices.length <= 3 && !explained) {
     return (
-      <SettingsFieldRow label={label} info={description} settingsItem={anchor}>
+      <SettingsFieldRow label={label} description={descriptionProp} info={info} settingsItem={anchor}>
         <SettingsChipGroup
           value={current}
           aria-label={label}
@@ -276,8 +280,8 @@ export const OmpRowControl: React.FC<{
   return (
     <SettingsFieldRow
       label={label}
-      description={selectedChoice?.description}
-      info={description}
+      description={descriptionProp ?? selectedChoice?.description}
+      info={info}
       settingsItem={anchor}
     >
       <OmpOptionSelect

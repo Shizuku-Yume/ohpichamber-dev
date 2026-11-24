@@ -15,7 +15,7 @@ import { SessionMentionChipsContext } from '../message/parts/sessionMentionChips
 import { SessionMentionChipButton } from '../message/parts/SessionMentionChipButton';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
-import { parseAgentHref, parseAttachmentHref, parseSkillHref, INLINE_REFERENCE_CHIP_CLASS, INTERACTIVE_REFERENCE_CHIP_CLASS, REFERENCE_CHIP_LABEL_CLASS, buildAgentMentionUrl } from '@/lib/messages/inlineMessageLinks';
+import { parseAgentHref, parseAttachmentHref, parseSkillHref, INLINE_REFERENCE_CHIP_CLASS, INTERACTIVE_REFERENCE_CHIP_CLASS, REFERENCE_CHIP_LABEL_CLASS } from '@/lib/messages/inlineMessageLinks';
 import { openAppLinkWithConfirmation } from '../appLinkConfirmation';
 import { useMarkdownPresentation, type FileReferenceSource } from './MarkdownPresentationContext';
 import { activateMarkdownFile, resolveMarkdownFile, useOpenMarkdownFile, useOpenTappedMarkdownFile } from './markdownFileReferences';
@@ -256,9 +256,9 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
   }
   if (agent) {
     return (
-      <a data-openchamber-agent-mention="true" className="text-primary hover:underline" href={buildAgentMentionUrl(agent)} target="_blank" rel="noopener noreferrer">
+      <span data-openchamber-agent-mention="true" className="text-primary">
         {children}
-      </a>
+      </span>
     );
   }
   return (

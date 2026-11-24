@@ -29,14 +29,18 @@ const createApp = async ({ enterprise = false, credentials = {} } = {}) => {
     readPinnedEndpoint: () => null,
     resolveSessionScope: async (sessionId) => sessionId === 's1' ? SCOPE : null,
     resolveWorkspaceScope: async (workspaceId) => workspaceId === SCOPE.workspaceId ? SCOPE : null,
-    service: { request: async (resource) => {
-      if (resource !== `/api/agent/v1/workspaces/${SCOPE.workspaceId}/providers`) throw new Error(`Unexpected native request: ${resource}`);
-      if (state.providerError) return Response.json({ detail: state.providerError.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
-      return Response.json({ workspaceId: SCOPE.workspaceId, revision: '1', providers: Object.keys(state.credentials).map((providerId) => ({
-        providerId, name: providerId, endpoint: null, protocol: null, authMethods: ['api-key'],
-        auth: { status: 'configured', method: 'api-key', source: 'stored-credential', credentialRef: `cred_${providerId}` },
-      })) });
-    } },
+    service: {
+      request: async (resource) => {
+        if (resource !== `/api/agent/v1/workspaces/${SCOPE.workspaceId}/providers`) throw new Error(`Unexpected native request: ${resource}`);
+        if (state.providerError) return Response.json({ detail: state.providerError.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
+        return Response.json({
+          workspaceId: SCOPE.workspaceId, revision: '1', providers: Object.keys(state.credentials).map((providerId) => ({
+            providerId, name: providerId, endpoint: null, protocol: null, authMethods: ['api-key'],
+            auth: { status: 'configured', method: 'api-key', source: 'stored-credential', credentialRef: `cred_${providerId}` },
+          }))
+        });
+      }
+    },
     resolveCredential: async (selection) => {
       resolved.push(selection);
       if (state.credentialError) throw state.credentialError;
@@ -49,10 +53,11 @@ const createApp = async ({ enterprise = false, credentials = {} } = {}) => {
   });
   const app = express();
   registerRoutingRoutes(app, runtime);
-  return { app, runtime, state, store, resolved, sent };
+  return { app, runtime, state, store, dataDir, resolved, sent };
 };
 
-const config = () => ({ ...resolveEffectiveConfig(null), enabled: true,
+const config = () => ({
+  ...resolveEffectiveConfig(null), enabled: true,
   fallback: { model: { providerID: 'anthropic', modelID: 'claude-sonnet-5' }, variant: 'medium' },
 });
 
@@ -100,9 +105,11 @@ describe('canonical routing settings HTTP boundary', () => {
   });
 
   it('describes workspace catalog presence without reading secrets and probes only the selected provider', async () => {
-    const { app, resolved, sent } = await createApp({ credentials: {
-      openrouter: { type: 'api_key', key: 'selected-secret' }, 'vercel-ai-gateway': { type: 'api_key', key: 'other-secret' },
-    } });
+    const { app, resolved, sent } = await createApp({
+      credentials: {
+        openrouter: { type: 'api_key', key: 'selected-secret' }, 'vercel-ai-gateway': { type: 'api_key', key: 'other-secret' },
+      }
+    });
     await request(app).put('/api/routing/classifier').send({ source: 'openrouter' }).expect(200);
     const read = await request(app).get(`/api/routing?workspaceId=${SCOPE.workspaceId}`).expect(200);
     expect(read.body.classification.effective).toBe('openrouter');
@@ -139,5 +146,19 @@ describe('canonical routing settings HTTP boundary', () => {
     expect(await store.readClassifierSource()).toBe('typesafe');
     expect(resolved).toEqual([]);
     expect(sent).toEqual([]);
+  });
+
+  it('normalizes legacy zen-promo and zen-key on-disk selections on GET /api/routing without throwing', async () => {
+    for (const retired of ['zen-promo', 'zen-key']) {
+      const { app, dataDir } = await createApp();
+      await fs.writeFile(path.join(dataDir, 'classification.json'), JSON.stringify({ version: 1, source: retired }));
+      const withoutKeys = await request(app).get('/api/routing').expect(200);
+      expect(withoutKeys.body.classification).toMatchObject({ selected: 'off', effective: null });
+      const withOpenRouter = await createApp({ credentials: { openrouter: { type: 'api_key', key: 'or-secret' } } });
+      await fs.writeFile(path.join(withOpenRouter.dataDir, 'classification.json'), JSON.stringify({ version: 1, source: retired }));
+      const normalized = await request(withOpenRouter.app).get(`/api/routing?workspaceId=${SCOPE.workspaceId}`).expect(200);
+      expect(normalized.body.classification).toMatchObject({ selected: 'openrouter', effective: 'openrouter' });
+      expect(normalized.body.classification.sources.map((s) => s.id)).not.toContain(retired);
+    }
   });
 });

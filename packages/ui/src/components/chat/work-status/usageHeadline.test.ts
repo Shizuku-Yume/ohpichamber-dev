@@ -51,10 +51,8 @@ beforeEach(() => {
 
 describe('resolveQuotaProviderId', () => {
   test('passes through ids that already match a quota provider', () => {
-    expect(resolveQuotaProviderId('opencode-go')).toBe('opencode-go');
-    // The OpenCode Console workspace serves its models under `opencode`, and
-    // the Zen quota card carries that id.
-    expect(resolveQuotaProviderId('opencode')).toBe('opencode');
+    expect(resolveQuotaProviderId('deepseek')).toBe('deepseek');
+    expect(resolveQuotaProviderId('openrouter')).toBe('openrouter');
   });
 
   test('maps the known divergences', () => {
@@ -79,7 +77,7 @@ describe('resolveQuotaProviderId', () => {
 describe('pickUsageHeadline', () => {
   const groups = [
     group('codex', [{ key: 'w', label: 'Weekly Limit', seconds: 7 * 24 * HOUR }]),
-    group('opencode-go', [
+    group('zai-coding-plan', [
       { key: 'm', label: 'Monthly Limit', seconds: 30 * 24 * HOUR },
       { key: 'h', label: '5-Hour', seconds: 5 * HOUR },
       { key: 'w', label: 'Weekly Limit', seconds: 7 * 24 * HOUR },
@@ -88,7 +86,7 @@ describe('pickUsageHeadline', () => {
 
   test('picks the shortest window of the matching provider', () => {
     // The tightest bucket is the one that decides whether the next turn lands.
-    expect(pickUsageHeadline(groups, 'opencode-go')?.row.label).toBe('5-Hour');
+    expect(pickUsageHeadline(groups, 'zai-coding-plan')?.row.label).toBe('5-Hour');
   });
 
   test('resolves the provider through the alias table', () => {

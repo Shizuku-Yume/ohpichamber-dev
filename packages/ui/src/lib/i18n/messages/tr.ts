@@ -26,7 +26,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -91,9 +90,9 @@ export const dict = {
   "chat.fileAttachment.actions.removeImage": "Görseli kaldır",
   "chat.fileAttachment.actions.removeNamed": "{name} öğesini kaldır",
   "chat.fileAttachment.toast.attachFailed": "Dosya eklenemedi. Tekrar deneyin.",
-  'quota.family.zen': 'Zen Modelleri',
   'quota.value.requests': 'İstekler: {count}',
   'quota.value.spent': '{spent} harcandı',
+  'quota.value.spentOf': '{spent} / {limit}',
   'quota.value.unknown': 'Bilinmiyor',
   'quota.window.monthlyTotal': 'Aylık toplam',
   'quota.window.monthlyByok': 'Aylık BYOK',
@@ -162,7 +161,6 @@ export const dict = {
   ...connectionHeartbeatI18n.tr,
   ...compactionSettingsI18n.tr,
   ...heapSnapshotI18n.tr,
-  ...consoleBudgetsI18n.tr,
   ...imageToolI18n.tr,
   ...sharePagesI18n.tr,
   ...receivedPagesI18n.tr,
@@ -4001,13 +3999,6 @@ export const dict = {
   "settings.themeImport.error.conflict": "Bu içe aktarılan tema sunucuda düzenlendi. Üzerine yazılmadı.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "Kaydırma çubuklarını her zaman göster",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "İşaretçi kaydırılabilir alanın dışındayken bile kaydırma çubuklarını görünür tutar. Yalnızca bu cihazda geçerlidir.",
-  "settings.providers.page.openCodeGo.workspaceId": "Çalışma alanı ID'si",
-  "settings.providers.page.openCodeGo.apiKey": "API anahtarı",
-  "settings.providers.page.openCodeGo.help": "Çalışma alanı ID'sini kontrol paneli URL'sinden, kimlik doğrulama çerezini de tarayıcınızın geliştirici araçlarından kopyalayın. OhPiChamber tarayıcı çerez deposunu asla taramaz.",
-  "settings.providers.page.openCodeGo.save": "Kaydet ve doğrula",
-  "settings.providers.page.openCodeGo.replace": "Değiştir",
-  "settings.providers.page.openCodeGo.validate": "Doğrula",
-  "settings.providers.page.openCodeGo.delete": "Sil",
   "settings.providers.page.quotaCredentials.saved": "{provider} kimlik bilgileri kaydedildi.",
   "settings.providers.page.quotaCredentials.accessToken": "Erişim token'ı",
   "settings.providers.page.quotaCredentials.usageToken": "Kullanım API token'ı",
@@ -5482,7 +5473,6 @@ export const dict = {
   "settings.providers.connect.recommended": "Önerilen",
   "settings.providers.connect.customHint": "OpenAI veya Anthropic uyumlu herhangi bir uç nokta",
   "settings.providers.connect.note.openai": "GPT modelleri, ChatGPT ile giriş",
-  "settings.providers.connect.note.opencodeGo": "Uygun fiyatlı abonelik",
   "settings.providers.connect.note.openrouter": "Tek anahtarla tüm modeller",
   "settings.providers.connect.note.anthropic": "API anahtarıyla Claude modelleri",
   "settings.providers.connect.note.githubCopilot": "Copilot planınızdaki modeller",
@@ -6645,7 +6635,6 @@ export const dict = {
   "settings.extensions.add.placeholder": "/yol/panel veya https://github.com/org/panel.git",
   "settings.extensions.add.action": "Ekle",
   "settings.extensions.add.aria": "Klasör, ZIP veya URL’den uzantı ekle",
-  "settings.extensions.browse.label": "Uzantılara göz at",
   "settings.extensions.add.browseFolder": "Klasöre göz at",
   "settings.extensions.add.browseFolder.aria": "Klasöre göz at",
   "settings.extensions.add.browseZip": "ZIP arşivine göz at",
@@ -7111,12 +7100,6 @@ export const dict = {
   "settings.classification.status.fallback": "Seçiminiz şu anda kullanılamıyor, bu yüzden Jev {provider} üzerinden çalışıyor.",
   "settings.classification.source.off.name": "Kapalı",
   "settings.classification.source.off.description": "Hiçbir yere bir şey gönderilmez. Güvenlik ağı ve Auto gizlenir, oturumlar yalnızca siz taşıdığınızda çalışmaya geçer.",
-  "settings.classification.source.zenPromo.name": "OpenCode Zen kampanyası",
-  "settings.classification.source.zenPromo.description": "Sınırlı bir süre ücretsiz, anahtar gerekmez. Kampanya bitince bir anahtara geçin.",
-  "settings.classification.source.zenPromo.ended": "Kampanya sona erdi.",
-  "settings.classification.source.zenKey.name": "OpenCode Zen anahtarı",
-  "settings.classification.source.zenKey.description": "OpenCode Zen için yapılandırılmış API anahtarını kullanır. Zen bakiyenizden düşülür.",
-  "settings.classification.source.zenKey.missing": "OpenCode Zen için kullanılabilir API anahtarı yok. OpenCode hesabıyla oturum açmak sayılmaz; Ayarlar → Provider'lar bölümünden bir API anahtarı ekleyin.",
   "settings.classification.source.openrouter.name": "OpenRouter anahtarı",
   "settings.classification.source.openrouter.description": "Provider'lar bölümünde yapılandırılmış bir OpenRouter API anahtarını kullanır. OpenRouter hesabınıza faturalanır.",
   "settings.classification.source.openrouter.missing": "Kullanılabilir OpenRouter API anahtarı yok. Ayarlar → Provider'lar bölümünden bir tane ekleyin.",
@@ -7159,7 +7142,7 @@ export const dict = {
   "settings.sessions.permissions.explain.safetyVia": "Rutin eylemler kendiliğinden çalışır; riskli veya geri alınması zor olan her şey sizi bekler. {provider} üzerinden Jev karar verir.",
   "settings.sessions.permissions.explain.auto": "Her onay isteği sormadan kabul edilir.",
   "settings.sessions.permissions.agentPermissionsLink": "Ajan izinleri",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Jev gerekir; Jev de bir sınıflandırma sağlayıcısına ihtiyaç duyar: ücretsiz OpenCode Zen kampanyası, Ayarlar → Sağlayıcılar bölümünde bir Zen API anahtarı veya bir TypeSafe anahtarı.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Jev gerekir; Jev de bir sınıflandırma sağlayıcısına ihtiyaç duyar: bir OpenRouter, Vercel, Gemini ya da TypeSafe anahtarı veya özel bir uç nokta.",
   "chat.workStatus.sections.extensionBadge": "Uzantı",
   "chat.chatInput.toast.guestHasNoPanel": "Bu uzantı panel olmadan çalışır.",
   "header.mainSurface.backToChat": "Sohbete dön",

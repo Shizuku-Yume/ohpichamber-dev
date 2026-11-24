@@ -41,12 +41,12 @@ export const buildUsageProviderRows = ({ configProviders, statsProviders, result
 };
 
 /**
- * A sample has something to show: provider windows, model windows or console
- * budgets. Model-only plans, such as Antigravity, report no provider windows.
+ * A sample has something to show: provider windows or model windows.
+ * Model-only plans, such as Antigravity, report no provider windows.
  */
 export const hasQuotaData = (usage: ProviderResult['usage'] | undefined): boolean => {
   if (!usage) return false;
-  if (Object.keys(usage.windows).length > 0 || usage.consoleBudgets) return true;
+  if (Object.keys(usage.windows).length > 0) return true;
   return Object.values(usage.models ?? {}).some((model) => Object.keys(model.windows).length > 0);
 };
 

@@ -19,7 +19,7 @@ function credentialFailure(code = 'SERVICE_UNAVAILABLE', status = 503) {
 async function readPrivateResponse(response, schema) {
   if (!response.ok) {
     let failure;
-    try { failure = await response.json(); } catch {}
+    try { failure = await response.json(); } catch { }
     const code = SAFE_CODES[failure?.code] === true ? failure.code : 'SERVICE_UNAVAILABLE';
     throw credentialFailure(code, response.status);
   }
@@ -85,8 +85,10 @@ export function createSelectedCredentialHandoff({ service, resolveWorkspaceScope
       if (selection.credentialType === 'oauth') {
         const reauth = selection.source === 'stored-credential'
           && ['anthropic', 'openai-codex', 'github-copilot', 'google-gemini-cli'].includes(selection.providerId);
-        results.push({ ...descriptor, status: reauth ? 're-auth-required' : 'unsupported',
-          code: reauth ? 'OAUTH_REAUTH_REQUIRED' : 'CREDENTIAL_FORMAT_UNSUPPORTED' });
+        results.push({
+          ...descriptor, status: reauth ? 're-auth-required' : 'unsupported',
+          code: reauth ? 'OAUTH_REAUTH_REQUIRED' : 'CREDENTIAL_FORMAT_UNSUPPORTED'
+        });
         continue;
       }
       if (selection.source === 'external-environment') {
@@ -137,7 +139,6 @@ const QUOTA_PROVIDER_RELATIONS = {
   'minimax-cn-coding-plan': { providers: ['minimax-code-cn'] },
   wafer: { providers: ['wafer-serverless'] },
   xai: { providers: ['xai-oauth'], methods: ['oauth'] },
-  opencode: { providers: ['opencode-zen'], methods: ['api-key', 'oauth'] },
 };
 const QUOTA_IDS_BY_NATIVE_PROVIDER = new Map();
 for (const [logicalId, relation] of Object.entries(QUOTA_PROVIDER_RELATIONS)) {

@@ -1,7 +1,6 @@
 import React from 'react';
 import type { UsageAccounts, UsageAuthLimit, UsageAuthReport } from '@openchamber/agent-contract';
 import { UsageCard } from './UsageCard';
-import { ConsoleBudgetsSection } from './ConsoleBudgetsSection';
 import { useQuotaAutoRefresh, useQuotaProviders, useQuotaStore } from '@/stores/useQuotaStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { QuotaProviderLogo } from '@/components/usage/QuotaProviderLogo';
@@ -323,8 +322,6 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
           ) : null}
         </div>
       ) : null}
-
-      {usage?.consoleBudgets ? <ConsoleBudgetsSection consoleBudgets={usage.consoleBudgets} /> : null}
 
       {!nativeWindows && !error && !hasQuotaData(usage) ? (
         <div>

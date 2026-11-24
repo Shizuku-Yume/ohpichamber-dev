@@ -62,8 +62,10 @@ test('Commands discovery writes its native setting and refreshes the catalog', a
   useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   const state: OmpSettingsState = {
     workspaceId: 'workspace', revision: '1', totalCount: 2,
-    settings: [{ id: 'commands.enableClaudeProject', type: 'boolean', value: true, default: true, configured: false,
-      placement: { type: 'page', page: 'commands', section: 'catalog' } }, {
+    settings: [{
+      id: 'commands.enableClaudeProject', type: 'boolean', value: true, default: true, configured: false,
+      placement: { type: 'page', page: 'commands', section: 'catalog' }
+    }, {
       id: 'commands.enableOpencodeProject', type: 'boolean', value: false, default: true, configured: true,
       condition: 'discoveryUsesSharedConfig', conditionActive: false,
       placement: { type: 'page', page: 'commands', section: 'catalog' },
@@ -77,17 +79,35 @@ test('Commands discovery writes its native setting and refreshes the catalog', a
   const reload = spyOn(useCommandsStore.getState(), 'loadCommands').mockResolvedValue(true);
   try {
     await act(async () => root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>));
-    const row = container.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableClaudeProject"]');
+    expect(container.querySelector('[data-settings-item="omp.commands.enableClaudeProject"]')).toBeNull();
+    const trigger = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Discovery sources'));
+    if (!trigger) throw new Error('Missing Discovery sources button');
+    await act(async () => trigger.click());
+    const row = document.body.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableClaudeProject"]');
     if (!row) throw new Error('Missing discovery setting');
-    const overridden = container.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableOpencodeProject"]');
+    const overridden = document.body.querySelector<HTMLElement>('[data-settings-item="omp.commands.enableOpencodeProject"]');
     expect(overridden?.getAttribute('aria-disabled')).toBe('true');
-    expect(container.textContent).toContain('Editing the shared setting would not change this project.');
+    expect(overridden?.textContent).toContain('Editing the shared setting would not change this project.');
     await act(async () => overridden?.click());
     expect(write).not.toHaveBeenCalled();
     await act(async () => row.click());
     expect(write).toHaveBeenCalledWith('workspace', { expectedRevision: '1', changes: [{ id: 'commands.enableClaudeProject', value: false }] });
     expect(reload).toHaveBeenCalledWith('/project');
   } finally { resolve.mockRestore(); read.mockRestore(); write.mockRestore(); reload.mockRestore(); }
+});
+
+test('Commands hides the Discovery sources button when zero discovery settings are exposed', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  const emptyState: OmpSettingsState = { workspaceId: 'workspace', revision: '1', totalCount: 0, settings: [] };
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(emptyState);
+  try {
+    await act(async () => root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>));
+    const trigger = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Discovery sources'));
+    expect(trigger).toBeUndefined();
+  } finally { resolve.mockRestore(); read.mockRestore(); }
 });
 const { useCommandsStore } = await import('@/stores/useCommandsStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');

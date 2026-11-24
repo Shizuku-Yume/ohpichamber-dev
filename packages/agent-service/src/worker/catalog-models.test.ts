@@ -89,17 +89,34 @@ test('model catalog publishes only executable providers while the provider direc
     // The bundled registry still knows providers nobody configured. They must
     // not reach the executable model catalog.
     const unconfigured = [...new Set(runtime.modelRegistry.getAll('all').map(model => model.provider))]
-      .find(provider => runtime.authStorage.keys.source(provider) === undefined && !runtime.authStorage.keys.keyless(provider));
+      .find(provider => provider !== 'opencode-zen' && provider !== 'opencode-go' && runtime.authStorage.keys.source(provider) === undefined && !runtime.authStorage.keys.keyless(provider));
     expect(unconfigured).toBeDefined();
     expect(catalogProviders.has(unconfigured!)).toBe(false);
 
     const directory = await runtime.models.readProviders('workspace_1', '1');
     expect(directory.providers.some(provider => provider.providerId === unconfigured)).toBe(true);
+    expect(directory.providers.some(provider => provider.providerId === 'opencode-zen' || provider.providerId === 'opencode-go')).toBe(false);
     expect(await readFile(modelsPath, 'utf8')).toBe(authored);
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('provider and model catalogs exclude retired opencode-zen and opencode-go providers even when stored credentials exist', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.authStorage.credentials.upsert('opencode-zen', { type: 'api_key', key: 'retired-zen-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.upsert('opencode-go', { type: 'api_key', key: 'retired-go-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    const providers = await fixture.writer.models.readProviders('workspace_1', '1');
+    expect(providers.providers.some(provider => provider.providerId === 'opencode-zen' || provider.providerId === 'opencode-go')).toBe(false);
+    const models = await fixture.writer.models.readModels('workspace_1', '1');
+    expect(models.models.some(model => model.provider === 'opencode-zen' || model.provider === 'opencode-go')).toBe(false);
+    expect(models.imageModels.some(model => model.provider === 'opencode-zen' || model.provider === 'opencode-go')).toBe(false);
+  } finally {
+    await fixture.close();
   }
 });
 

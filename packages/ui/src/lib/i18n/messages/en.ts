@@ -26,7 +26,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -85,9 +84,9 @@ import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
 const part1 = {
-  'quota.family.zen': 'Zen Models',
   'quota.value.requests': 'Requests: {count}',
   'quota.value.spent': '{spent} spent',
+  'quota.value.spentOf': '{spent} of {limit}',
   'quota.value.unknown': 'Unknown',
   'quota.window.monthlyTotal': 'Monthly Total',
   'quota.window.monthlyByok': 'Monthly BYOK',
@@ -217,7 +216,6 @@ const part1 = {
   ...connectionHeartbeatI18n.en,
   ...compactionSettingsI18n.en,
   ...heapSnapshotI18n.en,
-  ...consoleBudgetsI18n.en,
   ...imageToolI18n.en,
   ...sharePagesI18n.en,
   ...receivedPagesI18n.en,
@@ -4023,13 +4021,6 @@ const part2 = {
   "settings.themeImport.error.conflict": "This imported theme was edited on the server. It was not overwritten.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "Always show scrollbars",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "Keep scrollbars visible even when the pointer is outside the scrollable area. Applies on this device only.",
-  "settings.providers.page.openCodeGo.workspaceId": "Workspace ID",
-  "settings.providers.page.openCodeGo.apiKey": "API key",
-  "settings.providers.page.openCodeGo.help": "Copy the workspace ID from the dashboard URL and the auth cookie from your browser developer tools. OhPiChamber never scans browser cookie storage.",
-  "settings.providers.page.openCodeGo.save": "Save and validate",
-  "settings.providers.page.openCodeGo.replace": "Replace",
-  "settings.providers.page.openCodeGo.validate": "Validate",
-  "settings.providers.page.openCodeGo.delete": "Delete",
   "settings.providers.page.quotaCredentials.saved": "{provider} credentials saved.",
   "settings.providers.page.quotaCredentials.accessToken": "Access token",
   "settings.providers.page.quotaCredentials.usageToken": "Usage API token",
@@ -5588,7 +5579,6 @@ const part3 = {
   "settings.providers.connect.recommended": "Recommended",
   "settings.providers.connect.customHint": "Any OpenAI- or Anthropic-compatible endpoint",
   "settings.providers.connect.note.openai": "GPT models, sign in with ChatGPT",
-  "settings.providers.connect.note.opencodeGo": "Low-cost subscription",
   "settings.providers.connect.note.openrouter": "Every model with one key",
   "settings.providers.connect.note.anthropic": "Claude models with an API key",
   "settings.providers.connect.note.githubCopilot": "Models from your Copilot plan",
@@ -6618,7 +6608,6 @@ const part3 = {
   "settings.extensions.add.placeholder": "/path/to/panel or https://github.com/org/panel.git",
   "settings.extensions.add.action": "Add",
   "settings.extensions.add.aria": "Add extension from a folder, ZIP, or URL",
-  "settings.extensions.browse.label": "Browse extensions",
   "settings.extensions.add.browseFolder": "Browse folder",
   "settings.extensions.add.browseFolder.aria": "Browse folder",
   "settings.extensions.add.browseZip": "Browse ZIP archive",
@@ -7119,12 +7108,6 @@ const part4 = {
   "settings.classification.status.fallback": "Your pick cannot be used right now, so Jev goes through {provider}.",
   "settings.classification.source.off.name": "Off",
   "settings.classification.source.off.description": "Nothing is sent anywhere. The safety net and Auto are hidden, and sessions move into work only when you move them.",
-  "settings.classification.source.zenPromo.name": "OpenCode Zen promotion",
-  "settings.classification.source.zenPromo.description": "Free for a limited time, no key needed. When the promotion ends, switch to a key.",
-  "settings.classification.source.zenPromo.ended": "The promotion has ended.",
-  "settings.classification.source.zenKey.name": "OpenCode Zen key",
-  "settings.classification.source.zenKey.description": "Uses the API key configured for OpenCode Zen. Charges your Zen balance.",
-  "settings.classification.source.zenKey.missing": "No API key is available for OpenCode Zen. OpenCode account sign-in does not count; add an API key in Settings → Providers.",
   "settings.classification.source.openrouter.name": "OpenRouter key",
   "settings.classification.source.openrouter.description": "Uses an OpenRouter API key configured in Providers. Charges your OpenRouter account.",
   "settings.classification.source.openrouter.missing": "No OpenRouter API key is available. Add one in Settings → Providers.",
@@ -7167,7 +7150,7 @@ const part4 = {
   "settings.sessions.permissions.explain.safetyVia": "Routine actions run on their own; anything risky or hard to undo waits for you. Jev decides, via {provider}.",
   "settings.sessions.permissions.explain.auto": "Every tool your agent's permissions set to \"Ask\" runs without asking. Tools set to \"Deny\" stay blocked.",
   "settings.sessions.permissions.agentPermissionsLink": "Agent permissions",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Needs Jev, which needs a classification provider: the free OpenCode Zen promotion, a Zen API key in Settings → Providers, or a TypeSafe key.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Needs Jev, which needs a classification provider: an OpenRouter, Vercel, Gemini, or TypeSafe key, or a custom endpoint.",
   "chat.workStatus.sections.extensionBadge": "Extension",
   "chat.chatInput.toast.guestHasNoPanel": "This extension runs without a panel.",
   "header.mainSurface.backToChat": "Back to chat",

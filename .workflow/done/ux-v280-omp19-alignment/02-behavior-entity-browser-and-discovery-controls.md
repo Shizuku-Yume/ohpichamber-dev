@@ -1,0 +1,20 @@
+# 02: Rebuild Behavior as a structured autosave entity browser and clean up discovery/snippets editors
+
+**Effort:** ux-v280-omp19-alignment
+**Blocked by:** None
+**Covers:** W2
+**Files:** `packages/ui/src/components/sections/behavior/BehaviorPage.tsx`; `packages/ui/src/components/sections/behavior/NativeBehaviorFiles.tsx`; `packages/ui/src/components/sections/commands/CommandsPage.tsx`; `packages/ui/src/components/sections/skills/SkillsPage.tsx`; `packages/ui/src/components/sections/snippets/SnippetsPage.tsx`; `packages/ui/src/lib/settings/search.ts`; `packages/ui/src/lib/i18n/messages/behavior-files.i18n.ts`
+**Read first:** `.workflow/specs/ux-v280-omp19-alignment.md`; `packages/ui/src/components/sections/PATTERNS.md`; `packages/ui/src/components/sections/references/controls.md`; `packages/ui/src/components/sections/DOCUMENTATION.md`; `.agents/skills/locale-ui-patterns/SKILL.md`
+**Check:** `bun test packages/ui/src/components/sections/behavior/ packages/ui/src/components/sections/commands/CommandsPage.test.tsx packages/ui/src/components/sections/skills/SkillsPage.test.tsx packages/ui/src/components/sections/snippets/SnippetsPage.test.tsx packages/ui/src/lib/i18n/messages.test.ts && bun run --cwd packages/ui type-check && bunx oxlint packages/ui/src/components/sections/behavior packages/ui/src/components/sections/commands packages/ui/src/components/sections/skills packages/ui/src/components/sections/snippets` → all tests, 15-locale checks, type-check, and oxlint exit 0; isolated Web run verifies Behavior file CRUD + autosave in `zh-CN` and `en`.
+**Base commit:** d312961f50a678b32afcf339a3edb102d211c8f9
+
+- [x] Rebuild `BehaviorPage` and `NativeBehaviorFiles` into a unified sidebar/list + structured editor matching `AgentsPage` and `SkillsPage`: Global and Project file groups (`AGENTS.md`, `RULES.md`, `SYSTEM.md`, `.omp/rules/*`, `.omp/instructions/*`), a `+ Create` dialog for new rules/instructions, and `SettingsAutosave` on existing entries (silent blur/toggle save, error toast only on failure, zero manual Save buttons).
+- [x] Replace every raw camelCase frontmatter label (`astCondition`, `alwaysApply`, `globs`, `interruptMode`, `repeatMode`, `applyTo`, etc.), `'true'`/`'false'` string dropdown, and `JSON.stringify` input with 15-locale labels/info hints in a dedicated `behavior-files.i18n.ts` module, `SettingsCheckboxRow` booleans, localized enum `Select`s, and structured multi-value/tag inputs; restore visible `AGENTS.md` injection guidance per Description Policy; place Prompt & Personality + response style in a clean `showSaveStatus` section/tab with `lib/settings/search.ts` coverage.
+- [x] Move global `Discovery sources` switches out of the inline entity editor and empty-state panes on `CommandsPage` and `SkillsPage` (into a clean header settings dialog/popover that renders only exposed settings, so `commands.enableOpencode*` automatically disappears once marked `config-only`), and replace repeated inline override `<p>` lines with primitive `description`/`info` props.
+- [x] Migrate `SnippetsPage` to `SettingsAutosave` (remove manual Save button and `toast.success` notification) and replace `SettingsFieldRow label="/"` with a localized Name label and an inline `/` prefix adornment inside the input control.
+
+## Progress
+
+Check after: bun test (Check set, 12 files) 138 pass / 0 fail x3 runs; type-check 0 errors in 4,453 files; oxlint exit 0; isolated Web run en + zh-CN verified; receipts in /home/shizuku/Project/ohpichamber-omp-artifacts/ux-v280-omp19-alignment-2026-11-24/task02/
+
+Review: pass (base d312961f50a678b32afcf339a3edb102d211c8f9)

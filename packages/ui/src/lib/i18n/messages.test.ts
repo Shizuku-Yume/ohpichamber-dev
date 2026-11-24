@@ -36,13 +36,14 @@ const localeDictionaries = {
 } as const;
 
 describe('i18n dictionaries', () => {
-  test('Zen labels are translated and preserve their value placeholders in every locale', () => {
+  test('structured quota value labels are translated and preserve their value placeholders in every locale', () => {
     for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
       expect(dictionary['quota.value.requests']).toContain('{count}');
       expect(dictionary['quota.value.spent']).toContain('{spent}');
-      expect(dictionary['quota.family.zen']).toContain('Zen');
+      expect(dictionary['quota.value.spentOf']).toContain('{spent}');
+      expect(dictionary['quota.value.spentOf']).toContain('{limit}');
       if (locale !== 'en') {
-        for (const key of ['quota.value.requests', 'quota.value.spent', 'quota.family.zen'] as const) {
+        for (const key of ['quota.value.requests', 'quota.value.spent', 'quota.value.spentOf'] as const) {
           expect(dictionary[key]).not.toBe(enDict[key]);
         }
       }
@@ -301,11 +302,6 @@ describe('i18n dictionaries', () => {
       'settings.classification.gemini.key.info',
       'settings.classification.source.gemini.description',
       'settings.classification.source.gemini.missing',
-      'settings.classification.source.zenKey.description',
-      'settings.classification.source.zenKey.missing',
-      'settings.classification.source.zenKey.name',
-      'settings.classification.source.zenPromo.name',
-      'settings.classification.source.zenPromo.unavailable',
       'settings.extensions.capability.service.providesQuota',
       'settings.extensions.capability.service.providesQuota.credentials',
       'settings.extensions.capability.service.providesQuota.none',
@@ -318,7 +314,6 @@ describe('i18n dictionaries', () => {
       'settings.omp.items.commands.enableOpencodeUser.label',
       'settings.page.extensions.description',
       'settings.remoteInstances.page.error.hint.noOpencode',
-      'settings.sessions.permissions.explain.safetyUnavailable',
       'settings.skills.catalog.conflicts.source.opencode',
       'settings.skills.location.option.projectOpencode.description',
       'settings.skills.location.option.projectOpencode.label',
@@ -327,7 +322,6 @@ describe('i18n dictionaries', () => {
       'settings.skills.sidebar.badge.opencode',
       'settings.snippets.page.hint',
       'settings.sourceControl.ssh.passphraseHint',
-      'settings.usage.consoleBudgets.title',
       'spaces.create.access.hostKeysNotReused',
       'startup.legacyNotice.descriptionGeneric',
       'startup.legacyNotice.title',

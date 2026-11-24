@@ -19,6 +19,7 @@ describe('Guest canonical generation scope', () => {
     const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const request = new Request(input, init);
       expect(new URL(request.url).pathname).toBe('/api/guests/guest-a/generate');
+      expect(request.headers.has('x-openchamber-directory')).toBe(false);
       expect(request.headers.has('x-opencode-directory')).toBe(false);
       expect(request.headers.get('x-openchamber-provider')).toBe('selected-provider');
       expect(request.headers.get('x-openchamber-model')).toBe('selected-model');

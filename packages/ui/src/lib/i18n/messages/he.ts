@@ -26,7 +26,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -91,9 +90,9 @@ const part1 = {
   "chat.fileAttachment.actions.removeImage": "הסרת תמונה",
   "chat.fileAttachment.actions.removeNamed": "הסרת {name}",
   "chat.fileAttachment.toast.attachFailed": "לא ניתן לצרף את הקובץ. נסו שוב.",
-  'quota.family.zen': 'מודלי Zen',
   'quota.value.requests': 'בקשות: {count}',
   'quota.value.spent': 'נוצלו {spent}',
+  'quota.value.spentOf': '{spent} מתוך {limit}',
   'quota.value.unknown': 'לא ידוע',
   'quota.window.monthlyTotal': 'סך חודשי',
   'quota.window.monthlyByok': 'BYOK חודשי',
@@ -3872,7 +3871,6 @@ const part2 = {
   ...connectionHeartbeatI18n.he,
   ...compactionSettingsI18n.he,
   ...heapSnapshotI18n.he,
-  ...consoleBudgetsI18n.he,
   ...imageToolI18n.he,
   ...sharePagesI18n.he,
   ...receivedPagesI18n.he,
@@ -4117,13 +4115,6 @@ const part2 = {
   "settings.themeImport.error.conflict": "ערכת הנושא המיובאת הזו נערכה בשרת. היא לא נדרסה.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "הצג תמיד פסי גלילה",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "פסי הגלילה יישארו גלויים גם כשהסמן מחוץ לאזור הנגלל. חל על המכשיר הזה בלבד.",
-  "settings.providers.page.openCodeGo.workspaceId": "מזהה סביבת עבודה",
-  "settings.providers.page.openCodeGo.apiKey": "מפתח API",
-  "settings.providers.page.openCodeGo.help": "יש להעתיק את מזהה סביבת העבודה מכתובת ה-URL של לוח הבקרה, ואת קובץ ה-Cookie לאימות מכלי המפתחים של הדפדפן. OhPiChamber אף פעם לא סורק את אחסון קובצי ה-Cookie של הדפדפן.",
-  "settings.providers.page.openCodeGo.save": "שמור ואמת",
-  "settings.providers.page.openCodeGo.replace": "החלף",
-  "settings.providers.page.openCodeGo.validate": "אמת",
-  "settings.providers.page.openCodeGo.delete": "מחק",
   "settings.providers.page.quotaCredentials.saved": "פרטי הגישה של {provider} נשמרו.",
   "settings.providers.page.quotaCredentials.accessToken": "אסימון גישה",
   "settings.providers.page.quotaCredentials.usageToken": "אסימון API לשימוש",
@@ -5680,7 +5671,6 @@ const part3 = {
   "settings.providers.connect.recommended": "מומלץ",
   "settings.providers.connect.customHint": "כל נקודת קצה שתואמת ל-OpenAI או ל-Anthropic",
   "settings.providers.connect.note.openai": "מודלי GPT, התחברות עם ChatGPT",
-  "settings.providers.connect.note.opencodeGo": "מינוי בעלות נמוכה",
   "settings.providers.connect.note.openrouter": "כל המודלים עם מפתח אחד",
   "settings.providers.connect.note.anthropic": "מודלי Claude עם מפתח API",
   "settings.providers.connect.note.githubCopilot": "מודלים מתוכנית ה-Copilot שלך",
@@ -6770,7 +6760,6 @@ const part3 = {
   "settings.extensions.add.placeholder": "/path/to/panel או https://github.com/org/panel.git",
   "settings.extensions.add.action": "הוסף",
   "settings.extensions.add.aria": "הוסף הרחבה מתיקייה, מ-ZIP או מ-URL",
-  "settings.extensions.browse.label": "עיון בהרחבות",
   "settings.extensions.add.browseFolder": "עיון בתיקייה",
   "settings.extensions.add.browseFolder.aria": "עיון בתיקייה",
   "settings.extensions.add.browseZip": "עיון בארכיון ZIP",
@@ -7215,12 +7204,6 @@ const part4 = {
   "settings.classification.status.fallback": "אי אפשר להשתמש כרגע באפשרות שנבחרה, ולכן Jev עובר דרך {provider}.",
   "settings.classification.source.off.name": "כבוי",
   "settings.classification.source.off.description": "שום דבר לא נשלח לשום מקום. רשת הביטחון והמצב האוטומטי מוסתרים, והפעלות עוברות לעבודה רק כשמעבירים אותן ידנית.",
-  "settings.classification.source.zenPromo.name": "מבצע OpenCode Zen",
-  "settings.classification.source.zenPromo.description": "חינם לזמן מוגבל, בלי צורך במפתח. כשהמבצע יסתיים, יש לעבור למפתח.",
-  "settings.classification.source.zenPromo.ended": "המבצע הסתיים.",
-  "settings.classification.source.zenKey.name": "מפתח OpenCode Zen",
-  "settings.classification.source.zenKey.description": "מפתח ה-API של Zen ששמור ב-OpenCode, על חשבון יתרת ה-Zen.",
-  "settings.classification.source.zenKey.missing": "אין מפתח API של Zen ב-OpenCode. התחברות עם חשבון OpenCode לא נחשבת: יש להוסיף מפתח API לספק OpenCode Zen.",
   "settings.classification.source.openrouter.name": "מפתח OpenRouter",
   "settings.classification.source.openrouter.description": "משתמש במפתח API של OpenRouter המוגדר בספקים. החיוב יבוצע בחשבון OpenRouter שלך.",
   "settings.classification.source.openrouter.missing": "אין מפתח API של OpenRouter זמין. הוסף אחד בהגדרות ← ספקים.",
@@ -7263,7 +7246,7 @@ const part4 = {
   "settings.sessions.permissions.explain.safetyVia": "פעולות שגרתיות רצות מעצמן; כל דבר מסוכן או שקשה לבטל ממתין לך. Jev מחליט, באמצעות {provider}.",
   "settings.sessions.permissions.explain.auto": "כל כלי שהרשאות הסוכן מגדירות כ-\"לשאול\" רץ בלי לשאול. כלים שמוגדרים כ-\"לדחות\" נשארים חסומים.",
   "settings.sessions.permissions.agentPermissionsLink": "הרשאות סוכן",
-  "settings.sessions.permissions.explain.safetyUnavailable": "נדרש Jev, שדורש ספק סיווג: מבצע OpenCode Zen החינמי, מפתח API של Zen ב-OpenCode, או מפתח TypeSafe.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "נדרש Jev, שדורש ספק סיווג: מפתח OpenRouter, Vercel, Gemini או TypeSafe, או נקודת קצה מותאמת אישית.",
   "chat.workStatus.sections.extensionBadge": "הרחבה",
   "chat.chatInput.toast.guestHasNoPanel": "ההרחבה הזו פועלת בלי חלונית.",
   "header.mainSurface.backToChat": "חזרה לצ'אט",
