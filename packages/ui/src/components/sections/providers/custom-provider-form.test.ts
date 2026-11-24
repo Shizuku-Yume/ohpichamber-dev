@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import type { Model, ModelCatalogInfo, ProviderConfigurationRead } from '@openchamber/agent-contract';
+import { OMP_MODEL_APIS, OMP_PROVIDER_APIS } from '@openchamber/agent-contract';
 import {
+  apiDisplayLabel,
   applyModelCatalogInfo,
   autoFillFields,
   autoFillIds,
@@ -17,12 +19,13 @@ import {
   discoveryFilterValues,
   discoveryRows,
   groupDiscoveryRows,
+  duplicateModelRow,
   idsMissingCatalog,
   idsToAdd,
   markModelFieldTyped,
   matchesDiscoveryFilter,
   staleModelIds,
-  duplicateModelRow,
+  modelApiDisplayLabel,
   isCustomProviderProtocol,
   isValidProviderID,
   modelModalitiesForKind,
@@ -33,6 +36,7 @@ import {
   validateCustomProviderForm,
   type CustomProviderTranslator,
 } from './custom-provider-form';
+
 
 const translate: CustomProviderTranslator = (key) => key;
 test('the protocol guard admits only the native provider protocols', () => {
@@ -580,4 +584,44 @@ test('compat flag helpers round-trip known flags while preserving unknown keys',
     requiresThinkingAsText: false,
     maxTokensField: 'max_tokens',
   });
+});
+
+test('every known OMP provider and model api maps to a human label, not its raw slug', () => {
+  const required: Readonly<Record<string, string>> = {
+    'openai-completions': 'OpenAI Chat Completions',
+    'openai-responses': 'OpenAI Responses',
+    'openai-codex-responses': 'OpenAI Codex Responses',
+    'openai-images': 'OpenAI Images',
+    'anthropic-messages': 'Anthropic Messages',
+    'google-generative-ai': 'Google Gemini',
+    'google-vertex': 'Google Vertex AI',
+    'google-gemini-cli': 'Google Gemini CLI',
+    'bedrock-converse-stream': 'AWS Bedrock',
+    'azure-openai-responses': 'Azure OpenAI',
+  };
+
+  for (const api of OMP_PROVIDER_APIS) {
+    const label = apiDisplayLabel(api);
+    expect(label.length).toBeGreaterThan(0);
+    expect(label).not.toBe(api);
+    expect(label).not.toMatch(/^[a-z0-9]+(-[a-z0-9]+)+$/);
+  }
+
+  for (const api of OMP_MODEL_APIS) {
+    const label = modelApiDisplayLabel(api);
+    expect(label.length).toBeGreaterThan(0);
+    expect(label).not.toBe(api);
+    expect(label).not.toMatch(/^[a-z0-9]+(-[a-z0-9]+)+$/);
+  }
+
+  for (const [api, expected] of Object.entries(required)) {
+    expect(modelApiDisplayLabel(api)).toBe(expected);
+  }
+
+  expect(apiDisplayLabel('openai-images')).toBe('openai-images');
+  expect(modelApiDisplayLabel('openai-images')).toBe('OpenAI Images');
+  expect(apiDisplayLabel('not-a-real-api')).toBe('not-a-real-api');
+  expect(modelApiDisplayLabel('not-a-real-api')).toBe('not-a-real-api');
+  expect(apiDisplayLabel('toString')).toBe('toString');
+  expect(modelApiDisplayLabel('constructor')).toBe('constructor');
 });

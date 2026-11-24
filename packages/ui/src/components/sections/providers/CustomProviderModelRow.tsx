@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   SettingsCheckboxRow,
+  SettingsChipGroup,
   SettingsDisclosure,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
@@ -22,6 +23,7 @@ import {
   OMP_MODEL_TOKENIZERS,
   OMP_THINKING_EFFORTS,
   OMP_THINKING_MODES,
+  modelApiDisplayLabel,
   modelModalitiesForKind,
   readCompatBooleanFlag,
   readCompatMaxTokensField,
@@ -39,8 +41,10 @@ interface CustomProviderModelRowProps {
   mode?: 'definition' | 'override';
   isEdit?: boolean;
   providerDefaultApi?: string;
+  providerBaseUrl?: string;
   model: ModelRow;
   errors?: ModelFieldErrors;
+  validationAttempt?: number;
   expanded: boolean;
   onToggle: () => void;
   onUpdate: (updater: (row: ModelRow) => ModelRow) => void;
@@ -57,17 +61,29 @@ const positive = (value: string): number | null => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const extractUrlHost = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed).host || trimmed;
+  } catch {
+    return trimmed;
+  }
+};
+
 /**
  * One model definition (`models[]`) or per-model override (`modelOverrides.<id>`).
- * Collapsed, it reads as a single line; expanded, it surfaces all OMP 19.0.0 fields
- * with nested disclosures for thinking, pricing/cache, and advanced/headers.
+ * Collapsed, it reads as a 2-line summary; expanded, it shows the 5 core fields
+ * and folds protocol override, thinking, pricing, and compatibility into disclosures.
  */
 export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   mode = 'definition',
   isEdit = false,
   providerDefaultApi = '',
+  providerBaseUrl = '',
   model,
   errors,
+  validationAttempt = 0,
   expanded,
   onToggle,
   onUpdate,
@@ -79,42 +95,68 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
 }) => {
   const { t } = useI18n();
   const editorId = React.useId();
-  const [thinkingOpen, setThinkingOpen] = React.useState(false);
-  const [pricingOpen, setPricingOpen] = React.useState(false);
-  const [advancedOpen, setAdvancedOpen] = React.useState(false);
+
+  const hasProtocolError = Boolean(errors?.baseUrl || errors?.maxContextWindow);
+  const hasThinkingError = Boolean(errors?.thinkingEfforts || errors?.thinkingEffortMapJson);
+  const hasPricingError = Boolean(
+    errors?.cost
+    || errors?.promptCacheShort
+    || errors?.promptCacheLong
+    || errors?.premiumMultiplier,
+  );
+  const hasAdvancedError = Boolean(
+    errors?.imageCountBudget
+    || errors?.compatJson
+    || errors?.remoteCompactionEndpoint
+    || errors?.remoteCompactionV2Endpoint
+    || errors?.remoteCompactionStreamingEndpoint
+    || errors?.headers?.some((header) => Boolean(header.name || header.value)),
+  );
+
+  const [protocolOpen, setProtocolOpen] = React.useState(() => hasProtocolError);
+  const [thinkingOpen, setThinkingOpen] = React.useState(() => hasThinkingError);
+  const [pricingOpen, setPricingOpen] = React.useState(() => hasPricingError);
+  const [advancedOpen, setAdvancedOpen] = React.useState(() => hasAdvancedError);
+
+  React.useEffect(() => {
+    if (hasProtocolError) setProtocolOpen(true);
+  }, [hasProtocolError, validationAttempt]);
+
+  React.useEffect(() => {
+    if (hasThinkingError) setThinkingOpen(true);
+  }, [hasThinkingError, validationAttempt]);
+
+  React.useEffect(() => {
+    if (hasPricingError) setPricingOpen(true);
+  }, [hasPricingError, validationAttempt]);
+
+  React.useEffect(() => {
+    if (hasAdvancedError) setAdvancedOpen(true);
+  }, [hasAdvancedError, validationAttempt]);
 
   const modelId = model.modelId.trim();
   const name = model.name.trim();
   const title = name || modelId || t('settings.providers.page.custom.models.untitled');
   const context = positive(model.contextWindow);
+  const maxContext = positive(model.maxContextWindow);
   const output = positive(model.maxOutputTokens);
   const modalities = modelModalitiesForKind(model.nativeKind);
-  const extraInputs = model.modalities.filter((modality) => modality !== 'text');
   const baseModalityCount = model.modalities.filter((modality) => modality === 'text' || modality === 'image').length;
 
-  const baseUrlCue = (() => {
-    const trimmed = model.baseUrl.trim();
-    if (!trimmed) return null;
-    try {
-      return new URL(trimmed).host;
-    } catch {
-      return trimmed;
-    }
-  })();
+  const modelHost = extractUrlHost(model.baseUrl);
+  const providerHost = extractUrlHost(providerBaseUrl);
+  const baseUrlCue = modelHost && (!providerHost || modelHost.toLowerCase() !== providerHost.toLowerCase())
+    ? modelHost
+    : null;
 
-  const thinkingSummary = model.thinkingMode
-    ? `${model.thinkingMode}${model.thinkingEfforts.length > 0 ? ` (${model.thinkingEfforts.join(', ')})` : ''}`
-    : undefined;
-
-  const summary = [
+  const effectiveApi = model.api || providerDefaultApi;
+  const collapsedSummary = [
+    effectiveApi ? modelApiDisplayLabel(effectiveApi) : null,
+    context ? t('settings.providers.page.custom.omp.models.summaryContext', { value: formatGoalTokens(context) }) : null,
+    output ? t('settings.providers.page.custom.omp.models.summaryOutput', { value: formatGoalTokens(output) }) : null,
     baseUrlCue,
-    context ? t('settings.providers.page.custom.discovery.contextValue', { value: formatGoalTokens(context) }) : null,
-    output ? t('settings.providers.page.custom.discovery.outputValue', { value: formatGoalTokens(output) }) : null,
-    thinkingSummary ?? null,
-    extraInputs.length > 0 ? extraInputs.join(', ') : null,
-    model.toolsSupported === false ? t('settings.providers.page.custom.models.toolsOff') : null,
-    model.preferWebsockets === 'true' ? 'WS' : null,
   ].filter(Boolean).join(' · ');
+
   const fieldError = (message?: string) => (
     message ? <p className="typography-meta text-[var(--status-error)]">{message}</p> : null
   );
@@ -127,11 +169,67 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
       : t('settings.providers.page.custom.models.source.openrouter');
     return <p className={SETTINGS_HELPER_CLASS}>{label}</p>;
   };
+
+  const formatConfiguredCount = (count: number) => (
+    count === 1
+      ? t('settings.providers.page.custom.omp.models.summaryConfiguredSingle', { count })
+      : t('settings.providers.page.custom.omp.models.summaryConfiguredPlural', { count })
+  );
+
   const toolsTriState: TriState = model.toolsSupported === true ? 'true' : model.toolsSupported === false ? 'false' : 'default';
   const reasoningTriState: TriState = model.reasoning === true ? 'true' : model.reasoning === false ? 'false' : 'default';
+
+  const triStateOptions: Array<{ value: TriState; label: string; disabled?: boolean }> = [
+    { value: 'default', label: t('settings.providers.page.custom.omp.option.default'), disabled },
+    { value: 'true', label: t('settings.providers.page.custom.omp.option.enabled'), disabled },
+    { value: 'false', label: t('settings.providers.page.custom.omp.option.disabled'), disabled },
+  ];
+
+  const protocolSummary = [
+    model.api ? modelApiDisplayLabel(model.api) : null,
+    model.kind || null,
+    modelHost,
+    maxContext ? t('settings.providers.page.custom.omp.models.summaryMaxContext', { value: formatGoalTokens(maxContext) }) : null,
+  ].filter(Boolean).join(' · ') || undefined;
+
+  const hasThinkingOverride = Boolean(
+    model.thinkingMode
+    || model.thinkingDefaultLevel
+    || model.thinkingEfforts.length > 0
+    || model.thinkingSupportsDisplay !== 'default'
+    || model.thinkingRequiresEffort !== 'default'
+    || model.thinkingEffortMapJson.trim(),
+  );
+  const thinkingSummary = model.thinkingMode
+    ? `${model.thinkingMode}${model.thinkingEfforts.length > 0 ? ` (${model.thinkingEfforts.join(', ')})` : ''}`
+    : hasThinkingOverride
+      ? t('settings.providers.page.custom.omp.model.thinking.configured')
+      : undefined;
+
+  const pricingExtraCount = [
+    Boolean(model.costCacheRead.trim()),
+    Boolean(model.costCacheWrite.trim()),
+    Boolean(model.promptCacheShort.trim()),
+    Boolean(model.promptCacheLong.trim()),
+    Boolean(model.premiumMultiplier.trim()),
+  ].filter(Boolean).length;
   const pricingSummary = model.costInput.trim() || model.costOutput.trim()
-    ? `${model.costInput || '—'} / ${model.costOutput || '—'}`
-    : undefined;
+    ? `${model.costInput.trim() || '—'} / ${model.costOutput.trim() || '—'}`
+    : pricingExtraCount > 0
+      ? formatConfiguredCount(pricingExtraCount)
+      : undefined;
+
+  const hasRemoteCompaction = model.remoteCompactionEnabled !== 'default'
+    || Boolean(model.remoteCompactionApi)
+    || Boolean(model.remoteCompactionEndpoint.trim())
+    || Boolean(model.remoteCompactionModel.trim())
+    || model.remoteCompactionV2StreamingEnabled !== 'default'
+    || Boolean(model.remoteCompactionV2Endpoint.trim())
+    || Boolean(model.remoteCompactionStreamingEndpoint.trim());
+  const hasModelHeaders = model.headerNames.length > 0
+    || model.headersPatchRemove.length > 0
+    || model.replaceHeaders
+    || model.headers.some((header) => header.name.trim() || header.value);
   const advancedCount = [
     model.preferWebsockets !== 'default',
     model.omitMaxOutputTokens !== 'default',
@@ -141,8 +239,10 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
     Boolean(model.contextPromotionTarget.trim()),
     Boolean(model.compactionModel.trim()),
     Boolean(model.compatJson.trim()),
-    model.headerNames.length > 0 || model.headers.some((h) => h.name.trim() || h.value),
+    hasRemoteCompaction,
+    hasModelHeaders,
   ].filter(Boolean).length;
+  const advancedSummary = advancedCount > 0 ? formatConfiguredCount(advancedCount) : undefined;
 
   return (
     <div>
@@ -161,27 +261,15 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
             aria-hidden
           />
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <span className={cn('truncate', SETTINGS_FIELD_LABEL_CLASS, !name && !modelId && 'text-muted-foreground')}>{title}</span>
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className={cn('truncate font-medium', SETTINGS_FIELD_LABEL_CLASS, !name && !modelId && 'text-muted-foreground')}>
+                {title}
+              </span>
               {name && modelId && name !== modelId ? (
                 <span className="truncate font-mono text-xs text-muted-foreground">{modelId}</span>
               ) : null}
-              {model.api ? (
-                <span className="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 font-mono typography-micro text-muted-foreground">
-                  {model.api}
-                </span>
-              ) : providerDefaultApi ? (
-                <span className="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 typography-micro text-muted-foreground">
-                  {t('settings.providers.page.custom.omp.models.inheritedApi')}
-                </span>
-              ) : null}
-              {model.kind && model.kind !== 'chat' ? (
-                <span className="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 font-mono typography-micro text-muted-foreground">
-                  {model.kind}
-                </span>
-              ) : null}
             </span>
-            {summary ? <span className={cn('truncate', SETTINGS_HELPER_CLASS)}>{summary}</span> : null}
+            {collapsedSummary ? <span className={cn('truncate', SETTINGS_HELPER_CLASS)}>{collapsedSummary}</span> : null}
           </span>
         </button>
         {onDuplicate ? (
@@ -206,6 +294,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
             className={SETTINGS_ICON_BUTTON_CLASS}
             onClick={onRemove}
             disabled={disabled}
+            title={t('settings.providers.page.custom.models.remove')}
             aria-label={t('settings.providers.page.custom.models.remove')}
           >
             <Icon name="delete-bin" className="size-4" />
@@ -254,85 +343,6 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
 
           <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
             <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.api')}</label>
-              <Select
-                value={model.api || UNSET_VALUE}
-                onValueChange={(next) => {
-                  if (next === UNSET_VALUE) {
-                    onUpdate((row) => ({ ...row, api: '' }));
-                    return;
-                  }
-                  const matched = OMP_MODEL_APIS.find((entry) => entry === next);
-                  if (matched) onUpdate((row) => ({ ...row, api: matched }));
-                }}
-                disabled={disabled}
-              >
-                <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.api')} className="w-full">
-                  <SelectValue>{model.api || t('settings.providers.page.custom.omp.api.inherit')}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.api.inherit')}</SelectItem>
-                  {OMP_MODEL_APIS.map((api) => (
-                    <SelectItem key={api} value={api}>{api}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.kind')}</label>
-              <Select
-                value={model.kind || UNSET_VALUE}
-                onValueChange={(next) => {
-                  if (next === UNSET_VALUE) {
-                    onUpdate((row) => ({ ...row, kind: '', nativeKind: 'chat' }));
-                    return;
-                  }
-                  const matched = OMP_MODEL_KINDS.find((entry) => entry === next);
-                  if (matched) {
-                    onUpdate((row) => ({
-                      ...row,
-                      kind: matched,
-                      nativeKind: matched,
-                    }));
-                  }
-                }}
-                disabled={disabled}
-              >
-                <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.kind')} className="w-full">
-                  <SelectValue>{model.kind || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
-                  {OMP_MODEL_KINDS.map((kind) => (
-                    <SelectItem key={kind} value={kind}>{kind}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {mode === 'definition' ? (
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.baseUrl')}</label>
-              <Input
-                value={model.baseUrl}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  onUpdate((row) => ({ ...row, baseUrl: value }));
-                  onClearError('baseUrl');
-                }}
-                placeholder="https://..."
-                className="h-8 w-full rounded-md px-3 font-mono text-xs"
-                aria-invalid={Boolean(errors?.baseUrl)}
-                aria-label={t('settings.providers.page.custom.omp.model.baseUrl')}
-                disabled={disabled}
-              />
-              {fieldError(errors?.baseUrl)}
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-3">
-            <div className="flex flex-col gap-1">
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.contextWindow')}</label>
               <Input
                 inputMode="numeric"
@@ -351,24 +361,6 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
               />
               {fieldError(errors?.contextWindow)}
               {sourceNote('contextWindow')}
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.maxContextWindow')}</label>
-              <Input
-                inputMode="numeric"
-                value={model.maxContextWindow}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  onUpdate((row) => ({ ...row, maxContextWindow: value }));
-                  onClearError('maxContextWindow');
-                }}
-                placeholder="1000000"
-                className="h-8 w-full rounded-md px-3 font-mono text-xs"
-                aria-invalid={Boolean(errors?.maxContextWindow)}
-                aria-label={t('settings.providers.page.custom.omp.model.maxContextWindow')}
-                disabled={disabled}
-              />
-              {fieldError(errors?.maxContextWindow)}
             </div>
             <div className="flex flex-col gap-1">
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.maxOutputTokens')}</label>
@@ -392,71 +384,187 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.tools')}</label>
-              <TriStateSelect
-                value={toolsTriState}
-                onChange={(next) => {
-                  onUserEdit('toolsSupported');
-                  onUpdate((row) => ({
-                    ...row,
-                    toolsSupported: next === 'true' ? true : next === 'false' ? false : undefined,
-                  }));
-                }}
-                ariaLabel={t('settings.providers.page.custom.models.tools')}
-                disabled={disabled}
-              />
-              {sourceNote('toolsSupported')}
+          <div className="space-y-2">
+            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.models.coreCapabilities')}</span>
+            <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <span className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.models.tools')}</span>
+                <div>
+                  <SettingsChipGroup
+                    value={toolsTriState}
+                    options={triStateOptions}
+                    aria-label={t('settings.providers.page.custom.models.tools')}
+                    onChange={(next) => {
+                      onUserEdit('toolsSupported');
+                      onUpdate((row) => ({
+                        ...row,
+                        toolsSupported: next === 'true' ? true : next === 'false' ? false : undefined,
+                      }));
+                    }}
+                  />
+                </div>
+                {sourceNote('toolsSupported')}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.omp.model.reasoning')}</span>
+                <div>
+                  <SettingsChipGroup
+                    value={reasoningTriState}
+                    options={triStateOptions}
+                    aria-label={t('settings.providers.page.custom.omp.model.reasoning')}
+                    onChange={(next) => {
+                      onUserEdit('reasoning');
+                      onUpdate((row) => ({
+                        ...row,
+                        reasoning: next === 'true' ? true : next === 'false' ? false : undefined,
+                        reasoningEffortSupported: next === 'true' ? true : next === 'false' ? false : undefined,
+                      }));
+                    }}
+                  />
+                </div>
+                {sourceNote('reasoning')}
+              </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.reasoning')}</label>
-              <TriStateSelect
-                value={reasoningTriState}
-                onChange={(next) => {
-                  onUserEdit('reasoning');
-                  onUpdate((row) => ({
-                    ...row,
-                    reasoning: next === 'true' ? true : next === 'false' ? false : undefined,
-                    reasoningEffortSupported: next === 'true' ? true : next === 'false' ? false : undefined,
-                  }));
-                }}
-                ariaLabel={t('settings.providers.page.custom.omp.model.reasoning')}
-                disabled={disabled}
-              />
-              {sourceNote('reasoning')}
+            <div className="space-y-1">
+              <span className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.models.inputCapabilities')}</span>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {modalities.map((modality) => (
+                  <SettingsCheckboxRow
+                    key={modality}
+                    checked={model.modalities.includes(modality)}
+                    onChange={() => {
+                      onUserEdit('modalities');
+                      onUpdate((row) => {
+                        const selected = row.modalities.includes(modality);
+                        if (selected && row.modalities.length === 1) return row;
+                        return {
+                          ...row,
+                          modalities: selected
+                            ? row.modalities.filter((entry) => entry !== modality)
+                            : [...row.modalities, modality],
+                        };
+                      });
+                    }}
+                    disabled={disabled || (model.modalities.includes(modality)
+                      && (baseModalityCount === 1 && (modality === 'text' || modality === 'image')))}
+                    label={modality}
+                    ariaLabel={modality}
+                  />
+                ))}
+              </div>
+              {sourceNote('modalities')}
             </div>
           </div>
 
-          <div className="space-y-1">
-            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.inputCapabilities')}</span>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {modalities.map((modality) => (
-                <SettingsCheckboxRow
-                  key={modality}
-                  checked={model.modalities.includes(modality)}
-                  onChange={() => {
-                    onUserEdit('modalities');
-                    onUpdate((row) => {
-                      const selected = row.modalities.includes(modality);
-                      if (selected && row.modalities.length === 1) return row;
-                      return {
-                        ...row,
-                        modalities: selected
-                          ? row.modalities.filter((entry) => entry !== modality)
-                          : [...row.modalities, modality],
-                      };
-                    });
-                  }}
-                  disabled={disabled || (model.modalities.includes(modality)
-                    && (baseModalityCount === 1 && (modality === 'text' || modality === 'image')))}
-                  label={modality}
-                  ariaLabel={modality}
-                />
-              ))}
+          <SettingsDisclosure
+            title={t('settings.providers.page.custom.omp.model.protocol.title')}
+            secondary={protocolSummary}
+            expanded={protocolOpen}
+            onToggle={() => setProtocolOpen((prev) => !prev)}
+          >
+            <div className="space-y-2.5 ps-4 pt-1">
+              <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.api')}</label>
+                  <Select
+                    value={model.api || UNSET_VALUE}
+                    onValueChange={(next) => {
+                      if (next === UNSET_VALUE) {
+                        onUpdate((row) => ({ ...row, api: '' }));
+                        return;
+                      }
+                      const matched = OMP_MODEL_APIS.find((entry) => entry === next);
+                      if (matched) onUpdate((row) => ({ ...row, api: matched }));
+                    }}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.api')} className="w-full">
+                      <SelectValue>
+                        {model.api ? modelApiDisplayLabel(model.api) : t('settings.providers.page.custom.omp.model.apiInherit')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.model.apiInherit')}</SelectItem>
+                      {OMP_MODEL_APIS.map((api) => (
+                        <SelectItem key={api} value={api}>{modelApiDisplayLabel(api)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.kind')}</label>
+                  <Select
+                    value={model.kind || UNSET_VALUE}
+                    onValueChange={(next) => {
+                      if (next === UNSET_VALUE) {
+                        onUpdate((row) => ({ ...row, kind: '', nativeKind: 'chat' }));
+                        return;
+                      }
+                      const matched = OMP_MODEL_KINDS.find((entry) => entry === next);
+                      if (matched) {
+                        onUpdate((row) => ({
+                          ...row,
+                          kind: matched,
+                          nativeKind: matched,
+                        }));
+                      }
+                    }}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.kind')} className="w-full">
+                      <SelectValue>{model.kind || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
+                      {OMP_MODEL_KINDS.map((kind) => (
+                        <SelectItem key={kind} value={kind}>{kind}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className={cn('grid grid-cols-1 gap-2', mode === 'definition' && '@xl:grid-cols-2')}>
+                {mode === 'definition' ? (
+                  <div className="flex flex-col gap-1">
+                    <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.baseUrl')}</label>
+                    <Input
+                      value={model.baseUrl}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        onUpdate((row) => ({ ...row, baseUrl: value }));
+                        onClearError('baseUrl');
+                      }}
+                      placeholder="https://..."
+                      className="h-8 w-full rounded-md px-3 font-mono text-xs"
+                      aria-invalid={Boolean(errors?.baseUrl)}
+                      aria-label={t('settings.providers.page.custom.omp.model.baseUrl')}
+                      disabled={disabled}
+                    />
+                    {fieldError(errors?.baseUrl)}
+                  </div>
+                ) : null}
+                <div className="flex flex-col gap-1">
+                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.maxContextWindow')}</label>
+                  <Input
+                    inputMode="numeric"
+                    value={model.maxContextWindow}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      onUpdate((row) => ({ ...row, maxContextWindow: value }));
+                      onClearError('maxContextWindow');
+                    }}
+                    placeholder="1000000"
+                    className="h-8 w-full rounded-md px-3 font-mono text-xs"
+                    aria-invalid={Boolean(errors?.maxContextWindow)}
+                    aria-label={t('settings.providers.page.custom.omp.model.maxContextWindow')}
+                    disabled={disabled}
+                  />
+                  {fieldError(errors?.maxContextWindow)}
+                </div>
+              </div>
             </div>
-            {sourceNote('modalities')}
-          </div>
+          </SettingsDisclosure>
 
           <SettingsDisclosure
             title={t('settings.providers.page.custom.omp.model.thinking.title')}
@@ -589,27 +697,29 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                       />
                     </div>
                   </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.effortMap')}</label>
-                    <Textarea
-                      value={model.thinkingEffortMapJson}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        onUserEdit('thinking');
-                        onUpdate((row) => ({ ...row, thinkingEffortMapJson: value }));
-                        onClearError('thinkingEffortMapJson');
-                      }}
-                      placeholder={'{"high": "model-thinking"}'}
-                      rows={2}
-                      className="w-full font-mono text-xs"
-                      aria-invalid={Boolean(errors?.thinkingEffortMapJson)}
-                      aria-label={t('settings.providers.page.custom.omp.model.thinking.effortMap')}
-                      disabled={disabled}
-                    />
-                    {fieldError(errors?.thinkingEffortMapJson)}
-                  </div>
                 </>
+              ) : null}
+
+              {model.thinkingMode || Boolean(model.thinkingEffortMapJson.trim()) || Boolean(errors?.thinkingEffortMapJson) ? (
+                <div className="flex flex-col gap-1">
+                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.effortMap')}</label>
+                  <Textarea
+                    value={model.thinkingEffortMapJson}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      onUserEdit('thinking');
+                      onUpdate((row) => ({ ...row, thinkingEffortMapJson: value }));
+                      onClearError('thinkingEffortMapJson');
+                    }}
+                    placeholder={'{"high": "model-thinking"}'}
+                    rows={2}
+                    className="w-full font-mono text-xs"
+                    aria-invalid={Boolean(errors?.thinkingEffortMapJson)}
+                    aria-label={t('settings.providers.page.custom.omp.model.thinking.effortMap')}
+                    disabled={disabled}
+                  />
+                  {fieldError(errors?.thinkingEffortMapJson)}
+                </div>
               ) : null}
               {sourceNote('thinking')}
             </div>
@@ -756,7 +866,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
 
           <SettingsDisclosure
             title={t('settings.providers.page.custom.omp.model.advanced.title')}
-            secondary={advancedCount > 0 ? String(advancedCount) : undefined}
+            secondary={advancedSummary}
             expanded={advancedOpen}
             onToggle={() => setAdvancedOpen((prev) => !prev)}
           >
@@ -1002,7 +1112,10 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                     replaceHeaders,
                     headers: replaceHeaders ? row.headers : [],
                   }))}
-                  onHeadersChange={(headers) => onUpdate((row) => ({ ...row, headers }))}
+                  onHeadersChange={(headers) => {
+                    onUpdate((row) => ({ ...row, headers }));
+                    if (errors?.headers) onClearError('headers');
+                  }}
                 />
               </div>
             </div>

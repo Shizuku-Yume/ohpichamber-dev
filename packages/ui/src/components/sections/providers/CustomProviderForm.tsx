@@ -38,6 +38,7 @@ import {
   OMP_DISCOVERY_TYPES,
   OMP_PROVIDER_APIS,
   OMP_PROVIDER_AUTH_MODES,
+  apiDisplayLabel,
   applyModelCatalogInfo,
   autoFillIds,
   autoFillNoticeFor,
@@ -51,6 +52,7 @@ import {
   formatAutoFillNoticeModels,
   idsMissingCatalog,
   legacyProtocolForApi,
+  modelApiDisplayLabel,
   markModelFieldTyped,
   unresolvedAutoFillIds,
   validateCustomProviderForm,
@@ -59,7 +61,6 @@ import {
   type CustomProviderFieldErrors,
   type CustomProviderFormState,
   type CustomProviderPersistPlan,
-  type CustomProviderTranslator,
   type HeaderFieldErrors,
   type ModelFieldErrors,
   type ModelRow,
@@ -86,18 +87,6 @@ interface CustomProviderFormProps {
   onResetOverrides?: () => Promise<void>;
 }
 
-const apiDisplayLabel = (api: string, t: CustomProviderTranslator): string => {
-  switch (api) {
-    case 'openai-completions':
-      return `${t('settings.providers.page.custom.field.protocol.openaiChat')} (${api})`;
-    case 'openai-responses':
-      return `${t('settings.providers.page.custom.field.protocol.openaiResponses')} (${api})`;
-    case 'anthropic-messages':
-      return `${t('settings.providers.page.custom.field.protocol.anthropicMessages')} (${api})`;
-    default:
-      return api;
-  }
-};
 
 export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
   workspaceId,
@@ -136,26 +125,14 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     new Set(initial ? [] : form.models.map((model) => model.row))
   ));
   const [expandedOverrides, setExpandedOverrides] = React.useState<Set<string>>(() => new Set());
-  const [discoveryOpen, setDiscoveryOpen] = React.useState(() => form.discoveryEnabled);
-  const [compatOpen, setCompatOpen] = React.useState(() => Boolean(
-    form.compatJson.trim() || form.disableStrictTools !== 'default' || form.transportPiNative,
-  ));
-  const [bedrockOpen, setBedrockOpen] = React.useState(() => Boolean(
-    form.api === 'bedrock-converse-stream'
-    || form.guardrailIdentifier.trim()
-    || form.guardrailVersion.trim()
-    || form.guardrailTrace
-    || form.requestMetadata.length > 0,
-  ));
-  const [remoteCompactionOpen, setRemoteCompactionOpen] = React.useState(() => Boolean(
-    form.remoteCompactionEnabled !== 'default'
-    || form.remoteCompactionApi
-    || form.remoteCompactionEndpoint.trim()
-    || form.remoteCompactionModel.trim()
-    || form.remoteCompactionV2StreamingEnabled !== 'default'
-    || form.remoteCompactionV2Endpoint.trim()
-    || form.remoteCompactionStreamingEndpoint.trim(),
-  ));
+  const [appearanceOpen, setAppearanceOpen] = React.useState(false);
+  const [headersOpen, setHeadersOpen] = React.useState(false);
+  const [overridesOpen, setOverridesOpen] = React.useState(false);
+  const [discoveryOpen, setDiscoveryOpen] = React.useState(false);
+  const [compatOpen, setCompatOpen] = React.useState(false);
+  const [bedrockOpen, setBedrockOpen] = React.useState(false);
+  const [remoteCompactionOpen, setRemoteCompactionOpen] = React.useState(false);
+  const [validationAttempt, setValidationAttempt] = React.useState(0);
   const lifetime = React.useRef(true);
   React.useEffect(() => { lifetime.current = true; return () => { lifetime.current = false; }; }, []);
 
@@ -336,6 +313,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     if (busy || discovering) return;
     setFormError(null);
     const validation = validateCustomProviderForm(form, existingProviderIDs, isEdit, t);
+    setValidationAttempt((count) => count + 1);
     setFieldErrors(validation.fields);
     setModelErrors(validation.models);
     setOverrideErrors(validation.modelOverrides);
@@ -348,11 +326,15 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     if (rowsWithErrors.length > 0) {
       setExpandedRows((previous) => new Set([...previous, ...rowsWithErrors]));
     }
+    if (validation.headers.some((row) => row.name || row.value)) {
+      setHeadersOpen(true);
+    }
     const overridesWithErrors = form.modelOverrides
       .filter((_, index) => hasModelErrors(validation.modelOverrides[index]))
       .map((model) => model.row);
     if (overridesWithErrors.length > 0) {
       setExpandedOverrides((previous) => new Set([...previous, ...overridesWithErrors]));
+      setOverridesOpen(true);
     }
     if (validation.fields.discoveryTimeoutMs) setDiscoveryOpen(true);
     if (validation.fields.compatJson) setCompatOpen(true);
@@ -456,6 +438,128 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
   const allowEmptyModels = form.isBuiltIn || form.discoveryEnabled || form.modelOverrides.length > 0;
   const canRemoveModel = (count: number) => allowEmptyModels || count > 1;
+  const providerBaseUrl = form.endpoint.trim() || form.effectiveBaseUrl.trim();
+  const hasCustomLogo = Boolean(pickedLogoUrl || (form.logo === null && storedLogo));
+  const configApiKeySummary = form.configApiKeyAction === 'set'
+    ? t('settings.providers.page.custom.appearance.summary.configKeySet')
+    : form.configApiKeyAction === 'clear'
+      ? t('settings.providers.page.custom.appearance.summary.configKeyClear')
+      : form.configApiKeyStatus.configured
+        ? configApiKeyStatusText()
+        : null;
+  const iconOptionKey = form.icon
+    ? (`settings.providers.page.custom.field.icon.option.${form.icon}` as const)
+    : null;
+  const appearanceSummary = [
+    form.logo === 'removed'
+      ? t('settings.providers.page.custom.appearance.summary.logoRemoved')
+      : hasCustomLogo
+        ? t('settings.providers.page.custom.appearance.summary.customLogo')
+        : null,
+    iconOptionKey
+      ? t('settings.providers.page.custom.appearance.summary.icon', { icon: t(iconOptionKey) })
+      : null,
+    form.authHeader === 'true'
+      ? t('settings.providers.page.custom.appearance.summary.authHeaderOn')
+      : form.authHeader === 'false'
+        ? t('settings.providers.page.custom.appearance.summary.authHeaderOff')
+        : null,
+    configApiKeySummary,
+  ].filter(Boolean).join(' · ') || undefined;
+
+  const headersSummary = (() => {
+    const pendingRows = form.headers.filter((header) => header.name.trim() || header.value);
+    if (form.replaceHeaders) {
+      if (pendingRows.length === 0) {
+        return isEdit ? t('settings.providers.page.custom.headers.summary.replaceEmpty') : undefined;
+      }
+      return pendingRows.length === 1
+        ? t('settings.providers.page.custom.headers.summary.single', { count: 1 })
+        : t('settings.providers.page.custom.headers.summary.plural', { count: pendingRows.length });
+    }
+    const activeNames = new Set(
+      form.headerNames
+        .filter((name) => !form.headersPatchRemove.includes(name))
+        .map((name) => name.toLowerCase()),
+    );
+    let unnamedCount = 0;
+    for (const row of pendingRows) {
+      const name = row.name.trim().toLowerCase();
+      if (name) activeNames.add(name);
+      else unnamedCount += 1;
+    }
+    const activeCount = activeNames.size + unnamedCount;
+    if (activeCount > 0) {
+      return activeCount === 1
+        ? t('settings.providers.page.custom.headers.summary.single', { count: 1 })
+        : t('settings.providers.page.custom.headers.summary.plural', { count: activeCount });
+    }
+    const removedCount = form.headersPatchRemove.length;
+    if (removedCount > 0) {
+      return removedCount === 1
+        ? t('settings.providers.page.custom.headers.summary.removingSingle', { count: 1 })
+        : t('settings.providers.page.custom.headers.summary.removingPlural', { count: removedCount });
+    }
+    return undefined;
+  })();
+
+  const overridesSummary = form.modelOverrides.length > 0
+    ? form.modelOverrides.length === 1
+      ? t('settings.providers.page.custom.overrides.summary.single', { count: 1 })
+      : t('settings.providers.page.custom.overrides.summary.plural', { count: form.modelOverrides.length })
+    : undefined;
+
+  const discoverySummary = form.discoveryEnabled ? form.discoveryType : undefined;
+
+  const compatSummary = [
+    form.compatJson.trim() ? t('settings.providers.page.custom.compat.summary.customJson') : null,
+    form.disableStrictTools === 'true'
+      ? t('settings.providers.page.custom.compat.summary.strictToolsOff')
+      : form.disableStrictTools === 'false'
+        ? t('settings.providers.page.custom.compat.summary.strictToolsOn')
+        : null,
+    form.transportPiNative ? t('settings.providers.page.custom.compat.summary.piNative') : null,
+  ].filter(Boolean).join(' · ') || undefined;
+
+  const hasGuardrail = Boolean(
+    form.guardrailIdentifier.trim() || form.guardrailVersion.trim() || form.guardrailTrace,
+  );
+  const metadataCount = form.requestMetadata.filter((entry) => entry.name.trim() || entry.value).length;
+  const bedrockSummary = [
+    hasGuardrail ? t('settings.providers.page.custom.bedrock.summary.guardrailConfigured') : null,
+    metadataCount > 0
+      ? metadataCount === 1
+        ? t('settings.providers.page.custom.bedrock.summary.metadataSingle', { count: 1 })
+        : t('settings.providers.page.custom.bedrock.summary.metadataPlural', { count: metadataCount })
+      : null,
+  ].filter(Boolean).join(' · ') || undefined;
+
+  const hasRemoteCompactionEndpoint = Boolean(
+    form.remoteCompactionEndpoint.trim()
+    || form.remoteCompactionV2Endpoint.trim()
+    || form.remoteCompactionStreamingEndpoint.trim(),
+  );
+  const remoteCompactionSummary = [
+    hasRemoteCompactionEndpoint
+      ? t('settings.providers.page.custom.remoteCompaction.summary.endpointSet')
+      : null,
+    !hasRemoteCompactionEndpoint && form.remoteCompactionEnabled === 'true'
+      ? t('settings.providers.page.custom.omp.option.enabled')
+      : !hasRemoteCompactionEndpoint && form.remoteCompactionEnabled === 'false'
+        ? t('settings.providers.page.custom.omp.option.disabled')
+        : null,
+    form.remoteCompactionModel.trim() || null,
+    form.remoteCompactionApi ? apiDisplayLabel(form.remoteCompactionApi) : null,
+  ].filter(Boolean).join(' · ') || undefined;
+
+  const apiCounts = new Map<string, number>();
+  for (const model of form.models) {
+    const apiKey = model.api || form.api || 'inherited';
+    apiCounts.set(apiKey, (apiCounts.get(apiKey) ?? 0) + 1);
+  }
+  const showModelSearch = form.models.length >= 6;
+  const showModelApiChips = apiCounts.size >= 2;
+  const activeModelApiFilter = modelApiFilter !== 'all' && apiCounts.has(modelApiFilter) ? modelApiFilter : 'all';
 
   return (
     <form onSubmit={submit}>
@@ -465,20 +569,37 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           : isEdit
             ? t('settings.providers.page.custom.editTitle')
             : t('settings.providers.page.custom.title')}
+        info={form.isBuiltIn
+          ? t('settings.providers.page.custom.builtInDescription')
+          : t('settings.providers.native.customDescription')}
+        divider={false}
         settingsItem="providers.custom"
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
-        <p className={SETTINGS_HELPER_CLASS}>
-          {form.isBuiltIn
-            ? t('settings.providers.page.custom.builtInDescription')
-            : t('settings.providers.native.customDescription')}
-        </p>
-
         {authFailureHint ? (
           <p className="typography-meta text-[var(--status-warning)]" role="status">
             {authFailureHint}
           </p>
         ) : null}
+
+        <SettingsFieldRow
+          label={t('settings.providers.page.custom.field.name.label')}
+          info={t('settings.providers.page.custom.field.name.info')}
+        >
+          <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
+            <Input
+              value={form.name}
+              onChange={(event) => setField('name', event.target.value)}
+              disabled={busy}
+              placeholder={form.providerId.trim() || t('settings.providers.page.custom.field.name.placeholder')}
+              inputSize="compact"
+              className="w-full rounded-md px-3"
+              aria-invalid={Boolean(fieldErrors.name)}
+              aria-label={t('settings.providers.page.custom.field.name.label')}
+            />
+            {fieldErrors.name ? <p className="typography-meta text-[var(--status-error)]">{fieldErrors.name}</p> : null}
+          </div>
+        </SettingsFieldRow>
 
         <SettingsFieldRow
           label={t('settings.providers.page.custom.field.providerID.label')}
@@ -525,92 +646,17 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           >
             <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue>
-                {form.api ? apiDisplayLabel(form.api, t) : t('settings.providers.page.custom.omp.api.inherit')}
+                {form.api ? apiDisplayLabel(form.api) : t('settings.providers.page.custom.omp.api.inherit')}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.api.inherit')}</SelectItem>
               {OMP_PROVIDER_APIS.map((api) => (
-                <SelectItem key={api} value={api}>{apiDisplayLabel(api, t)}</SelectItem>
+                <SelectItem key={api} value={api}>{apiDisplayLabel(api)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </SettingsFieldRow>
-
-        <SettingsFieldRow
-          label={t('settings.providers.page.custom.field.name.label')}
-          info={t('settings.providers.page.custom.field.name.info')}
-        >
-          <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
-            <Input
-              value={form.name}
-              onChange={(event) => setField('name', event.target.value)}
-              disabled={busy}
-              placeholder={form.providerId.trim() || t('settings.providers.page.custom.field.name.placeholder')}
-              inputSize="compact"
-              className="w-full rounded-md px-3"
-              aria-invalid={Boolean(fieldErrors.name)}
-              aria-label={t('settings.providers.page.custom.field.name.label')}
-            />
-            {fieldErrors.name ? <p className="typography-meta text-[var(--status-error)]">{fieldErrors.name}</p> : null}
-          </div>
-        </SettingsFieldRow>
-
-        <SettingsStackedField
-          label={t('settings.providers.page.custom.field.icon.label')}
-          info={t('settings.providers.page.custom.field.icon.info')}
-        >
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('settings.providers.page.custom.field.icon.label')}>
-            <Button
-              type="button"
-              variant={form.icon === null ? 'chip' : 'ghost'}
-              size="icon"
-              className={cn(SETTINGS_ICON_BUTTON_CLASS, form.icon === null && 'text-foreground')}
-              aria-label={t('settings.providers.page.custom.field.icon.option.default')}
-              title={t('settings.providers.page.custom.field.icon.option.default')}
-              aria-pressed={form.icon === null}
-              disabled={busy}
-              onClick={() => setForm((previous) => ({ ...previous, icon: null }))}
-            >
-              {providerHasLogo
-                ? <ProviderLogo providerId={logoProviderId} className="size-4" ignoreCustomIcon />
-                : <Icon name="checkbox-blank-circle" className="size-4 text-muted-foreground" />}
-            </Button>
-            {CUSTOM_PROVIDER_ICONS.map((entry) => (
-              <Button
-                key={entry.id}
-                type="button"
-                variant={form.icon === entry.id ? 'chip' : 'ghost'}
-                size="icon"
-                className={cn(SETTINGS_ICON_BUTTON_CLASS, form.icon === entry.id && 'text-foreground')}
-                aria-label={t(`settings.providers.page.custom.field.icon.option.${entry.id}`)}
-                title={t(`settings.providers.page.custom.field.icon.option.${entry.id}`)}
-                aria-pressed={form.icon === entry.id}
-                disabled={busy}
-                onClick={() => setForm((previous) => ({ ...previous, icon: entry.id }))}
-              >
-                <Icon name={entry.icon} className="size-4" />
-              </Button>
-            ))}
-          </div>
-        </SettingsStackedField>
-
-        {providerLogoUploadSupported() ? (
-          <SettingsFieldRow
-            label={t('settings.providers.page.logo.title')}
-            info={t('settings.providers.page.logo.info')}
-            settingsItem="providers.logo"
-          >
-            <ProviderLogoImageControl
-              preview={pickedLogoUrl
-                ? <img src={pickedLogoUrl} alt="" className="size-5 object-contain" />
-                : form.logo === null && storedLogo ? <ProviderLogo providerId={logoProviderId} alt="" className="size-5" /> : null}
-              busy={busy}
-              onPick={(file) => setForm((previous) => ({ ...previous, logo: file }))}
-              onRemove={() => setForm((previous) => ({ ...previous, logo: 'removed' }))}
-            />
-          </SettingsFieldRow>
-        ) : null}
 
         <SettingsFieldRow
           label={t('settings.providers.page.custom.field.baseURL.label')}
@@ -683,64 +729,128 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           </Select>
         </SettingsFieldRow>
 
-        <SettingsFieldRow
-          label={t('settings.providers.page.custom.omp.authHeader.label')}
-          info={t('settings.providers.page.custom.omp.authHeader.info')}
+        <SettingsDisclosure
+          title={t('settings.providers.page.custom.appearance.title')}
+          secondary={appearanceSummary}
+          expanded={appearanceOpen}
+          onToggle={() => setAppearanceOpen((prev) => !prev)}
         >
-          <TriStateSelect
-            value={form.authHeader}
-            onChange={(authHeader) => setForm((previous) => ({ ...previous, authHeader }))}
-            ariaLabel={t('settings.providers.page.custom.omp.authHeader.label')}
-            disabled={busy}
-            triggerClassName={SETTINGS_WIDTH_SELECT_CLASS}
-          />
-        </SettingsFieldRow>
-
-        <SettingsFieldRow
-          label={t('settings.providers.page.custom.omp.configApiKey.label')}
-          info={t('settings.providers.page.custom.omp.configApiKey.info')}
-        >
-          <div className={cn('flex min-w-0 flex-col gap-1.5', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
-            <p className={SETTINGS_HELPER_CLASS}>{configApiKeyStatusText()}</p>
-            <Select
-              value={form.configApiKeyAction}
-              onValueChange={(next) => {
-                if (next === 'keep' || next === 'set' || next === 'clear') {
-                  setForm((previous) => ({ ...previous, configApiKeyAction: next }));
-                }
-              }}
-              disabled={busy}
-            >
-              <SelectTrigger aria-label={t('settings.providers.page.custom.omp.configApiKey.label')} className="w-full">
-                <SelectValue>{configApiKeyActionLabel(form.configApiKeyAction)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="keep">{t('settings.providers.page.custom.omp.configApiKey.keep')}</SelectItem>
-                <SelectItem value="set">{t('settings.providers.page.custom.omp.configApiKey.set')}</SelectItem>
-                {form.configApiKeyStatus.configured ? (
-                  <SelectItem value="clear">{t('settings.providers.page.custom.omp.configApiKey.clear')}</SelectItem>
-                ) : null}
-              </SelectContent>
-            </Select>
-            {form.configApiKeyAction === 'set' ? (
-              <Input
-                type="password"
-                value={form.configApiKeyValue}
-                onChange={(event) => setForm((previous) => ({ ...previous, configApiKeyValue: event.target.value }))}
+          <SettingsStackedField
+            label={t('settings.providers.page.custom.field.icon.label')}
+            info={t('settings.providers.page.custom.field.icon.info')}
+          >
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('settings.providers.page.custom.field.icon.label')}>
+              <Button
+                type="button"
+                variant={form.icon === null ? 'chip' : 'ghost'}
+                size="icon"
+                className={cn(SETTINGS_ICON_BUTTON_CLASS, form.icon === null && 'text-foreground')}
+                aria-label={t('settings.providers.page.custom.field.icon.option.default')}
+                title={t('settings.providers.page.custom.field.icon.option.default')}
+                aria-pressed={form.icon === null}
                 disabled={busy}
-                placeholder={t('settings.providers.page.custom.omp.configApiKey.placeholder')}
-                autoComplete="new-password"
-                inputSize="compact"
-                className="w-full rounded-md px-3 font-mono text-xs"
-                aria-label={t('settings.providers.page.custom.omp.configApiKey.placeholder')}
+                onClick={() => setForm((previous) => ({ ...previous, icon: null }))}
+              >
+                {providerHasLogo
+                  ? <ProviderLogo providerId={logoProviderId} className="size-4" ignoreCustomIcon />
+                  : <Icon name="checkbox-blank-circle" className="size-4 text-muted-foreground" />}
+              </Button>
+              {CUSTOM_PROVIDER_ICONS.map((entry) => (
+                <Button
+                  key={entry.id}
+                  type="button"
+                  variant={form.icon === entry.id ? 'chip' : 'ghost'}
+                  size="icon"
+                  className={cn(SETTINGS_ICON_BUTTON_CLASS, form.icon === entry.id && 'text-foreground')}
+                  aria-label={t(`settings.providers.page.custom.field.icon.option.${entry.id}`)}
+                  title={t(`settings.providers.page.custom.field.icon.option.${entry.id}`)}
+                  aria-pressed={form.icon === entry.id}
+                  disabled={busy}
+                  onClick={() => setForm((previous) => ({ ...previous, icon: entry.id }))}
+                >
+                  <Icon name={entry.icon} className="size-4" />
+                </Button>
+              ))}
+            </div>
+          </SettingsStackedField>
+
+          {providerLogoUploadSupported() ? (
+            <SettingsFieldRow
+              label={t('settings.providers.page.logo.title')}
+              info={t('settings.providers.page.logo.info')}
+              settingsItem="providers.logo"
+            >
+              <ProviderLogoImageControl
+                preview={pickedLogoUrl
+                  ? <img src={pickedLogoUrl} alt="" className="size-5 object-contain" />
+                  : form.logo === null && storedLogo ? <ProviderLogo providerId={logoProviderId} alt="" className="size-5" /> : null}
+                busy={busy}
+                onPick={(file) => setForm((previous) => ({ ...previous, logo: file }))}
+                onRemove={() => setForm((previous) => ({ ...previous, logo: 'removed' }))}
               />
-            ) : null}
-          </div>
-        </SettingsFieldRow>
+            </SettingsFieldRow>
+          ) : null}
+
+          <SettingsFieldRow
+            label={t('settings.providers.page.custom.omp.authHeader.label')}
+            info={t('settings.providers.page.custom.omp.authHeader.info')}
+          >
+            <TriStateSelect
+              value={form.authHeader}
+              onChange={(authHeader) => setForm((previous) => ({ ...previous, authHeader }))}
+              ariaLabel={t('settings.providers.page.custom.omp.authHeader.label')}
+              disabled={busy}
+              triggerClassName={SETTINGS_WIDTH_SELECT_CLASS}
+            />
+          </SettingsFieldRow>
+
+          <SettingsFieldRow
+            label={t('settings.providers.page.custom.omp.configApiKey.label')}
+            info={t('settings.providers.page.custom.omp.configApiKey.info')}
+          >
+            <div className={cn('flex min-w-0 flex-col gap-1.5', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
+              <p className={SETTINGS_HELPER_CLASS}>{configApiKeyStatusText()}</p>
+              <Select
+                value={form.configApiKeyAction}
+                onValueChange={(next) => {
+                  if (next === 'keep' || next === 'set' || next === 'clear') {
+                    setForm((previous) => ({ ...previous, configApiKeyAction: next }));
+                  }
+                }}
+                disabled={busy}
+              >
+                <SelectTrigger aria-label={t('settings.providers.page.custom.omp.configApiKey.label')} className="w-full">
+                  <SelectValue>{configApiKeyActionLabel(form.configApiKeyAction)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="keep">{t('settings.providers.page.custom.omp.configApiKey.keep')}</SelectItem>
+                  <SelectItem value="set">{t('settings.providers.page.custom.omp.configApiKey.set')}</SelectItem>
+                  {form.configApiKeyStatus.configured ? (
+                    <SelectItem value="clear">{t('settings.providers.page.custom.omp.configApiKey.clear')}</SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+              {form.configApiKeyAction === 'set' ? (
+                <Input
+                  type="password"
+                  value={form.configApiKeyValue}
+                  onChange={(event) => setForm((previous) => ({ ...previous, configApiKeyValue: event.target.value }))}
+                  disabled={busy}
+                  placeholder={t('settings.providers.page.custom.omp.configApiKey.placeholder')}
+                  autoComplete="new-password"
+                  inputSize="compact"
+                  className="w-full rounded-md px-3 font-mono text-xs"
+                  aria-label={t('settings.providers.page.custom.omp.configApiKey.placeholder')}
+                />
+              ) : null}
+            </div>
+          </SettingsFieldRow>
+        </SettingsDisclosure>
       </SettingsSection>
 
       <SettingsSection
         title={t('settings.providers.page.custom.models.title')}
+        divider
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex flex-col gap-2')}>
@@ -795,48 +905,46 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           ) : null}
         </div>
 
-        {form.models.length >= 6 ? (
+        {showModelSearch || showModelApiChips ? (
           <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex flex-col gap-2')}>
-            <Input
-              value={modelSearch}
-              onChange={(event) => setModelSearch(event.target.value)}
-              placeholder={t('settings.providers.page.custom.omp.models.searchPlaceholder')}
-              aria-label={t('settings.providers.page.custom.omp.models.searchPlaceholder')}
-              inputSize="compact"
-              className="w-full rounded-md px-3"
-              disabled={busy}
-            />
-            {(() => {
-              const apiCounts = new Map<string, number>();
-              for (const model of form.models) {
-                const apiKey = model.api || form.api || 'inherited';
-                apiCounts.set(apiKey, (apiCounts.get(apiKey) ?? 0) + 1);
-              }
-              if (apiCounts.size <= 1) return null;
-              return (
-                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('settings.providers.page.custom.omp.model.api')}>
+            {showModelSearch ? (
+              <Input
+                value={modelSearch}
+                onChange={(event) => setModelSearch(event.target.value)}
+                placeholder={t('settings.providers.page.custom.omp.models.searchPlaceholder')}
+                aria-label={t('settings.providers.page.custom.omp.models.searchPlaceholder')}
+                inputSize="compact"
+                className="w-full rounded-md px-3"
+                disabled={busy}
+              />
+            ) : null}
+            {showModelApiChips ? (
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('settings.providers.page.custom.omp.model.api')}>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant={activeModelApiFilter === 'all' ? 'chip' : 'outline'}
+                  aria-pressed={activeModelApiFilter === 'all'}
+                  onClick={() => setModelApiFilter('all')}
+                >
+                  {t('settings.providers.page.custom.models.dialog.filter.all')} ({form.models.length})
+                </Button>
+                {Array.from(apiCounts.entries()).map(([apiKey, count]) => (
                   <Button
+                    key={apiKey}
                     type="button"
                     size="xs"
-                    variant={modelApiFilter === 'all' ? 'chip' : 'outline'}
-                    onClick={() => setModelApiFilter('all')}
+                    variant={activeModelApiFilter === apiKey ? 'chip' : 'outline'}
+                    aria-pressed={activeModelApiFilter === apiKey}
+                    onClick={() => setModelApiFilter(apiKey)}
                   >
-                    {t('settings.providers.page.custom.models.dialog.filter.all')} ({form.models.length})
+                    {apiKey === 'inherited'
+                      ? t('settings.providers.page.custom.omp.models.inheritedApi')
+                      : modelApiDisplayLabel(apiKey)} ({count})
                   </Button>
-                  {Array.from(apiCounts.entries()).map(([apiKey, count]) => (
-                    <Button
-                      key={apiKey}
-                      type="button"
-                      size="xs"
-                      variant={modelApiFilter === apiKey ? 'chip' : 'outline'}
-                      onClick={() => setModelApiFilter(apiKey)}
-                    >
-                      {apiKey === 'inherited' ? t('settings.providers.page.custom.omp.models.inheritedApi') : apiKey} ({count})
-                    </Button>
-                  ))}
-                </div>
-              );
-            })()}
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -845,7 +953,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             {form.models.map((model, index) => {
               const query = modelSearch.trim().toLowerCase();
               const resolvedApi = model.api || form.api || 'inherited';
-              if (modelApiFilter !== 'all' && resolvedApi !== modelApiFilter) return null;
+              if (activeModelApiFilter !== 'all' && resolvedApi !== activeModelApiFilter) return null;
               if (query && !model.modelId.toLowerCase().includes(query) && !model.name.toLowerCase().includes(query)) return null;
               return (
                 <CustomProviderModelRow
@@ -853,8 +961,10 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                   mode="definition"
                   isEdit={isEdit}
                   providerDefaultApi={form.api}
+                  providerBaseUrl={providerBaseUrl}
                   model={model}
                   errors={modelErrors[index]}
+                  validationAttempt={validationAttempt}
                   expanded={expandedRows.has(model.row)}
                   disabled={busy}
                   onToggle={() => toggleRow(model.row)}
@@ -910,96 +1020,108 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       </SettingsSection>
 
       <SettingsSection
-        title={t('settings.providers.page.custom.omp.overrides.title')}
-        contentClassName={SETTINGS_SPACE_ROW_CLASS}
-      >
-        <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.omp.overrides.description')}</p>
-        {form.modelOverrides.length > 0 ? (
-          <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'divide-y divide-border/50')}>
-            {form.modelOverrides.map((override, index) => (
-              <CustomProviderModelRow
-                key={override.row}
-                mode="override"
-                isEdit={isEdit}
-                model={override}
-                errors={overrideErrors[index]}
-                expanded={expandedOverrides.has(override.row)}
-                disabled={busy}
-                onToggle={() => toggleOverrideRow(override.row)}
-                onUpdate={(updater) => updateModelAt('modelOverrides', index, updater)}
-                onClearError={(field) => clearModelErrorAt('modelOverrides', index, field)}
-                onUserEdit={(field) => updateModelAt('modelOverrides', index, (row) => markModelFieldTyped(row, field))}
-                onRemove={() => {
-                  setForm((previous) => ({
-                    ...previous,
-                    modelOverrides: previous.modelOverrides.filter((_, rowIndex) => rowIndex !== index),
-                  }));
-                  setOverrideErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
-                }}
-              />
-            ))}
-          </div>
-        ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={disabled}
-          onClick={() => {
-            const row = createModelRow();
-            setForm((previous) => ({ ...previous, modelOverrides: [...previous.modelOverrides, row] }));
-            setOverrideErrors((previous) => [...previous, {}]);
-            setExpandedOverrides((previous) => new Set([...previous, row.row]));
-          }}
-        >
-          {t('settings.providers.page.custom.omp.overrides.add')}
-        </Button>
-      </SettingsSection>
-
-      <SettingsSection
-        title={t('settings.providers.page.custom.headers.title')}
-        contentClassName={SETTINGS_SPACE_ROW_CLASS}
-      >
-        <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.headers.description')}</p>
-        <div className={SETTINGS_WIDTH_LONG_TEXT_CLASS}>
-          <OmpHeadersEditor
-            isEdit={isEdit}
-            headerNames={form.headerNames}
-            headersPatchRemove={form.headersPatchRemove}
-            headers={form.headers}
-            replaceHeaders={form.replaceHeaders}
-            headerErrors={headerErrors}
-            disabled={busy}
-            onToggleRemoveExisting={(headerName) => setForm((previous) => ({
-              ...previous,
-              headersPatchRemove: previous.headersPatchRemove.includes(headerName)
-                ? previous.headersPatchRemove.filter((item) => item !== headerName)
-                : [...previous.headersPatchRemove, headerName],
-            }))}
-            onReplaceHeadersChange={(replaceHeaders) => setForm((previous) => ({
-              ...previous,
-              replaceHeaders,
-              headers: replaceHeaders ? previous.headers : [],
-            }))}
-            onHeadersChange={(headers) => setForm((previous) => ({ ...previous, headers }))}
-            onClearHeaderError={(index, key) => setHeaderErrors((previous) => {
-              const next = [...previous];
-              next[index] = { ...(next[index] ?? {}), [key]: undefined };
-              return next;
-            })}
-            onRemoveHeaderError={(index) => setHeaderErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index))}
-            onAddHeaderError={() => setHeaderErrors((previous) => [...previous, {}])}
-          />
-        </div>
-      </SettingsSection>
-
-      <SettingsSection
-        title={t('settings.providers.page.custom.omp.advanced.title')}
+        title={t('settings.providers.page.custom.advancedSection.title')}
+        divider
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <SettingsDisclosure
+          title={t('settings.providers.page.custom.headers.title')}
+          secondary={headersSummary}
+          expanded={headersOpen}
+          onToggle={() => setHeadersOpen((prev) => !prev)}
+        >
+          <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'space-y-3 ps-4 pt-1')}>
+            <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.headers.description')}</p>
+            <OmpHeadersEditor
+              isEdit={isEdit}
+              headerNames={form.headerNames}
+              headersPatchRemove={form.headersPatchRemove}
+              headers={form.headers}
+              replaceHeaders={form.replaceHeaders}
+              headerErrors={headerErrors}
+              disabled={busy}
+              onToggleRemoveExisting={(headerName) => setForm((previous) => ({
+                ...previous,
+                headersPatchRemove: previous.headersPatchRemove.includes(headerName)
+                  ? previous.headersPatchRemove.filter((item) => item !== headerName)
+                  : [...previous.headersPatchRemove, headerName],
+              }))}
+              onReplaceHeadersChange={(replaceHeaders) => setForm((previous) => ({
+                ...previous,
+                replaceHeaders,
+                headers: replaceHeaders ? previous.headers : [],
+              }))}
+              onHeadersChange={(headers) => setForm((previous) => ({ ...previous, headers }))}
+              onClearHeaderError={(index, key) => setHeaderErrors((previous) => {
+                const next = [...previous];
+                next[index] = { ...(next[index] ?? {}), [key]: undefined };
+                return next;
+              })}
+              onRemoveHeaderError={(index) => setHeaderErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index))}
+              onAddHeaderError={() => setHeaderErrors((previous) => [...previous, {}])}
+            />
+          </div>
+        </SettingsDisclosure>
+
+        <SettingsDisclosure
+          title={t('settings.providers.page.custom.omp.overrides.title')}
+          secondary={overridesSummary}
+          expanded={overridesOpen}
+          onToggle={() => setOverridesOpen((prev) => !prev)}
+        >
+          <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'space-y-3 ps-4 pt-1')}>
+            <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.omp.overrides.description')}</p>
+            {form.modelOverrides.length > 0 ? (
+              <div className="divide-y divide-border/50">
+                {form.modelOverrides.map((override, index) => (
+                  <CustomProviderModelRow
+                    key={override.row}
+                    mode="override"
+                    isEdit={isEdit}
+                    providerDefaultApi={form.api}
+                    providerBaseUrl={providerBaseUrl}
+                    model={override}
+                    errors={overrideErrors[index]}
+                    validationAttempt={validationAttempt}
+                    expanded={expandedOverrides.has(override.row)}
+                    disabled={busy}
+                    onToggle={() => toggleOverrideRow(override.row)}
+                    onUpdate={(updater) => updateModelAt('modelOverrides', index, updater)}
+                    onClearError={(field) => clearModelErrorAt('modelOverrides', index, field)}
+                    onUserEdit={(field) => updateModelAt('modelOverrides', index, (row) => markModelFieldTyped(row, field))}
+                    onRemove={() => {
+                      setForm((previous) => ({
+                        ...previous,
+                        modelOverrides: previous.modelOverrides.filter((_, rowIndex) => rowIndex !== index),
+                      }));
+                      setOverrideErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
+                    }}
+                  />
+                ))}
+              </div>
+            ) : null}
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={disabled}
+                onClick={() => {
+                  const row = createModelRow();
+                  setForm((previous) => ({ ...previous, modelOverrides: [...previous.modelOverrides, row] }));
+                  setOverrideErrors((previous) => [...previous, {}]);
+                  setExpandedOverrides((previous) => new Set([...previous, row.row]));
+                }}
+              >
+                {t('settings.providers.page.custom.omp.overrides.add')}
+              </Button>
+            </div>
+          </div>
+        </SettingsDisclosure>
+
+        <SettingsDisclosure
           title={t('settings.providers.page.custom.omp.discovery.title')}
-          secondary={form.discoveryEnabled ? form.discoveryType : undefined}
+          secondary={discoverySummary}
           expanded={discoveryOpen}
           onToggle={() => setDiscoveryOpen((prev) => !prev)}
         >
@@ -1084,6 +1206,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
         <SettingsDisclosure
           title={t('settings.providers.page.custom.omp.advanced.title')}
+          secondary={compatSummary}
           expanded={compatOpen}
           onToggle={() => setCompatOpen((prev) => !prev)}
         >
@@ -1130,7 +1253,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
         <SettingsDisclosure
           title={t('settings.providers.page.custom.omp.bedrock.title')}
-          secondary={form.guardrailIdentifier.trim() || undefined}
+          secondary={bedrockSummary}
           expanded={bedrockOpen}
           onToggle={() => setBedrockOpen((prev) => !prev)}
         >
@@ -1283,7 +1406,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
         <SettingsDisclosure
           title={t('settings.providers.page.custom.omp.remoteCompaction.title')}
-          secondary={form.remoteCompactionEndpoint.trim() || undefined}
+          secondary={remoteCompactionSummary}
           expanded={remoteCompactionOpen}
           onToggle={() => setRemoteCompactionOpen((prev) => !prev)}
         >

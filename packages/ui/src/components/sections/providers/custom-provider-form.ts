@@ -65,6 +65,63 @@ export type ConfigApiKeyAction = 'keep' | 'set' | 'clear';
 
 export const isCustomProviderProtocol = (value: string): value is CustomProviderProtocol =>
   CUSTOM_PROVIDER_PROTOCOLS.some((protocol) => protocol === value);
+/**
+ * Exhaustive human labels for the OMP provider protocols. Brand names stay as-is;
+ * every key is a known `OmpProviderApi` so the compiler forces a label for each.
+ */
+const PROVIDER_API_LABELS: Readonly<Record<OmpProviderApi, string>> = {
+  'openai-completions': 'OpenAI Chat Completions',
+  'openai-responses': 'OpenAI Responses',
+  'openai-codex-responses': 'OpenAI Codex Responses',
+  'azure-openai-responses': 'Azure OpenAI',
+  'anthropic-messages': 'Anthropic Messages',
+  'bedrock-converse-stream': 'AWS Bedrock',
+  'google-generative-ai': 'Google Gemini',
+  'google-gemini-cli': 'Google Gemini CLI',
+  'google-vertex': 'Google Vertex AI',
+  'openrouter-decisions': 'OpenRouter Decisions',
+  'openai-decisions': 'OpenAI Decisions',
+  'google-decisions': 'Google Decisions',
+  'workers-ai-systemone': 'Cloudflare Workers AI',
+  'liquid-systemone': 'Liquid SystemOne',
+  'nace-systemone': 'NACE SystemOne',
+  'typesafe': 'Typesafe',
+};
+
+const MODEL_API_LABELS: Readonly<Record<OmpModelApi, string>> = {
+  ...PROVIDER_API_LABELS,
+  'openai-images': 'OpenAI Images',
+  'openrouter-images': 'OpenRouter Images',
+  'openai-speech': 'OpenAI Speech',
+  'xai-tts': 'xAI TTS',
+  'openai-transcriptions': 'OpenAI Transcriptions',
+  'openai-embeddings': 'OpenAI Embeddings',
+  'openrouter-rerank': 'OpenRouter Rerank',
+  'openrouter-video': 'OpenRouter Video',
+};
+
+/**
+ * Lookup maps built from the exhaustively typed Records above so unknown strings
+ * fall back to themselves without type assertions or `Object.prototype` leakage.
+ */
+const PROVIDER_API_LABEL_MAP: ReadonlyMap<string, string> = new Map(Object.entries(PROVIDER_API_LABELS));
+const MODEL_API_LABEL_MAP: ReadonlyMap<string, string> = new Map(Object.entries(MODEL_API_LABELS));
+
+/**
+ * Label for a provider protocol select option. Known enum values get a clean
+ * human name; anything else falls back to the stored string unchanged.
+ */
+export function apiDisplayLabel(api: string): string {
+  return PROVIDER_API_LABEL_MAP.get(api) ?? api;
+}
+
+/**
+ * Same mapping as `apiDisplayLabel`, extended to the model-only runner APIs.
+ */
+export function modelApiDisplayLabel(api: string): string {
+  return MODEL_API_LABEL_MAP.get(api) ?? api;
+}
+
 
 function nativeApiFromProtocol(protocol: CustomProviderProtocol): OmpProviderApi {
   switch (protocol) {

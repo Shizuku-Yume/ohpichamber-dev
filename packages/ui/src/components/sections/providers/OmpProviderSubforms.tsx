@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
+  apiDisplayLabel,
   OMP_PROVIDER_APIS,
   createHeaderRow,
   type HeaderFieldErrors,
@@ -274,12 +275,12 @@ export const OmpRemoteCompactionFields: React.FC<{
             disabled={disabled}
           >
             <SelectTrigger aria-label={t('settings.providers.page.custom.omp.remoteCompaction.api')} className="w-full">
-              <SelectValue>{values.api || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+              <SelectValue>{values.api ? apiDisplayLabel(values.api) : t('settings.providers.page.custom.omp.option.default')}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
               {OMP_PROVIDER_APIS.map((api) => (
-                <SelectItem key={api} value={api}>{api}</SelectItem>
+                <SelectItem key={api} value={api}>{apiDisplayLabel(api)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
