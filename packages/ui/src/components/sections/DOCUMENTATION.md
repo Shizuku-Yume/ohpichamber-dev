@@ -15,7 +15,7 @@ After a conflict, they read the latest snapshot and apply the intended edit
 again. Changing directories hides the previous snapshot without redirecting
 queued writes. Editing the first model role or retry selector preserves remaining
 selectors. Tools offers image generation models from the separate image catalog,
-not chat models that accept images as input.
+not chat models that accept images as input. Contextual pages (`DefaultsSettings`, `GitSettings`, `MemoryPage`, `AgentsPage`, and `ToolsPage`) edit their assigned roles inline against canonical `omp.modelRoles`, while `ModelRolesPage` also manages custom `@role` definitions backed by `modelRoles` and `modelTags` metadata, and `ModelRoleLinkRow` formats resolved model names via `formatRoleDisplayValue` with an outline navigation button for linked subsystems (`web`, `speech`). Usage folds Codex and Claude reset-credit auto-redeem toggles and thresholds into default-collapsed `SettingsDisclosure` rows.
 Per-model compaction rules (`openchamber/ModelCompactionSettings.tsx`) and retry fallback chains (`openchamber/RetryFallbackChains.tsx`) create entries via `+ Add` dialogs (`ModelSelector` / wildcard pickers and structured threshold modes with `NumberInput`) and persist edits immediately through single-flight CAS updates inside flat `SettingsDisclosure` rows (preserving extended-context cost confirmation on token compaction rules). `RetryFallbackChains` reorders chain targets with `@dnd-kit` `SettingsSortableList` and renders the `web` chain as a `ModelRoleLinkRow` pointing to Web Search fallbacks.
 
 Voice playback renders its voice-picker row only when the selected provider

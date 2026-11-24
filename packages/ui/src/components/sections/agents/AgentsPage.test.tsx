@@ -636,3 +636,39 @@ test('zh-CN locale renders localized mode chips, category headers, and expanded 
   ].find((row) => row.textContent?.includes('读取文件') && row.textContent?.includes('(read)'));
   expect(readRow).toBeDefined();
 });
+
+test('global agents view renders inline task and advisor ModelRoleEditors without ModelRoleLinkRow', async () => {
+  useAgentsStore.setState({ selectedAgentName: null });
+  const modelRolesSetting = {
+    id: 'modelRoles',
+    type: 'record',
+    default: {},
+    configured: true,
+    value: { task: 'provider/task-model:low', advisor: 'provider/advisor-model' },
+    placement: { type: 'owned-by', owner: 'model-roles.section.chat' },
+  };
+  fetchSpy.mockImplementation(async (input) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes('/workspaces/resolve')) {
+      return Response.json({ workspaceId: 'ws_1', projectId: 'project', name: 'project' });
+    }
+    if (url.includes('/omp')) {
+      return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 1, settings: [modelRolesSetting] });
+    }
+    return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  });
+
+  await render();
+  await act(async () => {
+    for (let i = 0; i < 6; i += 1) {
+      await Promise.resolve();
+    }
+  });
+
+  expect(container.querySelector('[data-settings-item="omp.modelRoles.task"]')).toBeNull();
+  expect(container.querySelector('[data-settings-item="omp.modelRoles.advisor"]')).toBeNull();
+  expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Set in Model roles')).toBeUndefined();
+  expect(container.textContent).toContain('Subagents');
+  expect(container.textContent).toContain('Advisor');
+  expect(container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBeGreaterThanOrEqual(2);
+});

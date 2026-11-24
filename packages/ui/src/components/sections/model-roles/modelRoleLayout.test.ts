@@ -3,7 +3,17 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SETTINGS_SEARCH_ITEMS as searchItems } from '@/lib/settings/search';
-import { CHAT_ROLES, KIND_ROLES, LINKED_ROLES, OMITTED_ROLES } from './modelRoleLayout';
+import {
+  CHAT_ROLES,
+  KIND_ROLES,
+  LINKED_ROLES,
+  OMITTED_ROLES,
+  deriveCustomRoleIds,
+  parseModelTagsRecord,
+  removeCustomRoleTag,
+  saveCustomRoleTag,
+  validateCustomRoleId,
+} from './modelRoleLayout';
 
 const OMP_MODEL_ROLES = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -39,4 +49,67 @@ test('every hub role is searchable on the hub, and linked roles name their owner
     expect(`${role}: ${linked.page !== 'model-roles'}`).toBe(`${role}: true`);
     if (linked.item) expect(searchItems.find((item) => item.id === linked.item)?.page).toBe(linked.page);
   }
+});
+
+test('custom role section is indexed under model-roles', () => {
+  expect(searchItems.find((item) => item.id === 'model-roles.section.custom')?.page).toBe('model-roles');
+});
+
+test('deriveCustomRoleIds returns sorted union of modelRoles and modelTags keys excluding built-in and omitted roles', () => {
+  const roles = {
+    default: 'openai/gpt-5',
+    smol: 'openai/gpt-5-mini',
+    dictation: 'openai/whisper',
+    'review-fast': 'anthropic/claude-haiku',
+    zeta: 'openai/gpt-5',
+  };
+  const tags = {
+    smol: { name: 'Mini' },
+    alpha: { name: 'Alpha Role', color: 'accent' },
+    'review-fast': { name: 'Fast Reviewer' },
+  };
+
+  expect(deriveCustomRoleIds(roles, tags)).toEqual(['alpha', 'review-fast', 'zeta']);
+  expect(deriveCustomRoleIds(null, undefined)).toEqual([]);
+});
+
+test('validateCustomRoleId enforces slug format and rejects built-in or existing collisions', () => {
+  expect(validateCustomRoleId('', [])).toEqual({ valid: false, reason: 'required' });
+  expect(validateCustomRoleId('   ', [])).toEqual({ valid: false, reason: 'required' });
+  expect(validateCustomRoleId('InvalidRole', [])).toEqual({ valid: false, reason: 'invalidFormat' });
+  expect(validateCustomRoleId('-bad', [])).toEqual({ valid: false, reason: 'invalidFormat' });
+  expect(validateCustomRoleId('has space', [])).toEqual({ valid: false, reason: 'invalidFormat' });
+  expect(validateCustomRoleId('smol', [])).toEqual({ valid: false, reason: 'builtinCollision' });
+  expect(validateCustomRoleId('dictation', [])).toEqual({ valid: false, reason: 'builtinCollision' });
+  expect(validateCustomRoleId('image', [])).toEqual({ valid: false, reason: 'builtinCollision' });
+  expect(validateCustomRoleId('review-fast', ['review-fast'])).toEqual({ valid: false, reason: 'duplicate' });
+  expect(validateCustomRoleId(' review_2 ', ['review-fast'])).toEqual({ valid: true, id: 'review_2' });
+});
+
+test('saveCustomRoleTag and removeCustomRoleTag preserve unrelated tags and clean up empty entries', () => {
+  const initial = parseModelTagsRecord({
+    other: { name: 'Other', color: 'info' },
+    custom: { name: 'Old', hidden: true },
+  });
+  const savedWithName = saveCustomRoleTag(initial, 'custom', 'Reviewer', true);
+  expect(savedWithName).toEqual({
+    other: { name: 'Other', color: 'info' },
+    custom: { name: 'Reviewer', hidden: true },
+  });
+
+  // Clearing display name while retaining an existing role assignment strips name only
+  const clearedNameWithRole = saveCustomRoleTag(savedWithName, 'custom', '', true);
+  expect(clearedNameWithRole).toEqual({
+    other: { name: 'Other', color: 'info' },
+    custom: { hidden: true },
+  });
+
+  // Creating a tag-only custom role without model keeps an entry in modelTags so it stays discoverable
+  const tagOnly = saveCustomRoleTag({}, 'tag-only', '', false);
+  expect(tagOnly).toEqual({ 'tag-only': { name: '' } });
+
+  // Deleting removes the custom role key cleanly without touching other tags
+  expect(removeCustomRoleTag(savedWithName, 'custom')).toEqual({
+    other: { name: 'Other', color: 'info' },
+  });
 });

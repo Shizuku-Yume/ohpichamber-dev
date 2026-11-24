@@ -117,7 +117,9 @@ const OMP_PAGE_SETTINGS: ReadonlyArray<readonly [page: SettingsPageSlug, setting
     'browser.headless', 'browser.cmux', 'browser.tern', 'browser.freezeOnTurnEnd', 'browser.idleCloseSec',
   ]],
   ['usage', [
+    'codexResets.autoRedeem5h', 'codexResets.autoRedeemWeekly',
     'codexResets.minBlockedMinutes', 'codexResets.keepCredits', 'codexResets.salvageHorizonHours',
+    'claudeResets.autoRedeem5h', 'claudeResets.autoRedeemWeekly', 'claudeResets.autoRedeemFable',
     'claudeResets.minBlockedMinutes', 'claudeResets.keepCredits', 'claudeResets.salvageHorizonHours',
   ]],
 ];
@@ -1752,6 +1754,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.omp.modelRoles.section.kind.title',
     descriptionKey: 'settings.omp.modelRoles.section.kind.description',
     keywords: ['roles', 'specialized', 'vision', 'image'],
+  },
+  {
+    id: 'model-roles.section.custom',
+    page: 'model-roles',
+    titleKey: 'settings.omp.modelRoles.section.custom.title',
+    descriptionKey: 'settings.omp.modelRoles.section.custom.description',
+    keywords: ['roles', 'custom', 'tags', 'model tags', 'add role'],
   },
   {
     id: 'chat.section.thinking',

@@ -1,6 +1,10 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { UsageStatsSchema } from '@openchamber/agent-contract';
+import { Window } from 'happy-dom';
+import { UsageStatsSchema, type OmpSetting, type OmpSettingsState } from '@openchamber/agent-contract';
+import * as omp from '@/components/sections/shared/useOmpPageSettings';
 import type { ProviderResult } from '@/types';
 import { I18nProvider } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -137,5 +141,123 @@ describe('Usage page quota cards', () => {
     Object.assign(usageServer, { selectedProvider: 'anthropic' });
     const html = render();
     expect(html).toContain('does not provide quota data');
+  });
+});
+
+describe('Usage page reset credit disclosures', () => {
+  let browser: Window;
+  let host: HTMLDivElement;
+  let root: Root;
+  let restoreOmp: (() => void) | null = null;
+
+  beforeEach(() => {
+    browser = new Window({ url: 'http://localhost/' });
+    Object.assign(globalThis, {
+      window: browser,
+      document: browser.document,
+      navigator: browser.navigator,
+      Node: browser.Node,
+      Element: browser.Element,
+      HTMLElement: browser.HTMLElement,
+      Event: browser.Event,
+      MouseEvent: browser.MouseEvent,
+      MutationObserver: browser.MutationObserver,
+      getComputedStyle: browser.getComputedStyle.bind(browser),
+      requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+      cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+      IS_REACT_ACT_ENVIRONMENT: true,
+    });
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    restoreOmp?.();
+    restoreOmp = null;
+    host.remove();
+    browser.close();
+  });
+
+  const resetSetting = (
+    id: string,
+    type: 'enum' | 'number',
+    value: string | number,
+    conditionActive = true,
+  ): OmpSetting => {
+    const base: OmpSetting = {
+      id,
+      type,
+      default: value,
+      configured: true,
+      value,
+      conditionActive,
+      placement: { type: 'page', page: 'usage', section: 'resets' },
+    };
+    if (type === 'enum') {
+      return { ...base, enumValues: ['unset', 'yes', 'no'] };
+    }
+    return base;
+  };
+  test('renders Codex and Claude disclosures collapsed by default and expands auto-redeem rows before thresholds', async () => {
+    const resetSettings: OmpSetting[] = [
+      resetSetting('codexResets.autoRedeem5h', 'enum', 'yes'),
+      resetSetting('codexResets.autoRedeemWeekly', 'enum', 'no', false),
+      resetSetting('codexResets.minBlockedMinutes', 'number', 45),
+      resetSetting('codexResets.keepCredits', 'number', 2),
+      resetSetting('codexResets.salvageHorizonHours', 'number', 8),
+      resetSetting('claudeResets.autoRedeem5h', 'enum', 'unset'),
+      resetSetting('claudeResets.autoRedeemWeekly', 'enum', 'unset'),
+      resetSetting('claudeResets.autoRedeemFable', 'enum', 'unset'),
+      resetSetting('claudeResets.minBlockedMinutes', 'number', 60),
+      resetSetting('claudeResets.keepCredits', 'number', 0),
+      resetSetting('claudeResets.salvageHorizonHours', 'number', 12),
+    ];
+    const ompState: OmpSettingsState = {
+      workspaceId: 'workspace_1',
+      revision: '1',
+      totalCount: resetSettings.length,
+      settings: resetSettings,
+    };
+    const spy = spyOn(omp, 'useOmpPageSettings').mockReturnValue({
+      state: ompState,
+      form: {},
+      loading: false,
+      saving: false,
+      pageSettings: resetSettings,
+      getSectionSettings: (section) => (section === 'resets' ? resetSettings : []),
+      updateSetting: async () => { },
+      updateSettings: async () => true,
+    });
+    restoreOmp = () => spy.mockRestore();
+
+    await act(async () => root.render(<I18nProvider><UsagePage /></I18nProvider>));
+
+    const triggers = Array.from(host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'));
+    const codexTrigger = triggers.find((button) => button.textContent?.includes('Codex'));
+    const claudeTrigger = triggers.find((button) => button.textContent?.includes('Claude'));
+    expect(codexTrigger?.getAttribute('aria-expanded')).toBe('false');
+    expect(claudeTrigger?.getAttribute('aria-expanded')).toBe('false');
+    expect(codexTrigger?.textContent).toContain('Mixed · 45m · 2 · 8h');
+    expect(claudeTrigger?.textContent).toContain('Ask · 60m · 0 · 12h');
+
+    expect(host.querySelector('[data-settings-item="omp.codexResets.autoRedeem5h"]')).toBeNull();
+    expect(host.querySelector('[data-settings-item="omp.codexResets.minBlockedMinutes"]')).toBeNull();
+
+    await act(async () => codexTrigger?.click());
+    expect(codexTrigger?.getAttribute('aria-expanded')).toBe('true');
+
+    const codexRowIds = Array.from(host.querySelectorAll<HTMLElement>('[data-settings-item^="omp.codexResets."]'))
+      .map((node) => node.getAttribute('data-settings-item'));
+    expect(codexRowIds).toEqual([
+      'omp.codexResets.autoRedeem5h',
+      'omp.codexResets.autoRedeemWeekly',
+      'omp.codexResets.minBlockedMinutes',
+      'omp.codexResets.keepCredits',
+      'omp.codexResets.salvageHorizonHours',
+    ]);
+    expect(host.textContent).toContain('A native configuration override sets this value.');
+    expect(host.querySelector('[data-settings-item="omp.claudeResets.autoRedeem5h"]')).toBeNull();
   });
 });

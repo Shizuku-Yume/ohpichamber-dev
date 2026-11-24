@@ -6,9 +6,10 @@ import type { Root } from 'react-dom/client';
 const window = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
   window, document: window.document, HTMLElement: window.HTMLElement, Element: window.Element,
-  navigator: window.navigator, Node: window.Node, Event: window.Event, CustomEvent: window.CustomEvent,
+  HTMLInputElement: window.HTMLInputElement, navigator: window.navigator, Node: window.Node, Event: window.Event, CustomEvent: window.CustomEvent,
   MouseEvent: window.MouseEvent, PointerEvent: window.PointerEvent, FocusEvent: window.FocusEvent,
   MutationObserver: window.MutationObserver, ResizeObserver: window.ResizeObserver,
+  IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} },
   getComputedStyle: window.getComputedStyle.bind(window),
   requestAnimationFrame: window.requestAnimationFrame.bind(window),
   cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
@@ -84,25 +85,47 @@ describe('retained Host tool settings', () => {
     expect(host.querySelector('[data-settings-item="sessions.agent-terminal-tool"]')).not.toBeNull();
   });
 
-  test('the image role shows its model and opens the Model roles page to change it', async () => {
+  test('the image role renders an inline ImageModelSelector writing canonical modelRoles.image', async () => {
     const imageEnabled: OmpSetting = {
       id: 'generate_image.enabled', type: 'boolean', default: true, value: true,
       configured: false, placement: { type: 'page', page: 'tools', section: 'image-generation' },
     };
-    const state = { workspaceId: 'workspace_1', revision: '1', totalCount: 1, settings: [imageEnabled] };
+    const modelRolesSetting: OmpSetting = {
+      id: 'modelRoles', type: 'record', default: {}, configured: true,
+      value: { image: 'provider/image-one', smol: 'provider/smol' },
+      placement: { type: 'owned-by', owner: 'model-roles.section.chat' },
+    };
+    const state = { workspaceId: 'workspace_1', revision: '1', totalCount: 2, settings: [imageEnabled, modelRolesSetting] };
+    const changes: Array<{ id: string; value: unknown }> = [];
+    const imageModelsSpy = spyOn(models, 'useSettingsImageModels').mockReturnValue([
+      { provider: 'provider', modelId: 'image-one', name: 'Image One' },
+      { provider: 'provider', modelId: 'image-two', name: 'Image Two' },
+    ]);
     const settings = spyOn(omp, 'useOmpPageSettings').mockReturnValue({
-      state, form: { 'generate_image.enabled': true, modelRoles: { image: 'provider/image-one' } }, loading: false, saving: false,
+      state, form: { 'generate_image.enabled': true, modelRoles: { image: 'provider/image-one', smol: 'provider/smol' } }, loading: false, saving: false,
       pageSettings: [imageEnabled], getSectionSettings: () => [imageEnabled],
-      updateSetting: async () => {}, updateSettings: async () => true,
+      updateSetting: async () => {},
+      updateSettings: async (build) => {
+        changes.push(...build(state));
+        return true;
+      },
     });
-    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump').mockImplementation(() => {});
-    restore.push(() => settings.mockRestore(), () => jump.mockRestore());
+    restore.push(() => settings.mockRestore(), () => imageModelsSpy.mockRestore());
     await act(async () => root.render(<I18nProvider><ToolsPage /></I18nProvider>));
-    expect(host.querySelector('[data-settings-item="omp.modelRoles.image"] [role="combobox"]') === null).toBe(true);
-    expect(host.textContent).toContain('provider/image-one');
-    const link = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set in Model roles');
-    expect(link).toBeDefined();
-    await act(async () => link?.click());
-    expect(jump).toHaveBeenCalledWith('model-roles', 'omp.modelRoles.image');
+    expect(host.querySelector('[data-settings-item="omp.modelRoles.image"]')).toBeNull();
+    const trigger = host.querySelector<HTMLElement>('[aria-label="Image generation"][data-slot="dropdown-menu-trigger"]');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain('Image One');
+    expect(Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set in Model roles')).toBeUndefined();
+
+    await act(async () => trigger?.click());
+
+    const item = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'))
+      .find((el) => el.textContent?.trim() === 'Image Two');
+    expect(item).toBeDefined();
+    await act(async () => item?.click());
+    expect(changes).toEqual([
+      { id: 'modelRoles', value: { image: 'provider/image-two', smol: 'provider/smol' } },
+    ]);
   });
 });

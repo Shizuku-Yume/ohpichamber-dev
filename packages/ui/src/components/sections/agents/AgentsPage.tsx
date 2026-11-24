@@ -3,9 +3,8 @@ import type { AutosaveResult } from '@/components/sections/shared/SettingsAutosa
 import type { Agent, AgentThinkingLevel, ToolCatalogEntry } from '@openchamber/agent-contract';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
-import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
-import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
+import { defaultThinkingLevelFromState, modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,6 +15,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { AgentPermissionsEditor } from './AgentPermissionsEditor';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ModelSelector } from './ModelSelector';
@@ -91,7 +91,8 @@ export const AgentsPage: React.FC = () => {
     updateAgent: state.updateAgent, loadAgents: state.loadAgents,
     agentDraft: state.agentDraft, setAgentDraft: state.setAgentDraft, setSelectedAgent: state.setSelectedAgent,
   })));
-  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('agents');
+  const models = useSettingsModels(settingsDirectory);
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading, saving: ompSaving } = useOmpPageSettings('agents');
   const subagentSettings = getSectionSettings('subagents');
   const prewalkSettings = getSectionSettings('prewalk');
   const advisorSettings = getSectionSettings('advisor');
@@ -102,6 +103,11 @@ export const AgentsPage: React.FC = () => {
     () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
     [rolesMap],
   );
+  const globalLevel = React.useMemo(() => defaultThinkingLevelFromState(ompState), [ompState]);
+  const setRole = React.useCallback(async (role: string, selector: string) => {
+    const saved = await updateSettings((state) => [modelRoleChange(state, role, selector)]);
+    if (!saved) toast.error(t('settings.omp.modelRoles.saveFailed'));
+  }, [t, updateSettings]);
 
   const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
   const revision = useAgentsStore((state) => state.revisionsByDirectory[directoryKey]);
@@ -307,12 +313,17 @@ export const AgentsPage: React.FC = () => {
           settingsItem="agents.section.subagents"
         >
           <div className={SETTINGS_SPACE_ROW_CLASS}>
-            <ModelRoleLinkRow
+            <ModelRoleEditor
+              role="task"
+              roles={roleSelectors}
+              models={models}
+              directory={settingsDirectory ?? undefined}
+              globalLevel={globalLevel}
+              disabled={ompLoading || ompSaving || !ompState}
+              loading={ompLoading && !ompState}
               label={t('settings.omp.modelRoles.role.task.label')}
               info={t('settings.omp.modelRoles.role.task.desc')}
-              value={roleSelectors.task || t('settings.omp.modelRoles.inheritFallback')}
-              linkLabel={t('settings.omp.modelRoles.link.hub')}
-              onOpen={() => openModelRoleEditor('task')}
+              onChange={(selector) => void setRole('task', selector)}
             />
             {subagentSettings.map((s) => (
               <OmpRowControl
@@ -352,12 +363,17 @@ export const AgentsPage: React.FC = () => {
           settingsItem="agents.section.advisor"
         >
           <div className={SETTINGS_SPACE_ROW_CLASS}>
-            <ModelRoleLinkRow
+            <ModelRoleEditor
+              role="advisor"
+              roles={roleSelectors}
+              models={models}
+              directory={settingsDirectory ?? undefined}
+              globalLevel={globalLevel}
+              disabled={ompLoading || ompSaving || !ompState}
+              loading={ompLoading && !ompState}
               label={t('settings.omp.modelRoles.role.advisor.label')}
               info={t('settings.omp.modelRoles.role.advisor.desc')}
-              value={roleSelectors.advisor || t('settings.omp.modelRoles.inheritFallback')}
-              linkLabel={t('settings.omp.modelRoles.link.hub')}
-              onOpen={() => openModelRoleEditor('advisor')}
+              onChange={(selector) => void setRole('advisor', selector)}
             />
             {advisorSettings.map((s) => (
               <OmpRowControl

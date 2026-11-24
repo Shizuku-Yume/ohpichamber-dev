@@ -16,6 +16,7 @@ Object.assign(globalThis, {
   HTMLInputElement: browser.HTMLInputElement,
   HTMLTextAreaElement: browser.HTMLTextAreaElement,
   Event: browser.Event,
+  MouseEvent: browser.MouseEvent,
   FocusEvent: browser.FocusEvent,
   CustomEvent: browser.CustomEvent,
   KeyboardEvent: browser.KeyboardEvent,
@@ -296,8 +297,19 @@ describe('DefaultsSettings', () => {
     expect(defaultRow).not.toBeNull();
   });
 
-  test('replaces redundant smol/slow/plan editors with ModelRoleLinkRows jumping to Model roles and drops moved engine sections', async () => {
-    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump').mockImplementation(() => { });
+  test('renders inline smol/slow/plan role editors writing canonical omp.modelRoles without claiming omp.modelRoles anchors', async () => {
+    const savedPayloads: Array<{ changes: Array<{ id: string; value: unknown }> }> = [];
+    const snapshot: OmpSettingsState = {
+      ...mockOmpSettings,
+      settings: mockOmpSettings.settings.map((setting) => setting.id === 'modelRoles'
+        ? { ...setting, value: { default: 'openai/o3-mini:high', smol: 'openai/o3-mini:low' } }
+        : setting),
+    };
+    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot);
+    const save = spyOn(canonicalClient, 'updateOmpSettings').mockImplementation(async (_workspace, input) => {
+      savedPayloads.push({ changes: input.changes });
+      return snapshot;
+    });
     try {
       await act(async () => {
         root.render(
@@ -310,6 +322,9 @@ describe('DefaultsSettings', () => {
 
       // Does not claim omp.modelRoles or moved engine sections.
       expect(host.querySelector('[data-settings-item="omp.modelRoles"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="omp.modelRoles.smol"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="omp.modelRoles.slow"]')).toBeNull();
+      expect(host.querySelector('[data-settings-item="omp.modelRoles.plan"]')).toBeNull();
       expect(host.querySelector('[data-settings-item="sessions.sampling"]')).toBeNull();
       expect(host.querySelector('[data-settings-item="sessions.execution"]')).toBeNull();
       expect(host.querySelector('[data-settings-item="sessions.isolation"]')).toBeNull();
@@ -319,18 +334,29 @@ describe('DefaultsSettings', () => {
 
       const linkButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
         .filter((button) => button.textContent === 'Set in Model roles');
-      expect(linkButtons.length).toBe(3);
+      expect(linkButtons.length).toBe(0);
 
-      await act(async () => linkButtons[0]?.click());
-      await act(async () => linkButtons[1]?.click());
-      await act(async () => linkButtons[2]?.click());
-      expect(jump.mock.calls).toEqual([
-        ['model-roles', 'omp.modelRoles.smol'],
-        ['model-roles', 'omp.modelRoles.slow'],
-        ['model-roles', 'omp.modelRoles.plan'],
+      // Inline pickers render for smol, slow, and plan, and editing smol writes omp.modelRoles.smol.
+      expect(host.textContent).toContain('Small model');
+      expect(host.textContent).toContain('Walkthrough model');
+      expect(host.textContent).toContain('Plan mode');
+      const smolEffortTrigger = host.querySelector<HTMLElement>('[aria-label="Thinking effort for Small model"]');
+      expect(smolEffortTrigger).not.toBeNull();
+      expect(smolEffortTrigger?.textContent).toBe('Low');
+      await act(async () => {
+        smolEffortTrigger?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+      });
+      const highOption = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+        .find((option) => option.textContent === 'High');
+      await act(async () => {
+        highOption?.click();
+      });
+      expect(savedPayloads.at(-1)?.changes).toEqual([
+        { id: 'modelRoles', value: { default: 'openai/o3-mini:high', smol: 'openai/o3-mini:high' } },
       ]);
     } finally {
-      jump.mockRestore();
+      read.mockRestore();
+      save.mockRestore();
     }
   });
 
@@ -540,7 +566,7 @@ describe('DefaultsSettings', () => {
       await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
       await settle();
       const group = host.querySelector('[data-settings-item="sessions.fallback-model"]');
-      expect(group?.textContent).toContain('web/exa');
+      expect(group?.textContent).toContain('exa');
       expect(group?.textContent).toContain('Web search');
       const link = [...group?.querySelectorAll('button') ?? []].find((button) => button.textContent === 'Set in Web search');
       expect(link).toBeDefined();

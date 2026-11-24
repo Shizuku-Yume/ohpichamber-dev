@@ -11,11 +11,11 @@ import {
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
-import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { parseRolesRecord, replaceFirstSelector, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { defaultThinkingLevelFromState, modelRoleChange, parseRolesRecord, replaceFirstSelector, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { toast } from '@/components/ui';
 
 export const MemoryPage: React.FC = () => {
   const { t } = useI18n();
@@ -30,6 +30,13 @@ export const MemoryPage: React.FC = () => {
     () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
     [rolesMap],
   );
+
+  const globalLevel = React.useMemo(() => defaultThinkingLevelFromState(ompState), [ompState]);
+
+  const setRole = React.useCallback(async (role: string, selector: string) => {
+    const saved = await updateSettings((state) => [modelRoleChange(state, role, selector)]);
+    if (!saved) toast.error(t('settings.omp.modelRoles.saveFailed'));
+  }, [t, updateSettings]);
 
   const backendSettings = getSectionSettings('backend');
   const backendById = React.useMemo(() => {
@@ -98,12 +105,17 @@ export const MemoryPage: React.FC = () => {
 
           {isEnabled ? (
             <div className="pt-2">
-              <ModelRoleLinkRow
+              <ModelRoleEditor
+                role="memory"
+                roles={roleSelectors}
+                models={models}
+                directory={directory ?? undefined}
+                globalLevel={globalLevel}
+                disabled={ompLoading || saving || !ompState}
+                loading={ompLoading && !ompState}
                 label={t('settings.omp.modelRoles.role.memory.label')}
                 info={t('settings.omp.modelRoles.role.memory.desc')}
-                value={roleSelectors.memory || t('settings.omp.modelRoles.inheritFallback')}
-                linkLabel={t('settings.omp.modelRoles.link.hub')}
-                onOpen={() => openModelRoleEditor('memory')}
+                onChange={(selector) => void setRole('memory', selector)}
               />
             </div>
           ) : null}

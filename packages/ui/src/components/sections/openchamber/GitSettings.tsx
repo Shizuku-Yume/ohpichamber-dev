@@ -1,6 +1,9 @@
 import React from 'react';
-import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { defaultThinkingLevelFromState, modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
+import { toast } from '@/components/ui';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -15,8 +18,7 @@ import {
  SettingsCheckboxRow,
  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
-import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 
 /** The OMP model role commit messages and PR descriptions are generated with. */
 const COMMIT_ROLE = 'commit';
@@ -29,7 +31,9 @@ export const GitSettings: React.FC = () => {
  const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
 
- const { state: ompState } = useOmpPageSettings('git');
+ const directory = useSettingsDirectory();
+ const models = useSettingsModels(directory);
+ const { state: ompState, loading: ompLoading, saving: ompSaving, updateSettings } = useOmpPageSettings('git');
 
  const viewOptions = React.useMemo(
   () => [
@@ -60,7 +64,19 @@ export const GitSettings: React.FC = () => {
   loadSettings();
  }, [setGitChangesViewMode, setSettingsGitmojiEnabled]);
 
- const commitRole = roleSelector(parseRolesRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value)[COMMIT_ROLE]);
+ const rolesMap = React.useMemo(
+  () => parseRolesRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value),
+  [ompState],
+ );
+ const roleSelectors = React.useMemo(
+  () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
+  [rolesMap],
+ );
+ const globalLevel = React.useMemo(() => defaultThinkingLevelFromState(ompState), [ompState]);
+ const setRole = React.useCallback(async (role: string, selector: string) => {
+  const saved = await updateSettings((state) => [modelRoleChange(state, role, selector)]);
+  if (!saved) toast.error(t('settings.omp.modelRoles.saveFailed'));
+ }, [t, updateSettings]);
 
  const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {
   setSettingsGitmojiEnabled(enabled);
@@ -86,13 +102,18 @@ export const GitSettings: React.FC = () => {
  return (
   <SettingsSection title={t('settings.openchamber.git.title')}>
    <div className={SETTINGS_SPACE_ROW_CLASS}>
-    <ModelRoleLinkRow
-     label={t('settings.omp.modelRoles.role.commit.label')}
-     info={t('settings.omp.modelRoles.role.commit.desc')}
-     value={commitRole || t('settings.omp.modelRoles.inheritFallback')}
-     linkLabel={t('settings.omp.modelRoles.link.hub')}
-     onOpen={() => openModelRoleEditor(COMMIT_ROLE)}
-    />
+   <ModelRoleEditor
+    role={COMMIT_ROLE}
+    roles={roleSelectors}
+    models={models}
+    directory={directory ?? undefined}
+    globalLevel={globalLevel}
+    disabled={ompLoading || ompSaving || !ompState}
+    loading={ompLoading && !ompState}
+    label={t('settings.omp.modelRoles.role.commit.label')}
+    info={t('settings.omp.modelRoles.role.commit.desc')}
+    onChange={(selector) => void setRole(COMMIT_ROLE, selector)}
+   />
 
     <SettingsControlGroup
      settingsItem="git.changes-view"
