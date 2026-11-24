@@ -1539,8 +1539,10 @@ describe('settings UX regression guards', () => {
     const scanned = new Map(scanSections().map((entry) => [entry.file, entry.source]));
     const usageSource = scanned.get('usage/UsagePage.tsx');
     const providerSource = scanned.get('providers/CustomProviderForm.tsx');
+    const advancedSource = scanned.get('providers/CustomProviderAdvancedSection.tsx');
     expect(usageSource, 'usage/UsagePage.tsx must be scanned').toBeDefined();
     expect(providerSource, 'providers/CustomProviderForm.tsx must be scanned').toBeDefined();
+    expect(advancedSource, 'providers/CustomProviderAdvancedSection.tsx must be scanned').toBeDefined();
     // `expanded` maps key->open; the empty initial map keeps every group
     // collapsed, and a `true` literal would resurface one section open on load.
     expect(usageSource!.includes('expanded[provider.key] === true')).toBe(true);
@@ -1551,8 +1553,8 @@ describe('settings UX regression guards', () => {
         `CustomProviderForm ${state} must initialize to false`,
       ).toBe(true);
       expect(
-        new RegExp(`expanded=\\{${state}\\}`).test(providerSource!),
-        `CustomProviderForm must bind ${state} to a SettingsDisclosure`,
+        new RegExp(`expanded=\\{${state}\\}`).test(advancedSource!),
+        `CustomProviderAdvancedSection must bind ${state} to a SettingsDisclosure`,
       ).toBe(true);
     }
   });
