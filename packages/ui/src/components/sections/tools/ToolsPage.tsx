@@ -1,6 +1,7 @@
 import React from 'react';
-import { formatModelRef } from '@openchamber/agent-contract';
+import { formatModelRef, parseModelSelector } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/components/ui';
 import { useUIStore } from '@/stores/useUIStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
@@ -19,9 +20,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
-import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
-import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
+import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { ImageModelSelector } from '@/components/sections/model-roles/ImageModelSelector';
 import { isElectronShell } from '@/lib/desktop';
 
 export const ToolsPage: React.FC = () => {
@@ -52,7 +52,7 @@ export const ToolsPage: React.FC = () => {
   const setAgentWorkflowToolEnabled = useUIStore((state) => state.setAgentWorkflowToolEnabled);
 
   // OMP tools state
-  const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('tools');
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading, saving: ompSaving } = useOmpPageSettings('tools');
 
   React.useEffect(() => {
     void loadGuestCatalog();
@@ -99,13 +99,14 @@ export const ToolsPage: React.FC = () => {
   }, [setAgentWorkflowToolEnabled]);
 
   // Model roles for image tool
-  const imageRole = roleSelector(parseRolesRecord(ompForm.modelRoles).image);
-  const imageOptions = React.useMemo(
-    () => imageModels?.filter((model) => model.enabled !== false)
-      .map((model) => ({ value: formatModelRef(model), label: `${model.name} (${model.provider})` })) ?? [],
-    [imageModels],
-  );
-  const selectedImage = imageOptions.find((option) => option.value === imageRole);
+  const modelRolesValue = ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value ?? ompForm.modelRoles;
+  const imageRole = roleSelector(parseRolesRecord(modelRolesValue).image);
+  const parsedImage = React.useMemo(() => parseModelSelector(imageRole), [imageRole]);
+
+  const setRole = React.useCallback(async (role: string, selector: string) => {
+    const saved = await updateSettings((state) => [modelRoleChange(state, role, selector)]);
+    if (!saved) toast.error(t('settings.omp.modelRoles.saveFailed'));
+  }, [t, updateSettings]);
 
 
   const availableSettings = getSectionSettings('available');
@@ -287,13 +288,26 @@ export const ToolsPage: React.FC = () => {
               />
               {ompForm['generate_image.enabled'] !== false ? (
                 <div className="ps-6">
-                  <ModelRoleLinkRow
+                  <SettingsFieldRow
                     label={t('settings.omp.modelRoles.role.image.label')}
                     info={t('settings.omp.modelRoles.role.image.desc')}
-                    value={selectedImage?.label ?? (imageRole || t('settings.omp.modelRoles.inheritFallback'))}
-                    linkLabel={t('settings.omp.modelRoles.link.hub')}
-                    onOpen={() => openModelRoleEditor('image')}
-                  />
+                  >
+                    <ImageModelSelector
+                      providerId={parsedImage?.providerId ?? ''}
+                      modelId={parsedImage?.modelId ?? ''}
+                      imageModels={imageModels}
+                      directory={directory ?? undefined}
+                      disabled={ompLoading || ompSaving || !ompState}
+                      loading={ompLoading && !ompState}
+                      placeholder={t('settings.omp.modelRoles.inheritFallback')}
+                      ariaLabel={t('settings.omp.modelRoles.role.image.label')}
+                      className={SETTINGS_WIDTH_SELECT_CLASS}
+                      onChange={(providerId, modelId) => {
+                        const selector = providerId && modelId ? formatModelRef({ provider: providerId, modelId }) : '';
+                        void setRole('image', selector);
+                      }}
+                    />
+                  </SettingsFieldRow>
                 </div>
               ) : null}
             </>

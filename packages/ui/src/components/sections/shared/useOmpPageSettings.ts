@@ -4,20 +4,29 @@ import type {
   OmpSettingsChange,
   OmpSettingsState,
   OmpSettingValue,
+  ProblemDetails,
 } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { reportSettingsSaveState } from '@/lib/persistence';
+
+export interface UpdateOmpSettingsOptions {
+  readonly onProblem?: (problem: ProblemDetails) => void;
+}
 
 export interface UseOmpPageSettingsResult {
   readonly state: OmpSettingsState | null;
   readonly form: Record<string, OmpSettingValue>;
   readonly loading: boolean;
   readonly saving: boolean;
+  readonly lastProblem?: ProblemDetails | null;
   readonly pageSettings: readonly OmpSetting[];
   readonly getSectionSettings: (section: string) => readonly OmpSetting[];
   readonly updateSetting: (settingOrId: OmpSetting | string, value: OmpSettingValue) => Promise<void>;
-  readonly updateSettings: (changes: (state: OmpSettingsState) => OmpSettingsChange[]) => Promise<boolean>;
+  readonly updateSettings: (
+    changes: (state: OmpSettingsState) => OmpSettingsChange[],
+    options?: UpdateOmpSettingsOptions,
+  ) => Promise<boolean>;
 }
 
 type SettingsScope = {
@@ -39,6 +48,7 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
   const [loaded, setLoaded] = React.useState<{ directory: string; state: OmpSettingsState | null } | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [pendingValues, setPendingValues] = React.useState<Record<string, PendingValue>>({});
+  const [lastProblem, setLastProblem] = React.useState<ProblemDetails | null>(null);
   const scopeRef = React.useRef<SettingsScope | null>(null);
   const state = loaded?.directory === directory ? loaded.state : null;
   const loading = Boolean(directory && loaded?.directory !== directory);
@@ -54,6 +64,7 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
     setLoaded(null);
     setSaving(false);
     setPendingValues({});
+    setLastProblem(null);
     if (!directory) return;
     const abort = new AbortController();
     const scope: SettingsScope = { directory, abort, state: null, tail: Promise.resolve(), pending: 0 };
@@ -79,7 +90,10 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
   }, [directory, page]);
 
   const updateSettings = React.useCallback(
-    async (makeChanges: (state: OmpSettingsState) => OmpSettingsChange[]) => {
+    async (
+      makeChanges: (state: OmpSettingsState) => OmpSettingsChange[],
+      options?: UpdateOmpSettingsOptions,
+    ) => {
       const scope = scopeRef.current;
       if (!scope?.state || scope.directory !== directory) return false;
       const { signal } = scope.abort;
@@ -108,11 +122,17 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
             next = await write(latest);
           }
           publish(next);
+          if (!signal.aborted) setLastProblem(null);
           reportSettingsSaveState('saved');
           return !signal.aborted;
         } catch (error) {
           reportSettingsSaveState('error');
-          if (!signal.aborted) console.warn('Failed to persist OMP settings:', error);
+          const problem = error instanceof CanonicalApiError ? error.problem : null;
+          if (!signal.aborted) {
+            setLastProblem(problem);
+            if (problem) options?.onProblem?.(problem);
+            console.warn('Failed to persist OMP settings:', error);
+          }
           return false;
         }
       }).finally(() => {
@@ -161,6 +181,7 @@ export function useOmpPageSettings(page: string): UseOmpPageSettingsResult {
     form,
     loading,
     saving,
+    lastProblem,
     pageSettings,
     getSectionSettings,
     updateSetting,

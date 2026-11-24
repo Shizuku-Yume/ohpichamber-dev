@@ -21,6 +21,7 @@ import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } fr
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 const byId = new Map<string, AnySetting>();
@@ -90,35 +91,39 @@ function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
 }
 
 /**
- * Roles the project's own config sets shadow the shared ones, and the route
- * writes the shared layer. OMP merges only an entry that names a model (a
- * string or string list); a cleared `null` entry falls back to the shared one.
+ * Record settings whose project-layer keys shadow the shared record, so the
+ * route writes the shared layer (`modelRoles`, `modelTags`). A key shadows
+ * when the project entry is an active value — a string or string list for
+ * `modelRoles`, a metadata object for `modelTags` — because a cleared `null`
+ * entry falls back to the shared one.
  */
-function projectModelRoles(settings: Settings): string[] {
-  const project = rolesRecord(settings.getProjectSettings().modelRoles);
-  return Object.keys(project).filter(role => {
-    const value = project[role];
-    return typeof value === 'string' || (Array.isArray(value) && value.every(entry => typeof entry === 'string'));
-  });
+const ROLE_ENTRY = z.union([z.string(), z.array(z.string())]);
+
+function projectRecordKeys(settings: Settings, id: 'modelRoles' | 'modelTags'): string[] {
+  const project = rolesRecord(settings.getProjectSettings()[id]);
+  return Object.keys(project).filter(key =>
+    id === 'modelRoles' ? ROLE_ENTRY.safeParse(project[key]).success : JsonObjectSchema.safeParse(project[key]).success);
 }
 
 /**
- * The shared record to save for a requested `modelRoles` value. The value the
- * route reads is the merged record, so project roles are put back to the shared
- * layer's own entries; changing one is refused, since no session in this
- * project would read it.
+ * The shared record to save for a requested record-setting value. The value
+ * the route reads is the merged record, so project keys are put back to the
+ * shared layer's own entries; changing one is refused, since no session in
+ * this project would read it. Removing a shared key persists: the projected
+ * write keeps only entries the shared layer may hold.
  */
-function sharedModelRoles(settings: Settings, value: JsonValue): JsonValue {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
-  const next = { ...value };
-  const current = rolesRecord(handle('modelRoles').layered(settings));
-  const shared = rolesRecord(settings.getGlobalSettings().modelRoles);
-  for (const role of projectModelRoles(settings)) {
-    if (!isDeepStrictEqual(current[role], next[role])) {
+function sharedRecordValue(settings: Settings, id: 'modelRoles' | 'modelTags', value: JsonValue): JsonValue {
+  const parsed = JsonObjectSchema.safeParse(value);
+  if (!parsed.success) return value;
+  const next = { ...parsed.data };
+  const current = rolesRecord(handle(id).layered(settings));
+  const shared = rolesRecord(settings.getGlobalSettings()[id]);
+  for (const key of projectRecordKeys(settings, id)) {
+    if (!isDeepStrictEqual(current[key], next[key])) {
       throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native configuration overrides the shared setting');
     }
-    if (Object.hasOwn(shared, role)) next[role] = JsonValueSchema.parse(shared[role]);
-    else delete next[role];
+    if (Object.hasOwn(shared, key)) next[key] = JsonValueSchema.parse(shared[key]);
+    else delete next[key];
   }
   return next;
 }
@@ -232,9 +237,10 @@ export class NativeSettings {
         throw new ProjectionError(400, 'INVALID_REQUEST', `OMP setting ${change.id} is not exposed`);
       }
     }
-    const changes = request.changes.map(change => change.id === 'modelRoles' && change.value !== null
-      ? { ...change, value: sharedModelRoles(this.settings, change.value) }
-      : change);
+    const changes = request.changes.map(change =>
+      (change.id === 'modelRoles' || change.id === 'modelTags') && change.value !== null
+        ? { ...change, value: sharedRecordValue(this.settings, change.id, change.value) }
+        : change);
     // Validate every value against the pinned definition before changing any
     // layer. `assertWritable` runs OMP's own validate/normalize checks, so the
     // route cannot invent a looser schema for numbers, enums, records or arrays.

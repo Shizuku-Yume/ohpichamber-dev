@@ -94,6 +94,8 @@ interface ModelRoleEditorProps {
    * effort control can name what an unset suffix means instead of guessing.
    */
   globalLevel?: string;
+  labelAccessory?: React.ReactNode;
+  trailingAccessory?: React.ReactNode;
 }
 
 /**
@@ -107,7 +109,7 @@ interface ModelRoleEditorProps {
  */
 export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
   role, roles, models, directory, globalLevel, label, description, info, settingsItem, effortLabel,
-  disabled, loading, layout = 'row', onChange,
+  labelAccessory, trailingAccessory, disabled, loading, layout = 'row', onChange,
 }) => {
   const { t } = useI18n();
   const selector = roles[role] ?? '';
@@ -157,6 +159,7 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
         ariaLabel={effortLabel ?? t('settings.omp.modelRoles.effortAria', { role: String(label) })}
         onChange={onEffortChange}
       />
+      {trailingAccessory}
     </>
   );
 
@@ -180,6 +183,7 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
       label={label}
       description={description}
       info={info}
+      labelAccessory={labelAccessory}
       settingsItem={settingsItem}
     >
       {controls}

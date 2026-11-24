@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   JsonObjectSchema,
   MAX_THINKING_SUFFIX_OPTIONS,
@@ -135,4 +136,80 @@ export function modelRoleChange(state: OmpSettingsState, role: string, selector:
     roles[role] = replaceFirstSelector(prior, selector);
   }
   return { id: 'modelRoles', value: roles };
+}
+
+const RoleSelectorObjectSchema = z.object({ selector: z.string() });
+const RoleSelectorEntrySchema = z.union([
+  z.string(),
+  RoleSelectorObjectSchema,
+]);
+const RoleSelectorValueSchema = z.union([
+  z.string(),
+  z.array(RoleSelectorEntrySchema),
+  RoleSelectorObjectSchema,
+]);
+
+export function defaultThinkingLevelFromState(state: OmpSettingsState | null | undefined): string | undefined {
+  const parsed = z.string().safeParse(state?.settings.find((setting) => setting.id === 'defaultThinkingLevel')?.value);
+  return parsed.success && parsed.data.length > 0 ? parsed.data : undefined;
+}
+
+function extractFallbackSelectors(rawValue: JsonValue | readonly string[] | undefined): string[] {
+  const parsed = RoleSelectorValueSchema.safeParse(rawValue);
+  if (!parsed.success) return [];
+  const entries: string[] = [];
+  const pushString = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (trimmed.includes(' → ') || (/\s/.test(trimmed) && !trimmed.includes(','))) {
+      entries.push(trimmed);
+      return;
+    }
+    for (const part of trimmed.split(',')) {
+      const candidate = part.trim();
+      if (candidate) entries.push(candidate);
+    }
+  };
+  const data = parsed.data;
+  const stringValue = z.string().safeParse(data);
+  if (stringValue.success) {
+    pushString(stringValue.data);
+  } else if (Array.isArray(data)) {
+    for (const item of data) {
+      const itemString = z.string().safeParse(item);
+      if (itemString.success) {
+        pushString(itemString.data);
+      } else {
+        const itemObj = RoleSelectorObjectSchema.safeParse(item);
+        if (itemObj.success) pushString(itemObj.data.selector);
+      }
+    }
+  } else {
+    const objValue = RoleSelectorObjectSchema.safeParse(data);
+    if (objValue.success) pushString(objValue.data.selector);
+  }
+  return entries;
+}
+
+export function formatRoleDisplayValue(
+  rawValue: JsonValue | readonly string[] | undefined,
+  models: readonly Model[],
+  t: (key: I18nKey) => string,
+): string {
+  const entries = extractFallbackSelectors(rawValue);
+  if (entries.length === 0) return t('settings.omp.modelRoles.inheritFallback');
+  const primary = entries[0];
+  const extraCount = entries.length - 1;
+  if (/\s/.test(primary)) {
+    return extraCount > 0 ? `${primary} +${extraCount}` : primary;
+  }
+  const { model: modelRef, effort } = splitRoleSelector(primary, models);
+  const catalogModel = modelForSelector(models, modelRef);
+  const parsed = catalogModel ? null : parseModelSelector(modelRef, MAX_THINKING_SUFFIX_OPTIONS);
+  const modelLabel = catalogModel
+    ? (catalogModel.name.trim() || catalogModel.modelId)
+    : (parsed ? parsed.modelId : modelRef);
+  const effortText = effort ? levelLabel(t, effort) : '';
+  const base = effortText ? `${modelLabel} · ${effortText}` : modelLabel;
+  return extraCount > 0 ? `${base} +${extraCount}` : base;
 }

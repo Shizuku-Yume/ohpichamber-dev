@@ -19,8 +19,6 @@ import { NumberInput } from '@/components/ui/number-input';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
 import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
-import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
-import { openModelRoleEditor } from '@/components/sections/shared/openModelRoleEditor';
 import { levelLabel, modelRoleChange, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { SessionWarmingField } from './SessionWarmingField';
@@ -248,19 +246,29 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
 
       {/* Models the app runs on its own: summaries, titles, the walkthrough. */}
       <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
-        <ModelRoleLinkRow
+        <ModelRoleEditor
+          role="smol"
+          roles={roleSelectors}
+          models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
+          disabled={isSavingOmp || !ompState}
+          loading={!ompState && !ompStateFailed}
           label={t('settings.omp.modelRoles.role.smol.label')}
           info={t('settings.omp.modelRoles.role.smol.desc')}
-          value={roleSelectors.smol || t('settings.omp.modelRoles.inheritFallback')}
-          linkLabel={t('settings.omp.modelRoles.link.hub')}
-          onOpen={() => openModelRoleEditor('smol')}
+          onChange={(selector) => void setRole('smol', selector)}
         />
-        <ModelRoleLinkRow
+        <ModelRoleEditor
+          role="slow"
+          roles={roleSelectors}
+          models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
+          disabled={isSavingOmp || !ompState}
+          loading={!ompState && !ompStateFailed}
           label={t('settings.omp.modelRoles.role.slow.label')}
           info={t('settings.omp.modelRoles.role.slow.desc')}
-          value={roleSelectors.slow || t('settings.omp.modelRoles.inheritFallback')}
-          linkLabel={t('settings.omp.modelRoles.link.hub')}
-          onOpen={() => openModelRoleEditor('slow')}
+          onChange={(selector) => void setRole('slow', selector)}
         />
       </SettingsSection>
 
@@ -274,12 +282,17 @@ const DefaultsSettingsContent: React.FC<{ directory: string | null }> = ({ direc
         settingsItem="sessions.plan-goal"
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
-          <ModelRoleLinkRow
+          <ModelRoleEditor
+            role="plan"
+            roles={roleSelectors}
+            models={models}
+            directory={directory ?? undefined}
+            globalLevel={configuredThinkingLevel || undefined}
+            disabled={isSavingOmp || !ompState}
+            loading={!ompState && !ompStateFailed}
             label={t('settings.omp.modelRoles.role.plan.label')}
             info={t('settings.omp.modelRoles.role.plan.desc')}
-            value={roleSelectors.plan || t('settings.omp.modelRoles.inheritFallback')}
-            linkLabel={t('settings.omp.modelRoles.link.hub')}
-            onOpen={() => openModelRoleEditor('plan')}
+            onChange={(selector) => void setRole('plan', selector)}
           />
           {getSectionRows('plan').map((s) => (
             <OmpRowControl

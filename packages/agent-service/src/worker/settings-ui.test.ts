@@ -58,7 +58,7 @@ test('misclassifications are fixed: followUpMode is not a chat owner; recap belo
 
 test('an owned-by placement names an owner control, and all placement types stay populated', () => {
   expect([...OMP_SETTING_OWNER_IDS].sort()).toEqual([
-    'chat.session-recap', 'chat.suggestion-generator', 'model-roles.section.chat', 'sessions.default-thinking',
+    'chat.session-recap', 'chat.suggestion-generator', 'model-roles.section.chat', 'model-roles.section.custom', 'sessions.default-thinking',
     'sessions.fallback-model', 'sessions.model-compaction',
   ]);
   const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, 'config-only': 0, hidden: 0, boundary: 0 };
@@ -160,7 +160,7 @@ test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page
   for (const id of ['tools.approval', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
-  for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles', 'steeringMode', 'plan.enabled', 'goal.enabled', 'retry.fallbackChains']) {
+  for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles', 'modelTags', 'steeringMode', 'plan.enabled', 'goal.enabled', 'retry.fallbackChains']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }
 });
@@ -210,24 +210,29 @@ test('discovery exposes only the pinned boolean controls on Commands and Skills'
   expect(OMP_SETTING_PLACEMENTS['skills.registryUrl']).toEqual({ type: 'boundary' });
 });
 
-test('Usage edits reset tuning without exposing automatic redemption', async () => {
+test('Usage edits reset tuning including automatic redemption', async () => {
   const f = await fixture();
   try {
     const state = await f.native.read('workspace_1', '0');
     const usage = state.settings.filter((setting) => setting.placement.type === 'page' && setting.placement.page === 'usage');
     expect(usage.map((setting) => setting.id).sort()).toEqual([
+      'claudeResets.autoRedeem5h', 'claudeResets.autoRedeemFable', 'claudeResets.autoRedeemWeekly',
       'claudeResets.keepCredits', 'claudeResets.minBlockedMinutes', 'claudeResets.salvageHorizonHours',
+      'codexResets.autoRedeem5h', 'codexResets.autoRedeemWeekly',
       'codexResets.keepCredits', 'codexResets.minBlockedMinutes', 'codexResets.salvageHorizonHours',
     ]);
-    expect(usage.every((setting) => setting.type === 'number')).toBe(true);
     const saved = await f.native.write('workspace_1', '1', {
       expectedRevision: state.revision,
-      changes: [{ id: 'codexResets.keepCredits', value: 2 }],
+      changes: [
+        { id: 'codexResets.keepCredits', value: 2 },
+        { id: 'codexResets.autoRedeem5h', value: 'yes' },
+      ],
     });
     expect(saved.settings.find((setting) => setting.id === 'codexResets.keepCredits')?.value).toBe(2);
+    expect(saved.settings.find((setting) => setting.id === 'codexResets.autoRedeem5h')?.value).toBe('yes');
     await expect(f.native.write('workspace_1', '2', {
       expectedRevision: saved.revision,
-      changes: [{ id: 'codexResets.autoRedeem5h', value: 'yes' }],
+      changes: [{ id: 'codexResets.autoRedeem5h', value: 'sometimes' }],
     })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
   } finally { await f.close(); }
 });
@@ -362,6 +367,57 @@ test('project discovery overrides cannot change shared settings', async () => {
     }
     expect(readFileSync(sharedPath, 'utf8')).toBe(config);
     expect(readFileSync(projectPath, 'utf8')).toBe(config);
+  } finally { await f.close(); }
+});
+
+test('model role and tag records persist key removal across a reload', async () => {
+  const f = await fixture();
+  try {
+    const path = join(f.agentDirectory, 'config.yml');
+    await writeFile(path, 'modelRoles:\n  reviewer: provider/model\n  helper: provider/other\nmodelTags:\n  reviewer:\n    name: Reviewer\n  helper:\n    name: Helper\n');
+    const state = await f.native.read('workspace_1', '0');
+    const roles = state.settings.find((setting) => setting.id === 'modelRoles');
+    const tags = state.settings.find((setting) => setting.id === 'modelTags');
+    await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [
+        { id: 'modelRoles', value: { reviewer: 'provider/model' }, expectedValue: roles?.value },
+        { id: 'modelTags', value: { reviewer: { name: 'Reviewer' } }, expectedValue: tags?.value },
+      ],
+    });
+    const after = await f.native.read('workspace_1', '2');
+    expect(after.settings.find((setting) => setting.id === 'modelRoles')?.value).toEqual({ reviewer: 'provider/model' });
+    expect(after.settings.find((setting) => setting.id === 'modelTags')?.value).toEqual({ reviewer: { name: 'Reviewer' } });
+    expect(readFileSync(path, 'utf8')).not.toContain('helper');
+  } finally { await f.close(); }
+});
+
+test('project model tags cannot replace the shared record', async () => {
+  const f = await fixture();
+  try {
+    const sharedPath = join(f.agentDirectory, 'config.yml');
+    const sharedConfig = 'modelTags:\n  reviewer:\n    name: Shared reviewer\n';
+    await writeFile(sharedPath, sharedConfig);
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'modelTags:\n  reviewer:\n    name: Project reviewer\n');
+    const state = await f.native.read('workspace_1', '0');
+    const tags = state.settings.find((setting) => setting.id === 'modelTags');
+    expect(tags?.value).toEqual({ reviewer: { name: 'Project reviewer' } });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{ id: 'modelTags', value: { reviewer: { name: 'Changed' } }, expectedValue: tags?.value }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect(readFileSync(sharedPath, 'utf8')).toBe(sharedConfig);
+    // A write that keeps the project entry intact may proceed: the shared
+    // layer is written and the project shadow stays untouched.
+    const saved = await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{ id: 'modelTags', value: { reviewer: { name: 'Project reviewer' }, helper: { name: 'Helper' } }, expectedValue: tags?.value }],
+    });
+    expect(saved.settings.find((setting) => setting.id === 'modelTags')?.value).toEqual({
+      reviewer: { name: 'Project reviewer' },
+      helper: { name: 'Helper' },
+    });
   } finally { await f.close(); }
 });
 
