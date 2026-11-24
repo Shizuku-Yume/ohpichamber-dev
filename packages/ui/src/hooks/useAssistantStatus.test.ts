@@ -178,7 +178,7 @@ describe('createParsedStatus', () => {
     });
 
     test('an unknown extension tool still names itself', () => {
-        expect(statusOf([tool('1', 'mcp__srv_custom')]).status).toEqual({ key: 'chat.agentStatus.usingTool', name: 'mcp__srv_custom' });
+        expect(statusOf([tool('1', 'mcp__srv_custom')]).status).toEqual({ key: 'chat.agentStatus.usingTool', name: 'srv: custom' });
         expect(statusOf([tool('1', 'mcp__srv_custom')]).isAnswering).toBe(false);
     });
 });
