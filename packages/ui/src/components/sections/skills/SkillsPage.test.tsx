@@ -41,8 +41,10 @@ test('Skills discovery writes its native setting and refreshes the catalog', asy
   useSkillsStore.setState({ selectedSkillName: null, selectedAuthoredSkill: null, skillDraft: null });
   const state: OmpSettingsState = {
     workspaceId: 'workspace', revision: '1', totalCount: 2,
-    settings: [{ id: 'skills.enabled', type: 'boolean', value: true, default: true, configured: false,
-      placement: { type: 'page', page: 'skills', section: 'discovery' } }, {
+    settings: [{
+      id: 'skills.enabled', type: 'boolean', value: true, default: true, configured: false,
+      placement: { type: 'page', page: 'skills', section: 'discovery' }
+    }, {
       id: 'skills.enablePiProject', type: 'boolean', value: false, default: true, configured: true,
       condition: 'discoveryUsesSharedConfig', conditionActive: false,
       placement: { type: 'page', page: 'skills', section: 'discovery' },
@@ -56,17 +58,36 @@ test('Skills discovery writes its native setting and refreshes the catalog', asy
   const reload = spyOn(useSkillsStore.getState(), 'loadSkills').mockResolvedValue(true);
   try {
     await act(async () => root.render(<ThemeSystemContext.Provider value={themeContext}><I18nProvider><SkillsPage /></I18nProvider></ThemeSystemContext.Provider>));
-    const row = container.querySelector<HTMLElement>('[data-settings-item="omp.skills.enabled"]');
+    expect(container.querySelector('[data-settings-item="omp.skills.enabled"]')).toBeNull();
+    const trigger = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Discovery sources'));
+    if (!trigger) throw new Error('Missing Discovery sources button');
+    await act(async () => trigger.click());
+    const row = document.body.querySelector<HTMLElement>('[data-settings-item="omp.skills.enabled"]');
     if (!row) throw new Error('Missing discovery setting');
-    const overridden = container.querySelector<HTMLElement>('[data-settings-item="omp.skills.enablePiProject"]');
+    const overridden = document.body.querySelector<HTMLElement>('[data-settings-item="omp.skills.enablePiProject"]');
     expect(overridden?.getAttribute('aria-disabled')).toBe('true');
-    expect(container.textContent).toContain('Editing the shared setting would not change this project.');
+    expect(overridden?.textContent).toContain('Editing the shared setting would not change this project.');
     await act(async () => overridden?.click());
     expect(write).not.toHaveBeenCalled();
     await act(async () => row.click());
     expect(write).toHaveBeenCalledWith('workspace', { expectedRevision: '1', changes: [{ id: 'skills.enabled', value: false }] });
     expect(reload).toHaveBeenCalledWith('/project');
   } finally { resolve.mockRestore(); read.mockRestore(); write.mockRestore(); reload.mockRestore(); }
+});
+
+test('Skills hides the Discovery sources button when zero discovery settings are exposed', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useSkillsStore.setState({ selectedSkillName: null, selectedAuthoredSkill: null, skillDraft: null });
+  const emptyState: OmpSettingsState = { workspaceId: 'workspace', revision: '1', totalCount: 0, settings: [] };
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'project' });
+  const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(emptyState);
+  try {
+    await act(async () => root.render(<ThemeSystemContext.Provider value={themeContext}><I18nProvider><SkillsPage /></I18nProvider></ThemeSystemContext.Provider>));
+    const trigger = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Discovery sources'));
+    expect(trigger).toBeUndefined();
+  } finally { resolve.mockRestore(); read.mockRestore(); }
 });
 const theme = getDefaultTheme(false);
 const noThemeChange = (): never => { throw new Error('Unexpected theme change'); };
@@ -94,16 +115,19 @@ test('skill refresh preserves newer editor text while a save is pending and swit
   const skill = { skillId: 'one', authoredSkillId: 'one', name: 'one', content: '', scope: 'agent', source: '.omp/agent/skills', description: 'one', readOnly: false } satisfies DiscoveredSkill;
   let persisted = '---\nname: one\ndescription: one\ncustom: [keep, metadata]\n---\n\ninitial';
   const writes: Array<{ instructions: string; finish: () => void }> = [];
-  useSkillsStore.setState({ selectedSkillName: null, selectedAuthoredSkill: null, skills: [skill], skillsByDirectory: { '/project': [skill] }, filesByDirectory: {},
+  useSkillsStore.setState({
+    selectedSkillName: null, selectedAuthoredSkill: null, skills: [skill], skillsByDirectory: { '/project': [skill] }, filesByDirectory: {},
     getSkillDetail: async (name) => ({ content: persisted.replace('description: one', `description: ${name}`), supportingFiles: [] }),
     updateSkill: async (_name, input) => {
       const { promise, resolve } = Promise.withResolvers<boolean>();
       const instructions = input.split('\n\n').at(-1) ?? '';
-      writes.push({ instructions, finish: () => {
-        persisted = input;
-        useSkillsStore.setState({ skills: [{ ...skill }], skillsByDirectory: { '/project': [{ ...skill }] } });
-        resolve(true);
-      } });
+      writes.push({
+        instructions, finish: () => {
+          persisted = input;
+          useSkillsStore.setState({ skills: [{ ...skill }], skillsByDirectory: { '/project': [{ ...skill }] } });
+          resolve(true);
+        }
+      });
       return promise;
     },
   });
@@ -135,7 +159,7 @@ test('skill refresh preserves newer editor text while a save is pending and swit
   await act(async () => { writes[1].finish(); });
   await act(async () => useSkillsStore.setState({ selectedSkillName: 'two', skills: [{ ...skill, skillId: 'two', name: 'two' }], skillsByDirectory: { '/project': [{ ...skill, skillId: 'two', name: 'two' }] } }));
   expect(currentView().state.doc.toString()).toContain('description: two');
-  let finishPending = () => {};
+  let finishPending = () => { };
   await act(async () => useSkillsStore.setState({
     selectedSkillName: 'loading', skills: [{ ...skill, skillId: 'loading', name: 'loading' }], skillsByDirectory: { '/project': [{ ...skill, skillId: 'loading', name: 'loading' }] },
     getSkillDetail: async () => {
@@ -155,7 +179,8 @@ test('skill refresh preserves newer editor text while a save is pending and swit
 
 test('a skill list refresh keeps the name typed into a new skill', async () => {
   const builtIn = { skillId: 'built-in', name: 'Built-in', content: 'built-in body', description: '', scope: 'agent', source: 'built-in', readOnly: true } satisfies DiscoveredSkill;
-  useSkillsStore.setState({ selectedSkillName: 'new-skill', skills: [builtIn], skillsByDirectory: { __default__: [builtIn], '/test': [builtIn] },
+  useSkillsStore.setState({
+    selectedSkillName: 'new-skill', skills: [builtIn], skillsByDirectory: { __default__: [builtIn], '/test': [builtIn] },
     skillDraft: { name: 'new-skill', scope: 'agent', content: '' },
     getSkillByName: (name) => useSkillsStore.getState().skills.find((entry) => entry.name === name),
   });
@@ -177,7 +202,8 @@ test('a skill list refresh keeps the name typed into a new skill', async () => {
   expect(nameInput().value).toBe('net-helper');
 
   // Another skill takes the editor; coming back shows the draft again, not that skill's text.
-  await act(async () => useSkillsStore.setState({ selectedSkillName: 'built-in',
+  await act(async () => useSkillsStore.setState({
+    selectedSkillName: 'built-in',
     getSkillDetail: async () => ({ content: 'built-in body', supportingFiles: [] }),
   }));
   await act(async () => useSkillsStore.setState({ selectedSkillName: 'new-skill' }));
@@ -190,7 +216,8 @@ test('a skill list refresh keeps the name typed into a new skill', async () => {
 test('a skill selected before the list is read shows its editor only while it exists', async () => {
   const builtIn = { skillId: 'built-in', name: 'Built-in', content: 'built-in body', description: '', scope: 'agent', source: 'built-in', readOnly: true } satisfies DiscoveredSkill;
   // Settings in a VS Code tab receives the selection before it has read any skills.
-  useSkillsStore.setState({ selectedSkillName: 'built-in', skillDraft: null, skills: [], skillsByDirectory: {},
+  useSkillsStore.setState({
+    selectedSkillName: 'built-in', skillDraft: null, skills: [], skillsByDirectory: {},
     getSkillByName: (name) => useSkillsStore.getState().skills.find((entry) => entry.name === name),
     getSkillDetail: async () => ({ content: 'text', supportingFiles: [] }),
   });

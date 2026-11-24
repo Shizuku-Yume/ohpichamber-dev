@@ -1,4 +1,5 @@
 import React from 'react';
+import type { OmpSetting, OmpSettingValue } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
@@ -8,7 +9,7 @@ import { invalidateSkillsLoadCache, selectAvailableSkillsForDirectory, useSkills
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { DiscoverySourcesDialog } from '@/components/sections/shared/DiscoverySourcesDialog';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import {
   useAutosave,
@@ -69,25 +70,20 @@ const SkillsInstalledPage: React.FC = () => {
   const directory = useSettingsDirectory();
   const { getSectionSettings, updateSettings, saving } = useOmpPageSettings('skills');
   const discoverySettings = getSectionSettings('discovery');
-  const discoverySection = discoverySettings.length > 0 ? (
-    <SettingsSection title={t('settings.omp.discovery.title')}>
-      {discoverySettings.map(setting => (
-        <React.Fragment key={setting.id}>
-          <OmpRowControl setting={setting} value={setting.value} disabled={saving || setting.conditionActive === false}
-            onChange={async value => {
-              if (!await updateSettings(() => [{ id: setting.id, value }])) {
-                toast.error(t('settings.common.status.saveFailed'));
-                return;
-              }
-              invalidateSkillsLoadCache(directory);
-              await useSkillsStore.getState().loadSkills(directory);
-            }} />
-          {setting.conditionActive === false && (
-            <p className="typography-meta text-muted-foreground">{t('settings.omp.sharedConfig.overridden')}</p>
-          )}
-        </React.Fragment>
-      ))}
-    </SettingsSection>
+  const handleDiscoveryChange = async (setting: OmpSetting, value: OmpSettingValue) => {
+    if (!await updateSettings(() => [{ id: setting.id, value }])) {
+      toast.error(t('settings.common.status.saveFailed'));
+      return;
+    }
+    invalidateSkillsLoadCache(directory);
+    await useSkillsStore.getState().loadSkills(directory);
+  };
+  const discoveryControl = discoverySettings.length > 0 ? (
+    <DiscoverySourcesDialog
+      settings={discoverySettings}
+      saving={saving}
+      onSettingChange={handleDiscoveryChange}
+    />
   ) : null;
   const {
     selectedSkillName,
@@ -372,8 +368,7 @@ const SkillsInstalledPage: React.FC = () => {
     // The page title is the heading SettingsView focuses on navigation, so the
     // empty pane keeps it instead of centring a message with no title.
     return (
-      <SettingsPageLayout title={pageTitle} showSaveStatus={false}>
-        {discoverySection}
+      <SettingsPageLayout title={pageTitle} headerEnd={discoveryControl} showSaveStatus={false}>
         <div className="flex items-center justify-center py-16">
           <div className="max-w-sm text-center text-muted-foreground">
             <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 @xl:h-12 @xl:w-12 opacity-50" />
@@ -387,8 +382,7 @@ const SkillsInstalledPage: React.FC = () => {
 
   if (loading || loadFailed) {
     return (
-      <SettingsPageLayout title={pageTitle} showSaveStatus={false}>
-        {discoverySection}
+      <SettingsPageLayout title={pageTitle} headerEnd={discoveryControl} showSaveStatus={false}>
         <div className="flex items-center justify-center py-16">
           <div className={loadFailed ? 'text-center text-[var(--status-error)]' : 'text-center text-muted-foreground'}>
             <p role={loadFailed ? 'alert' : undefined}>
@@ -405,9 +399,9 @@ const SkillsInstalledPage: React.FC = () => {
       <SettingsPageLayout
         title={title}
         description={description}
+        headerEnd={discoveryControl}
         onBlurCapture={autosave.onBlurCapture}
       >
-        {discoverySection}
         {applyFailed ? (
           <p role="alert" className="typography-meta text-[var(--status-warning)] pb-4">
             {t('settings.skills.page.status.sourceCommittedApplyFailed')}

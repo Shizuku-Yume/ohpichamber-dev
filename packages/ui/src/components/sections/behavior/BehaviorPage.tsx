@@ -1,9 +1,13 @@
 import React from 'react';
 import { z } from 'zod';
+import type { BehaviorFileCatalog, OmpSettingValue } from '@openchamber/agent-contract';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useI18n, type I18nKey } from '@/lib/i18n';
-import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
+import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { useDeviceInfo } from '@/lib/device';
 import {
   Select,
   SelectContent,
@@ -30,7 +34,6 @@ import {
 import {
   SettingsSection,
   SettingsCheckboxRow,
-  SettingsChipGroup,
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_SPACE_ROW_CLASS,
@@ -38,7 +41,16 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { toast } from '@/components/ui';
+import { Icon } from '@/components/icon/Icon';
+import { cn } from '@/lib/utils';
+import { BehaviorCreateDialog } from './BehaviorCreateDialog';
+import { BehaviorSidebar } from './BehaviorSidebar';
 import { NativeBehaviorFiles } from './NativeBehaviorFiles';
+import {
+  type BehaviorDraftTarget,
+  type BehaviorSelection,
+} from './behaviorTypes';
 
 const agentsMdResponseSchema = z.object({
   content: z.string(),
@@ -46,9 +58,12 @@ const agentsMdResponseSchema = z.object({
   path: z.string().min(1).optional(),
 });
 
+const apiErrorSchema = z.object({ error: z.string().optional() });
+
 const readApiError = async (response: Response, fallback: string) => {
-  const data = await response.json().catch(() => null) as { error?: unknown } | null;
-  return typeof data?.error === 'string' && data.error.trim() ? data.error : fallback;
+  const parsed = apiErrorSchema.safeParse(await response.json().catch(() => null));
+  const message = parsed.success ? parsed.data.error : undefined;
+  return message && message.trim() ? message : fallback;
 };
 
 const normalizeAgentsMdContent = (content: string) => (
@@ -60,8 +75,6 @@ const AGENTS_MD_FILE_NAME = 'AGENTS.md';
 
 type RulesScope = 'global' | 'project';
 
-// `default` reuses the shared localized "Default" label; every other preset has
-// its own name under the Behavior page's existing keys.
 const RESPONSE_STYLE_OPTION_LABEL_KEYS: Record<ResponseStylePreset, I18nKey> = {
   default: 'settings.openchamber.defaults.option.default',
   concise: 'settings.behavior.page.responseStyle.option.concise',
@@ -74,7 +87,6 @@ const RESPONSE_STYLE_OPTION_LABEL_KEYS: Record<ResponseStylePreset, I18nKey> = {
   custom: 'settings.behavior.page.responseStyle.option.custom',
 };
 
-
 const buildRulesQuery = (scope: RulesScope, directory: string | null) => {
   const params = new URLSearchParams({ scope });
   if (scope === 'project' && directory) params.set('directory', directory);
@@ -82,32 +94,46 @@ const buildRulesQuery = (scope: RulesScope, directory: string | null) => {
 };
 
 /**
- * Behavior settings: the AGENTS.md rules the agent reads (global and the
- * selected project's), and an opt-in response style.
- *
- * The AGENTS.md editors write the files OMP loads natively as context files;
- * nothing here injects that text into a prompt a second time.
- *
- * The response style is off unless the user turns it on and picks a preset:
- * `default`, an unset preference and an empty custom preset all persist an
- * empty instruction, which prompt delivery does not send at all.
+ * Behavior settings: unified entity browser for Global and Project AGENTS.md,
+ * RULES.md, SYSTEM.md, `.omp/rules/*`, `.omp/instructions/*`, plus Prompt &
+ * Personality settings.
  */
 export const BehaviorPage: React.FC = () => {
   const { t } = useI18n();
   const settingsDirectory = useSettingsDirectory();
-  const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('behavior');
+  const { isMobile } = useDeviceInfo();
+  const {
+    form: ompForm,
+    updateSettings: updateOmpSettings,
+    getSectionSettings,
+    loading: ompLoading,
+  } = useOmpPageSettings('behavior');
   const promptSettings = getSectionSettings('prompt');
 
-  const [rulesScope, setRulesScope] = React.useState<RulesScope>('global');
+  const [selection, setSelection] = React.useState<BehaviorSelection>({
+    type: 'agents-md',
+    scope: 'global',
+  });
+  const [mobileShowDetail, setMobileShowDetail] = React.useState(false);
+
   const [globalRules, setGlobalRules] = React.useState('');
   const [projectRules, setProjectRules] = React.useState('');
   const [responseStyleEnabled, setResponseStyleEnabled] = React.useState(false);
   const [responseStylePreset, setResponseStylePreset] = React.useState<ResponseStylePreset>('default');
   const [responseStyleCustomInstructions, setResponseStyleCustomInstructions] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(true);
+  const [agentsMdLoadError, setAgentsMdLoadError] = React.useState<{ global: boolean; project: boolean }>({
+    global: false,
+    project: false,
+  });
 
-  // What is currently on disk. Every field is compared against this, so a save
-  // writes only what actually changed and a refreshed value is never clobbered.
+  const [nativeCatalog, setNativeCatalog] = React.useState<BehaviorFileCatalog | undefined>(undefined);
+  const [nativeUnavailable, setNativeUnavailable] = React.useState(false);
+  const [nativeLoadError, setNativeLoadError] = React.useState<string | null>(null);
+  const [nativeReloadCount, setNativeReloadCount] = React.useState(0);
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [stagedDraft, setStagedDraft] = React.useState<BehaviorDraftTarget | null>(null);
+
   const savedRef = React.useRef<{
     globalRules: string;
     projectRules: string;
@@ -115,9 +141,10 @@ export const BehaviorPage: React.FC = () => {
     responseStylePreset: ResponseStylePreset;
     responseStyleCustomInstructions: string;
   } | null>(null);
-  // AGENTS.md exactly as last read or written per scope (null: no file). A save
-  // sends it so the server refuses to overwrite a file edited elsewhere.
-  const agentsMdOnDiskRef = React.useRef<{ global: string | null; project: string | null }>({ global: null, project: null });
+  const agentsMdOnDiskRef = React.useRef<{ global: string | null; project: string | null }>({
+    global: null,
+    project: null,
+  });
 
   const readRules = React.useCallback(async (scope: RulesScope, signal?: AbortSignal) => {
     const query = buildRulesQuery(scope, settingsDirectory);
@@ -126,21 +153,39 @@ export const BehaviorPage: React.FC = () => {
       headers: { Accept: 'application/json' },
       signal,
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      throw new Error(await readApiError(response, t('settings.behavior.files.loadFailed')));
+    }
     return agentsMdResponseSchema.parse(await response.json());
-  }, [settingsDirectory]);
+  }, [settingsDirectory, t]);
 
   React.useEffect(() => {
     const abort = new AbortController();
 
     const load = async () => {
       try {
-        const [settings, globalFile, projectFile] = await Promise.all([
+        const [settings, globalResult, projectResult] = await Promise.all([
           loadDesktopSettings(),
-          readRules('global', abort.signal).catch(() => null),
-          readRules('project', abort.signal).catch(() => null),
+          readRules('global', abort.signal).then(
+            (data) => ({ ok: true as const, data }),
+            (error: unknown) => ({ ok: false as const, error }),
+          ),
+          settingsDirectory
+            ? readRules('project', abort.signal).then(
+              (data) => ({ ok: true as const, data }),
+              (error: unknown) => ({ ok: false as const, error }),
+            )
+            : Promise.resolve({ ok: true as const, data: null }),
         ]);
         if (abort.signal.aborted) return;
+
+        const globalFile = globalResult.ok ? globalResult.data : null;
+        const projectFile = projectResult.ok ? projectResult.data : null;
+
+        setAgentsMdLoadError({
+          global: !globalResult.ok,
+          project: Boolean(settingsDirectory) && !projectResult.ok,
+        });
 
         const next = {
           globalRules: globalFile?.content ?? '',
@@ -162,7 +207,9 @@ export const BehaviorPage: React.FC = () => {
         setResponseStyleCustomInstructions(next.responseStyleCustomInstructions);
         savedRef.current = next;
       } catch (error) {
-        if ((error as Error).name !== 'AbortError') console.warn('Failed to load behavior settings:', error);
+        if ((error as Error).name !== 'AbortError') {
+          console.warn('Failed to load behavior settings:', error);
+        }
       } finally {
         if (!abort.signal.aborted) setIsLoading(false);
       }
@@ -170,11 +217,56 @@ export const BehaviorPage: React.FC = () => {
 
     void load();
     return () => abort.abort();
-  }, [readRules]);
+  }, [readRules, settingsDirectory]);
 
-  // AGENTS.md is often edited in another editor while this page stays open, so
-  // coming back to the window re-reads both scopes. A draft with an edit of its
-  // own is kept; the pending save then names the stale text and is refused.
+  React.useEffect(() => {
+    if (!settingsDirectory) {
+      setNativeCatalog(undefined);
+      setNativeUnavailable(false);
+      setNativeLoadError(null);
+      return;
+    }
+    let active = true;
+    setNativeLoadError(null);
+    setNativeUnavailable(false);
+    void canonicalClient
+      .resolveWorkspace(settingsDirectory)
+      .then((workspace) => canonicalClient.fileResources.getBehaviorFiles(workspace.workspaceId))
+      .then(
+        (result) => {
+          if (!active) return;
+          setNativeCatalog(result);
+          setNativeUnavailable(false);
+          setNativeLoadError(null);
+        },
+        (failure: unknown) => {
+          if (!active) return;
+          if (failure instanceof CanonicalApiError && failure.problem.status === 404) {
+            setNativeUnavailable(true);
+            setNativeCatalog(undefined);
+            setNativeLoadError(null);
+          } else {
+            setNativeLoadError(failure instanceof Error ? failure.message : t('settings.behavior.files.loadFailed'));
+          }
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [settingsDirectory, nativeReloadCount, t]);
+
+  React.useEffect(() => {
+    setStagedDraft(null);
+  }, [settingsDirectory]);
+
+  React.useEffect(() => {
+    if (settingsDirectory) return;
+    setSelection((current) => {
+      if (current.type === 'agents-md' && current.scope === 'project') return { type: 'agents-md', scope: 'global' };
+      if (current.type !== 'agents-md' && current.type !== 'prompt') return { type: 'agents-md', scope: 'global' };
+      return current;
+    });
+  }, [settingsDirectory]);
   const globalRulesRef = React.useRef(globalRules);
   globalRulesRef.current = globalRules;
   const projectRulesRef = React.useRef(projectRules);
@@ -189,7 +281,7 @@ export const BehaviorPage: React.FC = () => {
       try {
         const [globalFile, projectFile] = await Promise.all([
           readRules('global', controller.signal).catch(() => null),
-          readRules('project', controller.signal).catch(() => null),
+          settingsDirectory ? readRules('project', controller.signal).catch(() => null) : Promise.resolve(null),
         ]);
         const saved = savedRef.current;
         if (controller.signal.aborted || !saved) return;
@@ -197,21 +289,28 @@ export const BehaviorPage: React.FC = () => {
           ['global', globalFile, globalRulesRef, setGlobalRules],
           ['project', projectFile, projectRulesRef, setProjectRules],
         ] as const) {
+          if (file === null) continue;
+          setAgentsMdLoadError((previous) => (previous[scope] ? { ...previous, [scope]: false } : previous));
           const onDisk = agentsMdOnDiskRef.current[scope];
-          const content = file?.exists === true ? file.content : '';
-          if (file === null || content === onDisk) continue;
-          // A draft still holding exactly what was on disk has no edit of its
-          // own to keep; anything else is a pending edit the save coexists with.
+          const content = file.exists === true ? file.content : '';
+          if (content === onDisk) continue;
           const unchanged = normalizeAgentsMdContent(ref.current) === onDisk;
           agentsMdOnDiskRef.current[scope] = content;
-          savedRef.current = { ...savedRef.current, [scope === 'global' ? 'globalRules' : 'projectRules']: content };
+          savedRef.current = {
+            ...savedRef.current,
+            [scope === 'global' ? 'globalRules' : 'projectRules']: content,
+          };
           if (unchanged) set(content);
         }
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) console.warn('Failed to refresh AGENTS.md:', error);
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.warn('Failed to refresh AGENTS.md:', error);
+        }
       }
     };
-    const onRefresh = () => { void refresh(); };
+    const onRefresh = () => {
+      void refresh();
+    };
     window.addEventListener('focus', onRefresh);
     document.addEventListener('visibilitychange', onRefresh);
     return () => {
@@ -219,27 +318,30 @@ export const BehaviorPage: React.FC = () => {
       window.removeEventListener('focus', onRefresh);
       document.removeEventListener('visibilitychange', onRefresh);
     };
-  }, [readRules]);
+  }, [readRules, settingsDirectory]);
 
-  // `null` means the draft matches the last saved text, so nothing is written.
-  const saveRules = React.useCallback(async (
-    scope: RulesScope,
-    draft: string,
-    onDisk: string | null,
-    baseline: string,
-  ): Promise<AutosaveResult | null> => {
-    if (draft === baseline) return null;
-    const content = normalizeAgentsMdContent(draft);
-    const response = await runtimeFetch(`/api/behavior/agents-md?${buildRulesQuery(scope, settingsDirectory)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ content, expectedContent: onDisk, scope, directory: settingsDirectory }),
-    });
-    if (response.status === 409) return autosaveFailed(t('settings.behavior.page.toast.agentsMdChangedOnDisk'));
-    if (!response.ok) return autosaveFailed(await readApiError(response, t('settings.behavior.page.toast.saveFailed')));
-    agentsMdOnDiskRef.current[scope] = content;
-    return AUTOSAVE_SAVED;
-  }, [settingsDirectory, t]);
+  const saveRules = React.useCallback(
+    async (
+      scope: RulesScope,
+      draft: string,
+      onDisk: string | null,
+      baseline: string,
+    ): Promise<AutosaveResult | null> => {
+      if (draft === baseline) return null;
+      const content = normalizeAgentsMdContent(draft);
+      const response = await runtimeFetch(`/api/behavior/agents-md?${buildRulesQuery(scope, settingsDirectory)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ content, expectedContent: onDisk, scope, directory: settingsDirectory }),
+      });
+      if (response.status === 409) return autosaveFailed(t('settings.behavior.page.toast.agentsMdChangedOnDisk'));
+      if (!response.ok) return autosaveFailed(await readApiError(response, t('settings.behavior.page.toast.saveFailed')));
+      agentsMdOnDiskRef.current[scope] = content;
+      setAgentsMdLoadError((previous) => (previous[scope] ? { ...previous, [scope]: false } : previous));
+      return AUTOSAVE_SAVED;
+    },
+    [settingsDirectory, t],
+  );
 
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
     const saved = savedRef.current;
@@ -252,14 +354,16 @@ export const BehaviorPage: React.FC = () => {
     const projectResult = await saveRules('project', projectRules, agentsMdOnDiskRef.current.project, saved.projectRules);
     if (projectResult && !projectResult.ok) return projectResult;
 
-    // `default` is an explicit choice with the same zero-injection result as an
-    // unset preference; switching the feature off also resolves to no text.
     const instruction = responseStyleEnabled
-      ? resolveResponseStyleInstruction({ preset: responseStylePreset, customInstructions: responseStyleCustomInstructions })
+      ? resolveResponseStyleInstruction({
+        preset: responseStylePreset,
+        customInstructions: responseStyleCustomInstructions,
+      })
       : '';
-    const settingsChanged = responseStyleEnabled !== saved.responseStyleEnabled
-      || responseStylePreset !== saved.responseStylePreset
-      || responseStyleCustomInstructions !== saved.responseStyleCustomInstructions;
+    const settingsChanged =
+      responseStyleEnabled !== saved.responseStyleEnabled ||
+      responseStylePreset !== saved.responseStylePreset ||
+      responseStyleCustomInstructions !== saved.responseStyleCustomInstructions;
 
     if (settingsChanged) {
       const result = await updateDesktopSettings({
@@ -270,7 +374,6 @@ export const BehaviorPage: React.FC = () => {
       });
       if (!result.ok) return autosaveFailed(t('settings.behavior.page.toast.saveFailed'));
     }
-
     const nextSaved = {
       ...saved,
       globalRules: normalizeAgentsMdContent(globalRules),
@@ -280,14 +383,10 @@ export const BehaviorPage: React.FC = () => {
       responseStyleCustomInstructions,
     };
     savedRef.current = nextSaved;
-    // Normalize only the submitted drafts. A newer edit must survive this
-    // response so the autosave follow-up can still write it.
-    setGlobalRules((current) => current === globalRules ? normalizeAgentsMdContent(globalRules) : current);
-    setProjectRules((current) => current === projectRules ? normalizeAgentsMdContent(projectRules) : current);
+    setGlobalRules((current) => (current === globalRules ? normalizeAgentsMdContent(globalRules) : current));
+    setProjectRules((current) => (current === projectRules ? normalizeAgentsMdContent(projectRules) : current));
 
-    return wroteGlobal || settingsChanged || projectResult !== null
-      ? AUTOSAVE_SAVED
-      : AUTOSAVE_UNCHANGED;
+    return wroteGlobal || settingsChanged || projectResult !== null ? AUTOSAVE_SAVED : AUTOSAVE_UNCHANGED;
   }, [
     globalRules,
     isLoading,
@@ -302,137 +401,246 @@ export const BehaviorPage: React.FC = () => {
   const autosave = useAutosave(save);
   const { requestSave } = autosave;
 
-  const rulesValue = rulesScope === 'global' ? globalRules : projectRules;
-  const setRulesValue = rulesScope === 'global' ? setGlobalRules : setProjectRules;
-  const rulesDisabled = isLoading || (rulesScope === 'project' && !settingsDirectory);
+  const handleSelect = (next: BehaviorSelection) => {
+    setSelection(next);
+    if (isMobile) setMobileShowDetail(true);
+  };
+
+
+  const mobileBackButton = isMobile ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="-ms-2 h-7 w-7 shrink-0"
+      onClick={() => setMobileShowDetail(false)}
+      aria-label={t('settings.behavior.files.sidebar.back')}
+    >
+      <Icon name="arrow-left-s" className="size-4" />
+    </Button>
+  ) : undefined;
+
+  const handleOmpChange = async (settingId: string, value: OmpSettingValue) => {
+    reportSettingsSaveState('saving');
+    const ok = await updateOmpSettings(() => [{ id: settingId, value }]);
+    if (!ok) {
+      reportSettingsSaveState('error');
+      toast.error(t('settings.common.status.saveFailed'));
+      return;
+    }
+    reportSettingsSaveState('saved');
+  };
+
+  const renderDetail = () => {
+    if (selection.type === 'prompt') {
+      return (
+        <SettingsPageLayout
+          title={t('settings.behavior.section.prompt.title')}
+          description={t('settings.behavior.section.prompt.description')}
+          titleLeading={mobileBackButton}
+          showSaveStatus
+          onBlurCapture={autosave.onBlurCapture}
+        >
+          <SettingsSection
+            title={t('settings.behavior.page.section.responseStyle')}
+            info={t('settings.behavior.page.responseStyle.tooltip')}
+            divider={false}
+            settingsItem="behavior.response-style"
+            contentClassName={SETTINGS_SPACE_ROW_CLASS}
+          >
+            <SettingsCheckboxRow
+              checked={responseStyleEnabled}
+              onChange={(next) => {
+                setResponseStyleEnabled(next);
+                requestSave();
+              }}
+              disabled={isLoading}
+              label={t('settings.behavior.page.responseStyle.enable')}
+              ariaLabel={t('settings.behavior.page.responseStyle.enableAria')}
+            />
+
+            <SettingsFieldRow label={t('settings.behavior.page.responseStyle.preset')}>
+              <Select<ResponseStylePreset>
+                value={responseStylePreset}
+                onValueChange={(value) => {
+                  setResponseStylePreset(value);
+                  requestSave();
+                }}
+                disabled={isLoading || !responseStyleEnabled}
+              >
+                <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
+                  <SelectValue>
+                    {(value) => (isResponseStylePreset(value) ? t(RESPONSE_STYLE_OPTION_LABEL_KEYS[value]) : null)}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {RESPONSE_STYLE_PRESETS.map((preset) => (
+                    <SelectItem key={preset} value={preset}>
+                      {t(RESPONSE_STYLE_OPTION_LABEL_KEYS[preset])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsFieldRow>
+
+            {responseStylePreset === 'custom' ? (
+              <SettingsStackedField
+                label={t('settings.behavior.page.responseStyle.option.custom')}
+                controlClassName="w-full max-w-none flex-col items-stretch"
+              >
+                <Textarea
+                  aria-label={t('settings.behavior.page.responseStyle.option.custom')}
+                  value={responseStyleCustomInstructions}
+                  onChange={(event) => setResponseStyleCustomInstructions(event.target.value)}
+                  placeholder={t('settings.behavior.page.responseStyle.customPlaceholder')}
+                  rows={5}
+                  disabled={isLoading || !responseStyleEnabled}
+                  outerClassName="min-h-[120px]"
+                  className="w-full font-mono typography-meta bg-transparent"
+                />
+              </SettingsStackedField>
+            ) : null}
+          </SettingsSection>
+
+          <SettingsSection
+            title={t('settings.behavior.section.prompt.title')}
+            description={t('settings.behavior.section.prompt.description')}
+            settingsItem="behavior.prompt-personality"
+          >
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
+              {promptSettings.map((s) => (
+                <OmpRowControl
+                  key={s.id}
+                  setting={s}
+                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void handleOmpChange(s.id, val)}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+        </SettingsPageLayout>
+      );
+    }
+
+    if (selection.type === 'agents-md') {
+      const scope = selection.scope;
+      const rulesValue = scope === 'global' ? globalRules : projectRules;
+      const setRulesValue = scope === 'global' ? setGlobalRules : setProjectRules;
+      const rulesDisabled = isLoading || (scope === 'project' && !settingsDirectory);
+      const loadFailed = scope === 'global' ? agentsMdLoadError.global : agentsMdLoadError.project;
+      const title =
+        scope === 'global'
+          ? t('settings.behavior.page.section.systemPrompt')
+          : t('settings.behavior.files.agentsMd.projectSection');
+      const scopeDescription =
+        scope === 'global'
+          ? t('settings.behavior.files.agentsMd.scopeGlobal')
+          : t('settings.behavior.files.agentsMd.scopeProject');
+
+      return (
+        <SettingsPageLayout
+          title={title}
+          description={scopeDescription}
+          titleLeading={mobileBackButton}
+          onBlurCapture={autosave.onBlurCapture}
+        >
+          {loadFailed ? (
+            <p role="alert" className="mb-4 typography-meta text-[var(--status-error)]">
+              {t('settings.behavior.files.loadFailed')}
+            </p>
+          ) : null}
+
+          <SettingsSection
+            title={t('settings.behavior.page.warning.title')}
+            description={t('settings.behavior.page.warning.description', { path: AGENTS_MD_FILE_NAME })}
+            divider={false}
+            settingsItem={scope === 'global' ? 'behavior.system-prompt' : undefined}
+            contentClassName={SETTINGS_SPACE_ROW_CLASS}
+          >
+            <SettingsStackedField
+              label={AGENTS_MD_FILE_NAME}
+              controlClassName="w-full max-w-none flex-col items-stretch"
+            >
+              <Textarea
+                value={rulesValue}
+                onChange={(event) => setRulesValue(event.target.value)}
+                placeholder={t('settings.behavior.page.field.systemPromptPlaceholder')}
+                rows={12}
+                disabled={rulesDisabled}
+                outerClassName="min-h-[160px]"
+                className="w-full font-mono typography-meta bg-transparent"
+              />
+            </SettingsStackedField>
+          </SettingsSection>
+        </SettingsPageLayout>
+      );
+    }
+
+    if (settingsDirectory) {
+      return (
+        <NativeBehaviorFiles
+          directory={settingsDirectory}
+          selection={selection}
+          catalog={nativeCatalog}
+          error={nativeLoadError}
+          unavailable={nativeUnavailable}
+          onCatalogChange={setNativeCatalog}
+          onSelect={handleSelect}
+          onClearDraft={() => setStagedDraft(null)}
+          titleLeading={mobileBackButton}
+        />
+      );
+    }
+
+    return null;
+  };
 
   return (
-    <SettingsPageLayout
-      title={t('settings.behavior.page.title')}
-      description={t('settings.page.behavior.description')}
-      onBlurCapture={autosave.onBlurCapture}
-    >
-      {settingsDirectory && <NativeBehaviorFiles key={settingsDirectory} directory={settingsDirectory} />}
-      <SettingsSection
-        title={t('settings.behavior.page.section.systemPrompt')}
-        info={(
-          <div className="space-y-1">
-            <p className="font-medium text-foreground">
-              {t('settings.behavior.page.warning.title')}
-            </p>
-            <p>
-              {t('settings.behavior.page.warning.description', { path: AGENTS_MD_FILE_NAME })}
-            </p>
-          </div>
-        )}
-        settingsItem="behavior.system-prompt"
-        contentClassName={SETTINGS_SPACE_ROW_CLASS}
-      >
-        <SettingsChipGroup<RulesScope>
-          value={rulesScope}
-          onChange={(scope) => setRulesScope(scope)}
-          options={[
-            { value: 'global', label: t('settings.common.scope.global') },
-            { value: 'project', label: t('settings.common.scope.project'), disabled: !settingsDirectory },
-          ]}
-          aria-label={t('settings.behavior.page.section.systemPrompt')}
-        />
-        <SettingsStackedField
-          label={AGENTS_MD_FILE_NAME}
-          controlClassName="w-full max-w-none flex-col items-stretch"
+    <div className={cn('flex h-full min-h-0 flex-1 overflow-hidden @container')}>
+      {(!isMobile || !mobileShowDetail) ? (
+        <div
+          className={cn(
+            'h-full min-h-0 shrink-0 border-r bg-sidebar',
+            isMobile ? 'w-full border-r-0' : 'w-64',
+          )}
+          style={{ borderColor: 'var(--interactive-border)' }}
         >
-          <Textarea
-            value={rulesValue}
-            onChange={(event) => setRulesValue(event.target.value)}
-            placeholder={t('settings.behavior.page.field.systemPromptPlaceholder')}
-            rows={12}
-            disabled={rulesDisabled}
-            outerClassName="min-h-[160px]"
-            className="w-full font-mono typography-meta bg-transparent"
+          <BehaviorSidebar
+            selection={selection}
+            onSelect={handleSelect}
+            hasProjectDirectory={Boolean(settingsDirectory)}
+            catalog={nativeCatalog}
+            nativeUnavailable={nativeUnavailable}
+            nativeLoadError={nativeLoadError}
+            onRetryNative={() => setNativeReloadCount((count) => count + 1)}
+            stagedDraft={stagedDraft}
+            onOpenCreate={() => setCreateOpen(true)}
           />
-        </SettingsStackedField>
-      </SettingsSection>
-
-      <SettingsSection
-        title={t('settings.behavior.page.section.responseStyle')}
-        info={t('settings.behavior.page.responseStyle.tooltip')}
-        settingsItem="behavior.response-style"
-        contentClassName={SETTINGS_SPACE_ROW_CLASS}
-      >
-        <SettingsCheckboxRow
-          checked={responseStyleEnabled}
-          onChange={(next) => {
-            setResponseStyleEnabled(next);
-            requestSave();
-          }}
-          disabled={isLoading}
-          label={t('settings.behavior.page.responseStyle.enable')}
-          ariaLabel={t('settings.behavior.page.responseStyle.enableAria')}
-        />
-
-        <SettingsFieldRow
-          label={t('settings.behavior.page.responseStyle.preset')}
-        >
-          <Select<ResponseStylePreset>
-            value={responseStylePreset}
-            onValueChange={(value) => {
-              setResponseStylePreset(value);
-              requestSave();
-            }}
-            disabled={isLoading || !responseStyleEnabled}
-          >
-            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
-              <SelectValue>
-                {(value) => (isResponseStylePreset(value) ? t(RESPONSE_STYLE_OPTION_LABEL_KEYS[value]) : null)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {RESPONSE_STYLE_PRESETS.map((preset) => (
-                <SelectItem key={preset} value={preset}>
-                  {t(RESPONSE_STYLE_OPTION_LABEL_KEYS[preset])}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsFieldRow>
-
-        {responseStylePreset === 'custom' ? (
-          <SettingsStackedField
-            label={t('settings.behavior.page.responseStyle.option.custom')}
-            controlClassName="w-full max-w-none flex-col items-stretch"
-          >
-            <Textarea
-              aria-label={t('settings.behavior.page.responseStyle.option.custom')}
-              value={responseStyleCustomInstructions}
-              onChange={(event) => setResponseStyleCustomInstructions(event.target.value)}
-              placeholder={t('settings.behavior.page.responseStyle.customPlaceholder')}
-              rows={5}
-              disabled={isLoading || !responseStyleEnabled}
-              outerClassName="min-h-[120px]"
-              className="w-full font-mono typography-meta bg-transparent"
-            />
-          </SettingsStackedField>
-        ) : null}
-      </SettingsSection>
-
-      {/* OMP Prompt & Personality */}
-      <SettingsSection
-        title={t('settings.behavior.section.prompt.title')}
-        description={t('settings.behavior.section.prompt.description')}
-        settingsItem="behavior.section.prompt"
-      >
-        <div className={SETTINGS_SPACE_ROW_CLASS}>
-          {promptSettings.map((s) => (
-            <OmpRowControl
-              key={s.id}
-              setting={s}
-              value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
-              disabled={ompLoading}
-              onChange={(val) => void updateOmpSetting(s.id, val)}
-            />
-          ))}
         </div>
-      </SettingsSection>
-    </SettingsPageLayout>
+      ) : null}
+
+      {(!isMobile || mobileShowDetail) ? (
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+          {renderDetail()}
+        </div>
+      ) : null}
+
+      <BehaviorCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        availableScopes={nativeCatalog?.scopes ?? ['agent']}
+        existingFiles={nativeCatalog?.files ?? []}
+        onCreateDraft={(target) => {
+          setStagedDraft(target);
+          handleSelect({
+            type: 'new-draft',
+            scope: target.scope,
+            kind: target.kind,
+            name: target.name,
+          });
+        }}
+      />
+    </div>
   );
 };
