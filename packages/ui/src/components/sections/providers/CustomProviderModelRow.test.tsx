@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import type { ProviderConfigurationRead } from '@openchamber/agent-contract';
-import type { ModelRow } from './custom-provider-form';
+import type { ModelRow } from './custom-provider-model-rows';
 
 const dom = new Window({ url: 'http://localhost' });
 Object.assign(globalThis, {
@@ -32,11 +32,9 @@ Object.assign(globalThis, {
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { CustomProviderModelRow } = await import('./CustomProviderModelRow');
-const {
-  buildCustomProviderRequest,
-  createEmptyCustomProviderForm,
-  createModelRow,
-} = await import('./custom-provider-form');
+const { createEmptyCustomProviderForm } = await import('./custom-provider-form');
+const { createModelRow } = await import('./custom-provider-model-rows');
+const { buildCustomProviderRequest } = await import('./custom-provider-persist');
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -69,17 +67,17 @@ const buttonByText = (container: HTMLElement, text: string) => {
 const noop = () => { };
 
 test('collapsed row renders a crisp 2-line summary with human API label, deduplicated modelId, and no repeated host or capability badges', async () => {
-  const distinctRow = {
+  const distinctRow: ModelRow = {
     ...createModelRow(),
     modelId: 'gpt-5-codex',
     name: 'GPT-5 Codex',
-    api: 'openai-codex-responses' as const,
+    api: 'openai-codex-responses',
     contextWindow: '600000',
     maxOutputTokens: '128000',
     baseUrl: 'https://proxy.example.com/v1/responses',
-    modalities: ['text', 'image'] as Array<'text' | 'image'>,
+    modalities: ['text', 'image'],
     toolsSupported: false,
-    preferWebsockets: 'true' as const,
+    preferWebsockets: 'true',
   };
 
   const { container } = await render(
@@ -137,23 +135,23 @@ test('collapsed row renders a crisp 2-line summary with human API label, dedupli
 });
 
 test('expanded row renders only the 5 essential fields directly and keeps all 4 disclosures collapsed with summaries', async () => {
-  const populatedRow = {
+  const populatedRow: ModelRow = {
     ...createModelRow(),
     modelId: 'gpt-image-1',
     name: 'GPT Image 1',
-    api: 'openai-images' as const,
-    kind: 'image' as const,
-    nativeKind: 'image' as const,
+    api: 'openai-images',
+    kind: 'image',
+    nativeKind: 'image',
     baseUrl: 'https://cdn.example.com/v1',
     contextWindow: '128000',
     maxContextWindow: '1000000',
     maxOutputTokens: '16384',
-    modalities: ['text', 'image'] as Array<'text' | 'image'>,
-    thinkingMode: 'effort' as const,
-    thinkingEfforts: ['low', 'medium', 'high'] as Array<'low' | 'medium' | 'high'>,
+    modalities: ['text', 'image'],
+    thinkingMode: 'effort',
+    thinkingEfforts: ['low', 'medium', 'high'],
     costInput: '2.5',
     costOutput: '10',
-    preferWebsockets: 'true' as const,
+    preferWebsockets: 'true',
     compatJson: '{"supportsStore": true}',
     remoteCompactionEndpoint: 'https://compact.example.com/v1',
   };

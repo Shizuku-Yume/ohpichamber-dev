@@ -11,15 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import {
-  apiDisplayLabel,
-  OMP_PROVIDER_APIS,
-  createHeaderRow,
-  type HeaderFieldErrors,
-  type HeaderRow,
-  type TriState,
-} from './custom-provider-form';
-import type { OmpProviderApi } from '@openchamber/agent-contract';
+import { OMP_PROVIDER_APIS, type OmpProviderApi } from '@openchamber/agent-contract';
+import { apiDisplayLabel } from './provider-api-labels';
+import { createHeaderRow, type HeaderRow, type TriState } from './custom-provider-model-rows';
+import type { HeaderFieldErrors } from './custom-provider-form';
 
 const UNSET_VALUE = '__default__';
 

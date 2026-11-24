@@ -174,7 +174,9 @@ test('multi-protocol custom provider shows API badges, protocol filter chips, an
 
   const duplicateButtons = container.querySelectorAll('button[aria-label="Duplicate model"]');
   expect(duplicateButtons.length).toBe(6);
-  await act(async () => (duplicateButtons[0] as HTMLButtonElement).click());
+  const firstDuplicate = duplicateButtons[0];
+  if (!(firstDuplicate instanceof HTMLElement)) throw new Error('Missing duplicate model button');
+  await act(async () => firstDuplicate.click());
   expect(container.textContent).toContain('New model');
 });
 
@@ -430,9 +432,9 @@ test('disclosures auto-open when validation fails inside them and when bedrock-c
     protocolTrigger.click();
   });
   const bedrockOption = [...document.body.querySelectorAll('[role="option"]')].find((el) => el.textContent?.includes('AWS Bedrock'));
-  if (!bedrockOption) throw new Error('Missing AWS Bedrock option in protocol dropdown');
+  if (!(bedrockOption instanceof HTMLElement)) throw new Error('Missing AWS Bedrock option in protocol dropdown');
   await act(async () => {
-    (bedrockOption as HTMLElement).click();
+    bedrockOption.click();
   });
   expect(buttonByText(container, 'Bedrock guardrails & metadata').getAttribute('aria-expanded')).toBe('true');
   expect(container.querySelector('input[aria-label="Guardrail ID"]')).not.toBeNull();

@@ -33,11 +33,11 @@ import {
   idsToAdd,
   matchesDiscoveryFilter,
   staleModelIds,
-  type CustomProviderTranslator,
   type DiscoveryFilter,
   type DiscoveryRow,
-  type ModelRow,
-} from './custom-provider-form';
+} from './custom-provider-autofill';
+import type { ModelRow } from './custom-provider-model-rows';
+import type { CustomProviderTranslator } from './custom-provider-form';
 
 /** Below this many rows the list is short enough to scan without a search field. */
 const SEARCH_THRESHOLD = 8;
