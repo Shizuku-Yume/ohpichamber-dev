@@ -192,7 +192,10 @@ export class AgentService {
         // rejected child identity or persistence write stops that root instead of
         // becoming an unhandled rejection that exits the whole service.
         onSubagent: (...args) => {
-          void this.sessions.onSubagent(...args).catch(() => { void this.workers.stop(args[0]).catch(() => { }); });
+          void this.sessions.onSubagent(...args).catch(error => {
+            this.options.onDiagnostic?.({ level: 'error', rootSessionId: args[0], workerGeneration: args[1], message: `Subagent lifecycle update failed; stopping the worker (${typeof error} ${error instanceof Error ? `${error.name}::${error.message}::${String(error.stack).slice(0, 300)}` : JSON.stringify(error)?.slice(0, 300) ?? String(error)})` });
+            void this.workers.stop(args[0]).catch(() => { });
+          });
         },
       },
     });

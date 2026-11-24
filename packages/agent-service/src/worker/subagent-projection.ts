@@ -108,6 +108,7 @@ export class SubagentProjector {
       solutionSpace: existing?.solutionSpace,
       status,
       activeTool: status === 'running' ? existing?.activeTool : undefined,
+      activeToolCallId: status === 'running' ? existing?.activeToolCallId : undefined,
       activeToolArgs: status === 'running' ? existing?.activeToolArgs : undefined,
       model: existing?.model,
       tokens: existing?.tokens,
@@ -144,7 +145,7 @@ export class SubagentProjector {
   settleSubagentsForClose(): void {
     for (const existing of this.liveSubagents.values()) {
       if (existing.status !== 'running') continue;
-      const subagent: Subagent = { ...existing, status: 'cancelled', activeTool: undefined, activeToolArgs: undefined, retryCountdown: undefined };
+      const subagent: Subagent = { ...existing, status: 'cancelled', activeTool: undefined, activeToolArgs: undefined, activeToolCallId: undefined, retryCountdown: undefined };
       this.liveSubagents.set(subagent.subagentId, subagent);
       try {
         this.publish([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
@@ -188,6 +189,7 @@ export class SubagentProjector {
       status,
       activeTool: status === 'running' ? p.currentTool : undefined,
       activeToolArgs: status === 'running' ? p.currentToolArgs : undefined,
+      activeToolCallId: status === 'running' ? existing?.activeToolCallId : undefined,
       model: p.resolvedModel ?? existing?.model,
       tokens: p.tokens !== undefined && p.tokens >= 0 ? p.tokens : existing?.tokens,
       contextTokens: p.contextTokens !== undefined && p.contextTokens >= 0 ? p.contextTokens : existing?.contextTokens,
@@ -215,7 +217,12 @@ export class SubagentProjector {
     const existing = this.liveSubagents.get(id);
     if (!existing) {
       // The first tool_execution_start can arrive before the 'started'
-      // lifecycle frame; hold it so the row opens with its initial tool.
+      // lifecycle frame; hold it so the row opens with its initial tool. The
+      // toolCallId map is filled now rather than on replay: the child's own
+      // approval prompt can block on this call while the row still buffers.
+      if (event.type === 'tool_execution_start' && event.toolCallId) {
+        this.toolCallToSubagentId.set(event.toolCallId, id);
+      }
       const queue = this.pendingSubagentEvents.get(id) ?? [];
       if (queue.length < 32) queue.push(payload);
       this.pendingSubagentEvents.set(id, queue);
@@ -230,11 +237,14 @@ export class SubagentProjector {
       }
       if (event.toolCallId) {
         this.toolCallToSubagentId.set(event.toolCallId, id);
+        updated.activeToolCallId = event.toolCallId;
+        changed = true;
       }
     } else if (event.type === 'tool_execution_end') {
-      if (updated.activeTool) {
+      if (updated.activeTool || updated.activeToolCallId) {
         updated.activeTool = undefined;
         updated.activeToolArgs = undefined;
+        updated.activeToolCallId = undefined;
         changed = true;
       }
     }

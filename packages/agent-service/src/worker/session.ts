@@ -350,7 +350,7 @@ export class WorkerSession {
           if (isTodoToolResultEnd || event.type === 'turn_end' || event.type === 'agent_pause' || event.type === 'agent_end') {
             this.syncTodoAutoClear();
           }
-        }).catch(() => this.fail());
+        }).catch(error => this.fail(error));
       }
       if (event.type === 'agent_end') {
         this.scheduleAutoTitle();
@@ -436,7 +436,7 @@ export class WorkerSession {
           }]);
         }
       }
-    } catch { this.fail(); }
+    } catch (error) { this.fail(error); }
   }
 
   static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload & { assignment?: string }) => void): Promise<WorkerSession> {
@@ -507,7 +507,20 @@ export class WorkerSession {
     // and the host-tool scope, so a completed `/btw` branch rekeys them all at
     // once instead of leaving a retired root id on any published catalog.
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
-    const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
+    const interaction = new NativeInteraction({
+      request: onInteraction,
+      currentTurn: () => projection?.currentTurn()?.turnId,
+      // `toolCallToSubagentId` is filled by subagent event frames after the
+      // session owns the maps; the lookup defers to them at request time.
+      subagentForToolCall: toolCallId => {
+        const session = owned;
+        if (!session) return undefined;
+        const subagentId = session.toolCallToSubagentId.get(toolCallId);
+        if (!subagentId) return undefined;
+        const childSessionId = session.liveSubagents.get(subagentId)?.childSessionId;
+        return { subagentId, ...(childSessionId === undefined ? {} : { childSessionId }) };
+      },
+    });
     const observer: ExtensionFactory = api => {
       api.on('tool_call', async (event, ctx) => {
         interaction.observeToolCall(event);
@@ -882,9 +895,13 @@ export class WorkerSession {
 
   private emit(inputs: ProjectionInput[]): void { if (!this.closed && inputs.length !== 0) this.publish(inputs); }
 
-  private fail(): void {
+  private fail(cause?: unknown): void {
     if (this.failed) return;
     this.failed = true;
+    try {
+      const detail = cause instanceof Error ? cause.name : 'unknown';
+      process.stderr.write(`${JSON.stringify({ type: 'openchamber.diagnostic', level: 'error', code: 'WORKER_SESSION_FAILED', detail })}\n`);
+    } catch { /* diagnostics never affect lifecycle */ }
     try { this.emit(this.projection.failRun('Session projection failed', Date.now())); }
     finally { this.onFatal(); }
   }
@@ -996,23 +1013,52 @@ export class WorkerSession {
   }
 
   private hubRoster(): Subagent[] {
+    const nonNegativeInt = (value: number | undefined): number | undefined =>
+      typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : undefined;
     return this.hubRefs().map(ref => {
       const live = this.liveSubagents.get(ref.id);
       const persisted = ref.sessionFile !== null && !this.liveSubagents.has(ref.id);
+      // Persisted refs derive timestamps from fs.stat `mtimeMs` (often floats);
+      // canonical TimestampSchema requires safe integers, so truncate here.
+      const createdAt = nonNegativeInt(live?.createdAt) ?? nonNegativeInt(ref.createdAt);
+      const updatedAt = nonNegativeInt(live?.updatedAt) ?? nonNegativeInt(ref.lastActivity);
+      const tokens = nonNegativeInt(live?.tokens);
+      const contextTokens = nonNegativeInt(live?.contextTokens);
+      const contextWindow = typeof live?.contextWindow === 'number' && Number.isFinite(live.contextWindow) && live.contextWindow > 0 ? Math.trunc(live.contextWindow) : undefined;
+      const turnCount = nonNegativeInt(live?.turnCount);
       return {
         subagentId: ref.id,
         parentSessionId: this._sessionId,
-        name: ref.displayName || ref.id,
-        role: ref.displayName,
+        ...(live?.childSessionId === undefined ? {} : { childSessionId: live.childSessionId }),
+        ...(live?.toolCallId === undefined ? {} : { toolCallId: live.toolCallId }),
+        name: live?.name ?? (ref.displayName || ref.id),
+        role: live?.role ?? ref.displayName,
+        ...(live?.solutionSpace === undefined ? {} : { solutionSpace: live.solutionSpace }),
         status: live?.status ?? (persisted ? 'parked' : 'idle'),
         ...(live?.activeTool === undefined ? {} : { activeTool: live.activeTool }),
-        ...(live?.tokens === undefined ? {} : { tokens: live.tokens }),
+        ...(live?.activeToolCallId === undefined ? {} : { activeToolCallId: live.activeToolCallId }),
+        ...(live?.activeToolArgs === undefined ? {} : { activeToolArgs: live.activeToolArgs }),
+        ...(live?.model === undefined ? {} : { model: live.model }),
+        ...(tokens === undefined ? {} : { tokens }),
+        ...(contextTokens === undefined ? {} : { contextTokens }),
+        ...(contextWindow === undefined ? {} : { contextWindow }),
+        ...(live?.cost === undefined ? {} : { cost: live.cost }),
         ...(ref.history?.directCost === undefined ? {} : { directCost: ref.history.directCost }),
-        ...(ref.parentId === undefined ? {} : { parentSubagentId: ref.parentId }),
+        ...(turnCount === undefined ? {} : { turnCount }),
+        ...(live?.retryCountdown === undefined ? {} : { retryCountdown: live.retryCountdown }),
+        ...(live?.depth === undefined ? {} : { depth: live.depth }),
+        ...(live?.parentSubagentId !== undefined ? { parentSubagentId: live.parentSubagentId } : ref.parentId === undefined ? {} : { parentSubagentId: ref.parentId }),
+        ...(live?.description === undefined ? {} : { description: live.description }),
+        ...(live?.task === undefined ? {} : { task: live.task }),
+        ...(live?.lastIntent === undefined ? {} : { lastIntent: live.lastIntent }),
+        ...(live?.stage === undefined ? {} : { stage: live.stage }),
+        ...(live?.completionPercent === undefined ? {} : { completionPercent: live.completionPercent }),
+        ...(live?.recentOutput === undefined ? {} : { recentOutput: live.recentOutput }),
+        ...(live?.durationMs === undefined ? {} : { durationMs: live.durationMs }),
         ...(ref.sessionFile === null ? {} : { sessionFile: ref.sessionFile }),
         ...(persisted ? { persisted: true } : {}),
-        createdAt: ref.createdAt,
-        updatedAt: ref.lastActivity,
+        ...(createdAt === undefined ? {} : { createdAt }),
+        ...(updatedAt === undefined ? {} : { updatedAt }),
       };
     });
   }

@@ -21,7 +21,7 @@ import { assertArchiveActive, exportNativeArchive, importNativeArchive, type Arc
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference, SessionRelocationIntent } from './references.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
-import { hasRunningSubagent, queueSubagentLifecycle, readSubagentIdentity, settleSubagentsForExit, type ChildRecord, type Opened, type SubagentLifecycleInput } from './subagent-lifecycle.ts';
+import { hasRunningSubagent, queueSubagentLifecycle, readSubagentIdentity, settleSubagentsForExit, subagentKey, type ChildRecord, type Opened, type SubagentLifecycleInput } from './subagent-lifecycle.ts';
 type RelocationAdmission = (input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<RuntimeSession>) => Promise<RuntimeSession>;
 type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 type ColdRoot = { reference: SessionReference; child?: ChildRecord };
@@ -100,7 +100,17 @@ export class SessionRegistry {
       });
       if (reference.parentSessionId) runtime.parentSessionId = reference.parentSessionId;
       this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime });
-      for (const child of this.references.listSubagents(reference.rootSessionId)) this.subagents.set(child.subagentId, child);
+      const children = this.references.listSubagents(reference.rootSessionId);
+      let settledAny = false;
+      const settledChildren = children.map(child => {
+        if (child.status !== 'running' && child.status !== 'idle') return child;
+        settledAny = true;
+        return { ...child, status: 'cancelled' as const };
+      });
+      if (settledAny && !reference.deletedSpace) {
+        await this.references.replaceSubagents(reference.rootSessionId, settledChildren);
+      }
+      for (const child of settledChildren) this.subagents.set(subagentKey(child.rootSessionId, child.subagentId), child);
     }
   }
 
@@ -667,7 +677,7 @@ export class SessionRegistry {
       try { assertArchiveActive(transfer); await this.references.installArchive(imported.reference, imported.children, transfer); }
       catch (error) { await rm(imported.reference.deletedSpace!.directory, { recursive: true, force: true }); throw error; }
       const session = this.setUnloaded(imported.reference);
-      for (const child of imported.children) this.subagents.set(child.subagentId, child);
+      for (const child of imported.children) this.subagents.set(subagentKey(child.rootSessionId, child.subagentId), child);
       return { sessionId: input.sessionId, session, children: imported.children.map(({ rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...publicRecord }) => SubagentSchema.parse(publicRecord)), imported: true };
     } finally { this.controls.delete(input.sessionId); }
   }
@@ -764,7 +774,7 @@ export class SessionRegistry {
       await this.references.removeArchive(reference.rootSessionId);
       this.releaseColdJournals(reference.rootSessionId, children);
       this.entries.delete(reference.rootSessionId);
-      for (const child of children) this.subagents.delete(child.subagentId);
+      for (const child of children) this.subagents.delete(subagentKey(child.rootSessionId, child.subagentId));
       const deletedSessionIds = [reference.rootSessionId, ...children.map(child => child.childSessionId)];
       await this.onSessionDeleted?.(deletedSessionIds);
       return { sessionId, deletedSessionIds };
@@ -859,7 +869,7 @@ export class SessionRegistry {
         if (entry?.state !== 'unloaded') entry?.opened?.journal.close();
         this.interactions.closeSession(sessionId);
         this.entries.delete(sessionId);
-        for (const child of children) this.subagents.delete(child.subagentId);
+        for (const child of children) this.subagents.delete(subagentKey(child.rootSessionId, child.subagentId));
         await this.onSessionDeleted?.(ids);
         return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
       });
@@ -1191,7 +1201,7 @@ export class SessionRegistry {
       return { ...record, workspaceId, projectId, sessionFile: join(destinationArtifacts, childPath) };
     });
     await this.references.replaceSubagents(rootSessionId, relocated);
-    for (const record of relocated) this.subagents.set(record.subagentId, record);
+    for (const record of relocated) this.subagents.set(subagentKey(record.rootSessionId, record.subagentId), record);
   }
 
   private setUnloaded(reference: SessionReference): RuntimeSession {
@@ -1332,7 +1342,7 @@ export class SessionRegistry {
   }
   async steerSubagent(sessionId: string, subagentId: string, message: string) {
     this.ensureOpen(); this.assertWritable(sessionId);
-    const subagent = this.subagents.get(subagentId);
+    const subagent = [...this.subagents.values()].find(record => record.subagentId === subagentId && (record.rootSessionId === sessionId || record.parentSessionId === sessionId || record.childSessionId === sessionId));
     if (subagent && subagent.rootSessionId !== sessionId && subagent.parentSessionId !== sessionId) {
       throw new WorkerOperationError(404, 'SESSION_NOT_FOUND', 'The subagent belongs to a different session');
     }
@@ -1342,7 +1352,7 @@ export class SessionRegistry {
   }
   async cancelSubagent(sessionId: string, subagentId: string) {
     this.ensureOpen(); this.assertWritable(sessionId);
-    const subagent = this.subagents.get(subagentId);
+    const subagent = [...this.subagents.values()].find(record => record.subagentId === subagentId && (record.rootSessionId === sessionId || record.parentSessionId === sessionId || record.childSessionId === sessionId));
     if (subagent && subagent.rootSessionId !== sessionId && subagent.parentSessionId !== sessionId) {
       return { type: 'subagent.cancel' as const, subagentId, cancelled: false };
     }
@@ -1355,11 +1365,47 @@ export class SessionRegistry {
    * answer is scoped to that worker's artifact tree rather than the
    * process-global agent registry.
    */
+  private persistedHubSubagents(sessionId: string): Subagent[] {
+    const root = this.entries.has(sessionId) ? sessionId : [...this.subagents.values()].find(record => record.childSessionId === sessionId)?.rootSessionId;
+    return [...this.subagents.values()]
+      .filter(record => record.rootSessionId === root && record.parentSessionId === sessionId)
+      .map(({ rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...publicRecord }) => {
+        const settled = publicRecord.status === 'running' || publicRecord.status === 'idle' ? { ...publicRecord, status: 'cancelled' as const } : publicRecord;
+        return SubagentSchema.parse(settled);
+      });
+  }
   async listHubSubagents(sessionId: string): Promise<Subagent[]> {
     this.ensureOpen(); this.get(sessionId);
-    const result = await this.workers.request(sessionId, { type: 'subagents.list' });
-    if (result.type !== 'subagents.list') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested subagents.list operation.');
-    return result.subagents;
+    const persisted = this.persistedHubSubagents(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, { type: 'subagents.list' }, undefined, 10_000);
+      if (result.type !== 'subagents.list') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested subagents.list operation.');
+      // Re-attached workers start with an empty AgentRegistry; merge the
+      // persisted roster underneath live entries so pre-restart settled rows
+      // remain visible and live rows keep their childSessionId/metadata.
+      const merged = new Map<string, Subagent>(persisted.map(item => [item.subagentId, item]));
+      for (const live of result.subagents) {
+        const prior = merged.get(live.subagentId);
+        const keepPriorStatus = prior !== undefined && live.persisted === true
+          && (prior.status === 'completed' || prior.status === 'failed' || prior.status === 'cancelled');
+        merged.set(live.subagentId, prior ? SubagentSchema.parse({
+          ...prior,
+          ...live,
+          status: keepPriorStatus ? prior.status : live.status,
+          childSessionId: live.childSessionId ?? prior.childSessionId,
+          name: live.name ?? prior.name,
+          role: (live.persisted ? prior.role : live.role) || prior.role || live.role,
+          solutionSpace: live.solutionSpace ?? prior.solutionSpace,
+          description: live.description ?? prior.description,
+          toolCallId: live.toolCallId ?? prior.toolCallId,
+          activeToolCallId: live.activeToolCallId ?? prior.activeToolCallId,
+        }) : live);
+      }
+      return [...merged.values()];
+    } catch (error) {
+      if (!(error instanceof WorkerOperationError) || (error.status !== 503 && error.status !== 409)) throw error;
+      return persisted;
+    }
   }
   async subagentTranscript(sessionId: string, subagentId: string): Promise<SubagentTranscriptResponse> {
     this.ensureOpen(); this.get(sessionId);
@@ -1512,7 +1558,7 @@ export class SessionRegistry {
         try { await manager.dropSession(reference.sessionFile); } finally { await manager.close(); }
       });
       this.entries.delete(sessionId);
-      for (const [subagentId, record] of this.subagents) if (record.rootSessionId === sessionId || record.childSessionId === sessionId) this.subagents.delete(subagentId);
+      for (const [key, record] of this.subagents) if (record.rootSessionId === sessionId || record.childSessionId === sessionId) this.subagents.delete(key);
       await this.references.removeSubagents(sessionId);
       this.interactions.closeSession(sessionId);
       journal.close();
@@ -1564,8 +1610,12 @@ export class SessionRegistry {
     if (this.pendingRuns.delete(previousSessionId)) this.pendingRuns.add(sessionId);
     if (this.controls.delete(previousSessionId)) this.controls.add(sessionId);
     this.entries.set(sessionId, entry);
-    for (const [subagentId, record] of this.subagents) {
-      if (record.rootSessionId === previousSessionId) this.subagents.set(subagentId, { ...record, rootSessionId: sessionId, parentSessionId: record.parentSessionId === previousSessionId ? sessionId : record.parentSessionId });
+    for (const [key, record] of this.subagents) {
+      if (record.rootSessionId === previousSessionId) {
+        this.subagents.delete(key);
+        const next = { ...record, rootSessionId: sessionId, parentSessionId: record.parentSessionId === previousSessionId ? sessionId : record.parentSessionId };
+        this.subagents.set(subagentKey(sessionId, next.subagentId), next);
+      }
     }
     const coldJournal = this.coldJournals.get(previousSessionId);
     if (coldJournal) { this.coldJournals.delete(previousSessionId); coldJournal.rekey(sessionId); this.coldJournals.set(sessionId, coldJournal); }

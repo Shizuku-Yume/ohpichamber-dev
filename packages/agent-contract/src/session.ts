@@ -119,6 +119,8 @@ export const SubagentSchema = z.strictObject({
   name: z.string().min(1).optional(),
   role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'parked', 'completed', 'failed', 'cancelled']),
   activeTool: z.string().optional(),
+  /** The child run's in-flight tool call id; resolves root-attributed approvals to this row. */
+  activeToolCallId: EntityIdSchema.optional(),
   activeToolArgs: z.string().optional(),
   model: z.string().min(1).optional(),
   tokens: z.number().int().nonnegative().optional(),

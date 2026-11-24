@@ -184,6 +184,10 @@ When a session worker does stop — explicit stop, restart, delete, eviction or 
 
 `DELETE /internal/workers/:rootSessionId` explicitly unloads an idle root worker on demand through this same eviction path: it verifies that no active run, pending worker command, restart reservation, or background shell job is active (returning 409 `RUN_ACTIVE` or `COMMAND_IN_FLIGHT` otherwise), evicts the worker gracefully, transitions the runtime to `unavailable`, and allows the session to reopen cold with native history intact upon subsequent interaction.
 
+A `subagentId` is only unique inside its root session — the worker's child id is model/tool chosen, so different roots (and respawns under one root) legitimately reuse names. The live `SessionRegistry.subagents` map and the persisted `SessionReferences.childRecords` index therefore key every child record by the composite `subagentKey(rootSessionId, subagentId)`; `putSubagent`'s collision guard applies within a root, not across the service. Lookups that arrive with only a session context (`steerSubagent`, `cancelSubagent`, `references.child`) resolve the record through that root's roster. A child identity write that fails for real corruption still stops the worker via `onSubagent`; a same-named child under another root is not corruption.
+
+Worker operations are bounded: `WorkerRegistry.dispatch` arms an `unref`'d timer that rejects the pending command with `WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker did not answer the operation in time')` after `operationTimeoutMs` (default 120 000 ms — `compact`/MCP operations legitimately run long; callers may pass a tighter per-call `timeoutMs`). Worker-side drops reply `operation.error` instead of settling never (`stopping` → 503, worker-generation mismatch → 409), and a `result`/`operation.error` IPC frame that fails `WorkerReplySchema` rejects its matching `pending` entry with 503 instead of hanging until timeout. `WorkerSession.hubRoster()` truncates persisted `AgentRef` `mtimeMs` timestamps to safe integers so `TimestampSchema` validation succeeds after re-attach. `SessionRegistry.initialize()` settles non-terminal (`running`/`idle`) persisted child records to `cancelled`, and `listHubSubagents` (10 s worker timeout) merges the live worker roster over the settled persisted index while preserving terminal status (`completed`/`failed`/`cancelled`) for `persisted: true` disk entries, so cold and re-attached roots keep their settled roster without stalling or dropping pre-restart children.
+
 ## Explicit plugin application
 
 `POST /api/agent/v1/workspaces/:workspaceId/plugins/apply` with `strategy: "restart-idle-sessions"` applies the persisted plugin revision without incrementing it. The owner-wide operation captures current session generations, then `SessionRegistry.restartIdleSessions()` reserves every selected root before any retirement. Active runs, pending prompts, controls, interactions, child-index writes, worker commands, Host actions, lifecycle mutations and running background Shell jobs refuse the whole preflight without stopping any selected worker. Reservations block competing commands until the operation settles.
@@ -335,6 +339,22 @@ The Host captures both preferences into the worker bootstrap environment (`OPENC
 ## Plan mode and subagent delegation
 
 Plan mode keeps its own tool set. When `OPENCHAMBER_PLAN_ALLOW_AGENTS` is set in the worker bootstrap environment (Settings → Sessions → "Allow subagents in Plan mode"), `enterPlan` and the plan restore keep the native `task` tool active alongside the plan tool set. Leaving Plan mode restores the previous tools, so the permission never outlives the mode. It grants no capability of its own: every child tool call still passes its own authorization.
+
+A child's execution approval is attributed to the root session, because the
+`tasks[]` children share the root worker's `authorizeBashExecution` and its
+`WorkerInteraction`: the card is created and resolved under the root's
+interaction session, and `assertOwner` answers it there. To keep the row it
+belongs to identifiable, the worker stamps `subagentId`/`childSessionId` on
+the canonical request in `WorkerInteraction.requestApproval` /
+`requestPermission`: `subagentForToolCall` resolves the call through
+`toolCallToSubagentId`, which `SubagentProjector.handleSubagentEvent` fills on
+`tool_execution_start` — including events still buffered ahead of the child's
+first lifecycle frame, since the approval gate fires inside the same window.
+`Subagent.activeToolCallId` mirrors the in-flight call on the live record so
+a request the stamp could not reach (e.g. an older projection frame) still
+resolves by call id. Questions carry the same optional fields for callers
+that can correlate them; `requestNativeGrant` stays un-stamped (the internal
+auto-resolved grant is not a user card).
 
 ## Native goal mode
 

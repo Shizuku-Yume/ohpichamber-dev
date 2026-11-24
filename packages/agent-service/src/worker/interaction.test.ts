@@ -508,3 +508,57 @@ describe('WorkerInteraction OMP 18.16 ui.approve bridge', () => {
     expect(await approvePromise).toBe('once');
   });
 });
+
+test('subagent tool approvals carry the child linkage on the canonical request', async () => {
+  const requests: WorkerInteractionMessage[] = [];
+  const links = new Map([
+    ['call-child-bash', { subagentId: 'BetaWorker-2', childSessionId: 'child-session-uuid' }],
+    ['call-child-nofile', { subagentId: 'AlphaScout' }],
+  ]);
+  const interaction = new WorkerInteraction({
+    request: item => requests.push(item),
+    currentTurn: () => 'turn-1',
+    subagentForToolCall: toolCallId => links.get(toolCallId),
+  });
+  try {
+    const pending = interaction.approveBash('call-child-bash', { command: 'sleep 12 && ls' });
+    expect(requests).toHaveLength(1);
+    const request = requests[0];
+    if (request?.kind !== 'approval') throw new Error('Expected a canonical approval');
+    expect(request.subagentId).toBe('BetaWorker-2');
+    expect(request.childSessionId).toBe('child-session-uuid');
+    interaction.resolveApproval(request.approvalId, 'approve');
+    await expect(pending).resolves.toBe(true);
+
+    const unlinked = interaction.approveBash('call-root-bash', { command: 'ls' });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.kind === 'approval' ? requests[1].subagentId : undefined).toBeUndefined();
+    interaction.resolveApproval(requests[1]!.approvalId, 'approve');
+    await expect(unlinked).resolves.toBe(true);
+
+    const noFile = interaction.requestPermission(
+      { toolCallId: 'call-child-nofile', toolName: 'bash', title: 'bash', rawInput: { command: 'ls' } },
+      [{ optionId: 'once', name: 'Allow once', kind: 'allow_once' as const }],
+      undefined,
+    );
+    expect(requests).toHaveLength(3);
+    const perm = requests[2];
+    if (perm?.kind !== 'approval') throw new Error('Expected a permission approval');
+    expect(perm.subagentId).toBe('AlphaScout');
+    expect(perm.childSessionId).toBeUndefined();
+    interaction.resolveApproval(perm.approvalId, 'approve');
+    await expect(noFile).resolves.toBe('once');
+
+    const askPromise = interaction.ui.askDialog!(
+      [{ id: 'q1', question: 'Confirm?', options: [{ label: 'Yes' }] }],
+      { toolCallId: 'call-child-bash' },
+    );
+    expect(requests).toHaveLength(4);
+    const questionReq = requests[3];
+    if (questionReq?.kind !== 'question') throw new Error('Expected a canonical question');
+    expect(questionReq.subagentId).toBe('BetaWorker-2');
+    expect(questionReq.childSessionId).toBe('child-session-uuid');
+    interaction.resolveQuestion(questionReq.questionId, 'cancel');
+    await expect(askPromise).resolves.toBeUndefined();
+  } finally { interaction.close(); }
+});

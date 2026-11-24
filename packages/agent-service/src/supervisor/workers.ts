@@ -108,6 +108,14 @@ export interface WorkerRegistryOptions {
   onDiagnostic?: (entry: WorkerDiagnostic) => void;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
+  /**
+   * Bound on one worker operation reply (default 120s; callers may pass a
+   * tighter `timeoutMs` for reads). The worker drops in-flight operations
+   * silently while it is stopping or when the generation does not match its
+   * bootstrap, so a dispatched request that never hears back must fail on its
+   * own clock instead of pinning its caller forever.
+   */
+  operationTimeoutMs?: number;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
   invokeHostAction?: (rootSessionId: string, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
   consumeApprovalGrant?: (rootSessionId: string, generation: string, request: Extract<WorkerPolicyRequest, { type: 'tool' }>) => NativeApprovalGrant | undefined;
@@ -759,29 +767,40 @@ export class WorkerRegistry {
     };
   }
 
-  async request(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult> {
+  async request(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string, timeoutMs?: number): Promise<WorkerOperationResult> {
     const parsed = WorkerOperationSchema.parse(operation);
     const entry = this.workerEntries.get(rootSessionId);
     if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
       throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The worker already has a restart reservation');
     if (entry && expectedGeneration !== undefined && expectedGeneration !== entry.info.workerGeneration) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The request generation does not match the worker generation');
     if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker left service before the request was admitted');
-    return this.dispatch(entry, parsed);
+    return this.dispatch(entry, parsed, timeoutMs);
   }
 
   /**
    * Serialize with root lifecycle mutations. Shell start uses this so a
    * background job cannot be admitted between the idle probe and stopEntry.
    */
-  requestSerialized(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult> {
-    return this.withRoot(rootSessionId, () => this.request(rootSessionId, operation, expectedGeneration));
+  requestSerialized(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string, timeoutMs?: number): Promise<WorkerOperationResult> {
+    return this.withRoot(rootSessionId, () => this.request(rootSessionId, operation, expectedGeneration, timeoutMs));
   }
 
-  private dispatch(entry: WorkerEntry, operation: WorkerOperation): Promise<WorkerOperationResult> {
+  private dispatch(entry: WorkerEntry, operation: WorkerOperation, timeoutMs?: number): Promise<WorkerOperationResult> {
     const commandId = randomUUID();
     entry.lastActivityAt = Date.now();
     const { promise, resolve, reject } = Promise.withResolvers<WorkerOperationResult>();
     entry.pending.set(commandId, { resolve, reject, type: operation.type });
+    // A worker that stays connected but drops the operation — stopping, a
+    // generation mismatch against its bootstrap, or a wedged loop — never
+    // answers, so the request fails on the supervisor's own bound rather than
+    // holding the HTTP caller open indefinitely.
+    const timer = setTimeout(() => {
+      const pending = entry.pending.get(commandId);
+      entry.pending.delete(commandId);
+      pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker did not answer the operation in time'));
+    }, timeoutMs ?? this.options.operationTimeoutMs ?? 120_000);
+    timer.unref();
+    void promise.then(() => clearTimeout(timer), () => clearTimeout(timer));
     entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation }, error => {
       if (!error) return;
       const pending = entry.pending.get(commandId); entry.pending.delete(commandId); pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker stopped before accepting the operation'));
@@ -1322,9 +1341,21 @@ export class WorkerRegistry {
       lastActivityAt: Date.now(),
     };
     this.workerEntries.set(input.rootSessionId, entry);
+    const FailedReplyEnvelopeSchema = z.object({ type: z.enum(['result', 'operation.error']), workerGeneration: z.string(), commandId: z.string() });
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
-      if (!reply.success || reply.data.type === 'idle' || reply.data.type === 'warm' || reply.data.workerGeneration !== workerGeneration) return;
+      if (!reply.success) {
+        const failed = FailedReplyEnvelopeSchema.safeParse(raw);
+        if (failed.success && failed.data.workerGeneration === workerGeneration && this.workerEntries.get(entry.info.rootSessionId) === entry) {
+          const pending = entry.pending.get(failed.data.commandId);
+          if (pending) {
+            entry.pending.delete(failed.data.commandId);
+            pending.reject(new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply failed schema validation'));
+          }
+        }
+        return;
+      }
+      if (reply.data.type === 'idle' || reply.data.type === 'warm' || reply.data.workerGeneration !== workerGeneration) return;
       if (this.workerEntries.get(entry.info.rootSessionId) !== entry) return;
       if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
       entry.lastActivityAt = Date.now();
@@ -1439,7 +1470,7 @@ export class WorkerRegistry {
         const cleaned = await cleanupWorkerDescendants(descendants);
         descendantsStopped = descendantsStopped && cleaned;
       }
-      for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
+      for (const pending of entry.pending.values()) pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker stopped before the pending operation was answered'));
       entry.pending.clear();
       entry.info.state = 'stopped';
       if (this.workerEntries.get(entry.info.rootSessionId) === entry) this.workerEntries.delete(entry.info.rootSessionId);

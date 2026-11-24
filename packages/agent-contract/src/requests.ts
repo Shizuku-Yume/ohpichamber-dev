@@ -35,6 +35,8 @@ export const ApprovalRequestSchema = RequestCASSchema.extend({
   approvalId: EntityIdSchema, sessionId: EntityIdSchema, turnId: EntityIdSchema, toolCallId: EntityIdSchema,
   toolName: z.string().min(1), actionType: z.enum(['bash_command', 'file_write', 'network_request', 'custom_tool']),
   commandSummary: z.string(), details: JsonObjectSchema,
+  /** Set when the request originated inside a subagent's tool call, so surfaces can resolve it to that row. */
+  subagentId: EntityIdSchema.optional(), childSessionId: EntityIdSchema.optional(),
   status: z.enum(['pending', 'approved', 'rejected', 'revoked', 'expired']),
   requestedAt: TimestampSchema, resolvedAt: TimestampSchema.optional(), resolvedBy: EntityIdSchema.optional(),
   policyTarget: z.strictObject({ toolName: z.string().min(1), pattern: z.string() }).optional(),
@@ -101,6 +103,8 @@ export const QuestionReplySchema = z.discriminatedUnion('action', [
 export type QuestionReply = z.infer<typeof QuestionReplySchema>;
 export const QuestionRequestSchema = RequestCASSchema.extend({
   questionId: EntityIdSchema, sessionId: EntityIdSchema, turnId: EntityIdSchema, prompt: z.string(),
+  /** Set when the question originated inside a subagent session. */
+  subagentId: EntityIdSchema.optional(), childSessionId: EntityIdSchema.optional(),
   schema: JsonObjectSchema.optional(), status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
   response: JsonValueSchema.optional(), requestedAt: TimestampSchema, answeredAt: TimestampSchema.optional(),
   timeoutResetAt: TimestampSchema.optional(),

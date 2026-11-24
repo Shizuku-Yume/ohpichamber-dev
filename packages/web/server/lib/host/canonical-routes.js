@@ -306,6 +306,11 @@ export function registerCanonicalHostRoutes(app, {
   const disconnect = () => controller.abort();
   req.once('aborted', disconnect);
   res.once('close', disconnect);
+  // Non-stream reads get a hard bound: the Agent Service can keep a worker
+  // request pending while it waits on a wedged worker, and a caller that
+  // stays connected would otherwise hold this fetch open forever. Streams
+  // stay unbounded — SSE is long-lived by contract.
+  let requestTimeout; let timedOut = false;
   try {
    const groups = route.pattern.exec(req.path).groups;
    let scope;
@@ -421,6 +426,10 @@ export function registerCanonicalHostRoutes(app, {
     headers['Last-Event-ID'] = cursor.data;
    }
    const target = route.usage ? (req.path === '/usage/tools' ? '/internal/usage/tools' : '/internal/usage') : `${PREFIX}${req.path}${url.search}`;
+   if (!route.stream) {
+    requestTimeout = setTimeout(() => { timedOut = true; controller.abort(); }, 60_000);
+    requestTimeout.unref();
+   }
    const response = await service.request(target, {
     method: route.usage ? 'POST' : req.method, headers, body, signal: controller.signal,
    });
@@ -485,12 +494,13 @@ export function registerCanonicalHostRoutes(app, {
    }
    return res.status(response.status).json(result);
   } catch (error) {
-   if (controller.signal.aborted || res.destroyed) return;
+   if ((controller.signal.aborted && !timedOut) || res.destroyed) return;
    if (res.headersSent) { res.destroy(); return; }
    return problem(res, error instanceof z.ZodError || error instanceof URIError ? 400 : 503,
     error instanceof z.ZodError || error instanceof URIError ? 'INVALID_REQUEST' : 'SERVICE_UNAVAILABLE',
     'The canonical operation could not be completed.');
   } finally {
+   clearTimeout(requestTimeout);
    req.removeListener('aborted', disconnect);
    res.removeListener('close', disconnect);
   }

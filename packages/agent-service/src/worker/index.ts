@@ -69,6 +69,7 @@ function send(reply: WorkerReply): void {
 function stop(exitCode: number): Promise<void> {
   if (shutdown) return shutdown;
   stopping = true;
+  try { process.stderr.write(`${JSON.stringify({ type: 'openchamber.diagnostic', level: 'info', code: 'WORKER_STOPPING', detail: `exitCode=${exitCode}` })}\n`); } catch { /* diagnostics never affect lifecycle */ }
   policy?.close();
   hostActions?.close();
   shutdown = (async () => {
@@ -108,7 +109,16 @@ process.on('message', raw => {
     return;
   }
   if (command.type === 'operation') {
-    if (stopping || command.workerGeneration !== bootstrap?.workerGeneration) return;
+    // Never drop a generation- or stopping-gated operation silently: the
+    // supervisor holds a pending entry per commandId and would wait forever.
+    if (stopping) {
+      send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId, status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'The worker is stopping' });
+      return;
+    }
+    if (command.workerGeneration !== bootstrap?.workerGeneration) {
+      send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId, status: 409, code: 'CATALOG_CONFLICT', detail: 'The worker generation does not match this process' });
+      return;
+    }
     const owned = resources;
     const usage = command.operation.type === 'usage.stats' || command.operation.type === 'usage.tools' || command.operation.type === 'usage.accounts';
     if ((!owned && !usage) || (usage && bootstrap?.type !== 'usage.bootstrap')) {

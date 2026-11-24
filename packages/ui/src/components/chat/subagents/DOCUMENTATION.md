@@ -33,6 +33,13 @@ tab the child's own folder.
 - A subagent with a permission request or a question starts open, with the
   request cards above its tile, so the answer takes one click. The user's
   toggle flips that default per subagent.
+- A child's pending request is attributed to the root session: the Agent
+  Service stamps `subagentId`/`childSessionId` on the canonical approval (and
+  on questions when a child link exists), so the panel resolves it from the
+  root's `permission`/`form` bucket. A request from before the stamp — or one
+  the worker could not stamp — still resolves by the child's in-flight
+  `activeToolCallId` on the `Subagent` record. Answering it posts to the root
+  session's `/approvals/:id/respond`, the same path the timeline card uses.
 - The report is the newest report projected for that subagent in the parent:
   the `async_job_result` notice part's matching `jobs[]` entry for a
   background run (keyed by `subagentId`/`childSessionId`/`jobId`), or the

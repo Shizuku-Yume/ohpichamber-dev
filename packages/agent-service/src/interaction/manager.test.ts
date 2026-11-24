@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'bun:test';
-import { ApprovalRequestSchema } from '@openchamber/agent-contract';
+import { ApprovalRequestSchema, QuestionRequestSchema } from '@openchamber/agent-contract';
 import type { ApprovalReply, QuestionReply } from '@openchamber/agent-contract';
 import type { ProjectionInput } from '../projection/protocol.ts';
 import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
@@ -719,4 +719,34 @@ test('a session rekey moves a pending approval to the minted id it must be answe
     expect(resolved).toMatchObject({ approvalId: 'approval-1', sessionId, status: 'approved' });
     expect(operations).toEqual([{ type: 'approval.resolve', approvalId: 'approval-1', decision: 'approve' }]);
   } finally { manager.closeSession(sessionId); }
+});
+
+test('a subagent-linked approval keeps its linkage on the canonical record', () => {
+  const { manager } = sessionHarness();
+  try {
+    manager.onRequest('session-1', 'worker-1', {
+      ...approval,
+      approvalId: 'approval-child', toolCallId: 'call-child',
+      subagentId: 'BetaWorker-2', childSessionId: 'child-session-uuid',
+    });
+    const pending = manager.approvals('session-1');
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ approvalId: 'approval-child', sessionId: 'session-1', subagentId: 'BetaWorker-2', childSessionId: 'child-session-uuid' });
+    expect(ApprovalRequestSchema.parse(pending[0])).toEqual(pending[0]);
+  } finally { manager.closeSession('session-1'); }
+});
+
+test('a subagent-linked question keeps its linkage on the canonical record', () => {
+  const { manager } = sessionHarness();
+  try {
+    manager.onRequest('session-1', 'worker-1', {
+      kind: 'question', questionId: 'question-child', turnId: 'turn-1', prompt: 'Pick one',
+      schema: { type: 'omp.ask', questions: [] },
+      subagentId: 'BetaWorker-2', childSessionId: 'child-session-uuid',
+    });
+    const pending = manager.questions('session-1');
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ questionId: 'question-child', sessionId: 'session-1', subagentId: 'BetaWorker-2', childSessionId: 'child-session-uuid' });
+    expect(QuestionRequestSchema.parse(pending[0])).toEqual(pending[0]);
+  } finally { manager.closeSession('session-1'); }
 });

@@ -32,6 +32,8 @@ type PendingQuestion = { questions: ExtensionAskDialogQuestion[]; resolve: (resu
 export interface WorkerInteractionCallbacks {
   request: (interaction: WorkerInteractionMessage) => void;
   currentTurn: () => string | undefined;
+  /** Resolves an in-flight tool call to the subagent run that owns it. */
+  subagentForToolCall?: (toolCallId: string) => { subagentId: string; childSessionId?: string } | undefined;
 }
 
 function actionType(toolName: string): 'bash_command' | 'file_write' | 'network_request' | 'custom_tool' {
@@ -246,10 +248,12 @@ export class WorkerInteraction {
     const [approve, reject] = choices;
     const action = actionType(toolName);
     const summary = approvalInputSummary(action, input);
+    const subagent = this.callbacks.subagentForToolCall?.(toolCallId);
     const interaction: WorkerInteractionMessage = {
       kind: 'approval', approvalId, toolCallId, toolName, actionType: action,
       commandSummary: summary, details: JsonObjectSchema.parse({ reason: oneLineApprovalText(reason), options: choices, input }),
       policyTarget: { toolName, pattern: JSON.stringify(input) }, turnId, permissionRequest: true,
+      ...(subagent === undefined ? {} : { subagentId: subagent.subagentId, ...(subagent.childSessionId === undefined ? {} : { childSessionId: subagent.childSessionId }) }),
     };
     const { promise, resolve } = Promise.withResolvers<string | undefined>();
     this.approvalHandles.set(approvalId, { toolCallId, resolve, approve, reject });
@@ -281,12 +285,14 @@ export class WorkerInteraction {
     const input = this.approvalInput(toolCall);
     const action = actionType(toolCall.toolName);
     const names = options.map(option => option.name);
+    const subagent = this.callbacks.subagentForToolCall?.(toolCall.toolCallId);
     this.callbacks.request({
       kind: 'approval', approvalId, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, actionType: action,
       commandSummary: approvalInputSummary(action, input),
       details: JsonObjectSchema.parse({ options: names }),
       policyTarget: { toolName: toolCall.toolName, pattern: JSON.stringify(input) }, turnId, sessionRuleKey,
       permissionRequest: true,
+      ...(subagent === undefined ? {} : { subagentId: subagent.subagentId, ...(subagent.childSessionId === undefined ? {} : { childSessionId: subagent.childSessionId }) }),
     });
     const { promise, resolve } = Promise.withResolvers<NativePermissionChoice | undefined>();
     this.permissionHandles.set(approvalId, { toolCallId: toolCall.toolCallId, resolve });
@@ -339,7 +345,7 @@ export class WorkerInteraction {
     } finally { signal?.removeEventListener('abort', abort); }
   }
 
-  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal; timeout?: number }, presentation?: JsonObject): Promise<ExtensionAskDialogResult | undefined> {
+  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: ExtensionUIDialogOptions, presentation?: JsonObject): Promise<ExtensionAskDialogResult | undefined> {
     if (this.closed) return undefined;
     const turnId = this.callbacks.currentTurn();
     if (!turnId || questions.length === 0) return undefined;
@@ -363,9 +369,17 @@ export class WorkerInteraction {
     });
     const schema: JsonObject = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions.map(question => ({ ...question, ...presentation })) });
     if (dialogOptions?.timeout !== undefined) schema.timeout = dialogOptions.timeout;
+    const callId = dialogOptions && 'toolCallId' in dialogOptions && typeof dialogOptions.toolCallId === 'string'
+      ? dialogOptions.toolCallId
+      : undefined;
+    const subagent = callId ? this.callbacks.subagentForToolCall?.(callId) : undefined;
     const { promise, resolve } = Promise.withResolvers<ExtensionAskDialogResult | undefined>();
     this.questionHandles.set(questionId, { questions, resolve });
-    this.callbacks.request({ kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'), schema, timeout: dialogOptions?.timeout });
+    this.callbacks.request({
+      kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'),
+      schema, timeout: dialogOptions?.timeout,
+      ...(subagent === undefined ? {} : { subagentId: subagent.subagentId, ...(subagent.childSessionId === undefined ? {} : { childSessionId: subagent.childSessionId }) }),
+    });
     if (dialogOptions?.signal) {
       const abort = () => { this.questionHandles.delete(questionId); resolve(undefined); };
       if (dialogOptions.signal.aborted) abort();
@@ -388,9 +402,15 @@ export class WorkerInteraction {
       resolve(undefined);
     };
     options?.signal?.addEventListener('abort', abort, { once: true });
+    const callId = options && 'toolCallId' in options && typeof options.toolCallId === 'string'
+      ? options.toolCallId
+      : undefined;
+    const subagent = callId ? this.callbacks.subagentForToolCall?.(callId) : undefined;
     try {
-      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: '', schema: form.schema, timeout: options?.timeout });
-      if (options?.timeout) options.onTimeoutStart?.();
+      this.callbacks.request({
+        kind: 'question', questionId, turnId, prompt: '', schema: form.schema, timeout: options?.timeout,
+        ...(subagent === undefined ? {} : { subagentId: subagent.subagentId, ...(subagent.childSessionId === undefined ? {} : { childSessionId: subagent.childSessionId }) }),
+      });
       if (options?.signal?.aborted) abort();
       return await promise;
     } finally {

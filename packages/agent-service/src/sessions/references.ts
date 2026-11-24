@@ -5,6 +5,7 @@ import { DisplayPathSchema, EntityIdSchema, JsonValueSchema, SubagentSchema, Tim
 import type { JsonValue, ProblemCode } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { WorkerBootstrapSchema } from '../protocol.ts';
+import { subagentKey } from './subagent-lifecycle.ts';
 
 const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true, observationEpoch: true, catalogRevision: true, mcpConfiguration: true, skillSources: true, sessionWarmingMode: true }).required({ sessionFile: true })
   .extend({
@@ -91,7 +92,7 @@ export class SessionReferences {
     this.worktreeDeletes = state.worktreeDeletes;
     for (const rows of Object.values(this.subagentValues)) for (const row of rows) {
       const parsed = ChildReferenceSchema.safeParse(row);
-      if (parsed.success) this.childRecords.set(parsed.data.subagentId, parsed.data);
+      if (parsed.success) this.childRecords.set(subagentKey(parsed.data.rootSessionId, parsed.data.subagentId), parsed.data);
     }
     for (const [id, value] of Object.entries(this.values)) {
       const parsed = SessionReferenceSchema.safeParse(value);
@@ -140,7 +141,7 @@ export class SessionReferences {
       this.records.delete(previousSessionId);
       this.malformed.delete(previousSessionId);
       this.records.set(parsed.rootSessionId, parsed);
-      for (const row of moved) this.childRecords.set(row.subagentId, row);
+      for (const row of moved) { this.childRecords.delete(subagentKey(previousSessionId, row.subagentId)); this.childRecords.set(subagentKey(row.rootSessionId, row.subagentId), row); }
     });
   }
 
@@ -196,16 +197,16 @@ export class SessionReferences {
     return this.enqueue(async () => {
       this.assertWritable(parsed.rootSessionId);
       this.assertWritable(parsed.childSessionId);
-      this.assertWritable(parsed.subagentId);
-      const collision = this.childRecords.get(parsed.subagentId);
+      const collision = this.childRecords.get(subagentKey(parsed.rootSessionId, parsed.subagentId));
       if ((collision && (collision.rootSessionId !== parsed.rootSessionId || collision.childSessionId !== parsed.childSessionId))
-        || this.records.has(parsed.childSessionId) || [...this.childRecords.values()].some(row => row.childSessionId === parsed.childSessionId && row.subagentId !== parsed.subagentId)) {
+        || this.records.has(parsed.childSessionId)
+        || [...this.childRecords.values()].some(row => row.childSessionId === parsed.childSessionId && (row.rootSessionId !== parsed.rootSessionId || row.subagentId !== parsed.subagentId))) {
         throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Child identity already belongs to another session');
       }
       const subagents = { ...this.subagentValues, [parsed.rootSessionId]: [...(this.subagentValues[parsed.rootSessionId] ?? []).filter(row => row.subagentId !== parsed.subagentId), parsed] };
       await this.persist(this.values, this.relocations, subagents);
       this.subagentValues = subagents;
-      this.childRecords.set(parsed.subagentId, parsed);
+      this.childRecords.set(subagentKey(parsed.rootSessionId, parsed.subagentId), parsed);
     });
   }
   replaceSubagents(rootSessionId: string, values: readonly ChildReference[]): Promise<void> {
@@ -214,23 +215,23 @@ export class SessionReferences {
     if (parsed.some(value => value.rootSessionId !== rootSessionId)) throw new SessionReferenceError(400, 'INVALID_REQUEST', 'Child references must retain their root owner');
     return this.enqueue(async () => {
       this.assertWritable(rootSessionId);
-      for (const child of parsed) { this.assertWritable(child.childSessionId); this.assertWritable(child.subagentId); }
+      for (const child of parsed) this.assertWritable(child.childSessionId);
       const ids = new Set<string>();
       const subagentIds = new Set<string>();
       for (const child of parsed) {
-        const existing = this.childRecords.get(child.subagentId);
+        const existing = this.childRecords.get(subagentKey(rootSessionId, child.subagentId));
         if (ids.has(child.childSessionId) || subagentIds.has(child.subagentId) || this.records.has(child.childSessionId)
           || (existing && (existing.rootSessionId !== rootSessionId || existing.childSessionId !== child.childSessionId))
-          || [...this.childRecords.values()].some(row => row.childSessionId === child.childSessionId && row.subagentId !== child.subagentId)) {
+          || [...this.childRecords.values()].some(row => row.childSessionId === child.childSessionId && (row.rootSessionId !== rootSessionId || row.subagentId !== child.subagentId))) {
           throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Child identity collides with another session');
         }
         ids.add(child.childSessionId); subagentIds.add(child.subagentId);
       }
       const subagents = { ...this.subagentValues, [rootSessionId]: parsed };
       await this.persist(this.values, this.relocations, subagents);
-      for (const previous of this.subagentValues[rootSessionId] ?? []) if (!parsed.some(value => value.subagentId === previous.subagentId)) this.childRecords.delete(previous.subagentId);
+      for (const previous of this.subagentValues[rootSessionId] ?? []) if (!parsed.some(value => value.subagentId === previous.subagentId)) this.childRecords.delete(subagentKey(rootSessionId, previous.subagentId));
       this.subagentValues = subagents;
-      for (const value of parsed) this.childRecords.set(value.subagentId, value);
+      for (const value of parsed) this.childRecords.set(subagentKey(value.rootSessionId, value.subagentId), value);
     });
   }
   removeSubagents(rootSessionId: string): Promise<void> {
@@ -241,11 +242,11 @@ export class SessionReferences {
       const removed = subagents[rootSessionId] ?? [];
       delete subagents[rootSessionId];
       await this.persist(this.values, this.relocations, subagents);
-      for (const row of removed) this.childRecords.delete(row.subagentId);
+      for (const row of removed) this.childRecords.delete(subagentKey(row.rootSessionId, row.subagentId));
       this.subagentValues = subagents;
     });
   }
-  child(sessionId: string): ChildReference | null { this.ensureReady(); return this.childRecords.get(sessionId) ?? null; }
+  child(sessionId: string): ChildReference | null { this.ensureReady(); return [...this.childRecords.values()].find(child => child.childSessionId === sessionId || child.subagentId === sessionId) ?? null; }
 
   assertWritable(sessionId: string): void {
     if (this.worktreeDeletes[sessionId] || Object.values(this.worktreeDeletes).some(intent => intent.children.some(child => child.childSessionId === sessionId || child.subagentId === sessionId)))
@@ -274,13 +275,13 @@ export class SessionReferences {
       for (const child of rows) this.assertWritable(child.subagentId);
       if (new Set(ids).size !== ids.length || new Set(rows.map(child => child.subagentId)).size !== rows.length
         || ids.some(id => Object.hasOwn(this.values, id) || [...this.childRecords.values()].some(child => child.childSessionId === id))
-        || rows.some(child => this.childRecords.has(child.subagentId))) throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Archive identity collides with an existing session');
+        || rows.some(child => this.childRecords.has(subagentKey(parsed.rootSessionId, child.subagentId)))) throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Archive identity collides with an existing session');
       const references = { ...this.values, [parsed.rootSessionId]: referenceJson(parsed) };
       const subagents = { ...this.subagentValues, [parsed.rootSessionId]: rows };
       await this.persist(references, this.relocations, subagents, signal);
       this.values = references; this.subagentValues = subagents;
       this.records.set(parsed.rootSessionId, parsed);
-      for (const child of rows) this.childRecords.set(child.subagentId, child);
+      for (const child of rows) this.childRecords.set(subagentKey(child.rootSessionId, child.subagentId), child);
     });
   }
 
@@ -291,7 +292,7 @@ export class SessionReferences {
       const references = { ...this.values }; delete references[sessionId];
       const subagents = { ...this.subagentValues }; delete subagents[sessionId];
       await this.persist(references, this.relocations, subagents);
-      for (const child of this.subagentValues[sessionId] ?? []) this.childRecords.delete(child.subagentId);
+      for (const child of this.subagentValues[sessionId] ?? []) this.childRecords.delete(subagentKey(child.rootSessionId, child.subagentId));
       this.values = references; this.subagentValues = subagents; this.records.delete(sessionId);
     });
   }
@@ -326,7 +327,7 @@ export class SessionReferences {
       const subagents = { ...this.subagentValues }; delete subagents[sessionId];
       const intents = { ...this.worktreeDeletes, [sessionId]: { ...intent, state: 'completed' as const } };
       await this.persist(references, this.relocations, subagents, undefined, intents);
-      for (const child of intent.children) this.childRecords.delete(child.subagentId);
+      for (const child of intent.children) this.childRecords.delete(subagentKey(child.rootSessionId, child.subagentId));
       this.values = references; this.subagentValues = subagents; this.records.delete(sessionId); this.worktreeDeletes = intents;
     });
   }

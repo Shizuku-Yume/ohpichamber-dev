@@ -300,6 +300,8 @@ export class InteractionManager {
         status: 'pending', version: '1', epoch: state.epoch,
         workerGeneration: state.generation, requestedAt: now,
       };
+      if (interaction.subagentId !== undefined) approvalDraft.subagentId = interaction.subagentId;
+      if (interaction.childSessionId !== undefined) approvalDraft.childSessionId = interaction.childSessionId;
       if (sessionRuleKey) approvalDraft.policyTarget = { toolName: interaction.toolName, pattern: '*' };
       const request: ApprovalRequest = ApprovalRequestSchema.parse(approvalDraft);
       const record: ApprovalRecordState = { kind: 'approval', request, target: privateTarget, sessionRuleKey, permissionRequest: interaction.permissionRequest === true, unpublished: interaction.permissionRequest === true };
@@ -344,6 +346,8 @@ export class InteractionManager {
     const request: QuestionRequest = QuestionRequestSchema.parse({
       questionId: interaction.questionId, sessionId, turnId: interaction.turnId, prompt: interaction.prompt, schema: interaction.schema,
       status: 'pending', version: '1', epoch: state.epoch, workerGeneration: state.generation, requestedAt: now,
+      ...(interaction.subagentId === undefined ? {} : { subagentId: interaction.subagentId }),
+      ...(interaction.childSessionId === undefined ? {} : { childSessionId: interaction.childSessionId }),
     });
     const timeoutMs = interaction.schema.form === true ? interaction.timeout : Math.min(this.timeoutMs, interaction.timeout ?? this.timeoutMs);
     const timer = timeoutMs === undefined ? undefined : setTimeout(() => { void this.expirePending(sessionId, request.questionId); }, timeoutMs);

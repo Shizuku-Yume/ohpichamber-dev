@@ -130,6 +130,8 @@ export type DeriveSubagentRowsInput = {
   projects: ReturnType<typeof useProjectsStore.getState>['projects'];
   worktrees: ReturnType<typeof useSessionUIStore.getState>['availableWorktreesByProject'];
   directory: string | null;
+  /** The parent session these rows belong to; root-keyed child requests resolve to their row from here. */
+  sessionId: string | null;
 };
 
 export const deriveSubagentRows = (input: DeriveSubagentRowsInput): SubagentRow[] => {
@@ -149,6 +151,7 @@ export const deriveSubagentRows = (input: DeriveSubagentRowsInput): SubagentRow[
     projects,
     worktrees,
     directory,
+    sessionId,
   } = input;
 
   if (children.length === 0 && liveSubagents.length === 0) return [];
@@ -215,6 +218,45 @@ export const deriveSubagentRows = (input: DeriveSubagentRowsInput): SubagentRow[
     });
   }
 
+  // Child approvals/questions are attributed to the parent session: the Agent
+  // Service stamps `subagentId`/`childSessionId` on those requests, and an
+  // older frame is still matched by the child's in-flight `activeToolCallId`.
+  const rootPermissions = sessionId ? permissions[sessionId] ?? [] : [];
+  const rootForms = sessionId ? forms[sessionId] ?? [] : [];
+  const linkedPermissionIds = new Map<string, Set<string>>();
+  const linkedPermissionCallIds = new Map<string, string>();
+  const linkedFormIds = new Map<string, Set<string>>();
+  for (const request of rootPermissions) {
+    if (request.status !== 'pending') continue;
+    if (request.subagentId || request.childSessionId) {
+      if (request.subagentId) {
+        const bucket = linkedPermissionIds.get(request.subagentId) ?? new Set<string>();
+        bucket.add(request.approvalId);
+        linkedPermissionIds.set(request.subagentId, bucket);
+      }
+      if (request.childSessionId) {
+        const childBucket = linkedPermissionIds.get(request.childSessionId) ?? new Set<string>();
+        childBucket.add(request.approvalId);
+        linkedPermissionIds.set(request.childSessionId, childBucket);
+      }
+    } else {
+      linkedPermissionCallIds.set(request.toolCallId, request.approvalId);
+    }
+  }
+  for (const request of rootForms) {
+    if (request.status !== 'pending' || (!request.subagentId && !request.childSessionId)) continue;
+    if (request.subagentId) {
+      const bucket = linkedFormIds.get(request.subagentId) ?? new Set<string>();
+      bucket.add(request.questionId);
+      linkedFormIds.set(request.subagentId, bucket);
+    }
+    if (request.childSessionId) {
+      const childBucket = linkedFormIds.get(request.childSessionId) ?? new Set<string>();
+      childBucket.add(request.questionId);
+      linkedFormIds.set(request.childSessionId, childBucket);
+    }
+  }
+
   const panelDirectory = normalizePath(directory);
   const panelSpaceId = spaceIdOfDirectory(panelDirectory);
 
@@ -224,8 +266,10 @@ export const deriveSubagentRows = (input: DeriveSubagentRowsInput): SubagentRow[
       : child?.sessionId) ?? null;
     const lookupIds = [childSessionId, subagent?.subagentId].filter((value): value is string => Boolean(value));
 
-    const hasPermission = lookupIds.some((id) => (permissions[id]?.length ?? 0) > 0 || Boolean(requestsById.get(id)?.includes('p')));
-    const hasForm = lookupIds.some((id) => (forms[id]?.length ?? 0) > 0 || Boolean(requestsById.get(id)?.includes('f')));
+    const callLinkedPermission = subagent?.activeToolCallId ? linkedPermissionCallIds.get(subagent.activeToolCallId) : undefined;
+    const hasPermission = callLinkedPermission !== undefined
+      || lookupIds.some((id) => (linkedPermissionIds.get(id)?.size ?? 0) > 0 || (permissions[id]?.length ?? 0) > 0 || Boolean(requestsById.get(id)?.includes('p')));
+    const hasForm = lookupIds.some((id) => (linkedFormIds.get(id)?.size ?? 0) > 0 || (forms[id]?.length ?? 0) > 0 || Boolean(requestsById.get(id)?.includes('f')));
     const liveStatus = lookupIds.map((id) => statuses[id]).find((value) => value !== undefined);
     const observed = lookupIds.map((id) => observedById.get(id)).find((value) => value !== undefined);
 
@@ -432,6 +476,7 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
       projects,
       worktrees,
       directory,
+      sessionId,
     });
   }, [
     children,
@@ -444,6 +489,7 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
     permissions,
     projects,
     providers,
+    sessionId,
     reports,
     statusInvalidated,
     statusReady,

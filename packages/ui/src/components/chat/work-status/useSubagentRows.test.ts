@@ -48,6 +48,7 @@ const input = (overrides: Partial<DeriveSubagentRowsInput> = {}): DeriveSubagent
   projects: [],
   worktrees: new Map(),
   directory: '/dir',
+  sessionId: 'parent',
   ...overrides,
 });
 
@@ -144,6 +145,42 @@ describe('deriveSubagentRows', () => {
       permissions: { blocked: [blocker] },
     }));
     expect(rows.map((row) => row.subagentId)).toEqual(['blocked', 'running', 'done']);
+  });
+
+  test('a root-keyed child approval stamped with subagent linkage marks the row blocked', () => {
+    // The Agent Service attributes a child worker's pending approval to the
+    // root session; its `subagentId`/`childSessionId` stamp is the row's link.
+    const blocker: ApprovalRequest = {
+      version: '1', epoch: 'epoch', workerGeneration: 'worker', approvalId: 'a-child', sessionId: 'parent', turnId: 'run', toolCallId: 'call_bash_b',
+      toolName: 'bash', actionType: 'bash_command', commandSummary: 'sleep 12 && ls', details: {}, status: 'pending', requestedAt: 1,
+      subagentId: 'BetaWorker-2', childSessionId: 'child-uuid',
+    };
+    const live = subagent({ subagentId: 'BetaWorker-2', role: 'task', status: 'running', childSessionId: 'child-uuid' });
+    const rows = deriveSubagentRows(input({ liveSubagents: [live], permissions: { parent: [blocker] } }));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].blocked).toBe(true);
+    expect(rows[0].busy).toBe(true);
+    expect(rows[0].finished).toBe(false);
+  });
+
+  test('a root-keyed child approval still resolves by the child in-flight toolCallId', () => {
+    const blocker: ApprovalRequest = {
+      version: '1', epoch: 'epoch', workerGeneration: 'worker', approvalId: 'a-child', sessionId: 'parent', turnId: 'run', toolCallId: 'call_bash_b',
+      toolName: 'bash', actionType: 'bash_command', commandSummary: 'sleep 12 && ls', details: {}, status: 'pending', requestedAt: 1,
+    };
+    const live = subagent({ subagentId: 'BetaWorker-2', role: 'task', status: 'running', childSessionId: 'child-uuid', activeTool: 'bash', activeToolCallId: 'call_bash_b' });
+    const rows = deriveSubagentRows(input({ liveSubagents: [live], permissions: { parent: [blocker] } }));
+    expect(rows[0].blocked).toBe(true);
+  });
+
+  test('an unlinked root-keyed approval does not block a sibling subagent row', () => {
+    const blocker: ApprovalRequest = {
+      version: '1', epoch: 'epoch', workerGeneration: 'worker', approvalId: 'a-root', sessionId: 'parent', turnId: 'run', toolCallId: 'call_root',
+      toolName: 'bash', actionType: 'bash_command', commandSummary: 'ls', details: {}, status: 'pending', requestedAt: 1,
+    };
+    const live = subagent({ subagentId: 'AlphaScout', role: 'scout', status: 'running', childSessionId: 'child-uuid', activeToolCallId: 'call_other' });
+    const rows = deriveSubagentRows(input({ liveSubagents: [live], permissions: { parent: [blocker] } }));
+    expect(rows[0].blocked).toBe(false);
   });
 
   test('looks up a report by subagentId for the row tooltip', () => {

@@ -56,14 +56,46 @@ const SubagentDetails: React.FC<{
 }> = ({ row, parentId, directory, onOpenSession }) => {
   const { t } = useI18n();
   const childId = row.childSessionId;
-  const permissions = useDirectorySync(
-    React.useCallback((state: State) => (childId ? state.permission[childId] ?? NO_PERMISSIONS : NO_PERMISSIONS), [childId]),
+  const subagentId = row.subagentId;
+  const activeToolCallId = row.subagent?.activeToolCallId;
+  // Child blockers are attributed to the parent session; the Agent Service
+  // stamps `subagentId`/`childSessionId` on them (older frames still match by
+  // the child's in-flight toolCallId), so this surface resolves them from the
+  // root bucket as well as the child's own key. Raw bucket references feed
+  // `useDirectorySync`; the merge runs in a memo so the selector stays
+  // referentially stable.
+  const rootPermissions = useDirectorySync(
+    React.useCallback((state: State) => state.permission[parentId] ?? NO_PERMISSIONS, [parentId]),
     directory ?? undefined,
   );
-  const forms = useDirectorySync(
-    React.useCallback((state: State) => (childId ? state.form[childId] ?? NO_FORMS : NO_FORMS), [childId]),
+  const ownPermissions = useDirectorySync(
+    React.useCallback((state: State) => (childId !== null ? state.permission[childId] ?? NO_PERMISSIONS : NO_PERMISSIONS), [childId]),
     directory ?? undefined,
   );
+  const permissions = React.useMemo<ApprovalRequest[]>(() => {
+    const linked = rootPermissions.filter((request) => request.status === 'pending'
+      && (request.subagentId === subagentId
+        || (childId !== null && request.childSessionId === childId)
+        || (request.subagentId === undefined && request.childSessionId === undefined && activeToolCallId !== undefined && request.toolCallId === activeToolCallId)));
+    if (linked.length === 0) return ownPermissions;
+    const seen = new Set(linked.map((request) => request.approvalId));
+    return [...linked, ...ownPermissions.filter((request) => !seen.has(request.approvalId))];
+  }, [rootPermissions, ownPermissions, childId, subagentId, activeToolCallId]);
+  const rootForms = useDirectorySync(
+    React.useCallback((state: State) => state.form[parentId] ?? NO_FORMS, [parentId]),
+    directory ?? undefined,
+  );
+  const ownForms = useDirectorySync(
+    React.useCallback((state: State) => (childId !== null ? state.form[childId] ?? NO_FORMS : NO_FORMS), [childId]),
+    directory ?? undefined,
+  );
+  const forms = React.useMemo<QuestionRequest[]>(() => {
+    const linked = rootForms.filter((request) => request.status === 'pending'
+      && (request.subagentId === subagentId || (childId !== null && request.childSessionId === childId)));
+    if (linked.length === 0) return ownForms;
+    const seen = new Set(linked.map((request) => request.questionId));
+    return [...linked, ...ownForms.filter((request) => !seen.has(request.questionId))];
+  }, [rootForms, ownForms, childId, subagentId]);
   const task = useSubagentTask(parentId, childId, directory, {
     subagentId: row.subagentId,
     name: row.subagent?.name ?? row.displayName,

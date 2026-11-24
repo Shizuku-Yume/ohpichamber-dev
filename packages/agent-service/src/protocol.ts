@@ -128,6 +128,8 @@ const WorkerApprovalInteractionSchema = z.strictObject({
   actionType: z.enum(['bash_command', 'file_write', 'network_request', 'custom_tool']), commandSummary: z.string(),
   details: JsonObjectSchema, policyTarget: z.strictObject({ toolName: z.string().min(1), pattern: z.string() }), turnId: EntityIdSchema,
   sessionRuleKey: z.string().min(1).optional(), nativeGrant: z.literal(true).optional(),
+  /** Stamped when the pending call belongs to a subagent run, not the root turn. */
+  subagentId: EntityIdSchema.optional(), childSessionId: EntityIdSchema.optional(),
   /**
    * A tool execution approval: the ACP permission gate and the native approval
    * extension's tool requests. The only approval a session mode may answer.
@@ -137,6 +139,7 @@ const WorkerApprovalInteractionSchema = z.strictObject({
 const WorkerQuestionInteractionSchema = z.strictObject({
   kind: z.literal('question'), questionId: EntityIdSchema, turnId: EntityIdSchema, prompt: z.string(),
   schema: JsonObjectSchema, timeout: z.number().int().positive().optional(),
+  subagentId: EntityIdSchema.optional(), childSessionId: EntityIdSchema.optional(),
 });
 const WorkerCancelInteractionSchema = z.strictObject({
   kind: z.literal('cancel'), approvalId: EntityIdSchema.optional(), questionId: EntityIdSchema.optional(),

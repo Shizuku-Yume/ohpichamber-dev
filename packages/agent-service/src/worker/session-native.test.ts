@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import { JsonValueSchema, type ApprovalRequest, type QuestionRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
+import { JsonValueSchema, SubagentSchema, type ApprovalRequest, type QuestionRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgEditMode } from '@oh-my-pi/pi-coding-agent/edit/settings';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
 import { TASK_SUBAGENT_EVENT_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
@@ -525,10 +525,32 @@ test('Agent Hub reads answer from the worker without a live subagent', async () 
  try {
   const roster = await harness.worker.operation({ type: 'subagents.list' });
   expect(roster).toMatchObject({ type: 'subagents.list', subagents: [] });
+  const ref = AgentRegistry.global().register({
+   id: 'persisted-float-stamp',
+   displayName: 'persisted-float-stamp',
+   kind: 'sub',
+   status: 'parked',
+   session: null,
+   sessionFile: harness.worker.sessionFile.replace(/\.jsonl$/, '/task/persisted-float-stamp.jsonl'),
+   createdAt: 1_700_000_000_000.25,
+   lastActivity: 1_700_000_000_123.75,
+  });
+  try {
+   const hydrated = await harness.worker.operation({ type: 'subagents.list' });
+   expect(hydrated.type).toBe('subagents.list');
+   if (hydrated.type === 'subagents.list') {
+    const parsed = SubagentSchema.parse(hydrated.subagents.find(item => item.subagentId === 'persisted-float-stamp'));
+    expect(parsed.createdAt).toBe(1_700_000_000_000);
+    expect(parsed.updatedAt).toBe(1_700_000_000_123);
+    expect(parsed.persisted).toBe(true);
+   }
+  } finally {
+   AgentRegistry.global().unregister(ref.id, ref);
+  }
   const cost = await harness.worker.operation({ type: 'subagents.tree-cost' });
   expect(cost).toMatchObject({ type: 'subagents.tree-cost', cost: { sessionId: expect.any(String), directCost: 0, treeCost: 0 } });
  } finally { await harness.close(); }
-}, 30000);
+});
 
 test('reviving an unknown subagent is refused rather than inventing one', async () => {
  const harness = await fixture({ respond: () => completion() });

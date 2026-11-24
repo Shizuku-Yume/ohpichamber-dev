@@ -25,6 +25,15 @@ export interface SubagentLifecycleDeps {
 }
 
 /**
+ * A `subagentId` is only unique inside its root session — the worker's child
+ * id is model/tool chosen (`task` ids repeat across roots and respawns), so
+ * every live and persisted child index keys records under the owning root.
+ */
+export function subagentKey(rootSessionId: string, subagentId: string): string {
+  return `${rootSessionId}\u0000${subagentId}`;
+}
+
+/**
  * A `running` record is live detached work (`task` `tasks[]` children keep
  * working after the spawning turn's `agent_end`), so it blocks idle eviction.
  * Terminal and parked records are file state and never do.
@@ -89,7 +98,7 @@ async function persistSubagent(deps: SubagentLifecycleDeps, rootSessionId: strin
   if (!isCurrentSubagentOwner(deps, rootSessionId, generation) || !entry || entry.state !== 'live' || !input.sessionFile) return;
   const identity = await readSubagentIdentity(input.sessionFile);
   if (!identity || !isCurrentSubagentOwner(deps, rootSessionId, generation) || deps.entries.get(rootSessionId) !== entry) return;
-  const existing = deps.subagents.get(input.subagentId);
+  const existing = deps.subagents.get(subagentKey(rootSessionId, input.subagentId));
   let parentSessionId = existing?.parentSessionId;
   if (!parentSessionId) {
     if (!identity.parentSessionFile) return;
@@ -110,12 +119,15 @@ async function persistSubagent(deps: SubagentLifecycleDeps, rootSessionId: strin
   if (solutionSpace) record.solutionSpace = solutionSpace;
   await deps.references.putSubagent(record);
   if (isCurrentSubagentOwner(deps, rootSessionId, generation) && deps.entries.get(rootSessionId) === entry) {
-    deps.subagents.set(input.subagentId, record);
+    deps.subagents.set(subagentKey(rootSessionId, input.subagentId), record);
     // The live worker frame cannot know the child's session id — that UUID
     // only exists once this file's header resolves. Reconcile the row the UI
     // already renders so it never keys a native name as a session id.
     const { rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...subagent } = record;
-    entry.opened.journal.append([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: SubagentSchema.parse(subagent) } }]);
+    // A closed journal (relocation, service shutdown) rejects append; the
+    // durable record above already carries the state.
+    try { entry.opened.journal.append([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: SubagentSchema.parse(subagent) } }]); }
+    catch { /* the journal is already closed */ }
   }
 }
 
@@ -132,7 +144,7 @@ export function settleSubagentsForExit(deps: SubagentLifecycleDeps, rootSessionI
   if (orphans.length === 0) return;
   for (const orphan of orphans) {
     const record: ChildRecord = { ...orphan, status: 'cancelled' };
-    deps.subagents.set(record.subagentId, record);
+    deps.subagents.set(subagentKey(rootSessionId, record.subagentId), record);
     const { rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...subagent } = record;
     // A closed journal (relocation, service shutdown) rejects append; the
     // durable record still settles below.

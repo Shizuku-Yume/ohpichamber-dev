@@ -106,8 +106,10 @@ own data fetching and reconciliation; the layout's right slot owns column width.
 - Built-in section ids stay stable because saved order and visibility use them.
   Hidden-state checks test membership of available sections because stale ids
   from removed sections can inflate a count.
-- Subagent permission requests remain visible in the work-status section because
-  the parent transcript has no representation of those child blockers.
+- Subagent permission requests remain visible in the work-status section even
+  though the child approval is attributed to the root session: the row flags
+  blocked via the request's `subagentId`/`childSessionId` stamp or the row's
+  `activeToolCallId`, so its card and the timeline card stay in step.
 - Presence reports clear on section unmount, so an absent section cannot keep the
   card visible. Hidden retained cards are inert so keyboard focus cannot reach
   invisible controls.
@@ -262,7 +264,7 @@ which requests only providers enabled for this panel.
 | Changed files | `useGitStore` status `files` + `diffStats` | working tree, not session-authored edits |
 | PR + checks | `useFreshestPrVisualSummaryForBranch` | **read-only**; follows the freshest remote-keyed entry for the branch |
 | Subagents | `useSubagentRows`: canonical `Subagent` records (`useSubagentsStore.byParent`, hydrated via `listSubagents` so settled subagents stay after child sessions park) merged with child `Session`s by `childSessionId`; per-row cost prefers the record's `treeCost`/`cost`, else `useSubagentCostRollup`'s `perChildCost` | rows render through the shared `SubagentStatusRow` |
-| Subagent blockers | directory `permission` / `question` maps | one subscription covers every child |
+| Subagent blockers | directory `permission` / `question` maps — child-keyed buckets plus root-keyed requests the service stamps with `subagentId`/`childSessionId`, or that match the row's `activeToolCallId` | one subscription covers every child; a child approval attributed to the parent still flags its row blocked |
 | Usage | `components/usage/usageGroups.ts` over `useQuotaStore` | grouping shared with the mobile popover; presentation is not |
 | Linked threads | `lib/linkedIssues.ts` over session metadata | written by the flows that attach an issue or PR |
 | Turn stats | `telemetry.ts` over `useSessionMessageRecords` | computed only while expanded and authoritatively idle; either rate above 5,000 tok/s is reported as unknown (see the two-rate description below) |
