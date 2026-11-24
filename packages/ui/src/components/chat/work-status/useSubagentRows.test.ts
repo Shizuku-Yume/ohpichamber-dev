@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import { z } from 'zod';
 
 import type { ApprovalRequest, Session, Subagent } from '@openchamber/agent-contract';
 import type { SubagentReport } from './useSubagentReports';
+import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { deriveSubagentRows, isSubagentsSurfaceShown, resolveSubagentDisplayName, type DeriveSubagentRowsInput } from './useSubagentRows';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import { formatSubagentLiveDetail } from './subagentActivity';
-
 const session = (sessionId: string, overrides: Partial<Session> = {}): Session => ({
   sessionId,
   projectId: 'project',
@@ -278,7 +279,7 @@ describe('deriveSubagentRows', () => {
 });
 
 describe('formatSubagentLiveDetail', () => {
-  const t = (key: string, params?: Record<string, unknown>) => `${key}${params ? JSON.stringify(params) : ''}`;
+  const t = (key: I18nKey, params?: I18nParams) => `${key}${params ? JSON.stringify(params) : ''}`;
 
   test('shows the retry countdown while a live record is retrying', () => {
     const line = formatSubagentLiveDetail(subagent({ retryCountdown: 30 }), false, t, 'en');
@@ -299,20 +300,20 @@ describe('formatSubagentLiveDetail', () => {
 
 describe('isSubagentsSurfaceShown', () => {
   test('matches rail visibility for open tabs and live or listed subagents', () => {
-    expect(isSubagentsSurfaceShown([], 'parent', [])).toBe(false);
+    const parentId = 'surface-shown-parent';
+    expect(isSubagentsSurfaceShown([], parentId, [])).toBe(false);
     expect(isSubagentsSurfaceShown([{ mode: 'subagents' }], null, [])).toBe(true);
-    expect(isSubagentsSurfaceShown([], 'parent', [session('child-1', { parentSessionId: 'parent' })])).toBe(true);
-    expect(isSubagentsSurfaceShown([], 'parent', [session('wf-1', {
-      parentSessionId: 'parent',
-      // SAFETY: test fixture exercises runtime parser for workflow-agent metadata absent from SessionMetadata schema.
-      metadata: { openchamber: { kind: 'workflow-agent' } } as unknown as Session['metadata'],
+    expect(isSubagentsSurfaceShown([], parentId, [session('child-1', { parentSessionId: parentId })])).toBe(true);
+    const workflowMetadata = z.custom<Session['metadata']>().parse({ openchamber: { kind: 'workflow-agent' } });
+    expect(isSubagentsSurfaceShown([], parentId, [session('wf-1', {
+      parentSessionId: parentId,
+      metadata: workflowMetadata,
     })])).toBe(false);
-
-    useSubagentsStore.getState().setSubagents('parent', [subagent()]);
+    useSubagentsStore.getState().setSubagents(parentId, [subagent({ parentSessionId: parentId })]);
     try {
-      expect(isSubagentsSurfaceShown([], 'parent', [])).toBe(true);
+      expect(isSubagentsSurfaceShown([], parentId, [])).toBe(true);
     } finally {
-      useSubagentsStore.getState().clearSession('parent');
+      useSubagentsStore.getState().clearSession(parentId);
     }
   });
 });

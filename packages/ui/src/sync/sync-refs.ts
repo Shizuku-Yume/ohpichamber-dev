@@ -1,9 +1,11 @@
 
-import type { Part } from "@openchamber/agent-contract"
+import type { Part, Subagent } from "@openchamber/agent-contract"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import type { ChildStoreManager } from "./child-store"
 import { getSessionMaterializationStatus, type SessionMaterializationStatus } from "./materialization"
 import type { State } from "./types"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
 
 let _childStores: ChildStoreManager | null = null
 let _directory: string = ""
@@ -141,4 +143,12 @@ export function getSyncParts(messageId: string, directory?: string): Part[] {
     if (message) return message.parts
   }
   return []
+}
+
+export function syncSubagentUpdate(parentSessionId: string, subagent: Subagent): void {
+  useSubagentsStore.getState().applySubagentUpdate(parentSessionId, subagent)
+  if (!subagent.childSessionId || subagent.childSessionId === subagent.subagentId) return
+  const global = useGlobalSessionsStore.getState()
+  const parent = getAllSyncSessionMap().get(parentSessionId) ?? global.entityById.get(parentSessionId)
+  if (parent) global.upsertSubagents(parent, [subagent])
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { SidebarTopBar } from './SidebarTopBar';
-import { useSidebarPeek } from './useSidebarPeek';
+import { useSidebarPeek } from '@/hooks/useSidebarPeek';
 import { useLayoutAnimationMs } from '@/hooks/useLayoutAnimationMs';
 import { TitlebarLeftControls } from './TitlebarLeftControls';
 import { ContextPanel } from './ContextPanel';
@@ -77,7 +77,7 @@ const LeftSidebar = React.memo<{ isMobile: boolean }>(({ isMobile }) => {
  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
  const peek = useSidebarPeek({ enabled: !isSidebarOpen && !isMobile, layoutAnimationMs: useLayoutAnimationMs() });
  const [listControlsSlot, setListControlsSlot] = React.useState<HTMLDivElement | null>(null);
-    return (
+ return (
   <Sidebar
    isOpen={isSidebarOpen}
    isMobile={isMobile}
@@ -132,9 +132,9 @@ export const MainLayout: React.FC = () => {
  const isSurfacePageOpen = isScheduledTasksPageOpen || isArchivePageOpen || isIntegrationsCatalogOpen || isUsageStatsPageOpen || isSourceBoardOpen || isOverviewOpen || Boolean(worktreesPageProjectId) || isSpacesPageOpen || isRunOverviewOpen || Boolean(guestPage);
  const mainRef = React.useRef<HTMLElement | null>(null);
  React.useEffect(() => {
-        if (!isSurfacePageOpen) return;
-        return registerCloseTabTarget(() => useUIStore.getState().closeMainSurfaces(), mainRef, 1);
-    }, [isSurfacePageOpen]);
+  if (!isSurfacePageOpen) return;
+  return registerCloseTabTarget(() => useUIStore.getState().closeMainSurfaces(), mainRef, 1);
+ }, [isSurfacePageOpen]);
  React.useLayoutEffect(() => {
   setChatCovered(isSurfacePageOpen);
  }, [isSurfacePageOpen]);
@@ -153,8 +153,8 @@ export const MainLayout: React.FC = () => {
  }, []);
  const { isMobile } = useDeviceInfo();
 
-    useUpdatePolling();
-    useGuestUpdateNotice();
+ useUpdatePolling();
+ useGuestUpdateNotice();
 
  React.useEffect(() => {
   const previous = useUIStore.getState().isMobile;
@@ -167,86 +167,86 @@ export const MainLayout: React.FC = () => {
   <DiagnosticDialogAvailableContext.Provider value>
    <DiffWorkerProvider>
     <ProjectActionsProvider>
-    <div
-     data-page-scroll-lock="true"
-     className="main-content-safe-area relative flex h-[100dvh] bg-background"
-    >
-     <OnDemand needed={isCommandPaletteOpen} load={loadCommandPalette} onFailure={() => useUIStore.getState().setCommandPaletteOpen(false)} />
-     <OnDemand needed={isHelpDialogOpen} load={loadHelpDialog} onFailure={() => useUIStore.getState().setHelpDialogOpen(false)} />
-     <OnDemand needed={isRuntimeStatusDialogOpen} load={loadRuntimeStatusDialog} onFailure={() => useUIStore.getState().setRuntimeStatusDialogOpen(false)} />
-     <OnDemand needed={isProjectActionsDialogOpen} load={loadProjectActionsDialog} onFailure={() => useUIStore.getState().setProjectActionsDialogOpen(false)} />
-     <RunAutoFusion />
-     <SessionDialogs />
-     {isolatedSpacesEnabled ? (
-      <>
-       <OnDemand needed={isSpaceAccessDialogOpen} load={loadSpaceAccessDialog} onFailure={() => useSpacesStore.getState().closeAccessDialog()} />
-       <SpaceActionsSheet />
-       <OnDemand needed={isSpaceApplyDialogOpen} load={loadSpaceApplyDialog} onFailure={() => useSpacesStore.getState().closeApplyDialog()} />
-       <SpaceDeleteDialog />
-       <OnDemand needed={isSpaceSetupOutputDialogOpen} load={loadSpaceSetupOutputDialog} onFailure={() => useSpacesStore.getState().closeSetupOutputDialog()} />
-      </>
-     ) : null}
+     <div
+      data-page-scroll-lock="true"
+      className="main-content-safe-area relative flex h-[100dvh] bg-background"
+     >
+      <OnDemand needed={isCommandPaletteOpen} load={loadCommandPalette} onFailure={() => useUIStore.getState().setCommandPaletteOpen(false)} />
+      <OnDemand needed={isHelpDialogOpen} load={loadHelpDialog} onFailure={() => useUIStore.getState().setHelpDialogOpen(false)} />
+      <OnDemand needed={isRuntimeStatusDialogOpen} load={loadRuntimeStatusDialog} onFailure={() => useUIStore.getState().setRuntimeStatusDialogOpen(false)} />
+      <OnDemand needed={isProjectActionsDialogOpen} load={loadProjectActionsDialog} onFailure={() => useUIStore.getState().setProjectActionsDialogOpen(false)} />
+      <RunAutoFusion />
+      <SessionDialogs />
+      {isolatedSpacesEnabled ? (
+       <>
+        <OnDemand needed={isSpaceAccessDialogOpen} load={loadSpaceAccessDialog} onFailure={() => useSpacesStore.getState().closeAccessDialog()} />
+        <SpaceActionsSheet />
+        <OnDemand needed={isSpaceApplyDialogOpen} load={loadSpaceApplyDialog} onFailure={() => useSpacesStore.getState().closeApplyDialog()} />
+        <SpaceDeleteDialog />
+        <OnDemand needed={isSpaceSetupOutputDialogOpen} load={loadSpaceSetupOutputDialog} onFailure={() => useSpacesStore.getState().closeSetupOutputDialog()} />
+       </>
+      ) : null}
 
-     <TitlebarLeftControls />
-     <div className="flex flex-1 overflow-hidden" data-page-scroll-lock="true">
-      <LeftSidebar isMobile={isMobile} />
-      <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden bg-background" data-page-scroll-lock="true">
-       <Header />
-       <div className="relative flex flex-1 min-h-0 overflow-hidden bg-background" data-page-scroll-lock="true">
-        <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden border-t border-border bg-background" data-page-scroll-lock="true">
-         <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true" data-workspace-row="true">
-          <ContextPanel zone="left" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
-          <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true" data-chat-area="true">
-                                        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-workspace-chat="true">
-            <main ref={mainRef} className="min-h-0 flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
-             <div className={cn('absolute inset-0', isSurfacePageOpen && 'invisible')}>
-              <ErrorBoundary><ChatView active={!isSettingsDialogOpen && !isSurfacePageOpen} /></ErrorBoundary>
-             </div>
-             <ErrorBoundary><OnDemand needed={isRunOverviewOpen} load={loadRunOverview} onFailure={closeMainSurfaces} /></ErrorBoundary>
-             <ErrorBoundary><OnDemand needed={isScheduledTasksPageOpen} load={loadScheduledTasksDialog} onFailure={closeMainSurfaces} /></ErrorBoundary>
-             <ErrorBoundary><OnDemand needed={isArchivePageOpen} load={loadArchiveView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-             <ErrorBoundary><OnDemand needed={isIntegrationsCatalogOpen} load={loadIntegrationsCatalogView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-             {isUsageStatsPageOpen && (
-              <div className="absolute inset-0 z-10 bg-background">
-               <ErrorBoundary><OnDemand needed load={loadUsageStatsView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+      <TitlebarLeftControls />
+      <div className="flex flex-1 overflow-hidden" data-page-scroll-lock="true">
+       <LeftSidebar isMobile={isMobile} />
+       <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden bg-background" data-page-scroll-lock="true">
+        <Header />
+        <div className="relative flex flex-1 min-h-0 overflow-hidden bg-background" data-page-scroll-lock="true">
+         <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden border-t border-border bg-background" data-page-scroll-lock="true">
+          <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true" data-workspace-row="true">
+           <ContextPanel zone="left" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
+           <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true" data-chat-area="true">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-workspace-chat="true">
+             <main ref={mainRef} className="min-h-0 flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
+              <div className={cn('absolute inset-0', isSurfacePageOpen && 'invisible')}>
+               <ErrorBoundary><ChatView active={!isSettingsDialogOpen && !isSurfacePageOpen} /></ErrorBoundary>
               </div>
-             )}
-             <OnDemand needed={isSourceBoardOpen} load={loadSourceBoardView} onFailure={closeMainSurfaces} />
-             <ErrorBoundary><OnDemand needed={isOverviewOpen} load={loadOverviewView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-             <ErrorBoundary><OnDemand needed={Boolean(worktreesPageProjectId)} load={loadWorktreesView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-             {isSpacesPageOpen ? <ErrorBoundary><OnDemand needed load={loadSpacesView} onFailure={closeMainSurfaces} /></ErrorBoundary> : null}
-             {guestPage && <div className="absolute inset-0 z-10 bg-background">
-              <ErrorBoundary><PluginPane mode={`plugin:${guestPage.id}`} surface="page" item={null}
-               onDismiss={() => useUIStore.getState().setOpenGuestPage(null)} /></ErrorBoundary>
-             </div>}
-            </main>
-            <ContextPanel zone="bottom" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
+              <ErrorBoundary><OnDemand needed={isRunOverviewOpen} load={loadRunOverview} onFailure={closeMainSurfaces} /></ErrorBoundary>
+              <ErrorBoundary><OnDemand needed={isScheduledTasksPageOpen} load={loadScheduledTasksDialog} onFailure={closeMainSurfaces} /></ErrorBoundary>
+              <ErrorBoundary><OnDemand needed={isArchivePageOpen} load={loadArchiveView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+              <ErrorBoundary><OnDemand needed={isIntegrationsCatalogOpen} load={loadIntegrationsCatalogView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+              {isUsageStatsPageOpen && (
+               <div className="absolute inset-0 z-10 bg-background">
+                <ErrorBoundary><OnDemand needed load={loadUsageStatsView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+               </div>
+              )}
+              <OnDemand needed={isSourceBoardOpen} load={loadSourceBoardView} onFailure={closeMainSurfaces} />
+              <ErrorBoundary><OnDemand needed={isOverviewOpen} load={loadOverviewView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+              <ErrorBoundary><OnDemand needed={Boolean(worktreesPageProjectId)} load={loadWorktreesView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+              {isSpacesPageOpen ? <ErrorBoundary><OnDemand needed load={loadSpacesView} onFailure={closeMainSurfaces} /></ErrorBoundary> : null}
+              {guestPage && <div className="absolute inset-0 z-10 bg-background">
+               <ErrorBoundary><PluginPane mode={`plugin:${guestPage.id}`} surface="page" item={null}
+                onDismiss={() => useUIStore.getState().setOpenGuestPage(null)} /></ErrorBoundary>
+              </div>}
+             </main>
+             <ContextPanel zone="bottom" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
+            </div>
+            <ContextPanel zone="right" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
+            <ContextSurfacePanes fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
+            <ZoneDropOverlay />
+            <ZoneFitArbiter />
            </div>
-           <ContextPanel zone="right" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
-           <ContextSurfacePanes fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
-           <ZoneDropOverlay />
-           <ZoneFitArbiter />
           </div>
          </div>
+         <div className="border-t border-border" data-page-scroll-lock="true">
+          <ErrorBoundary><ContextPanelRail /></ErrorBoundary>
+         </div>
+         <ErrorBoundary><GuestHosts /></ErrorBoundary>
         </div>
-        <div className="border-t border-border" data-page-scroll-lock="true">
-         <ErrorBoundary><ContextPanelRail /></ErrorBoundary>
-        </div>
-        <ErrorBoundary><GuestHosts /></ErrorBoundary>
        </div>
       </div>
-     </div>
 
-     {SettingsWindow ? (
-      <SettingsWindow
-       open={isSettingsDialogOpen}
-       onOpenChange={setSettingsDialogOpen}
-      />
-     ) : null}
-     {MotionTuningPanel ? (
-      <React.Suspense fallback={null}><MotionTuningPanel /></React.Suspense>
-     ) : null}
-    </div>
+      {SettingsWindow ? (
+       <SettingsWindow
+        open={isSettingsDialogOpen}
+        onOpenChange={setSettingsDialogOpen}
+       />
+      ) : null}
+      {MotionTuningPanel ? (
+       <React.Suspense fallback={null}><MotionTuningPanel /></React.Suspense>
+      ) : null}
+     </div>
     </ProjectActionsProvider>
    </DiffWorkerProvider>
   </DiagnosticDialogAvailableContext.Provider>

@@ -1334,26 +1334,23 @@ test('vibe_spawn correlates toolCallId, task, and concise description across too
       inputs => subagentFrames.push(...inputs),
       inputs => subagentFrames.push(...inputs),
     );
-    const projection = new WorkerProjection(
-      manager,
-      'session',
-      [],
-      undefined,
-      text => text,
-      correlation => projector.correlateVibeSpawn(correlation),
-    );
+    const projection = new WorkerProjection(manager, 'session', [], undefined, text => text);
+    const observe = (event: AgentSessionEvent) => {
+      projection.consume(event);
+      projector.observeSessionEvent(event, text => projection.publicText(text));
+    };
     projection.beginRun('run', 1);
     const prompt = { role: 'user' as const, content: 'Run vibe worker', timestamp: 2 };
-    projection.consume({ type: 'message_start', message: prompt });
-    projection.consume({ type: 'message_end', message: prompt });
+    observe({ type: 'message_start', message: prompt });
+    observe({ type: 'message_end', message: prompt });
 
-    projection.consume({
+    observe({
       type: 'tool_execution_start',
       toolCallId: 'call-vibe-update',
       toolName: 'vibe_spawn',
       args: { cli: 'fast', name: 'disk-check', prompt: `Check disk usage in ${root}\nSummarize top directories` },
     });
-    projection.consume({
+    observe({
       type: 'tool_execution_update',
       toolCallId: 'call-vibe-update',
       toolName: 'vibe_spawn',
@@ -1372,7 +1369,7 @@ test('vibe_spawn correlates toolCallId, task, and concise description across too
       index: 0,
       detached: true,
     });
-    projection.consume({
+    observe({
       type: 'tool_execution_end',
       toolCallId: 'call-vibe-update',
       toolName: 'vibe_spawn',
@@ -1400,13 +1397,13 @@ test('vibe_spawn correlates toolCallId, task, and concise description across too
       index: 1,
       detached: true,
     });
-    projection.consume({
+    observe({
       type: 'tool_execution_start',
       toolCallId: 'call-vibe-late',
       toolName: 'vibe_spawn',
       args: { cli: 'good', prompt: 'Refactor parser module\nKeep public types stable' },
     });
-    projection.consume({
+    observe({
       type: 'tool_execution_end',
       toolCallId: 'call-vibe-late',
       toolName: 'vibe_spawn',
@@ -1425,13 +1422,13 @@ test('vibe_spawn correlates toolCallId, task, and concise description across too
     });
     expect(subagentFrames).toHaveLength(3);
 
-    projection.consume({
+    observe({
       type: 'tool_execution_start',
       toolCallId: 'call-vibe-err',
       toolName: 'vibe_spawn',
       args: { cli: 'fast', prompt: 'Should fail' },
     });
-    projection.consume({
+    observe({
       type: 'tool_execution_end',
       toolCallId: 'call-vibe-err',
       toolName: 'vibe_spawn',
