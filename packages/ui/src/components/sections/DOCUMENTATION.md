@@ -16,6 +16,7 @@ again. Changing directories hides the previous snapshot without redirecting
 queued writes. Editing the first model role or retry selector preserves remaining
 selectors. Tools offers image generation models from the separate image catalog,
 not chat models that accept images as input.
+Per-model compaction rules (`openchamber/ModelCompactionSettings.tsx`) and retry fallback chains (`openchamber/RetryFallbackChains.tsx`) create entries via `+ Add` dialogs (`ModelSelector` / wildcard pickers and structured threshold modes with `NumberInput`) and persist edits immediately through single-flight CAS updates inside flat `SettingsDisclosure` rows (preserving extended-context cost confirmation on token compaction rules). `RetryFallbackChains` reorders chain targets with `@dnd-kit` `SettingsSortableList` and renders the `web` chain as a `ModelRoleLinkRow` pointing to Web Search fallbacks.
 
 Voice playback renders its voice-picker row only when the selected provider
 can render a picker: local voice options exist, OpenAI speech is available,
@@ -715,6 +716,7 @@ The page is hidden in VS Code (`metadata.ts`).
 The Plugins page follows the Skills catalog layout: an installed list of rows
 (plugins and local extension files), a marketplace section that installs and
 uninstalls in place, and the capability inventory below them.
+Active-worker apply actions (`Active session runtime` / `Restart idle sessions to apply`) live in one page-level lifecycle bar shown when active workers exist, rather than repeating Apply buttons across headers and detail rows; when no active workers exist, the next-session note stays visible.
 
 `plugins/ExtensionControlCenter.tsx` lists the capability sources OMP
 discovered in the workspace. A source that found nothing is not listed, and
@@ -931,6 +933,7 @@ the browser, and a second meaning there confuses both.
 - MCP integration matching uses source and server name because OpenCode owns its registration hash. Lookup retries cover registration completing after the first list read.
 - Runtime MCP status outranks store diagnostics. Policy-blocked servers use the page's blocked state because earlier runtime status is stale.
 - Web-search choice is locked when project configuration overrides the file Settings writes, since a write would immediately appear to revert. Configured providers no longer offered remain named so a missing plugin or typo stays visible.
+- Web-search fallback rows use flat `SettingsSortableList` rows with `Button` + `SettingsCardPill` status triggers rather than boxed tiles; `McpPage.tsx` shares `SettingsCardPill` for server status badges; and `GitHubSettings.tsx`, `GitHubComAccountSection.tsx`, and `GitLabSettings.tsx` use flat `SettingsControlGroup` / `SettingsFieldRow` layouts without boxed instance containers or row top borders.
 - Failed account-list reads preserve an identity's stored account. Only explicit selection changes it; public author writes leave private migration fields to the server.
 - Managed SSH references stay opaque and display only safe labels. Mounting preserves the saved key; a runtime switch clears a reference belonging to another machine.
 - SSH key fields are omitted for other transports. Transport authentication and commit signing remain independent.
@@ -967,6 +970,7 @@ the browser, and a second meaning there confuses both.
 - Retention fields remain editable with automatic cleanup off because manual cleanup uses them too. The In work block never includes archived sessions.
 - Message-search status reads continue beyond an initially settled answer after a switch because the debounced save can start indexing later.
 - Voice keys stay on the server. Dictation cleanup starts off because it sends text to the small-model provider, and without that model the server retains the transcription. Voice pickers share install state and list installed models plus the default; dictation displays the server's choice when no saved model is available.
+- `VoiceSettings` uses shared `Input` (`inputSize="compact"`) and `Button` primitives across all text and action controls, and `LocalModelPicker` renders flat `SettingsRadioGroup` / `SettingsRadioOption` rows.
 - Usage panels show only their provider's error, so Console budgets survive a failed Go usage read. Balance-only windows omit percentage bars and used captions because they report no usage share.
 - Settings names the Go credential next to its meters and the Console workspace next to its budgets. The two reads can use different accounts when the Go reader falls back to a key.
 - About separates app, connected-server and OpenCode updates. A latest-version toast waits for every relevant check; failed checks keep prior status, and authoritative running versions replace temporary installed-but-not-running state.

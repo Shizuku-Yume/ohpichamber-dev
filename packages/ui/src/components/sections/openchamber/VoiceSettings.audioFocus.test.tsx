@@ -46,6 +46,7 @@ const Wrapper = ({ children }: PropsWithChildren) => <div>{children}</div>;
 mock.module('@/components/sections/shared/SettingsSection', () => ({
     SettingsSection: Wrapper, SettingsFieldRow: Wrapper, SettingsStackedField: Wrapper,
     SettingsCheckboxRow: () => null, SettingsChipGroup: () => null,
+    SettingsDisclosure: Wrapper, SettingsRadioGroup: Wrapper, SettingsRadioOption: () => null,
     SETTINGS_WIDTH_NUMBER_CLASS: '', SETTINGS_WIDTH_SELECT_CLASS: '', SETTINGS_WIDTH_LONG_TEXT_CLASS: '',
     SETTINGS_WIDTH_SHORT_TEXT_CLASS: '', SETTINGS_NUMBER_STEPPER_ROW_CLASS: '',
     SETTINGS_HELPER_CLASS: '', SETTINGS_ICON_BUTTON_CLASS: '', SETTINGS_SPACE_CHECKBOX_CLASS: '',

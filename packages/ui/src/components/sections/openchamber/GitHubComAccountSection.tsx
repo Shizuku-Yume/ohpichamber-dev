@@ -319,7 +319,6 @@ export const GitHubComAccountSection: React.FC = () => {
           description={ghCli.disabled
             ? t('settings.github.page.ghCli.disabledDescription')
             : t('settings.github.page.ghCli.availableDescription')}
-          className="border-t border-[var(--surface-subtle)] pt-3"
         >
           <Button
             size="sm"

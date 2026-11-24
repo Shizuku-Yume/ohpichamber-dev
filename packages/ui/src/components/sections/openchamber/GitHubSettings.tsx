@@ -307,7 +307,6 @@ export const GitHubSettings: React.FC<GitHubSettingsProps> = () => {
           description={ghCli.disabled
             ? t('settings.github.page.ghCli.disabledDescription')
             : t('settings.github.page.ghCli.availableDescription')}
-          className="border-t border-[var(--surface-subtle)] pt-3"
         >
           <Button
             size="sm"

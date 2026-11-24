@@ -9,15 +9,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Radio } from '@/components/ui/radio';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
 import { Icon } from "@/components/icon/Icon";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
     SettingsSection,
     SettingsCheckboxRow,
+    SettingsDisclosure,
     SettingsFieldRow,
+    SettingsRadioGroup,
+    SettingsRadioOption,
     SettingsStackedField,
     SettingsChipGroup,
     SETTINGS_WIDTH_NUMBER_CLASS,
@@ -42,8 +44,6 @@ import { TranscriptCorrectionRow } from './TranscriptCorrectionRow';
 import { toast } from '@/components/ui';
 import type { VoiceApiKeyKind } from '@/lib/voiceKeysApi';
 import { Spinner } from '@/components/ui/spinner';
-
-const VOICE_TEXT_INPUT_CLASS = 'oc-surface-elevated oc-raised oc-field w-full min-w-0 h-7 rounded-md bg-surface-elevated px-3 typography-ui-label text-foreground placeholder:text-muted-foreground focus:outline-none';
 
 const LOCAL_STT_MODELS = [
     {
@@ -203,105 +203,87 @@ const LocalModelPicker = ({
     };
 
     return (
-        <div
-            role="radiogroup"
-            aria-label={t('settings.voice.page.field.model')}
-            className="grid w-full grid-cols-1 gap-2 @3xl:grid-cols-2"
-        >
+        <SettingsRadioGroup aria-label={t('settings.voice.page.field.model')}>
             {LOCAL_STT_MODELS.map((entry) => {
                 const selected = selectedModelId === entry.id;
                 const state = models.get(entry.id) ?? null;
                 return (
-                    <div
-                        key={entry.id}
-                        className={cn(
-                            'flex items-start gap-2 rounded-lg px-3 py-2.5',
-                            selected ? 'bg-interactive-selection text-interactive-selection-foreground' : 'oc-tile',
-                        )}
-                    >
-                        <div
-                            className="flex min-w-0 flex-1 cursor-pointer items-start gap-2"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => onSelect(entry.id)}
-                            onKeyDown={(e) => {
-                                if (e.key === ' ' || e.key === 'Enter') {
-                                    e.preventDefault();
-                                    onSelect(entry.id);
-                                }
-                            }}
-                        >
-                            <div className="pt-0.5">
-                                <Radio
-                                    checked={selected}
-                                    onChange={() => onSelect(entry.id)}
-                                    ariaLabel={tUnsafe(entry.labelKey)}
-                                />
-                            </div>
-                            <div className="min-w-0 flex-1 space-y-1">
-                                <div className="typography-ui-label truncate text-foreground" title={tUnsafe(entry.labelKey)}>
-                                    {tUnsafe(entry.labelKey)}
-                                </div>
-                                {entry.badgeKey ? (
-                                    <span className="inline-block rounded-full bg-[var(--status-success)]/15 px-2 py-px text-[0.625rem] font-medium text-[var(--status-success)]">
-                                        {tUnsafe(entry.badgeKey)}
+                    <div key={entry.id} className="flex items-start justify-between gap-2">
+                        <SettingsRadioOption
+                            selected={selected}
+                            onSelect={() => onSelect(entry.id)}
+                            ariaLabel={tUnsafe(entry.labelKey)}
+                            className="min-w-0 flex-1"
+                            label={(
+                                <span className="flex flex-wrap items-center gap-2">
+                                    <span>{tUnsafe(entry.labelKey)}</span>
+                                    {entry.badgeKey ? (
+                                        <span className="inline-block rounded-full bg-[var(--status-success)]/15 px-2 py-px typography-micro font-medium text-[var(--status-success)]">
+                                            {tUnsafe(entry.badgeKey)}
+                                        </span>
+                                    ) : null}
+                                </span>
+                            )}
+                            description={(
+                                <span className="flex flex-col gap-0.5">
+                                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                        <RatingBar value={entry.accuracy} label={t('settings.voice.page.stt.meta.accuracy')} />
+                                        <RatingBar value={entry.speed} label={t('settings.voice.page.stt.meta.speed')} />
+                                        <span className="typography-micro tabular-nums text-muted-foreground">{entry.size}</span>
                                     </span>
-                                ) : null}
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                    <RatingBar value={entry.accuracy} label={t('settings.voice.page.stt.meta.accuracy')} />
-                                    <RatingBar value={entry.speed} label={t('settings.voice.page.stt.meta.speed')} />
-                                    <span className="typography-micro tabular-nums text-muted-foreground">{entry.size}</span>
-                                </div>
-                                {state?.downloadError ? (
-                                    <p className="typography-meta text-[var(--status-error)]">{state.downloadError}</p>
-                                ) : null}
-                            </div>
-                        </div>
-                        <div className="flex h-6 shrink-0 items-center gap-1">
+                                    {state?.downloadError ? (
+                                        <span className="typography-meta text-[var(--status-error)]">{state.downloadError}</span>
+                                    ) : null}
+                                </span>
+                            )}
+                        />
+                        <div className="flex h-7 shrink-0 items-center gap-1">
                             {state?.installed ? (
                                 <>
                                     <Icon
                                         name="checkbox-circle"
-                                        className="h-4 w-4 flex-shrink-0 text-[var(--status-success)]"
+                                        className="size-4 shrink-0 text-[var(--status-success)]"
                                         aria-label={t('settings.voice.page.stt.modelInstalled')}
                                     />
                                     <Button
+                                        type="button"
                                         variant="ghost"
-                                        size="xs"
-                                        className="h-6 w-6 p-0 text-muted-foreground hover:text-[var(--status-error)]"
+                                        size="icon"
+                                        className={cn(SETTINGS_ICON_BUTTON_CLASS, 'hover:text-[var(--status-error)]')}
                                         disabled={requestingId === entry.id}
                                         onClick={() => { void handleDelete(entry.id); }}
                                         title={t('settings.voice.page.stt.modelDelete')}
                                         aria-label={t('settings.voice.page.stt.modelDelete')}
                                     >
-                                        <Icon name="delete-bin" className="h-4 w-4" />
+                                        <Icon name="delete-bin" className="size-4" />
                                     </Button>
                                 </>
                             ) : state?.downloading ? (
                                 <span className="flex items-center gap-1.5">
-                                    <Spinner className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className="tabular-nums text-muted-foreground">
+                                    <Spinner className="size-3.5 text-muted-foreground" />
+                                    <span className="typography-micro tabular-nums text-muted-foreground">
                                         {typeof state.downloadProgress === 'number' ? `${state.downloadProgress}%` : ''}
                                     </span>
                                 </span>
                             ) : (
                                 <Button
+                                    type="button"
                                     variant="ghost"
-                                    size="xs"
-                                    className="h-6 w-6 p-0"
+                                    size="icon"
+                                    className={SETTINGS_ICON_BUTTON_CLASS}
                                     disabled={requestingId === entry.id}
                                     onClick={() => { void handleDownload(entry.id); }}
                                     title={t('settings.voice.page.stt.modelDownload')}
                                     aria-label={t('settings.voice.page.stt.modelDownload')}
                                 >
-                                    <Icon name="download" className="h-4 w-4" />
+                                    <Icon name="download" className="size-4" />
                                 </Button>
                             )}
                         </div>
                     </div>
                 );
             })}
-        </div>
+        </SettingsRadioGroup>
     );
 };
 
@@ -430,35 +412,37 @@ const LocalTtsModelRow = ({
                     aria-label={t('settings.voice.page.stt.modelInstalled')}
                 />
                 <Button
+                    type="button"
                     variant="ghost"
-                    size="xs"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-[var(--status-error)]"
+                    size="icon"
+                    className={cn(SETTINGS_ICON_BUTTON_CLASS, 'hover:text-[var(--status-error)]')}
                     disabled={requestingId !== null}
                     onClick={() => { void request(model.id, 'DELETE'); }}
                     title={t('settings.voice.page.stt.modelDelete')}
                     aria-label={t('settings.voice.page.stt.modelDelete')}
                 >
-                    <Icon name="delete-bin" className="h-4 w-4" />
+                    <Icon name="delete-bin" className="size-4" />
                 </Button>
             </>
         ) : model.downloading ? (
             <span className="flex items-center gap-1.5">
-                <Spinner className="h-3.5 w-3.5 text-muted-foreground" />
+                <Spinner className="size-3.5 text-muted-foreground" />
                 <span className="tabular-nums text-muted-foreground">
                     {typeof model.downloadProgress === 'number' ? `${model.downloadProgress}%` : ''}
                 </span>
             </span>
         ) : (
             <Button
+                type="button"
                 variant="ghost"
-                size="xs"
-                className="h-6 w-6 p-0"
+                size="icon"
+                className={SETTINGS_ICON_BUTTON_CLASS}
                 disabled={requestingId !== null}
                 onClick={() => { void request(model.id, 'POST'); }}
                 title={t('settings.voice.page.stt.modelDownload')}
                 aria-label={t('settings.voice.page.stt.modelDownload')}
             >
-                <Icon name="download" className="h-4 w-4" />
+                <Icon name="download" className="size-4" />
             </Button>
         )}
         {model.downloadError ? (
@@ -505,36 +489,28 @@ const LocalTtsModelStatus = ({ models, requestingId, request }: ReturnType<typeo
                 />
             ))}
             {available.length > 0 ? (
-                <Collapsible open={availableOpen} onOpenChange={setAvailableOpen}>
-                    <CollapsibleTrigger className="group flex w-full items-center justify-between py-1 hover:bg-transparent">
-                        <div className="flex items-center gap-1.5 text-start">
-                            <span className="typography-ui-label font-normal text-foreground">
-                                {t('settings.voice.page.localTts.availableToDownload')}
-                            </span>
-                            <span className="typography-micro text-muted-foreground">
-                                ({available.length})
-                            </span>
+                <SettingsDisclosure
+                    title={t('settings.voice.page.localTts.availableToDownload')}
+                    secondary={`(${available.length})`}
+                    expanded={availableOpen}
+                    onToggle={() => setAvailableOpen((open) => !open)}
+                >
+                    <Input
+                        type="text"
+                        inputSize="compact"
+                        value={filter}
+                        onChange={(e) => setFilter(e.target.value)}
+                        placeholder={t('settings.voice.page.localTts.filterPlaceholder')}
+                        aria-label={t('settings.voice.page.localTts.filterPlaceholder')}
+                        className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
+                    />
+                    {filtered.length === 0 ? (
+                        <div className={SETTINGS_HELPER_CLASS}>
+                            {t('settings.voice.page.localTts.filterNoMatch')}
                         </div>
-                        <Icon
-                            name={availableOpen ? 'arrow-down-s' : 'arrow-right-s'}
-                            className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground"
-                        />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-1">
-                        <input
-                            type="text"
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            placeholder={t('settings.voice.page.localTts.filterPlaceholder')}
-                            aria-label={t('settings.voice.page.localTts.filterPlaceholder')}
-                            className={cn(VOICE_TEXT_INPUT_CLASS, 'mb-1')}
-                        />
-                        {filtered.length === 0 ? (
-                            <div className="typography-meta py-1.5 text-muted-foreground">
-                                {t('settings.voice.page.localTts.filterNoMatch')}
-                            </div>
-                        ) : (
-                            filtered.map((model) => (
+                    ) : (
+                        <div className="flex flex-col">
+                            {filtered.map((model) => (
                                 <LocalTtsModelRow
                                     key={model.id}
                                     model={model}
@@ -542,10 +518,10 @@ const LocalTtsModelStatus = ({ models, requestingId, request }: ReturnType<typeo
                                     request={request}
                                     t={t}
                                 />
-                            ))
-                        )}
-                    </CollapsibleContent>
-                </Collapsible>
+                            ))}
+                        </div>
+                    )}
+                </SettingsDisclosure>
             ) : null}
         </div>
     );
@@ -592,8 +568,9 @@ const VoiceApiKeyField: React.FC<{ kind: VoiceApiKeyKind }> = ({ kind }) => {
 
     return (
         <div className={cn('relative', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
-            <input
+            <Input
                 type="password"
+                inputSize="compact"
                 value={draft}
                 disabled={isSaving}
                 onChange={(e) => setDraft(e.target.value)}
@@ -602,19 +579,22 @@ const VoiceApiKeyField: React.FC<{ kind: VoiceApiKeyKind }> = ({ kind }) => {
                     if (e.key === 'Enter') commitDraft();
                 }}
                 placeholder={saved ? t('settings.voice.page.field.apiKeySavedPlaceholder') : 'sk-...'}
-                className={VOICE_TEXT_INPUT_CLASS}
+                className={saved && !draft ? 'pe-8' : undefined}
                 aria-label={t('settings.voice.page.field.apiKey')}
             />
             {saved && !draft && (
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => void save(null)}
                     disabled={isSaving}
                     aria-label={t('settings.voice.page.field.apiKeyRemove')}
-                    className="absolute inset-e-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    title={t('settings.voice.page.field.apiKeyRemove')}
+                    className={cn(SETTINGS_ICON_BUTTON_CLASS, 'absolute inset-e-0 top-1/2 -translate-y-1/2')}
                 >
-                    <Icon name="close" className="w-3.5 h-3.5" />
-                </button>
+                    <Icon name="close" className="size-3.5" />
+                </Button>
             )}
         </div>
     );
@@ -995,12 +975,13 @@ export const VoiceSettings: React.FC = () => {
                                 info={t('settings.voice.page.field.sttLanguageHint')}
                                 controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                             >
-                                <input
+                                <Input
                                     type="text"
+                                    inputSize="compact"
                                     value={sttLanguage}
                                     onChange={(e) => setSttLanguage(e.target.value)}
                                     placeholder="auto"
-                                    className={VOICE_TEXT_INPUT_CLASS}
+                                    aria-label={t('settings.voice.page.field.language')}
                                 />
                             </SettingsStackedField>
                         )}
@@ -1016,21 +997,27 @@ export const VoiceSettings: React.FC = () => {
                                     info={t('settings.voice.page.field.sttServerUrlHint')}
                                 >
                                     <div className="relative w-full">
-                                        <input
+                                        <Input
                                             type="text"
+                                            inputSize="compact"
                                             value={sttServerUrl}
                                             onChange={(e) => setSttServerUrl(e.target.value)}
                                             placeholder="http://localhost:8001/v1"
-                                            className={VOICE_TEXT_INPUT_CLASS}
+                                            aria-label={t('settings.voice.page.field.serverUrl')}
+                                            className={sttServerUrl ? 'pe-8' : undefined}
                                         />
                                         {sttServerUrl && (
-                                            <button
+                                            <Button
                                                 type="button"
+                                                variant="ghost"
+                                                size="icon"
                                                 onClick={() => setSttServerUrl('')}
-                                                className="absolute inset-e-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                aria-label={t('settings.common.actions.clear')}
+                                                title={t('settings.common.actions.clear')}
+                                                className={cn(SETTINGS_ICON_BUTTON_CLASS, 'absolute inset-e-0 top-1/2 -translate-y-1/2')}
                                             >
-                                                <Icon name="close" className="w-3.5 h-3.5" />
-                                            </button>
+                                                <Icon name="close" className="size-3.5" />
+                                            </Button>
                                         )}
                                     </div>
                                 </SettingsStackedField>
@@ -1041,12 +1028,13 @@ export const VoiceSettings: React.FC = () => {
                                     <VoiceApiKeyField kind="stt" />
                                 </SettingsStackedField>
                                 <SettingsStackedField label={t('settings.voice.page.field.model')}>
-                                    <input
+                                    <Input
                                         type="text"
+                                        inputSize="compact"
                                         value={sttModel}
                                         onChange={(e) => setSttModel(e.target.value)}
                                         placeholder="deepdml/faster-whisper-large-v3-turbo-ct2"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        aria-label={t('settings.voice.page.field.model')}
                                     />
                                 </SettingsStackedField>
                                 <SettingsStackedField
@@ -1054,14 +1042,14 @@ export const VoiceSettings: React.FC = () => {
                                     label={t('settings.voice.page.field.endpointPath')}
                                     info={t('settings.voice.page.field.endpointPathHint')}
                                 >
-                                    <input
+                                    <Input
                                         type="text"
+                                        inputSize="compact"
                                         value={sttEndpointPath}
                                         aria-label={t('settings.voice.page.field.endpointPath')}
                                         dir="ltr"
                                         onChange={(e) => setSttEndpointPath(e.target.value)}
                                         placeholder="/audio/transcriptions"
-                                        className={VOICE_TEXT_INPUT_CLASS}
                                     />
                                 </SettingsStackedField>
                                 <SettingsStackedField
@@ -1069,12 +1057,13 @@ export const VoiceSettings: React.FC = () => {
                                     info={t('settings.voice.page.field.sttLanguageHint')}
                                     controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                 >
-                                    <input
+                                    <Input
                                         type="text"
+                                        inputSize="compact"
                                         value={sttLanguage}
                                         onChange={(e) => setSttLanguage(e.target.value)}
                                         placeholder="auto"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        aria-label={t('settings.voice.page.field.language')}
                                     />
                                 </SettingsStackedField>
                                 <TranscriptionPromptField />
@@ -1160,31 +1149,39 @@ export const VoiceSettings: React.FC = () => {
                                     info={t('settings.voice.page.field.serverUrlHint')}
                                 >
                                     <div className={cn('relative', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
-                                        <input
+                                        <Input
                                             type="text"
+                                            inputSize="compact"
                                             value={openaiCompatibleUrl}
                                             onChange={(e) => setOpenaiCompatibleUrl(e.target.value)}
                                             placeholder="http://localhost:8880/v1"
-                                            className={VOICE_TEXT_INPUT_CLASS}
+                                            aria-label={t('settings.voice.page.field.serverUrl')}
+                                            className={openaiCompatibleUrl ? 'pe-8' : undefined}
                                         />
                                         {openaiCompatibleUrl && (
-                                            <button
+                                            <Button
                                                 type="button"
+                                                variant="ghost"
+                                                size="icon"
                                                 onClick={() => setOpenaiCompatibleUrl('')}
-                                                className="absolute inset-e-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                aria-label={t('settings.common.actions.clear')}
+                                                title={t('settings.common.actions.clear')}
+                                                className={cn(SETTINGS_ICON_BUTTON_CLASS, 'absolute inset-e-0 top-1/2 -translate-y-1/2')}
                                             >
-                                                <Icon name="close" className="w-3.5 h-3.5" />
-                                            </button>
+                                                <Icon name="close" className="size-3.5" />
+                                            </Button>
                                         )}
                                     </div>
                                 </SettingsFieldRow>
                                 <SettingsFieldRow label={t('settings.voice.page.field.model')}>
-                                    <input
+                                    <Input
                                         type="text"
+                                        inputSize="compact"
                                         value={openaiCompatibleTtsModel}
                                         onChange={(e) => setOpenaiCompatibleTtsModel(e.target.value)}
                                         placeholder="speaches-ai/Kokoro-82M-v1.0-ONNX"
-                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_LONG_TEXT_CLASS)}
+                                        aria-label={t('settings.voice.page.field.model')}
+                                        className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                                     />
                                 </SettingsFieldRow>
                                 <SettingsFieldRow
@@ -1192,26 +1189,29 @@ export const VoiceSettings: React.FC = () => {
                                     label={t('settings.voice.page.field.endpointPath')}
                                     info={t('settings.voice.page.field.endpointPathHint')}
                                 >
-                                    <input
+                                    <Input
                                         type="text"
+                                        inputSize="compact"
                                         value={openaiCompatibleTtsEndpointPath}
                                         aria-label={t('settings.voice.page.field.endpointPath')}
                                         dir="ltr"
                                         onChange={(e) => setOpenaiCompatibleTtsEndpointPath(e.target.value)}
                                         placeholder="/audio/speech"
-                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS)}
+                                        className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                     />
                                 </SettingsFieldRow>
                                 <SettingsFieldRow
                                     label={t('settings.voice.page.field.voice')}
                                     info={t('settings.voice.page.field.voiceIdentifierHint')}
                                 >
-                                    <input
+                                    <Input
                                         type="text"
+                                        inputSize="compact"
                                         value={openaiCompatibleVoice}
                                         onChange={(e) => setOpenaiCompatibleVoice(e.target.value)}
                                         placeholder="af_sky"
-                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS)}
+                                        aria-label={t('settings.voice.page.field.voice')}
+                                        className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                     />
                                     <Button size="sm" variant="ghost" className={SETTINGS_ICON_BUTTON_CLASS} onClick={previewCompatibleVoice} title={t('settings.voice.page.actions.preview')} aria-label={t('settings.voice.page.actions.preview')} disabled={!openaiCompatibleUrl.trim()}>
                                         {previewIcon(isCompatiblePreviewPlaying)}

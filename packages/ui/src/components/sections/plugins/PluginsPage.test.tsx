@@ -141,8 +141,10 @@ test('applying plugin changes only calls the native apply after the confirmation
   });
   await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
 
-  const applyButton = Array.from(container.querySelectorAll('button'))
-    .find(button => button.textContent?.trim() === 'Restart idle sessions to apply');
+  const applyButtons = Array.from(container.querySelectorAll('button'))
+    .filter(button => button.textContent?.trim() === 'Restart idle sessions to apply');
+  expect(applyButtons).toHaveLength(1);
+  const applyButton = applyButtons[0];
   if (!applyButton) throw new Error('Missing runtime apply action');
   const applyActionName = applyButton.textContent?.trim();
   await act(async () => { applyButton.click(); });
@@ -161,6 +163,34 @@ test('applying plugin changes only calls the native apply after the confirmation
   await waitFor(() => applies === 1);
 
   expect(applies).toBe(1);
+});
+
+test('plugin detail view renders the single page-level Apply action and preserves the zero-worker note', async () => {
+  usePluginsStore.setState({
+    catalog: { ...emptyCatalog, plugins: [plugin], workers: [readyWorker] },
+    loadedDirectory: '/repo',
+    loadedRuntimeKey: getRuntimeKey(),
+    isLoading: false,
+    loadPlugins: async () => true,
+  });
+  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+  const card = Array.from(container.querySelectorAll('button'))
+    .find(button => button.textContent?.includes(plugin.name) && button.textContent?.includes(plugin.version));
+  if (!card) throw new Error('Missing plugin card');
+  await act(async () => { card.click(); });
+  await settle();
+
+  const applyButtons = Array.from(container.querySelectorAll('button'))
+    .filter(button => button.textContent?.trim() === 'Restart idle sessions to apply');
+  expect(applyButtons).toHaveLength(1);
+  expect(container.textContent).not.toContain('Plugin changes take effect when a new session starts.');
+
+  usePluginsStore.setState({ catalog: { ...emptyCatalog, plugins: [plugin], workers: [] } });
+  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+  await settle();
+  expect(Array.from(container.querySelectorAll('button'))
+    .filter(button => button.textContent?.trim() === 'Restart idle sessions to apply')).toHaveLength(0);
+  expect(container.textContent).toContain('Plugin changes take effect when a new session starts.');
 });
 
 test('a local extension read failure keeps the failure visible and retry reloads the source', async () => {
@@ -329,8 +359,10 @@ test('project scope is hidden and explained when a write would change the regist
   const catalog = { ...emptyCatalog, plugins: [plugin] };
   const lifecycle: PluginLifecycleState = {
     workspaceId, revision: catalog.revision, projectWritable: false, projectWriteBlock: 'registry-root-change',
-    plugins: [{ ...plugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }], globalFeaturesWritable: true,
-      globalFeatures: null, workspaceFeatures: null, workspaceWritable: false, projectSettings: {} }],
+    plugins: [{
+      ...plugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }], globalFeaturesWritable: true,
+      globalFeatures: null, workspaceFeatures: null, workspaceWritable: false, projectSettings: {}
+    }],
   };
   const writes: Array<Omit<PluginConfigureRequest, 'expectedRevision'>> = [];
   usePluginsStore.setState({
@@ -363,10 +395,14 @@ test('a shadowed global copy offers only global features', async () => {
   const lifecycle: PluginLifecycleState = {
     workspaceId, revision: catalog.revision, projectWritable: true,
     plugins: [
-      { ...plugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }], globalFeaturesWritable: true,
-        globalFeatures: null, workspaceFeatures: ['shared', 'project-only'], workspaceWritable: false, projectSettings: {} },
-      { ...projectPlugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }, { name: 'project-only', defaultEnabled: true }],
-        globalFeaturesWritable: false, globalFeatures: null, workspaceFeatures: ['shared', 'project-only'], workspaceWritable: true, projectSettings: {} },
+      {
+        ...plugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }], globalFeaturesWritable: true,
+        globalFeatures: null, workspaceFeatures: ['shared', 'project-only'], workspaceWritable: false, projectSettings: {}
+      },
+      {
+        ...projectPlugin, availableFeatures: [{ name: 'shared', defaultEnabled: true }, { name: 'project-only', defaultEnabled: true }],
+        globalFeaturesWritable: false, globalFeatures: null, workspaceFeatures: ['shared', 'project-only'], workspaceWritable: true, projectSettings: {}
+      },
     ],
   };
   usePluginsStore.setState({

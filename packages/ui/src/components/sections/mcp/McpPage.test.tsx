@@ -183,6 +183,52 @@ test('worker apply failures remain visible even though persistence succeeded', a
   expect(container.querySelector('[role="status"]')?.textContent).toContain('The worker could not connect.');
 });
 
+test('status badge renders shared SettingsCardPill tones for connected and failed states', async () => {
+  useMcpStore.setState({
+    byDirectory: {
+      '/repo': {
+        tools: {
+          configuration: server,
+          catalogs: [{
+            runtimeStatus: 'ready',
+            appliedRevision: '3',
+            catalogRevision: '3',
+            worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'gen' },
+            activeServers: ['tools'],
+            tools: [],
+          }],
+        },
+      },
+    },
+  });
+  await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+  const connectedPills = Array.from(container.querySelectorAll('span.rounded-full'));
+  expect(connectedPills.length).toBeGreaterThanOrEqual(2);
+  expect(connectedPills.every((pill) => pill.className.includes('max-w-40') && pill.textContent === 'Connected')).toBe(true);
+
+  useMcpStore.setState({
+    byDirectory: {
+      '/repo': {
+        tools: {
+          configuration: server,
+          catalogs: [{
+            runtimeStatus: 'unavailable',
+            appliedRevision: null,
+            catalogRevision: '0',
+            worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'gen' },
+            activeServers: [],
+            tools: [],
+          }],
+        },
+      },
+    },
+  });
+  await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+  const failedPills = Array.from(container.querySelectorAll('span.rounded-full'));
+  expect(failedPills.length).toBeGreaterThanOrEqual(2);
+  expect(failedPills.every((pill) => pill.className.includes('max-w-40') && pill.textContent === 'Failed')).toBe(true);
+});
+
 test('unmanaged servers render read-only indicator and all fields are disabled/noninteractive without mutation controls', async () => {
   const unmanagedServer: MCPServerConfig = {
     serverId: 'unmanaged-tool',
