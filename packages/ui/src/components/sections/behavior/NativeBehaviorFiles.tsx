@@ -6,6 +6,7 @@ import {
   type FileResourceScope,
 } from '@openchamber/agent-contract';
 import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
+import { reportSettingsSaveState } from '@/lib/persistence';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import {
@@ -114,6 +115,7 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
   const kind = selection.kind;
   const name = selection.name;
 
+  const isFixedStandardFile = kind === 'sticky-rules' || kind === 'system';
   const existingEntry: BehaviorFileEntry | undefined = React.useMemo(
     () =>
       isDraft
@@ -204,6 +206,7 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
     }
 
     savingRef.current = true;
+    reportSettingsSaveState('saving');
     try {
       const nextCatalog = await mutateWithRevisionRetry(catalog, (expectedRevision) => {
         const writeInput: BehaviorFileWrite = {
@@ -221,8 +224,10 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
       if (currentRef.current.identityKey === identityKey) {
         baselineRef.current = { key: identityKey, content, fields };
       }
+      reportSettingsSaveState('saved');
       return AUTOSAVE_SAVED;
     } catch (failure) {
+      reportSettingsSaveState('error');
       return autosaveFailed(
         failure instanceof Error ? failure.message : t('settings.common.status.saveFailed'),
       );
@@ -307,7 +312,9 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
       onCatalogChange(nextCatalog);
       setConfirmDeleteOpen(false);
       baselineRef.current = null;
-      if (kind === 'rule' || kind === 'instruction') {
+      if (isFixedStandardFile) {
+        hydratedIdentityRef.current = null;
+      } else {
         onSelect({ type: 'agents-md', scope: scope === 'workspace' ? 'project' : 'global' });
       }
     } catch (failure) {
@@ -352,7 +359,7 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
     );
   }
 
-  if (!isDraft && catalog && !existingEntry) {
+  if (!isDraft && catalog && !existingEntry && !isFixedStandardFile) {
     return (
       <SettingsPageLayout title={name} titleLeading={titleLeading} description={subtitle}>
         <p role="alert" className="mb-4 typography-meta text-[var(--status-error)]">
@@ -375,6 +382,7 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
       title={name}
       titleLeading={titleLeading}
       description={subtitle}
+      showSaveStatus
       onBlurCapture={isDraft ? undefined : autosave.onBlurCapture}
       headerEnd={
         !isDraft && existingEntry ? (
@@ -648,6 +656,11 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
         divider={kind === 'rule' || kind === 'instruction'}
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
+        {isFixedStandardFile && catalog && !existingEntry ? (
+          <p className="typography-meta text-muted-foreground">
+            {t('settings.behavior.files.fixed.notCreated')}
+          </p>
+        ) : null}
         <SettingsStackedField
           label={t('settings.snippets.page.field.content')}
           controlClassName="w-full max-w-none flex-col items-stretch"

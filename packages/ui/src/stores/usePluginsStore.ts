@@ -6,12 +6,15 @@
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type {
-  ExtensionInventory, ExtensionInventoryState, LocalExtensionSource, PluginCatalogState, PluginConfigureRequest, PluginDoctorResult,
-  MarketplaceSource, PluginInstallRequest, PluginLifecycleState, PluginMutationResult, PluginTarget, PluginUpgradePreviewEntry,
-  PluginUpdateCheckEntry,
+import {
+  MarketplaceErrorCodeSchema,
+  MarketplaceErrorDetailsSchema,
+  type ExtensionInventory, type ExtensionInventoryState, type LocalExtensionSource, type MarketplaceSource,
+  type MarketplaceSourceFailure, type PluginCatalogState, type PluginConfigureRequest, type PluginDoctorResult,
+  type PluginInstallRequest, type PluginLifecycleState, type PluginMutationResult, type PluginTarget,
+  type PluginUpgradePreviewEntry, type PluginUpdateCheckEntry,
 } from '@openchamber/agent-contract';
-import { canonicalClient } from '@/api/canonicalClient';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { compareCounters } from '@/sync/event-reducer';
@@ -30,6 +33,7 @@ interface PluginsStore {
   error: Error | null;
   isMutating: boolean;
   lastMutation: PluginMutationResult | null;
+  marketplaceFailures: Record<string, MarketplaceSourceFailure>;
   doctor: PluginDoctorResult | null;
   loadPlugins: (options?: { directory?: string | null; force?: boolean }) => Promise<boolean>;
   installPlugin: (source: PluginInstallRequest['source']) => Promise<PluginMutationResult>;
@@ -182,7 +186,7 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
 
   return {
     catalog: null, extensions: null, extensionRevision: null, loadedDirectory: null, loadedRuntimeKey: null, requestedScope: null,
-    isLoading: false, error: null, isMutating: false, lastMutation: null, doctor: null,
+    isLoading: false, error: null, isMutating: false, lastMutation: null, marketplaceFailures: {}, doctor: null,
     loadPlugins: options => {
       if (inFlight && inFlight.scope !== scopeKey(inFlight.directory)) inFlight = null;
       const directory = options?.directory === undefined
@@ -195,7 +199,7 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
       const previousScope = get().requestedScope;
       set({
         requestedScope: scope, isLoading: true, error: null,
-        ...(previousScope !== scope ? { lastMutation: null, doctor: null, isMutating: false, extensions: null, extensionRevision: null } : {}),
+        ...(previousScope !== scope ? { lastMutation: null, marketplaceFailures: {}, doctor: null, isMutating: false, extensions: null, extensionRevision: null } : {}),
       });
       const promise = (async () => {
         try {
@@ -262,12 +266,65 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
     addMarketplaceSource: source => mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId, {
       action: 'add', expectedRevision: catalog.revision, source
     })),
-    removeMarketplaceSource: name => mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId, {
-      action: 'remove', expectedRevision: catalog.revision, name
-    })),
-    updateMarketplaceSource: name => mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId,
-      name === undefined ? { action: 'update', expectedRevision: catalog.revision }
-        : { action: 'update', expectedRevision: catalog.revision, name })),
+    removeMarketplaceSource: async name => {
+      const captured = owner();
+      const result = await mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId, {
+        action: 'remove', expectedRevision: catalog.revision, name
+      }));
+      if (current(captured.scope)) {
+        const currentFailures = get().marketplaceFailures;
+        if (name in currentFailures) {
+          const next = { ...currentFailures };
+          delete next[name];
+          set({ marketplaceFailures: next, error: null });
+        }
+      }
+      return result;
+    },
+    updateMarketplaceSource: async name => {
+      const captured = owner();
+      try {
+        const result = await mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId,
+          name === undefined ? { action: 'update', expectedRevision: catalog.revision }
+            : { action: 'update', expectedRevision: catalog.revision, name }));
+        if (current(captured.scope)) {
+          if (name === undefined) {
+            set({ marketplaceFailures: {} });
+          } else if (name in get().marketplaceFailures) {
+            const next = { ...get().marketplaceFailures };
+            delete next[name];
+            set({ marketplaceFailures: next });
+          }
+        }
+        return result;
+      } catch (failure) {
+        if (current(captured.scope) && failure instanceof CanonicalApiError) {
+          const parsedCode = MarketplaceErrorCodeSchema.safeParse(failure.problem.code);
+          const parsedDetails = failure.problem.details === undefined
+            ? null
+            : MarketplaceErrorDetailsSchema.safeParse(failure.problem.details);
+          if (parsedDetails?.success) {
+            const details = parsedDetails.data;
+            if (details.failures && details.failures.length > 0) {
+              const next: Record<string, MarketplaceSourceFailure> = name === undefined ? {} : { ...get().marketplaceFailures };
+              for (const item of details.failures) next[item.name] = item;
+              set({ marketplaceFailures: next });
+            }
+            if ((details.updatedCount ?? 0) > 0) {
+              await get().loadMarketplace().catch(() => undefined);
+            }
+          } else if (name !== undefined && parsedCode.success) {
+            set({
+              marketplaceFailures: {
+                ...get().marketplaceFailures,
+                [name]: { name, code: parsedCode.data, detail: failure.problem.detail },
+              },
+            });
+          }
+        }
+        throw failure;
+      }
+    },
     /** Reads the native registry through the manage `list` action; never fetches. */
     listMarketplaceSources: async () => {
       const captured = owner();
@@ -338,7 +395,7 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
 subscribeRuntimeEndpointChanged(() => {
   usePluginsStore.setState({
     catalog: null, extensions: null, extensionRevision: null, loadedDirectory: null, loadedRuntimeKey: null, requestedScope: null,
-    isLoading: false, error: null, isMutating: false, lastMutation: null, doctor: null
+    isLoading: false, error: null, isMutating: false, lastMutation: null, marketplaceFailures: {}, doctor: null
   });
 });
 

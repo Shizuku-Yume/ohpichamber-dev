@@ -145,6 +145,7 @@ export const BehaviorPage: React.FC = () => {
     global: null,
     project: null,
   });
+  const catalogAbortRef = React.useRef<AbortController | null>(null);
 
   const readRules = React.useCallback(async (scope: RulesScope, signal?: AbortSignal) => {
     const query = buildRulesQuery(scope, settingsDirectory);
@@ -308,13 +309,34 @@ export const BehaviorPage: React.FC = () => {
         }
       }
     };
+    const reloadNativeCatalog = () => {
+      if (!settingsDirectory || document.visibilityState !== 'visible') return;
+      const controller = new AbortController();
+      catalogAbortRef.current?.abort();
+      catalogAbortRef.current = controller;
+      const directory = settingsDirectory;
+      void canonicalClient
+        .resolveWorkspace(directory)
+        .then((workspace) => canonicalClient.fileResources.getBehaviorFiles(workspace.workspaceId))
+        .then(
+          (result) => {
+            if (controller.signal.aborted || catalogAbortRef.current !== controller) return;
+            setNativeCatalog(result);
+            setNativeUnavailable(false);
+            setNativeLoadError(null);
+          },
+          () => undefined,
+        );
+    };
     const onRefresh = () => {
       void refresh();
+      reloadNativeCatalog();
     };
     window.addEventListener('focus', onRefresh);
     document.addEventListener('visibilitychange', onRefresh);
     return () => {
       abort?.abort();
+      catalogAbortRef.current?.abort();
       window.removeEventListener('focus', onRefresh);
       document.removeEventListener('visibilitychange', onRefresh);
     };

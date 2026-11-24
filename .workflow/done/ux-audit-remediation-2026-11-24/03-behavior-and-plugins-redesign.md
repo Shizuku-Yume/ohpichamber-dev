@@ -44,7 +44,7 @@ Maintainer feedback (Images #4, #5, #6):
 
 ## Checklist
 
-- [ ] **Behavior Page: Clean Ready-to-Edit Create Flow for `RULES.md` / `SYSTEM.md` (Image #4)**:
+- [x] **Behavior Page: Clean Ready-to-Edit Create Flow for `RULES.md` / `SYSTEM.md` (Image #4)**:
   - In `packages/ui/src/components/sections/behavior/NativeBehaviorFiles.tsx`:
     - Distinguish fixed standard files (`kind === 'sticky-rules' || kind === 'system'`, i.e., `RULES.md` & `SYSTEM.md`) from dynamic files (`rule` / `instruction`).
     - When a fixed standard file (`RULES.md` or `SYSTEM.md`) is selected and `!existingEntry` (file does not exist on disk yet), **NEVER render the red `settings.behavior.files.missing` error or `返回行为文件` button!**
@@ -53,7 +53,7 @@ Maintainer feedback (Images #4, #5, #6):
     - Keep the missing-file fallback ONLY for dynamic `rule`/`instruction` entries that disappeared externally while open.
   - In `packages/ui/src/components/sections/behavior/BehaviorPage.tsx`: revalidate the native behavior catalog on window focus (mirroring `AGENTS.md` focus reload) so externally created/deleted files stay fresh.
   - Ensure `BehaviorSidebar.tsx` renders `RULES.md` and `SYSTEM.md` cleanly and consistently with `AGENTS.md` (subtle visual indicator if helpful, zero broken clicks).
-- [ ] **OMP Plugins: Remove Unrelated Capabilities (`ssh`, `builtin-defaults`, rules/skills/MCP/commands) & Dead Apply Button (Image #5)**:
+- [x] **OMP Plugins: Remove Unrelated Capabilities (`ssh`, `builtin-defaults`, rules/skills/MCP/commands) & Dead Apply Button (Image #5)**:
   - In `packages/ui/src/components/sections/plugins/PluginsPage.tsx` and `ExtensionControlCenter.tsx`:
     - Filter the extension inventory shown on `OMP 插件` STRICTLY to actual plugin/extension code surfaces: **ONLY `kind === 'extension-module' || kind === 'hook' || kind === 'tool'`** AND **NEVER** include `ssh` (`OpenSSH Config`), `rule`, `context-file`, `skill`, `slash-command`, `prompt`, `mcp`, `instruction`, or `builtin-defaults` (`内置默认`)!
     - Recalculate provider counts and hide providers with 0 remaining items after filtering! If zero plugin/extension capabilities exist, **do NOT render a sprawling empty capability browser** (either omit the capability section cleanly or show a compact single-line note only when relevant).
@@ -62,7 +62,7 @@ Maintainer feedback (Images #4, #5, #6):
   - Fix `AddPluginDialog.tsx`:
     - Key installed marketplace plugins by `${name}@${marketplace}@${scope}` (matching `PluginsPage.tsx`) instead of ignoring scope.
     - Fix empty-state copy: distinguish "no marketplace sources configured" (`sources.length === 0`) from "sources configured, no plugins available" (`sources.length > 0 && marketplace.length === 0`).
-- [ ] **Plugin Marketplace: Real Error Reporting, Per-Source Resilience, Guaranteed Removal, & Test Isolation (Image #6)**:
+- [x] **Plugin Marketplace: Real Error Reporting, Per-Source Resilience, Guaranteed Removal, & Test Isolation (Image #6)**:
   - In `packages/agent-service/src/worker/catalog-plugins.ts`:
     - Stop swallowing native marketplace errors into one generic English sentence (`line 366`). Inspect the real error and return structured, actionable error messages / codes (e.g., local path does not exist, source already registered, invalid source URI/manifest, git/network failure) with private home paths sanitized cleanly.
     - For `action === 'update'` with `name === undefined` (`updateAllMarketplaces`): iterate registered sources individually and refresh each one! If a `local` source's `sourceUri` does not exist on disk (`!existsSync(sourceUri)`), record a clean per-source failure instead of aborting valid sources, and return a clear actionable error listing the failed source name & reason.
@@ -74,10 +74,16 @@ Maintainer feedback (Images #4, #5, #6):
   - In `packages/agent-service/src/worker/catalog-plugins.test.ts`:
     - Add a hard guard at the top of the test file asserting isolated HOME (`OPENCHAMBER_PLUGIN_FIXTURE_HOME` / temp dir ≠ real user home) so running tests can NEVER pollute `~/.omp/marketplaces.json` again!
     - Add tests covering: missing local source path error detail, resilient `updateAll` when one source is broken and another is valid, removing a broken/missing-path source, and `plugins.read` surviving a missing `catalogPath`.
-- [ ] **i18n & Tests**:
+- [x] **i18n & Tests**:
   - Translate every added/changed key across ALL 15 locales in `behavior-files.i18n.ts`, `plugins-grid.i18n.ts`, and `plugins-marketplace.i18n.ts`.
   - Add/update UI tests in `NativeBehaviorFiles.test.tsx`, `PluginsPage.test.tsx` (verifying zero `ssh`/`OpenSSH Config`/`builtin-defaults`, zero dead Apply button, AddPluginDialog scope check, localized marketplace error & broken-source deletion).
 
 ## Progress
 
-- Planned; ready for wave 1 implementation.
+- Implemented Behavior uncreated `RULES.md`/`SYSTEM.md` ready-to-edit autosave flow and window-focus revalidation (`BehaviorPage.tsx`, `NativeBehaviorFiles.tsx`, `behavior-files.i18n.ts`).
+- Scoped `ExtensionControlCenter` / `PluginsPage` strictly to `extension-module`, `hook`, `tool` via `pluginCapabilities.ts` (excluding `ssh`, `openssh-config`, `builtin-defaults`, and non-plugin kinds), removed the permanently-failing `plugins.apply` button in favor of `settings.plugins.apply.nextSession`, and fixed `AddPluginDialog` scope keys and empty states.
+- Added structured `MARKETPLACE_SOURCE_MISSING`, `MARKETPLACE_SOURCE_EXISTS`, `MARKETPLACE_INVALID_SOURCE`, `MARKETPLACE_NETWORK_ERROR` problem codes and `MarketplaceErrorDetailsSchema` (`packages/agent-contract/src/errors.ts`, `plugins.ts`), forwarded `ProjectionError.details` across worker IPC (`protocol.ts`, `worker/index.ts`, `supervisor/workers.ts`), implemented sanitized error classification, resilient per-source `updateAll`, guaranteed `remove`, and fault-tolerant `marketplaceEntries` reads (`catalog-plugins.ts`), localized marketplace errors across all 15 locales (`marketplaceError.ts`, `plugins-marketplace.i18n.ts`), and added fail-fast `HOME` isolation guards + regression tests (`catalog-plugins.test.ts`).
+
+Check after: `catalog-plugins.test.ts` (2 pass + 24 isolated child pass, 0 fail), `packages/agent-contract` test (284 pass, 0 fail), isolated UI `behavior/` + `plugins/` (3/3 test files pass), `settingsLayoutGuard.test.ts` (14 pass), `messages.test.ts` (17 pass / 4860 expect), `agent-contract` / `agent-service` / `ui` type-checks (0 errors), `check:changed --ratchet-only` (0 new findings, file size OK), `oxlint` (0 findings), and `agent-contract` + `agent-service` builds + `canonical-plugins.test.js` (6 pass); receipts in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-audit-remediation-2026-11-24/task03/` (`check.log`, `ratchet-and-oxlint.log`, `backend-build.log`, `plugins-ui-tests.log`, `behavior-tests.log`).
+
+Review: pass (base 1637a063b39aacc078b88188b8821ad176dc1f1f)

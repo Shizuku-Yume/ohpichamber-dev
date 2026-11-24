@@ -1,6 +1,7 @@
 import React from 'react';
-import type { MarketplaceSource } from '@openchamber/agent-contract';
+import type { MarketplaceSource, MarketplaceSourceFailure, PluginMutationResult } from '@openchamber/agent-contract';
 import { CanonicalApiError } from '@/api/canonicalClient';
+import { formatMarketplaceFailure, formatMarketplaceProblemLines } from './marketplaceError';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ const SOURCE_TYPE_LABEL = {
 } as const satisfies Record<MarketplaceSource['sourceType'], string>;
 
 const EMPTY_SOURCES: MarketplaceSource[] = [];
+const EMPTY_FAILURES: Record<string, MarketplaceSourceFailure> = {};
 
 /**
  * Catalog sources are user-scoped native registries. Adding or refreshing one
@@ -30,27 +32,28 @@ export const MarketplaceSourcesDialog: React.FC<{
 }> = ({ open, onOpenChange }) => {
  const { t } = useI18n();
  const sources = usePluginsStore(state => state.catalog?.marketplaceSources) ?? EMPTY_SOURCES;
+ const marketplaceFailures = usePluginsStore(state => state.marketplaceFailures) ?? EMPTY_FAILURES;
  const [source, setSource] = React.useState('');
  const [pending, setPending] = React.useState(false);
  const [refreshing, setRefreshing] = React.useState<string | null>(null);
- const [error, setError] = React.useState<string | null>(null);
+ const [errorLines, setErrorLines] = React.useState<string[]>([]);
 
  React.useEffect(() => {
   if (open) return;
   setSource('');
-  setError(null);
+ setErrorLines([]);
   setPending(false);
   setRefreshing(null);
  }, [open]);
 
- const perform = async (action: () => Promise<unknown>, success: string) => {
+ const perform = async (action: () => Promise<PluginMutationResult>, success: string) => {
   setPending(true);
-  setError(null);
+  setErrorLines([]);
   try {
    await action();
    toast.success(success);
   } catch (failure) {
-   setError(failure instanceof CanonicalApiError ? failure.message : t('settings.plugins.error.operation'));
+   setErrorLines(formatMarketplaceProblemLines(failure instanceof CanonicalApiError ? failure.problem : null, t));
   } finally {
    setPending(false);
   }
@@ -60,8 +63,9 @@ export const MarketplaceSourcesDialog: React.FC<{
   const trimmed = source.trim();
   if (trimmed === '' || pending) return;
   void perform(async () => {
-   await usePluginsStore.getState().addMarketplaceSource(trimmed);
+   const result = await usePluginsStore.getState().addMarketplaceSource(trimmed);
    setSource('');
+   return result;
   }, t('settings.plugins.marketplace.sources.added'));
  };
 
@@ -115,17 +119,24 @@ export const MarketplaceSourcesDialog: React.FC<{
         </Button>
        </SettingsFieldRow>
        <div className="divide-y divide-[var(--surface-subtle)]">
-        {sources.map(item => (
-         <div key={item.name} className="flex min-w-0 flex-col gap-2 py-2 @xl:flex-row @xl:items-center @xl:gap-4">
-          <div className="min-w-0 flex-1">
-           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate typography-ui-label text-foreground">{item.name}</span>
-            <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">
-             {t(SOURCE_TYPE_LABEL[item.sourceType])}
-            </span>
-           </div>
-           <p className="truncate font-mono typography-micro text-muted-foreground" title={item.sourceUri}>{item.sourceUri}</p>
+       {sources.map(item => {
+        const itemFailure = marketplaceFailures[item.name];
+        return (
+        <div key={item.name} className="flex min-w-0 flex-col gap-2 py-2 @xl:flex-row @xl:items-center @xl:gap-4">
+         <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+           <span className="truncate typography-ui-label text-foreground">{item.name}</span>
+           <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">
+            {t(SOURCE_TYPE_LABEL[item.sourceType])}
+           </span>
           </div>
+          <p className="truncate font-mono typography-micro text-muted-foreground" title={item.sourceUri}>{item.sourceUri}</p>
+          {itemFailure ? (
+           <p className="mt-1 typography-micro text-[var(--status-error)]">
+            {formatMarketplaceFailure(itemFailure, t)}
+           </p>
+          ) : null}
+         </div>
           <div className="flex shrink-0 items-center gap-1">
            <Button
             variant="ghost"
@@ -150,13 +161,20 @@ export const MarketplaceSourcesDialog: React.FC<{
             <Icon name="delete-bin" className="size-3.5" />
            </Button>
           </div>
-         </div>
-        ))}
-       </div>
-      </>
-     )}
+        </div>
+        );
+       })}
+      </div>
+     </>
+    )}
 
-     {error ? <p role="alert" className="typography-meta text-[var(--status-error)]">{error}</p> : null}
+    {errorLines.length > 0 ? (
+     <div role="alert" className="space-y-1 typography-meta text-[var(--status-error)]">
+      {errorLines.map((line, index) => (
+       <p key={index}>{line}</p>
+      ))}
+     </div>
+    ) : null}
     </div>
 
     <DialogFooter>

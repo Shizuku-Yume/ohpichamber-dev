@@ -11,9 +11,10 @@ import {
   SettingsSection,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsCardChip, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
+import { filterPluginCapabilities } from './pluginCapabilities';
 
 /** Localized kind names. The worker's own `kinds[].label` is English, so the UI names each kind itself. */
 const KIND_LABEL_KEY = {
@@ -44,8 +45,6 @@ const KIND_ICON = {
  ssh: 'terminal-box',
 } as const satisfies Record<ExtensionKind, IconName>;
 
-/** OMP's bundled rule provider id (`BUILTIN_DEFAULTS_PROVIDER_ID` in its capability registry). */
-const BUNDLED_PROVIDER_ID = 'builtin-defaults';
 
 const ScopeChip: React.FC<{ scope: ExtensionScope }> = ({ scope }) => {
  const { t } = useI18n();
@@ -56,16 +55,6 @@ const ScopeChip: React.FC<{ scope: ExtensionScope }> = ({ scope }) => {
    : t('settings.skills.catalog.conflicts.scope.project');
  return <SettingsCardChip>{label}</SettingsCardChip>;
 };
-
-/** Providers whose OMP-side name needs the UI's own wording; unknown ids keep the reported name. */
-const BUNDLED_PROVIDER_NAME_KEY = 'settings.plugins.provider.builtinDefaults' satisfies I18nKey;
-
-const getProviderDisplayName = (
- provider: { id: string; displayName: string },
- t: (key: I18nKey) => string,
-): string => (
- provider.id === BUNDLED_PROVIDER_ID ? t(BUNDLED_PROVIDER_NAME_KEY) : provider.displayName
-);
 
 /** Shadowing wins over the switch, so one status drives the pill and the inspector. */
 const StatusPill: React.FC<{ item: ExtensionItem }> = ({ item }) => {
@@ -197,29 +186,25 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
  const [kind, setKind] = React.useState<ExtensionKind | 'all'>('all');
  const [query, setQuery] = React.useState('');
  const [selectedId, setSelectedId] = React.useState<string | null>(null);
- const [bundledOpen, setBundledOpen] = React.useState(false);
 
- const filtered = rankByQuery(inventory.items, query, item => [item.name, item.description ?? '', item.path, item.providerName]);
+ const pluginInventory = React.useMemo(() => filterPluginCapabilities(inventory), [inventory]);
+
+ const filtered = rankByQuery(pluginInventory.items, query, item => [item.name, item.description ?? '', item.path, item.providerName]);
  // Tabs follow the worker's kind order and show only kinds with rows under the current query.
- const tabs = inventory.kinds
+ const tabs = pluginInventory.kinds
   .map(entry => ({ kind: entry.kind, count: filtered.filter(item => item.kind === entry.kind).length }))
   .filter(tab => tab.count > 0);
  const activeKind = kind === 'all' || tabs.some(tab => tab.kind === kind) ? kind : 'all';
- const inKind = activeKind === 'all' ? filtered : filtered.filter(item => item.kind === activeKind);
- // OMP reports its bundled rules under the builtin-defaults provider with user scope, so both mark a bundled row.
- const visible = inKind.filter(item => item.scope !== 'builtin' && item.providerId !== BUNDLED_PROVIDER_ID);
- const bundled = inKind.filter(item => item.scope === 'builtin' || item.providerId === BUNDLED_PROVIDER_ID);
- const shown = bundledOpen ? [...visible, ...bundled] : visible;
- // A row from a previous filter, or a bundled row once it collapses, is never inspected.
- const selected = shown.find(item => item.id === selectedId) ?? shown[0] ?? null;
- // A source that discovered nothing is not a source a reader can act on.
- const providers = inventory.providers.filter(provider => provider.itemCount > 0);
+ const visible = activeKind === 'all' ? filtered : filtered.filter(item => item.kind === activeKind);
+ const selected = visible.find(item => item.id === selectedId) ?? visible[0] ?? null;
+ const providers = pluginInventory.providers;
+
+ if (pluginInventory.items.length === 0) return null;
 
  return (
   <SettingsSection
    title={t('settings.plugins.capabilities.title')}
    info={t('settings.plugins.capabilities.info')}
-   divider={false}
    headerAction={(
     <Input
      value={query}
@@ -232,18 +217,16 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
    contentClassName={SETTINGS_SPACE_ROW_CLASS}
   >
    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-    {providers.map(provider => {
-     const displayName = getProviderDisplayName(provider, t);
-     return (
-     <div key={provider.id} className="flex min-w-0 items-center gap-2">
-      <Switch
-       checked={provider.enabled}
-       disabled={disabled}
-       aria-label={t(provider.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: displayName })}
-       onCheckedChange={enabled => onToggleProvider(provider.id, enabled)}
-      />
-      <span className="min-w-0 truncate typography-meta text-foreground">{displayName} ({provider.itemCount})</span>
-      {provider.foreignUserSource ? (
+    {providers.map(provider => (
+    <div key={provider.id} className="flex min-w-0 items-center gap-2">
+     <Switch
+      checked={provider.enabled}
+      disabled={disabled}
+      aria-label={t(provider.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: provider.displayName })}
+      onCheckedChange={enabled => onToggleProvider(provider.id, enabled)}
+     />
+     <span className="min-w-0 truncate typography-meta text-foreground">{provider.displayName} ({provider.itemCount})</span>
+     {provider.foreignUserSource ? (
        <>
         <Switch
          checked={provider.userSourceEnabled}
@@ -254,11 +237,9 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
         <span className="typography-micro text-muted-foreground">{t('settings.extensions.detail.field.source')}</span>
        </>
       ) : null}
-     </div>
-     );
-    })}
+    </div>
+    ))}
    </div>
-
    {filtered.length === 0 ? (
     <p className="py-4 typography-meta text-muted-foreground">
      {query.trim().length > 0
@@ -293,25 +274,6 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
          onToggle={enabled => onToggleItem(item.providerId, item.id, enabled)}
         />
        ))}
-       {bundled.length === 0 ? null : (
-        <div className="pt-2">
-         <Button variant="ghost" size="xs" aria-expanded={bundledOpen} onClick={() => setBundledOpen(open => !open)}>
-          {bundledOpen
-           ? t('settings.plugins.capabilities.hideBundled')
-           : t('settings.plugins.capabilities.showBundled', { count: bundled.length })}
-         </Button>
-         {bundledOpen ? bundled.map(item => (
-          <ItemRow
-           key={item.id}
-           item={item}
-           selected={selected?.id === item.id}
-           disabled={disabled}
-           onSelect={() => setSelectedId(item.id)}
-           onToggle={enabled => onToggleItem(item.providerId, item.id, enabled)}
-          />
-         )) : null}
-        </div>
-       )}
       </div>
      </div>
 

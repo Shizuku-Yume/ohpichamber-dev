@@ -15,6 +15,7 @@ import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 import { MarketplaceSourcesDialog } from './MarketplaceSourcesDialog';
+import { formatMarketplaceProblem } from './marketplaceError';
 
 type TabKey = 'marketplace' | 'package' | 'local';
 
@@ -149,7 +150,9 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
   [catalog, query],
  );
  const installedIds = React.useMemo(() => new Set((catalog?.plugins ?? []).flatMap(plugin => (
-  plugin.target.kind === 'marketplace' ? [`${plugin.target.name}@${plugin.target.marketplace}`] : [])),
+  plugin.target.kind === 'marketplace'
+   ? [`${plugin.target.name}@${plugin.target.marketplace}@${plugin.scope === 'global' ? 'user' : 'project'}`]
+   : [])),
  ), [catalog]);
 
  const submitDisabled =
@@ -168,7 +171,7 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
    toast.success(t('settings.plugins.toast.created'));
    onOpenChange(false);
   } catch (failure) {
-   const message = failure instanceof CanonicalApiError ? failure.message : t('settings.plugins.error.operation');
+  const message = formatMarketplaceProblem(failure instanceof CanonicalApiError ? failure.problem : null, t);
    setError(message);
    toast.error(message);
   } finally {
@@ -177,7 +180,7 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
  };
 
  const installMarketplaceEntry = async (entry: MarketplaceEntry) => {
-  const key = `${entry.name}@${entry.marketplace}`;
+  const key = `${entry.name}@${entry.marketplace}@${scope}`;
   setSubmitting(key);
   setError(null);
   try {
@@ -186,7 +189,7 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
    });
    toast.success(t('settings.plugins.marketplace.toast.installed', { name: entry.name }));
   } catch (failure) {
-   const message = failure instanceof CanonicalApiError ? failure.message : t('settings.plugins.error.operation');
+  const message = formatMarketplaceProblem(failure instanceof CanonicalApiError ? failure.problem : null, t);
    setError(message);
    toast.error(message);
   } finally {
@@ -282,9 +285,13 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
          </div>
         ) : null}
 
-        {(catalog?.marketplace.length ?? 0) === 0 ? (
-         <p className="py-2 typography-meta text-muted-foreground">{t('settings.plugins.marketplace.sources.empty')}</p>
-        ) : marketplaceEntries.length === 0 ? (
+       {(catalog?.marketplace.length ?? 0) === 0 ? (
+        <p className="py-2 typography-meta text-muted-foreground">
+         {(catalog?.marketplaceSources.length ?? 0) === 0
+          ? t('settings.plugins.marketplace.emptyNoSources')
+          : t('settings.plugins.marketplace.emptyInSources')}
+        </p>
+       ) : marketplaceEntries.length === 0 ? (
          <p className="py-2 typography-meta text-muted-foreground">
           {t('settings.plugins.grid.noMatches', { query: query.trim() })}
          </p>
@@ -294,7 +301,7 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
            <MarketplaceRow
             key={`${entry.marketplace}:${entry.name}`}
             entry={entry}
-            installed={installedIds.has(`${entry.name}@${entry.marketplace}`)}
+           installed={installedIds.has(`${entry.name}@${entry.marketplace}@${scope}`)}
             disabled={submitting !== null}
             onInstall={() => void installMarketplaceEntry(entry)}
            />

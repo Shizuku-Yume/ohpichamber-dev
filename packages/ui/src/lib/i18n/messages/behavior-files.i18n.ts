@@ -86,6 +86,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Once',
     'settings.behavior.files.field.repeatMode.afterGap': 'After a gap',
     'settings.behavior.files.field.repeatMode.always': 'Always',
+    'settings.behavior.files.fixed.notCreated': 'This file is not created yet — it will be created automatically when you write and save.',
   },
   de: {
     'settings.behavior.files.rules': 'Bereichsregeln',
@@ -174,6 +175,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Einmal',
     'settings.behavior.files.field.repeatMode.afterGap': 'Nach einer Pause',
     'settings.behavior.files.field.repeatMode.always': 'Immer',
+    'settings.behavior.files.fixed.notCreated': 'Diese Datei ist noch nicht erstellt — sie wird automatisch erstellt, sobald du schreibst und speicherst.',
   },
   es: {
     'settings.behavior.files.rules': 'Reglas con ámbito',
@@ -262,6 +264,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Una vez',
     'settings.behavior.files.field.repeatMode.afterGap': 'Tras una pausa',
     'settings.behavior.files.field.repeatMode.always': 'Siempre',
+    'settings.behavior.files.fixed.notCreated': 'Este archivo aún no está creado — se creará automáticamente cuando escribas y guardes.',
   },
   fr: {
     'settings.behavior.files.rules': 'Règles à portée définie',
@@ -350,6 +353,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Une fois',
     'settings.behavior.files.field.repeatMode.afterGap': 'Après une pause',
     'settings.behavior.files.field.repeatMode.always': 'Toujours',
+    'settings.behavior.files.fixed.notCreated': 'Ce fichier n\u2019est pas encore créé — il sera créé automatiquement lorsque vous écrirez et enregistrerez.',
   },
   nl: {
     'settings.behavior.files.rules': 'Regels met bereik',
@@ -438,6 +442,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Eenmaal',
     'settings.behavior.files.field.repeatMode.afterGap': 'Na een pauze',
     'settings.behavior.files.field.repeatMode.always': 'Altijd',
+    'settings.behavior.files.fixed.notCreated': 'Dit bestand is nog niet aangemaakt — het wordt automatisch aangemaakt zodra je schrijft en opslaat.',
   },
   'pt-BR': {
     'settings.behavior.files.rules': 'Regras com escopo',
@@ -526,6 +531,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Uma vez',
     'settings.behavior.files.field.repeatMode.afterGap': 'Após um intervalo',
     'settings.behavior.files.field.repeatMode.always': 'Sempre',
+    'settings.behavior.files.fixed.notCreated': 'Este arquivo ainda não foi criado — será criado automaticamente quando você escrever e salvar.',
   },
   pl: {
     'settings.behavior.files.rules': 'Reguły o określonym zakresie',
@@ -614,6 +620,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Raz',
     'settings.behavior.files.field.repeatMode.afterGap': 'Po przerwie',
     'settings.behavior.files.field.repeatMode.always': 'Zawsze',
+    'settings.behavior.files.fixed.notCreated': 'Ten plik nie został jeszcze utworzony — zostanie utworzony automatycznie, gdy napiszesz i zapiszesz.',
   },
   tr: {
     'settings.behavior.files.rules': 'Kapsamlı kurallar',
@@ -702,6 +709,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Bir kez',
     'settings.behavior.files.field.repeatMode.afterGap': 'Bir aradan sonra',
     'settings.behavior.files.field.repeatMode.always': 'Her zaman',
+    'settings.behavior.files.fixed.notCreated': 'Bu dosya henüz oluşturulmadı — yazıp kaydettiğinizde otomatik olarak oluşturulacak.',
   },
   uk: {
     'settings.behavior.files.rules': 'Правила з визначеною областю дії',
@@ -790,6 +798,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'Один раз',
     'settings.behavior.files.field.repeatMode.afterGap': 'Після паузи',
     'settings.behavior.files.field.repeatMode.always': 'Завжди',
+    'settings.behavior.files.fixed.notCreated': 'Цей файл ще не створено — він буде створений автоматично, коли ви напишете та збережете.',
   },
   ar: {
     'settings.behavior.files.rules': 'قواعد محددة النطاق',
@@ -878,6 +887,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'مرة واحدة',
     'settings.behavior.files.field.repeatMode.afterGap': 'بعد فترة انقطاع',
     'settings.behavior.files.field.repeatMode.always': 'دائمًا',
+    'settings.behavior.files.fixed.notCreated': 'هذا الملف لم يُنشأ بعد — سيُنشأ تلقائيًا عندما تكتب وتحفظ.',
   },
   he: {
     'settings.behavior.files.rules': 'כללים לפי תחום',
@@ -966,6 +976,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': 'פעם אחת',
     'settings.behavior.files.field.repeatMode.afterGap': 'אחרי הפסקה',
     'settings.behavior.files.field.repeatMode.always': 'תמיד',
+    'settings.behavior.files.fixed.notCreated': 'הקובץ עוד לא נוצר — הוא ייווצר אוטומטית כשתכתוב ותשמור.',
   },
   ja: {
     'settings.behavior.files.rules': 'スコープ付きルール',
@@ -1054,6 +1065,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': '1 回',
     'settings.behavior.files.field.repeatMode.afterGap': '間隔を置いて',
     'settings.behavior.files.field.repeatMode.always': '常に',
+    'settings.behavior.files.fixed.notCreated': 'このファイルはまだ作成されていません — 書き込んで保存すると自動的に作成されます。',
   },
   ko: {
     'settings.behavior.files.rules': '범위 지정 규칙',
@@ -1142,6 +1154,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': '한 번',
     'settings.behavior.files.field.repeatMode.afterGap': '간격 후',
     'settings.behavior.files.field.repeatMode.always': '항상',
+    'settings.behavior.files.fixed.notCreated': '이 파일은 아직 생성되지 않았습니다 — 작성하고 저장하면 자동으로 생성됩니다.',
   },
   'zh-CN': {
     'settings.behavior.files.rules': '作用域规则',
@@ -1230,6 +1243,7 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': '一次',
     'settings.behavior.files.field.repeatMode.afterGap': '间隔后',
     'settings.behavior.files.field.repeatMode.always': '始终',
+    'settings.behavior.files.fixed.notCreated': '此文件尚未创建 — 当你编写并保存时会自动创建。',
   },
   'zh-TW': {
     'settings.behavior.files.rules': '範圍規則',
@@ -1318,5 +1332,6 @@ export const behaviorFilesI18n = {
     'settings.behavior.files.field.repeatMode.once': '一次',
     'settings.behavior.files.field.repeatMode.afterGap': '間隔後',
     'settings.behavior.files.field.repeatMode.always': '永遠',
+    'settings.behavior.files.fixed.notCreated': '此檔案尚未建立 — 當你撰寫並儲存時會自動建立。',
   },
 } as const;

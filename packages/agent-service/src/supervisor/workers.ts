@@ -1367,7 +1367,7 @@ export class WorkerRegistry {
         ready.reject(new WorkerOperationError(reply.data.status ?? 503, reply.data.code, reply.data.detail ?? 'The worker failed to initialize'));
       } else if (reply.data.type === 'operation.error') {
         const pending = entry.pending.get(reply.data.commandId);
-        if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code, reply.data.detail)); }
+        if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code, reply.data.detail, reply.data.details)); }
       } else if (reply.data.type === 'opened') {
         if (entry.kind === 'session') {
           entry.input.sessionFile = reply.data.sessionFile;

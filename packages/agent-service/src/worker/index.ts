@@ -141,14 +141,16 @@ process.on('message', raw => {
     }).catch((error: unknown) => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
       const code = error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE';
-      send({
+      const reply: Extract<WorkerReply, { type: 'operation.error' }> = {
         type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
         status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
         code,
         // An MCP OAuth failure carries the provider's own sentence, which the
         // sign-in panel shows verbatim; other codes keep the short bound.
-        detail: operationErrorDetail(code, operationCause(error))
-      });
+        detail: operationErrorDetail(code, operationCause(error)),
+      };
+      if (error instanceof ProjectionError && error.details !== undefined) reply.details = error.details;
+      send(reply);
     });
     return;
   }

@@ -1,5 +1,6 @@
-import { lstat, mkdir, opendir, readFile, realpath, stat, writeFile, rename, unlink } from 'node:fs/promises';
+import { lstat, mkdir, opendir, readFile, realpath, rm, stat, writeFile, rename, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
+import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { getAgentDir, getConfigDirName, getConfigRootDir, getPluginsDir, getPluginsLockfile, getPluginsPackageJson, getPluginsNodeModules, getProjectPluginOverridesPath, normalizePathForComparison } from '@oh-my-pi/pi-utils';
@@ -8,7 +9,8 @@ import { getConfigDirPaths } from '@oh-my-pi/pi-coding-agent/config';
 import type { InstalledPlugin } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/types';
 import type { MarketplacePluginEntry } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
 import {
-  MarketplaceManager, buildPluginId, parsePluginId, getInstalledPluginsRegistryPath, getMarketplacesRegistryPath,
+  MarketplaceManager, classifySource, readMarketplacesRegistry, writeMarketplacesRegistry,
+  buildPluginId, parsePluginId, getInstalledPluginsRegistryPath, getMarketplacesRegistryPath,
   getMarketplacesCacheDir, getPluginsCacheDir
 } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
 import { clearPluginRootsAndCaches, getProjectDiscoveryCeilings, isUserConfigRoot, resolveOrDefaultProjectRegistryPath } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
@@ -16,8 +18,9 @@ import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capability/types';
 import { NativeExtensions } from './catalog-extensions.ts';
 import {
-  MarketplacePluginDetailsSchema, JsonObjectSchema, type JsonObject, type InstalledPluginEntry, type PluginTarget, type PluginSettingDefinition,
+  MarketplacePluginDetailsSchema, MarketplaceErrorDetailsSchema, JsonObjectSchema, type JsonObject, type InstalledPluginEntry, type PluginTarget, type PluginSettingDefinition,
   type CatalogWorkerIdentity, type PluginCatalogState, type MarketplaceEntry, type MarketplaceSource,
+  type MarketplaceErrorCode, type MarketplaceErrorDetails, type MarketplaceSourceFailure,
   type PluginUpdateCheckEntry, type PluginUpgradePreviewEntry, type MarketplacePluginDetails, type PluginLifecycleState
 } from '@openchamber/agent-contract';
 import type { NativePluginOperation, NativePluginResult } from '../catalogs/plugins.ts';
@@ -115,6 +118,109 @@ function publicSettings(values: JsonObject, definitions: PluginSettingDefinition
     .map(setting => [setting.key, values[setting.key]!]));
 }
 
+function expandTildePath(path: string): string {
+  if (path === '~') return homedir();
+  if (path.startsWith('~/') || path.startsWith('~\\')) return join(homedir(), path.slice(2));
+  return path;
+}
+
+function replacePathPrefix(text: string, prefix: string, replacement: string): string {
+  const normalized = prefix.replace(/[\\/]+$/, '');
+  if (normalized === '') return text;
+  let result = '';
+  let index = 0;
+  while (index < text.length) {
+    const match = text.indexOf(normalized, index);
+    if (match === -1) { result += text.slice(index); break; }
+    const nextChar = text[match + normalized.length];
+    const boundaryAfter = nextChar === undefined || '/\\"\'`)]}>:,;'.includes(nextChar) || /\s/.test(nextChar);
+    const prevChar = match === 0 ? undefined : text[match - 1];
+    const boundaryBefore = prevChar === undefined || '"\'`([{<=:,;'.includes(prevChar) || /\s/.test(prevChar)
+      || (prevChar === '/' && text.slice(Math.max(0, match - 3), match) === '://');
+    if (boundaryBefore && boundaryAfter) {
+      result += `${text.slice(index, match)}${replacement}`;
+      index = match + normalized.length;
+    } else {
+      result += text.slice(index, match + 1);
+      index = match + 1;
+    }
+  }
+  return result;
+}
+
+function sanitizeMarketplaceText(text: string): string {
+  const internalRoots = Array.from(new Set([
+    getMarketplacesCacheDir(), getPluginsCacheDir(), getPluginsDir(), getConfigRootDir(), getAgentDir(), dirname(getMarketplacesRegistryPath()),
+  ].filter(root => root.trim().length > 0))).sort((left, right) => right.length - left.length);
+  let sanitized = text;
+  for (const root of internalRoots) sanitized = replacePathPrefix(sanitized, root, '[native plugin location]');
+  const homeRoots = Array.from(new Set([homedir(), process.env.HOME ?? ''].filter(root => root.trim().length > 0))).sort((left, right) => right.length - left.length);
+  for (const home of homeRoots) sanitized = replacePathPrefix(sanitized, home, '~');
+  return sanitized.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/\s@]+)@/g, '$1[redacted]@').replace(/\s+/g, ' ').trim();
+}
+
+function marketplaceStatus(code: MarketplaceErrorCode): number {
+  switch (code) {
+    case 'MARKETPLACE_SOURCE_MISSING': return 404;
+    case 'MARKETPLACE_SOURCE_EXISTS': return 409;
+    case 'MARKETPLACE_INVALID_SOURCE': return 400;
+    case 'MARKETPLACE_NETWORK_ERROR': return 502;
+  }
+}
+
+const CaughtCauseSchema = z.object({ code: z.string() });
+const CaughtFailureSchema = z.union([
+  z.instanceof(Error).transform(error => ({
+    message: error.message,
+    errno: CaughtCauseSchema.safeParse(error).data?.code ?? CaughtCauseSchema.safeParse(error.cause).data?.code,
+  })),
+  z.string().transform(message => ({ message, errno: undefined })),
+]).catch({ message: '', errno: undefined });
+
+interface ParsedCaughtFailure { message: string; errno?: string; }
+interface MarketplaceFailureContext { action: MarketplaceErrorDetails['action']; sourceName?: string; sourceUri?: string; }
+interface ClassifiedMarketplaceFailure { code: MarketplaceErrorCode; detail: string; sourceName?: string; sourceUri?: string; }
+interface MarketplaceErrorInput {
+  code: MarketplaceErrorCode; action: MarketplaceErrorDetails['action']; detail: string;
+  sourceName?: string; sourceUri?: string; updatedCount?: number; failures?: MarketplaceSourceFailure[];
+}
+
+function classifyMarketplaceFailure(failure: ParsedCaughtFailure, context: MarketplaceFailureContext): ClassifiedMarketplaceFailure {
+  const { message: rawMessage, errno } = failure;
+  const sanitizedUri = context.sourceUri ? sanitizeMarketplaceText(context.sourceUri) : undefined;
+  const namedMatch = /Marketplace "([^"]+)" (?:already exists|not found)|conflicts with existing marketplace "([^"]+)"|Marketplace catalog name changed from "([^"]+)"/.exec(rawMessage);
+  const sourceName = context.sourceName ?? namedMatch?.[1] ?? namedMatch?.[2] ?? namedMatch?.[3];
+  const cleaned = sanitizeMarketplaceText(rawMessage);
+  const fallbackTarget = sourceName ?? sanitizedUri ?? 'unknown';
+  if (/already exists|conflicts with existing marketplace/i.test(rawMessage)) {
+    return { code: 'MARKETPLACE_SOURCE_EXISTS', detail: cleaned || `Marketplace source "${fallbackTarget}" already exists.`, sourceName, sourceUri: sanitizedUri };
+  }
+  const isCatalogValidationFailure = /Unrecognized source format|Failed to parse marketplace catalog|must be a JSON object|Missing or invalid field|Marketplace catalog name changed|Invalid marketplace name|Invalid plugin|Marketplace catalog not found at/i.test(rawMessage);
+  if (errno === 'ENOENT' || errno === 'ENOTDIR' || /Marketplace "[^"]+" not found/i.test(rawMessage) || (!isCatalogValidationFailure && /does not exist/i.test(rawMessage))) {
+    return { code: 'MARKETPLACE_SOURCE_MISSING', detail: cleaned || `Marketplace source "${fallbackTarget}" was not found.`, sourceName, sourceUri: sanitizedUri };
+  }
+  if (isCatalogValidationFailure) {
+    return { code: 'MARKETPLACE_INVALID_SOURCE', detail: cleaned || `Marketplace source "${fallbackTarget}" has an invalid format or manifest.`, sourceName, sourceUri: sanitizedUri };
+  }
+  const isNetworkFailure = errno === 'ENOTFOUND' || errno === 'ECONNREFUSED' || errno === 'ECONNRESET' || errno === 'ETIMEDOUT'
+    || errno === 'EAI_AGAIN' || errno === 'EHOSTUNREACH' || errno === 'ENETUNREACH'
+    || /Cloned repository |Failed to fetch marketplace catalog|\bHTTP \d{3}\b|fetch failed|network|timed out|timeout|Could not resolve|Authentication failed|Permission denied|Repository not found|unable to access/i.test(rawMessage);
+  if (isNetworkFailure) {
+    return { code: 'MARKETPLACE_NETWORK_ERROR', detail: cleaned || `Network error while fetching marketplace source "${fallbackTarget}".`, sourceName, sourceUri: sanitizedUri };
+  }
+  const remoteSource = context.sourceUri !== undefined && /^(?:https?:\/\/|ssh:\/\/|git@|[a-z0-9-]+\/[a-z0-9._-]+$)/i.test(context.sourceUri.trim());
+  return { code: remoteSource ? 'MARKETPLACE_NETWORK_ERROR' : 'MARKETPLACE_INVALID_SOURCE', detail: cleaned || `Marketplace operation "${context.action}" failed for "${fallbackTarget}".`, sourceName, sourceUri: sanitizedUri };
+}
+
+function marketplaceProjectionError(input: MarketplaceErrorInput): ProjectionError {
+  const payload: MarketplaceErrorDetails = { action: input.action, detail: input.detail };
+  if (input.sourceName) payload.sourceName = input.sourceName;
+  if (input.sourceUri) payload.sourceUri = input.sourceUri;
+  if (input.updatedCount !== undefined) payload.updatedCount = input.updatedCount;
+  if (input.failures && input.failures.length > 0) payload.failures = input.failures;
+  const details = MarketplaceErrorDetailsSchema.parse(payload);
+  return new ProjectionError(marketplaceStatus(input.code), input.code, input.detail, JsonObjectSchema.parse(details));
+}
 /** Native package and marketplace state are instantiated per operation: their SDK managers cache mutable files. */
 export class NativePlugins {
   readonly local: PluginLocalSource;
@@ -345,27 +451,18 @@ export class NativePlugins {
     if (operation.type === 'plugins.marketplace.previewUpgrade') {
       return { type: 'plugins.upgradePreview', result: { workspaceId, revision, preview: await this.previewUpgrades(marketplace, operation.request.target) } };
     }
-    try {
-      switch (operation.type) {
-        case 'plugins.marketplace.manage': {
-          const request = operation.request;
-          // `list` is handled above as a read; the baseline documents why the
-          // narrowing exists so a future native action cannot silently fall here.
-          if (request.action === 'list') throw new ProjectionError(400, 'INVALID_REQUEST', 'Marketplace listing is a cached read');
-          if (request.action === 'add') await marketplace.addMarketplace(request.source);
-          else if (request.action === 'remove') {
-            if ((await marketplace.listMarketplaces()).some(source => source.name === request.name)) await marketplace.removeMarketplace(request.name);
-          } else if (request.name === undefined) await marketplace.updateAllMarketplaces();
-          else await marketplace.updateMarketplace(request.name);
-          break;
-        }
-        case 'plugins.marketplace.upgradeAll': await marketplace.upgradeAllPlugins(); break;
-      }
-    } catch (error) {
-      if (error instanceof ProjectionError) throw error;
-      throw new ProjectionError(400, 'INVALID_REQUEST', 'Native marketplace operation failed. Check the source, name and network access.');
+    if (operation.type === 'plugins.marketplace.manage') {
+      await this.manageMarketplace(marketplace, operation.request);
+      clearPluginRootsAndCaches();
+      return { type: 'plugins.catalog', catalog: await this.read(revision) };
     }
-    if (operation.type === 'plugins.marketplace.manage' || operation.type === 'plugins.marketplace.upgradeAll') {
+    if (operation.type === 'plugins.marketplace.upgradeAll') {
+      try { await marketplace.upgradeAllPlugins(); }
+      catch (error) {
+        if (error instanceof ProjectionError) throw error;
+        const classified = classifyMarketplaceFailure(CaughtFailureSchema.parse(error), { action: 'upgradeAll' });
+        throw marketplaceProjectionError({ code: classified.code, action: 'upgradeAll', detail: classified.detail, sourceName: classified.sourceName, sourceUri: classified.sourceUri });
+      }
       clearPluginRootsAndCaches();
       return { type: 'plugins.catalog', catalog: await this.read(revision) };
     }
@@ -513,14 +610,118 @@ export class NativePlugins {
     clearPluginRootsAndCaches();
     return { type: 'plugins.catalog', catalog: await this.read(revision) };
   }
+  private async manageMarketplace(marketplace: MarketplaceManager, request: Extract<NativePluginOperation, { type: 'plugins.marketplace.manage' }>['request']): Promise<void> {
+    if (request.action === 'list') throw new ProjectionError(400, 'INVALID_REQUEST', 'Marketplace listing is a cached read');
+    if (request.action === 'add') {
+      const trimmed = request.source.trim();
+      const sanitizedUri = sanitizeMarketplaceText(trimmed);
+      let sourceType: MarketplaceSource['sourceType'];
+      try { sourceType = classifySource(trimmed); }
+      catch (error) {
+        const classified = classifyMarketplaceFailure(CaughtFailureSchema.parse(error), { action: 'add', sourceUri: trimmed });
+        throw marketplaceProjectionError({ code: classified.code, action: 'add', detail: classified.detail, sourceName: classified.sourceName, sourceUri: sanitizedUri });
+      }
+      if (sourceType === 'local' && await fileEntry(resolve(expandTildePath(trimmed)), stat) === null) {
+        throw marketplaceProjectionError({ code: 'MARKETPLACE_SOURCE_MISSING', action: 'add', sourceUri: sanitizedUri, detail: `Local marketplace path "${sanitizedUri}" does not exist.` });
+      }
+      try { await marketplace.addMarketplace(trimmed); }
+      catch (error) {
+        if (error instanceof ProjectionError) throw error;
+        const classified = classifyMarketplaceFailure(CaughtFailureSchema.parse(error), { action: 'add', sourceUri: trimmed });
+        throw marketplaceProjectionError({ code: classified.code, action: 'add', detail: classified.detail, sourceName: classified.sourceName, sourceUri: classified.sourceUri ?? sanitizedUri });
+      }
+      return;
+    }
+    if (request.action === 'remove') {
+      const registered = await marketplace.listMarketplaces();
+      if (!registered.some(source => source.name === request.name)) return;
+      try { await marketplace.removeMarketplace(request.name); }
+      catch (primaryError) {
+        try {
+          const registryPath = getMarketplacesRegistryPath();
+          const registry = await readMarketplacesRegistry(registryPath);
+          if (registry.marketplaces.some(entry => entry.name === request.name)) {
+            await mkdir(dirname(registryPath), { recursive: true, mode: 0o700 });
+            await writeMarketplacesRegistry(registryPath, { ...registry, marketplaces: registry.marketplaces.filter(entry => entry.name !== request.name) });
+          }
+          if (!request.name.includes('/') && !request.name.includes('\\') && request.name !== '.' && request.name !== '..') {
+            await rm(join(getMarketplacesCacheDir(), request.name), { recursive: true, force: true }).catch(() => {});
+          }
+        } catch (fallbackError) {
+          const classified = classifyMarketplaceFailure(CaughtFailureSchema.parse(fallbackError ?? primaryError), { action: 'remove', sourceName: request.name });
+          throw marketplaceProjectionError({ code: classified.code, action: 'remove', detail: classified.detail, sourceName: request.name });
+        }
+      }
+      return;
+    }
+    const sources = await marketplace.listMarketplaces();
+    if (request.name !== undefined) {
+      const target = sources.find(source => source.name === request.name);
+      if (!target) throw marketplaceProjectionError({ code: 'MARKETPLACE_SOURCE_MISSING', action: 'update', sourceName: request.name, detail: `Marketplace "${request.name}" is not registered.` });
+      const sanitizedUri = sanitizeMarketplaceText(target.sourceUri);
+      if (target.sourceType === 'local' && await fileEntry(resolve(expandTildePath(target.sourceUri)), stat) === null) {
+        throw marketplaceProjectionError({ code: 'MARKETPLACE_SOURCE_MISSING', action: 'update', sourceName: target.name, sourceUri: sanitizedUri, detail: `Local marketplace path "${sanitizedUri}" for "${target.name}" does not exist.` });
+      }
+      try { await marketplace.updateMarketplace(target.name); }
+      catch (error) {
+        if (error instanceof ProjectionError) throw error;
+        const classified = classifyMarketplaceFailure(CaughtFailureSchema.parse(error), { action: 'update', sourceName: target.name, sourceUri: target.sourceUri });
+        throw marketplaceProjectionError({ code: classified.code, action: 'update', detail: classified.detail, sourceName: classified.sourceName ?? target.name, sourceUri: classified.sourceUri ?? sanitizedUri });
+      }
+      return;
+    }
+    let updatedCount = 0;
+    const failures: MarketplaceSourceFailure[] = [];
+    for (const src of sources) {
+      const sanitizedUri = sanitizeMarketplaceText(src.sourceUri);
+      if (src.sourceType === 'local' && await fileEntry(resolve(expandTildePath(src.sourceUri)), stat) === null) {
+        const failure: MarketplaceSourceFailure = { name: src.name, code: 'MARKETPLACE_SOURCE_MISSING', detail: `Local marketplace path "${sanitizedUri}" does not exist.` };
+        if (sanitizedUri) failure.sourceUri = sanitizedUri;
+        failures.push(failure);
+        continue;
+      }
+      try {
+        await marketplace.updateMarketplace(src.name);
+        updatedCount += 1;
+      } catch (error) {
+        const classified = classifyMarketplaceFailure(CaughtFailureSchema.parse(error), { action: 'update', sourceName: src.name, sourceUri: src.sourceUri });
+        const failure: MarketplaceSourceFailure = { name: src.name, code: classified.code, detail: classified.detail };
+        if (sanitizedUri) failure.sourceUri = sanitizedUri;
+        failures.push(failure);
+      }
+    }
+    if (updatedCount > 0) clearPluginRootsAndCaches();
+    if (failures.length > 0) {
+      const primaryCode: MarketplaceErrorCode = failures.length === 1
+        ? failures[0]!.code
+        : failures.some(failure => failure.code === 'MARKETPLACE_SOURCE_MISSING')
+          ? 'MARKETPLACE_SOURCE_MISSING'
+          : failures.some(failure => failure.code === 'MARKETPLACE_NETWORK_ERROR')
+            ? 'MARKETPLACE_NETWORK_ERROR'
+            : failures[0]!.code;
+      const summary = failures.length === 1
+        ? (updatedCount > 0 ? `Updated ${updatedCount} marketplace source(s); failed for "${failures[0]!.name}": ${failures[0]!.detail}` : `Marketplace "${failures[0]!.name}" refresh failed: ${failures[0]!.detail}`)
+        : `${updatedCount > 0 ? `Updated ${updatedCount} marketplace source(s); f` : 'F'}ailed for ${failures.length} sources: ${failures.map(failure => `${failure.name} (${failure.detail})`).join('; ')}`;
+      const errorInput: MarketplaceErrorInput = { code: primaryCode, action: 'update', detail: summary, updatedCount, failures };
+      if (failures.length === 1) {
+        errorInput.sourceName = failures[0]!.name;
+        if (failures[0]!.sourceUri) errorInput.sourceUri = failures[0]!.sourceUri;
+      }
+      throw marketplaceProjectionError(errorInput);
+    }
+  }
   private async marketplaceEntries(manager: MarketplaceManager): Promise<MarketplaceEntry[]> {
     const entries: MarketplaceEntry[] = [];
     for (const registry of await manager.listMarketplaces()) {
-      for (const entry of await manager.listAvailablePlugins(registry.name)) {
-        entries.push({
-          marketplace: registry.name, name: entry.name, description: entry.description ?? '', version: entry.version ?? null,
-          ...marketplaceDetails(entry),
-        });
+      try {
+        for (const entry of await manager.listAvailablePlugins(registry.name)) {
+          entries.push({
+            marketplace: registry.name, name: entry.name, description: entry.description ?? '', version: entry.version ?? null,
+            ...marketplaceDetails(entry),
+          });
+        }
+      } catch {
+        continue;
       }
     }
     return entries;
