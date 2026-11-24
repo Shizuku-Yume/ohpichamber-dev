@@ -1,5 +1,5 @@
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
-import { isAstEditTool, isEditTool, isReadTool, isWriteTool, parseNativeReadPath } from '@/lib/toolHelpers';
+import { isAstEditTool, isEditTool, isReadTool, isWriteTool, parseEditInputPaths, parseNativeReadPath, toolBaseName } from '@/lib/toolHelpers';
 import { z } from 'zod';
 
 const editFileSchema = z.object({
@@ -242,10 +242,13 @@ function parseAstEditOutput(output: unknown): ToolFileChange[] {
     }
     return [];
 }
+
+const isEditLikeTool = (toolName: string | undefined): boolean =>
+    isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch';
 /** Successful native mutations only; call inputs are never evidence of a diff. */
 export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): ToolFileChange[] {
     if (part.type === 'tool_call') {
-        if (!isEditTool(part.toolName) || !part.editPreview?.files) return [];
+        if (!isEditLikeTool(part.toolName) || !part.editPreview?.files) return [];
         return part.editPreview.files.flatMap((file): ToolFileChange[] => {
             if (!file || file.error) return [];
             const path = file.path;
@@ -274,7 +277,7 @@ export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): T
     if (isAstEditTool(part.toolName)) {
         return parseAstEditOutput(part.output);
     }
-    if (!isEditTool(part.toolName)) return [];
+    if (!isEditLikeTool(part.toolName)) return [];
     const details = editResultSchema.safeParse(part.output).data?.details;
     if (!details) {
         if (call?.editPreview?.files) {
@@ -317,8 +320,17 @@ export function getToolDiffs(part: ToolPart, pairedCall?: ToolCallPart): ToolDif
 export function getPrimaryToolPath(part: ToolPart, pairedCall?: ToolCallPart): string | null {
     if (part.type === 'tool_result') return getToolFileChanges(part, pairedCall).find((file) => file.op !== 'delete')?.path ?? null;
     const path = pathValueSchema.safeParse(part.input.path).data;
-    if ((isEditTool(part.toolName) || isWriteTool(part.toolName)) && path && workspaceRelativePath(path) !== null)
+    if ((isEditLikeTool(part.toolName) || isWriteTool(part.toolName)) && path && workspaceRelativePath(path) !== null)
         return normalizeWorkspaceToolPath(path);
+    if (isEditLikeTool(part.toolName)) {
+        if (typeof part.input.input === 'string') {
+            for (const candidate of parseEditInputPaths(part.input.input)) {
+                if (workspaceRelativePath(candidate) !== null) return normalizeWorkspaceToolPath(candidate);
+            }
+        }
+        const previewPath = part.editPreview?.files?.find((file) => !file.error && file.path && workspaceRelativePath(file.path) !== null)?.path;
+        if (previewPath) return normalizeWorkspaceToolPath(previewPath);
+    }
     if (isAstEditTool(part.toolName)) {
         if (path && workspaceRelativePath(path) !== null) return normalizeWorkspaceToolPath(path);
         const paths = Array.isArray(part.input.paths) && typeof part.input.paths[0] === 'string'

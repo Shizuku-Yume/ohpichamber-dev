@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 import type { ToolGroup, ToolPresentation } from './types';
 import { evalResultSummary } from './toolView';
+import { parseEditInputPaths } from './editInputPaths';
+import { normalizeIntent } from './intent';
 
 /** A JSON field's non-blank text. */
 const text = (value: JsonValue | undefined, max = 160): string | null => {
@@ -69,6 +71,15 @@ const diffStats = (diff: string): string | null => {
     return added || removed ? `+${added}/-${removed}` : null;
 };
 
+const editCallDescription: ToolPresentation['describeCall'] = (input) => {
+    const direct = inputText(input, 'path', 'file_path');
+    if (direct) return direct;
+    if (typeof input.input !== 'string') return null;
+    const paths = parseEditInputPaths(input.input);
+    if (paths.length === 0) return null;
+    return paths.length === 1 ? text(paths[0]) : text(`${paths[0]} (+${paths.length - 1})`);
+};
+
 const editSummary: ToolPresentation['describeResult'] = (result) =>
     diffStats(detailText(result, 'diff') ?? '') ?? detailText(result, 'message');
 
@@ -89,6 +100,26 @@ const todoSummary: ToolPresentation['describeResult'] = (result) => {
 };
 
 const askSummary: ToolPresentation['describeResult'] = (result) => {
+    const timedOut = detailValue(result, 'timedOut') === true;
+    const answers = z.array(z.object({ answer: z.string().optional() })).safeParse(detailValue(result, 'answers')).data;
+    if (answers && answers.length > 0) {
+        const answered = answers.filter((item) => Boolean(item.answer?.trim())).length;
+        return timedOut ? `timed out · ${answered}/${answers.length} answered` : `${answered}/${answers.length} answered`;
+    }
+    const rawData = detailValue(result, 'data');
+    if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+        const entries = Object.entries(rawData);
+        if (entries.length > 0) {
+            const answered = entries.filter(([, value]) => {
+                if (value === null || value === undefined) return false;
+                if (typeof value === 'string') return value.trim().length > 0;
+                if (Array.isArray(value)) return value.length > 0;
+                return true;
+            }).length;
+            return timedOut ? `timed out · ${answered}/${entries.length} answered` : `${answered}/${entries.length} answered`;
+        }
+        if (timedOut) return 'timed out';
+    }
     const results = detailValue(result, 'results');
     const multi = z.array(z.object({
         selectedOptions: z.array(z.string()).optional(),
@@ -100,27 +131,154 @@ const askSummary: ToolPresentation['describeResult'] = (result) => {
         return `${answered}/${multi.length} answered`;
     }
     if (typeof detailValue(result, 'chatRedirect') === 'boolean' && detailValue(result, 'chatRedirect') === true) return 'sent to chat';
-    if (detailValue(result, 'timedOut') === true) return 'timed out';
+    if (timedOut) return 'timed out';
     const selected = z.array(z.string()).safeParse(detailValue(result, 'selectedOptions')).data;
     return selected?.length ? text(selected.join(', ')) : detailText(result, 'customInput');
 };
 
-const taskSummary: ToolPresentation['describeResult'] = (result) => {
-    const results = z.array(z.unknown()).safeParse(detailValue(result, 'results')).data;
-    return results?.length ? `${results.length} agents` : null;
+const taskItemCallSchema = z.object({
+    name: z.string().optional(),
+    agent: z.string().optional(),
+    task: z.string().optional(),
+});
+
+const taskStepsSchema = z.array(z.string());
+
+const taskCallDescription = (input: JsonObject): string | null => {
+    const rawIntent = z.string().safeParse(input.i).data;
+    if (rawIntent) {
+        const intent = normalizeIntent(rawIntent);
+        if (intent) return text(intent);
+    }
+    const batchTasks = z.array(taskItemCallSchema).safeParse(input.tasks).data;
+    if (batchTasks && batchTasks.length > 0) {
+        if (batchTasks.length === 1) {
+            const item = batchTasks[0];
+            const itemName = text(item?.name);
+            if (itemName) return itemName;
+            const itemRole = text(item?.agent);
+            if (itemRole) return text(`1 subagent (${itemRole})`);
+            return text(item?.task) ?? inputText(input, 'context') ?? '1 subagent';
+        }
+        const roles: string[] = [];
+        for (const item of batchTasks) {
+            const role = item.agent?.trim();
+            if (role && !roles.includes(role)) roles.push(role);
+        }
+        if (roles.length > 0) {
+            return text(`${batchTasks.length} subagents (${roles.join(', ')})`);
+        }
+        const names: string[] = [];
+        for (const item of batchTasks) {
+            const name = text(item.name, 40);
+            if (name && !names.includes(name)) names.push(name);
+        }
+        return names.length > 0
+            ? text(`${batchTasks.length} subagents (${names.join(', ')})`)
+            : `${batchTasks.length} subagents`;
+    }
+    const singleName = inputText(input, 'name');
+    if (singleName) return singleName;
+    const singleTask = inputText(input, 'task');
+    if (singleTask) return singleTask;
+    const steps = taskStepsSchema.safeParse(input.steps).data;
+    if (steps?.length) {
+        const firstStep = text(steps[0]);
+        if (firstStep) return firstStep;
+    }
+    const singleRole = inputText(input, 'agent');
+    if (singleRole) return text(`1 subagent (${singleRole})`);
+    return inputText(input, 'context');
 };
 
+const taskProgressItemSchema = z.object({ status: z.string().optional() });
+const taskAsyncSchema = z.object({ state: z.string().optional() });
+
+const taskSummary: ToolPresentation['describeResult'] = (result) => {
+    const results = z.array(z.unknown()).safeParse(detailValue(result, 'results')).data;
+    const progress = z.array(taskProgressItemSchema).safeParse(detailValue(result, 'progress')).data;
+    const asyncInfo = taskAsyncSchema.safeParse(detailValue(result, 'async')).data;
+    const count = Math.max(progress?.length ?? 0, results?.length ?? 0);
+    const countLabel = count > 0 ? `${count} ${count === 1 ? 'subagent' : 'subagents'}` : null;
+    const asyncState = asyncInfo?.state?.trim();
+    if (asyncState === 'running' || asyncState === 'failed' || asyncState === 'completed') {
+        return countLabel ? `${countLabel} · ${asyncState}` : asyncState;
+    }
+    if (progress && progress.length > 0 && (!results || results.length === 0)) {
+        const hasRunning = progress.some((item) => item.status === 'running' || item.status === 'pending');
+        const hasFailed = progress.some((item) => item.status === 'failed');
+        if (hasRunning) return `${countLabel} · running`;
+        if (hasFailed) return `${countLabel} · failed`;
+    }
+    return countLabel;
+};
+
+const waitJobSchema = z.object({ status: z.string().optional() });
+
 const waitSummary: ToolPresentation['describeResult'] = (result) => {
-    const jobs = z.array(z.unknown()).safeParse(detailValue(result, 'jobs')).data;
+    const jobs = z.array(waitJobSchema).safeParse(detailValue(result, 'jobs')).data;
     const agents = z.array(z.unknown()).safeParse(detailValue(result, 'agents')).data;
-    const parts = [jobs?.length ? `${jobs.length} jobs` : null, agents?.length ? `${agents.length} agents` : null].filter(Boolean);
+    const interrupted = detailValue(result, 'interrupted') === true;
+    const parts: string[] = [];
+    if (jobs && jobs.length > 0) {
+        const runningCount = jobs.filter((job) => job.status === 'running').length;
+        parts.push(
+            runningCount > 0 && runningCount < jobs.length
+                ? `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'} (${runningCount} running)`
+                : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'}`,
+        );
+    }
+    if (agents && agents.length > 0) {
+        parts.push(`${agents.length} ${agents.length === 1 ? 'subagent' : 'subagents'}`);
+    }
+    if (parts.length === 0 && interrupted) {
+        return 'interrupted';
+    }
     return parts.length ? parts.join(' · ') : null;
 };
 
+const bashAsyncSchema = z.object({
+    jobId: z.string().min(1),
+    state: z.string().min(1),
+});
+
+const bashServiceSchema = z.object({
+    name: z.string().min(1),
+    state: z.string().optional(),
+    ready: z.boolean().optional(),
+    timedOut: z.boolean().optional(),
+    pid: z.number().optional(),
+});
+
 const bashSummary: ToolPresentation['describeResult'] = (result) => {
+    const parts: string[] = [];
+    const asyncInfo = bashAsyncSchema.safeParse(detailValue(result, 'async')).data;
+    if (asyncInfo) {
+        parts.push(`job ${asyncInfo.jobId} · ${asyncInfo.state}`);
+    }
+    const serviceInfo = bashServiceSchema.safeParse(detailValue(result, 'service')).data;
+    if (serviceInfo) {
+        const readyText = serviceInfo.ready === true
+            ? 'ready'
+            : serviceInfo.timedOut === true
+                ? 'ready timed out'
+                : serviceInfo.ready === false
+                    ? 'not ready'
+                    : serviceInfo.state;
+        const serviceParts = [
+            `service ${serviceInfo.name}`,
+            readyText,
+            serviceInfo.pid !== undefined ? `pid ${serviceInfo.pid}` : null,
+        ].filter(Boolean);
+        parts.push(serviceParts.join(' · '));
+    }
     const exitCode = detailNumber(result, 'exitCode');
-    if (exitCode === null) return detailValue(result, 'timedOut') === true ? 'timed out' : null;
-    return exitCode === 0 ? 'exit 0' : `exit ${exitCode}`;
+    if (exitCode !== null) {
+        parts.push(exitCode === 0 ? 'exit 0' : `exit ${exitCode}`);
+    } else if (detailValue(result, 'timedOut') === true) {
+        parts.push('timed out');
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
 };
 
 const hostCall: ToolPresentation['describeCall'] = (input) => {
@@ -165,12 +323,12 @@ export const TOOL_PRESENTATIONS = {
     bash: bashPresentation,
     edit: {
         label: 'Edit', icon: 'pencil', group: 'call', outputLanguage: 'diff',
-        describeCall: (input) => inputText(input, 'path', 'file_path'),
+        describeCall: editCallDescription,
         describeResult: editSummary,
     },
     apply_patch: {
         label: 'Edit', icon: 'pencil', group: 'call', outputLanguage: 'diff',
-        describeCall: (input) => inputText(input, 'path', 'file_path'),
+        describeCall: editCallDescription,
         describeResult: editSummary,
     },
     ast_grep: {
@@ -251,12 +409,19 @@ export const TOOL_PRESENTATIONS = {
     security_scan: plainTool('Security scan', 'shield-check', ['action', 'plan_id']),
     task: {
         label: 'Task', icon: 'ai-agent', group: 'call', outputLanguage: 'text',
-        describeCall: (input) => inputText(input, 'name', 'task'),
+        describeCall: taskCallDescription,
         describeResult: taskSummary,
     },
     wait: {
         label: 'Wait', icon: 'time', group: 'call', outputLanguage: 'text',
-        describeCall: (input) => inputText(input, 'op'),
+        describeCall: (input) => {
+            const rawIntent = z.string().safeParse(input.i).data;
+            if (rawIntent) {
+                const intent = normalizeIntent(rawIntent);
+                if (intent) return text(intent);
+            }
+            return inputText(input, 'op');
+        },
         describeResult: waitSummary,
     },
     todo: {
@@ -280,6 +445,17 @@ export const TOOL_PRESENTATIONS = {
         describeResult: (result) => {
             const count = detailNumber(result, 'imageCount') ?? (Array.isArray(detailValue(result, 'imagePaths')) ? (detailValue(result, 'imagePaths') as unknown[]).length : null);
             return count !== null ? `${count} ${count === 1 ? 'image' : 'images'}` : null;
+        },
+    },
+    tts: {
+        label: 'Speech generation', icon: 'volume-up', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'output_path', 'text'),
+        describeResult: (result) => {
+            const codec = detailText(result, 'codec')?.toUpperCase();
+            const voiceId = detailText(result, 'voiceId');
+            const bytes = detailNumber(result, 'bytes');
+            const parts = [codec, voiceId, bytes !== null ? `${bytes} bytes` : null].filter(Boolean);
+            return parts.length > 0 ? parts.join(' · ') : null;
         },
     },
     memory_edit: {

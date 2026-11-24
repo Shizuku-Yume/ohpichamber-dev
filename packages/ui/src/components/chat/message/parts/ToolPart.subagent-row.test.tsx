@@ -12,11 +12,12 @@ import { useGuestsStore } from '@/lib/guests/store';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 
 const { default: ToolPart } = await import('./ToolPart');
 const { default: TurnActivity } = await import('../../components/TurnActivity');
-const noAction = () => {};
+const noAction = () => { };
 const unexpectedThemeChange = (): never => { throw new Error('Rendering must not change the theme'); };
 const theme = getDefaultTheme(false);
 const themeContext: ThemeContextValue = {
@@ -43,7 +44,17 @@ const result: ToolResultPart = {
   type: 'tool_result', partId: 'task-result', toolCallId: call.toolCallId, toolName: 'task', isError: false,
   output: { content: [{ type: 'text', text: 'Child returned the marker.' }], details: { marker: 'T18 child marker' } },
 };
-type RenderOptions = { sessionId?: string; directory?: string; grouped?: boolean; expanded?: boolean; mobile?: boolean; status?: ToolCallPart['status']; pairedResult?: boolean };
+type RenderOptions = {
+  sessionId?: string;
+  directory?: string;
+  grouped?: boolean;
+  expanded?: boolean;
+  mobile?: boolean;
+  status?: ToolCallPart['status'];
+  pairedResult?: boolean;
+  customCall?: ToolCallPart;
+  customResult?: ToolResultPart;
+};
 
 async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run: (harness: {
   container: HTMLElement; render: (options?: RenderOptions) => Promise<void>;
@@ -66,18 +77,21 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
   const previousUI = useUIStore.getState();
   const previousSelection = useSessionUIStore.getState();
   const previousGuests = useGuestsStore.getState();
+  const previousSubagents = useSubagentsStore.getState();
   const list = spyOn(canonicalClient, 'listSubagents').mockImplementation(load);
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const render = async ({ sessionId = parent.sessionId, directory = '/workspace', grouped = false, expanded = true, mobile = false, status = call.status, pairedResult = false }: RenderOptions = {}) => {
+  const render = async ({ sessionId = parent.sessionId, directory = '/workspace', grouped = false, expanded = true, mobile = false, status = call.status, pairedResult = false, customCall, customResult }: RenderOptions = {}) => {
+    const effectiveCall = customCall ?? call;
+    const effectiveResult = customResult ?? result;
     const tree = <I18nProvider><ThemeSystemContext.Provider value={themeContext}>
       {grouped ? <TurnActivity
-        parts={[{ id: 'activity', turnId: 'turn', messageId: 'message', kind: 'tool', partIndex: 0, part: { ...call, status } }]}
+        parts={[{ id: 'activity', turnId: 'turn', messageId: 'message', kind: 'tool', partIndex: 0, part: { ...effectiveCall, status } }]}
         sessionId={sessionId} directory={directory} isExpanded isMobile={mobile} onToggle={noAction}
-        expandedTools={new Set([call.partId])} onToggleTool={noAction} onShowPopup={noAction}
+        expandedTools={new Set([effectiveCall.partId])} onToggleTool={noAction} onShowPopup={noAction}
         streamPhase="completed" showHeader={false} animateRows={false}
-      /> : <ToolPart part={pairedResult ? result : { ...call, status }} pairedCall={pairedResult ? call : undefined} sessionId={sessionId} directory={directory} isExpanded={expanded} isMobile={mobile} onToggle={noAction} />}
+      /> : <ToolPart part={pairedResult ? effectiveResult : { ...effectiveCall, status }} pairedCall={pairedResult ? effectiveCall : undefined} sessionId={sessionId} directory={directory} isExpanded={expanded} isMobile={mobile} onToggle={noAction} />}
     </ThemeSystemContext.Provider></I18nProvider>;
     await act(async () => {
       root.render(pairedResult ? <SyncProvider directory="/workspace">{tree}</SyncProvider> : tree);
@@ -91,6 +105,7 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
     useUIStore.setState({ contextPanelByDirectory: {} });
     useSessionUIStore.setState({ currentSessionId: parent.sessionId, currentSessionDirectory: '/workspace' });
     useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
+    useSubagentsStore.getState().resetForRuntimeSwitch();
     await run({ container, render });
   } finally {
     await act(async () => { root.unmount(); });
@@ -99,6 +114,7 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
     useUIStore.setState(previousUI);
     useSessionUIStore.setState(previousSelection);
     useGuestsStore.setState(previousGuests);
+    useSubagentsStore.setState(previousSubagents);
     await happyWindow.happyDOM.abort();
     for (const [name, descriptor] of descriptors) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -198,5 +214,79 @@ test('a completed task result keeps the paired child navigation visible', async 
     expect(useUIStore.getState().contextPanelByDirectory['/workspace']?.tabs).toMatchObject([
       { dedupeKey: 'session:paired-session', readOnly: true },
     ]);
+  });
+});
+
+test('OMP 19.1 batch task shows subagent count/roles and async running summary when details.results is empty', async () => {
+  const batchCall: ToolCallPart = {
+    type: 'tool_call',
+    partId: 'batch-call',
+    toolCallId: 'batch-call-id',
+    toolName: 'task',
+    status: 'completed',
+    input: {
+      context: 'Shared repo context',
+      tasks: [
+        { name: 'ScoutAuth', agent: 'scout', task: 'Inspect auth', solutionSpace: 'narrow' },
+        { name: 'FixCard', agent: 'task', task: 'Fix card', solutionSpace: 'narrow' },
+      ],
+    },
+  };
+  const asyncResult: ToolResultPart = {
+    type: 'tool_result',
+    partId: 'batch-result',
+    toolCallId: 'batch-call-id',
+    toolName: 'task',
+    isError: false,
+    output: {
+      content: [{
+        type: 'text',
+        text: 'Spawned 2 background agents using scout, task.\n- `ScoutAuth` (job `ScoutAuth`)\n- `FixCard` (job `FixCard`)\nread proc:// lists jobs/services; read proc://<id> inspects status/output without consuming delivery; write proc://<id>/kill with empty `content` cancels/stops.\nJob IDs are process-local; delivered results expire shortly (~30s), unconsumed results within ~5min. Agent output/transcripts remain readable at agent://ScoutAuth / history://ScoutAuth.',
+      }],
+      details: {
+        projectAgentsDir: null,
+        results: [],
+        totalDurationMs: 12,
+        progress: [
+          { id: 'ScoutAuth', agent: 'scout', status: 'running' },
+          { id: 'FixCard', agent: 'task', status: 'pending' },
+        ],
+        async: { state: 'running', jobId: 'ScoutAuth', type: 'task' },
+      },
+    },
+  };
+
+  await withHarness(async () => [], async ({ container, render }) => {
+    await render({ pairedResult: true, expanded: false, customCall: batchCall, customResult: asyncResult });
+    expect(container.textContent).toContain('2 subagents (scout, task)');
+    expect(container.textContent).toContain('2 subagents · running');
+    expect(container.textContent).not.toContain('Unavailable');
+
+    await render({ pairedResult: true, expanded: true, customCall: batchCall, customResult: asyncResult });
+    expect(container.textContent).not.toContain('Unavailable');
+    expect(container.textContent).not.toContain('read proc://');
+    expect(container.textContent).toContain('ScoutAuth');
+    expect(container.textContent).toContain('FixCard');
+
+    await act(async () => {
+      useSubagentsStore.getState().applySubagentUpdate(parent.sessionId, {
+        subagentId: 'ScoutAuth',
+        parentSessionId: parent.sessionId,
+        childSessionId: 'scout-auth-session',
+        toolCallId: 'batch-call-id',
+        name: 'ScoutAuth',
+        role: 'scout',
+        status: 'running',
+        activeTool: 'read',
+        activeToolArgs: 'src/auth.ts',
+      });
+    });
+
+    expect(container.textContent).toContain('ScoutAuth');
+    expect(container.textContent).toContain('(scout)');
+    expect(container.textContent).toContain('read: src/auth.ts');
+    expect(container.querySelector('button[aria-label="Open scout subtask"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('read proc://');
+    expect(container.textContent).toContain('Open in the Subagents panel');
   });
 });

@@ -5,6 +5,7 @@ import { fallbackPresentation, KNOWN_TOOL_NAMES, TOOL_PRESENTATIONS, type KnownT
 import type { ToolGroup, ToolPresentation } from './types';
 
 export { normalizeIntent } from './intent';
+export { parseEditInputPaths } from './editInputPaths';
 export { KNOWN_TOOL_NAMES } from './presentations';
 export {
     categorizeTool,
@@ -92,13 +93,102 @@ export const isStaticTool = (toolName: string | undefined): boolean => {
     return toolGrouping(name) === 'read' || name === 'skill';
 };
 
+export interface AskAnswerEntry {
+    question: string;
+    answer: string;
+    note?: string;
+    timedOut?: boolean;
+}
+
+const askNoteSchema = z.object({
+    name: z.string().optional(),
+    question: z.string().optional(),
+    option: z.string().optional(),
+    value: z.string().optional(),
+    text: z.string(),
+});
+
+const formatAskFormValue = (value: JsonValue): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (value === null) return '';
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => (typeof item === 'string' ? item : typeof item === 'number' || typeof item === 'boolean' ? String(item) : JSON.stringify(item)))
+            .join(', ');
+    }
+    return JSON.stringify(value);
+};
+
 /**
- * The answer pairs OMP reports for an `ask` result. A multi-question call
- * carries `results`; a single one carries the fields at the top level.
+ * The answer pairs OMP reports for an `ask` result. Handles HTML `<form>`
+ * results (`answers` or `{ data, notes, timedOut }`) as well as legacy
+ * multi-question `results` and single-question objects.
  */
-export const askAnswers = (details: JsonValue | undefined): Array<{ question: string; answer: string }> => {
+export const askAnswers = (details: JsonValue | undefined): AskAnswerEntry[] => {
     const root = details && typeof details === 'object' && !Array.isArray(details) ? details : undefined;
     if (!root) return [];
+    const timedOut = root.timedOut === true;
+    const notes = z.array(askNoteSchema).safeParse(root.notes).data ?? [];
+
+    const formAnswers = z.array(z.object({
+        name: z.string().optional(),
+        question: z.string(),
+        answer: z.string(),
+    })).safeParse(root.answers).data;
+    if (formAnswers) {
+        return formAnswers.map((entry) => {
+            const matchedNotes = notes.filter(
+                (note) => (note.name && entry.name && note.name === entry.name)
+                    || (note.question && note.question === entry.question),
+            );
+            const noteText = matchedNotes
+                .map((note) => (note.option ? `${note.option}: ${note.text}` : note.text))
+                .filter(Boolean)
+                .join('; ');
+            return {
+                question: entry.question,
+                answer: entry.answer,
+                ...(noteText ? { note: noteText } : {}),
+                ...(timedOut ? { timedOut: true } : {}),
+            };
+        });
+    }
+
+    const rawData = root.data;
+    if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+        const matchedNoteIndices = new Set<number>();
+        const rows: AskAnswerEntry[] = Object.entries(rawData).map(([key, value]) => {
+            const matchedNotes: Array<z.infer<typeof askNoteSchema>> = [];
+            notes.forEach((note, index) => {
+                if (note.name === key || note.question === key) {
+                    matchedNotes.push(note);
+                    matchedNoteIndices.add(index);
+                }
+            });
+            const questionLabel = matchedNotes.find((note) => note.question?.trim())?.question ?? key;
+            const noteText = matchedNotes
+                .map((note) => (note.option ? `${note.option}: ${note.text}` : note.text))
+                .filter(Boolean)
+                .join('; ');
+            return {
+                question: questionLabel,
+                answer: formatAskFormValue(value),
+                ...(noteText ? { note: noteText } : {}),
+                ...(timedOut ? { timedOut: true } : {}),
+            };
+        });
+        notes.forEach((note, index) => {
+            if (matchedNoteIndices.has(index)) return;
+            rows.push({
+                question: note.question || note.name || note.option || 'Note',
+                answer: note.option ? `${note.option}: ${note.text}` : note.text,
+                ...(timedOut ? { timedOut: true } : {}),
+            });
+        });
+        return rows;
+    }
+
     const questions = z.array(z.object({
         question: z.string(),
         selectedOptions: z.array(z.string()).optional(),
@@ -111,7 +201,7 @@ export const askAnswers = (details: JsonValue | undefined): Array<{ question: st
     if (questions?.length) {
         return questions.flatMap((item) => {
             const answer = answerOf(item);
-            return answer ? [{ question: item.question, answer }] : [];
+            return answer ? [{ question: item.question, answer, ...(item.timedOut ? { timedOut: true } : {}) }] : [];
         });
     }
     const single = z.object({
@@ -123,7 +213,7 @@ export const askAnswers = (details: JsonValue | undefined): Array<{ question: st
     }).safeParse(root).data;
     if (!single) return [];
     const answer = answerOf(single);
-    return answer ? [{ question: single.question, answer }] : [];
+    return answer ? [{ question: single.question, answer, ...(single.timedOut ? { timedOut: true } : {}) }] : [];
 };
 
 /** A tool that mutates project files. */

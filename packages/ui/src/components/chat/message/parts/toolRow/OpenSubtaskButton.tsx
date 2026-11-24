@@ -1,29 +1,31 @@
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { cn } from '@/lib/utils';
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { Icon } from '@/components/icon/Icon';
 import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { useI18n } from '@/lib/i18n';
-import { useChatColumnActions } from '@/components/chat/chatColumnSession';
+import { useChatColumnActions, useChatSessionSelection } from '@/components/chat/chatColumnSession';
 
 export const OpenSubtaskButton: React.FC<{
     sessionId: string;
     agent: string | undefined;
     isMobile: boolean;
-}> = ({ sessionId, agent, isMobile }) => {
+    directory?: string | null;
+    label?: string;
+}> = ({ sessionId, agent, isMobile, directory, label: customLabel }) => {
     const { t } = useI18n();
-    const currentDirectory = useEffectiveDirectory();
-    const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+    const selection = useChatSessionSelection();
+    const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
+    const currentDirectory = directory ?? selection.directory ?? fallbackDirectory;
     const column = useChatColumnActions();
-    const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const runtime = React.useContext(RuntimeAPIContext);
 
     const agentType = agent ?? 'subagent';
-    const agentLabel = agentType.charAt(0).toUpperCase() + agentType.slice(1);
-    const label = t('chat.toolPart.openSubtask', { type: agentLabel });
+    const tabLabel = customLabel?.trim() || agentType;
+    const label = t('chat.toolPart.openSubtask', { type: agentType });
 
     const handleOpen = (event: React.MouseEvent) => {
         event.stopPropagation();
@@ -33,13 +35,13 @@ export const OpenSubtaskButton: React.FC<{
             return;
         }
         if (isMobile || runtime?.runtime.isVSCode) {
-            setCurrentSession(sessionId, currentDirectory);
+            useSessionUIStore.getState().setCurrentSession(sessionId, currentDirectory);
             return;
         }
-        openContextPanelTab(currentDirectory, {
+        useUIStore.getState().openContextPanelTab(currentDirectory, {
             mode: 'chat',
             dedupeKey: `session:${sessionId}`,
-            label: agentLabel,
+            label: tabLabel,
             readOnly: true,
         });
     };

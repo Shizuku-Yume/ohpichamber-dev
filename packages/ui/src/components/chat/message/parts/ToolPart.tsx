@@ -30,11 +30,12 @@ import {
     isWriteTool,
     toolInputPaths,
     normalizeToolName,
+    toolBaseName,
     parseNativeReadPath,
     toolInputPath,
     toolPresentation,
 } from '@/lib/toolHelpers';
-import { describeToolCall, describeToolResult, evalResultSummary, isMemoryTool } from '@/lib/toolPresentation';
+import { describeToolCall, describeToolResult, evalResultSummary, isMemoryTool, normalizeIntent } from '@/lib/toolPresentation';
 import { TodoCard } from './TodoCard';
 import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
@@ -91,17 +92,41 @@ import {
 import { getDirectoryForFilePath, getRelativeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
 import { useI18n } from '@/lib/i18n';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
-import { canonicalClient } from '@/api/canonicalClient';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
+import { openSubagentsPanel } from '@/components/chat/subagents/panel';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { OpenSubtaskButton } from './toolRow/OpenSubtaskButton';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { WritePreview } from '../../DiffPreview';
 
-type TaskChildrenState = {
-    sessionId: string;
-    runtimeKey: string;
-    toolCallId: string;
-    status: 'loading' | 'ready' | 'failed';
-    children: Subagent[];
-};
+const EMPTY_SUBAGENTS: Subagent[] = [];
+
+const taskProgressItemSchema = z.object({
+    id: z.string(),
+    agent: z.string(),
+    status: z.string().optional(),
+    lastIntent: z.string().optional(),
+    currentTool: z.string().optional(),
+    currentToolArgs: z.string().optional(),
+    stage: z.string().optional(),
+});
+
+const taskResultDetailsSchema = z.object({
+    progress: z.array(taskProgressItemSchema).optional(),
+    async: z.object({
+        state: z.string().optional(),
+        jobId: z.string().optional(),
+    }).optional(),
+});
+
+const TASK_SPAWN_ACK_LINE_RE = /^(?:Spawned\s+(?:agent\s+`[^`]+`\s+\(job\s+`[^`]+`\)\.?|\d+\s+background\s+agents?(?:\s+using\s+[^.]+)?\.?(?:\s+Failed\s+to\s+schedule\s+.+)?)|Running\s+.+?\s+inline;\s+\d+\s+background\s+agents?\.?|-\s+`[^`]+`\s+\(job\s+`[^`]+`\)|read\s+proc:\/\/\s+lists\s+jobs\/services.*|Job\s+IDs\s+are\s+process-local.*|Tip:\s+this\s+call\s+spawned\s+\d+\s+generic\s+workers.*|\d+\s+siblings\s+run\s+together\..*)$/i;
+
+function stripTaskSpawnBoilerplate(raw: string): string {
+    const kept = raw
+        .split('\n')
+        .filter((line) => !TASK_SPAWN_ACK_LINE_RE.test(line.trim()));
+    return kept.join('\n').trim();
+}
 
 // Native write input and ask input contracts; tool inputs are arbitrary JSON on
 // the canonical part, so each renderer parses the shape it consumes.
@@ -126,9 +151,105 @@ const askInputSchema = z.object({
     questions: z.array(askQuestionSchema).min(1),
 });
 
+const bashAsyncDetailsSchema = z.object({
+    jobId: z.string().min(1),
+    state: z.string().min(1),
+});
+
+const bashServiceDetailsSchema = z.object({
+    name: z.string().min(1),
+    state: z.string().optional(),
+    ready: z.boolean().optional(),
+    timedOut: z.boolean().optional(),
+    pid: z.number().optional(),
+});
+
+const bashStatusDetailsSchema = z.object({
+    async: bashAsyncDetailsSchema.optional(),
+    service: bashServiceDetailsSchema.optional(),
+});
+
+type ParsedFindLine =
+    | { kind: 'hit'; filePath: string; startLine: number; endLine?: string; score?: number; snippet: string }
+    | { kind: 'header'; filePath: string; score: number; meta: string }
+    | { kind: 'text'; text: string };
+
+const FIND_HIT_LINE_RE = /^\s*(\S+?):(\d+)(?:-(\d+))?\s+(?:([01]\.\d{2})\s{2,})?(.*)$/;
+const FIND_HEADER_LINE_RE = /^(\S+)\s{2,}([01]\.\d{2})\s{2,}(.+)$/;
+
+function parseFindLine(line: string): ParsedFindLine {
+    const hitMatch = FIND_HIT_LINE_RE.exec(line);
+    if (hitMatch?.[1] && hitMatch[2]) {
+        const scoreValue = hitMatch[4] !== undefined ? Number(hitMatch[4]) : undefined;
+        return {
+            kind: 'hit',
+            filePath: hitMatch[1],
+            startLine: parseInt(hitMatch[2], 10),
+            endLine: hitMatch[3],
+            score: scoreValue !== undefined && scoreValue >= 0 && scoreValue <= 1 ? scoreValue : undefined,
+            snippet: hitMatch[5] ?? '',
+        };
+    }
+    const headerMatch = FIND_HEADER_LINE_RE.exec(line);
+    if (headerMatch?.[1] && headerMatch[2] && headerMatch[3]) {
+        const scoreValue = Number(headerMatch[2]);
+        if (scoreValue >= 0 && scoreValue <= 1) {
+            return {
+                kind: 'header',
+                filePath: headerMatch[1],
+                score: scoreValue,
+                meta: headerMatch[3],
+            };
+        }
+    }
+    return { kind: 'text', text: line };
+}
+
+function findScoreBadgeStyle(score: number): React.CSSProperties {
+    if (score >= 0.7) {
+        return {
+            color: 'var(--status-success)',
+            backgroundColor: 'var(--status-success-background)',
+            borderColor: 'var(--status-success-border)',
+        };
+    }
+    if (score >= 0.4) {
+        return {
+            color: 'var(--status-warning)',
+            backgroundColor: 'var(--status-warning-background)',
+            borderColor: 'var(--status-warning-border)',
+        };
+    }
+    return {
+        color: 'var(--muted-foreground)',
+        backgroundColor: 'color-mix(in srgb, var(--surface-muted) 40%, transparent)',
+        borderColor: 'var(--border)',
+    };
+}
+
+const isActiveCallStatus = (status: ToolCallPart['status'] | undefined): boolean =>
+    status === 'running' || status === 'approved' || status === 'pending_approval';
+
+const subagentStatusIcon = (status: string | undefined): { name: 'record-circle' | 'checkbox-circle' | 'close-circle' | 'time'; color?: string } => {
+    switch (status) {
+        case 'running':
+            return { name: 'record-circle', color: 'var(--status-info)' };
+        case 'completed':
+            return { name: 'checkbox-circle', color: 'var(--status-success)' };
+        case 'failed':
+            return { name: 'close-circle', color: 'var(--status-error)' };
+        case 'cancelled':
+        case 'aborted':
+            return { name: 'close-circle' };
+        default:
+            return { name: 'time' };
+    }
+};
+
 /** Child sessions join a task call by its exact native tool call identity. */
-const TaskToolSessions = ({ call, sessionId: addressedSessionId, directory: addressedDirectory, isMobile }: {
+const TaskToolSessions = ({ call, resultDetails, sessionId: addressedSessionId, directory: addressedDirectory, isMobile }: {
     call: ToolCallPart;
+    resultDetails?: JsonValue;
     sessionId?: string;
     directory?: string | null;
     isMobile: boolean;
@@ -139,58 +260,189 @@ const TaskToolSessions = ({ call, sessionId: addressedSessionId, directory: addr
     const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
     const sessionId = addressedSessionId ?? selection.sessionId;
     const directory = addressedDirectory ?? selection.directory;
-    const [state, setState] = React.useState<TaskChildrenState | null>(null);
-    const [retry, setRetry] = React.useState(0);
+    const allSubagents = useSubagentsStore(
+        React.useCallback((state) => (sessionId ? (state.byParent[sessionId] ?? EMPTY_SUBAGENTS) : EMPTY_SUBAGENTS), [sessionId]),
+    );
+    const isHydrated = useSubagentsStore(
+        React.useCallback((state) => Boolean(sessionId && state.hydratedByParent[sessionId] === runtimeKey), [runtimeKey, sessionId]),
+    );
+    const hydrateFailed = useSubagentsStore(
+        React.useCallback((state) => Boolean(sessionId && state.failedByParent?.[sessionId] === runtimeKey), [runtimeKey, sessionId]),
+    );
+    const children = React.useMemo(
+        () => (sessionId ? allSubagents.filter((child) => child.parentSessionId === sessionId && child.toolCallId === call.toolCallId) : EMPTY_SUBAGENTS),
+        [allSubagents, call.toolCallId, sessionId],
+    );
+    const parsedDetails = React.useMemo(() => taskResultDetailsSchema.safeParse(resultDetails).data, [resultDetails]);
+    const progressFallback = React.useMemo(
+        () => (children.length === 0 ? (parsedDetails?.progress ?? []) : []),
+        [children.length, parsedDetails?.progress],
+    );
+
+    const [hydrating, setHydrating] = React.useState(false);
+    const mountedRef = React.useRef(true);
+    const ownerRef = React.useRef({ sessionId, runtimeKey });
+    ownerRef.current = { sessionId, runtimeKey };
+    const prevCallStatusRef = React.useRef<ToolCallPart['status'] | undefined>(undefined);
 
     React.useEffect(() => {
-        if (!sessionId || !directory) return;
-        let current = true;
-        const owner = { sessionId, runtimeKey, toolCallId: call.toolCallId };
-        setState(previous => ({
-            ...owner,
-            status: 'loading',
-            children: previous?.sessionId === sessionId
-                && previous.runtimeKey === runtimeKey
-                && previous.toolCallId === call.toolCallId ? previous.children : [],
-        }));
-        void canonicalClient.listSubagents(sessionId).then(records => {
-            if (!current || getRuntimeKey() !== runtimeKey) return;
-            const children = records.filter(child => child.parentSessionId === sessionId && child.toolCallId === call.toolCallId);
-            const global = useGlobalSessionsStore.getState();
-            const parent = getSyncSessions(directory).find(session => session.sessionId === sessionId) ?? global.entityById.get(sessionId);
-            if (parent) global.upsertSubagents(parent, children);
-            setState({ ...owner, status: 'ready', children });
-        }).catch(() => {
-            if (current && getRuntimeKey() === runtimeKey) setState(previous => previous ? { ...previous, status: 'failed' } : null);
-        });
-        return () => { current = false; };
-    }, [sessionId, directory, runtimeKey, call.toolCallId, call.status, retry]);
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
 
-    if (!sessionId || !directory || state?.sessionId !== sessionId || state.runtimeKey !== runtimeKey || state.toolCallId !== call.toolCallId) return null;
+    const runHydrate = React.useCallback((force: boolean) => {
+        if (!sessionId || !directory) return;
+        const capturedSessionId = sessionId;
+        const capturedRuntimeKey = runtimeKey;
+        setHydrating(true);
+        void useSubagentsStore.getState().hydrateParent(capturedSessionId, force).finally(() => {
+            if (mountedRef.current && ownerRef.current.sessionId === capturedSessionId && ownerRef.current.runtimeKey === capturedRuntimeKey) {
+                setHydrating(false);
+            }
+        });
+    }, [directory, runtimeKey, sessionId]);
+
+    React.useEffect(() => {
+        const prevStatus = prevCallStatusRef.current;
+        prevCallStatusRef.current = call.status;
+        if (!sessionId || !directory) return;
+        const settledTransition = isActiveCallStatus(prevStatus) && !isActiveCallStatus(call.status);
+        if (!isHydrated || settledTransition) {
+            runHydrate(settledTransition);
+        }
+    }, [call.status, call.toolCallId, directory, isHydrated, runHydrate, sessionId]);
+
+    React.useEffect(() => {
+        if (!sessionId || !directory || children.length === 0) return;
+        const global = useGlobalSessionsStore.getState();
+        const parent = getSyncSessions(directory).find((session) => session.sessionId === sessionId) ?? global.entityById.get(sessionId);
+        if (parent) global.upsertSubagents(parent, children);
+    }, [children, directory, sessionId]);
+
+    if (!sessionId || !directory) return null;
+
     const openChild = (child: Subagent) => {
         if (!child.childSessionId) return;
+        const label = child.name?.trim() || child.role;
         if (column.pinned) column.openSession(child.childSessionId, directory);
         else if (isMobile) useSessionUIStore.getState().setCurrentSession(child.childSessionId, directory);
         else useUIStore.getState().openContextPanelTab(directory, {
-            mode: 'chat', dedupeKey: `session:${child.childSessionId}`, label: child.role, readOnly: true,
+            mode: 'chat', dedupeKey: `session:${child.childSessionId}`, label, readOnly: true,
         });
     };
+
+    const isAsyncRunning = parsedDetails?.async?.state === 'running' || isActiveCallStatus(call.status);
+    const showPanelButton = !isMobile && !isVSCodeRuntime() && (children.length > 0 || progressFallback.length > 0);
+
     return (
-        <div className="mb-2 flex flex-wrap items-center gap-1.5 typography-meta">
-            {state.children.map(child => (
-                <Button key={child.subagentId} variant="ghost" size="xs" onClick={() => openChild(child)}
-                    aria-label={t('chat.toolPart.openSubtask', { type: child.role })}>
-                    <Icon name="external-link" className="h-3.5 w-3.5" />
-                    {child.role}
-                </Button>
-            ))}
-            {state.status === 'loading' ? <span className="text-muted-foreground">{t('common.loading')}</span> : null}
-            {state.status === 'failed' || state.status === 'ready' && state.children.length === 0 ? (
-                <>
-                    <span className="text-muted-foreground">{state.status === 'failed' || call.status !== 'running'
-                        ? t('common.unavailable') : t('chat.toolPart.awaitingResponse')}</span>
-                    <Button variant="ghost" size="xs" onClick={() => setRetry(value => value + 1)}>{t('errorBoundary.actions.tryAgain')}</Button>
-                </>
+        <div className="mb-2 space-y-1 typography-meta">
+            {children.map((child) => {
+                const icon = subagentStatusIcon(child.status);
+                const displayName = child.name?.trim() || child.role;
+                const showRole = Boolean(child.name?.trim() && child.name.trim() !== child.role);
+                const liveDetail = child.status === 'running'
+                    ? (child.activeTool
+                        ? (child.activeToolArgs ? `${child.activeTool}: ${child.activeToolArgs}` : child.activeTool)
+                        : (child.stage || child.lastIntent || t('chat.workStatus.subagent.working')))
+                    : child.status === 'failed'
+                        ? (child.stage || t('chat.workStatus.subagent.failed'))
+                        : child.status === 'cancelled'
+                            ? (child.stage || t('subagents.status.cancelled'))
+                            : child.status === 'completed'
+                                ? (child.stage || t('chat.workStatus.subagent.done'))
+                                : (child.stage || null);
+                return (
+                    <div
+                        key={child.subagentId}
+                        className={cn(
+                            'flex items-center gap-2 rounded-lg px-2 py-1 border border-border/20 bg-muted/15 min-w-0',
+                            child.childSessionId && 'hover:bg-interactive-hover cursor-pointer',
+                        )}
+                        onClick={child.childSessionId ? (event) => { event.stopPropagation(); openChild(child); } : undefined}
+                    >
+                        <Icon
+                            name={icon.name}
+                            className={cn('size-3.5 shrink-0', !icon.color && 'text-muted-foreground')}
+                            style={icon.color ? { color: icon.color } : undefined}
+                        />
+                        <span className="font-medium text-foreground truncate" dir="auto">{displayName}</span>
+                        {showRole ? (
+                            <span className="shrink-0 text-[11px] text-muted-foreground">({child.role})</span>
+                        ) : null}
+                        {liveDetail ? (
+                            <span className="min-w-0 flex-1 truncate text-muted-foreground" dir="auto" title={liveDetail}>
+                                {liveDetail}
+                            </span>
+                        ) : <span className="flex-1" />}
+                        {child.childSessionId ? (
+                            <OpenSubtaskButton
+                                sessionId={child.childSessionId}
+                                agent={child.role}
+                                label={displayName}
+                                directory={directory}
+                                isMobile={isMobile}
+                            />
+                        ) : null}
+                    </div>
+                );
+            })}
+            {progressFallback.map((item) => {
+                const icon = subagentStatusIcon(item.status);
+                const detail = item.currentTool
+                    ? (item.currentToolArgs ? `${item.currentTool}: ${item.currentToolArgs}` : item.currentTool)
+                    : (item.stage || item.lastIntent || null);
+                return (
+                    <div
+                        key={item.id}
+                        className="flex items-center gap-2 rounded-lg px-2 py-1 border border-border/20 bg-muted/15 min-w-0"
+                    >
+                        <Icon
+                            name={icon.name}
+                            className={cn('size-3.5 shrink-0', !icon.color && 'text-muted-foreground')}
+                            style={icon.color ? { color: icon.color } : undefined}
+                        />
+                        <span className="font-medium text-foreground truncate" dir="auto">{item.id}</span>
+                        {item.agent && item.agent !== item.id ? (
+                            <span className="shrink-0 text-[11px] text-muted-foreground">({item.agent})</span>
+                        ) : null}
+                        {detail ? (
+                            <span className="min-w-0 flex-1 truncate text-muted-foreground" dir="auto" title={detail}>
+                                {detail}
+                            </span>
+                        ) : null}
+                    </div>
+                );
+            })}
+            {hydrating && children.length === 0 && progressFallback.length === 0 ? (
+                <span className="text-muted-foreground">{t('common.loading')}</span>
+            ) : null}
+            {hydrateFailed ? (
+                <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground">{t('common.unavailable')}</span>
+                    <Button variant="ghost" size="xs" onClick={(event) => { event.stopPropagation(); runHydrate(true); }}>
+                        {t('errorBoundary.actions.tryAgain')}
+                    </Button>
+                </div>
+            ) : children.length === 0 && progressFallback.length === 0 && !hydrating && isAsyncRunning ? (
+                <span className="text-muted-foreground">{t('chat.toolPart.awaitingResponse')}</span>
+            ) : null}
+            {showPanelButton ? (
+                <div className="flex items-center justify-end">
+                    <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            openSubagentsPanel(directory);
+                        }}
+                    >
+                        <Icon name="ai-agent" className="size-3.5" />
+                        {t('chat.workStatus.subagent.openPanel')}
+                    </Button>
+                </div>
             ) : null}
         </div>
     );
@@ -660,6 +912,7 @@ interface ToolExpandedContentProps {
     resultContent: NativeResultContent;
     fileChanges: ToolFileChange[];
     toolName: string;
+    hasStructuredSubagentRows?: boolean;
 }
 
 const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
@@ -674,6 +927,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     resultContent,
     fileChanges,
     toolName,
+    hasStructuredSubagentRows = false,
 }) => {
     const { t } = useI18n();
     const runtime = React.useContext(RuntimeAPIContext);
@@ -695,7 +949,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         setDiffViewMode('unified');
     }, [part.partId]);
 
-    const hideToolInputPreview = isEditTool(toolName);
+    const hideToolInputPreview = (isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch') && fileChanges.length > 0;
     const isWrite = isWriteTool(toolName);
     const writeInput = isWrite ? writeInputSchema.safeParse(input).data : undefined;
     const writeContent = writeInput?.content;
@@ -766,13 +1020,40 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const renderQuestionContent = () => {
         if (part.type === 'tool_result' && !part.isError) {
             const parsedQA = askAnswers(resultContent.details);
-            if (parsedQA.length > 0) {
+            const askTimedOut = Boolean(
+                resultContent.details
+                && typeof resultContent.details === 'object'
+                && !Array.isArray(resultContent.details)
+                && resultContent.details.timedOut === true,
+            );
+            if (parsedQA.length > 0 || askTimedOut) {
                 return renderScrollableBlock(
                     <div className="space-y-2">
+                        {askTimedOut ? (
+                            <div
+                                data-testid="ask-timed-out-notice"
+                                className="typography-micro inline-flex items-center gap-1 rounded px-1.5 py-0.5 border"
+                                style={{
+                                    color: 'var(--status-warning)',
+                                    backgroundColor: 'var(--status-warning-background)',
+                                    borderColor: 'var(--status-warning-border)',
+                                }}
+                            >
+                                <Icon name="time" className="size-3" />
+                                <span>{t('chat.toolPart.askTimedOut')}</span>
+                            </div>
+                        ) : null}
                         {parsedQA.map((qa, index) => (
                             <div key={index} className="space-y-0.5">
                                 <FormMarkdown content={qa.question} size="micro" className="text-muted-foreground" />
-                                <div className="typography-meta text-foreground whitespace-pre-wrap">{qa.answer}</div>
+                                <div className={cn('typography-meta whitespace-pre-wrap', qa.answer ? 'text-foreground' : 'text-muted-foreground/70 italic')}>
+                                    {qa.answer || t('chat.toolPart.noAnswer')}
+                                </div>
+                                {qa.note ? (
+                                    <div className="typography-micro text-muted-foreground/80 whitespace-pre-wrap">
+                                        {qa.note}
+                                    </div>
+                                ) : null}
                             </div>
                         ))}
                     </div>,
@@ -884,9 +1165,13 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (isQuestionTool(toolName)) return renderQuestionContent();
 
         if (isSubagentTool(toolName) && hasStringOutput) {
+            const taskBody = hasStructuredSubagentRows
+                ? stripTaskSpawnBoilerplate(outputString)
+                : outputString;
+            if (!taskBody.trim()) return null;
             return renderScrollableBlock(
                 <div className="w-full min-w-0">
-                    <SimpleMarkdownRenderer content={outputString} variant="tool" onShowPopup={onShowPopup} />
+                    <SimpleMarkdownRenderer content={taskBody} variant="tool" onShowPopup={onShowPopup} />
                 </div>
             );
         }
@@ -900,32 +1185,76 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         }
         if (isFindTool(toolName) && hasStringOutput && outputString.trim()) {
             const lines = outputString.split('\n');
+            const openFindTarget = (rawPath: string, line?: number) => {
+                const normalized = normalizeWorkspaceToolPath(rawPath);
+                const abs = toAbsoluteFilePath(currentDirectory, normalized);
+                if (runtime?.editor) {
+                    void runtime.editor.openFile(abs, line);
+                    return;
+                }
+                const uiStore = useUIStore.getState();
+                if (line !== undefined && Number.isFinite(line)) {
+                    uiStore.openContextFileAtLine(currentDirectory, abs, Math.max(1, Math.trunc(line)), 1);
+                } else {
+                    uiStore.openContextFile(currentDirectory, abs);
+                }
+                mobileActions?.openFiles();
+            };
             const findOutput = (
                 <div className="space-y-1 font-mono text-xs">
                     {lines.map((line, idx) => {
-                        const match = /^([^\s:]+):(\d+)(?:-(\d+))?\s+(.*)$/.exec(line);
-                        if (match) {
-                            const filePath = match[1]!;
-                            const startLine = parseInt(match[2]!, 10);
-                            const rest = match[4]!;
+                        const parsed = parseFindLine(line);
+                        if (parsed.kind === 'hit') {
+                            const displayPath = normalizeWorkspaceToolPath(parsed.filePath);
                             return (
-                                <div key={idx} className="flex items-start gap-1.5 py-0.5">
+                                <div key={idx} className="flex items-start gap-1.5 py-0.5 pl-2">
+                                    {parsed.score !== undefined ? (
+                                        <span
+                                            data-testid="find-score-badge"
+                                            className="inline-flex items-center px-1 py-0 rounded border text-[10px] leading-4 font-medium shrink-0"
+                                            style={findScoreBadgeStyle(parsed.score)}
+                                        >
+                                            {parsed.score.toFixed(2)}
+                                        </span>
+                                    ) : null}
                                     <button
                                         type="button"
                                         className="text-primary hover:underline font-medium shrink-0 cursor-pointer"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            const abs = toAbsoluteFilePath(currentDirectory, filePath);
-                                            if (runtime?.editor) {
-                                                void runtime.editor.openFile(abs, startLine);
-                                            } else {
-                                                useUIStore.getState().openContextFileAtLine(currentDirectory, abs, startLine, 1);
-                                            }
+                                            openFindTarget(parsed.filePath, parsed.startLine);
                                         }}
                                     >
-                                        {filePath}:{match[2]}{match[3] ? `-${match[3]}` : ''}
+                                        {displayPath}:{parsed.startLine}{parsed.endLine ? `-${parsed.endLine}` : ''}
                                     </button>
-                                    <span className="text-muted-foreground truncate">{rest}</span>
+                                    {parsed.snippet ? (
+                                        <span className="text-muted-foreground truncate">{parsed.snippet}</span>
+                                    ) : null}
+                                </div>
+                            );
+                        }
+                        if (parsed.kind === 'header') {
+                            const displayPath = normalizeWorkspaceToolPath(parsed.filePath);
+                            return (
+                                <div key={idx} className="flex items-center gap-1.5 pt-1 pb-0.5">
+                                    <button
+                                        type="button"
+                                        className="text-foreground hover:text-primary hover:underline font-medium shrink-0 cursor-pointer"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openFindTarget(parsed.filePath);
+                                        }}
+                                    >
+                                        {displayPath}
+                                    </button>
+                                    <span
+                                        data-testid="find-score-badge"
+                                        className="inline-flex items-center px-1 py-0 rounded border text-[10px] leading-4 font-medium shrink-0"
+                                        style={findScoreBadgeStyle(parsed.score)}
+                                    >
+                                        {parsed.score.toFixed(2)}
+                                    </span>
+                                    <span className="text-muted-foreground/80 truncate">{parsed.meta}</span>
                                 </div>
                             );
                         }
@@ -996,9 +1325,26 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         );
     };
 
-    const hasVisibleOutput = outputString.trim().length > 0;
-    const shouldRenderResult = part.type === 'tool_result' || (isShellTool(toolName) && hasVisibleOutput) || fileChanges.length > 0;
+    const hasVisibleOutput = isSubagentTool(toolName) && hasStructuredSubagentRows
+        ? stripTaskSpawnBoilerplate(outputString).trim().length > 0
+        : outputString.trim().length > 0;
+    const shouldRenderResult = isSubagentTool(toolName) && hasStructuredSubagentRows
+        ? (hasVisibleOutput || fileChanges.length > 0)
+        : (part.type === 'tool_result' || (isShellTool(toolName) && hasVisibleOutput) || fileChanges.length > 0);
     const hasVisualDiffEntry = fileChanges.some((entry) => !!entry.diff);
+    const bashStatus = React.useMemo(() => {
+        if (!isShellTool(toolName)) return null;
+        const parsed = bashStatusDetailsSchema.safeParse(resultContent.details);
+        if (!parsed.success) return null;
+        if (!parsed.data.async && !parsed.data.service) return null;
+        return parsed.data;
+    }, [resultContent.details, toolName]);
+    const hasExpandedBody = hasInputText
+        || Boolean(writeContent && !hasVisualDiffEntry)
+        || shouldRenderResult
+        || resultContent.images.length > 0
+        || (part.type === 'tool_result' && Boolean(part.error))
+        || Boolean(bashStatus);
 
     const openImagePreview = (index: number) => {
         if (!onShowPopup) return;
@@ -1103,6 +1449,44 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                                 {part.error}
                             </div>
                         </div>
+                    ) : null}
+                    {bashStatus ? (
+                        <div data-testid="bash-status-footer" className="flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground/80">
+                            {bashStatus.async ? (
+                                <div
+                                    data-testid="bash-async-badge"
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px]"
+                                >
+                                    <Icon name="history" className="size-3" />
+                                    <span>
+                                        {t('chat.eval.backgroundJob', { id: bashStatus.async.jobId })} · {bashStatus.async.state}
+                                    </span>
+                                </div>
+                            ) : null}
+                            {bashStatus.service ? (() => {
+                                const service = bashStatus.service;
+                                const readyLabel = service.ready === true
+                                    ? t('chat.toolPart.bashServiceReady')
+                                    : service.timedOut === true
+                                        ? t('chat.toolPart.bashServiceTimedOut')
+                                        : t('chat.toolPart.bashServiceNotReady');
+                                return (
+                                    <div
+                                        data-testid="bash-service-badge"
+                                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px]"
+                                    >
+                                        <Icon name="terminal-box" className="size-3" />
+                                        <span>
+                                            {t('chat.toolPart.bashService', { name: service.name })} · {readyLabel}
+                                            {service.pid !== undefined ? ` · ${t('chat.toolPart.bashServicePid', { pid: service.pid })}` : ''}
+                                        </span>
+                                    </div>
+                                );
+                            })() : null}
+                        </div>
+                    ) : null}
+                    {!hasExpandedBody ? (
+                        <div className="typography-meta text-muted-foreground/70">{t('chat.toolPart.awaitingResponse')}</div>
                     ) : null}
                 </>
             )}
@@ -1222,8 +1606,8 @@ const ToolPart: React.FC<ToolPartProps> = ({
         if (!call) return { text: '', path: null };
         const paths = toolInputPaths(call);
         if (paths.length > 1) return { text: t('chat.toolPart.filesCount', { count: paths.length }), path: null };
-        const filePath = isReadTool(toolName) || isEditTool(toolName) || isWriteTool(toolName) || isAstEditTool(toolName)
-            ? toolInputPath(call.input)
+        const filePath = isReadTool(toolName) || isEditTool(toolName) || isWriteTool(toolName) || isAstEditTool(toolName) || toolBaseName(toolName) === 'apply_patch'
+            ? (toolInputPath(call.input) ?? (paths.length === 1 ? paths[0]! : null))
             : null;
         if (filePath) {
             const target = normalizeWorkspaceToolPath(isReadTool(toolName) ? parseNativeReadPath(filePath).path : filePath);
@@ -1244,12 +1628,40 @@ const ToolPart: React.FC<ToolPartProps> = ({
             : describeToolResult(resultContent.details, toolName);
         return summary && summary !== described.text ? summary : null;
     }, [described.text, result, resultContent.details, t, toolName]);
-    const description = guestHeader?.subtitle ?? described.text;
+    const intent = React.useMemo(() => {
+        if (!call || typeof call.input.i !== 'string') return null;
+        return normalizeIntent(call.input.i);
+    }, [call]);
+    const primaryDescription = guestHeader?.subtitle ?? (described.text || intent || '');
+    const secondaryIntent = intent && primaryDescription && intent !== primaryDescription && !guestHeader?.subtitle
+        ? intent
+        : null;
+    const description = primaryDescription;
     const title = guestHeader?.title ?? displayName;
 
     const callStatus = call?.status;
     const failed = result?.isError ?? (callStatus === 'failed' || callStatus === 'denied');
     const running = callStatus ? (callStatus === 'running' || callStatus === 'approved' || callStatus === 'pending_approval') : !result;
+    const taskSessionId = sessionId ?? selection.sessionId;
+    const hasStoreSubagentRows = useSubagentsStore(
+        React.useCallback(
+            (state) => Boolean(
+                isSubagentTool(toolName)
+                && call
+                && taskSessionId
+                && state.byParent[taskSessionId]?.some(
+                    (child) => child.parentSessionId === taskSessionId && child.toolCallId === call.toolCallId,
+                ),
+            ),
+            [call, taskSessionId, toolName],
+        ),
+    );
+    const hasStructuredSubagentRows = React.useMemo(() => {
+        if (!isSubagentTool(toolName)) return false;
+        if (hasStoreSubagentRows) return true;
+        const parsed = taskResultDetailsSchema.safeParse(resultContent.details).data;
+        return Boolean(parsed?.progress && parsed.progress.length > 0);
+    }, [hasStoreSubagentRows, resultContent.details, toolName]);
 
     const diffStats = React.useMemo(() => {
         if (diffs.length === 0) return null;
@@ -1424,6 +1836,15 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                     </Text>
                                 )
                             ) : null}
+                            {secondaryIntent ? (
+                                <span
+                                    data-testid="tool-part-intent"
+                                    className="min-w-0 truncate typography-meta text-muted-foreground/75"
+                                    title={secondaryIntent}
+                                >
+                                    · {secondaryIntent}
+                                </span>
+                            ) : null}
                             {resultSummary ? (
                                 <span className="flex-shrink-0 typography-meta text-muted-foreground/70" title={resultSummary}>
                                     {resultSummary}
@@ -1470,9 +1891,10 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 resultContent={resultContent}
                                 fileChanges={fileChanges}
                                 toolName={toolName}
+                                hasStructuredSubagentRows={hasStructuredSubagentRows}
                             />
                             {call && isSubagentTool(toolName) ? (
-                                <TaskToolSessions call={call} sessionId={sessionId} directory={directory} isMobile={isMobile} />
+                                <TaskToolSessions call={call} resultDetails={resultContent.details} sessionId={sessionId} directory={directory} isMobile={isMobile} />
                             ) : null}
                             {onShowPopup && popupContent ? (
                                 <div className="mb-1 flex items-center justify-end gap-1">

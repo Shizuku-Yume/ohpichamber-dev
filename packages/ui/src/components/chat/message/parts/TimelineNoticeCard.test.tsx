@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Window } from 'happy-dom';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TimelineNoticeCard } from './TimelineNoticeCard';
+import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import type { NoticePart } from '@openchamber/agent-contract';
 
@@ -114,5 +121,166 @@ describe('TimelineNoticeCard', () => {
     const html = renderCard(notice);
     expect(html).toContain('data-notice-type="cache_invalidation"');
     expect(html).toContain('Prompt cache invalidated');
+  });
+
+  test('renders async_job_result single subagent notice with report and navigation links', () => {
+    const notice: NoticePart = {
+      type: 'notice',
+      partId: 'n7',
+      noticeType: 'async_job_result',
+      level: 'info',
+      details: {
+        jobs: [
+          {
+            jobId: 'job-1',
+            subagentId: 'ScoutAuth',
+            childSessionId: 'child-ses-1',
+            type: 'task',
+            status: 'completed',
+            label: 'ScoutAuth',
+            durationMs: 4200,
+            reportText: 'Found **2** auth handlers.',
+          },
+        ],
+      },
+    };
+
+    const collapsedHtml = renderCard(notice);
+    expect(collapsedHtml).toContain('data-notice-type="async_job_result"');
+    expect(collapsedHtml).toContain('Subagent result: ScoutAuth');
+    expect(collapsedHtml).not.toContain('Found');
+
+    const expandedHtml = renderToStaticMarkup(
+      <I18nProvider>
+        <TimelineNoticeCard notice={notice} directory="/workspace" defaultExpanded />
+      </I18nProvider>,
+    );
+    expect(expandedHtml).toContain('ScoutAuth');
+    expect(expandedHtml).toContain('Open session');
+    expect(expandedHtml).toContain('Open in the Subagents panel');
+    expect(expandedHtml).toContain('Found **2** auth handlers.');
+  });
+
+  test('renders async_job_result multi-job and failed job titles cleanly', () => {
+    const failedNotice: NoticePart = {
+      type: 'notice',
+      partId: 'n8',
+      noticeType: 'async_job_result',
+      level: 'error',
+      details: {
+        jobs: [
+          { jobId: 'bash-1', type: 'bash', status: 'failed', label: 'bun test', reportText: 'exit 1' },
+        ],
+      },
+    };
+    const multiNotice: NoticePart = {
+      type: 'notice',
+      partId: 'n9',
+      noticeType: 'async_job_result',
+      level: 'info',
+      details: {
+        jobs: [
+          { jobId: 'j1', subagentId: 'S1', type: 'task', status: 'completed', reportText: 'Done 1' },
+          { jobId: 'j2', subagentId: 'S2', type: 'task', status: 'completed', reportText: 'Done 2' },
+        ],
+      },
+    };
+
+    expect(renderCard(failedNotice)).toContain('Background job failed: bun test');
+    expect(renderCard(multiNotice)).toContain('2 subagent results');
+  });
+
+  test('expands async_job_result interactively and opens SubagentsPanel or child session via store fallback', async () => {
+    const happyWindow = new Window({ url: 'http://localhost' });
+    const globals = {
+      window: happyWindow, document: happyWindow.document, navigator: happyWindow.navigator,
+      localStorage: happyWindow.localStorage,
+      Node: happyWindow.Node, Text: happyWindow.Text, Element: happyWindow.Element, HTMLElement: happyWindow.HTMLElement,
+      IS_REACT_ACT_ENVIRONMENT: true,
+    };
+    const descriptors = Object.keys(globals).map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
+    for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+    const prevUI = useUIStore.getState();
+    const prevSessionUI = useSessionUIStore.getState();
+    const prevSubagents = useSubagentsStore.getState();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      useUIStore.setState({ isMobile: false, contextPanelByDirectory: {} });
+      useSessionUIStore.setState({ currentSessionId: 'parent-1', currentSessionDirectory: '/workspace' });
+      useSubagentsStore.setState({
+        byParent: {
+          'parent-1': [
+            {
+              subagentId: 'ScoutAuth',
+              parentSessionId: 'parent-1',
+              childSessionId: 'child-ses-from-store',
+              role: 'scout',
+              name: 'ScoutAuth',
+              status: 'completed',
+            },
+          ],
+        },
+      });
+
+      const notice: NoticePart = {
+        type: 'notice',
+        partId: 'n10',
+        noticeType: 'async_job_result',
+        level: 'info',
+        details: {
+          jobs: [
+            { jobId: 'ScoutAuth', subagentId: 'ScoutAuth', type: 'task', status: 'completed', reportText: 'Report body' },
+          ],
+        },
+      };
+
+      await act(async () => {
+        root.render(
+          <SyncProvider directory="/workspace">
+            <I18nProvider>
+              <TimelineNoticeCard notice={notice} sessionId="parent-1" directory="/workspace" />
+            </I18nProvider>
+          </SyncProvider>,
+        );
+      });
+
+      const toggle = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+      expect(toggle).not.toBeNull();
+      await act(async () => {
+        toggle?.click();
+      });
+      expect(container.textContent).toContain('Report body');
+
+      const openSessionBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open session'));
+      expect(openSessionBtn).not.toBeUndefined();
+      await act(async () => {
+        openSessionBtn?.click();
+      });
+      expect(useUIStore.getState().contextPanelByDirectory['/workspace']?.tabs).toMatchObject([
+        { mode: 'chat', dedupeKey: 'session:child-ses-from-store', readOnly: true },
+      ]);
+
+      const openPanelBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Open in the Subagents panel"]');
+      expect(openPanelBtn).not.toBeNull();
+      await act(async () => {
+        openPanelBtn?.click();
+      });
+      expect(useUIStore.getState().contextPanelByDirectory['/workspace']?.tabs).toEqual(
+        expect.arrayContaining([expect.objectContaining({ mode: 'subagents' })]),
+      );
+    } finally {
+      await act(async () => { root.unmount(); });
+      useUIStore.setState(prevUI);
+      useSessionUIStore.setState(prevSessionUI);
+      useSubagentsStore.setState(prevSubagents);
+      await happyWindow.happyDOM.abort();
+      for (const [name, descriptor] of descriptors) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      }
+    }
   });
 });

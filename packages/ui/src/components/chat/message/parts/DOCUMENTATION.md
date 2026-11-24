@@ -255,7 +255,7 @@ Descriptions must not invent protocol metadata, aliases, or a successful mutatio
 
 - Do not duplicate icon logic; keep it in `toolPresentation.tsx`.
 - For static tool copy changes, prefer `ProgressiveGroup.tsx` first.
-- For expanded output changes, edit `toolRow/ToolExpandedContent.tsx`.
+- For expanded output changes, edit `ToolPart.tsx` (expanded sections live there; `toolRow/` only retains `OpenSubtaskButton.tsx`).
 - After edits run:
   - `bun run type-check`
   - `bun run lint`

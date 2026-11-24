@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { overrides } from '../../../../../package.json';
-import { KNOWN_TOOL_NAMES, OMP_TOOL_NAMES, toolPresentation } from './index';
+import { askAnswers, categorizeTool, getToolOneLineDescription, KNOWN_TOOL_NAMES, OMP_TOOL_NAMES, toolPresentation } from './index';
 
 const known = (name: string): boolean => (KNOWN_TOOL_NAMES as readonly string[]).includes(name);
 
@@ -117,11 +117,99 @@ describe('OMP tool presentation coverage', () => {
 
     test('todo progress counts completed and abandoned tasks as closed across phases', () => {
         const todo = toolPresentation('todo');
-        expect(todo.describeResult({ phases: [
-            { name: 'Plan', tasks: [{ content: 'Done', status: 'completed' }, { content: 'Dropped', status: 'abandoned' }] },
-            { name: 'Verify', tasks: [{ content: 'Working', status: 'in_progress' }, { content: 'Next', status: 'pending' }] },
-        ] })).toBe('2/4');
+        expect(todo.describeResult({
+            phases: [
+                { name: 'Plan', tasks: [{ content: 'Done', status: 'completed' }, { content: 'Dropped', status: 'abandoned' }] },
+                { name: 'Verify', tasks: [{ content: 'Working', status: 'in_progress' }, { content: 'Next', status: 'pending' }] },
+            ]
+        })).toBe('2/4');
         expect(todo.describeResult({ phases: [] })).toBeNull();
         expect(todo.describeResult({})).toBeNull();
+    });
+
+    test('bashSummary surfaces async job and service details', () => {
+        const bash = toolPresentation('bash');
+        expect(bash.describeResult({
+            async: { jobId: 'job-42', state: 'running', type: 'bash' },
+            exitCode: 0,
+        })).toBe('job job-42 · running · exit 0');
+        expect(bash.describeResult({
+            service: { name: 'dev-server', state: 'running', ready: true, timedOut: false, pid: 1234 },
+        })).toBe('service dev-server · ready · pid 1234');
+    });
+
+    test('tts presentation and permission group are registered', () => {
+        const tts = toolPresentation('tts');
+        expect(tts.label).toBe('Speech generation');
+        expect(tts.icon).toBe('volume-up');
+        expect(tts.describeCall({ output_path: 'out/hello.mp3', text: 'Hello' })).toBe('out/hello.mp3');
+        expect(tts.describeResult({ codec: 'mp3', voiceId: 'eve', bytes: 2048 })).toBe('MP3 · eve · 2048 bytes');
+    });
+
+    test('askAnswers parses HTML form { data, notes, timedOut } outcomes', () => {
+        expect(categorizeTool('tts')).toBe('execution');
+        expect(getToolOneLineDescription('tts')).toBe('Synthesize speech audio from text');
+        expect(askAnswers({
+            data: { db: 'postgres', tags: ['api', 'cli'] },
+            notes: [{ name: 'db', question: 'Which database?', option: 'postgres', value: 'postgres', text: 'Primary store' }],
+            timedOut: true,
+        })).toEqual([
+            { question: 'Which database?', answer: 'postgres', note: 'postgres: Primary store', timedOut: true },
+            { question: 'tags', answer: 'api, cli', timedOut: true },
+        ]);
+        expect(toolPresentation('ask').describeResult({
+            data: { db: 'postgres', blank: '' },
+            timedOut: true,
+        })).toBe('timed out · 1/2 answered');
+    });
+
+    test('task.describeCall supports intent, single, and OMP 19.1 batch inputs', () => {
+        const task = toolPresentation('task');
+        expect(task.describeCall({
+            i: 'Auditing tool cards...',
+            context: 'Shared',
+            tasks: [{ name: 'A', agent: 'scout', task: 'Inspect' }],
+        })).toBe('Auditing tool cards');
+        expect(task.describeCall({
+            context: 'Shared',
+            tasks: [
+                { name: 'ScoutA', agent: 'scout', task: 'Read A', solutionSpace: 'narrow' },
+                { name: 'WorkerB', agent: 'task', task: 'Fix B', solutionSpace: 'narrow' },
+            ],
+        })).toBe('2 subagents (scout, task)');
+        expect(task.describeCall({
+            context: 'Shared',
+            tasks: [{ name: 'Solo', agent: 'scout', task: 'Read A' }],
+        })).toBe('Solo');
+        expect(task.describeCall({
+            context: 'Shared',
+            tasks: [{ agent: 'scout', task: 'Read A' }],
+        })).toBe('1 subagent (scout)');
+        expect(task.describeCall({ agent: 'scout', task: 'Inspect auth' })).toBe('Inspect auth');
+    });
+
+    test('taskSummary and waitSummary report async progress and jobs when results is empty', () => {
+        const task = toolPresentation('task');
+        expect(task.describeResult({
+            results: [],
+            progress: [{ id: 'a1', agent: 'scout', status: 'running' }, { id: 'a2', agent: 'task', status: 'pending' }],
+            async: { state: 'running', jobId: 'a1', type: 'task' },
+        })).toBe('2 subagents · running');
+        expect(task.describeResult({
+            results: [],
+            progress: [{ id: 'a1', agent: 'scout', status: 'failed' }],
+            async: { state: 'failed', jobId: 'a1', type: 'task' },
+        })).toBe('1 subagent · failed');
+        expect(task.describeResult({
+            results: [{ id: 'a1' }, { id: 'a2' }],
+        })).toBe('2 subagents');
+
+        const wait = toolPresentation('wait');
+        expect(wait.describeCall({ i: 'Waiting for scouts...' })).toBe('Waiting for scouts');
+        expect(wait.describeResult({
+            op: 'wait',
+            jobs: [{ id: 'j1', status: 'running' }, { id: 'j2', status: 'completed' }],
+        })).toBe('2 jobs (1 running)');
+        expect(wait.describeResult({ op: 'wait', jobs: [], interrupted: true })).toBe('interrupted');
     });
 });

@@ -47,7 +47,22 @@ describe('native tool helpers', () => {
     expect(detectToolOutputLanguage('read', '', { path: 'src/main.ts' })).toBe('typescript');
     const rename = ToolCallPartSchema.parse({ ...edit, input: { path: 'old.ts', edits: [{ op: 'update', rename: 'new.ts' }] } });
     expect(toolInputPaths(rename)).toEqual(['old.ts', 'new.ts']);
-    expect(toolInputPaths({ ...edit, input: { input: '[src/main.ts#A123]\nPUT 1.=1:\n+updated' } })).toEqual([]);
+    expect(toolInputPaths({ ...edit, input: { input: '[src/main.ts#A123]\nPUT 1.=1:\n+updated' } })).toEqual(['src/main.ts']);
+    expect(toolInputPaths({
+      ...edit,
+      input: { input: '[src/first.ts#A123]\nPUT 1.=1:\n+a\n[src/second.ts#BEEF]\nMV src/moved.ts' },
+    })).toEqual(['src/first.ts', 'src/second.ts', 'src/moved.ts']);
+    expect(toolInputPaths({
+      ...edit,
+      toolName: 'apply_patch',
+      input: { input: '*** Begin Patch\n*** Add File: added.ts\n+hi\n*** Update File: src/app.ts\n*** Move to: src/main.ts\n*** End Patch' },
+    })).toEqual(['added.ts', 'src/app.ts', 'src/main.ts']);
+    expect(toolInputPaths({
+      ...edit,
+      input: { input: '*** Edit File: src/sloppy.ts\n*** Replace Block: foo\n+bar' },
+    })).toEqual(['src/sloppy.ts']);
+    expect(describeToolCall({ input: '[src/main.ts#A123]\nPUT 1.=1:\n+updated' }, 'edit')).toBe('src/main.ts');
+    expect(describeToolCall({ input: '*** Begin Patch\n*** Update File: src/a.ts\n*** Add File: src/b.ts' }, 'apply_patch')).toBe('src/a.ts (+1)');
     expect(describeToolCall({ query: 'session deletion', grep_keywords: ['delete'] }, 'find')).toBe('session deletion');
     expect(describeToolCall({ agent: 'child', name: 'inspect', task: 'Inspect files' }, 'task')).toBe('inspect');
     expect(describeToolCall({ questions: [{ id: 'q1', question: 'Proceed?', options: [{ label: 'Yes' }] }] }, 'ask')).toBe('Proceed?');
@@ -62,5 +77,11 @@ describe('native tool helpers', () => {
     expect(parseNativeReadPath('src/main.ts:-60')).toEqual({ path: 'src/main.ts' });
     expect(parseNativeReadPath('https://example.test:3127/src/main.ts')).toEqual({ path: 'https://example.test:3127/src/main.ts' });
     expect(detectToolOutputLanguage('read', '', { path: 'src/main.ts:50-100' })).toBe('typescript');
+  });
+
+  test('strips tool intent `i` from raw JSON input dumps while preserving edit payloads', () => {
+    expect(JSON.parse(formatToolInput({ i: 'Checking status', flags: '--short' }, 'custom_tool'))).toEqual({ flags: '--short' });
+    expect(formatToolInput({ i: 'Only intent' }, 'custom_tool')).toBe('');
+    expect(formatToolInput({ i: 'Editing file', input: '[src/a.ts#1234]\nPUT 1.=1:\n+next' }, 'edit')).toBe('[src/a.ts#1234]\nPUT 1.=1:\n+next');
   });
 });

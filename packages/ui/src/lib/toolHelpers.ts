@@ -22,6 +22,7 @@ import {
  isReadTool as registryRead,
  isWebSearchTool,
  isAstEditTool as registryAstEdit,
+ parseEditInputPaths,
  askAnswers,
  toolBaseName,
  toolPresentation,
@@ -45,6 +46,7 @@ export const isAstEditTool = registryAstEdit;
 export const isReadTool = registryRead;
 export const isWriteTool = registryWrite;
 export {
+ parseEditInputPaths,
  askAnswers,
  isFindTool,
  isGlobTool,
@@ -75,9 +77,17 @@ export const toolInputPath = inputPathOf;
 export function toolInputPaths(call: ToolCallPart): string[] {
  const path = toolInputPath(call.input);
  const paths = path ? [path] : [];
- if (isEditTool(call.toolName) && Array.isArray(call.input.edits)) {
-  for (const edit of call.input.edits) {
-   if (edit && typeof edit === 'object' && !Array.isArray(edit) && typeof edit.rename === 'string' && !paths.includes(edit.rename)) paths.push(edit.rename);
+ const baseName = toolBaseName(call.toolName);
+ if (isEditTool(call.toolName) || baseName === 'apply_patch') {
+  if (Array.isArray(call.input.edits)) {
+   for (const edit of call.input.edits) {
+    if (edit && typeof edit === 'object' && !Array.isArray(edit) && typeof edit.rename === 'string' && !paths.includes(edit.rename)) paths.push(edit.rename);
+   }
+  }
+  if (typeof call.input.input === 'string') {
+   for (const extracted of parseEditInputPaths(call.input.input)) {
+    if (!paths.includes(extracted)) paths.push(extracted);
+   }
   }
  } else if (isAstEditTool(call.toolName)) {
   if (Array.isArray(call.input.paths)) {
@@ -88,8 +98,6 @@ export function toolInputPaths(call: ToolCallPart): string[] {
    paths.push(call.input.path);
   }
  }
- // Raw edit modes carry a native program, not a path field. Their resolved
- // targets come from the result's details, not a guessed client-side parser.
  return paths;
 }
 
@@ -493,14 +501,14 @@ export function getLanguageFromExtension(filePath: string): string | null {
   'diff': 'diff',
   'patch': 'diff',
 
-    'prisma': 'prisma',
+  'prisma': 'prisma',
 
-    'proto': 'protobuf',
+  'proto': 'protobuf',
 
-    'thrift': 'thrift',
+  'thrift': 'thrift',
 
-    'wat': 'wasm',
-    'wast': 'wasm',
+  'wat': 'wasm',
+  'wast': 'wasm',
 
   // GLSL/Shaders
   'glsl': 'glsl',
@@ -590,14 +598,14 @@ export function isMermaidFile(filePath: string): boolean {
 }
 
 const BINARY_FILE_EXTENSIONS = new Set([
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
-  'zip', 'rar', '7z', 'gz', 'tgz', 'tar', 'bz2', 'xz', 'jar', 'war', 'apk', 'dmg', 'iso',
-  'deb', 'rpm', 'msi',
-  ...IMAGE_EXTENSIONS.filter((ext) => ext !== 'svg'),
-  ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS, 'wma', 'avi', 'wmv',
-  ...FONT_EXTENSIONS, 'eot',
-  'exe', 'dll', 'so', 'dylib', 'bin', 'class', 'o', 'a', 'lib', 'wasm', 'node',
-  'sqlite', 'sqlite3', 'db', 'dat', 'parquet', 'feather', 'pickle', 'pyc', 'pyo', 'lockb',
+ 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
+ 'zip', 'rar', '7z', 'gz', 'tgz', 'tar', 'bz2', 'xz', 'jar', 'war', 'apk', 'dmg', 'iso',
+ 'deb', 'rpm', 'msi',
+ ...IMAGE_EXTENSIONS.filter((ext) => ext !== 'svg'),
+ ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS, 'wma', 'avi', 'wmv',
+ ...FONT_EXTENSIONS, 'eot',
+ 'exe', 'dll', 'so', 'dylib', 'bin', 'class', 'o', 'a', 'lib', 'wasm', 'node',
+ 'sqlite', 'sqlite3', 'db', 'dat', 'parquet', 'feather', 'pickle', 'pyc', 'pyo', 'lockb',
 ]);
 
 export function getFileExtension(filePath: string): string {
@@ -622,16 +630,16 @@ export function looksLikeBinaryText(content: string): boolean {
   return false;
  }
 
-  const sample = content.length > 8192 ? content.slice(0, 8192) : content;
-  if (sample.includes('\0')) {
-    return true;
-  }
-  if (sample.startsWith('%PDF')) {
-    return true;
-  }
-  if (sample.startsWith('PK\u0003\u0004') || sample.startsWith('PK\u0005\u0006') || sample.startsWith('PK\u0007\u0008')) {
-    return true;
-  }
+ const sample = content.length > 8192 ? content.slice(0, 8192) : content;
+ if (sample.includes('\0')) {
+  return true;
+ }
+ if (sample.startsWith('%PDF')) {
+  return true;
+ }
+ if (sample.startsWith('PK\u0003\u0004') || sample.startsWith('PK\u0005\u0006') || sample.startsWith('PK\u0007\u0008')) {
+  return true;
+ }
 
  let suspicious = 0;
  for (let index = 0; index < sample.length; index += 1) {
@@ -669,22 +677,25 @@ export function formatToolInput(input: ToolCallPart['input'], toolName: string):
  if (isShellTool(toolName) && typeof input.command === 'string') return input.command;
  if (isWriteTool(toolName) && typeof input.content === 'string') return input.content;
  if (isEvalTool(toolName) && typeof input.code === 'string') return input.code;
- // Keep complete structured native edit/task/custom-tool inputs visible.
- return JSON.stringify(input, null, 2);
+ if ((isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch') && typeof input.input === 'string') return input.input;
+ const { i: _intent, ...rest } = input;
+ if (Object.keys(rest).length === 0) return '';
+ // Keep complete structured native edit/task/custom-tool inputs visible without duplicating `i` intent.
+ return JSON.stringify(rest, null, 2);
 }
 
 export function hasFileVersionsDiff(filePath: string): boolean {
-  return isImageFile(filePath) || isOfficePreviewFile(filePath);
+ return isImageFile(filePath) || isOfficePreviewFile(filePath);
 }
 
 export function isDataFile(filePath: string): boolean {
-  return ['sqlite', 'sqlite3', 'db', 'parquet'].includes(getFileExtension(filePath));
+ return ['sqlite', 'sqlite3', 'db', 'parquet'].includes(getFileExtension(filePath));
 }
 
 export function isArchiveFile(filePath: string): boolean {
-  return ['zip', 'jar', 'war'].includes(getFileExtension(filePath));
+ return ['zip', 'jar', 'war'].includes(getFileExtension(filePath));
 }
 
 export function isNotebookFile(filePath: string): boolean {
-  return getFileExtension(filePath) === 'ipynb';
+ return getFileExtension(filePath) === 'ipynb';
 }

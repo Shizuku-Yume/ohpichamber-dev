@@ -152,6 +152,11 @@ interface MessageRowProps {
     reviewTransferDirection?: ReviewTransferDirection | null;
 }
 
+const isVisibleSystemNoticeMessage = (message: ChatMessageEntry): boolean => (
+    message.role === 'system'
+    && message.parts.some((part) => part.type === 'notice' && part.noticeType === 'async_job_result')
+);
+
 const MessageRow = React.memo<MessageRowProps>(({
     message,
     previousMessage,
@@ -164,7 +169,7 @@ const MessageRow = React.memo<MessageRowProps>(({
     onUserAnimationConsumed,
     reviewTransferDirection,
 }) => {
-    if (message.role === 'system') return null;
+    if (message.role === 'system' && !isVisibleSystemNoticeMessage(message)) return null;
 
     return (
         <ChatMessage
@@ -185,9 +190,9 @@ const MessageRow = React.memo<MessageRowProps>(({
     const nextTurn = next.turnGroupingContext;
 
     return areRenderRelevantMessagesEqual(
-            { info: prev.message, parts: prev.message.parts },
-            { info: next.message, parts: next.message.parts }
-        )
+        { info: prev.message, parts: prev.message.parts },
+        { info: next.message, parts: next.message.parts }
+    )
         && areOptionalRenderRelevantMessagesEqual(
             prev.previousMessage ? { info: prev.previousMessage, parts: prev.previousMessage.parts } : undefined,
             next.previousMessage ? { info: next.previousMessage, parts: next.previousMessage.parts } : undefined
@@ -964,41 +969,41 @@ const TimelineRowContent: React.FC<{
     activeStreamingPhase,
     reviewTransferDirection,
 }) => {
-    // Overlay live parts on every message of the tail, not only the one
-    // currently streaming: a finished step message's base record can lag the
-    // part store, and rendering it from that stale snapshot briefly unmounts
-    // its completed tool parts when the stream hands off to the next message.
-    // A history row subscribes to nothing.
-    const tailMessageIds = React.useMemo(() => {
-        if (!live) return EMPTY_ROW_MESSAGE_IDS;
-        if (entry.kind === 'turn') return entry.turn.assistantMessageIds;
-        return [entry.message.messageId];
-    }, [entry, live]);
-    const livePartsByMessageId = useSessionPartsForMessages(sessionKey, tailMessageIds, directory);
-    const rowEntry = React.useMemo(() => (live ? buildLiveStreamingEntry(entry, {
-        livePartsByMessageId,
-        showTextJustificationActivity: chatRenderMode === 'sorted',
-        showTurnChangedFiles,
-        mergeHiddenUserTurns: true,
-    }) : entry), [chatRenderMode, entry, live, livePartsByMessageId, showTurnChangedFiles]);
+        // Overlay live parts on every message of the tail, not only the one
+        // currently streaming: a finished step message's base record can lag the
+        // part store, and rendering it from that stale snapshot briefly unmounts
+        // its completed tool parts when the stream hands off to the next message.
+        // A history row subscribes to nothing.
+        const tailMessageIds = React.useMemo(() => {
+            if (!live) return EMPTY_ROW_MESSAGE_IDS;
+            if (entry.kind === 'turn') return entry.turn.assistantMessageIds;
+            return [entry.message.messageId];
+        }, [entry, live]);
+        const livePartsByMessageId = useSessionPartsForMessages(sessionKey, tailMessageIds, directory);
+        const rowEntry = React.useMemo(() => (live ? buildLiveStreamingEntry(entry, {
+            livePartsByMessageId,
+            showTextJustificationActivity: chatRenderMode === 'sorted',
+            showTurnChangedFiles,
+            mergeHiddenUserTurns: true,
+        }) : entry), [chatRenderMode, entry, live, livePartsByMessageId, showTurnChangedFiles]);
 
-    return (
-        <MessageListEntry
-            entry={rowEntry}
-            stickyUserHeader={stickyUserHeader}
-            sessionIsWorking={sessionIsWorking}
-            defaultActivityExpanded={defaultActivityExpanded}
-            turnUiStates={turnUiStates}
-            onToggleTurnGroup={onToggleTurnGroup}
-            chatRenderMode={chatRenderMode}
-            shouldAnimateUserMessage={shouldAnimateUserMessage}
-            onUserAnimationConsumed={onUserAnimationConsumed}
-            activeStreamingMessageId={activeStreamingMessageId}
-            activeStreamingPhase={activeStreamingPhase}
-            reviewTransferDirection={reviewTransferDirection}
-        />
-    );
-};
+        return (
+            <MessageListEntry
+                entry={rowEntry}
+                stickyUserHeader={stickyUserHeader}
+                sessionIsWorking={sessionIsWorking}
+                defaultActivityExpanded={defaultActivityExpanded}
+                turnUiStates={turnUiStates}
+                onToggleTurnGroup={onToggleTurnGroup}
+                chatRenderMode={chatRenderMode}
+                shouldAnimateUserMessage={shouldAnimateUserMessage}
+                onUserAnimationConsumed={onUserAnimationConsumed}
+                activeStreamingMessageId={activeStreamingMessageId}
+                activeStreamingPhase={activeStreamingPhase}
+                reviewTransferDirection={reviewTransferDirection}
+            />
+        );
+    };
 
 TimelineRowContent.displayName = 'TimelineRowContent';
 
@@ -1063,7 +1068,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         for (const message of messages) {
             // A notice row (rewind, compaction) is its own row; every other
             // message, tool results included, belongs to a turn.
-            if (message.role === 'system') {
+            if (message.role === 'system' && !isVisibleSystemNoticeMessage(message)) {
                 continue;
             }
             latestById.set(message.messageId, message);
@@ -1072,7 +1077,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         // Preserve the first occurrence's chronological position, but use the last
         // value because prepended history can overlap with newer live store data.
         for (const message of messages) {
-            if (message.role === 'system') {
+            if (message.role === 'system' && !isVisibleSystemNoticeMessage(message)) {
                 continue;
             }
             const messageId = message.messageId;

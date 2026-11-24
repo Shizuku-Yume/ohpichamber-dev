@@ -159,6 +159,33 @@ describe('native tool diffs', () => {
             expect(getToolFileChanges(result({ path, diff: '+1|new' }))).toEqual([]);
         }
     });
+    test('extracts target and quick-open paths for running hashline, apply_patch, and sloppy edit calls', () => {
+        const hashlineCall: ToolCallPart = {
+            type: 'tool_call', partId: 'hashline-call', toolCallId: 'hashline-call', toolName: 'edit', status: 'running',
+            input: { input: '[src/hashline.ts#A1B2]\nPUT 1.=1:\n+next' },
+        };
+        expect(getPrimaryToolPath(hashlineCall)).toBe('src/hashline.ts');
+        expect(resolveToolQuickOpenTarget(hashlineCall)).toEqual({ filePath: 'src/hashline.ts', line: undefined });
+
+        const streamingHashlineCall: ToolCallPart = {
+            type: 'tool_call', partId: 'hashline-stream', toolCallId: 'hashline-stream', toolName: 'edit', status: 'running',
+            input: { input: '[src/streaming.ts#A1' },
+        };
+        expect(getPrimaryToolPath(streamingHashlineCall)).toBe('src/streaming.ts');
+
+        const applyPatchCall: ToolCallPart = {
+            type: 'tool_call', partId: 'patch-call', toolCallId: 'patch-call', toolName: 'apply_patch', status: 'running',
+            input: { input: '*** Begin Patch\n*** Update File: src/updated.ts\n@@\n-a\n+b\n*** End Patch' },
+        };
+        expect(getPrimaryToolPath(applyPatchCall)).toBe('src/updated.ts');
+        expect(resolveToolQuickOpenTarget(applyPatchCall)).toEqual({ filePath: 'src/updated.ts', line: undefined });
+
+        const sloppyCall: ToolCallPart = {
+            type: 'tool_call', partId: 'sloppy-call', toolCallId: 'sloppy-call', toolName: 'edit', status: 'running',
+            input: { input: '*** Edit File: src/sloppy.ts\n*** Replace Block: fn\n+next' },
+        };
+        expect(getPrimaryToolPath(sloppyCall)).toBe('src/sloppy.ts');
+    });
 });
 
 describe('bounded tool diff previews', () => {

@@ -1,19 +1,52 @@
 import React from 'react';
-import type { NoticePart } from '@openchamber/agent-contract';
+import type { NoticePart, Subagent } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { openSubagentsPanel } from '@/components/chat/subagents/panel';
+import { useOpenChildSession } from '@/components/chat/work-status/useOpenChildSession';
+import { formatSessionActivityDuration } from '@/components/session/sessionActivityDurationFormat';
+import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
+
+const EMPTY_SUBAGENTS: Subagent[] = [];
 
 interface TimelineNoticeCardProps {
   notice: NoticePart;
+  sessionId?: string;
+  directory?: string | null;
+  defaultExpanded?: boolean;
   className?: string;
 }
 
-export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, className }) => {
+export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({
+  notice,
+  sessionId,
+  directory,
+  defaultExpanded = false,
+  className,
+}) => {
   const { t } = useI18n();
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isExpanded, setIsExpanded] = React.useState(defaultExpanded);
+  const isMobile = useUIStore((state) => state.isMobile);
+  const activeSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const activeSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
+  const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const effectiveSessionId = sessionId ?? activeSessionId;
+  const effectiveDirectory = directory ?? activeSessionDirectory ?? fallbackDirectory ?? null;
+  const subagents = useSubagentsStore(
+    React.useCallback((state) => (effectiveSessionId ? (state.byParent[effectiveSessionId] ?? EMPTY_SUBAGENTS) : EMPTY_SUBAGENTS), [effectiveSessionId]),
+  );
+  const openChildSession = useOpenChildSession(effectiveDirectory);
 
   const { noticeType, level } = notice;
+  const isTaskAsyncDelivery = notice.noticeType === 'async_job_result'
+    && notice.details.jobs.some((job) => job.type === 'task' || Boolean(job.subagentId || job.childSessionId));
 
   // Icon mapping
   const iconName = React.useMemo(() => {
@@ -30,10 +63,12 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
         return 'alert' as const;
       case 'cache_invalidation':
         return 'database-2' as const;
+      case 'async_job_result':
+        return isTaskAsyncDelivery ? 'ai-agent' as const : 'terminal-box' as const;
       default:
         return level === 'error' ? 'alert' as const : 'information' as const;
     }
-  }, [noticeType, level]);
+  }, [isTaskAsyncDelivery, noticeType, level]);
 
   // Tone styling
   const toneClasses = React.useMemo(() => {
@@ -85,11 +120,33 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
         return t('chat.notice.servedModelMismatch', { requested: notice.details.requested, served: notice.details.served });
       case 'cache_invalidation':
         return t('chat.notice.cacheInvalidation');
+      case 'async_job_result': {
+        const jobs = notice.details.jobs;
+        if (jobs.length === 1) {
+          const job = jobs[0]!;
+          const matchingSubagent = subagents.find(
+            (candidate) => candidate.subagentId === (job.subagentId ?? job.jobId) || (job.subagentId ? candidate.name === job.subagentId : false),
+          );
+          const name = job.label?.trim() || matchingSubagent?.name?.trim() || job.subagentId || job.jobId;
+          const isSubagent = job.type === 'task' || Boolean(job.subagentId || job.childSessionId || matchingSubagent);
+          if (isSubagent) {
+            return job.status === 'failed'
+              ? t('chat.notice.asyncJobResultSubagentFailed', { name })
+              : t('chat.notice.asyncJobResultSubagent', { name });
+          }
+          return job.status === 'failed'
+            ? t('chat.notice.asyncJobResultJobFailed', { name })
+            : t('chat.notice.asyncJobResultJob', { name });
+        }
+        return isTaskAsyncDelivery
+          ? t('chat.notice.asyncJobResultSubagents', { count: jobs.length })
+          : t('chat.notice.asyncJobResultJobs', { count: jobs.length });
+      }
     }
-  }, [notice, t]);
+  }, [isTaskAsyncDelivery, notice, subagents, t]);
 
   const hasDetails = Boolean(notice.message || notice.details);
-
+  const showSubagentsPanelAction = isTaskAsyncDelivery && Boolean(effectiveDirectory) && !isMobile && !isVSCodeRuntime();
   return (
     <div
       data-timeline-notice=""
@@ -105,22 +162,39 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
           <Icon name={iconName} className={cn('size-4 shrink-0', toneClasses.icon)} />
           <span className="font-medium tracking-tight truncate">{title}</span>
         </div>
-
-        {hasDetails && (
-          <button
-            type="button"
-            onClick={() => setIsExpanded(prev => !prev)}
-            aria-expanded={isExpanded}
-            aria-label={isExpanded ? t('chat.notice.hideDetailsAria') : t('chat.notice.showDetailsAria')}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-          >
-            <span>{isExpanded ? t('chat.notice.hide') : t('chat.notice.details')}</span>
-            <Icon
-              name="arrow-down-s"
-              className={cn('size-3.5 transition-transform duration-200', isExpanded && 'rotate-180')}
-            />
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {showSubagentsPanelAction && effectiveDirectory ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                openSubagentsPanel(effectiveDirectory);
+              }}
+              aria-label={t('chat.workStatus.subagent.openPanel')}
+              title={t('chat.workStatus.subagent.openPanel')}
+              className="h-5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              <Icon name="ai-agent" className="size-3" />
+            </Button>
+          ) : null}
+          {hasDetails && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded(prev => !prev)}
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? t('chat.notice.hideDetailsAria') : t('chat.notice.showDetailsAria')}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+            >
+              <span>{isExpanded ? t('chat.notice.hide') : t('chat.notice.details')}</span>
+              <Icon
+                name="arrow-down-s"
+                className={cn('size-3.5 transition-transform duration-200', isExpanded && 'rotate-180')}
+              />
+            </button>
+          )}
+        </div>
       </div>
 
       {isExpanded && (
@@ -208,6 +282,71 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
             </div>
           )}
 
+          {notice.noticeType === 'async_job_result' && (
+            <div className="space-y-2">
+              {notice.details.jobs.map((job) => {
+                const matchingSubagent = subagents.find(
+                  (candidate) => candidate.subagentId === (job.subagentId ?? job.jobId) || (job.subagentId ? candidate.name === job.subagentId : false),
+                );
+                const childSessionId = job.childSessionId ?? matchingSubagent?.childSessionId;
+                const jobName = job.label?.trim() || matchingSubagent?.name?.trim() || job.subagentId || job.jobId;
+                const statusIcon = job.status === 'failed'
+                  ? { name: 'close-circle' as const, style: { color: 'var(--status-error)' } }
+                  : job.status === 'running'
+                    ? { name: 'record-circle' as const, style: { color: 'var(--status-info)' } }
+                    : job.status === 'cancelled'
+                      ? { name: 'close-circle' as const, style: undefined }
+                      : { name: 'checkbox-circle' as const, style: { color: 'var(--status-success)' } };
+                const reportBody = job.reportText.trim();
+                return (
+                  <div key={job.jobId} className="space-y-1.5 rounded-lg border border-border/20 bg-muted/15 p-2">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Icon
+                          name={statusIcon.name}
+                          className={cn('size-3.5 shrink-0', !statusIcon.style && 'text-muted-foreground')}
+                          style={statusIcon.style}
+                        />
+                        <span className="font-medium text-foreground truncate" dir="auto">{jobName}</span>
+                        {job.durationMs !== undefined ? (
+                          <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                            {formatSessionActivityDuration(job.durationMs, t)}
+                          </span>
+                        ) : null}
+                      </div>
+                      {childSessionId && effectiveDirectory ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openChildSession(childSessionId, jobName);
+                          }}
+                          aria-label={t('chat.toolPart.openSubtask', { type: matchingSubagent?.role ?? jobName })}
+                          className="h-5 px-1.5 text-[11px] shrink-0"
+                        >
+                          <Icon name="external-link" className="size-3" />
+                          <span>{t('subagents.panel.openSession')}</span>
+                        </Button>
+                      ) : null}
+                    </div>
+                    {reportBody ? (
+                      <div className="text-foreground/90 max-h-60 overflow-y-auto">
+                        <SimpleMarkdownRenderer
+                          content={reportBody}
+                          variant="tool"
+                          fallbackContent={<div className="whitespace-pre-wrap">{reportBody}</div>}
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground/70">{t('chat.notice.asyncJobResultEmpty')}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {notice.message && notice.noticeType !== 'auto_retry_start' && notice.noticeType !== 'retry_fallback_applied' && (
             <div className="whitespace-pre-wrap leading-relaxed">{notice.message}</div>
           )}

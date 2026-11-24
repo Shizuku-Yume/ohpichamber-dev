@@ -29,7 +29,7 @@ export function categorizeTool(name: string): ToolPermissionGroupKey {
   ) {
     return 'files_and_search';
   }
-  if (['bash', 'eval', 'debug', 'lsp', 'ida', 'ask', 'security_scan'].includes(name)) {
+  if (['bash', 'eval', 'debug', 'lsp', 'ida', 'ask', 'security_scan', 'tts'].includes(name)) {
     return 'execution';
   }
   if (['web_search', 'web', 'github'].includes(name)) {
@@ -76,6 +76,7 @@ const TOOL_ONE_LINE_DESCRIPTIONS = {
   ida: 'Inspect binaries using IDA Pro integration',
   ask: 'Ask the user clarifying questions during execution',
   security_scan: 'Run automated security scans on code or plans',
+  tts: 'Synthesize speech audio from text',
   task: 'Spawn concurrent subagents for delegated tasks',
   wait: 'Observe and barrier on background jobs and services',
   web_search: 'Search the web for documentation and current information',

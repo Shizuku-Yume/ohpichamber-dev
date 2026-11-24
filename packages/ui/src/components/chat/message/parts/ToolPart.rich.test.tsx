@@ -114,7 +114,7 @@ async function withToolHarness(run: (harness: {
                                         pairedCall={options.pairedCall}
                                         isExpanded={options.expanded ?? false}
                                         isMobile={false}
-                                        onToggle={options.onToggle ?? (() => {})}
+                                        onToggle={options.onToggle ?? (() => { })}
                                         onShowPopup={options.onShowPopup}
                                     />
                                 </RuntimeAPIContext.Provider>
@@ -163,7 +163,7 @@ const runtimeForEditor = (openFile: (path: string, line?: number) => Promise<voi
         get settings() { return unexpected(); },
         get permissions() { return unexpected(); },
         get notifications() { return unexpected(); },
-        editor: { openFile, openDiff: async () => {} },
+        editor: { openFile, openDiff: async () => { } },
     };
 };
 
@@ -354,5 +354,158 @@ test('a running call stays visible and toggles by its native part id', async () 
         if (!disclosure) throw new Error('Expected the running tool disclosure');
         await act(async () => { disclosure.click(); });
         expect(toggled).toEqual([call.partId]);
+    });
+});
+
+test('running hashline edit shows target path, supports quick-open, and expands input before diff arrives', async () => {
+    const opened: Array<{ path: string; line?: number }> = [];
+    const runtime = runtimeForEditor(async (path, line) => { opened.push({ path, line }); });
+    const call = {
+        type: 'tool_call' as const,
+        partId: 'hashline-running',
+        toolCallId: 'hashline-running',
+        toolName: 'edit',
+        status: 'running' as const,
+        input: { i: 'Update greet helper', input: '[src/greet.ts#A1B2]\nPUT 3.=3:\n+return "hi";' },
+    };
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(call, { expanded: true, runtime });
+        expect(container.textContent).toContain('src/greet.ts');
+        expect(container.textContent).toContain('Update greet helper');
+        expect(container.textContent).toContain('PUT 3.=3:');
+        const quickOpen = container.querySelector<HTMLButtonElement>('button[aria-label="Open file"]');
+        if (!quickOpen) throw new Error('Expected quick-open action on running hashline edit');
+        await act(async () => { quickOpen.click(); });
+        expect(opened).toEqual([{ path: '/project/src/greet.ts', line: undefined }]);
+    });
+});
+
+test('tool intent i surfaces on collapsed row and is omitted from expanded JSON input', async () => {
+    const call: ToolCallPart = {
+        type: 'tool_call',
+        partId: 'custom-intent',
+        toolCallId: 'custom-intent',
+        toolName: 'custom_probe',
+        status: 'completed',
+        input: { i: 'Inspect health...', target: 'api' },
+    };
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(call, { expanded: true });
+        expect(container.textContent).toContain('Inspect health');
+        const inputBlock = container.querySelector('blockquote.tool-input-text');
+        expect(inputBlock?.textContent).toContain('"target": "api"');
+        expect(inputBlock?.textContent).not.toContain('"i"');
+    });
+});
+
+test('bash renders async job and service badges in summary and expanded footer', async () => {
+    const call: ToolCallPart = {
+        type: 'tool_call',
+        partId: 'bash-service-call',
+        toolCallId: 'bash-service-call',
+        toolName: 'bash',
+        status: 'completed',
+        input: { command: 'bun run dev' },
+    };
+    const result: ToolResultPart = {
+        type: 'tool_result',
+        partId: 'bash-service-result',
+        toolCallId: 'bash-service-call',
+        toolName: 'bash',
+        isError: false,
+        output: {
+            content: [{ type: 'text', text: 'Server started' }],
+            details: {
+                async: { jobId: 'job-9', state: 'running', type: 'bash' },
+                service: { name: 'web', state: 'running', ready: true, timedOut: false, pid: 4321 },
+                exitCode: 0,
+            },
+        },
+    };
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(result, { pairedCall: call, expanded: true });
+        expect(container.querySelector('[data-testid="bash-async-badge"]')?.textContent).toContain('job-9');
+        expect(container.querySelector('[data-testid="bash-service-badge"]')?.textContent).toContain('web');
+        expect(container.querySelector('[data-testid="bash-service-badge"]')?.textContent).toContain('4321');
+    });
+});
+
+test('find renders indented hit lines with clickable path:line links and score badges', async () => {
+    const opened: Array<{ path: string; line?: number }> = [];
+    const runtime = runtimeForEditor(async (path, line) => { opened.push({ path, line }); });
+    const call: ToolCallPart = {
+        type: 'tool_call',
+        partId: 'find-call',
+        toolCallId: 'find-call',
+        toolName: 'find',
+        status: 'completed',
+        input: { query: 'find parser' },
+    };
+    const result: ToolResultPart = {
+        type: 'tool_result',
+        partId: 'find-result',
+        toolCallId: 'find-call',
+        toolName: 'find',
+        isError: false,
+        output: {
+            content: [{
+                type: 'text',
+                text: [
+                    '1 hit(s) for "find parser" (τ 0.40), strongest first',
+                    '',
+                    'src/tools/find.ts  0.88  120 lines judged',
+                    '  src/tools/find.ts:42-50  0.88  export function parseFindLine() {}',
+                ].join('\n'),
+            }],
+        },
+    };
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(result, { pairedCall: call, expanded: true, runtime });
+        const badges = container.querySelectorAll('[data-testid="find-score-badge"]');
+        expect(badges.length).toBeGreaterThanOrEqual(2);
+        const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button'));
+        const hitButton = buttons.find((button) => button.textContent?.includes('src/tools/find.ts:42-50'));
+        if (!hitButton) throw new Error('Expected clickable find hit button');
+        await act(async () => { hitButton.click(); });
+        expect(opened).toEqual([{ path: '/project/src/tools/find.ts', line: 42 }]);
+    });
+});
+
+test('ask renders HTML form data, notes, and timedOut notice without raw JSON', async () => {
+    const call: ToolCallPart = {
+        type: 'tool_call',
+        partId: 'ask-form-call',
+        toolCallId: 'ask-form-call',
+        toolName: 'ask',
+        status: 'completed',
+        input: { html: '<form><input name="env" /></form>' },
+    };
+    const result: ToolResultPart = {
+        type: 'tool_result',
+        partId: 'ask-form-result',
+        toolCallId: 'ask-form-call',
+        toolName: 'ask',
+        isError: false,
+        output: {
+            content: [{ type: 'text', text: '{"env":"staging"}' }],
+            details: {
+                data: { env: 'staging' },
+                notes: [{ name: 'env', question: 'Target environment', option: 'staging', value: 'staging', text: 'Match QA cluster' }],
+                timedOut: true,
+            },
+        },
+    };
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(result, { pairedCall: call, expanded: true });
+        expect(container.querySelector('[data-testid="ask-timed-out-notice"]')).not.toBeNull();
+        expect(container.textContent).toContain('Target environment');
+        expect(container.textContent).toContain('staging');
+        expect(container.textContent).toContain('Match QA cluster');
+        expect(container.textContent).not.toContain('{"env":"staging"}');
     });
 });

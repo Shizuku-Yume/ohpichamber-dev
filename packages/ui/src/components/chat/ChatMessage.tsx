@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
 
 import MessageBody, { type MessageExtraAction } from './message/MessageBody';
+import { TimelineNoticeCard } from './message/parts/TimelineNoticeCard';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import { buildGuestMessageItem, guestMessageActionsFor } from '@/lib/guests/actions';
@@ -358,7 +359,29 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [setImagePreviewOpen]);
 
     if (message.role === 'system') {
-        return null;
+        const asyncJobNotices = visibleParts.filter(
+            (part): part is Extract<typeof part, { type: 'notice'; noticeType: 'async_job_result' }> =>
+                part.type === 'notice' && part.noticeType === 'async_job_result',
+        );
+        if (asyncJobNotices.length === 0) {
+            return null;
+        }
+        return (
+            <div
+                className="group w-full pb-2"
+                id={sliceName ? undefined : `message-${message.messageId}`}
+                data-message-id={message.messageId}
+                ref={messageContainerRef}
+            >
+                <div className="chat-message-column relative">
+                    {asyncJobNotices.map((notice) => (
+                        <FadeInOnReveal key={`notice-${notice.partId}`}>
+                            <TimelineNoticeCard notice={notice} sessionId={sessionId} />
+                        </FadeInOnReveal>
+                    ))}
+                </div>
+            </div>
+        );
     }
 
     // Desktop keeps the whole gap below the user bubble inside the user row

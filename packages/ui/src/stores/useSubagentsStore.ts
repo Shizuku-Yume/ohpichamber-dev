@@ -6,6 +6,7 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-sw
 type SubagentsStore = {
   byParent: Record<string, Subagent[]>;
   hydratedByParent: Record<string, string>;
+  failedByParent: Record<string, string>;
   applySubagentUpdate: (parentSessionId: string, subagent: Subagent) => void;
   setSubagents: (parentSessionId: string, subagents: Subagent[]) => void;
   hydrateParent: (parentSessionId: string, force?: boolean) => Promise<void>;
@@ -84,9 +85,17 @@ const bumpMutationRevision = (parentSessionId: string): number => {
   return next;
 };
 
+const withoutParentKey = (record: Record<string, string>, parentSessionId: string): Record<string, string> => {
+  if (!(parentSessionId in record)) return record;
+  const next = { ...record };
+  delete next[parentSessionId];
+  return next;
+};
+
 export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
   byParent: {},
   hydratedByParent: {},
+  failedByParent: {},
   applySubagentUpdate: (parentSessionId, subagent) => {
     bumpMutationRevision(parentSessionId);
     set((state) => {
@@ -100,6 +109,7 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
           ...state.byParent,
           [parentSessionId]: updated,
         },
+        failedByParent: withoutParentKey(state.failedByParent, parentSessionId),
       };
     });
   },
@@ -110,6 +120,7 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
         ...state.byParent,
         [parentSessionId]: subagents,
       },
+      failedByParent: withoutParentKey(state.failedByParent, parentSessionId),
     }));
   },
   hydrateParent: async (parentSessionId, force = false) => {
@@ -143,10 +154,19 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
               ...state.hydratedByParent,
               [parentSessionId]: runtimeKey,
             },
+            failedByParent: withoutParentKey(state.failedByParent, parentSessionId),
           };
         });
       } catch {
         // Failure is not empty: preserve prior byParent state and leave parent unhydrated so future triggers can retry.
+        if (capturedGeneration === storeGeneration && getRuntimeKey() === runtimeKey) {
+          set((state) => ({
+            failedByParent: {
+              ...state.failedByParent,
+              [parentSessionId]: runtimeKey,
+            },
+          }));
+        }
       }
     })();
     inflightHydrations.set(inflightKey, task);
@@ -175,19 +195,20 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
     set((state) => {
       const hasParent = parentSessionId in state.byParent;
       const hasHydrated = parentSessionId in state.hydratedByParent;
-      if (!hasParent && !hasHydrated) return state;
+      const hasFailed = parentSessionId in state.failedByParent;
+      if (!hasParent && !hasHydrated && !hasFailed) return state;
       const byParent = { ...state.byParent };
       delete byParent[parentSessionId];
-      const hydratedByParent = { ...state.hydratedByParent };
-      delete hydratedByParent[parentSessionId];
-      return { byParent, hydratedByParent };
+      const hydratedByParent = withoutParentKey(state.hydratedByParent, parentSessionId);
+      const failedByParent = withoutParentKey(state.failedByParent, parentSessionId);
+      return { byParent, hydratedByParent, failedByParent };
     });
   },
   resetForRuntimeSwitch: () => {
     storeGeneration += 1;
     inflightHydrations.clear();
     mutationRevisionByParent.clear();
-    set({ byParent: {}, hydratedByParent: {} });
+    set({ byParent: {}, hydratedByParent: {}, failedByParent: {} });
   },
 }));
 
