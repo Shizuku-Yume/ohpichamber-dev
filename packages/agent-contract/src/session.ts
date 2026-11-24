@@ -114,13 +114,17 @@ export const RunSchema = z.strictObject({
 }, { message: 'Only outer terminal runs have a finish time', path: ['finishedAt'] });
 export type Run = z.infer<typeof RunSchema>;
 export const SubagentSchema = z.strictObject({
-  subagentId: EntityIdSchema, parentSessionId: EntityIdSchema, childSessionId: EntityIdSchema,
+  subagentId: EntityIdSchema, parentSessionId: EntityIdSchema, childSessionId: EntityIdSchema.optional(),
   toolCallId: EntityIdSchema.optional(),
+  name: z.string().min(1).optional(),
   role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'parked', 'completed', 'failed', 'cancelled']),
   activeTool: z.string().optional(),
+  activeToolArgs: z.string().optional(),
+  model: z.string().min(1).optional(),
   tokens: z.number().int().nonnegative().optional(),
+  contextTokens: z.number().int().nonnegative().optional(),
+  contextWindow: z.number().int().positive().optional(),
   cost: z.number().nonnegative().optional(),
-  /** Own-session spend, excluding everything the subagent's own children spent. */
   directCost: z.number().nonnegative().optional(),
   /** Own spend plus every descendant's, so a row answers "what did this line cost". */
   treeCost: z.number().nonnegative().optional(),

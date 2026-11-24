@@ -23,7 +23,7 @@ const SessionRelocationIntentSchema = z.strictObject({
   && intent.source.projectId === intent.destination.projectId && intent.source.agentDirectory === intent.destination.agentDirectory
   && intent.source.agentDirectoryId === intent.destination.agentDirectoryId, 'Relocation must retain its session and Host owner');
 export type SessionRelocationIntent = z.infer<typeof SessionRelocationIntentSchema>;
-const ChildReferenceSchema = SubagentSchema.extend({ rootSessionId: EntityIdSchema, workspaceId: EntityIdSchema, projectId: EntityIdSchema, sessionFile: z.string().min(1) });
+const ChildReferenceSchema = SubagentSchema.extend({ rootSessionId: EntityIdSchema, workspaceId: EntityIdSchema, projectId: EntityIdSchema, sessionFile: z.string().min(1) }).required({ childSessionId: true });
 export type ChildReference = Readonly<z.infer<typeof ChildReferenceSchema>>;
 const WorktreeDeleteSchema = z.strictObject({
   operationId: EntityIdSchema, nativeSessionId: z.string().min(1), reference: SessionReferenceSchema, children: z.array(ChildReferenceSchema),

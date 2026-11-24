@@ -30,8 +30,6 @@ import * as kilo from './kilo.js';
 import * as zenmux from './zenmux.js';
 import * as ollamaCloud from './ollama-cloud.js';
 import * as wafer from './wafer.js';
-import * as opencodeGo from './opencode-go.js';
-import * as opencode from './opencode.js';
 import * as xai from './xai.js';
 
 const registry: QuotaProviderRegistry = {
@@ -160,18 +158,6 @@ const registry: QuotaProviderRegistry = {
     providerName: wafer.providerName,
     isConfigured: wafer.isConfigured,
     fetchQuota: wafer.fetchQuota
-  },
-  'opencode-go': {
-    providerId: opencodeGo.providerId,
-    providerName: opencodeGo.providerName,
-    isConfigured: opencodeGo.isConfigured,
-    fetchQuota: opencodeGo.fetchQuota
-  },
-  opencode: {
-    providerId: opencode.providerId,
-    providerName: opencode.providerName,
-    isConfigured: opencode.isConfigured,
-    fetchQuota: opencode.fetchQuota
   },
   neuralwatt: {
     providerId: neuralwatt.providerId,

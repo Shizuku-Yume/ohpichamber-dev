@@ -1,4 +1,6 @@
-import type { Message, SessionRuntimeStatus, ToolCallPart } from '@openchamber/agent-contract';
+import type { Message, SessionRuntimeStatus, Subagent, ToolCallPart } from '@openchamber/agent-contract';
+import type { I18nKey, I18nParams, Locale } from '@/lib/i18n';
+import { formatRetryCountdown } from '@/lib/retryCountdown';
 import { describeToolCall, isReadTool, isShellTool, isWriteTool, isEditTool, toolPresentation } from '@/lib/toolPresentation';
 
 export const SUBAGENT_SILENCE_MS = 90_000;
@@ -133,4 +135,36 @@ export const reportFirstLine = (output: string): string | null => {
   if (!first) return null;
   const line = first.endsWith(':') && second ? `${first} ${second}` : first;
   return line.length > REPORT_LINE_MAX ? `${line.slice(0, REPORT_LINE_MAX)}…` : line;
+};
+
+type SubagentTranslate = (key: I18nKey, params?: I18nParams) => string;
+
+type SubagentLiveDetailText = { text: string; tone: 'muted' | 'warning' } | null;
+
+/**
+ * Live detail for a row that has a Canonical `Subagent` record but no hydrated
+ * child transcript: the record's own `activeTool`/`lastIntent`/`retryCountdown`
+ * describe the live step until the child session's messages catch up.
+ */
+export const formatSubagentLiveDetail = (
+  subagent: Subagent | undefined,
+  alertsOnly: boolean | undefined,
+  t: SubagentTranslate,
+  locale: Locale,
+): SubagentLiveDetailText => {
+  if (!subagent) return null;
+  if (subagent.retryCountdown !== undefined && subagent.retryCountdown > 0) {
+    const countdown = formatRetryCountdown(Math.ceil(subagent.retryCountdown), locale);
+    return { text: t('chat.agentStatus.retry.in', { time: countdown }), tone: 'warning' };
+  }
+  if (alertsOnly) return null;
+  const tool = subagent.activeTool?.trim();
+  const args = subagent.activeToolArgs?.trim();
+  if (tool) {
+    const detail = args ? `${tool} ${args}` : tool;
+    return { text: detail, tone: 'muted' };
+  }
+  const intent = subagent.lastIntent?.trim() || subagent.stage?.trim();
+  if (intent) return { text: intent, tone: 'muted' };
+  return null;
 };

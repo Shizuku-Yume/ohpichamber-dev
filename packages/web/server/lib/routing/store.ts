@@ -9,7 +9,7 @@ import {
   THINKING_LEVELS,
   isAutoModel,
 } from './defaults.js';
-import { CLASSIFIER_SOURCES, parseCustomEndpointUrl } from './classifier.js';
+import { CLASSIFIER_SOURCES, RETIRED_CLASSIFIER_SOURCES, parseCustomEndpointUrl } from './classifier.js';
 import type { JsonValue } from '../shared/json-values.js';
 
 const FILE_VERSION = 1;
@@ -84,7 +84,11 @@ type UserCategory = z.infer<typeof userCategorySchema>;
 const authSchema = z.object({ token: z.string().min(1).max(4000) }).strict();
 const geminiKeySchema = z.object({ key: z.string().min(1).max(4000) }).strict();
 
-const classifierSchema = z.object({ version: z.literal(FILE_VERSION), source: z.enum(CLASSIFIER_SOURCES) }).strict();
+const classifierWriteSchema = z.object({ version: z.literal(FILE_VERSION), source: z.enum(CLASSIFIER_SOURCES) }).strict();
+const classifierReadSchema = z.object({
+  version: z.literal(FILE_VERSION),
+  source: z.union([z.enum(CLASSIFIER_SOURCES), z.enum(RETIRED_CLASSIFIER_SOURCES)]),
+}).strict();
 
 const isParsedEndpointUrl = (url: string) => {
   try {
@@ -278,13 +282,13 @@ export const createRoutingStore = ({ dataDir }: { dataDir: string }) => {
     }),
     readClassifierSource: async () => {
       try {
-        return (await readJsonFile(classifierFile, classifierSchema))?.source ?? null;
+        return (await readJsonFile(classifierFile, classifierReadSchema))?.source ?? null;
       } catch (error) {
         console.warn('[routing] classification.json is unreadable:', (hasErrorMessage(error) ? error.message : undefined) ?? error);
         return null;
       }
     },
-    writeClassifierSource: (source: z.infer<typeof classifierSchema>['source']) => serialize(() => writeJsonFile(classifierFile, { version: FILE_VERSION, source })),
+    writeClassifierSource: (source: z.infer<typeof classifierWriteSchema>['source']) => serialize(() => writeJsonFile(classifierFile, { version: FILE_VERSION, source })),
     readCustomEndpoint: async () => {
       try {
         return (await readJsonFile(customEndpointFile, customEndpointFileSchema))?.endpoint ?? null;

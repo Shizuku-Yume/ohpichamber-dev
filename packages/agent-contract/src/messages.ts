@@ -162,6 +162,30 @@ export const CompactionNoticePartSchema = z.strictObject({
     warning: z.string().optional(),
   }),
 });
+export const AsyncJobResultJobSchema = z.strictObject({
+  jobId: EntityIdSchema,
+  subagentId: EntityIdSchema.optional(),
+  childSessionId: EntityIdSchema.optional(),
+  type: z.string().min(1).optional(),
+  status: z.enum(['running', 'completed', 'failed', 'cancelled']).optional(),
+  label: z.string().optional(),
+  durationMs: z.number().nonnegative().optional(),
+  reportText: z.string(),
+});
+export type AsyncJobResultJob = z.infer<typeof AsyncJobResultJobSchema>;
+
+export const AsyncJobResultNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('async_job_result'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    jobs: z.array(AsyncJobResultJobSchema),
+  }),
+});
+export type AsyncJobResultNoticePart = z.infer<typeof AsyncJobResultNoticePartSchema>;
 
 export const NoticePartSchema = z.discriminatedUnion('noticeType', [
   TodoNoticePartSchema,
@@ -171,6 +195,7 @@ export const NoticePartSchema = z.discriminatedUnion('noticeType', [
   ServedModelMismatchNoticePartSchema,
   CacheInvalidationNoticePartSchema,
   CompactionNoticePartSchema,
+  AsyncJobResultNoticePartSchema,
 ]);
 export type NoticePart = z.infer<typeof NoticePartSchema>;
 export type CompactionNoticePart = z.infer<typeof CompactionNoticePartSchema>;

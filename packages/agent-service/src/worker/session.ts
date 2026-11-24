@@ -140,11 +140,15 @@ const SubagentProgressObservationSchema = z.object({
   agent: z.string(),
   task: z.string(),
   parentToolCallId: z.string().optional(),
+  /** The caller's verbatim brief; a spawn's own words on how open-ended its work is. */
+  assignment: z.string().optional(),
   progress: z.object({
     id: z.string(),
     agent: z.string(),
     status: z.enum(['pending', 'running', 'completed', 'failed', 'aborted']),
     currentTool: z.string().optional(),
+    currentToolArgs: z.string().optional(),
+    currentToolIntent: z.string().optional(),
     tokens: z.number().optional(),
     cost: z.number().optional(),
     toolCount: z.number().optional(),
@@ -152,11 +156,13 @@ const SubagentProgressObservationSchema = z.object({
     description: z.string().optional(),
     task: z.string().optional(),
     lastIntent: z.string().optional(),
-    currentToolIntent: z.string().optional(),
     stage: z.string().optional(),
     completionPercent: z.number().min(0).max(100).optional(),
     recentOutput: z.array(z.string()).optional(),
     durationMs: z.number().optional(),
+    contextTokens: z.number().optional(),
+    contextWindow: z.number().optional(),
+    resolvedModel: z.string().optional(),
     retryState: z.object({ delayMs: z.number(), startedAtMs: z.number() }).optional(),
   }),
 });
@@ -210,6 +216,8 @@ export class WorkerSession {
   readonly suggestionDriver: SuggestionDriver;
   private _draftPresent = false;
   private readonly toolCallToSubagentId = new Map<string, string>();
+  /** Tool events that arrived before their subagent's first lifecycle/progress frame. */
+  private readonly pendingSubagentEvents = new Map<string, SubagentEventObservation[]>();
   // Agent Hub reads: the observer registry tracks live sessions for the tree
   // cost rollup, and the persisted roster is only awaited when the UI asks.
   private readonly observers = new SessionObserverRegistry();
@@ -242,7 +250,7 @@ export class WorkerSession {
     private readonly admission: NativeAdmission,
     private readonly authorize: WorkerAuthorize,
     private readonly authorizeProviderUse: (model: { provider: string; id: string; baseUrl: string }) => Promise<void>,
-    private readonly onSubagent: (payload: SubagentLifecyclePayload) => void,
+    private readonly onSubagent: (payload: SubagentLifecyclePayload & { assignment?: string }) => void,
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
@@ -280,7 +288,7 @@ export class WorkerSession {
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
       const parsed = SubagentLifecyclePayloadSchema.safeParse(data);
       if (!parsed.success) return;
-      this.onSubagent(parsed.data);
+      this.onSubagent({ ...parsed.data, assignment: this.liveSubagents.get(parsed.data.id)?.solutionSpace });
       this.handleSubagentLifecycle(parsed.data);
     });
     this.subagentEventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, data => {
@@ -482,7 +490,7 @@ export class WorkerSession {
     } catch { this.fail(); }
   }
 
-  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload) => void): Promise<WorkerSession> {
+  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload & { assignment?: string }) => void): Promise<WorkerSession> {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
     if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
     const prewarmed = await consumePrewarmedNativeRuntime(input);
@@ -1045,7 +1053,7 @@ export class WorkerSession {
       return {
         subagentId: ref.id,
         parentSessionId: this._sessionId,
-        childSessionId: ref.id,
+        name: ref.displayName || ref.id,
         role: ref.displayName,
         status: live?.status ?? (persisted ? 'parked' : 'idle'),
         ...(live?.activeTool === undefined ? {} : { activeTool: live.activeTool }),
@@ -1138,13 +1146,21 @@ export class WorkerSession {
     const subagent: Subagent = {
       subagentId: payload.id,
       parentSessionId: this.sessionId,
-      childSessionId: payload.id,
+      // The canonical child session id only exists once the registry reads the
+      // child's JSONL header; payload.id is the allocated subagent name, not a
+      // session id, so a live frame must not present it as one.
+      childSessionId: existing?.childSessionId,
       toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      name: payload.id,
       role: payload.agent,
       solutionSpace: existing?.solutionSpace,
       status,
       activeTool: status === 'running' ? existing?.activeTool : undefined,
+      activeToolArgs: status === 'running' ? existing?.activeToolArgs : undefined,
+      model: existing?.model,
       tokens: existing?.tokens,
+      contextTokens: existing?.contextTokens,
+      contextWindow: existing?.contextWindow,
       cost: existing?.cost,
       turnCount: existing?.turnCount,
       retryCountdown: status === 'running' ? existing?.retryCountdown : undefined,
@@ -1160,6 +1176,16 @@ export class WorkerSession {
     };
     this.liveSubagents.set(payload.id, subagent);
     this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
+    this.flushPendingSubagentEvents(payload.id);
+  }
+
+  // A fast subagent's first tool events can race its 'started'/progress frame;
+  // replay the buffered ones once a row exists so it keeps its initial tool.
+  private flushPendingSubagentEvents(id: string): void {
+    const buffered = this.pendingSubagentEvents.get(id);
+    if (!buffered) return;
+    this.pendingSubagentEvents.delete(id);
+    for (const pending of buffered) this.handleSubagentEvent(pending);
   }
 
   private handleSubagentProgress(payload: SubagentProgressObservation): void {
@@ -1188,13 +1214,18 @@ export class WorkerSession {
     const subagent: Subagent = {
       subagentId: p.id,
       parentSessionId: this.sessionId,
-      childSessionId: p.id,
+      childSessionId: existing?.childSessionId,
       toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      name: p.id,
       role: p.agent || payload.agent,
-      solutionSpace: existing?.solutionSpace,
+      solutionSpace: payload.assignment ?? existing?.solutionSpace,
       status,
       activeTool: status === 'running' ? p.currentTool : undefined,
+      activeToolArgs: status === 'running' ? p.currentToolArgs : undefined,
+      model: p.resolvedModel ?? existing?.model,
       tokens: p.tokens !== undefined && p.tokens >= 0 ? p.tokens : existing?.tokens,
+      contextTokens: p.contextTokens !== undefined && p.contextTokens >= 0 ? p.contextTokens : existing?.contextTokens,
+      contextWindow: p.contextWindow !== undefined && p.contextWindow > 0 ? p.contextWindow : existing?.contextWindow,
       cost: p.cost !== undefined && p.cost >= 0 ? p.cost : existing?.cost,
       turnCount: p.toolCount ?? p.requests ?? existing?.turnCount,
       retryCountdown: status === 'running' ? retryCountdown : undefined,
@@ -1210,12 +1241,20 @@ export class WorkerSession {
     };
     this.liveSubagents.set(p.id, subagent);
     this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
+    this.flushPendingSubagentEvents(p.id);
   }
 
   private handleSubagentEvent(payload: SubagentEventObservation): void {
     const { id, event } = payload;
     const existing = this.liveSubagents.get(id);
-    if (!existing) return;
+    if (!existing) {
+      // The first tool_execution_start can arrive before the 'started'
+      // lifecycle frame; hold it so the row opens with its initial tool.
+      const queue = this.pendingSubagentEvents.get(id) ?? [];
+      if (queue.length < 32) queue.push(payload);
+      this.pendingSubagentEvents.set(id, queue);
+      return;
+    }
     let changed = false;
     const updated: Subagent = { ...existing };
     if (event.type === 'tool_execution_start') {
@@ -1229,6 +1268,7 @@ export class WorkerSession {
     } else if (event.type === 'tool_execution_end') {
       if (updated.activeTool) {
         updated.activeTool = undefined;
+        updated.activeToolArgs = undefined;
         changed = true;
       }
     }

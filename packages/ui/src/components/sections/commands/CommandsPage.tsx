@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ModelSelection } from '@openchamber/agent-contract';
+import type { ModelSelection, OmpSetting, OmpSettingValue } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { DiscoverySourcesDialog } from '@/components/sections/shared/DiscoverySourcesDialog';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { useAutosave, AUTOSAVE_SAVED, AUTOSAVE_UNCHANGED, autosaveFailed, type AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
 import {
@@ -37,25 +37,20 @@ export const CommandsPage: React.FC = () => {
   const directory = useSettingsDirectory();
   const { getSectionSettings, updateSettings, saving } = useOmpPageSettings('commands');
   const discoverySettings = getSectionSettings('catalog');
-  const discoverySection = discoverySettings.length > 0 ? (
-    <SettingsSection title={t('settings.omp.discovery.title')}>
-      {discoverySettings.map(setting => (
-        <React.Fragment key={setting.id}>
-          <OmpRowControl setting={setting} value={setting.value} disabled={saving || setting.conditionActive === false}
-            onChange={async value => {
-              if (!await updateSettings(() => [{ id: setting.id, value }])) {
-                toast.error(t('settings.common.status.saveFailed'));
-                return;
-              }
-              invalidateCommandsLoadCache(directory);
-              await useCommandsStore.getState().loadCommands(directory);
-            }} />
-          {setting.conditionActive === false && (
-            <p className="typography-meta text-muted-foreground">{t('settings.omp.sharedConfig.overridden')}</p>
-          )}
-        </React.Fragment>
-      ))}
-    </SettingsSection>
+  const handleDiscoveryChange = async (setting: OmpSetting, value: OmpSettingValue) => {
+    if (!await updateSettings(() => [{ id: setting.id, value }])) {
+      toast.error(t('settings.common.status.saveFailed'));
+      return;
+    }
+    invalidateCommandsLoadCache(directory);
+    await useCommandsStore.getState().loadCommands(directory);
+  };
+  const discoveryControl = discoverySettings.length > 0 ? (
+    <DiscoverySourcesDialog
+      settings={discoverySettings}
+      saving={saving}
+      onSettingChange={handleDiscoveryChange}
+    />
   ) : null;
   const selectedId = useCommandsStore(state => state.selectedCommandId);
   const selectedName = useCommandsStore(state => state.selectedCommandName);
@@ -141,8 +136,7 @@ export const CommandsPage: React.FC = () => {
     // heading: SettingsView focuses `[data-settings-page-heading]` on navigation,
     // and a bare centred div left the pane with no title at all.
     return (
-      <SettingsPageLayout title={t('settings.page.commands.title')} showSaveStatus={false}>
-        {discoverySection}
+      <SettingsPageLayout title={t('settings.page.commands.title')} headerEnd={discoveryControl} showSaveStatus={false}>
         <div className="flex items-center justify-center py-16">
           <div className="max-w-sm text-center text-muted-foreground">
             <Icon name="terminal-box" className="mx-auto mb-3 size-12 opacity-50" />
@@ -155,8 +149,8 @@ export const CommandsPage: React.FC = () => {
   }
   return <SettingsPageLayout title={isNew ? t('settings.commands.page.title.new') : `/${selectedName}`}
     description={isNew ? t('settings.commands.page.subtitle.new') : t('settings.commands.page.subtitle.edit')}
+    headerEnd={discoveryControl}
     onBlurCapture={autosave.onBlurCapture}>
-    {discoverySection}
     <fieldset className="min-w-0">
       <SettingsSection title={t('settings.commands.page.section.identity')} divider={false}>
         {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')}>

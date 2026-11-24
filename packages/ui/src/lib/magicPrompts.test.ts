@@ -57,6 +57,7 @@ describe('loadMagicPrompts', () => {
     expect(prompts.render('plan.improve.visible', { plan_title: 'X' })).toContain('X');
     expect(calls).toHaveLength(1);
     expect([...calls[0].url.searchParams.entries()]).toEqual([['sessionDirectory', '/spaces/space-1/repo']]);
+    expect(calls[0].headers.has('x-openchamber-directory')).toBe(false);
     expect(calls[0].headers.has('x-opencode-directory')).toBe(false);
   });
 

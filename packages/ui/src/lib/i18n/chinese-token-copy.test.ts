@@ -3,7 +3,6 @@ import { describe, expect, test } from 'bun:test';
 import { chatWorkbenchI18n } from './messages/chat-workbench.i18n';
 import { extensionsSettingsI18n } from './messages/extensions.settings.i18n';
 import { ompSettingsI18n } from './messages/omp-settings.i18n';
-import { subagentHudI18n } from './messages/subagent-hud.i18n';
 import { usageStatsI18n } from './messages/usage-stats.i18n';
 import { dict as zhCnDict } from './messages/zh-CN';
 import { settingsDict as zhCnSettingsDict } from './messages/zh-CN.settings';
@@ -157,7 +156,6 @@ describe('Chinese copy writes LLM tokens as "Token"', () => {
       { name: 'chatWorkbenchI18n', module: chatWorkbenchI18n },
       { name: 'extensionsSettingsI18n', module: extensionsSettingsI18n },
       { name: 'ompSettingsI18n', module: ompSettingsI18n },
-      { name: 'subagentHudI18n', module: subagentHudI18n },
       { name: 'usageStatsI18n', module: usageStatsI18n },
     ];
 

@@ -33,17 +33,25 @@ tab the child's own folder.
 - A subagent with a permission request or a question starts open, with the
   request cards above its tile, so the answer takes one click. The user's
   toggle flips that default per subagent.
-- The report is the newest `<subagent>` report in the parent: the message
-  OpenCode appends for a background run, or the call's own result for a
-  foreground one (the Claude agent provider runs them that way). A later
-  round of work replaces it when its report arrives.
+- The report is the newest report projected for that subagent in the parent:
+  the `async_job_result` notice part's matching `jobs[]` entry for a
+  background run (keyed by `subagentId`/`childSessionId`/`jobId`), or the
+  foreground `task` tool call's own result (a `<task-result>` block when the
+  runtime wraps several, else the raw output; a bare async-spawn
+  acknowledgement is never mistaken for a report). A later round of work
+  replaces it when its report arrives.
 - The card holds only what the row above it does not: the request cards,
   the report and the task. Who ran it, for how long and what it spent are
   in the row.
-- The task is the prompt of the parent's first `subagent` call for the child,
-  else the child's own first prompt, read once when the card opens. A prompt
-  never changes, so the card does not follow the parent's every part. When
+- The task is the prompt of the parent's matching `task` call for the child —
+  a single `{ task | prompt | steps }` call or the matching item of a batch
+  `{ context, tasks[] }` call — else the stored `subagent.task`, else the
+  child's own first prompt, read once when the card opens. A prompt never
+  changes, so the card does not follow the parent's every part. When
   neither is loaded the Task section is absent.
+- While the subagent runs the card offers inline Steer and Cancel through
+  `canonicalClient` (`subagent.steer` / `subagent.cancel`); finished rows
+  keep only Open session.
 - The panel's body is mounted only while its zone shows it: from the moment
   it opens until its closing animation ends (`useOpenUntilSettled` in
   `ContextPanel`). A closed zone keeps drawing its last tab under `inert`,

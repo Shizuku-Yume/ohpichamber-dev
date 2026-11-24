@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 
 import { dict as enDict, type I18nKey } from './messages/en';
-import { subagentHudI18n } from './messages/subagent-hud.i18n';
 import { timelineNoticesI18n } from './messages/timeline-notices.i18n';
 import { DEFAULT_LOCALE, detectInitialLocale, type Locale, writeStoredLocale } from './runtime';
 import { formatTemplate, type I18nParams } from './format';
@@ -52,12 +51,12 @@ async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
   }
 
   const mod = await DICTIONARY_LOADERS[locale]();
-  const subagentDict = subagentHudI18n[locale] ?? subagentHudI18n.en;
+
   /* SAFETY: timelineNoticesI18n structure is Record<string, Record<string, string>>. */
   const noticeDict = (timelineNoticesI18n as Record<string, Record<string, string>>)[locale] ?? timelineNoticesI18n.en;
 
   /* SAFETY: The merged dictionary follows the I18nDictionary contract. */
-  const fullDict = { ...enDict, ...mod.dict, ...subagentDict, ...noticeDict };
+  const fullDict = { ...enDict, ...mod.dict, ...noticeDict };
   dictionaries.set(locale, fullDict);
   return fullDict;
 }

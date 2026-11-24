@@ -22,22 +22,7 @@ Without a provider, the safety net and Auto are hidden, and sessions in work get
 
 ## Set it up
 
-Jev is off until you turn it on: nothing from your conversations goes to a classification provider unless you pick one. Open **Settings → Providers → Classification providers** and pick where Jev requests go. Besides **Off**, there are seven options.
-
-### OpenCode Zen promotion
-
-Free for a limited time, no key needed. OpenCode Zen lets OhPiChamber use Jev at no cost while the promotion runs.
-
-When the promotion ends, the option disappears and OhPiChamber switches to one of the keys below if you have one.
-
-### OpenCode Zen key
-
-Uses the stored API key configured for OpenCode Zen, paid from your Zen balance. Jev classification requires a stored provider credential rather than an environment variable.
-
-1. Open **Settings → Providers** and add an API key to the **OpenCode Zen** provider (see [Providers, Models & Agents](/providers/)).
-2. Come back to **Classification providers** and pick **OpenCode Zen key**.
-
-Zen requires an API key for Jev.
+Jev is off until you turn it on: nothing from your conversations goes to a classification provider unless you pick one. Open **Settings → Providers → Classification providers** and pick where Jev requests go. Besides **Off**, there are five options.
 
 ### OpenRouter key
 
@@ -101,7 +86,7 @@ The card on **Settings → Providers** shows **Ready** once a provider works.
 
 ## When your pick stops working
 
-If the provider you picked can't be used (the promotion ended, a key was removed), OhPiChamber falls back to the first of your own keys that works: TypeSafe key, then your custom endpoint, then OpenRouter, then Vercel AI Gateway, then Zen key. It never falls back to the promotion or to Google Gemini, and **Off** stays off. The page tells you which one it uses right now.
+If the provider you picked can't be used (for example, a key was removed), OhPiChamber falls back to the first of your own keys that works: TypeSafe key, then your custom endpoint, then OpenRouter, then Vercel AI Gateway. It never falls back to Google Gemini, and **Off** stays off. The page tells you which one it uses right now.
 
 If Jev is slow or fails on a single request, nothing breaks. Each feature has a safe answer for that case:
 
@@ -114,7 +99,7 @@ If Jev is slow or fails on a single request, nothing breaks. Each feature has a 
 
 Jev gets your latest message and, for context, excerpts of the recent conversation: up to three previous turns, cut down to a few hundred characters each, and when a turn ends, the agent's answer, cut down to its start and end. For the safety net it also gets the action the agent asks permission for, the way OMP describes it: the command the agent wants to run, or the file and the change for an edit. When the agent creates a file, that change is the whole file, images written as text such as SVG included. When Jev checks a goal, it gets the goal and the agent's last answer, up to 10,000 characters of it.
 
-Requests go from the OhPiChamber server straight to OpenCode Zen, OpenRouter, Vercel AI Gateway, Google, TypeSafe or your custom endpoint, depending on your pick.
+Requests go from the OhPiChamber server straight to OpenRouter, Vercel AI Gateway, Google, TypeSafe or your custom endpoint, depending on your pick.
 
 ## Where it works
 
@@ -122,5 +107,5 @@ Jev runs in the OhPiChamber server, so it works in the desktop app, the web app 
 
 ## Related
 
-- [Providers, Models & Agents](/providers/): where the OpenCode Zen, OpenRouter and Vercel AI Gateway keys live
+- [Providers, Models & Agents](/providers/): where the OpenRouter and Vercel AI Gateway keys live
 - [Security](/security/): how OhPiChamber handles keys and access

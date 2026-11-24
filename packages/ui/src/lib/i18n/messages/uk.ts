@@ -27,7 +27,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -79,7 +78,6 @@ import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
@@ -93,9 +91,9 @@ export const dict: Record<I18nKey, string> = {
   "chat.fileAttachment.actions.removeImage": "Видалити зображення",
   "chat.fileAttachment.actions.removeNamed": "Видалити {name}",
   "chat.fileAttachment.toast.attachFailed": "Не вдалося прикріпити файл. Спробуйте ще раз.",
-  'quota.family.zen': 'Моделі Zen',
   'quota.value.requests': 'Запити: {count}',
   'quota.value.spent': 'Витрачено {spent}',
+  'quota.value.spentOf': '{spent} з {limit}',
   'quota.value.unknown': 'Невідомо',
   'quota.window.monthlyTotal': 'Місячний підсумок',
   'quota.window.monthlyByok': 'Місячний BYOK',
@@ -235,7 +233,6 @@ export const dict: Record<I18nKey, string> = {
   ...connectionHeartbeatI18n.uk,
   ...compactionSettingsI18n.uk,
   ...heapSnapshotI18n.uk,
-  ...consoleBudgetsI18n.uk,
   ...imageToolI18n.uk,
   ...sharePagesI18n.uk,
   ...receivedPagesI18n.uk,
@@ -3971,7 +3968,6 @@ export const dict: Record<I18nKey, string> = {
   ...tooltipsChatI18n.uk,
   ...chatWorkbenchI18n['uk'],
   ...btwI18n.uk,
-  ...subagentHudI18n['uk'],
   ...ompSettingsI18n.uk,
   ...behaviorFilesI18n['uk'],
   ...pluginsMarketplaceI18n.uk,
@@ -4024,13 +4020,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.themeImport.error.conflict": "Цю імпортовану тему було змінено на сервері. Її не перезаписано.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "Завжди показувати смуги прокручування",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "Залишати смуги прокручування видимими, навіть коли курсор поза областю прокручування. Лише на цьому пристрої.",
-  "settings.providers.page.openCodeGo.workspaceId": "ID робочого простору",
-  "settings.providers.page.openCodeGo.apiKey": "Ключ API",
-  "settings.providers.page.openCodeGo.help": "Скопіюйте ID робочого простору з URL панелі, а cookie auth з інструментів розробника браузера. OhPiChamber ніколи не сканує сховище cookie браузера.",
-  "settings.providers.page.openCodeGo.save": "Зберегти й перевірити",
-  "settings.providers.page.openCodeGo.replace": "Замінити",
-  "settings.providers.page.openCodeGo.validate": "Перевірити",
-  "settings.providers.page.openCodeGo.delete": "Видалити",
   "settings.providers.page.quotaCredentials.saved": "Облікові дані {provider} збережено.",
   "settings.providers.page.quotaCredentials.accessToken": "Токен доступу",
   "settings.providers.page.quotaCredentials.usageToken": "Токен API використання",
@@ -5553,7 +5542,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.providers.connect.recommended": "Рекомендовано",
   "settings.providers.connect.customHint": "Будь-який endpoint, сумісний з OpenAI або Anthropic",
   "settings.providers.connect.note.openai": "Моделі GPT, вхід через ChatGPT",
-  "settings.providers.connect.note.opencodeGo": "Недорога підписка",
   "settings.providers.connect.note.openrouter": "Усі моделі з одним ключем",
   "settings.providers.connect.note.anthropic": "Моделі Claude з API-ключем",
   "settings.providers.connect.note.githubCopilot": "Моделі з вашого плану Copilot",
@@ -6609,7 +6597,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.extensions.add.placeholder": "/шлях/до/панелі або https://github.com/org/panel.git",
   "settings.extensions.add.action": "Додати",
   "settings.extensions.add.aria": "Додати розширення з теки, ZIP або URL",
-  "settings.extensions.browse.label": "Переглянути розширення",
   "settings.extensions.add.browseFolder": "Огляд теки",
   "settings.extensions.add.browseFolder.aria": "Огляд теки",
   "settings.extensions.add.browseZip": "Огляд ZIP архіву",
@@ -7107,12 +7094,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.classification.status.fallback": "Ваш вибір зараз недоступний, тож Jev працює через {provider}.",
   "settings.classification.source.off.name": "Вимкнено",
   "settings.classification.source.off.description": "Нічого нікуди не надсилається. Запобіжник і Auto приховано, а сесії переходять у роботу, лише коли ви їх переносите.",
-  "settings.classification.source.zenPromo.name": "Акція OpenCode Zen",
-  "settings.classification.source.zenPromo.description": "Безкоштовно на обмежений час, ключ не потрібен. Коли акція закінчиться, перейдіть на ключ.",
-  "settings.classification.source.zenPromo.ended": "Акція закінчилася.",
-  "settings.classification.source.zenKey.name": "Ключ OpenCode Zen",
-  "settings.classification.source.zenKey.description": "Використовує API-ключ, налаштований для OpenCode Zen. Списує кошти з вашого балансу Zen.",
-  "settings.classification.source.zenKey.missing": "Немає доступного API-ключа для OpenCode Zen. Вхід через акаунт OpenCode не враховується; додайте API-ключ у Налаштування → Провайдери.",
   "settings.classification.source.openrouter.name": "Ключ OpenRouter",
   "settings.classification.source.openrouter.description": "Використовує API-ключ OpenRouter, налаштований у Провайдерах. Списує кошти з вашого акаунта OpenRouter.",
   "settings.classification.source.openrouter.missing": "Немає доступного API-ключа OpenRouter. Додайте його в Налаштування → Провайдери.",
@@ -7155,7 +7136,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.sessions.permissions.explain.safetyVia": "Звичайні дії виконуються самі; усе ризиковане чи важко відворотне чекає на вас. Вирішує Jev через {provider}.",
   "settings.sessions.permissions.explain.auto": "Кожен запит на схвалення приймається без запитання.",
   "settings.sessions.permissions.agentPermissionsLink": "Дозволи агента",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Потрібен Jev, а йому потрібен постачальник класифікації: безкоштовна акція OpenCode Zen, API-ключ Zen у розділі Постачальники або ключ TypeSafe.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Потрібен Jev, а йому потрібен постачальник класифікації: ключ OpenRouter, Vercel, Gemini чи TypeSafe або власна кінцева точка.",
   "chat.workStatus.sections.extensionBadge": "Розширення",
   "chat.chatInput.toast.guestHasNoPanel": "Це розширення працює без панелі.",
   "header.mainSurface.backToChat": "Назад до чату",

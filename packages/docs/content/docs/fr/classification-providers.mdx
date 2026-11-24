@@ -22,22 +22,7 @@ Sans fournisseur, le filet de sécurité et Auto sont masqués, et les sessions 
 
 ## Configuration
 
-Jev reste désactivé tant que vous ne l’activez pas : rien de vos conversations ne part vers un fournisseur de classification si vous n’en choisissez pas un. Ouvrez **Paramètres → Fournisseurs → Fournisseurs de classification** et choisissez où partent les requêtes vers Jev. En plus de **Désactivé**, il y a sept options.
-
-### Promotion OpenCode Zen
-
-Gratuit pendant une durée limitée, sans clé. Tant que la promotion dure, OpenCode Zen permet à OhPiChamber d'utiliser Jev sans frais.
-
-À la fin de la promotion, l’option disparaît et OhPiChamber passe à l’une des clés ci-dessous si vous en avez une.
-
-### Clé OpenCode Zen
-
-Utilise la clé API enregistrée et configurée pour OpenCode Zen, payée sur votre solde Zen. La classification Jev requiert un identifiant de fournisseur enregistré plutôt qu'une variable d'environnement.
-
-1. Ouvrez **Paramètres → Fournisseurs** et ajoutez une clé API au fournisseur **OpenCode Zen** (voir [Fournisseurs, modèles et agents](/fr/providers/)).
-2. Revenez à **Fournisseurs de classification** et choisissez **Clé OpenCode Zen**.
-
-Pour Jev, Zen n’accepte qu’une clé API.
+Jev reste désactivé tant que vous ne l’activez pas : rien de vos conversations ne part vers un fournisseur de classification si vous n’en choisissez pas un. Ouvrez **Paramètres → Fournisseurs → Fournisseurs de classification** et choisissez où partent les requêtes vers Jev. En plus de **Désactivé**, il y a cinq options.
 
 ### Clé OpenRouter
 
@@ -101,7 +86,7 @@ Dès qu’un fournisseur fonctionne, la carte dans **Paramètres → Fournisseur
 
 ## Quand votre choix ne fonctionne plus
 
-Si le fournisseur choisi n’est plus utilisable (la promotion est terminée, une clé a été supprimée), OhPiChamber se rabat sur la première de vos propres clés qui fonctionne : clé TypeSafe, puis votre point de terminaison personnalisé, puis OpenRouter, puis Vercel AI Gateway, puis clé Zen. Il ne se rabat jamais sur la promotion ni sur Google Gemini, et **Désactivé** reste désactivé. La page indique lequel est utilisé en ce moment.
+Si le fournisseur choisi n’est plus utilisable (par exemple, une clé a été supprimée), OhPiChamber se rabat sur la première de vos propres clés qui fonctionne : clé TypeSafe, puis votre point de terminaison personnalisé, puis OpenRouter, puis Vercel AI Gateway. Il ne se rabat jamais sur Google Gemini, et **Désactivé** reste désactivé. La page indique lequel est utilisé en ce moment.
 
 Si Jev est lent ou échoue sur une requête, rien ne casse. Chaque fonction a une réponse sûre pour ce cas :
 
@@ -114,7 +99,7 @@ Si Jev est lent ou échoue sur une requête, rien ne casse. Chaque fonction a un
 
 Jev reçoit votre dernier message et, pour le contexte, des extraits de la conversation récente : jusqu’à trois tours précédents, coupés à quelques centaines de caractères chacun, et à la fin d’un tour, la réponse de l’agent réduite à son début et à sa fin. Pour le filet de sécurité, il reçoit aussi l’action pour laquelle l’agent demande une permission, telle qu’OMP la décrit : la commande que l’agent veut lancer, ou le fichier et la modification pour une édition. Quand l’agent crée un fichier, cette modification est le fichier entier, y compris les images écrites sous forme de texte comme le SVG. Quand Jev vérifie un objectif, il reçoit l’objectif et la dernière réponse de l’agent, jusqu’à 10 000 caractères.
 
-Les requêtes partent du serveur OhPiChamber directement vers OpenCode Zen, OpenRouter, Vercel AI Gateway, Google, TypeSafe ou votre point de terminaison personnalisé, selon votre choix.
+Les requêtes partent du serveur OhPiChamber directement vers OpenRouter, Vercel AI Gateway, Google, TypeSafe ou votre point de terminaison personnalisé, selon votre choix.
 
 ## Où ça fonctionne
 
@@ -122,5 +107,5 @@ Jev tourne dans le serveur OhPiChamber : il fonctionne donc dans l’application
 
 ## Voir aussi
 
-- [Fournisseurs, modèles et agents](/fr/providers/) : où se trouvent les clés OpenCode Zen, OpenRouter et Vercel AI Gateway
+- [Fournisseurs, modèles et agents](/fr/providers/) : où se trouvent les clés OpenRouter et Vercel AI Gateway
 - [Sécurité](/fr/security/) : comment OhPiChamber gère les clés et l’accès

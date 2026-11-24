@@ -441,3 +441,35 @@ describe('page-placed options in zh-CN', () => {
     }
   });
 });
+
+describe('description and info props', () => {
+  test('passes explicit description and info props to boolean and field rows', async () => {
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <OmpRowControl
+            setting={setting({ id: 'commands.enableClaudeProject', type: 'boolean' })}
+            value={true}
+            disabled
+            description="Overridden by native config"
+            info="Custom info text"
+            onChange={() => { }}
+          />
+          <OmpRowControl
+            setting={setting({ id: 'custom.endpoint', type: 'string' })}
+            value="https://example.test"
+            description="Field override notice"
+            onChange={() => { }}
+          />
+        </I18nProvider>,
+      );
+    });
+
+    const boolRow = container.querySelector('[data-settings-item="omp.commands.enableClaudeProject"]');
+    expect(boolRow?.textContent).toContain('Overridden by native config');
+    expect(boolRow?.querySelector('button[aria-label="More information"]')).not.toBeNull();
+
+    const stringRow = container.querySelector('[data-settings-item="omp.custom.endpoint"]');
+    expect(stringRow?.textContent).toContain('Field override notice');
+  });
+});

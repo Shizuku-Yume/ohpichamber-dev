@@ -273,6 +273,7 @@ describe('createWebFilesAPI', () => {
     for (const [path, options] of runtimeFetchMock.mock.calls) {
       expect(path).toMatch(/^\/api\/fs\//);
       const headers = (options as { headers?: Record<string, string> } | undefined)?.headers;
+      expect(headers?.['x-openchamber-directory']).toBeUndefined();
       expect(headers?.['x-opencode-directory']).toBeUndefined();
     }
   });

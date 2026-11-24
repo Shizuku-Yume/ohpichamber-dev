@@ -1,22 +1,99 @@
 import { create } from 'zustand';
 import type { Subagent } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 
 type SubagentsStore = {
   byParent: Record<string, Subagent[]>;
+  hydratedByParent: Record<string, string>;
   applySubagentUpdate: (parentSessionId: string, subagent: Subagent) => void;
   setSubagents: (parentSessionId: string, subagents: Subagent[]) => void;
+  hydrateParent: (parentSessionId: string, force?: boolean) => Promise<void>;
   removeSubagent: (parentSessionId: string, subagentId: string) => void;
   clearSession: (parentSessionId: string) => void;
+  resetForRuntimeSwitch: () => void;
 };
 
-export const useSubagentsStore = create<SubagentsStore>()((set) => ({
+const mergeSubagent = (previous: Subagent | undefined, incoming: Subagent): Subagent => {
+  if (!previous) return incoming;
+  const resolvedChildSessionId = incoming.childSessionId && incoming.childSessionId !== incoming.subagentId
+    ? incoming.childSessionId
+    : (previous.childSessionId && previous.childSessionId !== previous.subagentId
+      ? previous.childSessionId
+      : (incoming.childSessionId ?? previous.childSessionId));
+  return {
+    ...previous,
+    ...incoming,
+    name: incoming.name ?? previous.name,
+    childSessionId: resolvedChildSessionId,
+    toolCallId: incoming.toolCallId ?? previous.toolCallId,
+    model: incoming.model ?? previous.model,
+    solutionSpace: incoming.solutionSpace ?? previous.solutionSpace,
+    description: incoming.description ?? previous.description,
+    task: incoming.task ?? previous.task,
+    createdAt: incoming.createdAt ?? previous.createdAt,
+    contextTokens: incoming.contextTokens ?? previous.contextTokens,
+    contextWindow: incoming.contextWindow ?? previous.contextWindow,
+  };
+};
+
+const mergeHydratedList = (existing: readonly Subagent[], fetched: readonly Subagent[]): Subagent[] => {
+  const merged = new Map<string, Subagent>();
+  for (const item of fetched) {
+    merged.set(item.subagentId, item);
+  }
+  for (const item of existing) {
+    const persisted = merged.get(item.subagentId);
+    if (!persisted) {
+      merged.set(item.subagentId, item);
+      continue;
+    }
+    // Live SSE records carry transient activeTool/lastIntent/retryCountdown that persisted transcripts omit;
+    // persisted records carry authoritative childSessionId, tokens, cost, and durationMs.
+    const preferLiveStatus = persisted.persisted && (item.status === 'running' || item.status === 'idle');
+    merged.set(item.subagentId, {
+      ...item,
+      ...persisted,
+      name: persisted.name ?? item.name,
+      childSessionId: persisted.childSessionId ?? item.childSessionId,
+      model: persisted.model ?? item.model,
+      status: preferLiveStatus ? item.status : persisted.status,
+      activeTool: item.status === 'running' ? (item.activeTool ?? persisted.activeTool) : persisted.activeTool,
+      activeToolArgs: item.status === 'running' ? (item.activeToolArgs ?? persisted.activeToolArgs) : persisted.activeToolArgs,
+      lastIntent: item.lastIntent ?? persisted.lastIntent,
+      stage: item.stage ?? persisted.stage,
+      retryCountdown: item.status === 'running' ? (item.retryCountdown ?? persisted.retryCountdown) : persisted.retryCountdown,
+      contextTokens: persisted.contextTokens ?? item.contextTokens,
+      contextWindow: persisted.contextWindow ?? item.contextWindow,
+      solutionSpace: item.solutionSpace ?? persisted.solutionSpace,
+      task: item.task ?? persisted.task,
+      description: item.description ?? persisted.description,
+      toolCallId: persisted.toolCallId ?? item.toolCallId,
+    });
+  }
+  return [...merged.values()];
+};
+
+let storeGeneration = 0;
+const inflightHydrations = new Map<string, Promise<void>>();
+const mutationRevisionByParent = new Map<string, number>();
+
+const bumpMutationRevision = (parentSessionId: string): number => {
+  const next = (mutationRevisionByParent.get(parentSessionId) ?? 0) + 1;
+  mutationRevisionByParent.set(parentSessionId, next);
+  return next;
+};
+
+export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
   byParent: {},
-  applySubagentUpdate: (parentSessionId, subagent) =>
+  hydratedByParent: {},
+  applySubagentUpdate: (parentSessionId, subagent) => {
+    bumpMutationRevision(parentSessionId);
     set((state) => {
       const current = state.byParent[parentSessionId] ?? [];
       const index = current.findIndex((item) => item.subagentId === subagent.subagentId);
       const updated = index >= 0
-        ? current.map((item, idx) => (idx === index ? { ...item, ...subagent } : item))
+        ? current.map((item, idx) => (idx === index ? mergeSubagent(item, subagent) : item))
         : [...current, subagent];
       return {
         byParent: {
@@ -24,15 +101,64 @@ export const useSubagentsStore = create<SubagentsStore>()((set) => ({
           [parentSessionId]: updated,
         },
       };
-    }),
-  setSubagents: (parentSessionId, subagents) =>
+    });
+  },
+  setSubagents: (parentSessionId, subagents) => {
+    bumpMutationRevision(parentSessionId);
     set((state) => ({
       byParent: {
         ...state.byParent,
         [parentSessionId]: subagents,
       },
-    })),
-  removeSubagent: (parentSessionId, subagentId) =>
+    }));
+  },
+  hydrateParent: async (parentSessionId, force = false) => {
+    if (!parentSessionId) return;
+    const runtimeKey = getRuntimeKey();
+    if (!force && get().hydratedByParent[parentSessionId] === runtimeKey) return;
+    const inflightKey = `${runtimeKey}\0${parentSessionId}`;
+    const existingInflight = inflightHydrations.get(inflightKey);
+    if (existingInflight) return existingInflight;
+
+    const capturedGeneration = storeGeneration;
+    const startRevision = mutationRevisionByParent.get(parentSessionId) ?? 0;
+    const task: Promise<void> = (async () => {
+      try {
+        const fetched = await canonicalClient.listSubagents(parentSessionId);
+        if (capturedGeneration !== storeGeneration || getRuntimeKey() !== runtimeKey) return;
+        set((state) => {
+          const current = state.byParent[parentSessionId] ?? [];
+          const currentRevision = mutationRevisionByParent.get(parentSessionId) ?? 0;
+          // Whether or not live updates arrived in flight, mergeHydratedList preserves newer live fields
+          // while reconciling persisted childSessionId, tokens, cost, and settled rows.
+          const nextList = currentRevision > startRevision || current.length > 0
+            ? mergeHydratedList(current, fetched)
+            : fetched;
+          return {
+            byParent: {
+              ...state.byParent,
+              [parentSessionId]: nextList,
+            },
+            hydratedByParent: {
+              ...state.hydratedByParent,
+              [parentSessionId]: runtimeKey,
+            },
+          };
+        });
+      } catch {
+        // Failure is not empty: preserve prior byParent state and leave parent unhydrated so future triggers can retry.
+      }
+    })();
+    inflightHydrations.set(inflightKey, task);
+    void task.finally(() => {
+      if (inflightHydrations.get(inflightKey) === task) {
+        inflightHydrations.delete(inflightKey);
+      }
+    });
+    return task;
+  },
+  removeSubagent: (parentSessionId, subagentId) => {
+    bumpMutationRevision(parentSessionId);
     set((state) => {
       const current = state.byParent[parentSessionId];
       if (!current) return state;
@@ -42,12 +168,29 @@ export const useSubagentsStore = create<SubagentsStore>()((set) => ({
           [parentSessionId]: current.filter((item) => item.subagentId !== subagentId),
         },
       };
-    }),
-  clearSession: (parentSessionId) =>
+    });
+  },
+  clearSession: (parentSessionId) => {
+    bumpMutationRevision(parentSessionId);
     set((state) => {
-      if (!(parentSessionId in state.byParent)) return state;
+      const hasParent = parentSessionId in state.byParent;
+      const hasHydrated = parentSessionId in state.hydratedByParent;
+      if (!hasParent && !hasHydrated) return state;
       const byParent = { ...state.byParent };
       delete byParent[parentSessionId];
-      return { byParent };
-    }),
+      const hydratedByParent = { ...state.hydratedByParent };
+      delete hydratedByParent[parentSessionId];
+      return { byParent, hydratedByParent };
+    });
+  },
+  resetForRuntimeSwitch: () => {
+    storeGeneration += 1;
+    inflightHydrations.clear();
+    mutationRevisionByParent.clear();
+    set({ byParent: {}, hydratedByParent: {} });
+  },
 }));
+
+subscribeRuntimeEndpointChanged(() => {
+  useSubagentsStore.getState().resetForRuntimeSwitch();
+});

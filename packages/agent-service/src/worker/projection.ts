@@ -8,7 +8,7 @@ import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-ent
 import { getLatestTodoPhasesFromEntries, getTodoHudVisibility, isTodoPhase } from '@oh-my-pi/pi-coding-agent/tools/todo';
 import { isClosedTodo } from '@oh-my-pi/pi-tui/tools/todo';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema, parseModelString } from '@openchamber/agent-contract';
-import type { CompactionMethod, EditPreview, EditPreviewFile, HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionCompacting, SessionMention, StepTiming, TodoPhase, TodoStatus, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { AsyncJobResultJob, CompactionMethod, EditPreview, EditPreviewFile, HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionCompacting, SessionMention, StepTiming, TodoPhase, TodoStatus, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -296,6 +296,146 @@ function toolResultText(content: unknown): string {
   }).join('\n').trim();
 }
 
+/** `customType` of OMP's owner-routed async job delivery (`ASYNC_RESULT_MESSAGE_TYPE`). */
+const ASYNC_RESULT_CUSTOM_TYPE = 'async-result';
+const AsyncResultJobDetailsSchema = z.looseObject({
+  jobId: z.string().min(1),
+  type: z.string().min(1).optional(),
+  status: z.string().min(1).optional(),
+  agentId: z.string().min(1).optional(),
+  label: z.string().optional(),
+  durationMs: z.number().nonnegative().optional(),
+});
+const AsyncResultDetailsSchema = z.looseObject({
+  jobs: z.array(AsyncResultJobDetailsSchema).catch([]),
+});
+type AsyncResultJobDetails = z.infer<typeof AsyncResultJobDetailsSchema>;
+
+/** A `<` the harness escaped before its own tag names so job output could not forge one. */
+const ESCAPED_HARNESS_TAG_RE = /&lt;(?=\s*\/?\s*(?:irc|tangent-notice|system-[a-z][a-z-]*)(?![\w-]))/gi;
+function unescapeHarnessTags(text: string): string {
+  return text.replace(ESCAPED_HARNESS_TAG_RE, '<');
+}
+
+/** `── Job <id> (<headerLabel>) ──` separators the batch template puts between jobs. */
+const ASYNC_JOB_SECTION_RE = /^── Job (\S+)(?:\s+\([^)]*\))? ──\s*$/gm;
+const TASK_RESULT_BLOCK_RE = /<task-result\b([^>]*)>([\s\S]*?)<\/task-result>/g;
+const TASK_RESULT_ID_RE = /\bid="([^"]+)"/;
+const ASYNC_AGENT_LINE_RE = /^Agent: (?:agent|history):\/\/\S+.*$/gm;
+
+function taskResultBody(block: string): string {
+  // Mirror `useSubagentReports` / upstream `cleanTaskResultBody`: keep every
+  // present section in envelope order, not just the first that parses.
+  const sections: string[] = [];
+  const abort = /<abort-reason>\s*([\s\S]*?)\s*<\/abort-reason>/.exec(block);
+  if (abort?.[1]) sections.push(abort[1]);
+  const error = /<error>\s*([\s\S]*?)\s*<\/error>/.exec(block);
+  if (error?.[1]) sections.push(error[1]);
+  const output = /<output>\s*([\s\S]*?)\s*<\/output>/.exec(block);
+  const preview = /<preview\b[^>]*>\s*([\s\S]*?)\s*<\/preview>/.exec(block);
+  if (output?.[1]) sections.push(output[1]);
+  else if (preview?.[1]) sections.push(preview[1]);
+  const merge = /<merge-summary>\s*([\s\S]*?)\s*<\/merge-summary>/.exec(block);
+  if (merge?.[1]) sections.push(merge[1]);
+  if (sections.length > 0) return sections.join('\n\n');
+  return block
+    .replace(/<meta\b[^>]*\/?>/gi, '')
+    .replace(/<\/?(?:output|preview|error|abort-reason|merge-summary)(?:\s[^>]*)?>/gi, '')
+    .trim();
+}
+
+/**
+ * One job's share of the batch text: its `── Job` section in a multi-job
+ * delivery, or the whole stripped body when it is the only job.
+ */
+function asyncJobSection(body: string, jobId: string, single: boolean): string {
+  const markers = [...body.matchAll(ASYNC_JOB_SECTION_RE)];
+  if (markers.length === 0) return single ? body : '';
+  for (const [index, marker] of markers.entries()) {
+    if (marker[1] !== jobId) continue;
+    const start = marker.index + marker[0].length;
+    const end = index + 1 < markers.length ? markers[index + 1]!.index : body.length;
+    return body.slice(start, end);
+  }
+  return '';
+}
+
+/**
+ * A job's report as clean Markdown: for a `task` job the `<task-result>`
+ * envelope's payload, for any other job its section with the delivery's
+ * boilerplate lines (`Agent:` handles, `<system-notice>` wrapper) stripped.
+ */
+function asyncJobReportText(job: AsyncResultJobDetails, body: string, single: boolean, taskResults: ReadonlyMap<string, string>): string {
+  if (job.type === 'task') {
+    const block = taskResults.get(job.jobId)
+      ?? (job.agentId !== undefined ? taskResults.get(job.agentId) : undefined)
+      ?? (single ? taskResults.values().next().value : undefined);
+    if (block !== undefined) return unescapeHarnessTags(taskResultBody(block)).trim();
+  }
+  const section = asyncJobSection(body, job.jobId, single);
+  const cleaned = section
+    .replace(TASK_RESULT_BLOCK_RE, (_match, attrs: string, inner: string) => taskResultBody(inner))
+    .replace(ASYNC_AGENT_LINE_RE, '')
+    // The batch template's delivery headline and resume cue are notice
+    // framing, not report.
+    .replace(/^(?:\d+ )?background jobs?[^\n]*(?:has|have) completed\.?\s*/i, '')
+    .replace(/^Resume your work using the results? below\.?\s*/im, '')
+    .trim();
+  return unescapeHarnessTags(cleaned);
+}
+
+/**
+ * The structured half of an `async-result` delivery: `details.jobs` joined
+ * with each job's report extracted from the rendered batch text, harness
+ * `<system-notice>`/`<task-result>` envelopes already removed.
+ */
+function asyncJobResultJobs(content: unknown, details: unknown): AsyncJobResultJob[] {
+  const parsed = AsyncResultDetailsSchema.safeParse(details ?? {});
+  const jobs = parsed.success ? parsed.data.jobs : [];
+  if (jobs.length === 0) return [];
+  const raw = typeof content === 'string' ? content : toolResultText(content);
+  const notice = /<system-notice[^>]*>([\s\S]*?)<\/system-notice>/.exec(raw);
+  const body = (notice?.[1] ?? raw).trim();
+  const taskResults = new Map<string, string>();
+  for (const match of body.matchAll(TASK_RESULT_BLOCK_RE)) {
+    const id = TASK_RESULT_ID_RE.exec(match[1] ?? '')?.[1];
+    if (id && !taskResults.has(id)) taskResults.set(id, match[2] ?? '');
+  }
+  const single = jobs.length === 1;
+  return jobs.map((job): AsyncJobResultJob => {
+    const reportText = asyncJobReportText(job, body, single, taskResults);
+    const status = job.status === 'running' || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'
+      ? job.status : undefined;
+    const subagentId = job.type === 'task' ? job.agentId ?? job.jobId : job.agentId;
+    return {
+      jobId: job.jobId,
+      ...(subagentId !== undefined ? { subagentId } : {}),
+      ...(job.type !== undefined ? { type: job.type } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(job.label !== undefined ? { label: job.label } : {}),
+      ...(job.durationMs !== undefined ? { durationMs: job.durationMs } : {}),
+      reportText,
+    };
+  });
+}
+
+function asyncJobResultNotice(content: unknown, details: unknown, partIdValue: string): NoticePart | undefined {
+  const jobs = asyncJobResultJobs(content, details);
+  if (jobs.length === 0) return undefined;
+  const failed = jobs.some(job => job.status === 'failed');
+  return {
+    type: 'notice',
+    partId: partIdValue,
+    noticeType: 'async_job_result',
+    level: failed ? 'error' : 'info',
+    details: { jobs },
+  };
+}
+
+function isAsyncResultMessage(message: NativeMessage): message is Extract<NativeMessage, { role: 'custom' }> {
+  return message.role === 'custom' && message.customType === ASYNC_RESULT_CUSTOM_TYPE;
+}
+
 /**
  * The canonical output object: the SDK's content and details verbatim, so a
  * tool card reads what the tool returned. An OpenChamber host tool carries its
@@ -469,6 +609,22 @@ export class WorkerProjection {
     } else {
       this.deferredNotices.push(noticePart);
     }
+  }
+
+  /**
+   * An async job delivery as a canonical `system` row carrying the structured
+   * `async_job_result` notice, mirroring the history rebuild of the same
+   * `custom_message` entry. Deliveries only arrive while a run is live; with
+   * no open turn the persisted entry still lands on rebuild.
+   */
+  private projectAsyncJobResult(message: Extract<NativeMessage, { role: 'custom' }>, emit: (event: ProjectionEvent) => void): void {
+    if (!this.turn) return;
+    const messageId = randomUUID();
+    const notice = asyncJobResultNotice(message.content, message.details, partId(messageId, 0));
+    if (!notice) return;
+    emit({ type: 'message.created', messageId, turnId: this.turn.turnId, role: 'system' });
+    emit({ type: 'part.started', messageId, part: notice });
+    emit({ type: 'part.completed', part: notice });
   }
   constructor(
     private readonly manager: SessionManager,
@@ -1025,6 +1181,13 @@ export class WorkerProjection {
         break;
       }
       case 'message_end': {
+        // An owner-routed async job delivery is a `custom` message: kept out
+        // of the model-facing transcript, but a canonical row here so the
+        // report the parent just received renders instead of disappearing.
+        if (isAsyncResultMessage(event.message)) {
+          this.projectAsyncJobResult(event.message, emit);
+          break;
+        }
         if (!visible(event.message)) break;
         // A result message ends after its call's message already closed; the
         // outcome is published on the call's message either way.
@@ -1323,7 +1486,7 @@ export class WorkerProjection {
       // A tool result is a part of the message that made the call, not a
       // message of its own, so only messages that author a row count.
       if ((entry.type === 'message' && visible(entry.message) && entry.message.role !== 'toolResult')
-        || (entry.type === 'custom_message' && entry.customType === 'rewind-report')
+        || (entry.type === 'custom_message' && (entry.customType === 'rewind-report' || entry.customType === ASYNC_RESULT_CUSTOM_TYPE))
         || entry.type === 'compaction') version++;
       if (entry.type !== 'custom') continue;
       if (entry.customType === BRANCH_TYPE) version++;
@@ -1374,6 +1537,23 @@ export class WorkerProjection {
           messageId, turnId, sessionId: this.sessionId, role: 'system',
           createdAt: timestamp,
           parts: [{ type: 'step_summary', partId: partId(messageId, 0), title: report ? `Rewind: ${report}` : 'Rewound to checkpoint' }],
+        });
+        leafMessageId = messageId;
+        continue;
+      }
+      if (entry.type === 'custom_message' && entry.customType === ASYNC_RESULT_CUSTOM_TYPE) {
+        const messageId = opaqueNativeId('message', this.sessionId, entry.id);
+        const notice = asyncJobResultNotice(entry.content, entry.details, partId(messageId, 0));
+        if (!notice) continue;
+        const timestamp = Date.parse(entry.timestamp) || Date.now();
+        const turnId = current?.turnId ?? opaqueNativeId('turn', this.sessionId, entry.id);
+        messages.push({
+          messageId,
+          turnId,
+          sessionId: this.sessionId,
+          role: 'system',
+          createdAt: timestamp,
+          parts: [notice],
         });
         leafMessageId = messageId;
         continue;

@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsBackButton } from '@/components/sections/shared/SettingsCards';
+import { SettingsBackButton, SettingsCardPill, type SettingsCardTone } from '@/components/sections/shared/SettingsCards';
 import {
   SettingsSection,
   SettingsFieldRow,
@@ -417,17 +417,12 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
   );
 };
 
-// ─────────────────────────────────────────────────────────────
-// Status badge
-// ─────────────────────────────────────────────────────────────
-const StatusBadge: React.FC<{ status: McpRuntimeStatus; enabled: boolean }> = ({ status, enabled }) => {
-  const { t } = useI18n();
-  if (!enabled) return <span className="typography-micro rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-muted-foreground">{t('settings.mcp.grid.status.disabled')}</span>;
-  if (status === 'ready') return <span className="typography-micro rounded-full bg-[var(--status-success)]/15 px-2 py-0.5 text-[var(--status-success)]">{t('settings.mcp.page.status.label.connected')}</span>;
-  if (status === 'unavailable') return <span className="typography-micro rounded-full bg-[var(--status-error)]/15 px-2 py-0.5 text-[var(--status-error)]">{t('settings.mcp.page.status.label.failed')}</span>;
-  return <span className="typography-micro rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-muted-foreground">{t('settings.mcp.grid.status.pending')}</span>;
+const statusPillProps = (status: McpRuntimeStatus, enabled: boolean, t: (key: I18nKey) => string): { tone: SettingsCardTone; label: string } => {
+  if (!enabled) return { tone: 'neutral', label: t('settings.mcp.grid.status.disabled') };
+  if (status === 'ready') return { tone: 'success', label: t('settings.mcp.page.status.label.connected') };
+  if (status === 'unavailable') return { tone: 'error', label: t('settings.mcp.page.status.label.failed') };
+  return { tone: 'neutral', label: t('settings.mcp.grid.status.pending') };
 };
-
 const statusDescription = (status: McpRuntimeStatus, error: string | undefined, t: (key: I18nKey) => string): string => {
   if (status === 'ready') return t('settings.mcp.page.status.description.connected');
   if (status === 'disabled') return t('settings.mcp.page.status.description.disabled');
@@ -780,6 +775,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
       : REMOTE_TRANSPORT_LABELS.http;
   const probeFailure = statusEntry?.probe?.status === 'failed' ? statusEntry.probe.error.detail : undefined;
   const statusMessage = statusDescription(status, probeFailure, t);
+  const statusPill = statusPillProps(status, draft.enabled, t);
   const failedWorkers = applyResult ? applyResult.workers.filter((worker) => worker.outcome === 'failed') : [];
   const applyStatusLabel = applyResult
     ? applyResult.status === 'applied'
@@ -801,7 +797,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
             onClick={() => { useMcpConfigStore.getState().setMcpDraft(null); useMcpConfigStore.getState().setSelectedMcp(null); }}
           />
         )}
-        titleAccessory={created ? <StatusBadge status={status} enabled={draft.enabled} /> : undefined}
+        titleAccessory={created ? <SettingsCardPill tone={statusPill.tone}>{statusPill.label}</SettingsCardPill> : undefined}
         description={isNew ? t('settings.mcp.page.header.configureNewServer') : t('settings.mcp.page.header.transport', { type: transportLabel })}
         headerEnd={!isNew && initial.managed !== false ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -877,7 +873,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.mcp.page.status.runtimeStatus')}</span>
-                    <StatusBadge status={status} enabled={draft.enabled} />
+                    <SettingsCardPill tone={statusPill.tone}>{statusPill.label}</SettingsCardPill>
                   </div>
                   <p className="typography-meta text-muted-foreground">{statusMessage}</p>
                 </div>

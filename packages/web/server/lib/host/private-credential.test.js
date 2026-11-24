@@ -7,7 +7,7 @@ const scope = { workspaceId: 'workspace_1', projectId: 'project_1', agentDirecto
 describe('selected private credential boundary', () => {
   it('requires the production service and resolver constructor dependencies', () => {
     expect(() => createSelectedCredentialResolver({ service: {}, resolveWorkspaceScope: async () => scope })).toThrow(TypeError);
-    expect(() => createSelectedCredentialHandoff({ service: { request() {}, getState() {} } })).toThrow(TypeError);
+    expect(() => createSelectedCredentialHandoff({ service: { request() { }, getState() { } } })).toThrow(TypeError);
   });
   it('checks readiness and exact selected owner before sending any private secret request', async () => {
     let requests = 0;
@@ -21,13 +21,17 @@ describe('selected private credential boundary', () => {
     expect(requests).toBe(0);
   });
   it('returns only the exact native selected OAuth record with actual SDK metadata and no invented conversion', async () => {
-    const credential = { type: 'oauth', access: 'access-token', refresh: 'refresh-token', expires: 12345,
-      accountId: 'account_1', enterpriseUrl: 'https://company.example', projectId: 'project-native', inferenceRegion: 'eu' };
+    const credential = {
+      type: 'oauth', access: 'access-token', refresh: 'refresh-token', expires: 12345,
+      accountId: 'account_1', enterpriseUrl: 'https://company.example', projectId: 'project-native', inferenceRegion: 'eu'
+    };
     const requests = [];
-    const service = { getState: () => ({ phase: 'ready' }), request: async (url, init) => {
-      requests.push({ url, body: JSON.parse(init.body) });
-      return Response.json({ ...selection, credential });
-    } };
+    const service = {
+      getState: () => ({ phase: 'ready' }), request: async (url, init) => {
+        requests.push({ url, body: JSON.parse(init.body) });
+        return Response.json({ ...selection, credential });
+      }
+    };
     const resolve = createSelectedCredentialResolver({ service, resolveWorkspaceScope: async () => scope });
     expect(await resolve(selection)).toEqual(credential);
     expect(requests).toEqual([{ url: '/internal/workspaces/workspace_1/credentials/resolve', body: selection }]);
@@ -49,13 +53,15 @@ describe('selected private credential boundary', () => {
     let requests = 0;
     const service = { getState: () => ({ phase: 'ready' }), request: async () => { requests++; throw new Error('No secret read permitted'); } };
     const handoff = createSelectedCredentialHandoff({ service, resolveWorkspaceScope: async () => scope });
-    const result = await handoff({ intent: 'credential-handoff', consent: true, workspaceId: 'workspace_1', selections: [
-      { providerId: 'proxy', source: 'stored-credential', credentialType: 'key' },
-      { providerId: 'opencode', source: 'stored-credential', credentialType: 'oauth' },
-      { providerId: 'openai-codex', source: 'stored-credential', credentialType: 'oauth' },
-      { providerId: 'unknown-oauth', source: 'stored-credential', credentialType: 'oauth' },
-      { providerId: 'openai', source: 'stored-credential', credentialType: 'key' },
-    ] });
+    const result = await handoff({
+      intent: 'credential-handoff', consent: true, workspaceId: 'workspace_1', selections: [
+        { providerId: 'proxy', source: 'stored-credential', credentialType: 'key' },
+        { providerId: 'opencode', source: 'stored-credential', credentialType: 'oauth' },
+        { providerId: 'openai-codex', source: 'stored-credential', credentialType: 'oauth' },
+        { providerId: 'unknown-oauth', source: 'stored-credential', credentialType: 'oauth' },
+        { providerId: 'openai', source: 'stored-credential', credentialType: 'key' },
+      ]
+    });
     expect(result.results.map(({ status, code }) => [status, code])).toEqual([
       ['unavailable', 'SELECTED_SOURCE_UNAVAILABLE'], ['unsupported', 'CONSOLE_CREDENTIAL_UNSUPPORTED'],
       ['re-auth-required', 'OAUTH_REAUTH_REQUIRED'], ['unsupported', 'CREDENTIAL_FORMAT_UNSUPPORTED'],
@@ -65,20 +71,26 @@ describe('selected private credential boundary', () => {
   });
   it('selects only the explicit file and its provider at the owning CAS revision, preserving independent partial failures', async () => {
     const paths = [];
-    const service = { getState: () => ({ phase: 'ready' }), request: async (url, init) => {
-      paths.push(url);
-      if (url.endsWith('/providers')) return Response.json({ workspaceId: 'workspace_1', revision: '7', providers: [] });
-      const body = JSON.parse(init.body);
-      expect(body).toMatchObject({ workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', expectedRevision: '7' });
-      expect(body.selection.file).toEqual({ format: 'opencode-auth-entry', content: '{"type":"api","key":"selected-key"}' });
-      return Response.json({ workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', revision: '7',
-        outcome: { providerId: 'proxy', source: 'selected-file', credentialType: 'key', status: 'unavailable', code: 'PROVIDER_UNAVAILABLE' } });
-    } };
+    const service = {
+      getState: () => ({ phase: 'ready' }), request: async (url, init) => {
+        paths.push(url);
+        if (url.endsWith('/providers')) return Response.json({ workspaceId: 'workspace_1', revision: '7', providers: [] });
+        const body = JSON.parse(init.body);
+        expect(body).toMatchObject({ workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', expectedRevision: '7' });
+        expect(body.selection.file).toEqual({ format: 'opencode-auth-entry', content: '{"type":"api","key":"selected-key"}' });
+        return Response.json({
+          workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', revision: '7',
+          outcome: { providerId: 'proxy', source: 'selected-file', credentialType: 'key', status: 'unavailable', code: 'PROVIDER_UNAVAILABLE' }
+        });
+      }
+    };
     const handoff = createSelectedCredentialHandoff({ service, resolveWorkspaceScope: async () => scope });
-    const result = await handoff({ intent: 'credential-handoff', consent: true, workspaceId: 'workspace_1', selections: [
-      { providerId: 'proxy', source: 'selected-file', credentialType: 'key', file: { format: 'opencode-auth-entry', content: '{"type":"api","key":"selected-key"}' } },
-      { providerId: 'other', source: 'external-environment', credentialType: 'key' },
-    ] });
+    const result = await handoff({
+      intent: 'credential-handoff', consent: true, workspaceId: 'workspace_1', selections: [
+        { providerId: 'proxy', source: 'selected-file', credentialType: 'key', file: { format: 'opencode-auth-entry', content: '{"type":"api","key":"selected-key"}' } },
+        { providerId: 'other', source: 'external-environment', credentialType: 'key' },
+      ]
+    });
     expect(paths).toEqual(['/api/agent/v1/workspaces/workspace_1/providers', '/internal/workspaces/workspace_1/credentials/handoff']);
     expect(result.results.map(result => result.status)).toEqual(['unavailable', 'unavailable']);
     expect(JSON.stringify(result)).not.toContain('selected-key');
@@ -88,17 +100,19 @@ describe('selected private credential boundary', () => {
 const quotaRegistry = () => import('../quota/providers/index.js');
 const publicProvider = (providerId, { method = 'api-key', credentialRef = `credential_${providerId}`,
   endpoint = 'https://provider.example/v1', protocol = 'chat-completions', configured = true } = {}) => ({
-  providerId, name: providerId, endpoint, protocol, authMethods: [method],
-  auth: configured ? { status: 'configured', credentialRef, method, source: 'stored-credential' } : { status: 'missing' },
-});
+    providerId, name: providerId, endpoint, protocol, authMethods: [method],
+    auth: configured ? { status: 'configured', credentialRef, method, source: 'stored-credential' } : { status: 'missing' },
+  });
 const catalogFixture = (providers, extra = {}) => {
   const paths = [];
   let admitted = false;
-  const service = { getState: () => ({ phase: 'ready' }), request: async url => {
-    expect(admitted).toBe(true);
-    paths.push(url);
-    return Response.json({ workspaceId: 'workspace_1', revision: '3', providers });
-  } };
+  const service = {
+    getState: () => ({ phase: 'ready' }), request: async url => {
+      expect(admitted).toBe(true);
+      paths.push(url);
+      return Response.json({ workspaceId: 'workspace_1', revision: '3', providers });
+    }
+  };
   const resolveWorkspaceScope = async id => { await Promise.resolve(); admitted = true; return id === scope.workspaceId ? scope : null; };
   const owners = createCatalogCredentialSelections({ service, resolveWorkspaceScope, getQuotaProviders: quotaRegistry, ...extra });
   return { ...owners, service, paths };
@@ -108,12 +122,12 @@ const catalogRequest = (extra = {}) => ({ query: { workspaceId: 'workspace_1', a
 describe('Host-owned public catalog credential selections', () => {
   it('requires actual service, admitted scope and quota registry owners', () => {
     expect(() => createCatalogCredentialSelections({ service: {}, resolveWorkspaceScope: async () => scope, getQuotaProviders: quotaRegistry })).toThrow(TypeError);
-    expect(() => createCatalogCredentialSelections({ service: { request() {}, getState() {} }, resolveWorkspaceScope: async () => scope })).toThrow(TypeError);
+    expect(() => createCatalogCredentialSelections({ service: { request() { }, getState() { } }, resolveWorkspaceScope: async () => scope })).toThrow(TypeError);
   });
   it('rejects missing, conflicting and mismatched identities before any catalog or secret request', async () => {
     const owner = catalogFixture([]);
     for (const req of [{}, { query: { agentDirectoryId: 'agent_1' } }, catalogRequest({ workspaceId: ['workspace_1'] }),
-      { ...catalogRequest(), body: { workspaceId: 'sibling' } }, catalogRequest({ providerId: null })]) {
+    { ...catalogRequest(), body: { workspaceId: 'sibling' } }, catalogRequest({ providerId: null })]) {
       await expect(owner.listQuotaSelections(req)).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     }
     await expect(owner.listQuotaSelections(catalogRequest({ agentDirectoryId: 'sibling' }))).rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
@@ -153,24 +167,25 @@ describe('Host-owned public catalog credential selections', () => {
     ['zhipuai-coding-plan', 'zhipu-coding-plan', 'api-key'], ['kimi-for-coding', 'kimi-code', 'api-key'],
     ['nano-gpt', 'nanogpt', 'api-key'], ['minimax-coding-plan', 'minimax-code', 'api-key'],
     ['minimax-cn-coding-plan', 'minimax-code-cn', 'api-key'], ['wafer', 'wafer-serverless', 'api-key'],
-    ['xai', 'xai-oauth', 'oauth'], ['opencode-go', 'opencode-go', 'api-key'],
-    ['opencode', 'opencode-zen', 'api-key'], ['opencode', 'opencode-zen', 'oauth'],
+    ['xai', 'xai-oauth', 'oauth'],
   ])('resolves logical %s to established stored native provider %s', async (logicalId, nativeId, method) => {
     const owner = catalogFixture([publicProvider(nativeId, { method })]);
-    expect(await owner.resolveQuotaSelection(catalogRequest(), logicalId)).toEqual({ workspaceId: 'workspace_1',
-      agentDirectoryId: 'agent_1', providerId: nativeId, credentialRef: `credential_${nativeId}` });
+    expect(await owner.resolveQuotaSelection(catalogRequest(), logicalId)).toEqual({
+      workspaceId: 'workspace_1',
+      agentDirectoryId: 'agent_1', providerId: nativeId, credentialRef: `credential_${nativeId}`
+    });
     expect(owner.paths).toEqual(['/api/agent/v1/workspaces/workspace_1/providers']);
   });
   it('does not treat login IDs, legacy alias bags or unrelated vendor credentials as stored native targets', async () => {
     for (const [logicalId, wrongNativeId] of [['codex', 'openai-codex-device'], ['zai-coding-plan', 'zai-coding-plan'],
-      ['minimax-coding-plan', 'minimax'], ['kimi-for-coding', 'moonshot'], ['opencode-go', 'opencode'], ['xai', 'xai']]) {
+    ['minimax-coding-plan', 'minimax'], ['kimi-for-coding', 'moonshot'], ['xai', 'xai']]) {
       const owner = catalogFixture([publicProvider(wrongNativeId)]);
       await expect(owner.resolveQuotaSelection(catalogRequest(), logicalId)).rejects.toMatchObject({ status: 422, code: 'CREDENTIAL_UNAVAILABLE' });
     }
   });
   it('never infers the quota implementation ID is a native SDK alias or reads sibling credentials', async () => {
     const owner = catalogFixture([publicProvider('codex', { method: 'oauth' }), publicProvider('openai', { method: 'oauth' }),
-      publicProvider('openai-codex', { method: 'oauth' }), publicProvider('anthropic')]);
+    publicProvider('openai-codex', { method: 'oauth' }), publicProvider('anthropic')]);
     await expect(owner.resolveQuotaSelection(catalogRequest({ providerId: 'codex' }), 'codex')).rejects.toMatchObject({ code: 'CREDENTIAL_UNAVAILABLE' });
     await expect(owner.resolveQuotaSelection(catalogRequest({ providerId: 'openai' }), 'codex')).rejects.toMatchObject({ code: 'CREDENTIAL_UNAVAILABLE' });
     await expect(owner.resolveQuotaSelection(catalogRequest({ credentialRef: 'old-ref' }), 'codex')).rejects.toMatchObject({ code: 'CREDENTIAL_UNAVAILABLE' });
@@ -178,7 +193,7 @@ describe('Host-owned public catalog credential selections', () => {
   });
   it('requires an explicit native provider when a logical quota product has multiple configured native owners', async () => {
     const owner = catalogFixture([publicProvider('google-gemini-cli', { method: 'oauth', protocol: 'generate-content' }),
-      publicProvider('google-antigravity', { method: 'oauth', protocol: 'generate-content' })]);
+    publicProvider('google-antigravity', { method: 'oauth', protocol: 'generate-content' })]);
     await expect(owner.resolveQuotaSelection(catalogRequest(), 'google')).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     expect(await owner.resolveQuotaSelection(catalogRequest({ providerId: 'google-antigravity' }), 'google')).toMatchObject({
       providerId: 'google-antigravity', credentialRef: 'credential_google-antigravity',
@@ -201,12 +216,14 @@ describe('Host-owned public catalog credential selections', () => {
   });
   it('selects TTS only by admitted native provider and catalog endpoint, never the browser endpoint', async () => {
     const owner = catalogFixture([publicProvider('proxy', { endpoint: 'https://selected.example/v1' }),
-      publicProvider('openai', { endpoint: 'https://api.openai.com/v1', protocol: 'responses' }),
-      publicProvider('openai-codex', { method: 'oauth', protocol: 'responses' }), publicProvider('anthropic', { protocol: 'messages' }),
-      publicProvider('missing-endpoint', { endpoint: null })]);
+    publicProvider('openai', { endpoint: 'https://api.openai.com/v1', protocol: 'responses' }),
+    publicProvider('openai-codex', { method: 'oauth', protocol: 'responses' }), publicProvider('anthropic', { protocol: 'messages' }),
+    publicProvider('missing-endpoint', { endpoint: null })]);
     const req = { body: { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'proxy', baseURL: 'https://browser.example/v1' } };
-    expect(await owner.resolveTtsSelection(req)).toEqual({ workspaceId: 'workspace_1', agentDirectoryId: 'agent_1',
-      providerId: 'proxy', credentialRef: 'credential_proxy', baseURL: 'https://selected.example/v1' });
+    expect(await owner.resolveTtsSelection(req)).toEqual({
+      workspaceId: 'workspace_1', agentDirectoryId: 'agent_1',
+      providerId: 'proxy', credentialRef: 'credential_proxy', baseURL: 'https://selected.example/v1'
+    });
     expect(await owner.resolveTtsSelection(catalogRequest({ providerId: 'openai' }))).toMatchObject({ baseURL: 'https://api.openai.com/v1' });
     await expect(owner.resolveTtsSelection(catalogRequest())).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     for (const providerId of ['openai-codex', 'anthropic', 'missing-endpoint', 'sibling'])

@@ -19,6 +19,25 @@ test('compaction abort and optional rich subagent progress stay canonical', () =
   expect(SubagentSchema.safeParse({ ...row, completionPercent: 101 }).success).toBe(false);
   expect(SubagentSchema.safeParse({ ...row, recentOutput: [null] }).success).toBe(false);
 });
+
+test('SubagentSchema accepts live frames without childSessionId and carries optional name and telemetry', () => {
+  const live = {
+    subagentId: 'SettingsAuditScout',
+    parentSessionId: 'parent',
+    name: 'SettingsAuditScout',
+    role: 'scout',
+    solutionSpace: 'Check settings IA',
+    status: 'running' as const,
+    activeTool: 'read',
+    activeToolArgs: 'packages/ui/src/App.tsx',
+    model: 'anthropic/claude-sonnet-4-5',
+    contextTokens: 1200,
+    contextWindow: 200000,
+  };
+  expect(SubagentSchema.parse(live)).toEqual(live);
+  expect(SubagentSchema.safeParse({ ...live, name: '' }).success).toBe(false);
+  expect(SubagentSchema.safeParse({ ...live, childSessionId: '' }).success).toBe(false);
+});
 const timestamp = 1774201000000;
 const options = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
 const prompt = { input: { text: 'hello', attachments: [], context: [] }, options };

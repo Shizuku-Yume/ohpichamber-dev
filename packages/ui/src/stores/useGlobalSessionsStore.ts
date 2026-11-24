@@ -141,6 +141,7 @@ const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyM
       const children: Session[] = [];
       for (const record of records) {
         const child = SubagentSchema.parse(record);
+        if (child.childSessionId === undefined) continue;
         const previous = known.get(child.childSessionId);
         const owner = owners.get(child.childSessionId);
         if (child.parentSessionId !== root.sessionId || rootIds.has(child.childSessionId)
@@ -1091,6 +1092,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
 
   upsertSubagents: (parent, children) => {
     set((state) => applySessionMutations(state, children.flatMap((child) => {
+      if (child.childSessionId === undefined) return [];
       const previous = state.entityById.get(child.childSessionId);
       if (child.parentSessionId !== parent.sessionId || child.childSessionId === parent.rootSessionId
         || (previous && previous.parentSessionId !== parent.sessionId)) return [];

@@ -209,4 +209,64 @@ describe('VoiceSettings endpoint paths', () => {
     expect(useConfigStore.getState().voiceApiKeys).toEqual({ stt: false });
     expect(patches).toEqual([{ stt: 'synthetic-test-key' }, { stt: null }]);
   });
+
+  test('renders flat radio options without oc-tile cards in LocalModelPicker and selects models', async () => {
+    setFetch(async () => Response.json({
+      activeModel: 'parakeet-tdt-0.6b-v2-int8',
+      models: [
+        { id: 'parakeet-tdt-0.6b-v2-int8', installed: true, downloading: false, downloadProgress: null, downloadError: null },
+        { id: 'whisper-tiny-int8', installed: false, downloading: false, downloadProgress: null, downloadError: null },
+      ],
+    }));
+    useConfigStore.setState({ dictationEnabled: true, sttProvider: 'local', sttLocalModel: 'parakeet-tdt-0.6b-v2-int8' });
+    await act(async () => root.render(<I18nProvider><VoiceSettings /></I18nProvider>));
+
+    const group = host.querySelector('[role="radiogroup"]');
+    expect(group).not.toBeNull();
+    expect(host.querySelector('.oc-tile')).toBeNull();
+
+    const whisperRadio = host.querySelector<HTMLButtonElement>(`button[role="radio"][aria-label="${enDict['settings.voice.page.stt.model.whisperTiny']}"]`);
+    expect(whisperRadio).not.toBeNull();
+    expect(whisperRadio?.getAttribute('aria-checked')).toBe('false');
+
+    await act(async () => { whisperRadio?.click(); });
+    expect(useConfigStore.getState().sttLocalModel).toBe('whisper-tiny-int8');
+  });
+
+  test('uses shared compact Input and Button primitives for server fields and LocalTts disclosure filter', async () => {
+    setFetch(async () => Response.json({
+      ttsModels: [
+        { id: 'kokoro-en-v0_19', description: 'Kokoro English', installed: true, downloading: false, downloadProgress: null, downloadError: null },
+        { id: 'kokoro-multi-lang-v1_1', description: 'Kokoro Multilingual', installed: false, downloading: false, downloadProgress: null, downloadError: null },
+      ],
+    }));
+    useConfigStore.setState({
+      dictationEnabled: true,
+      sttProvider: 'openai-compatible',
+      sttServerUrl: 'http://localhost:8001/v1',
+      showMessageTTSButtons: true,
+      voiceProvider: 'local',
+    });
+    await act(async () => root.render(<I18nProvider><VoiceSettings /></I18nProvider>));
+
+    const sttUrlInput = inputWithPlaceholder('http://localhost:8001/v1');
+    expect(sttUrlInput?.getAttribute('data-slot')).toBe('input');
+    expect(sttUrlInput?.className).toContain('h-7');
+
+    const clearButton = host.querySelector<HTMLButtonElement>(`button[aria-label="${enDict['settings.common.actions.clear']}"]`);
+    expect(clearButton?.getAttribute('data-slot')).toBe('button');
+    await act(async () => { clearButton?.click(); });
+    expect(useConfigStore.getState().sttServerUrl).toBe('');
+
+    const disclosureButton = Array.from(host.querySelectorAll('button')).find((el) =>
+      el.textContent?.includes(enDict['settings.voice.page.localTts.availableToDownload']),
+    );
+    expect(disclosureButton?.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => { disclosureButton?.click(); });
+    expect(disclosureButton?.getAttribute('aria-expanded')).toBe('true');
+
+    const filterInput = inputWithPlaceholder(enDict['settings.voice.page.localTts.filterPlaceholder']);
+    expect(filterInput?.getAttribute('data-slot')).toBe('input');
+    expect(filterInput?.className).toContain('h-7');
+  });
 });

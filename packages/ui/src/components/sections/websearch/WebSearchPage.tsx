@@ -220,16 +220,20 @@ const FallbackStatus: React.FC<{
   if (!needsKey && !needsSetup) return null;
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="xs"
       disabled={busy}
       onClick={onOpen}
       aria-label={t('settings.webSearch.native.configureFallback', { provider: label })}
       title={t('settings.webSearch.native.configureFallback', { provider: label })}
-      className="max-w-40 shrink-0 cursor-pointer truncate rounded-full bg-[var(--status-warning)]/15 px-2 py-0.5 text-[0.625rem] font-medium text-[var(--status-warning)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-auto shrink-0 p-0 hover:bg-transparent hover:opacity-80"
     >
-      {needsKey ? t('settings.webSearch.card.needsKey') : t('settings.webSearch.card.needsSetup')}
-    </button>
+      <SettingsCardPill tone="warning">
+        {needsKey ? t('settings.webSearch.card.needsKey') : t('settings.webSearch.card.needsSetup')}
+      </SettingsCardPill>
+    </Button>
   );
 };
 
@@ -273,23 +277,22 @@ const FallbacksSection: React.FC<{
             items={rows}
             disabled={busy}
             dragInstructions={t('settings.webSearch.native.dragInstructions')}
-            listClassName="gap-2"
-            rowClassName="oc-tile oc-tile-hover rounded-xl px-3 py-2"
+            listClassName="gap-1"
+            rowClassName="py-1.5"
             onReorder={(providerIds) => void commit({ fallbackProviderIds: providerIds })}
             renderRow={(row, index) => (
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <span className="oc-tile-inset flex size-5 shrink-0 items-center justify-center rounded-md typography-micro font-medium tabular-nums text-muted-foreground">
+                <span className="shrink-0 typography-meta tabular-nums text-muted-foreground">
                   {index + 1}
                 </span>
-                <span
+                <Icon
+                  name="global"
                   className={cn(
-                    'oc-tile-inset flex size-7 shrink-0 items-center justify-center rounded-lg',
+                    'size-4 shrink-0 text-muted-foreground',
                     (!row.provider?.configured || (row.provider.requiresCredential && !row.provider.credentialConfigured)) && 'opacity-60',
                   )}
                   aria-hidden="true"
-                >
-                  <Icon name="global" className="size-4 text-muted-foreground" />
-                </span>
+                />
                 <span className="min-w-0 flex-1 truncate typography-ui-label font-medium text-foreground">
                   {row.label}
                 </span>

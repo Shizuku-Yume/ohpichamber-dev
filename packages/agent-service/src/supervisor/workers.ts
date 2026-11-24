@@ -29,7 +29,7 @@ interface WorkerLifecycleCallbacks {
   onOpened?: (rootSessionId: string, generation: string, sessionFile: string, seed: ProjectionSeed) => void;
   onEvents?: (rootSessionId: string, generation: string, inputs: ProjectionInput[]) => void;
   onInteraction?: (rootSessionId: string, generation: string, interaction: WorkerInteraction) => void;
-  onSubagent?: (rootSessionId: string, generation: string, subagent: { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string }) => void;
+  onSubagent?: (rootSessionId: string, generation: string, subagent: { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; description?: string; solutionSpace?: string; sessionFile?: string }) => void;
   onExit?: (rootSessionId: string, generation: string) => void;
 }
 
@@ -676,7 +676,7 @@ export class WorkerRegistry {
     if (entry.kind === 'session') {
       const opening = this.options.sessionOpening?.(entry.info.rootSessionId);
       if (opening) {
-        await waitWithin(opening.then(() => {}, () => {}), this.options.startupTimeoutMs ?? 15_000)
+        await waitWithin(opening.then(() => { }, () => { }), this.options.startupTimeoutMs ?? 15_000)
           .catch(() => { throw refuse('COMMAND_IN_FLIGHT'); });
       }
     }

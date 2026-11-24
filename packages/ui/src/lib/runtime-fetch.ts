@@ -61,10 +61,10 @@ const appendRuntimeQuery = (url: URL, query?: RuntimeUrlQuery): void => {
 
 const hasDirectoryHeader = (headers: HeadersInit | undefined): boolean => {
   if (!headers) return false;
-  if (headers instanceof Headers) return headers.has('x-opencode-directory');
+  if (headers instanceof Headers) return headers.has('x-openchamber-directory');
   const entries: Iterable<[string, string]> = Array.isArray(headers) ? headers : Object.entries(headers);
   for (const [key] of entries) {
-    if (key.toLowerCase() === 'x-opencode-directory') return true;
+    if (key.toLowerCase() === 'x-openchamber-directory') return true;
   }
   return false;
 };
@@ -72,11 +72,11 @@ const hasDirectoryHeader = (headers: HeadersInit | undefined): boolean => {
 const withSpaceDirectory = (input: string | URL | Request, init: RequestInit, directory: string | null | undefined): RequestInit => {
   const spaceHeaders = spaceDirectoryHeaders(directory);
   if (spaceHeaders === null || hasDirectoryHeader(init.headers)) return init;
-  if (input instanceof Request && input.headers.has('x-opencode-directory')) return init;
+  if (input instanceof Request && input.headers.has('x-openchamber-directory')) return init;
   const own: [string, string][] = !init.headers ? []
     : init.headers instanceof Headers ? Array.from(init.headers.entries())
-    : Array.isArray(init.headers) ? (init.headers as [string, string][])
-    : Object.entries(init.headers as Record<string, string>);
+      : Array.isArray(init.headers) ? (init.headers as [string, string][])
+        : Object.entries(init.headers as Record<string, string>);
   return { ...init, headers: [...own, ...Object.entries(spaceHeaders)] };
 };
 
@@ -184,13 +184,13 @@ export const sanitizeHeadersForBrowser = (init?: HeadersInit): [string, string][
     if (shouldEncodeHeaderValue(key, value)) {
       entries.push([key, encodeURIComponent(value)]);
       dirty = true;
-      if (key.toLowerCase() === 'x-opencode-directory') encodedDirectoryHint = true;
+      if (key.toLowerCase() === 'x-openchamber-directory') encodedDirectoryHint = true;
     } else {
       entries.push([key, value]);
     }
   }
   if (encodedDirectoryHint) {
-    entries.push(['x-opencode-directory-encoding', 'uri']);
+    entries.push(['x-openchamber-directory-encoding', 'uri']);
   }
   return dirty ? entries : undefined;
 };
@@ -262,13 +262,13 @@ const resolveRuntimeFetchInput = (input: string | URL | Request, query?: Runtime
 const COALESCE_READ_PATH = /\/api\/(config|path|app\/agents|agent|project|command)(\b|\/|\?|$)/;
 const READ_COALESCE = new Map<string, Promise<Response>>();
 
-// external: https://github.com/anomalyco/opencode/tree/v2.3.0/packages/server OpenCode scopes config reads by x-opencode-directory, so coalescing includes that header.
+// Scope config reads by x-openchamber-directory, so coalescing includes that header.
 const coalesceReadKey = (method: string, url: string, hasSignal: boolean, headers: Headers): string | null => {
   if (hasSignal) return null;
   if (method !== 'GET') return null;
   if (url.includes('/event')) return null;
   if (!COALESCE_READ_PATH.test(url)) return null;
-  return `GET ${url}\u0000${headers.get('x-opencode-directory') ?? ''}`;
+  return `GET ${url}\u0000${headers.get('x-openchamber-directory') ?? ''}`;
 };
 
 type RuntimeRequestObserver = (request: { method: string; url: string; status: number | null; durationMs: number }) => void;
@@ -305,8 +305,8 @@ export const runtimeFetch = async (rawInput: string | URL | Request, init: Runti
     const headers = await mergeHeaders(inputHeaders, requestInit.headers, shouldAttachRuntimeAuth(resolvedInput));
     const resolvedUrl =
       resolvedInput instanceof Request ? resolvedInput.url
-      : resolvedInput instanceof URL ? resolvedInput.toString()
-      : String(resolvedInput);
+        : resolvedInput instanceof URL ? resolvedInput.toString()
+          : String(resolvedInput);
     addRuntimeProxyHeaders(resolvedUrl, headers);
     doFetch = resolvedInput instanceof Request
       ? () => fetch(new Request(resolvedInput, { ...requestInit, headers }))

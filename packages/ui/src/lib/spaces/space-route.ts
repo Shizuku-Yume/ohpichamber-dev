@@ -41,7 +41,7 @@ export const spaceApiPath = (path: string, directory: string | null | undefined)
  */
 export const spaceDirectoryHeaders = (directory: string | null | undefined): Record<string, string> | null => {
   if (!directory || !isSpaceDirectory(directory)) return null;
-  return { 'x-opencode-directory': encodeURIComponent(directory), 'x-opencode-directory-encoding': 'uri' };
+  return { 'x-openchamber-directory': encodeURIComponent(directory), 'x-openchamber-directory-encoding': 'uri' };
 };
 
 /** The root of a space, `/spaces/<id>`: the directory a socket of that space names. */

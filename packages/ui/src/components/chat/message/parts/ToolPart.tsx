@@ -168,6 +168,7 @@ const TaskToolSessions = ({ call, sessionId: addressedSessionId, directory: addr
 
     if (!sessionId || !directory || state?.sessionId !== sessionId || state.runtimeKey !== runtimeKey || state.toolCallId !== call.toolCallId) return null;
     const openChild = (child: Subagent) => {
+        if (!child.childSessionId) return;
         if (column.pinned) column.openSession(child.childSessionId, directory);
         else if (isMobile) useSessionUIStore.getState().setCurrentSession(child.childSessionId, directory);
         else useUIStore.getState().openContextPanelTab(directory, {

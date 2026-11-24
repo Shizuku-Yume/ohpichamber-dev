@@ -42,6 +42,7 @@ describe('guest file operation directory scope', () => {
     const url = new URL(request.url);
     expect(url.pathname).toBe('/api/guests/guest-a/files');
     expect(url.searchParams.get('directory')).toBe('/project');
+    expect(request.headers.has('x-openchamber-directory')).toBe(false);
     expect(request.headers.has('x-opencode-directory')).toBe(false);
     expect(request.method).toBe('POST');
     expect(await request.json()).toEqual({ op: 'read', path: 'README.md' });
@@ -57,6 +58,7 @@ describe('guest file operation directory scope', () => {
     const url = new URL(request.url);
     expect(url.pathname).toBe('/api/guests/guest-a/files');
     expect(url.searchParams.has('directory')).toBe(false);
+    expect(request.headers.has('x-openchamber-directory')).toBe(false);
     expect(request.headers.has('x-opencode-directory')).toBe(false);
   });
 

@@ -1318,7 +1318,7 @@ describe('fs read', () => {
     ['ENOENT', 'ENOTDIR', 'EINVAL', 'ENAMETOOLONG'].map((code) => [operation, code])
   ))('returns an optional missing result for %s %s without logging', async (operation, code) => {
     const error = Object.assign(new Error(code), { code });
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => { });
 
     try {
       const res = await callRead(registerStat({ [operation]: async () => { throw error; } }), {
@@ -1336,7 +1336,7 @@ describe('fs read', () => {
 
   it('logs and returns 500 for non-optional non-ENOENT filesystem errors', async () => {
     const error = Object.assign(new Error('Invalid package'), { code: 'EINVAL' });
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => { });
 
     try {
       const res = await callRead(registerStat({ realpath: async () => { throw error; } }), {
@@ -1371,7 +1371,7 @@ describe('fs read', () => {
     const handler = operation === 'workspace'
       ? registerStat({}, fail)
       : registerStat({ [operation]: fail });
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => { });
 
     try {
       const res = await callRead(handler, { path: '/repo/app.asar', optional: 'true' });
@@ -1483,7 +1483,7 @@ describe('fs read', () => {
 
     await handler({
       query: { path: '/home/user/proj/file.txt' },
-      get: (name) => (name === 'x-opencode-directory' ? '/home/user/proj' : undefined),
+      get: (name) => (name === 'x-openchamber-directory' ? '/home/user/proj' : undefined),
     }, res);
 
     expect(res.statusCode).toBe(200);
@@ -2263,7 +2263,7 @@ describe('fs git-dirs', () => {
 
 describe('fs stat directory scope (issue 3019)', () => {
   // Wires the real project-directory runtime so the stat route resolves the
-  // workspace exactly as the server does: explicit x-opencode-directory header
+  // workspace exactly as the server does: explicit x-openchamber-directory header
   // first, then the settings.lastDirectory fallback. The renderer's file
   // reference probes must send the header because lastDirectory reflects the
   // directory the UI last browsed, not the session's directory.
@@ -2327,11 +2327,11 @@ describe('fs stat directory scope (issue 3019)', () => {
     expect(res.body).toEqual({ error: 'Path is outside of active workspace' });
   });
 
-  it('accepts the same stat when the session directory rides the x-opencode-directory header', async () => {
+  it('accepts the same stat when the session directory rides the x-openchamber-directory header', async () => {
     const handler = registerStatWithProjectDirectoryRuntime();
 
     const res = await callStat(handler, {
-      headers: { 'x-opencode-directory': '/repo-b' },
+      headers: { 'x-openchamber-directory': '/repo-b' },
       query: { path: '/repo-b/src/index.ts', optional: 'true' },
     });
 
@@ -2357,8 +2357,8 @@ describe('fs stat directory error handling', () => {
         '--outDir', directory,
         ...helpers.map((name) => fileURLToPath(new URL(`./${name}.ts`, import.meta.url))),
         fileURLToPath(new URL('../git/redaction.ts', import.meta.url)),
-         fileURLToPath(new URL('../shared/object-guards.ts', import.meta.url)),
-         fileURLToPath(new URL('../path-realpath-cache.ts', import.meta.url)),
+        fileURLToPath(new URL('../shared/object-guards.ts', import.meta.url)),
+        fileURLToPath(new URL('../path-realpath-cache.ts', import.meta.url)),
       ], { cwd: directory, stdio: 'pipe' });
       await copyFile(new URL('../shared/guards.ts', import.meta.url), path.join(directory, 'shared/guards.js'));
       expect(() => execFileSync('node', [
@@ -2431,15 +2431,15 @@ describe('fs stat directory error handling', () => {
     }
     expect(stat).toHaveBeenCalledTimes(1);
 
-    const missing = await callStat(handler, { headers: { 'x-opencode-directory': '/repo-b' }, query: { path: '/repo-b', directory: 'true' } });
+    const missing = await callStat(handler, { headers: { 'x-openchamber-directory': '/repo-b' }, query: { path: '/repo-b', directory: 'true' } });
     expect(missing.statusCode).toBe(404);
     expect(missing.body).toEqual({ error: 'Directory not found', reason: 'not-found' });
 
-    const notDir = await callStat(handler, { headers: { 'x-opencode-directory': '/repo-b' }, query: { path: '/repo-b/file.txt/child', directory: 'true' } });
+    const notDir = await callStat(handler, { headers: { 'x-openchamber-directory': '/repo-b' }, query: { path: '/repo-b/file.txt/child', directory: 'true' } });
     expect(notDir.statusCode).toBe(400);
     expect(notDir.body).toEqual({ error: 'Specified path is not a directory', reason: 'not-directory' });
 
-    const denied = await callStat(handler, { headers: { 'x-opencode-directory': '/repo-b' }, query: { path: '/repo-b/protected', directory: 'true' } });
+    const denied = await callStat(handler, { headers: { 'x-openchamber-directory': '/repo-b' }, query: { path: '/repo-b/protected', directory: 'true' } });
     expect(denied.statusCode).toBe(403);
     expect(denied.body).toEqual({ error: 'Access to directory denied', reason: 'os-permission' });
 
@@ -2485,13 +2485,15 @@ describe('fs stat directory error handling', () => {
     const response = createMockResponse();
     await handler({ body: { paths: ['/repo', '/link', '/unresolvable', '/gone', '/file'] } }, response);
     expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ results: [
-      { path: '/repo', isDirectory: true, realPath: '/repo' },
-      { path: '/link', isDirectory: true, realPath: '/repo' },
-      { path: '/unresolvable', isDirectory: true },
-      { path: '/gone', isDirectory: false, reason: 'not-found' },
-      { path: '/file', isDirectory: false, reason: 'not-directory' },
-    ] });
+    expect(response.body).toEqual({
+      results: [
+        { path: '/repo', isDirectory: true, realPath: '/repo' },
+        { path: '/link', isDirectory: true, realPath: '/repo' },
+        { path: '/unresolvable', isDirectory: true },
+        { path: '/gone', isDirectory: false, reason: 'not-found' },
+        { path: '/file', isDirectory: false, reason: 'not-directory' },
+      ]
+    });
 
     const invalid = createMockResponse();
     await handler({ body: { paths: [] } }, invalid);

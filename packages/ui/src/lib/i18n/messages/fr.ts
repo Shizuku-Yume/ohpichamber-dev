@@ -26,7 +26,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -78,7 +77,6 @@ import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
@@ -92,9 +90,9 @@ const part1 = {
   "chat.fileAttachment.actions.removeImage": "Supprimer l’image",
   "chat.fileAttachment.actions.removeNamed": "Supprimer {name}",
   "chat.fileAttachment.toast.attachFailed": "Impossible de joindre le fichier. Réessayez.",
-  'quota.family.zen': 'Modèles Zen',
   'quota.value.requests': 'Requêtes : {count}',
   'quota.value.spent': '{spent} dépensés',
+  'quota.value.spentOf': '{spent} sur {limit}',
   'quota.value.unknown': 'Inconnu',
   'quota.window.monthlyTotal': 'Total mensuel',
   'quota.window.monthlyByok': 'BYOK mensuel',
@@ -224,7 +222,6 @@ const part1 = {
   ...connectionHeartbeatI18n.fr,
   ...compactionSettingsI18n.fr,
   ...heapSnapshotI18n.fr,
-  ...consoleBudgetsI18n.fr,
   ...imageToolI18n.fr,
   ...sharePagesI18n.fr,
   ...receivedPagesI18n.fr,
@@ -3973,7 +3970,6 @@ const part2 = {
   ...tooltipsChatI18n.fr,
   ...chatWorkbenchI18n['fr'],
   ...btwI18n.fr,
-  ...subagentHudI18n['fr'],
   ...ompSettingsI18n.fr,
   ...behaviorFilesI18n['fr'],
   ...pluginsMarketplaceI18n.fr,
@@ -4026,13 +4022,6 @@ const part2 = {
   "settings.themeImport.error.conflict": "Ce thème importé a été modifié sur le serveur. Il n’a pas été écrasé.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "Toujours afficher les barres de défilement",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "Gardez les barres de défilement visibles même lorsque le pointeur se trouve hors de la zone défilante. Uniquement sur cet appareil.",
-  "settings.providers.page.openCodeGo.workspaceId": "ID de l’espace de travail",
-  "settings.providers.page.openCodeGo.apiKey": "Clé API",
-  "settings.providers.page.openCodeGo.help": "Copiez l’ID depuis l’URL du tableau de bord et le cookie auth depuis les outils du navigateur. OhPiChamber n’analyse jamais les cookies du navigateur.",
-  "settings.providers.page.openCodeGo.save": "Enregistrer et valider",
-  "settings.providers.page.openCodeGo.replace": "Remplacer",
-  "settings.providers.page.openCodeGo.validate": "Valider",
-  "settings.providers.page.openCodeGo.delete": "Supprimer",
   "settings.providers.page.quotaCredentials.saved": "Identifiants de {provider} enregistrés.",
   "settings.providers.page.quotaCredentials.accessToken": "Jeton d’accès",
   "settings.providers.page.quotaCredentials.usageToken": "Jeton API d’utilisation",
@@ -5461,7 +5450,6 @@ const part3 = {
   "settings.providers.connect.recommended": "Recommandé",
   "settings.providers.connect.customHint": "Tout point de terminaison compatible OpenAI ou Anthropic",
   "settings.providers.connect.note.openai": "Modèles GPT, connexion avec ChatGPT",
-  "settings.providers.connect.note.opencodeGo": "Abonnement à petit prix",
   "settings.providers.connect.note.openrouter": "Tous les modèles avec une seule clé",
   "settings.providers.connect.note.anthropic": "Modèles Claude avec une clé API",
   "settings.providers.connect.note.githubCopilot": "Modèles inclus dans votre offre Copilot",
@@ -6614,7 +6602,6 @@ const part3 = {
   "settings.extensions.add.placeholder": "/chemin/vers/le/panneau ou https://github.com/org/panel.git",
   "settings.extensions.add.action": "Ajouter",
   "settings.extensions.add.aria": "Ajouter une extension depuis un dossier, un ZIP ou une URL",
-  "settings.extensions.browse.label": "Parcourir les extensions",
   "settings.extensions.add.browseFolder": "Parcourir le dossier",
   "settings.extensions.add.browseFolder.aria": "Parcourir le dossier",
   "settings.extensions.add.browseZip": "Parcourir l’archive ZIP",
@@ -7115,12 +7102,6 @@ const part4 = {
   "settings.classification.status.fallback": "Votre choix n’est pas utilisable pour l’instant, Jev passe donc par {provider}.",
   "settings.classification.source.off.name": "Désactivé",
   "settings.classification.source.off.description": "Rien n’est envoyé nulle part. Le filet de sécurité et Auto sont masqués, et les sessions passent en cours uniquement quand vous les y placez.",
-  "settings.classification.source.zenPromo.name": "Promotion OpenCode Zen",
-  "settings.classification.source.zenPromo.description": "Gratuit pour une durée limitée, sans clé. À la fin de la promotion, passez à une clé.",
-  "settings.classification.source.zenPromo.ended": "La promotion est terminée.",
-  "settings.classification.source.zenKey.name": "Clé OpenCode Zen",
-  "settings.classification.source.zenKey.description": "Utilise la clé API configurée pour OpenCode Zen. Facturé sur votre solde Zen.",
-  "settings.classification.source.zenKey.missing": "Aucune clé API disponible pour OpenCode Zen. Une connexion avec un compte OpenCode ne compte pas ; ajoutez une clé API dans Paramètres → Fournisseurs.",
   "settings.classification.source.openrouter.name": "Clé OpenRouter",
   "settings.classification.source.openrouter.description": "Utilise une clé API OpenRouter configurée dans Fournisseurs. Facturé sur votre compte OpenRouter.",
   "settings.classification.source.openrouter.missing": "Aucune clé API OpenRouter disponible. Ajoutez-en une dans Paramètres → Fournisseurs.",
@@ -7163,7 +7144,7 @@ const part4 = {
   "settings.sessions.permissions.explain.safetyVia": "Les actions courantes s’exécutent seules ; tout ce qui est risqué ou difficile à annuler vous attend. Jev fait le tri, via {provider}.",
   "settings.sessions.permissions.explain.auto": "Chaque demande d’autorisation est acceptée sans confirmation.",
   "settings.sessions.permissions.agentPermissionsLink": "Permissions de l’agent",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Nécessite Jev, qui a besoin d’un fournisseur de classification : la promotion gratuite OpenCode Zen, une clé API Zen dans Réglages → Fournisseurs ou une clé TypeSafe.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Nécessite Jev, qui a besoin d’un fournisseur de classification : une clé OpenRouter, Vercel, Gemini ou TypeSafe, ou un point de terminaison personnalisé.",
   "chat.workStatus.sections.extensionBadge": "Extension",
   "chat.chatInput.toast.guestHasNoPanel": "Cette extension fonctionne sans panneau.",
   "header.mainSurface.backToChat": "Retour au chat",

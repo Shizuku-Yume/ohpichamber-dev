@@ -527,49 +527,6 @@ describe('DefaultsSettings', () => {
     }
   });
 
-  test.each([
-    ['Save Changes', { default: ['other/original', '@slow', 'other/last'], 'other/*': ['another-provider/*', 'openai/o3-mini:high'] }],
-    ['Delete', { default: ['other/original', '@slow', 'other/last'] }],
-  ])('%s updates only the selected wildcard retry chain', async (action, expectedChains) => {
-    const original = { default: ['other/original', '@slow', 'other/last'], 'other/*': ['@smol'] };
-    const snapshot = {
-      ...mockOmpSettings,
-      settings: mockOmpSettings.settings.map((setting) => setting.id === 'retry.fallbackChains'
-        ? { ...setting, value: original }
-        : setting),
-    };
-    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot as OmpSettingsState);
-    const save = spyOn(canonicalClient, 'updateOmpSettings').mockResolvedValue(snapshot as OmpSettingsState);
-    try {
-      await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
-      await settle();
-      const trigger = [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')]
-        .find((button) => button.textContent?.startsWith('other/*'));
-      expect(trigger).toBeDefined();
-      await act(async () => trigger?.click());
-      const editor = host.querySelector<HTMLTextAreaElement>('textarea[aria-label^="Fallbacks in order"]');
-      expect(editor?.value).toBe('@smol');
-      if (action === 'Save Changes' && editor) {
-        const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
-        await act(async () => {
-          setter?.call(editor, 'another-provider/*\nopenai/o3-mini:high');
-          editor.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
-        });
-      }
-      const button = [...host.querySelectorAll<HTMLButtonElement>('form button')].find((entry) => entry.textContent === action);
-      expect(button).toBeDefined();
-      await act(async () => button?.click());
-      expect(save.mock.calls[0]?.[1].changes[0]).toEqual({
-        id: 'retry.fallbackChains',
-        value: expectedChains,
-        expectedValue: original,
-      });
-    } finally {
-      read.mockRestore();
-      save.mockRestore();
-    }
-  });
-
   test('the web retry chain links to Web Search rather than opening a second editor', async () => {
     const snapshot = {
       ...mockOmpSettings,
@@ -584,7 +541,8 @@ describe('DefaultsSettings', () => {
       await settle();
       const group = host.querySelector('[data-settings-item="sessions.fallback-model"]');
       expect(group?.textContent).toContain('web/exa');
-      const link = [...group?.querySelectorAll('button') ?? []].find((button) => button.textContent === 'Web search');
+      expect(group?.textContent).toContain('Web search');
+      const link = [...group?.querySelectorAll('button') ?? []].find((button) => button.textContent === 'Set in Web search');
       expect(link).toBeDefined();
       await act(async () => link?.click());
       expect(jump).toHaveBeenCalledWith('web-search', 'web-search.fallbacks');
@@ -592,65 +550,6 @@ describe('DefaultsSettings', () => {
     } finally {
       read.mockRestore();
       jump.mockRestore();
-    }
-  });
-
-  test.each([
-    ['75%', '75%', false],
-    ['84000', 84000, true],
-    ['f84000', 'f84000', true],
-  ])('adding a %s compaction rule preserves other native rules', async (input, thresholdValue, needsConfirmation) => {
-    const existing = { 'example/*': '80%', 'other/model': 'f90000' };
-    const snapshot = {
-      ...mockOmpSettings,
-      totalCount: 2,
-      settings: [
-        { id: 'compaction.modelThresholds', type: 'record', value: existing, default: {}, configured: true },
-        { id: 'compaction.modelThresholdsEnabled', type: 'boolean', value: true, default: true, configured: false },
-      ],
-    } as OmpSettingsState;
-    const read = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(snapshot);
-    const write = spyOn(canonicalClient, 'updateOmpSettings').mockResolvedValue(snapshot);
-    try {
-      await act(async () => root.render(<I18nProvider><DefaultsSettings /></I18nProvider>));
-      await settle();
-      const addRule = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Add model rule');
-      expect(addRule).toBeDefined();
-      await act(async () => addRule?.click());
-      const selector = host.querySelector<HTMLInputElement>('input[aria-label="Model selector"]');
-      const threshold = host.querySelector<HTMLInputElement>('input[aria-label="Compaction threshold"]');
-      expect(selector).not.toBeNull();
-      expect(threshold).not.toBeNull();
-      const setValue = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
-      if (!setValue) throw new Error('Missing input value setter');
-      await act(async () => {
-        setValue.call(selector, 'example/model');
-        selector?.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
-        setValue.call(threshold, input);
-        threshold?.dispatchEvent(new browser.Event('input', { bubbles: true }) as unknown as Event);
-      });
-      const save = threshold?.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-      expect(save?.disabled).toBe(false);
-      await act(async () => save?.click());
-      if (needsConfirmation) {
-        expect(write).not.toHaveBeenCalled();
-        expect(document.body.textContent).toContain('Longer requests may cost more.');
-        const cancel = Array.from(document.body.querySelectorAll('button')).find((button) => button.textContent === 'Cancel');
-        expect(cancel).toBeDefined();
-        await act(async () => cancel?.click());
-        expect(write).not.toHaveBeenCalled();
-        await act(async () => save?.click());
-        const confirm = Array.from(document.body.querySelectorAll('button')).find((button) =>
-          button !== save && button.textContent?.toLowerCase() === 'save changes');
-        expect(confirm).toBeDefined();
-        await act(async () => confirm?.click());
-      }
-      expect(write.mock.calls[0]?.[1].changes).toEqual([
-        { id: 'compaction.modelThresholds', value: { ...existing, 'example/model': thresholdValue }, expectedValue: existing },
-      ]);
-    } finally {
-      read.mockRestore();
-      write.mockRestore();
     }
   });
 

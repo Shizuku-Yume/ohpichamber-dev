@@ -65,7 +65,7 @@ describe('usage.read', () => {
     const codex = sample('codex', {
       planLabel: 'Pro',
       accountLabel: 'me@example.com',
-      usage: { windows: {}, models: { 'gpt-5': { windows: {} } }, consoleBudgets: { workspace: 'w', budgets: [] } },
+      usage: { windows: {}, models: { 'gpt-5': { windows: {} } } },
     });
     const { read, reads } = setup({ answer: (id) => Promise.resolve(id === 'codex' ? codex : sample(id)) });
 

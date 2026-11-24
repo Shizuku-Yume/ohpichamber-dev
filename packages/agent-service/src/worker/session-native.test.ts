@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { JsonValueSchema, type ApprovalRequest, type QuestionRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgEditMode } from '@oh-my-pi/pi-coding-agent/edit/settings';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
-import { TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
+import { TASK_SUBAGENT_EVENT_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import { renderStepsBrief } from '@oh-my-pi/pi-coding-agent/task/steps';
 import { cfgToolsApprovalMode, cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
@@ -1165,10 +1165,12 @@ for (const control of ['abort', 'close'] as const) {
   const childStarted = Promise.withResolvers<void>();
   const releaseChild = Promise.withResolvers<void>();
   let requests = 0;
-  const harness = await fixture({ respond: async () => {
-   if (++requests === 1) { childStarted.resolve(); await releaseChild.promise; }
-   return completion();
-  } });
+  const harness = await fixture({
+   respond: async () => {
+    if (++requests === 1) { childStarted.resolve(); await releaseChild.promise; }
+    return completion();
+   }
+  });
   const runtime = await openNativeRuntime({ cwd: harness.root, agentDirectory: harness.agentDirectory });
   const { session: child } = await createAgentSession({
    cwd: harness.root, agentDir: harness.agentDirectory,
@@ -1180,8 +1182,10 @@ for (const control of ['abort', 'close'] as const) {
   const childTask = child.prompt('Keep the child running.');
   await childStarted.promise;
   const registry = AgentRegistry.global();
-  const ref = registry.register({ id: 'stop-child', displayName: 'Stop child', kind: 'sub',
-   parentId: harness.worker.session.getAgentId(), status: 'running', session: child });
+  const ref = registry.register({
+   id: 'stop-child', displayName: 'Stop child', kind: 'sub',
+   parentId: harness.worker.session.getAgentId(), status: 'running', session: child
+  });
   const paused = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => {
    if (event.type === 'agent_pause' && event.awaiting) paused.resolve();
@@ -1234,11 +1238,13 @@ test('native daemon service callbacks retain the AgentSession receiver', async (
   if (!subscription) throw new Error('Native daemon completion subscription is missing');
   const notification: DaemonCompletionEvent = {
    ev: 'completed', completionId: 'completion-native', owner: rootSessionId,
-   unit: { key: 'native-service', kind: 'proc', scope: { kind: 'project', dir: harness.root },
+   unit: {
+    key: 'native-service', kind: 'proc', scope: { kind: 'project', dir: harness.root },
     label: 'native-service', generation: 'generation', pids: [], leases: 0, supervised: true,
     policy: { hold: 'leases', idleMs: 0, onIdle: 'stop', restart: 'no', survive: 'exec' },
     id: 'native-service-id', state: 'exited', createdAt: 1, startedAt: 1,
-    restartCount: 0, outputBytes: 0, owner: rootSessionId },
+    restartCount: 0, outputBytes: 0, owner: rootSessionId
+   },
   };
   await harness.worker.close();
   await expect(Promise.resolve().then(() => subscription[1](notification))).rejects.toThrow('Session disposed before launch completion delivery');
@@ -1580,6 +1586,49 @@ test('native subagent progress retains ordered task briefs and finished status w
   expect(finished?.event).toMatchObject({ type: 'subagent.updated', subagent: { status: 'completed', activeTool: undefined, retryCountdown: undefined, recentOutput: [] } });
   expect(JSON.stringify(finished?.event)).not.toContain('taskFile');
   expect(JSON.stringify(finished?.event)).not.toContain('sourceSession');
+ } finally { await harness.close(); }
+});
+
+test('a subagent tool event that beats its lifecycle frame keeps its initial activeTool and live identity stays off the child session id', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const bus = harness.worker['subagentEventBus'];
+  // The native id is the allocated name; the canonical child session id only
+  // exists once the registry reads the child's JSONL header.
+  await bus.emit(TASK_SUBAGENT_EVENT_CHANNEL, { id: 'SettingsAuditScout', event: { type: 'tool_execution_start', toolName: 'read', toolCallId: 'call-1' } });
+  expect(harness.events.some(input => input.event.type === 'subagent.updated')).toBe(false);
+  await bus.emit(TASK_SUBAGENT_LIFECYCLE_CHANNEL, { id: 'SettingsAuditScout', agent: 'scout', agentSource: 'bundled', index: 0, status: 'started', description: 'Audit settings IA' });
+  const started = harness.events.findLast(input => input.event.type === 'subagent.updated');
+  expect(started?.event).toMatchObject({
+   type: 'subagent.updated', subagent: {
+    subagentId: 'SettingsAuditScout', name: 'SettingsAuditScout', role: 'scout',
+    description: 'Audit settings IA', status: 'running',
+   }
+  });
+  if (started?.event.type !== 'subagent.updated') throw new Error('Expected subagent.updated');
+  expect(started.event.subagent.childSessionId).toBeUndefined();
+  const replayed = harness.events.findLast(input => input.event.type === 'subagent.updated');
+  expect(replayed?.event).toMatchObject({ type: 'subagent.updated', subagent: { activeTool: 'read' } });
+  await bus.emit(TASK_SUBAGENT_PROGRESS_CHANNEL, {
+   agent: 'scout', task: 'Audit settings', assignment: 'Check settings IA',
+   progress: { id: 'SettingsAuditScout', agent: 'scout', status: 'running', currentTool: 'grep', currentToolArgs: 'packages/ui/**', resolvedModel: 'anthropic/claude-sonnet-4-5', contextTokens: 1200, contextWindow: 200000 },
+  });
+  const progressed = harness.events.findLast(input => input.event.type === 'subagent.updated');
+  expect(progressed?.event).toMatchObject({
+   type: 'subagent.updated', subagent: {
+    subagentId: 'SettingsAuditScout', name: 'SettingsAuditScout', role: 'scout',
+    description: 'Audit settings IA', solutionSpace: 'Check settings IA',
+    activeTool: 'grep', activeToolArgs: 'packages/ui/**',
+    model: 'anthropic/claude-sonnet-4-5', contextTokens: 1200, contextWindow: 200000,
+   }
+  });
+  await bus.emit(TASK_SUBAGENT_LIFECYCLE_CHANNEL, { id: 'SettingsAuditScout', agent: 'scout', agentSource: 'bundled', index: 0, status: 'completed' });
+  const finished = harness.events.findLast(input => input.event.type === 'subagent.updated');
+  expect(finished?.event).toMatchObject({
+   type: 'subagent.updated', subagent: {
+    description: 'Audit settings IA', solutionSpace: 'Check settings IA', status: 'completed',
+   }
+  });
  } finally { await harness.close(); }
 });
 
@@ -1976,11 +2025,15 @@ test('automatic selection authorizes provider.use before resolving and never cac
  try {
   const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
   if (!model) throw new Error('Fixture model is unavailable');
-  await harness.worker.operation({ type: 'catalog', revision: '3', operation: {
-   type: 'catalog.provider.configure', request: { expectedRevision: '2', configuration: {
-    providerId: model.provider, name: 'Native fixture', endpoint: model.baseUrl, protocol: 'chat-completions', credentialRef: null,
-   } },
-  } });
+  await harness.worker.operation({
+   type: 'catalog', revision: '3', operation: {
+    type: 'catalog.provider.configure', request: {
+     expectedRevision: '2', configuration: {
+      providerId: model.provider, name: 'Native fixture', endpoint: model.baseUrl, protocol: 'chat-completions', credentialRef: null,
+     }
+    },
+   }
+  });
   // Prompt admission returns before the model call, so the refusal lands later in the turn.
   const first = turnSettled();
   await harness.worker.operation({ type: 'prompt', runId: 'provider-use-denied', request: prompt('Denied turn.') }).catch(() => undefined);
@@ -2002,10 +2055,12 @@ test('automatic selection authorizes provider.use before resolving and never cac
 
 test('the next turn in an open session uses the updated provider endpoint', async () => {
  const paths: string[] = [];
- const harness = await fixture({ respond: (_payload, _root, request) => {
-  paths.push(new URL(request.url).pathname);
-  return completion();
- } });
+ const harness = await fixture({
+  respond: (_payload, _root, request) => {
+   paths.push(new URL(request.url).pathname);
+   return completion();
+  }
+ });
  const send = async (id: string, text: string) => {
   await harness.worker.operation({ type: 'prompt', runId: id, request: prompt(text) });
   await waitForGoal(harness.worker, () => harness.events.some(({ event }) =>
@@ -2421,12 +2476,14 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
 test('Stop cancels plan-review compaction without starting approved execution', async () => {
  let stage = 0;
  const planText = '# Stop plan\nDo not execute after Stop.';
- const harness = await fixture({ planModel: true, machineCommands: ['propose review'], respond: () => {
-  stage++;
-  if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
-  if (stage === 2) return completion({ name: 'bash', id: 'propose-plan', input: { command: 'propose review' } });
-  return completion();
- } });
+ const harness = await fixture({
+  planModel: true, machineCommands: ['propose review'], respond: () => {
+   stage++;
+   if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
+   if (stage === 2) return completion({ name: 'bash', id: 'propose-plan', input: { command: 'propose review' } });
+   return completion();
+  }
+ });
  cfgBashPatterns.override(harness.worker.session.settings, [{ match: 'propose review', approval: 'allow' }]);
  const compacting = Promise.withResolvers<void>();
  const release = Promise.withResolvers<never>();

@@ -4,6 +4,7 @@ import { Icon } from '@/components/icon/Icon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUIStore } from '@/stores/useUIStore';
 import type { IconName } from '@/components/icon/icons';
+import { WorkStatusTouchContext } from './touchContext';
 
 /**
  * Row/section vocabulary for the work-status panel.
@@ -124,13 +125,16 @@ type RowProps = {
   leading?: React.ReactNode;
   label: React.ReactNode;
   value?: React.ReactNode;
+  detail?: React.ReactNode;
   muted?: boolean;
   /** Turns the row into a button; the caller decides what it opens. */
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   ariaLabel?: string;
+  expanded?: boolean;
   tooltip?: React.ReactNode;
   wrapLabel?: boolean;
   className?: string;
+  labelDir?: 'auto' | 'ltr';
 };
 
 /**
@@ -143,35 +147,70 @@ export const WorkStatusRow: React.FC<RowProps> = ({
   leading,
   label,
   value,
+  detail,
   muted,
   onClick,
   ariaLabel,
+  expanded,
   tooltip,
   wrapLabel = false,
   className,
+  labelDir,
 }) => {
   const labelId = React.useId();
-  const body = (
+  const touch = React.useContext(WorkStatusTouchContext);
+  const twoLines = detail !== undefined && detail !== null;
+  const leadingNode = leading ?? (icon ? (
+    <Icon
+      name={icon}
+      className={cn('size-4 shrink-0', !iconColor && 'text-muted-foreground')}
+      style={iconColor ? { color: iconColor } : undefined}
+    />
+  ) : null);
+  const leadingSlot = touch && leadingNode ? (
+    <span className="flex size-5 shrink-0 items-center justify-center [&>span]:size-5 [&_svg]:size-4">{leadingNode}</span>
+  ) : leadingNode;
+  const firstLine = (
     <>
-      {leading ?? (icon ? (
-        <Icon
-          name={icon}
-          className={cn('size-4 shrink-0', !iconColor && 'text-muted-foreground')}
-          style={iconColor ? { color: iconColor } : undefined}
-        />
-      ) : null)}
-      <span id={labelId} className={cn('min-w-0 flex-1 text-[13px]', wrapLabel ? 'whitespace-normal [overflow-wrap:anywhere]' : 'truncate', muted && 'text-muted-foreground')}>
+      <span
+        id={labelId}
+        dir={labelDir}
+        className={cn(
+          'min-w-0 flex-1',
+          labelDir && 'oc-ui-start-align',
+          wrapLabel ? 'whitespace-normal [overflow-wrap:anywhere]' : 'truncate',
+          touch ? 'typography-ui-label' : 'text-[13px]',
+          muted && 'text-muted-foreground',
+        )}
+      >
         {label}
       </span>
       {value !== undefined && value !== null ? (
-        <span className="flex shrink-0 items-center gap-1.5 text-[13px] tabular-nums">{value}</span>
+        <span className={cn('flex shrink-0 items-center gap-1.5 tabular-nums', touch ? 'typography-ui-label font-medium' : 'text-[13px]')}>{value}</span>
       ) : null}
+    </>
+  );
+  const body = twoLines ? (
+    <>
+      {leadingSlot ? <span className={cn('flex shrink-0 items-center', touch ? 'h-6' : 'h-5')}>{leadingSlot}</span> : null}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cn('flex min-w-0 items-center', touch ? 'h-6 gap-3' : 'h-5 gap-2')}>{firstLine}</span>
+        <span className={cn('min-w-0 truncate text-muted-foreground', touch ? 'typography-meta' : 'text-[0.6875rem] leading-4')}>{detail}</span>
+      </span>
+    </>
+  ) : (
+    <>
+      {leadingSlot}
+      {firstLine}
     </>
   );
 
   const shared = cn(
-    'flex w-full gap-2 rounded-md px-1 text-left text-muted-foreground',
-    wrapLabel ? 'min-h-7 items-start py-1' : 'h-7 items-center',
+    'flex w-full text-left text-muted-foreground',
+    twoLines ? 'items-start' : 'items-center',
+    touch
+      ? cn('min-h-11 gap-3 rounded-xl px-2.5', (twoLines || wrapLabel) && 'py-1.5')
+      : cn('gap-2 rounded-md px-1', twoLines ? 'py-[3px]' : wrapLabel ? 'min-h-7 items-start py-1' : 'h-7'),
     className,
   );
 
@@ -186,14 +225,14 @@ export const WorkStatusRow: React.FC<RowProps> = ({
         // The label no longer sits inside the button, so it names it here.
         aria-label={ariaLabel}
         aria-labelledby={ariaLabel ? undefined : labelId}
+        aria-expanded={expanded}
         className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--interactive-focus-ring)]"
       />
-      <div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-2 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
+      <div className={cn('pointer-events-none relative flex min-w-0 flex-1 [&_a]:pointer-events-auto [&_button]:pointer-events-auto', twoLines ? 'items-start' : 'items-center', touch ? 'gap-3' : 'gap-2')}>
         {body}
       </div>
     </div>
   ) : <div className={shared} tabIndex={tooltip ? 0 : undefined}>{body}</div>;
-
   if (!tooltip) return row;
 
   return (

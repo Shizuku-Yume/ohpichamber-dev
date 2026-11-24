@@ -91,33 +91,6 @@ formatter preserves its supplied percentage type. A shared reader's window
 contract retains the numeric fields established by its own parsing, without
 promising the same validation for other providers' windows.
 
-### Why OpenCode Go response fields remain unknown
-
-The object parsers establish only a non-null object, including arrays, without
-copying it or checking its properties. Each optional field stays unknown until
-the existing string, number, timestamp or nested-object check. Inherited fields
-remain readable, matching the shared `asObject` contract.
-
-Console meters retain fractional usage that the API-key usage endpoint floors.
-An ended Go subscription may retain its product while omitting access; it keeps
-the absent-subscription error. A captured Console failure keeps its unchecked
-thrown value so the expired-key fallback preserves both its identity and its
-truthiness rule.
-
-### Why Zen fields remain unknown
-
-The Console object parser accepts arrays and retains unchecked property values.
-Pagination counts narrow only after the existing safe-integer check. The numeric
-parser keeps its string check because blank strings are unavailable here, while
-the shared numeric parser accepts them as zero. A nullish-only page-info guard
-preserves property reads on primitives and inherited properties.
-
-The formatter's percentage return type retains the supplied input type because
-it copies that field unchanged. Zen windows preserve their known numeric or null
-reset timestamps. The transformer's string-parser re-export points directly to
-its TypeScript owner, retaining function identity while exposing its declaration
-to VS Code without converting the JavaScript guards entry used by Node fixtures.
-
 ### Why unchecked provider fields remain unknown
 
 The field predicates retain identity and inherited properties. A nullish-only

@@ -27,7 +27,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -79,7 +78,6 @@ import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
@@ -93,9 +91,9 @@ export const dict: Record<I18nKey, string> = {
   "chat.fileAttachment.actions.removeImage": "画像を削除",
   "chat.fileAttachment.actions.removeNamed": "{name} を削除",
   "chat.fileAttachment.toast.attachFailed": "ファイルを添付できませんでした。もう一度お試しください。",
-  'quota.family.zen': 'Zen モデル',
   'quota.value.requests': 'リクエスト数: {count}',
   'quota.value.spent': '{spent} 使用済み',
+  'quota.value.spentOf': '{limit} のうち {spent}',
   'quota.value.unknown': '不明',
   'quota.window.monthlyTotal': '月間合計',
   'quota.window.monthlyByok': '月間 BYOK',
@@ -225,7 +223,6 @@ export const dict: Record<I18nKey, string> = {
   ...connectionHeartbeatI18n.ja,
   ...compactionSettingsI18n.ja,
   ...heapSnapshotI18n.ja,
-  ...consoleBudgetsI18n.ja,
   ...imageToolI18n.ja,
   ...sharePagesI18n.ja,
   ...receivedPagesI18n.ja,
@@ -3971,7 +3968,6 @@ export const dict: Record<I18nKey, string> = {
   ...tooltipsChatI18n.ja,
   ...chatWorkbenchI18n['ja'],
   ...btwI18n.ja,
-  ...subagentHudI18n['ja'],
   ...ompSettingsI18n.ja,
   ...behaviorFilesI18n['ja'],
   ...pluginsMarketplaceI18n.ja,
@@ -4024,13 +4020,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.themeImport.error.conflict": "このインポート済みテーマはサーバー上で編集されています。上書きしませんでした。",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "スクロールバーを常に表示",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "ポインターがスクロール領域の外にあるときも、スクロールバーを表示します。このデバイスにのみ適用されます。",
-  "settings.providers.page.openCodeGo.workspaceId": "ワークスペース ID",
-  "settings.providers.page.openCodeGo.apiKey": "API キー",
-  "settings.providers.page.openCodeGo.help": "ダッシュボード URL からワークスペース ID を、ブラウザーの開発者ツールから auth Cookie をコピーしてください。OhPiChamber がブラウザーの Cookie を走査することはありません。",
-  "settings.providers.page.openCodeGo.save": "保存して検証",
-  "settings.providers.page.openCodeGo.replace": "置換",
-  "settings.providers.page.openCodeGo.validate": "検証",
-  "settings.providers.page.openCodeGo.delete": "削除",
   "settings.providers.page.quotaCredentials.saved": "{provider} の認証情報を保存しました。",
   "settings.providers.page.quotaCredentials.accessToken": "アクセストークン",
   "settings.providers.page.quotaCredentials.usageToken": "使用量 API トークン",
@@ -5586,7 +5575,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.providers.connect.recommended": "おすすめ",
   "settings.providers.connect.customHint": "OpenAI または Anthropic 互換の任意のエンドポイント",
   "settings.providers.connect.note.openai": "GPT モデル、ChatGPT でサインイン",
-  "settings.providers.connect.note.opencodeGo": "低価格のサブスクリプション",
   "settings.providers.connect.note.openrouter": "1 つのキーですべてのモデル",
   "settings.providers.connect.note.anthropic": "API キーで Claude モデルを利用",
   "settings.providers.connect.note.githubCopilot": "Copilot プランのモデル",
@@ -6609,7 +6597,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.extensions.add.placeholder": "/path/to/panel または https://github.com/org/panel.git",
   "settings.extensions.add.action": "追加",
   "settings.extensions.add.aria": "フォルダ、ZIP、URL から拡張機能を追加",
-  "settings.extensions.browse.label": "拡張機能を探す",
   "settings.extensions.add.browseFolder": "フォルダを参照",
   "settings.extensions.add.browseFolder.aria": "フォルダを参照",
   "settings.extensions.add.browseZip": "ZIP アーカイブを参照",
@@ -7107,12 +7094,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.classification.status.fallback": "選択したものは現在使えないため、Jev は {provider} 経由で動いています。",
   "settings.classification.source.off.name": "オフ",
   "settings.classification.source.off.description": "どこにも何も送信しません。セーフティネットと Auto は非表示になり、セッションは自分で移したときだけ作業中になります。",
-  "settings.classification.source.zenPromo.name": "OpenCode Zen プロモーション",
-  "settings.classification.source.zenPromo.description": "期間限定で無料、キー不要。プロモーション終了後はキーに切り替えてください。",
-  "settings.classification.source.zenPromo.ended": "プロモーションは終了しました。",
-  "settings.classification.source.zenKey.name": "OpenCode Zen キー",
-  "settings.classification.source.zenKey.description": "OpenCode Zen 用に設定された API キーを使用します。Zen の残高から支払われます。",
-  "settings.classification.source.zenKey.missing": "OpenCode Zen 用に利用可能な API キーがありません。OpenCode アカウントでのサインインは対象外です。設定 → プロバイダー で API キーを追加してください。",
   "settings.classification.source.openrouter.name": "OpenRouter キー",
   "settings.classification.source.openrouter.description": "プロバイダーで設定された OpenRouter API キーを使用します。OpenRouter アカウントに請求されます。",
   "settings.classification.source.openrouter.missing": "利用可能な OpenRouter API キーがありません。設定 → プロバイダー で追加してください。",
@@ -7155,7 +7136,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.sessions.permissions.explain.safetyVia": "通常の操作はそのまま実行され、危険な操作や取り消しにくい操作はあなたを待ちます。{provider} 経由の Jev が判断します。",
   "settings.sessions.permissions.explain.auto": "すべての承認リクエストは、確認なしで受け入れられます。",
   "settings.sessions.permissions.agentPermissionsLink": "エージェントの権限",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Jev が必要で、Jev には分類プロバイダーが必要です: 無料の OpenCode Zen プロモーション、設定 → プロバイダーの Zen API キー、または TypeSafe キー。",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Jev が必要で、Jev には分類プロバイダーが必要です: OpenRouter、Vercel、Gemini、または TypeSafe キー、あるいはカスタムエンドポイント。",
   "chat.workStatus.sections.extensionBadge": "拡張機能",
   "chat.chatInput.toast.guestHasNoPanel": "この拡張機能はパネルなしで動作します。",
   "header.mainSurface.backToChat": "チャットに戻る",

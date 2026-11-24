@@ -27,7 +27,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -79,7 +78,6 @@ import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
@@ -93,9 +91,9 @@ export const dict: Record<I18nKey, string> = {
   "chat.fileAttachment.actions.removeImage": "إزالة الصورة",
   "chat.fileAttachment.actions.removeNamed": "إزالة {name}",
   "chat.fileAttachment.toast.attachFailed": "تعذر إرفاق الملف. حاول مرة أخرى.",
-  'quota.family.zen': 'نماذج Zen',
   'quota.value.requests': 'الطلبات: {count}',
   'quota.value.spent': 'تم إنفاق {spent}',
+  'quota.value.spentOf': '{spent} من {limit}',
   'quota.value.unknown': 'غير معروف',
   'quota.window.monthlyTotal': 'الإجمالي الشهري',
   'quota.window.monthlyByok': 'BYOK الشهري',
@@ -3871,7 +3869,6 @@ export const dict: Record<I18nKey, string> = {
   ...connectionHeartbeatI18n.ar,
   ...compactionSettingsI18n.ar,
   ...heapSnapshotI18n.ar,
-  ...consoleBudgetsI18n.ar,
   ...imageToolI18n.ar,
   ...sharePagesI18n.ar,
   ...receivedPagesI18n.ar,
@@ -3993,7 +3990,6 @@ export const dict: Record<I18nKey, string> = {
   ...tooltipsChatI18n.ar,
   ...chatWorkbenchI18n['ar'],
   ...btwI18n.ar,
-  ...subagentHudI18n['ar'],
   ...ompSettingsI18n.ar,
   ...behaviorFilesI18n['ar'],
   ...pluginsMarketplaceI18n.ar,
@@ -4117,13 +4113,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.themeImport.error.conflict": "عُدّلت هذه السمة المستوردة على الخادم. لم تتم الكتابة فوقها.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "إظهار أشرطة التمرير دائمًا",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "إبقاء أشرطة التمرير ظاهرة حتى عندما يكون المؤشر خارج المنطقة القابلة للتمرير. ينطبق على هذا الجهاز فقط.",
-  "settings.providers.page.openCodeGo.workspaceId": "معرّف مساحة العمل",
-  "settings.providers.page.openCodeGo.apiKey": "مفتاح API",
-  "settings.providers.page.openCodeGo.help": "انسخ معرّف مساحة العمل من URL لوحة التحكم، وملف تعريف ارتباط المصادقة من أدوات المطوّر في متصفحك. لا يفحص OhPiChamber أبدًا مخزن ملفات تعريف الارتباط في المتصفح.",
-  "settings.providers.page.openCodeGo.save": "حفظ والتحقق",
-  "settings.providers.page.openCodeGo.replace": "استبدال",
-  "settings.providers.page.openCodeGo.validate": "تحقق",
-  "settings.providers.page.openCodeGo.delete": "حذف",
   "settings.providers.page.quotaCredentials.saved": "تم حفظ بيانات اعتماد {provider}.",
   "settings.providers.page.quotaCredentials.accessToken": "رمز الوصول المميز",
   "settings.providers.page.quotaCredentials.usageToken": "رمز API المميز للاستخدام",
@@ -5677,7 +5666,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.providers.connect.recommended": "موصى به",
   "settings.providers.connect.customHint": "أي نقطة نهاية متوافقة مع OpenAI أو Anthropic",
   "settings.providers.connect.note.openai": "نماذج GPT، سجّل الدخول عبر ChatGPT",
-  "settings.providers.connect.note.opencodeGo": "اشتراك منخفض التكلفة",
   "settings.providers.connect.note.openrouter": "كل النماذج بمفتاح واحد",
   "settings.providers.connect.note.anthropic": "نماذج Claude بمفتاح API",
   "settings.providers.connect.note.githubCopilot": "نماذج من خطة Copilot الخاصة بك",
@@ -6760,7 +6748,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.extensions.add.placeholder": "/path/to/panel أو https://github.com/org/panel.git",
   "settings.extensions.add.action": "إضافة",
   "settings.extensions.add.aria": "إضافة إضافة من مجلد أو ZIP أو URL",
-  "settings.extensions.browse.label": "تصفح الإضافات",
   "settings.extensions.add.browseFolder": "استعراض مجلد",
   "settings.extensions.add.browseFolder.aria": "استعراض مجلد",
   "settings.extensions.add.browseZip": "استعراض أرشيف ZIP",
@@ -7202,12 +7189,6 @@ export const dict: Record<I18nKey, string> = {
   "settings.classification.status.fallback": "لا يمكن استخدام اختيارك الآن، لذا يعمل Jev عبر {provider}.",
   "settings.classification.source.off.name": "إيقاف",
   "settings.classification.source.off.description": "لا يُرسل أي شيء إلى أي مكان. شبكة الأمان و\"تلقائي\" مخفيان، ولا تنتقل الجلسات إلى العمل إلا عندما تنقلها بنفسك.",
-  "settings.classification.source.zenPromo.name": "عرض OpenCode Zen",
-  "settings.classification.source.zenPromo.description": "مجاني لفترة محدودة، دون حاجة إلى مفتاح. عند انتهاء العرض، انتقل إلى استخدام مفتاح.",
-  "settings.classification.source.zenPromo.ended": "انتهى العرض.",
-  "settings.classification.source.zenKey.name": "مفتاح OpenCode Zen",
-  "settings.classification.source.zenKey.description": "مفتاح Zen API المحفوظ في OpenCode، على رصيد Zen الخاص بك.",
-  "settings.classification.source.zenKey.missing": "لا يوجد مفتاح Zen API في OpenCode. تسجيل الدخول بحساب OpenCode لا يكفي: أضف مفتاح API إلى موفر OpenCode Zen.",
   "settings.classification.source.openrouter.name": "مفتاح OpenRouter",
   "settings.classification.source.openrouter.description": "يستخدم مفتاح API لـ OpenRouter تم تكوينه في الموفرين. يتم الخصم من حساب OpenRouter الخاص بك.",
   "settings.classification.source.openrouter.missing": "لا يوجد مفتاح API لـ OpenRouter. أضف مفتاحًا في الإعدادات ← الموفرون.",
@@ -7250,7 +7231,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.sessions.permissions.explain.safetyVia": "تعمل الإجراءات الروتينية من تلقاء نفسها؛ وكل ما هو خطر أو يصعب التراجع عنه ينتظرك. يقرر Jev عبر {provider}.",
   "settings.sessions.permissions.explain.auto": "كل أداة تضبطها أذونات وكيلك على \"سؤال\" تعمل دون سؤال. الأدوات المضبوطة على \"رفض\" تبقى محظورة.",
   "settings.sessions.permissions.agentPermissionsLink": "أذونات الوكيل",
-  "settings.sessions.permissions.explain.safetyUnavailable": "يحتاج إلى Jev، الذي يحتاج إلى موفر تصنيف: عرض OpenCode Zen المجاني، أو مفتاح Zen API في OpenCode، أو مفتاح TypeSafe.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "يحتاج إلى Jev، الذي يحتاج إلى موفر تصنيف: مفتاح OpenRouter أو Vercel أو Gemini أو TypeSafe، أو نقطة نهاية مخصصة.",
   "chat.workStatus.sections.extensionBadge": "إضافة",
   "chat.chatInput.toast.guestHasNoPanel": "تعمل هذه الإضافة دون لوحة.",
   "header.mainSurface.backToChat": "العودة إلى المحادثة",

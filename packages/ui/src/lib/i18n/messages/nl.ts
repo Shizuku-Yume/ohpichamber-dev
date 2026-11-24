@@ -26,7 +26,6 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { connectionHeartbeatI18n } from './connection-heartbeat.i18n';
 import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
-import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { imageToolI18n } from './image-tool.i18n';
 import { sharePagesI18n } from './share-pages.i18n';
 import { receivedPagesI18n } from './received-pages.i18n';
@@ -78,7 +77,6 @@ import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
@@ -92,9 +90,9 @@ const part1 = {
   "chat.fileAttachment.actions.removeImage": "Afbeelding verwijderen",
   "chat.fileAttachment.actions.removeNamed": "{name} verwijderen",
   "chat.fileAttachment.toast.attachFailed": "Het bestand kon niet worden bijgevoegd. Probeer het opnieuw.",
-  'quota.family.zen': 'Zen-modellen',
   'quota.value.requests': 'Verzoeken: {count}',
   'quota.value.spent': '{spent} besteed',
+  'quota.value.spentOf': '{spent} van {limit}',
   'quota.value.unknown': 'Onbekend',
   'quota.window.monthlyTotal': 'Maandtotaal',
   'quota.window.monthlyByok': 'Maandelijks BYOK',
@@ -224,7 +222,6 @@ const part1 = {
   ...connectionHeartbeatI18n.nl,
   ...compactionSettingsI18n.nl,
   ...heapSnapshotI18n.nl,
-  ...consoleBudgetsI18n.nl,
   ...imageToolI18n.nl,
   ...sharePagesI18n.nl,
   ...receivedPagesI18n.nl,
@@ -3973,7 +3970,6 @@ const part2 = {
   ...tooltipsChatI18n.nl,
   ...chatWorkbenchI18n['nl'],
   ...btwI18n.nl,
-  ...subagentHudI18n['nl'],
   ...ompSettingsI18n.nl,
   ...behaviorFilesI18n['nl'],
   ...pluginsMarketplaceI18n.nl,
@@ -4028,13 +4024,6 @@ const part2 = {
   "settings.themeImport.error.conflict": "Dit geïmporteerde thema is op de server bewerkt. Het is niet overschreven.",
   "settings.openchamber.visual.field.alwaysShowScrollbars": "Scrollbalken altijd tonen",
   "settings.openchamber.visual.field.alwaysShowScrollbarsHint": "Houd scrollbalken zichtbaar, ook als de aanwijzer buiten het scrollgebied staat. Geldt alleen voor dit apparaat.",
-  "settings.providers.page.openCodeGo.workspaceId": "Werkruimte-ID",
-  "settings.providers.page.openCodeGo.apiKey": "API-sleutel",
-  "settings.providers.page.openCodeGo.help": "Kopieer de werkruimte-ID uit de dashboard-URL en de auth-cookie uit de ontwikkelaarstools van uw browser. OhPiChamber scant nooit de cookiestorage van de browser.",
-  "settings.providers.page.openCodeGo.save": "Opslaan en valideren",
-  "settings.providers.page.openCodeGo.replace": "Vervangen",
-  "settings.providers.page.openCodeGo.validate": "Valideren",
-  "settings.providers.page.openCodeGo.delete": "Verwijderen",
   "settings.providers.page.quotaCredentials.saved": "Inloggegevens van {provider} opgeslagen.",
   "settings.providers.page.quotaCredentials.platformApiKey": "Platform-API-sleutel",
   "settings.providers.page.quotaCredentials.zenmuxInstructions": "Voor gebruik is een Platform-API-sleutel uit de ZenMux-console nodig. De sleutel die Agent Service voor chat gebruikt, staat daar los van en wordt hier niet gebruikt.",
@@ -5592,7 +5581,6 @@ const part3 = {
   "settings.providers.connect.recommended": "Aanbevolen",
   "settings.providers.connect.customHint": "Elk OpenAI- of Anthropic-compatibel endpoint",
   "settings.providers.connect.note.openai": "GPT-modellen, inloggen met ChatGPT",
-  "settings.providers.connect.note.opencodeGo": "Goedkoop abonnement",
   "settings.providers.connect.note.openrouter": "Elk model met één sleutel",
   "settings.providers.connect.note.anthropic": "Claude-modellen met een API-sleutel",
   "settings.providers.connect.note.githubCopilot": "Modellen uit je Copilot-abonnement",
@@ -6624,7 +6612,6 @@ const part3 = {
   "settings.extensions.add.placeholder": "/path/to/panel of https://github.com/org/panel.git",
   "settings.extensions.add.action": "Toevoegen",
   "settings.extensions.add.aria": "Extensie toevoegen uit een map, ZIP of URL",
-  "settings.extensions.browse.label": "Extensies bekijken",
   "settings.extensions.add.browseFolder": "Map kiezen",
   "settings.extensions.add.browseFolder.aria": "Map kiezen",
   "settings.extensions.add.browseZip": "ZIP-archief kiezen",
@@ -7141,12 +7128,6 @@ const part4 = {
   "settings.classification.jev.info": "Het beslismodel van TypeSafe. OhPiChamber stelt het snelle vragen over uw prompts en de acties van de agent.",
   "settings.classification.status.none": "Er kan nu geen classificatieprovider worden gebruikt, waardoor het vangnet en Auto verborgen zijn.",
   "settings.classification.status.fallback": "Uw keuze kan nu niet worden gebruikt, waardoor Jev via {provider} loopt.",
-  "settings.classification.source.zenPromo.name": "OpenCode Zen-actie",
-  "settings.classification.source.zenPromo.description": "Tijdelijk gratis, geen sleutel nodig. Als de actie eindigt, schakelt u over op een sleutel.",
-  "settings.classification.source.zenPromo.ended": "De actie is afgelopen.",
-  "settings.classification.source.zenKey.name": "OpenCode Zen-sleutel",
-  "settings.classification.source.zenKey.description": "Gebruikt de voor OpenCode Zen geconfigureerde API-sleutel. Wordt verrekend met uw Zen-saldo.",
-  "settings.classification.source.zenKey.missing": "Er is geen API-sleutel beschikbaar voor OpenCode Zen. Inloggen met een OpenCode-account telt niet; voeg een API-sleutel toe in Instellingen → Providers.",
   "settings.classification.source.openrouter.name": "OpenRouter-sleutel",
   "settings.classification.source.openrouter.description": "Gebruikt een in Providers geconfigureerde OpenRouter API-sleutel. Wordt in rekening gebracht op uw OpenRouter-account.",
   "settings.classification.source.openrouter.missing": "Er is geen OpenRouter API-sleutel beschikbaar. Voeg er een toe in Instellingen → Providers.",
@@ -7163,7 +7144,7 @@ const part4 = {
   "settings.sessions.permissions.explain.safetyVia": "Routinehandelingen draaien vanzelf; alles wat riskant of moeilijk ongedaan te maken is, wacht op u. Jev beslist, via {provider}.",
   "settings.sessions.permissions.explain.auto": "Elk goedkeuringsverzoek wordt zonder vragen geaccepteerd.",
   "settings.sessions.permissions.agentPermissionsLink": "Agenttoestemmingen",
-  "settings.sessions.permissions.explain.safetyUnavailable": "Vereist Jev, en Jev vereist een classificatieprovider: de gratis OpenCode Zen-aanbieding, een Zen API-sleutel bij de providers of een TypeSafe-sleutel.",
+  "settings.sessions.permissions.explain.safetyUnavailable": "Vereist Jev, en Jev vereist een classificatieprovider: een OpenRouter-, Vercel-, Gemini- of TypeSafe-sleutel, of een aangepast adres.",
   "chat.workStatus.sections.extensionBadge": "Extensie",
   "chat.chatInput.toast.guestHasNoPanel": "Deze extensie draait zonder paneel.",
   "header.mainSurface.backToChat": "Terug naar de chat",
