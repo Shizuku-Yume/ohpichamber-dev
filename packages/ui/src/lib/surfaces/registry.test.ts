@@ -52,6 +52,14 @@ describe('getVisibleContextRailSurfaces', () => {
     expect(shown({ receivedPagesShown: true, hiddenSurfaces: ['pages'] })).toBe(false);
   });
 
+  test('shows the subagents surface while the active session has subagents, with or without a tab', () => {
+    const shown = (options: Partial<Parameters<typeof getVisibleContextRailSurfaces>[0]>) => getVisibleContextRailSurfaces({ ...baseOptions, ...options }).some((s) => s.id === 'subagents');
+    expect(shown({})).toBe(false);
+    expect(shown({ subagentsShown: true })).toBe(true);
+    expect(shown({ tabs: [{ mode: 'subagents' }] })).toBe(true);
+    expect(shown({ subagentsShown: true, hiddenSurfaces: ['subagents'] })).toBe(false);
+  });
+
   test('the browser surface can be opened from the rail with no tab yet', () => {
     const browser = CONTEXT_SURFACES.find((surface) => surface.id === 'browser');
     expect(browser?.availability).toBe('always');

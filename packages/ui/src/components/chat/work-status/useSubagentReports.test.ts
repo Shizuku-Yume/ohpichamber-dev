@@ -147,4 +147,154 @@ describe('collectSubagentReports', () => {
     expect(report?.output).toBe('Second');
     expect(report?.state).toBe('failed');
   });
+
+  test('extracts clean markdown from vibe async_job_result and vibe_wait results while ignoring vibe_spawn acks', () => {
+    const spawnAndWait = assistantMessage('a1', [
+      {
+        type: 'tool_call',
+        partId: 'c1',
+        toolCallId: 'call-vibe-spawn',
+        toolName: 'vibe_spawn',
+        status: 'completed',
+        input: { cli: 'fast', name: 'home-disk-usage', prompt: 'Inspect $HOME' },
+      },
+      {
+        type: 'tool_result',
+        partId: 'r1',
+        toolCallId: 'call-vibe-spawn',
+        toolName: 'vibe_spawn',
+        isError: false,
+        output: {
+          content: [{ type: 'text', text: 'Spawned fast session `home-disk-usage-2` (turn job `home-disk-usage-2-t1`).' }],
+          details: { op: 'spawn', spawned: { id: 'home-disk-usage-2', cli: 'fast', jobId: 'home-disk-usage-2-t1' } },
+        },
+      },
+      {
+        type: 'tool_call',
+        partId: 'c2',
+        toolCallId: 'call-vibe-wait',
+        toolName: 'vibe_wait',
+        status: 'completed',
+        input: { sessions: ['home-disk-usage-2'] },
+      },
+      {
+        type: 'tool_result',
+        partId: 'r2',
+        toolCallId: 'call-vibe-wait',
+        toolName: 'vibe_wait',
+        isError: false,
+        output: {
+          content: [{
+            type: 'text',
+            text: [
+              '## `home-disk-usage-2` — completed',
+              '<vibe-turn session="home-disk-usage-2" cli="fast" turn="1" status="completed" duration="1.5s">',
+              '<activity tool-calls="2" requests="2">',
+              '- bash(du -sh ~/*)',
+              '</activity>',
+              '<response>',
+              '### Disk Usage',
+              'Top directory is `~/Downloads`.',
+              '</response>',
+              'Session `home-disk-usage-2` is idle and retains this conversation — continue it with vibe_send. Transcript: history://home-disk-usage-2',
+              '</vibe-turn>',
+            ].join('\n'),
+          }],
+          details: {
+            op: 'wait',
+            wait: {
+              settled: [{ id: 'home-disk-usage-2', jobId: 'home-disk-usage-2-t1', status: 'completed' }],
+              stillRunning: [],
+              timedOut: false,
+            },
+          },
+        },
+      },
+    ]);
+
+    const waitReports = collectSubagentReports([spawnAndWait]);
+    const foundWait = findSubagentReport(waitReports, {
+      subagentId: 'home-disk-usage-2',
+      toolCallId: 'call-vibe-spawn',
+    });
+    expect(foundWait?.state).toBe('completed');
+    expect(foundWait?.output).toBe('### Disk Usage\nTop directory is `~/Downloads`.');
+
+    const asyncVibeNotice: Message = {
+      messageId: 'n-vibe',
+      sessionId: 'parent',
+      turnId: 'turn-2',
+      role: 'system',
+      createdAt: 2,
+      parts: [
+        {
+          type: 'notice',
+          partId: 'np-vibe',
+          noticeType: 'async_job_result',
+          level: 'info',
+          details: {
+            jobs: [
+              {
+                jobId: 'home-disk-usage-2-t1',
+                subagentId: 'home-disk-usage-2',
+                childSessionId: 'uuid-vibe-2',
+                type: 'task',
+                status: 'completed',
+                label: 'vibe fast home-disk-usage-2: Inspect $HOME',
+                durationMs: 1500,
+                reportText: [
+                  '<vibe-turn session="home-disk-usage-2" cli="fast" turn="1" status="completed" duration="1.5s">',
+                  '<response>',
+                  '### Final Summary',
+                  '12.4 GB total.',
+                  '</response>',
+                  '</vibe-turn>',
+                ].join('\n'),
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const noticeReports = collectSubagentReports([spawnAndWait, asyncVibeNotice]);
+    const foundNotice = findSubagentReport(noticeReports, {
+      subagentId: 'home-disk-usage-2',
+      childSessionId: 'uuid-vibe-2',
+      toolCallId: 'call-vibe-spawn',
+    });
+    expect(foundNotice?.output).toBe('### Final Summary\n12.4 GB total.');
+    expect(foundNotice?.durationMs).toBe(1500);
+
+    const proseWithVibeExample: Message = {
+      messageId: 'n-prose',
+      sessionId: 'parent',
+      turnId: 'turn-3',
+      role: 'system',
+      createdAt: 3,
+      parts: [
+        {
+          type: 'notice',
+          partId: 'np-prose',
+          noticeType: 'async_job_result',
+          level: 'info',
+          details: {
+            jobs: [
+              {
+                jobId: 'task-1',
+                subagentId: 'TaskScout',
+                type: 'task',
+                status: 'completed',
+                reportText: 'Found parser bug.\n\nExample:\n<vibe-turn session="ex"><response>sample</response></vibe-turn>',
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const proseReports = collectSubagentReports([proseWithVibeExample]);
+    expect(findSubagentReport(proseReports, { subagentId: 'TaskScout' })?.output).toBe(
+      'Found parser bug.\n\nExample:\n<vibe-turn session="ex"><response>sample</response></vibe-turn>',
+    );
+  });
 });

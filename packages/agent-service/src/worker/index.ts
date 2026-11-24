@@ -182,6 +182,7 @@ process.on('message', raw => {
       const reply: Extract<WorkerReply, { type: 'subagent' }> = { type: 'subagent', workerGeneration: command.workerGeneration, subagentId: payload.id, status: payload.status, role: payload.agent };
       if (payload.parentToolCallId) reply.toolCallId = payload.parentToolCallId;
       if (payload.description) reply.description = payload.description;
+      if (payload.task) reply.task = payload.task;
       if (payload.assignment) reply.solutionSpace = payload.assignment;
       if (payload.sessionFile) reply.sessionFile = payload.sessionFile;
       send(reply);

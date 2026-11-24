@@ -198,7 +198,7 @@ export class WorkerSession {
     private readonly admission: NativeAdmission,
     private readonly authorize: WorkerAuthorize,
     private readonly authorizeProviderUse: (model: { provider: string; id: string; baseUrl: string }) => Promise<void>,
-    private readonly onSubagent: (payload: SubagentLifecyclePayload & { assignment?: string }) => void,
+    private readonly onSubagent: (payload: SubagentLifecyclePayload & { assignment?: string; task?: string }) => void,
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
@@ -215,7 +215,23 @@ export class WorkerSession {
       () => this.publishContinuationPending(),
       mode => this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]),
     );
-    this.projection = new WorkerProjection(session.sessionManager, this._sessionId, [], () => session.getTodoPhases(), sanitizeProviderError);
+    this.subagentProjector = new SubagentProjector(
+      this._sessionId,
+      this.liveSubagents,
+      this.pendingSubagentEvents,
+      this.toolCallToSubagentId,
+      inputs => this.emit(inputs),
+      inputs => this.publish(inputs),
+      payload => this.onSubagent(payload),
+    );
+    this.projection = new WorkerProjection(
+      session.sessionManager,
+      this._sessionId,
+      [],
+      () => session.getTodoPhases(),
+      sanitizeProviderError,
+      correlation => this.subagentProjector.correlateVibeSpawn(correlation),
+    );
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedToolCommandNames();
     this.defaultRegisteredNames = session.getAllToolNames();
@@ -229,7 +245,6 @@ export class WorkerSession {
       }
     });
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
-    this.subagentProjector = new SubagentProjector(this._sessionId, this.liveSubagents, this.pendingSubagentEvents, this.toolCallToSubagentId, inputs => this.emit(inputs), inputs => this.publish(inputs));
     this.titleUnsubscribe = session.sessionManager.onSessionNameChanged(() => {
       const title = session.sessionManager.getSessionName()?.trim();
       if (title) this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', title } }]);
@@ -237,8 +252,13 @@ export class WorkerSession {
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
       const parsed = SubagentLifecyclePayloadSchema.safeParse(data);
       if (!parsed.success) return;
-      this.onSubagent({ ...parsed.data, assignment: this.liveSubagents.get(parsed.data.id)?.solutionSpace });
-      this.subagentProjector.handleSubagentLifecycle(parsed.data);
+      const subagent = this.subagentProjector.handleSubagentLifecycle(parsed.data);
+      const lifecycle: SubagentLifecyclePayload & { assignment?: string; task?: string } = { ...parsed.data };
+      if (subagent.toolCallId !== undefined) lifecycle.parentToolCallId = subagent.toolCallId;
+      if (subagent.description !== undefined) lifecycle.description = subagent.description;
+      if (subagent.task !== undefined) lifecycle.task = subagent.task;
+      if (subagent.solutionSpace !== undefined) lifecycle.assignment = subagent.solutionSpace;
+      this.onSubagent(lifecycle);
     });
     this.subagentEventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, data => {
       const parsed = SubagentProgressSchema.safeParse(data);
@@ -439,7 +459,7 @@ export class WorkerSession {
     } catch (error) { this.fail(error); }
   }
 
-  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload & { assignment?: string }) => void): Promise<WorkerSession> {
+  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload & { assignment?: string; task?: string }) => void): Promise<WorkerSession> {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
     if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
     const prewarmed = await consumePrewarmedNativeRuntime(input);
@@ -1668,7 +1688,14 @@ export class WorkerSession {
         this.hostToolsController?.rekey(newSessionId);
         this.mcp?.rekey(newSessionId);
         this.workerIdentity.rootSessionId = newSessionId;
-        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId, [], () => this.session.getTodoPhases(), this.sanitizeProviderError);
+        this.projection = new WorkerProjection(
+          this.session.sessionManager,
+          newSessionId,
+          [],
+          () => this.session.getTodoPhases(),
+          this.sanitizeProviderError,
+          correlation => this.subagentProjector.correlateVibeSpawn(correlation),
+        );
         this.projection.resetSelection();
         this.syncTodoAutoClear();
         await this.session.sessionManager.flush();

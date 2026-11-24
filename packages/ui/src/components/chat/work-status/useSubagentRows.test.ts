@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApprovalRequest, Session, Subagent } from '@openchamber/agent-contract';
 import type { SubagentReport } from './useSubagentReports';
-import { deriveSubagentRows, resolveSubagentDisplayName, type DeriveSubagentRowsInput } from './useSubagentRows';
+import { deriveSubagentRows, isSubagentsSurfaceShown, resolveSubagentDisplayName, type DeriveSubagentRowsInput } from './useSubagentRows';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import { formatSubagentLiveDetail } from './subagentActivity';
 
 const session = (sessionId: string, overrides: Partial<Session> = {}): Session => ({
@@ -239,6 +240,41 @@ describe('deriveSubagentRows', () => {
     expect(rows[0].report).toBe(report);
     expect(rows[0].reportLine).toBe('Summary');
   });
+
+  test('derives clean name, role/model subtitle, tokens/cost/duration, and report for vibe workers', () => {
+    const child = session('uuid-vibe-2', { title: 'home-disk-usage-2', createdAt: 1000, updatedAt: 9000 });
+    const live = subagent({
+      subagentId: 'home-disk-usage-2',
+      childSessionId: 'uuid-vibe-2',
+      name: 'home-disk-usage-2',
+      role: 'sonic',
+      model: 'openai/gpt-5.4-mini',
+      status: 'completed',
+      activeTool: 'bash',
+      tokens: 18400,
+      cost: 0.0123,
+      durationMs: 4800,
+    });
+    const report: SubagentReport = {
+      subagentId: 'home-disk-usage-2',
+      childSessionId: 'uuid-vibe-2',
+      state: 'completed',
+      output: '### Disk Usage\nAll clear.',
+    };
+    const [row] = deriveSubagentRows(input({
+      children: [child],
+      liveSubagents: [live],
+      reports: new Map([['home-disk-usage-2', report]]),
+    }));
+    expect(row.displayName).toBe('home-disk-usage-2');
+    expect(row.role).toBe('sonic');
+    expect(row.identity).toBe('sonic · GPT-5.4 Mini');
+    expect(row.tokens).toBe(18400);
+    expect(row.cost).toBe(0.0123);
+    expect(row.elapsedMs).toBe(4800);
+    expect(row.reportLine).toBe('Disk Usage');
+    expect(row.done).toBe(true);
+  });
 });
 
 describe('formatSubagentLiveDetail', () => {
@@ -258,5 +294,25 @@ describe('formatSubagentLiveDetail', () => {
   test('suppresses non-warning detail in alertsOnly mode', () => {
     expect(formatSubagentLiveDetail(subagent({ activeTool: 'bash' }), true, t, 'en')).toBeNull();
     expect(formatSubagentLiveDetail(subagent({ retryCountdown: 5 }), true, t, 'en')).not.toBeNull();
+  });
+});
+
+describe('isSubagentsSurfaceShown', () => {
+  test('matches rail visibility for open tabs and live or listed subagents', () => {
+    expect(isSubagentsSurfaceShown([], 'parent', [])).toBe(false);
+    expect(isSubagentsSurfaceShown([{ mode: 'subagents' }], null, [])).toBe(true);
+    expect(isSubagentsSurfaceShown([], 'parent', [session('child-1', { parentSessionId: 'parent' })])).toBe(true);
+    expect(isSubagentsSurfaceShown([], 'parent', [session('wf-1', {
+      parentSessionId: 'parent',
+      // SAFETY: test fixture exercises runtime parser for workflow-agent metadata absent from SessionMetadata schema.
+      metadata: { openchamber: { kind: 'workflow-agent' } } as unknown as Session['metadata'],
+    })])).toBe(false);
+
+    useSubagentsStore.getState().setSubagents('parent', [subagent()]);
+    try {
+      expect(isSubagentsSurfaceShown([], 'parent', [])).toBe(true);
+    } finally {
+      useSubagentsStore.getState().clearSession('parent');
+    }
   });
 });

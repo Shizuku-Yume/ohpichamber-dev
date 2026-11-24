@@ -6,6 +6,9 @@ import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manage
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import { SessionJournal } from '../projection/journal.ts';
 import { nativePrivateRootContext, rememberPrivateRoots, WorkerProjection } from './projection.ts';
+import type { Subagent } from '@openchamber/agent-contract';
+import type { ProjectionInput } from '../projection/protocol.ts';
+import { SubagentProjector, type SubagentEventObservation } from './subagent-projection.ts';
 
 type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['message'];
 type Assistant = Extract<NativeMessage, { role: 'assistant' }>;
@@ -1308,6 +1311,147 @@ test('a single non-task async job report drops the delivery headline and resume 
     const part = completed.event.part;
     if (part.type !== 'notice' || part.noticeType !== 'async_job_result') throw new Error('Expected async_job_result notice');
     expect(part.details.jobs[0]?.reportText).toBe('12 tests passed, 0 failed');
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('vibe_spawn correlates toolCallId, task, and concise description across tool_execution_start, update, and end', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-vibe-spawn-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const liveSubagents = new Map<string, Subagent>();
+    const pendingEvents = new Map<string, SubagentEventObservation[]>();
+    const toolCallToSubagentId = new Map<string, string>();
+    const subagentFrames: ProjectionInput[] = [];
+    const projector = new SubagentProjector(
+      'session',
+      liveSubagents,
+      pendingEvents,
+      toolCallToSubagentId,
+      inputs => subagentFrames.push(...inputs),
+      inputs => subagentFrames.push(...inputs),
+    );
+    const projection = new WorkerProjection(
+      manager,
+      'session',
+      [],
+      undefined,
+      text => text,
+      correlation => projector.correlateVibeSpawn(correlation),
+    );
+    projection.beginRun('run', 1);
+    const prompt = { role: 'user' as const, content: 'Run vibe worker', timestamp: 2 };
+    projection.consume({ type: 'message_start', message: prompt });
+    projection.consume({ type: 'message_end', message: prompt });
+
+    projection.consume({
+      type: 'tool_execution_start',
+      toolCallId: 'call-vibe-update',
+      toolName: 'vibe_spawn',
+      args: { cli: 'fast', name: 'disk-check', prompt: `Check disk usage in ${root}\nSummarize top directories` },
+    });
+    projection.consume({
+      type: 'tool_execution_update',
+      toolCallId: 'call-vibe-update',
+      toolName: 'vibe_spawn',
+      args: { cli: 'fast', name: 'disk-check', prompt: `Check disk usage in ${root}\nSummarize top directories` },
+      partialResult: {
+        content: [{ type: 'text', text: 'Spawning...' }],
+        details: { op: 'spawn', spawned: { id: 'disk-check', cli: 'fast', jobId: 'job-1' } },
+      },
+    });
+    projector.handleSubagentLifecycle({
+      id: 'disk-check',
+      agent: 'sonic',
+      agentSource: 'bundled',
+      description: 'vibe fast session',
+      status: 'started',
+      index: 0,
+      detached: true,
+    });
+    projection.consume({
+      type: 'tool_execution_end',
+      toolCallId: 'call-vibe-update',
+      toolName: 'vibe_spawn',
+      result: {
+        content: [{ type: 'text', text: 'Spawned fast session `disk-check`.' }],
+        details: { op: 'spawn', spawned: { id: 'disk-check', cli: 'fast', jobId: 'job-1' } },
+      },
+      isError: false,
+    });
+
+    expect(liveSubagents.get('disk-check')).toMatchObject({
+      subagentId: 'disk-check',
+      toolCallId: 'call-vibe-update',
+      description: 'Check disk usage in [workspace]',
+      task: 'Check disk usage in [workspace]\nSummarize top directories',
+    });
+    expect(subagentFrames).toHaveLength(1);
+
+    projector.handleSubagentLifecycle({
+      id: 'late-worker',
+      agent: 'task',
+      agentSource: 'bundled',
+      description: 'vibe good session',
+      status: 'started',
+      index: 1,
+      detached: true,
+    });
+    projection.consume({
+      type: 'tool_execution_start',
+      toolCallId: 'call-vibe-late',
+      toolName: 'vibe_spawn',
+      args: { cli: 'good', prompt: 'Refactor parser module\nKeep public types stable' },
+    });
+    projection.consume({
+      type: 'tool_execution_end',
+      toolCallId: 'call-vibe-late',
+      toolName: 'vibe_spawn',
+      result: {
+        content: [{ type: 'text', text: 'Spawned good session `late-worker`.' }],
+        details: { op: 'spawn', spawned: { id: 'late-worker', cli: 'good', jobId: 'job-2' } },
+      },
+      isError: false,
+    });
+
+    expect(liveSubagents.get('late-worker')).toMatchObject({
+      subagentId: 'late-worker',
+      toolCallId: 'call-vibe-late',
+      description: 'Refactor parser module',
+      task: 'Refactor parser module\nKeep public types stable',
+    });
+    expect(subagentFrames).toHaveLength(3);
+
+    projection.consume({
+      type: 'tool_execution_start',
+      toolCallId: 'call-vibe-err',
+      toolName: 'vibe_spawn',
+      args: { cli: 'fast', prompt: 'Should fail' },
+    });
+    projection.consume({
+      type: 'tool_execution_end',
+      toolCallId: 'call-vibe-err',
+      toolName: 'vibe_spawn',
+      result: {
+        content: [{ type: 'text', text: 'Spawn failed' }],
+        details: { op: 'spawn', spawned: { id: 'failed-worker', cli: 'fast', jobId: 'job-3' } },
+      },
+      isError: true,
+    });
+    projector.handleSubagentLifecycle({
+      id: 'failed-worker',
+      agent: 'sonic',
+      agentSource: 'bundled',
+      description: 'vibe fast session',
+      status: 'started',
+      index: 2,
+      detached: true,
+    });
+    expect(liveSubagents.get('failed-worker')?.toolCallId).toBeUndefined();
+    expect(liveSubagents.get('failed-worker')?.description).toBe('vibe fast session');
   } finally {
     await manager.close();
     await rm(root, { recursive: true, force: true });

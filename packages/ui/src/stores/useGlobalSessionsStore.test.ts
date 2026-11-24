@@ -177,3 +177,70 @@ describe('native recency updates', () => {
     expect(fallback?.updatedAt).toBe(50_000);
   });
 });
+
+describe('subagent child session titles', () => {
+  const buildParent = () => session('ses_parent');
+  const buildChild = (extra: Partial<Subagent> = {}): Subagent => ({
+    subagentId: 'sub_one',
+    parentSessionId: 'ses_parent',
+    childSessionId: 'child_one',
+    role: 'sonic',
+    status: 'running',
+    ...extra,
+  });
+
+  test('prefers the worker name over its role', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildParent());
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [buildChild({ name: 'home-disk-usage-2' })]);
+    expect(useGlobalSessionsStore.getState().entityById.get('child_one')?.title).toBe('home-disk-usage-2');
+  });
+
+  test('uses the first useful description line and skips vibe boilerplate', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildParent());
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [
+      buildChild({ description: 'vibe fast session\nAudit the disk usage of /home' }),
+    ]);
+    expect(useGlobalSessionsStore.getState().entityById.get('child_one')?.title).toBe('Audit the disk usage of /home');
+  });
+
+  test('falls back to the task first line, clamped to 80 chars', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildParent());
+    const longTask = `  ${'x'.repeat(120)}  `;
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [
+      buildChild({ description: 'vibe good session', task: longTask }),
+    ]);
+    const title = useGlobalSessionsStore.getState().entityById.get('child_one')?.title;
+    expect(title).toBe('x'.repeat(80));
+  });
+
+  test('falls back to the role only when name, description, and task are empty', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildParent());
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [
+      buildChild({ name: '   ', description: '\n  ', task: '' }),
+    ]);
+    expect(useGlobalSessionsStore.getState().entityById.get('child_one')?.title).toBe('sonic');
+  });
+
+  test('upgrades a role-only title when a later update carries the worker name', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildParent());
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [buildChild()]);
+    expect(useGlobalSessionsStore.getState().entityById.get('child_one')?.title).toBe('sonic');
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [buildChild({ name: 'home-disk-usage-2' })]);
+    expect(useGlobalSessionsStore.getState().entityById.get('child_one')?.title).toBe('home-disk-usage-2');
+  });
+
+  test('keeps a resolved title when a later update loses the metadata', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildParent());
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [buildChild({ name: 'AlphaScout' })]);
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [buildChild({ status: 'completed' })]);
+    expect(useGlobalSessionsStore.getState().entityById.get('child_one')?.title).toBe('AlphaScout');
+  });
+
+  test('ignores a name equal to the role when a description or task exists', () => {
+    useGlobalSessionsStore.getState().upsertSession(buildParent());
+    useGlobalSessionsStore.getState().upsertSubagents(buildParent(), [
+      buildChild({ name: 'sonic', description: 'Inspect disk usage' }),
+    ]);
+    expect(useGlobalSessionsStore.getState().entityById.get('child_one')?.title).toBe('Inspect disk usage');
+  });
+});

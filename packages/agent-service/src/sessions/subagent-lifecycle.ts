@@ -6,7 +6,7 @@ import type { SessionJournal } from '../projection/journal.ts';
 import type { SessionReferences } from './references.ts';
 import type { Entry } from './registry.ts';
 
-export type SubagentLifecycleInput = { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; description?: string; solutionSpace?: string; sessionFile?: string };
+export type SubagentLifecycleInput = { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; description?: string; task?: string; solutionSpace?: string; sessionFile?: string };
 export type ChildRecord = Subagent & { childSessionId: string; rootSessionId: string; workspaceId: string; projectId: string; sessionFile: string };
 export type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 const SessionFileIdentitySchema = z.object({ type: z.literal('session'), id: z.string().min(1), parentSession: z.string().min(1).optional() });
@@ -136,6 +136,8 @@ async function persistSubagent(deps: SubagentLifecycleDeps, rootSessionId: strin
   }
   const toolCallId = input.toolCallId ?? existing?.toolCallId;
   if (toolCallId) record.toolCallId = toolCallId;
+  const task = input.task ?? existing?.task;
+  if (task) record.task = task;
   const description = input.description ?? existing?.description;
   if (description) record.description = description;
   const solutionSpace = input.solutionSpace ?? existing?.solutionSpace;

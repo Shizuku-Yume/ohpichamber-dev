@@ -38,7 +38,7 @@ import { subscribeAutoReviewSync } from "./auto-review-sync";
 import { getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
 import { createSyncStores, takePrefetchedSyncStores } from './sync-stores'
 export { prefetchSessionBeforeMount } from './sync-stores'
-import { setSyncRefs } from "./sync-refs"
+import { getAllSyncSessionMap, setSyncRefs } from "./sync-refs"
 import { setActionRefs, setOptimisticRefs } from "./session-actions"
 import { aggregateLiveSessions, aggregateLiveSessionStatuses, areSessionListsEquivalent, areStatusMapsEquivalent, findLiveSession } from "./live-aggregate"
 import { applyGlobalSessionStatusEvents, applyGlobalSessionStatusSnapshot, useGlobalSessionStatusStore, setSessionParentResolver } from "./global-session-status"
@@ -119,13 +119,16 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     if (event.type === "btw.delta" || event.type === "btw.completed") continue
     if (event.type === "subagent.updated") {
       useSubagentsStore.getState().applySubagentUpdate(target.sessionId, event.subagent);
+      const subagent = event.subagent;
+      if (subagent.childSessionId && subagent.childSessionId !== subagent.subagentId) {
+        const global = useGlobalSessionsStore.getState();
+        const parent = getAllSyncSessionMap().get(target.sessionId) ?? global.entityById.get(target.sessionId);
+        if (parent) global.upsertSubagents(parent, [subagent]);
+      }
       continue;
     }
     if (event.type === "session.recap") {
       useSessionRecapStore.getState().applyRecap(event);
-    }
-    if (event.type === "session.suggestion") {
-      useSessionSuggestionStore.getState().applySuggestion(event);
     }
     if (event.type === "run.started" || event.type === "turn.started") {
       useSessionSuggestionStore.getState().clearSuggestion(target.sessionId);

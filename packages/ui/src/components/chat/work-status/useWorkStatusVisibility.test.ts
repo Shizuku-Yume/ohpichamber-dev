@@ -1,23 +1,36 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-
 type PanelState = {
   isOpen: boolean;
-  tabs: { id: string; mode: string }[];
+  expanded?: boolean;
+  tabs: { id: string; mode: string; targetPath?: string | null; touchedAt?: number }[];
   activeTabId: string | null;
+  zones?: {
+    left: { isOpen: boolean; expanded: boolean; activeTabId: string | null };
+    bottom: { isOpen: boolean; expanded: boolean; activeTabId: string | null };
+  };
 };
 
 let panelByDirectory: Record<string, PanelState> = {};
 let panelEnabled = true;
 let effectiveDirectory: string | undefined = '/repo';
+let contextZoneSizes: Record<string, number> = {};
 
 mock.module('@/stores/useUIStore', () => ({
   useUIStore: (selector: (state: unknown) => unknown) =>
-    selector({ contextPanelByDirectory: panelByDirectory, workStatusPanelEnabled: panelEnabled }),
+    selector({
+      contextPanelByDirectory: panelByDirectory,
+      contextSurfaceZones: {},
+      contextZoneSizes,
+      contextEditorVisible: true,
+      contextEditorTreeVisible: true,
+      contextEditorTreeWidth: 260,
+      isSidebarOpen: false,
+      workStatusPanelEnabled: panelEnabled,
+    }),
   normalizeContextPanelDirectoryKey: (value: string) => value,
 }));
-
 mock.module('@/hooks/useEffectiveDirectory', () => ({
   useEffectiveDirectory: () => effectiveDirectory,
 }));
@@ -106,13 +119,14 @@ const renderVisibility = (args: Args, rowWidth: number) => {
     getBoundingClientRect: () => ({ width: rowWidth }),
     closest: () => null,
   } as unknown as HTMLDivElement;
-  const result = { visible: false, fits: false, roomy: false, renders: 0 };
+  const result = { visible: false, fits: false, roomy: false, roomyBesidePanel: false, renders: 0 };
 
   const Probe: React.FC = () => {
-    const { rowRef, visible, fits, roomy } = useWorkStatusVisibility(args);
+    const { rowRef, visible, fits, roomy, roomyBesidePanel } = useWorkStatusVisibility(args);
     result.visible = visible;
     result.fits = fits;
     result.roomy = roomy;
+    result.roomyBesidePanel = roomyBesidePanel;
     result.renders += 1;
     React.useLayoutEffect(() => {
       rowRef(rowNode);
@@ -133,6 +147,7 @@ const renderVisibility = (args: Args, rowWidth: number) => {
 };
 
 beforeEach(() => {
+  contextZoneSizes = {};
   panelByDirectory = {};
   panelEnabled = true;
   effectiveDirectory = '/repo';
@@ -346,8 +361,57 @@ describe('useWorkStatusVisibility', () => {
       REQUIRED - 1,
     );
     expect(result.fits).toBe(false);
+
     expect(result.visible).toBe(false);
     teardown();
+  });
+
+  test('shows work status beside an open right context panel when width affords both', () => {
+    panelByDirectory['/repo'] = {
+      isOpen: true,
+      tabs: [{ id: 'tab-1', mode: 'subagents' }],
+      activeTabId: 'tab-1',
+    };
+    const { result, teardown } = renderVisibility({ isMobile: false }, REQUIRED + 640);
+    expect(result.roomy).toBe(true);
+    expect(result.roomyBesidePanel).toBe(true);
+    expect(result.fits).toBe(true);
+    expect(result.visible).toBe(true);
+    teardown();
+  });
+
+  test('hides work status beside an expanded right context panel even on wide screens', () => {
+    panelByDirectory['/repo'] = {
+      isOpen: true,
+      expanded: true,
+      tabs: [{ id: 'tab-1', mode: 'subagents' }],
+      activeTabId: 'tab-1',
+    };
+    const { result, teardown } = renderVisibility({ isMobile: false }, REQUIRED + 640);
+    expect(result.roomy).toBe(true);
+    expect(result.roomyBesidePanel).toBe(false);
+    expect(result.fits).toBe(false);
+    expect(result.visible).toBe(false);
+    teardown();
+  });
+
+  test('respects custom right zone width when deciding besidePanel fit', () => {
+    contextZoneSizes = { right: 420 };
+    panelByDirectory['/repo'] = {
+      isOpen: true,
+      tabs: [{ id: 'tab-1', mode: 'git' }],
+      activeTabId: 'tab-1',
+    };
+    const fitsSmaller = renderVisibility({ isMobile: false }, REQUIRED + 420);
+    expect(fitsSmaller.result.roomyBesidePanel).toBe(true);
+    expect(fitsSmaller.result.visible).toBe(true);
+    fitsSmaller.teardown();
+
+    const tooNarrow = renderVisibility({ isMobile: false }, REQUIRED + 419);
+    expect(tooNarrow.result.roomy).toBe(true);
+    expect(tooNarrow.result.roomyBesidePanel).toBe(false);
+    expect(tooNarrow.result.visible).toBe(false);
+    tooNarrow.teardown();
   });
 
   test('stays hidden on mobile regardless of width', () => {

@@ -1,6 +1,14 @@
 import React from 'react';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { sidebarPendingWidth } from '@/components/layout/sidebarPendingWidth';
+import {
+  CONTEXT_ZONE_DEFAULT_WIDTH,
+  isZoneShown,
+  resolveZoneActiveTab,
+  showsFileTreeOnly,
+  sideZoneWidth,
+} from '@/lib/workspace/zones';
 
 /**
  * Fixed panel width. The panel is not user-resizable: it is an object inside
@@ -37,6 +45,7 @@ type Result = {
    * this, so closing the context panel goes straight back to it.
    */
   roomy: boolean;
+  roomyBesidePanel: boolean;
   /**
    * Attach to the flex row that contains the chat column and the panel.
    *
@@ -64,6 +73,7 @@ export const useWorkStatusVisibility = ({ isMobile }: Options): Result => {
   // every frame of a sidebar animation, and storing the width itself
   // re-rendered the whole chat on each of those frames.
   const [wideEnough, setWideEnough] = React.useState<boolean | null>(null);
+  const [wideEnoughBesidePanel, setWideEnoughBesidePanel] = React.useState(false);
   const rowRef = React.useCallback((node: HTMLDivElement | null) => { setRowNode(node); }, []);
 
   // Keyed exactly like the rail and the panel itself: whichever directory the
@@ -80,13 +90,34 @@ export const useWorkStatusVisibility = ({ isMobile }: Options): Result => {
   // resolvable active tab renders nothing, and must not displace this panel.
   const contextPanelOpen = useUIStore(
     React.useCallback(
+      (state) => isZoneShown(
+        directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined,
+        state.contextSurfaceZones,
+        'right',
+      ),
+      [directoryKey],
+    ),
+  );
+
+  const contextPanelWidth = useUIStore(
+    React.useCallback(
       (state) => {
         const panel = directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined;
-        if (!panel?.isOpen) return false;
-        const activeTab = panel.tabs.find((tab) => tab.id === panel.activeTabId)
-          ?? panel.tabs[panel.tabs.length - 1]
-          ?? null;
-        return Boolean(activeTab);
+        const tab = panel ? resolveZoneActiveTab(panel, state.contextSurfaceZones, 'right') : null;
+        return panel && tab ? sideZoneWidth(panel, tab, 'right', state) : CONTEXT_ZONE_DEFAULT_WIDTH;
+      },
+      [directoryKey],
+    ),
+  );
+  const contextPanelExpanded = useUIStore(
+    React.useCallback(
+      (state) => {
+        const panel = directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined;
+        if (!panel?.expanded) return false;
+        const tab = isZoneShown(panel, state.contextSurfaceZones, 'right')
+          ? resolveZoneActiveTab(panel, state.contextSurfaceZones, 'right')
+          : null;
+        return tab !== null && !showsFileTreeOnly(panel, tab, state);
       },
       [directoryKey],
     ),
@@ -96,9 +127,15 @@ export const useWorkStatusVisibility = ({ isMobile }: Options): Result => {
   // before layout is even measured.
   const panelEnabled = useUIStore((state) => state.workStatusPanelEnabled);
 
-  // Split from the switch: a narrow chat is a layout fact, and the header needs
-  // it to offer the panel as an overlay instead of pretending it is off.
-  const layoutAllows = !isMobile && !contextPanelOpen;
+  const areaWidthRef = React.useRef<number | null>(null);
+  const contextPanelWidthRef = React.useRef(contextPanelWidth);
+  contextPanelWidthRef.current = contextPanelWidth;
+  const applyAreaWidth = React.useCallback((measured: number) => {
+    areaWidthRef.current = measured;
+    const width = measured + sidebarPendingWidth();
+    setWideEnough(width >= WORK_STATUS_REQUIRED_ROW_WIDTH);
+    setWideEnoughBesidePanel(width >= WORK_STATUS_REQUIRED_ROW_WIDTH + contextPanelWidthRef.current);
+  }, []);
 
   // Measures the chat AREA — the container holding the chat and the context
   // panel together — not the chat row inside it.
@@ -116,19 +153,25 @@ export const useWorkStatusVisibility = ({ isMobile }: Options): Result => {
     if (!rowNode || typeof ResizeObserver === 'undefined') return undefined;
 
     const measured = rowNode.closest<HTMLElement>('[data-chat-area]') ?? rowNode;
-    setWideEnough(measured.getBoundingClientRect().width >= WORK_STATUS_REQUIRED_ROW_WIDTH);
+    applyAreaWidth(measured.getBoundingClientRect().width);
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
-      setWideEnough(entry.contentRect.width >= WORK_STATUS_REQUIRED_ROW_WIDTH);
+      applyAreaWidth(entry.contentRect.width);
     });
     observer.observe(measured);
     return () => observer.disconnect();
-  }, [rowNode]);
+  }, [applyAreaWidth, rowNode]);
+
+  const sidebarOpen = useUIStore((state) => panelEnabled && state.isSidebarOpen);
+  React.useLayoutEffect(() => {
+    if (areaWidthRef.current !== null) applyAreaWidth(areaWidthRef.current);
+  }, [applyAreaWidth, contextPanelWidth, sidebarOpen]);
 
   const roomy = !isMobile && wideEnough === true;
-  const fits = layoutAllows && roomy;
+  const roomyBesidePanel = roomy && wideEnoughBesidePanel && !contextPanelExpanded;
+  const fits = contextPanelOpen ? roomyBesidePanel : roomy;
   const visible = panelEnabled && fits;
 
-  return { rowRef, visible, fits, roomy };
+  return { rowRef, visible, fits, roomy, roomyBesidePanel };
 };

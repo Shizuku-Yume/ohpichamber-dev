@@ -2,13 +2,14 @@ import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { parseModelString, type Session, type Subagent } from '@openchamber/agent-contract';
 
+import type { ContextPanelMode } from '@/lib/surfaces/modes';
 import type { IconName } from '@/components/icon/icons';
 import type { I18nKey } from '@/lib/i18n';
 import { getProviderModelDisplayName, humanizeModelId } from '@/lib/modelDisplay';
 import { normalizePath } from '@/lib/pathNormalization';
 import { isWorkflowAgentSession } from '@/lib/sessionWorkflowMetadata';
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
-import { useSessionWorkflowRuns } from '@/lib/workflows/store';
+import { useSessionWorkflowRuns, useWorkflowRunsStore } from '@/lib/workflows/store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -382,6 +383,62 @@ const useSessionsWithListedChildren = (sessionId: string | null): Session[] => {
     });
     return [...merged, ...listedById.values()];
   }, [listedChildren, liveSessions]);
+};
+const hasSubagentRowInputs = (
+  sessionId: string | null,
+  sessions: readonly Session[],
+  liveSubagents: readonly Subagent[],
+  workflowAgentIds: ReadonlySet<string>,
+): boolean => {
+  if (!sessionId) return false;
+  if (liveSubagents.length > 0) return true;
+  return sessions.some((candidate) => (
+    candidate.parentSessionId === sessionId
+    && !workflowAgentIds.has(candidate.sessionId)
+    && !isWorkflowAgentSession(candidate)
+  ));
+};
+
+export const isSubagentsSurfaceShown = (
+  tabs: readonly { mode: ContextPanelMode }[],
+  sessionId: string | null,
+  liveSessions: readonly Session[],
+): boolean => {
+  if (tabs.some((tab) => tab.mode === 'subagents')) return true;
+  if (!sessionId) return false;
+  const liveSubagents = useSubagentsStore.getState().byParent[sessionId] ?? EMPTY_SUBAGENTS;
+  if (liveSubagents.length > 0) return true;
+  const listedChildIds = useGlobalSessionsStore.getState().structure.activeChildrenByParentId.get(sessionId);
+  const listedChildren = listedChildIds
+    ? [...listedChildIds].flatMap((id) => {
+      const child = useGlobalSessionsStore.getState().entityById.get(id);
+      return child ? [child] : [];
+    })
+    : NO_SESSIONS;
+  const workflowRuns = useWorkflowRunsStore.getState().bySession[sessionId]?.runs ?? [];
+  const workflowAgentIds = new Set(workflowRuns.flatMap((run) => run.agents.flatMap((agent) => (agent.sessionId ? [agent.sessionId] : []))));
+  return hasSubagentRowInputs(sessionId, [...liveSessions, ...listedChildren], liveSubagents, workflowAgentIds);
+};
+
+export const useSubagentsSurfaceShown = (
+  tabs: readonly { mode: ContextPanelMode }[],
+  sessionId: string | null,
+): boolean => {
+  const workflowRuns = useSessionWorkflowRuns(sessionId);
+  const workflowAgentIds = React.useMemo(
+    () => new Set(workflowRuns.flatMap((run) => run.agents.flatMap((agent) => (agent.sessionId ? [agent.sessionId] : [])))),
+    [workflowRuns],
+  );
+  const sessions = useSessionsWithListedChildren(sessionId);
+  const liveSubagents = useSubagentsStore(
+    React.useCallback((state) => (sessionId && state.byParent[sessionId] ? state.byParent[sessionId] : EMPTY_SUBAGENTS), [sessionId]),
+  );
+  React.useEffect(() => {
+    if (!sessionId) return;
+    void useSubagentsStore.getState().hydrateParent(sessionId);
+  }, [sessionId]);
+  return tabs.some((tab) => tab.mode === 'subagents')
+    || hasSubagentRowInputs(sessionId, sessions, liveSubagents, workflowAgentIds);
 };
 
 export const useSubagentRows = (sessionId: string | null, directory: string | null): SubagentRow[] => {

@@ -1005,7 +1005,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  // It yields to the context panel and to a narrow chat; `rowRef` goes on the
  // row that holds both columns, so its width never depends on the panel's
  // own visibility.
- const { rowRef: workStatusRowRef, visible: workStatusVisible, fits: workStatusFits, roomy: workStatusRoomy } = useWorkStatusVisibility({
+ const { rowRef: workStatusRowRef, visible: workStatusVisible, fits: workStatusFits, roomy: workStatusRoomy, roomyBesidePanel: workStatusRoomyBesidePanel } = useWorkStatusVisibility({
   isMobile,
  });
  const attachColumnRoot = React.useCallback((node: HTMLDivElement | null) => {
@@ -1968,6 +1968,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     <WorkStatusPanel
      visible={showWorkStatusPanel}
      reserved={workStatusReserved}
+     besidePanel={workStatusRoomyBesidePanel}
      sessionId={currentSessionId ?? null}
      directory={workStatusDirectory ?? null}
      repositoryEnabled={!isManagedChatContext}
