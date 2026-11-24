@@ -290,3 +290,38 @@ test('OMP 19.1 batch task shows subagent count/roles and async running summary w
     expect(container.textContent).toContain('Open in the Subagents panel');
   });
 });
+
+test('switching sessionId or toolCallId resets hydrating state and does not force-refresh from prior running status', async () => {
+  const slowFirst = Promise.withResolvers<Subagent[]>();
+  let requestedSessions: string[] = [];
+
+  await withHarness(async (sessionId) => {
+    requestedSessions.push(sessionId);
+    if (sessionId === 'parent') return slowFirst.promise;
+    return [child('second-session-child', 'call-b', 'next-parent')];
+  }, async ({ container, render }) => {
+    const callA: ToolCallPart = { ...call, partId: 'call-a-part', toolCallId: 'call-a', status: 'running' };
+    const callB: ToolCallPart = { ...call, partId: 'call-b-part', toolCallId: 'call-b', status: 'completed' };
+
+    // Pre-hydrate 'next-parent' so switching to it does not need a fresh hydration unless falsely triggered.
+    useSubagentsStore.getState().setSubagents('next-parent', [child('second-session-child', 'call-b', 'next-parent')]);
+    useSubagentsStore.setState((state) => ({
+      hydratedByParent: { ...state.hydratedByParent, 'next-parent': 'default' },
+    }));
+    await useSubagentsStore.getState().hydrateParent('next-parent');
+    requestedSessions = [];
+
+    await render({ sessionId: 'parent', customCall: callA, status: 'running' });
+    expect(container.textContent).toContain('Loading');
+
+    // Switch to already-hydrated 'next-parent' with completed callB while 'parent' is still in flight.
+    await render({ sessionId: 'next-parent', customCall: callB, status: 'completed' });
+    expect(container.textContent).not.toContain('Loading');
+    expect(container.querySelector('[aria-label="Open second-session-child subtask"]')).not.toBeNull();
+    expect(requestedSessions).toEqual(['parent']);
+
+    await act(async () => {
+      slowFirst.resolve([]);
+    });
+  });
+});

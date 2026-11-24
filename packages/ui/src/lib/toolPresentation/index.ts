@@ -93,7 +93,7 @@ export const isStaticTool = (toolName: string | undefined): boolean => {
     return toolGrouping(name) === 'read' || name === 'skill';
 };
 
-export interface AskAnswerEntry {
+interface AskAnswerEntry {
     question: string;
     answer: string;
     note?: string;

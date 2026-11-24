@@ -174,35 +174,99 @@ type ParsedFindLine =
     | { kind: 'header'; filePath: string; score: number; meta: string }
     | { kind: 'text'; text: string };
 
-const FIND_HIT_LINE_RE = /^\s*(\S+?):(\d+)(?:-(\d+))?\s+(?:([01]\.\d{2})\s{2,})?(.*)$/;
-const FIND_HEADER_LINE_RE = /^(\S+)\s{2,}([01]\.\d{2})\s{2,}(.+)$/;
+const FIND_URL_SCHEME_RE = /^https?:\/\//i;
+const FIND_HIT_TARGET_RE = /^(.+):(\d+)(?:-(\d+))?$/;
+const FIND_SCORE_RE = /^([01]\.\d{2})$/;
+const FIND_COL_SEP_RE = /\s{2,}/;
+
+function parseFindScore(value: string): number | undefined {
+    if (!FIND_SCORE_RE.test(value)) return undefined;
+    const score = Number(value);
+    return score >= 0 && score <= 1 ? score : undefined;
+}
 
 function parseFindLine(line: string): ParsedFindLine {
-    const hitMatch = FIND_HIT_LINE_RE.exec(line);
-    if (hitMatch?.[1] && hitMatch[2]) {
-        const scoreValue = hitMatch[4] !== undefined ? Number(hitMatch[4]) : undefined;
+    const trimmed = line.trimStart();
+    const sep1 = FIND_COL_SEP_RE.exec(trimmed);
+    if (!sep1) return { kind: 'text', text: line };
+
+    const target = trimmed.slice(0, sep1.index);
+    if (!target || FIND_URL_SCHEME_RE.test(target)) {
+        return { kind: 'text', text: line };
+    }
+
+    const rest1 = trimmed.slice(sep1.index + sep1[0].length);
+    const sep2 = FIND_COL_SEP_RE.exec(rest1);
+    const hitTarget = FIND_HIT_TARGET_RE.exec(target);
+    if (hitTarget?.[1] && hitTarget[2]) {
+        const filePath = hitTarget[1];
+        if (FIND_URL_SCHEME_RE.test(filePath)) return { kind: 'text', text: line };
+        if (sep2) {
+            const score = parseFindScore(rest1.slice(0, sep2.index));
+            if (score !== undefined) {
+                return {
+                    kind: 'hit',
+                    filePath,
+                    startLine: parseInt(hitTarget[2], 10),
+                    endLine: hitTarget[3],
+                    score,
+                    snippet: rest1.slice(sep2.index + sep2[0].length),
+                };
+            }
+        } else {
+            const trailingScore = parseFindScore(rest1.trim());
+            if (trailingScore !== undefined) {
+                return {
+                    kind: 'hit',
+                    filePath,
+                    startLine: parseInt(hitTarget[2], 10),
+                    endLine: hitTarget[3],
+                    score: trailingScore,
+                    snippet: '',
+                };
+            }
+        }
         return {
             kind: 'hit',
-            filePath: hitMatch[1],
-            startLine: parseInt(hitMatch[2], 10),
-            endLine: hitMatch[3],
-            score: scoreValue !== undefined && scoreValue >= 0 && scoreValue <= 1 ? scoreValue : undefined,
-            snippet: hitMatch[5] ?? '',
+            filePath,
+            startLine: parseInt(hitTarget[2], 10),
+            endLine: hitTarget[3],
+            snippet: rest1,
         };
     }
-    const headerMatch = FIND_HEADER_LINE_RE.exec(line);
-    if (headerMatch?.[1] && headerMatch[2] && headerMatch[3]) {
-        const scoreValue = Number(headerMatch[2]);
-        if (scoreValue >= 0 && scoreValue <= 1) {
+
+    if (!/^\s/.test(line) && sep2) {
+        const score = parseFindScore(rest1.slice(0, sep2.index));
+        const meta = rest1.slice(sep2.index + sep2[0].length);
+        if (score !== undefined && meta) {
             return {
                 kind: 'header',
-                filePath: headerMatch[1],
-                score: scoreValue,
-                meta: headerMatch[3],
+                filePath: target,
+                score,
+                meta,
             };
         }
     }
+
     return { kind: 'text', text: line };
+}
+
+function parseFindLines(lines: readonly string[]): ParsedFindLine[] {
+    const parsed: ParsedFindLine[] = [];
+    let inFailures = false;
+    for (const line of lines) {
+        if (inFailures) {
+            parsed.push({ kind: 'text', text: line });
+            continue;
+        }
+        if (line.trim() === 'failures:') {
+            inFailures = true;
+            parsed.push({ kind: 'text', text: line });
+            continue;
+        }
+        parsed.push(parseFindLine(line));
+    }
+    return parsed;
 }
 
 function findScoreBadgeStyle(score: number): React.CSSProperties {
@@ -279,11 +343,15 @@ const TaskToolSessions = ({ call, resultDetails, sessionId: addressedSessionId, 
         [children.length, parsedDetails?.progress],
     );
 
-    const [hydrating, setHydrating] = React.useState(false);
+    const ownerKey = `${sessionId ?? ''}\0${runtimeKey}\0${call.toolCallId}`;
+    const [hydratingToken, setHydratingToken] = React.useState<string | null>(null);
+    const hydrating = hydratingToken?.startsWith(`${ownerKey}\0`) ?? false;
     const mountedRef = React.useRef(true);
-    const ownerRef = React.useRef({ sessionId, runtimeKey });
-    ownerRef.current = { sessionId, runtimeKey };
-    const prevCallStatusRef = React.useRef<ToolCallPart['status'] | undefined>(undefined);
+    const hydrateSeqRef = React.useRef(0);
+    const prevCallRef = React.useRef<{ ownerKey: string; status: ToolCallPart['status'] | undefined }>({
+        ownerKey: '',
+        status: undefined,
+    });
 
     React.useEffect(() => {
         mountedRef.current = true;
@@ -294,25 +362,25 @@ const TaskToolSessions = ({ call, resultDetails, sessionId: addressedSessionId, 
 
     const runHydrate = React.useCallback((force: boolean) => {
         if (!sessionId || !directory) return;
-        const capturedSessionId = sessionId;
-        const capturedRuntimeKey = runtimeKey;
-        setHydrating(true);
-        void useSubagentsStore.getState().hydrateParent(capturedSessionId, force).finally(() => {
-            if (mountedRef.current && ownerRef.current.sessionId === capturedSessionId && ownerRef.current.runtimeKey === capturedRuntimeKey) {
-                setHydrating(false);
+        const token = `${ownerKey}\0${++hydrateSeqRef.current}`;
+        setHydratingToken(token);
+        void useSubagentsStore.getState().hydrateParent(sessionId, force).finally(() => {
+            if (mountedRef.current) {
+                setHydratingToken((current) => (current === token ? null : current));
             }
         });
-    }, [directory, runtimeKey, sessionId]);
+    }, [directory, ownerKey, sessionId]);
 
     React.useEffect(() => {
-        const prevStatus = prevCallStatusRef.current;
-        prevCallStatusRef.current = call.status;
+        const prev = prevCallRef.current;
+        const prevStatus = prev.ownerKey === ownerKey ? prev.status : undefined;
+        prevCallRef.current = { ownerKey, status: call.status };
         if (!sessionId || !directory) return;
         const settledTransition = isActiveCallStatus(prevStatus) && !isActiveCallStatus(call.status);
         if (!isHydrated || settledTransition) {
             runHydrate(settledTransition);
         }
-    }, [call.status, call.toolCallId, directory, isHydrated, runHydrate, sessionId]);
+    }, [call.status, directory, isHydrated, ownerKey, runHydrate, sessionId]);
 
     React.useEffect(() => {
         if (!sessionId || !directory || children.length === 0) return;
@@ -1200,10 +1268,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                 }
                 mobileActions?.openFiles();
             };
+            const parsedLines = parseFindLines(lines);
             const findOutput = (
                 <div className="space-y-1 font-mono text-xs">
-                    {lines.map((line, idx) => {
-                        const parsed = parseFindLine(line);
+                    {parsedLines.map((parsed, idx) => {
                         if (parsed.kind === 'hit') {
                             const displayPath = normalizeWorkspaceToolPath(parsed.filePath);
                             return (
@@ -1258,7 +1326,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                                 </div>
                             );
                         }
-                        return <div key={idx} className="text-muted-foreground whitespace-pre-wrap">{line}</div>;
+                        return <div key={idx} className="text-muted-foreground whitespace-pre-wrap">{parsed.text}</div>;
                     })}
                 </div>
             );

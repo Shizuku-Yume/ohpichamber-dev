@@ -76,7 +76,8 @@ const mergeHydratedList = (existing: readonly Subagent[], fetched: readonly Suba
 };
 
 let storeGeneration = 0;
-const inflightHydrations = new Map<string, Promise<void>>();
+type InflightHydration = { promise: Promise<void>; pendingForce: boolean };
+const inflightHydrations = new Map<string, InflightHydration>();
 const mutationRevisionByParent = new Map<string, number>();
 
 const bumpMutationRevision = (parentSessionId: string): number => {
@@ -128,12 +129,10 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
     const runtimeKey = getRuntimeKey();
     if (!force && get().hydratedByParent[parentSessionId] === runtimeKey) return;
     const inflightKey = `${runtimeKey}\0${parentSessionId}`;
-    const existingInflight = inflightHydrations.get(inflightKey);
-    if (existingInflight) return existingInflight;
-
     const capturedGeneration = storeGeneration;
-    const startRevision = mutationRevisionByParent.get(parentSessionId) ?? 0;
-    const task: Promise<void> = (async () => {
+
+    const runFetch = async (): Promise<void> => {
+      const startRevision = mutationRevisionByParent.get(parentSessionId) ?? 0;
       try {
         const fetched = await canonicalClient.listSubagents(parentSessionId);
         if (capturedGeneration !== storeGeneration || getRuntimeKey() !== runtimeKey) return;
@@ -168,14 +167,40 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
           }));
         }
       }
-    })();
-    inflightHydrations.set(inflightKey, task);
-    void task.finally(() => {
-      if (inflightHydrations.get(inflightKey) === task) {
+    };
+
+    const existing = inflightHydrations.get(inflightKey);
+    if (existing) {
+      if (!force || existing.pendingForce) return existing.promise;
+      const chainedEntry: InflightHydration = {
+        promise: Promise.resolve(),
+        pendingForce: true,
+      };
+      chainedEntry.promise = existing.promise.then(() => {
+        chainedEntry.pendingForce = false;
+        if (capturedGeneration !== storeGeneration || getRuntimeKey() !== runtimeKey) return;
+        return runFetch();
+      });
+      inflightHydrations.set(inflightKey, chainedEntry);
+      void chainedEntry.promise.finally(() => {
+        if (inflightHydrations.get(inflightKey) === chainedEntry) {
+          inflightHydrations.delete(inflightKey);
+        }
+      });
+      return chainedEntry.promise;
+    }
+
+    const entry: InflightHydration = {
+      promise: runFetch(),
+      pendingForce: false,
+    };
+    inflightHydrations.set(inflightKey, entry);
+    void entry.promise.finally(() => {
+      if (inflightHydrations.get(inflightKey) === entry) {
         inflightHydrations.delete(inflightKey);
       }
     });
-    return task;
+    return entry.promise;
   },
   removeSubagent: (parentSessionId, subagentId) => {
     bumpMutationRevision(parentSessionId);

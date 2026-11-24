@@ -475,6 +475,56 @@ test('find renders indented hit lines with clickable path:line links and score b
     });
 });
 
+test('find supports paths with single spaces and ignores https URLs and failures lines', async () => {
+    const opened: Array<{ path: string; line?: number }> = [];
+    const runtime = runtimeForEditor(async (path, line) => { opened.push({ path, line }); });
+    const call: ToolCallPart = {
+        type: 'tool_call',
+        partId: 'find-spaces-call',
+        toolCallId: 'find-spaces-call',
+        toolName: 'find',
+        status: 'completed',
+        input: { query: 'find spaces and failures' },
+    };
+    const result: ToolResultPart = {
+        type: 'tool_result',
+        partId: 'find-spaces-result',
+        toolCallId: 'find-spaces-call',
+        toolName: 'find',
+        isError: false,
+        output: {
+            content: [{
+                type: 'text',
+                text: [
+                    '1 hit(s) for "find spaces and failures" (τ 0.40), strongest first',
+                    '',
+                    'src/my tools/find parser.ts  0.91  80 lines judged',
+                    '  src/my tools/find parser.ts:14-18  0.91  export function parseFindLine() {}',
+                    '  https://judge.example.com:443  0.80  should not link',
+                    'failures:',
+                    '  https://host:443  timed out',
+                    '  src/ignored/failure.ts:99  request failed',
+                ].join('\n'),
+            }],
+        },
+    };
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(result, { pairedCall: call, expanded: true, runtime });
+        const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button'));
+        const buttonTexts = buttons.map((button) => button.textContent ?? '');
+        expect(buttonTexts.some((text) => text === 'src/my tools/find parser.ts')).toBe(true);
+        const hitButton = buttons.find((button) => button.textContent === 'src/my tools/find parser.ts:14-18');
+        if (!hitButton) throw new Error('Expected clickable find hit button for path with spaces');
+        expect(buttonTexts.some((text) => text.includes('https://'))).toBe(false);
+        expect(buttonTexts.some((text) => text.includes('src/ignored/failure.ts'))).toBe(false);
+        expect(container.textContent).toContain('https://host:443  timed out');
+        expect(container.textContent).toContain('src/ignored/failure.ts:99  request failed');
+        await act(async () => { hitButton.click(); });
+        expect(opened).toEqual([{ path: '/project/src/my tools/find parser.ts', line: 14 }]);
+    });
+});
+
 test('ask renders HTML form data, notes, and timedOut notice without raw JSON', async () => {
     const call: ToolCallPart = {
         type: 'tool_call',

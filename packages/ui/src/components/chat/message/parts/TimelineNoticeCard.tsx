@@ -8,7 +8,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useChatColumnActions, useChatSessionSelection } from '@/components/chat/chatColumnSession';
 import { openSubagentsPanel } from '@/components/chat/subagents/panel';
 import { useOpenChildSession } from '@/components/chat/work-status/useOpenChildSession';
 import { formatSessionActivityDuration } from '@/components/session/sessionActivityDurationFormat';
@@ -34,11 +34,11 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({
   const { t } = useI18n();
   const [isExpanded, setIsExpanded] = React.useState(defaultExpanded);
   const isMobile = useUIStore((state) => state.isMobile);
-  const activeSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const activeSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
+  const selection = useChatSessionSelection();
+  const column = useChatColumnActions();
   const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
-  const effectiveSessionId = sessionId ?? activeSessionId;
-  const effectiveDirectory = directory ?? activeSessionDirectory ?? fallbackDirectory ?? null;
+  const effectiveSessionId = sessionId ?? selection.sessionId;
+  const effectiveDirectory = directory ?? selection.directory ?? fallbackDirectory ?? null;
   const subagents = useSubagentsStore(
     React.useCallback((state) => (effectiveSessionId ? (state.byParent[effectiveSessionId] ?? EMPTY_SUBAGENTS) : EMPTY_SUBAGENTS), [effectiveSessionId]),
   );
@@ -321,7 +321,8 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({
                           size="xs"
                           onClick={(event) => {
                             event.stopPropagation();
-                            openChildSession(childSessionId, jobName);
+                            if (column.pinned) column.openSession(childSessionId, effectiveDirectory);
+                            else openChildSession(childSessionId, jobName);
                           }}
                           aria-label={t('chat.toolPart.openSubtask', { type: matchingSubagent?.role ?? jobName })}
                           className="h-5 px-1.5 text-[11px] shrink-0"

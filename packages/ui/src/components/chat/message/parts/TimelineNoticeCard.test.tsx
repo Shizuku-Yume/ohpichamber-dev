@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { TimelineNoticeCard } from './TimelineNoticeCard';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
+import { ChatColumnActionsContext, ChatColumnSessionContext } from '@/components/chat/chatColumnSession';
 import type { NoticePart } from '@openchamber/agent-contract';
 
 const renderCard = (notice: NoticePart) => renderToStaticMarkup(
@@ -271,6 +272,92 @@ describe('TimelineNoticeCard', () => {
       expect(useUIStore.getState().contextPanelByDirectory['/workspace']?.tabs).toEqual(
         expect.arrayContaining([expect.objectContaining({ mode: 'subagents' })]),
       );
+    } finally {
+      await act(async () => { root.unmount(); });
+      useUIStore.setState(prevUI);
+      useSessionUIStore.setState(prevSessionUI);
+      useSubagentsStore.setState(prevSubagents);
+      await happyWindow.happyDOM.abort();
+      for (const [name, descriptor] of descriptors) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      }
+    }
+  });
+
+  test('resolves sessionId and directory from pinned column selection when props are omitted', async () => {
+    const happyWindow = new Window({ url: 'http://localhost' });
+    const globals = {
+      window: happyWindow, document: happyWindow.document, navigator: happyWindow.navigator,
+      localStorage: happyWindow.localStorage,
+      Node: happyWindow.Node, Text: happyWindow.Text, Element: happyWindow.Element, HTMLElement: happyWindow.HTMLElement,
+      IS_REACT_ACT_ENVIRONMENT: true,
+    };
+    const descriptors = Object.keys(globals).map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
+    for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+    const prevUI = useUIStore.getState();
+    const prevSessionUI = useSessionUIStore.getState();
+    const prevSubagents = useSubagentsStore.getState();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const opened: Array<{ sessionId: string; directory: string | null }> = [];
+
+    try {
+      useUIStore.setState({ isMobile: false, contextPanelByDirectory: {} });
+      useSessionUIStore.setState({ currentSessionId: 'main-session', currentSessionDirectory: '/main-dir' });
+      useSubagentsStore.setState({
+        byParent: {
+          'pinned-parent': [
+            {
+              subagentId: 'PinnedScout',
+              parentSessionId: 'pinned-parent',
+              childSessionId: 'pinned-child-session',
+              role: 'scout',
+              name: 'PinnedScout',
+              status: 'completed',
+            },
+          ],
+        },
+      });
+
+      const notice: NoticePart = {
+        type: 'notice',
+        partId: 'n11',
+        noticeType: 'async_job_result',
+        level: 'info',
+        details: {
+          jobs: [
+            { jobId: 'PinnedScout', subagentId: 'PinnedScout', type: 'task', status: 'completed', reportText: 'Pinned report' },
+          ],
+        },
+      };
+
+      await act(async () => {
+        root.render(
+          <SyncProvider directory="/pinned-dir">
+            <I18nProvider>
+              <ChatColumnSessionContext.Provider value={{ sessionId: 'pinned-parent', directory: '/pinned-dir' }}>
+                <ChatColumnActionsContext.Provider value={{
+                  pinned: true,
+                  openSession: (sid, dir) => { opened.push({ sessionId: sid, directory: dir }); },
+                  openTimelineDialog: () => { },
+                  focusInput: () => { },
+                }}>
+                  <TimelineNoticeCard notice={notice} defaultExpanded />
+                </ChatColumnActionsContext.Provider>
+              </ChatColumnSessionContext.Provider>
+            </I18nProvider>
+          </SyncProvider>,
+        );
+      });
+
+      const openSessionBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open session'));
+      expect(openSessionBtn).not.toBeUndefined();
+      await act(async () => {
+        openSessionBtn?.click();
+      });
+      expect(opened).toEqual([{ sessionId: 'pinned-child-session', directory: '/pinned-dir' }]);
     } finally {
       await act(async () => { root.unmount(); });
       useUIStore.setState(prevUI);

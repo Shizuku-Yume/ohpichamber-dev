@@ -30,14 +30,16 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - Renders canonical `tool_call` and `tool_result` rows, headers, reported diff counts, errors, images, and output.
   - Restores the original compact animated tool execution row, hover disclosures, duration labels (from authoritative native records only), and live status feedback.
   - Integrates structured diff presentations (`ToolPartDiffPreview.tsx` via `@pierre/diffs`, lazy loaded with Shiki theme integration, unified/split modes, and line metrics) with fallback to `PlainDiffFallback.tsx` when diffs exceed size thresholds (`isToolDiffPreviewOversized`).
-  - Opens `ToolOutputDialog.tsx` for deep inspection of full stdout/stderr streams, raw JSON responses via `JsonTreeView`, worker-highlighted code blocks, and dedicated renderers (`toolRenderers.tsx` for bash, glob, grep, websearch, JSON).
-  - `TaskToolSessions` queries `canonicalClient.listSubagents(sessionId)` for canonical `task` calls, joining exact `parentSessionId` and `toolCallId` without legacy output parsing.
+  - Opens `ToolOutputDialog.tsx` for deep inspection of full stdout/stderr streams, raw JSON responses via `JsonTreeView`, worker-highlighted code blocks, and dedicated renderers (`../toolRenderers.tsx` for bash, glob, grep, websearch, JSON).
+  - `TaskToolSessions` subscribes to `useSubagentsStore` matched by `toolCallId` (hydrating via `hydrateParent` when needed, falling back to `details.progress` while the store is empty) rather than a one-shot `listSubagents` fetch; it renders live per-subagent rows with `OpenSubtaskButton`/`openSubagentsPanel` links and suppresses the model-only `Spawned N background agents … proc://` boilerplate lines when structured rows are shown.
   - Desktop opens a read-only context tab; pinned columns reuse `openSession`; mobile selects the child in place.
   - Failed child queries preserve known rows and expose retry.
   - `TurnActivity` and `ProgressiveGroup` thread addressed session/directory through `MemoExpandableToolRow`, whose comparator includes both.
   - Calls and results keep separate `partId` keys and toggle identities. Results borrow input only from the same turn's exact `toolCallId` and tool name; complete turn context survives segmented Activity rendering.
-  - `toolHelpers.toolDescription(part, pairedCall?)` owns native descriptions (`ast_edit`, `ast_grep`, `eval`, `lsp`, `checkpoint`, `rewind`, `find`). `toolDiffUtils` owns native result paths and numbered edit/ast_edit diff conversion; input text never proves a performed change.
-  - `isReplyWrite` detects `write` targeting `out://` and renders it as borderless assistant prose (`ReplyWrite`), omitting tool cards and diff chrome.
+  - Call/result one-line descriptions come from `lib/toolPresentation` (`describeToolCall`/`describeToolResult` over `TOOL_PRESENTATIONS` in `presentations.ts`), not `toolHelpers`. `toolDiffUtils` owns native result paths and numbered edit/ast_edit diff conversion; input text never proves a performed change.
+  - `input.i` tool intent surfaces on collapsed rows via `normalizeIntent` (`lib/toolPresentation/intent.ts`) as a fallback/secondary label when a call has no path/command; `formatToolInput` strips `i` so raw JSON dumps never show it.
+  - OMP `edit` inputs (`hashline` `[path#TAG]`, `apply_patch` `*** Add/Update/Delete File:`/`*** Move to:`, `sloppy` `*** Edit File:`) resolve target paths through `lib/toolPresentation/editInputPaths.ts` (`parseEditInputPaths`), so running edits show target file(s) and the quick-open button immediately.
+  - `bash` results surface `details.async` (`job {jobId} · {state}`) and `details.service` (`service {name} · ready|pid`) badges in `bashSummary` (`presentations.ts`); `find` output parses indented `  path:start-end  score  snippet` lines into clickable `path:line` hits with score badges; `ask` HTML `<form>` outcomes render `{ data, notes, timedOut }` as structured field/answer rows via `askAnswers`; `tts` is registered in `TOOL_PRESENTATIONS`/`groups.ts`.
 - `ReadToolGroup.tsx`
   - Groups consecutive `read` calls within a turn into a collapsible tree row with `├── / └──` guides, line ranges, and status icons.
   - Internal URIs (`proc://`, `agent://`) are rendered as clean non-interactive labels to prevent dead clicks.
@@ -65,7 +67,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - Thinking block UI (`ReasoningTimelineBlock`), summary + optional duration.
   - Live reasoning displays throttled partial paragraphs, so an expanded trace does not stay empty until a paragraph finishes. The 100 ms throttle limits updates; assistant answer text retains its block-level reveal.
   - The collapsed header keeps up to 400 characters of the summary in the DOM; CSS truncates at the real row width. A per-row measured character budget was rejected because a ResizeObserver per row would re-render the chat on every frame of a sidebar animation, the cost `useWorkStatusVisibility` records.
-  - Presentation titles accept inline content. `TimelineNotice` uses this for completed compactions, appending the recorded `providerID/id` in the description color (also on empty-summary rows). Attribution comes from the stored compaction message or `session.compaction.ended`, never the current session selection. Running, failed, and older model-less compactions have no attribution. Custom presentation headers can shrink and wrap long identifiers; ordinary thinking rows retain their existing layout.
+  - Presentation titles accept inline content. `TimelineNoticeCard.tsx` uses this for completed compactions, appending the recorded `providerID/id` in the description color (also on empty-summary rows). Attribution comes from the stored compaction message or `session.compaction.ended`, never the current session selection. Running, failed, and older model-less compactions have no attribution. `TimelineNoticeCard` also renders `async_job_result` delivery cards (subagent/job result) with a link to open the child session or `SubagentsPanel`. Custom presentation headers can shrink and wrap long identifiers; ordinary thinking rows retain their existing layout.
 
 - `reasoningText.ts`
   - `cleanReasoningText`, the one reasoning text normalization shared by `ReasoningPart.tsx` and `JustificationBlock.tsx`.
@@ -236,9 +238,9 @@ native, unusable-patch and long-diagnostic cases.
 
 ## Changing native tool descriptions
 
-1. Update the actual native input grammar in `lib/toolHelpers.ts` -> `toolDescription(part, pairedCall?)`.
+1. Update the actual native input grammar in `lib/toolPresentation/presentations.ts` (`TOOL_PRESENTATIONS` `describeCall`/`describeResult`).
 2. Keep compact `read` navigation and path display in `ProgressiveGroup.tsx`.
-3. Keep expandable output/error/attachment behavior in `ToolPart.tsx` and native result decoding in `toolRenderers.tsx`.
+3. Keep expandable output/error/attachment behavior in `ToolPart.tsx` and native result decoding in `../toolRenderers.tsx`.
 4. Keep icons in `toolPresentation.tsx` and native reported diffs in `toolDiffUtils.ts`.
 
 Descriptions must not invent protocol metadata, aliases, or a successful mutation from call input.
