@@ -30,7 +30,6 @@ import { ComposerStatusStrip } from '@/components/chat/ComposerStatusStrip';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { useShownAfter } from '@/hooks/useShownAfter';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
-import { SubagentHudTray } from '../../SubagentHudTray';
 import { TodoTray } from '../../TodoTray';
 import { LoopRow } from './LoopRow';
 import { MemoMobileModelButton, MemoMobileEffortButton } from './memoComposerControls';
@@ -199,7 +198,6 @@ export function useComposerRows({
             {prWatchRow}
             {extensionWaitRow}
             {liveSessionId && <LoopRow key={`loop:${liveSessionId}`} sessionId={liveSessionId} directory={sessionDirectory} />}
-            {liveSessionId && <SubagentHudTray key={`subagent:${liveSessionId}`} sessionId={liveSessionId} />}
             {backgroundShellsRow}
             {revertRow}
             {queueRow}

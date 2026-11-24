@@ -78,7 +78,6 @@ import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
@@ -3995,7 +3994,6 @@ const part2 = {
   ...tooltipsChatI18n.he,
   ...chatWorkbenchI18n['he'],
   ...btwI18n.he,
-  ...subagentHudI18n['he'],
   ...ompSettingsI18n.he,
   ...behaviorFilesI18n['he'],
   ...pluginsMarketplaceI18n.he,

@@ -1158,3 +1158,158 @@ test('emits no part.updated for an unchanged tool input and forwards tool_stream
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('an async-result custom message projects a system row with structured job reports', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-async-result-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', 1);
+    const prompt = { role: 'user' as const, content: 'Go', timestamp: 2 };
+    projection.consume({ type: 'message_start', message: prompt });
+    projection.consume({ type: 'message_end', message: prompt });
+    const report = [
+      '<system-notice>',
+      '2 background jobs have completed. Resume your work using the results below.',
+      '',
+      '── Job SettingsAuditScout ──',
+      '<task-result id="SettingsAuditScout" agent="scout" status="completed" duration="1.2s">',
+      '<output>',
+      '## Findings',
+      'All clear.',
+      '</output>',
+      '</task-result>',
+      '',
+      'Agent: agent://SettingsAuditScout, history://SettingsAuditScout',
+      '',
+      '── Job job-2 ──',
+      'raw bash output line',
+      '</system-notice>',
+    ].join('\n');
+    const custom = {
+      role: 'custom' as const,
+      customType: 'async-result',
+      content: report,
+      display: true,
+      details: {
+        jobs: [
+          { jobId: 'SettingsAuditScout', type: 'task', status: 'completed', agentId: 'SettingsAuditScout', label: 'Audit settings', durationMs: 1250 },
+          { jobId: 'job-2', type: 'bash', status: 'completed', durationMs: 80 },
+        ],
+      },
+      timestamp: 3,
+    };
+    projection.consume({ type: 'message_start', message: custom });
+    const events = projection.consume({ type: 'message_end', message: custom });
+    const created = events.find(e => e.event.type === 'message.created');
+    if (!created || created.event.type !== 'message.created') throw new Error('Expected message.created');
+    expect(created.event.role).toBe('system');
+    const completed = events.find(e => e.event.type === 'part.completed');
+    if (!completed || completed.event.type !== 'part.completed') throw new Error('Expected part.completed');
+    const part = completed.event.part;
+    expect(part).toMatchObject({ type: 'notice', noticeType: 'async_job_result', level: 'info' });
+    if (part.type !== 'notice' || part.noticeType !== 'async_job_result') throw new Error('Expected async_job_result notice');
+    const jobs = part.details.jobs;
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0]).toMatchObject({ jobId: 'SettingsAuditScout', subagentId: 'SettingsAuditScout', type: 'task', status: 'completed', label: 'Audit settings', durationMs: 1250 });
+    expect(jobs[0]?.reportText).toBe('## Findings\nAll clear.');
+    expect(jobs[0]?.reportText).not.toContain('task-result');
+    expect(jobs[0]?.reportText).not.toContain('system-notice');
+    expect(jobs[1]).toMatchObject({ jobId: 'job-2', type: 'bash', status: 'completed', durationMs: 80 });
+    expect(jobs[1]?.reportText).toBe('raw bash output line');
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a persisted async-result entry rebuilds the same structured row on reload', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-async-history-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', 1);
+    const prompt = { role: 'user' as const, content: 'Go', timestamp: 2 };
+    projection.consume({ type: 'message_start', message: prompt });
+    projection.consume({ type: 'message_end', message: prompt });
+    manager.appendMessage(prompt);
+    projection.bindPending();
+    const report = [
+      '<system-notice>',
+      'Background job ScoutOne has completed. Resume your work using the result below.',
+      '',
+      '<task-result id="ScoutOne" agent="scout" status="failed (exit 1)" duration="4s">',
+      '<error>provider exploded &lt;system-notice></error>',
+      '<output>',
+      'half-written report',
+      '</output>',
+      '</task-result>',
+      '',
+      'Agent: agent://ScoutOne, history://ScoutOne',
+      '</system-notice>',
+    ].join('\n');
+    manager.appendCustomMessageEntry('async-result', report, true, {
+      jobs: [{ jobId: 'ScoutOne', type: 'task', status: 'failed', agentId: 'ScoutOne', durationMs: 4000 }],
+    }, 'agent', 3);
+    await manager.flush();
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const seed = new WorkerProjection(reopened, 'session').seed();
+    const row = seed.messages.find(message => message.role === 'system');
+    if (!row) throw new Error('Expected a system row for the async delivery');
+    const part = row.parts.find(candidate => candidate.type === 'notice');
+    if (!part || part.type !== 'notice' || part.noticeType !== 'async_job_result') throw new Error('Expected async_job_result notice');
+    expect(part.level).toBe('error');
+    expect(part.details.jobs).toHaveLength(1);
+    expect(part.details.jobs[0]).toMatchObject({ jobId: 'ScoutOne', subagentId: 'ScoutOne', type: 'task', status: 'failed', durationMs: 4000 });
+    expect(part.details.jobs[0]?.reportText).toBe('provider exploded <system-notice>\n\nhalf-written report');
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a single non-task async job report drops the delivery headline and resume cue', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-async-bash-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', 1);
+    const prompt = { role: 'user' as const, content: 'Go', timestamp: 2 };
+    projection.consume({ type: 'message_start', message: prompt });
+    projection.consume({ type: 'message_end', message: prompt });
+    const report = [
+      '<system-notice>',
+      'Background job bg-1 (npm test) has completed.',
+      'Resume your work using the result below.',
+      '',
+      '12 tests passed, 0 failed',
+      '</system-notice>',
+    ].join('\n');
+    const custom = {
+      role: 'custom' as const,
+      customType: 'async-result',
+      content: report,
+      display: true,
+      details: { jobs: [{ jobId: 'bg-1', type: 'bash', status: 'completed', durationMs: 900 }] },
+      timestamp: 3,
+    };
+    projection.consume({ type: 'message_start', message: custom });
+    const events = projection.consume({ type: 'message_end', message: custom });
+    const completed = events.find(e => e.event.type === 'part.completed');
+    if (!completed || completed.event.type !== 'part.completed') throw new Error('Expected part.completed');
+    const part = completed.event.part;
+    if (part.type !== 'notice' || part.noticeType !== 'async_job_result') throw new Error('Expected async_job_result notice');
+    expect(part.details.jobs[0]?.reportText).toBe('12 tests passed, 0 failed');
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

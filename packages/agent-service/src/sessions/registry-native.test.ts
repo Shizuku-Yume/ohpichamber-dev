@@ -12,9 +12,11 @@ import { WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionRegistry } from './registry.ts';
 
 const rootSessionId = 'retained-public-root';
-const assistant = (text: string) => ({ role: 'assistant' as const, content: [{ type: 'text' as const, text }], api: 'openai-completions' as const,
+const assistant = (text: string) => ({
+  role: 'assistant' as const, content: [{ type: 'text' as const, text }], api: 'openai-completions' as const,
   provider: 'fixture', model: 'fixture', stopReason: 'stop' as const, timestamp: Date.now(),
-  usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+  usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
+});
 const admit = (input: WorkerBootstrap, launch: (input: WorkerBootstrap) => Promise<RuntimeSession>) => launch(input);
 // Native storage appends timestamped `custom` records (private roots, session exit) when a runtime opens or
 // disposes, so whole-file byte equality is not stable. The transcript invariant is the parsed message log.
@@ -36,11 +38,13 @@ async function fixture() {
   const manager = SessionManager.create(sourceCwd, sessionsDirectory);
   const policyLoads: { sessionId: string; workspaceId: string; forkOf?: string; workerStarted: boolean }[] = [];
   const createRegistry = () => {
-    const workers: WorkerRegistry = new WorkerRegistry({ workerEntrypoint: fileURLToPath(new URL('../worker/index.ts', import.meta.url)),
+    const workers: WorkerRegistry = new WorkerRegistry({
+      workerEntrypoint: fileURLToPath(new URL('../worker/index.ts', import.meta.url)),
       startupTimeoutMs: 30000, policyCheck: async () => ({ allowed: true }), callbacks: {
         onOpened: (...args) => sessions.onOpened(...args), onEvents: (...args) => sessions.onEvents(...args),
         onInteraction: (...args) => sessions.onInteraction(...args), onExit: (...args) => sessions.onExit(...args),
-      } });
+      }
+    });
     const sessions: SessionRegistry = new SessionRegistry(join(root, 'service-state'), workers, undefined, async request => {
       policyLoads.push({ ...request, workerStarted: workers.authorizationScope(request.sessionId) !== undefined });
       return [];
@@ -71,21 +75,30 @@ async function fixture() {
     await writeFile(join(sourceArtifacts, 'retained-tool-output.txt'), 'Native artifact bytes');
     await manager.close();
     await sessions.initialize();
-    const source = { rootSessionId, projectId: 'project', workspaceId: 'source-workspace', cwd: sourceCwd,
+    const source = {
+      rootSessionId, projectId: 'project', workspaceId: 'source-workspace', cwd: sourceCwd,
       agentDirectory, agentDirectoryId: 'retained-owner', displayPath: 'source', sessionFile: sourceFile, sessionsDirectory,
-      env: { HOME: root, USERPROFILE: root, PI_CONFIG_DIR: '.omp', PI_CODING_AGENT_DIR: agentDirectory,
+      env: {
+        HOME: root, USERPROFILE: root, PI_CONFIG_DIR: '.omp', PI_CODING_AGENT_DIR: agentDirectory,
         OMP_PROFILE: '', PI_PROFILE: '', XDG_CONFIG_HOME: join(root, 'config'), XDG_DATA_HOME: join(root, 'data'),
-        XDG_STATE_HOME: join(root, 'state'), XDG_CACHE_HOME: join(root, 'cache') } };
+        XDG_STATE_HOME: join(root, 'state'), XDG_CACHE_HOME: join(root, 'cache')
+      }
+    };
     await sessions.open(source);
-    const destination = { rootSessionId, projectId: 'project', workspaceId: 'destination-workspace', cwd: destinationCwd,
-      agentDirectory, agentDirectoryId: 'retained-owner', displayPath: 'destination', env: source.env };
-    return { root, source, destination, sourceArtifacts, childFile, childRelative, childBytes, policyLoads,
+    const destination = {
+      rootSessionId, projectId: 'project', workspaceId: 'destination-workspace', cwd: destinationCwd,
+      agentDirectory, agentDirectoryId: 'retained-owner', displayPath: 'destination', env: source.env
+    };
+    return {
+      root, source, destination, sourceArtifacts, childFile, childRelative, childBytes, policyLoads,
       get sessions() { return sessions; }, get workers() { return workers; },
       destinationFile: join(SessionManager.getDefaultSessionDir(destinationCwd, agentDirectory), basename(sourceFile)),
       restart: async () => { await sessions.close(); await workers.close(); ({ workers, sessions } = createRegistry()); await sessions.initialize(); },
-      close: async () => { await sessions.close(); await workers.close(); await manager.close();
+      close: async () => {
+        await sessions.close(); await workers.close(); await manager.close();
         if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
-        await rm(root, { recursive: true, force: true }); },
+        await rm(root, { recursive: true, force: true });
+      },
     };
   } catch (error) {
     await sessions.close();
@@ -108,8 +121,10 @@ test('worktree archive deletion replays the exact native family after service re
     if (!childId) throw new Error('Native child identity is required');
     await harness.workers.evict(rootSessionId);
     await rm(harness.source.cwd, { recursive: true, force: true });
-    const input = { operationId: 'archive-operation', projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
-      agentDirectoryId: harness.source.agentDirectoryId, sessionIds: [rootSessionId, childId] };
+    const input = {
+      operationId: 'archive-operation', projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
+      agentDirectoryId: harness.source.agentDirectoryId, sessionIds: [rootSessionId, childId]
+    };
     const first = await harness.sessions.deleteWorktreeArchiveFamily(rootSessionId, input);
     expect(first.deletedSessionIds.sort()).toEqual([...input.sessionIds].sort());
     await harness.restart();
@@ -130,13 +145,19 @@ test('pending worktree delete reconciles a transcript removed before its owned a
     const header = (await readFile(harness.source.sessionFile, 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line)).find(record => record.type === 'session');
     if (!header?.id) throw new Error('Native session header is required');
     const stat = await lstat(harness.sourceArtifacts, { bigint: true });
-    state.worktreeDeletes = { [rootSessionId]: { operationId: 'partial-delete', nativeSessionId: header.id,
-      reference: state.references[rootSessionId], children: [], artifacts: { device: stat.dev.toString(), inode: stat.ino.toString() }, state: 'pending' } };
+    state.worktreeDeletes = {
+      [rootSessionId]: {
+        operationId: 'partial-delete', nativeSessionId: header.id,
+        reference: state.references[rootSessionId], children: [], artifacts: { device: stat.dev.toString(), inode: stat.ino.toString() }, state: 'pending'
+      }
+    };
     await writeFile(referenceFile, JSON.stringify(state));
     await rm(harness.source.sessionFile);
     await harness.restart();
-    const input = { operationId: 'partial-delete', projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
-      agentDirectoryId: harness.source.agentDirectoryId, sessionIds: [rootSessionId] };
+    const input = {
+      operationId: 'partial-delete', projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
+      agentDirectoryId: harness.source.agentDirectoryId, sessionIds: [rootSessionId]
+    };
     expect(await harness.sessions.deleteWorktreeArchiveFamily(rootSessionId, input)).toMatchObject({ deletedSessionIds: [rootSessionId] });
     expect(await readFile(harness.childFile, 'utf8').catch(() => null)).toBeNull();
     await harness.sessions.retireWorktreeArchiveDelete(rootSessionId, input);
@@ -153,15 +174,21 @@ test('native SDK relocation replaces worker scope and preserves public identity,
     });
     const childSessionId = harness.sessions.listSubagents(rootSessionId)[0]?.childSessionId;
     if (!childSessionId) throw new Error('Native child session identity is required');
-    const prepared = await harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'move-commit',
-      sourceWorkspaceId: harness.source.workspaceId, destination: harness.destination }, admit);
+    const prepared = await harness.sessions.prepareRelocation(rootSessionId, {
+      transactionId: 'move-commit',
+      sourceWorkspaceId: harness.source.workspaceId, destination: harness.destination
+    }, admit);
     expect(prepared.session).toMatchObject({ sessionId: rootSessionId, rootSessionId, workspaceId: harness.destination.workspaceId, runtimeStatus: 'idle' });
     const destinationScope = harness.workers.authorizationScope(rootSessionId)!;
     expect(destinationScope).toMatchObject({ cwd: harness.destination.cwd, workspaceId: harness.destination.workspaceId, agentDirectoryId: harness.source.agentDirectoryId });
     expect(destinationScope.workerGeneration).not.toBe(priorScope.workerGeneration);
     await expect(harness.sessions.open(harness.source)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
-    await expect(harness.sessions.prompt(rootSessionId, { type: 'prompt', runId: 'blocked', request: { input: { text: 'blocked', context: [], attachments: [] },
-      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } } })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await expect(harness.sessions.prompt(rootSessionId, {
+      type: 'prompt', runId: 'blocked', request: {
+        input: { text: 'blocked', context: [], attachments: [] },
+        options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+      }
+    })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
     await expect(harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'mismatched-transaction', action: 'commit' }, admit))
       .rejects.toMatchObject({ code: 'SESSION_RELOCATION_CONFLICT' });
     expect(harness.sessions.relocation(rootSessionId).relocation?.transactionId).toBe('move-commit');
@@ -188,9 +215,13 @@ test('native SDK relocation replaces worker scope and preserves public identity,
     const published = Promise.withResolvers<void>();
     const watcher = watch(harness.destination.cwd, (_event, filename) => { if (filename === 'cwd-proof.txt') published.resolve(); });
     try {
-      const shell = await harness.workers.request(rootSessionId, { type: 'shell', operation: { type: 'start', request: {
-        command: 'pwd > cwd-proof.tmp && mv cwd-proof.tmp cwd-proof.txt', background: false,
-      } } });
+      const shell = await harness.workers.request(rootSessionId, {
+        type: 'shell', operation: {
+          type: 'start', request: {
+            command: 'pwd > cwd-proof.tmp && mv cwd-proof.tmp cwd-proof.txt', background: false,
+          }
+        }
+      });
       if (shell.type !== 'shell' || shell.result.type !== 'start') throw new Error('Real native shell start is required');
       await published.promise;
       expect((await readFile(join(harness.destination.cwd, 'cwd-proof.txt'), 'utf8')).trim()).toBe(harness.destination.cwd);
@@ -214,8 +245,10 @@ test('durable relocation intent repairs child paths when restart follows native 
     });
     const child = harness.sessions.listSubagents(rootSessionId)[0];
     if (!child) throw new Error('Native child reference is required');
-    await harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'repair-child-path',
-      sourceWorkspaceId: harness.source.workspaceId, destination: harness.destination }, admit);
+    await harness.sessions.prepareRelocation(rootSessionId, {
+      transactionId: 'repair-child-path',
+      sourceWorkspaceId: harness.source.workspaceId, destination: harness.destination
+    }, admit);
     const childReferenceSchema = SubagentSchema.extend({ rootSessionId: z.string(), workspaceId: z.string(), projectId: z.string(), sessionFile: z.string() });
     const referenceIndexSchema = z.object({
       references: z.record(z.string(), JsonValueSchema),
@@ -240,11 +273,15 @@ test('native relocation durable pending cutover rolls back after restart even if
   try {
     const before = harness.sessions.journal(rootSessionId).snapshot();
     await rm(harness.source.cwd, { recursive: true });
-    await harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'move-rollback', sourceWorkspaceId: harness.source.workspaceId,
-      destination: harness.destination }, admit);
+    await harness.sessions.prepareRelocation(rootSessionId, {
+      transactionId: 'move-rollback', sourceWorkspaceId: harness.source.workspaceId,
+      destination: harness.destination
+    }, admit);
     await harness.restart();
-    expect(harness.sessions.relocation(rootSessionId).relocation).toEqual({ transactionId: 'move-rollback',
-      sourceWorkspaceId: harness.source.workspaceId, destinationWorkspaceId: harness.destination.workspaceId });
+    expect(harness.sessions.relocation(rootSessionId).relocation).toEqual({
+      transactionId: 'move-rollback',
+      sourceWorkspaceId: harness.source.workspaceId, destinationWorkspaceId: harness.destination.workspaceId
+    });
     const rolledBack = await harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'move-rollback', action: 'rollback' }, admit);
     expect(RuntimeSessionSchema.parse(rolledBack.session)).toMatchObject({ sessionId: rootSessionId, workspaceId: harness.source.workspaceId, runtimeStatus: 'unavailable' });
     expect(harness.workers.authorizationScope(rootSessionId)).toBeUndefined();
@@ -261,11 +298,13 @@ test('native relocation durable pending cutover rolls back after restart even if
 test('failed native destination worker launch restores source storage and owner without a success acknowledgement', async () => {
   const harness = await fixture();
   try {
-    await expect(harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'failed-worker', sourceWorkspaceId: harness.source.workspaceId,
-      destination: harness.destination }, async (input, launch) => {
-        await rm(harness.destination.cwd, { recursive: true });
-        return launch(input);
-      })).rejects.toBeDefined();
+    await expect(harness.sessions.prepareRelocation(rootSessionId, {
+      transactionId: 'failed-worker', sourceWorkspaceId: harness.source.workspaceId,
+      destination: harness.destination
+    }, async (input, launch) => {
+      await rm(harness.destination.cwd, { recursive: true });
+      return launch(input);
+    })).rejects.toBeDefined();
     expect(harness.sessions.runtime(rootSessionId)).toMatchObject({ sessionId: rootSessionId, workspaceId: harness.source.workspaceId, runtimeStatus: 'unavailable' });
     expect(harness.sessions.relocation(rootSessionId).relocation).toBeNull();
     expect(await readFile(join(harness.sourceArtifacts, harness.childRelative), 'utf8')).toBe(harness.childBytes);
@@ -279,8 +318,10 @@ test('native destination cutover can commit after restart and a failed reference
   const index = join(harness.root, 'service-state', 'session-references.json');
   try {
     const before = harness.sessions.journal(rootSessionId).snapshot();
-    await harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'recover-commit', sourceWorkspaceId: harness.source.workspaceId,
-      destination: harness.destination }, admit);
+    await harness.sessions.prepareRelocation(rootSessionId, {
+      transactionId: 'recover-commit', sourceWorkspaceId: harness.source.workspaceId,
+      destination: harness.destination
+    }, admit);
     await harness.restart();
     await expect(harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'mismatched-transaction', action: 'commit' }, admit))
       .rejects.toMatchObject({ code: 'SESSION_RELOCATION_CONFLICT' });
@@ -311,8 +352,10 @@ test('service native branch selection expires stream epochs and survives cold re
     const invalidations: string[] = [];
     const subscription = journal.subscribe(before.cursor, event => { if (event.type === 'stream.invalidated') invalidations.push(event.reason); });
     try {
-      const reverted = await harness.sessions.branch(rootSessionId, { action: 'revert', messageId: before.messages[0]!.messageId,
-        branchId: before.branch.branchId, branchVersion: before.branch.branchVersion });
+      const reverted = await harness.sessions.branch(rootSessionId, {
+        action: 'revert', messageId: before.messages[0]!.messageId,
+        branchId: before.branch.branchId, branchVersion: before.branch.branchVersion
+      });
       expect(reverted).toMatchObject({ sessionId: rootSessionId, branch: { revert: { messageId: before.messages[0]!.messageId } } });
       expect(journal.snapshot().messages).toEqual([]);
       expect(journal.runtime().epoch).not.toBe(before.session.epoch);
@@ -444,8 +487,10 @@ test('explicit idle restart preserves native transcript files and publishes a ne
     const outcomes = await harness.sessions.restartIdleSessions([previous], observingAdmit);
     expect(admissionInput).not.toHaveProperty('displayPath');
     const current = harness.workers.authorizationScope(rootSessionId)!;
-    expect(outcomes).toEqual([{ rootSessionId, previousGeneration: previous.workerGeneration,
-      outcome: 'restarted', workerGeneration: current.workerGeneration }]);
+    expect(outcomes).toEqual([{
+      rootSessionId, previousGeneration: previous.workerGeneration,
+      outcome: 'restarted', workerGeneration: current.workerGeneration
+    }]);
     expect(current.workerGeneration).not.toBe(previous.workerGeneration);
     expect(harness.workers.bootstrap(rootSessionId)?.sessionFile).toBe(harness.source.sessionFile);
     const after = harness.sessions.journal(rootSessionId).snapshot();
@@ -488,9 +533,13 @@ test('idle restart refuses background Shell work before retiring any selected ro
     await harness.sessions.open({ ...second, rootSessionId: secondId });
     const first = harness.workers.authorizationScope(rootSessionId)!;
     const last = harness.workers.authorizationScope(secondId)!;
-    const shell = await harness.workers.request(secondId, { type: 'shell', operation: { type: 'start', request: {
-      command: 'sleep 30', background: true,
-    } } });
+    const shell = await harness.workers.request(secondId, {
+      type: 'shell', operation: {
+        type: 'start', request: {
+          command: 'sleep 30', background: true,
+        }
+      }
+    });
     if (shell.type !== 'shell' || shell.result.type !== 'start') throw new Error('Real native background Shell is required');
     try {
       await expect(harness.sessions.restartIdleSessions([first, last], admit)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
@@ -595,9 +644,11 @@ test('live reopen returns the open runtime and defers unavailable, unloaded or s
 test('stateless identity changes preserve active commands and recreate an idle worker under its actual new profile', async () => {
   const harness = await fixture();
   try {
-    const input = { rootSessionId: 'stateless-profile-owner', workspaceId: harness.source.workspaceId,
+    const input = {
+      rootSessionId: 'stateless-profile-owner', workspaceId: harness.source.workspaceId,
       projectId: harness.source.projectId, cwd: harness.source.cwd, agentDirectory: harness.source.agentDirectory,
-      agentDirectoryId: harness.source.agentDirectoryId, catalogRevision: '0', env: harness.source.env };
+      agentDirectoryId: harness.source.agentDirectoryId, catalogRevision: '0', env: harness.source.env
+    };
     const first = await harness.workers.startStateless(input);
     const reused = await harness.workers.startStateless({ ...input, catalogRevision: '7' });
     expect(reused.workerGeneration).toBe(first.workerGeneration);
@@ -607,8 +658,10 @@ test('stateless identity changes preserve active commands and recreate an idle w
     const profileName = 'refreshed-native-profile';
     const profileAgentDirectory = join(harness.root, '.omp', 'profiles', profileName, 'agent');
     await mkdir(profileAgentDirectory, { recursive: true });
-    const changed = { ...input, agentDirectory: profileAgentDirectory, agentDirectoryId: 'refreshed-owner',
-      env: { ...input.env, OMP_PROFILE: profileName } };
+    const changed = {
+      ...input, agentDirectory: profileAgentDirectory, agentDirectoryId: 'refreshed-owner',
+      env: { ...input.env, OMP_PROFILE: profileName }
+    };
     await expect(harness.workers.startStateless(changed)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
     expect(harness.workers.authorizationScope(input.rootSessionId)?.workerGeneration).toBe(first.workerGeneration);
     const oldOwner = await pending;
@@ -643,10 +696,12 @@ test('registry prompt blocks idle sessions during a pending continuation and adm
   try {
     const generation = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
     if (!generation) throw new Error('Live root worker generation is required');
-    const operation = { type: 'prompt' as const, runId: 'continuation-prompt', request: {
-      input: { text: 'after continuation', context: [], attachments: [] },
-      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
-    } };
+    const operation = {
+      type: 'prompt' as const, runId: 'continuation-prompt', request: {
+        input: { text: 'after continuation', context: [], attachments: [] },
+        options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+      }
+    };
     await harness.sessions.onEvents(rootSessionId, generation, [{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: true } }]);
     expect(harness.sessions.runtime(rootSessionId)).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: true });
 
@@ -1104,5 +1159,50 @@ test('a vibe_spawn child stays authorized through its rekeyed root', async () =>
     await harness.restart();
     expect(harness.sessions.runtime(childId).rootSessionId).toBe(newSessionId);
     expect(harness.sessions.listSubagents(childId)).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('persisted subagent identity emits the resolved child UUID live and keeps label and brief across lifecycle frames', async () => {
+  const harness = await fixture();
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+    const streamed: { childSessionId?: string; description?: string }[] = [];
+    const journal = harness.sessions.journal(rootSessionId);
+    const runtime = journal.runtime();
+    const subscription = journal.subscribe(`${runtime.epoch}:${runtime.headSequence}`, event => {
+      if (event.type === 'subagent.updated') streamed.push(event.subagent);
+    });
+    try {
+      await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+        subagentId: 'SettingsAuditScout', status: 'started', role: 'scout', description: 'Audit settings IA', solutionSpace: 'Check settings IA', sessionFile: harness.childFile,
+      });
+      let child = harness.sessions.listSubagents(rootSessionId)[0];
+      if (!child) throw new Error('Persisted native child is required');
+      expect(child.subagentId).toBe('SettingsAuditScout');
+      expect(child.name).toBe('SettingsAuditScout');
+      expect(child.role).toBe('scout');
+      expect(child.description).toBe('Audit settings IA');
+      expect(child.solutionSpace).toBe('Check settings IA');
+      expect(child.childSessionId).not.toBe('SettingsAuditScout');
+      expect(child.childSessionId).toMatch(/^[0-9a-f-]{36}$/);
+      const childSessionId = child.childSessionId;
+      // The reconciled row the UI renders must carry the real child session id
+      // live, not wait for a listSubagents rehydration.
+      const emitted = streamed.find(subagent => subagent.childSessionId === childSessionId);
+      expect(emitted).toMatchObject({ subagentId: 'SettingsAuditScout', childSessionId, description: 'Audit settings IA', solutionSpace: 'Check settings IA', role: 'scout' });
+      // A later frame without the label or brief keeps the stored ones.
+      await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+        subagentId: 'SettingsAuditScout', status: 'completed', role: 'scout', sessionFile: harness.childFile,
+      });
+      child = harness.sessions.listSubagents(rootSessionId)[0]!;
+      expect(child.status).toBe('completed');
+      expect(child.description).toBe('Audit settings IA');
+      expect(child.solutionSpace).toBe('Check settings IA');
+      expect(child.childSessionId).toBe(childSessionId);
+      await harness.restart();
+      child = harness.sessions.listSubagents(rootSessionId)[0]!;
+      expect(child).toMatchObject({ subagentId: 'SettingsAuditScout', name: 'SettingsAuditScout', role: 'scout', description: 'Audit settings IA', solutionSpace: 'Check settings IA', childSessionId });
+    } finally { subscription.unsubscribe(); }
   } finally { await harness.close(); }
 }, 60000);

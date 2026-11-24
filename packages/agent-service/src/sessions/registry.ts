@@ -21,9 +21,9 @@ import { assertArchiveActive, exportNativeArchive, importNativeArchive, type Arc
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference, SessionRelocationIntent } from './references.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
-type SubagentLifecycleInput = { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string };
+type SubagentLifecycleInput = { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; description?: string; solutionSpace?: string; sessionFile?: string };
 const SessionFileIdentitySchema = z.object({ type: z.literal('session'), id: z.string().min(1), parentSession: z.string().min(1).optional() });
-type ChildRecord = Subagent & { rootSessionId: string; workspaceId: string; projectId: string; sessionFile: string };
+type ChildRecord = Subagent & { childSessionId: string; rootSessionId: string; workspaceId: string; projectId: string; sessionFile: string };
 type RelocationAdmission = (input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<RuntimeSession>) => Promise<RuntimeSession>;
 type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 type ColdRoot = { reference: SessionReference; child?: ChildRecord };
@@ -576,12 +576,22 @@ export class SessionRegistry {
       }
     }
     const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'cancelled' : input.status;
-    const record: ChildRecord = { subagentId: input.subagentId, parentSessionId, childSessionId: identity.childSessionId, role: input.role, status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
+    const record: ChildRecord = { subagentId: input.subagentId, parentSessionId, childSessionId: identity.childSessionId, name: input.subagentId, role: input.role, status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
     const toolCallId = input.toolCallId ?? existing?.toolCallId;
     if (toolCallId) record.toolCallId = toolCallId;
-    if (input.solutionSpace) record.solutionSpace = input.solutionSpace;
+    const description = input.description ?? existing?.description;
+    if (description) record.description = description;
+    const solutionSpace = input.solutionSpace ?? existing?.solutionSpace;
+    if (solutionSpace) record.solutionSpace = solutionSpace;
     await this.references.putSubagent(record);
-    if (this.isCurrentSubagentOwner(rootSessionId, generation) && this.entries.get(rootSessionId) === entry) this.subagents.set(input.subagentId, record);
+    if (this.isCurrentSubagentOwner(rootSessionId, generation) && this.entries.get(rootSessionId) === entry) {
+      this.subagents.set(input.subagentId, record);
+      // The live worker frame cannot know the child's session id — that UUID
+      // only exists once this file's header resolves. Reconcile the row the UI
+      // already renders so it never keys a native name as a session id.
+      const { rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...subagent } = record;
+      entry.opened.journal.append([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: SubagentSchema.parse(subagent) } }]);
+    }
   }
 
 

@@ -187,7 +187,6 @@ test.each([false, true])('the composer exposes live OMP rows (mobile: %s)', asyn
   await mount();
   const { getSyncChildStores } = await import('@/sync/sync-refs');
   const { nativeSnapshot } = await import('@/sync/session-message-loader-test-fixtures');
-  const { useSubagentsStore } = await import('@/stores/useSubagentsStore');
   const { useUIStore } = await import('@/stores/useUIStore');
   const previousIsMobile = useUIStore.getState().isMobile;
   const store = getSyncChildStores().getChild('/workspace');
@@ -216,11 +215,7 @@ test.each([false, true])('the composer exposes live OMP rows (mobile: %s)', asyn
   try {
     await act(async () => useUIStore.setState({ isMobile }));
     await publish('plan');
-    await act(async () => useSubagentsStore.getState().setSubagents(SESSION_ID, [
-      { parentSessionId: SESSION_ID, subagentId: 'reviewer', childSessionId: 'child', role: 'reviewer', status: 'running' },
-    ]));
     expect(container.querySelector('[data-testid="todo-tray"]')?.textContent).toContain('Check the build');
-    expect(container.querySelector('[data-testid="subagent-hud-tray"]')).not.toBeNull();
     expect(container.textContent).toContain('Plan is running');
     expect(container.textContent).toContain('Loop iteration 2/4');
     const button = container.querySelector<HTMLButtonElement>('[data-testid="composer-stop-loop-button"]');
@@ -237,7 +232,6 @@ test.each([false, true])('the composer exposes live OMP rows (mobile: %s)', asyn
   } finally {
     stop.mockRestore();
     await act(async () => {
-      useSubagentsStore.getState().setSubagents(SESSION_ID, []);
       store.setState({ snapshot: {} });
       useUIStore.setState({ isMobile: previousIsMobile });
     });

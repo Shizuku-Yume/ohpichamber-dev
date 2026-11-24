@@ -81,7 +81,6 @@ import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { btwI18n } from './btw.i18n';
 import { effortI18n } from './effort.i18n';
 
@@ -3974,7 +3973,6 @@ const part2 = {
   ...ompSettingsI18n.en,
   ...behaviorFilesI18n['en'],
   ...pluginsMarketplaceI18n.en,
-  ...subagentHudI18n['en'],
   ...btwI18n['en'],
   "settings.sourceControl.ssh.title": "SSH keys",
   "settings.sourceControl.ssh.load": "Show keys",

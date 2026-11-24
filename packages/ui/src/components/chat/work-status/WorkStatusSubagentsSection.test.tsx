@@ -132,7 +132,7 @@ describe('subagent status rows', () => {
     expect(container.textContent).toContain('1/1');
     await publish({ session_status: { child: 'idle' } });
     expect(icon()).toBe('#oc-checkbox-circle');
-    expect(rowContent().textContent).toBe('Child');
+    expect(rowContent().textContent).toMatch(/^Child/);
     expect(row().getAttribute('aria-label')).toContain('Done');
   });
 
@@ -143,11 +143,15 @@ describe('subagent status rows', () => {
       await act(async () => {
         useUIStore.setState({ agentWorkflowFeatureAvailable: true, agentWorkflowToolEnabled: true });
         useWorkflowRunsStore.setState({
-          bySession: { [parent.sessionId]: { status: 'ready', runs: [{
-            id: 'workflow', directory, parentSessionId: parent.sessionId, name: 'Workflow', description: '',
-            state: 'running', attempt: 1, createdAt: 1, currentPhase: null, phases: [], logs: [],
-            agents: [{ key: 'workflow-child', label: 'Workflow child', phase: null, state: 'running', sessionId: workflowChild.sessionId }],
-          }] } },
+          bySession: {
+            [parent.sessionId]: {
+              status: 'ready', runs: [{
+                id: 'workflow', directory, parentSessionId: parent.sessionId, name: 'Workflow', description: '',
+                state: 'running', attempt: 1, createdAt: 1, currentPhase: null, phases: [], logs: [],
+                agents: [{ key: 'workflow-child', label: 'Workflow child', phase: null, state: 'running', sessionId: workflowChild.sessionId }],
+              }]
+            }
+          },
         });
       });
       await publish({ session: [parent, child, workflowChild] });
@@ -193,7 +197,7 @@ describe('subagent status rows', () => {
   test('orders rows newest first by creation and sinks finished ones', async () => {
     const older = session('older', { parentSessionId: parent.sessionId, createdAt: 2, updatedAt: 50, title: 'Older', metadata: {}, metadataRevision: '1' });
     const newer = session('newer', { parentSessionId: parent.sessionId, createdAt: 3, updatedAt: 10, title: 'Newer', metadata: {}, metadataRevision: '1' });
-    const titles = () => rowButtons().map((button) => button.parentElement?.textContent?.replace(/\$.*$/, ''));
+    const titles = () => rowButtons().map((button) => button.parentElement?.textContent?.replace(/\$.*$/, '').replace(/(\d+[hms].*)+$/, ''));
     await publish({
       session: [parent, older, newer],
       sessionStatusReady: true,
@@ -275,10 +279,11 @@ describe('subagent status rows', () => {
     expect(rowContent().textContent).not.toContain('Silent for');
   });
 
-  test('opens the canonical Agent Hub from its heading action', async () => {
-    const button = container.querySelector<HTMLButtonElement>('button[title="Subagents"]');
+  test('opens the Subagents panel from its heading action', async () => {
+    const button = container.querySelector<HTMLButtonElement>('button[aria-label="Open in the Subagents panel"]');
     if (!button) throw new Error('Expected the panel button');
     await act(async () => button.click());
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
+    expect(tabs.some((tab) => tab.mode === 'subagents')).toBe(true);
   });
 });

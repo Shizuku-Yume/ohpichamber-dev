@@ -4,10 +4,10 @@ import { formatSessionActivityDuration } from '@/components/session/sessionActiv
 import { useDurationTickerNow } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { Session, SessionSnapshot } from '@openchamber/agent-contract';
+import type { Session, SessionSnapshot, Subagent } from '@openchamber/agent-contract';
 import { resolveUsageTone } from '@/lib/quota';
 import { formatRetryCountdown, toRetryTargetTimestamp } from '@/lib/retryCountdown';
-import { findAnsweringModelKey, limitsForAnsweringModel } from '@/lib/routing/contextWindowLimits';
+import { findAnsweringModelKey, findSessionModelKey, limitsForAnsweringModel } from '@/lib/routing/contextWindowLimits';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import { findLatestContextFill } from '@/stores/utils/tokenUtils';
@@ -18,6 +18,7 @@ import {
   SUBAGENT_SILENCE_MS,
   decodeSubagentActivity,
   encodeSubagentActivity,
+  formatSubagentLiveDetail,
   readSubagentActivity,
   subagentAlertInputs,
   toolCallText,
@@ -48,23 +49,40 @@ const useSubagentActivity = (childId: string, directory: string | null, alertsOn
   return React.useMemo(() => decodeSubagentActivity(encoded), [encoded]);
 };
 
-const useSubagentContextPercent = (child: Session, directory: string | null): number | null => {
+const useSubagentContextPercent = (
+  child: Session | undefined,
+  subagent: Subagent | undefined,
+  directory: string | null,
+): number | null => {
   const providers = useConfigStore((state) => state.providers);
-  const tokens = useDirectorySync(
+  const childId = child?.sessionId ?? subagent?.childSessionId ?? subagent?.subagentId ?? '';
+  const tokensFromMessages = useDirectorySync(
     React.useCallback((state: State) => {
-      const fill = findLatestContextFill(state.message[child.sessionId] ?? []);
+      if (!childId) return 0;
+      const fill = findLatestContextFill(state.message[childId] ?? []);
       return fill?.state === 'measured' ? fill.totalTokens : 0;
-    }, [child.sessionId]),
+    }, [childId]),
     directory ?? undefined,
   );
   const answeringKey = useDirectorySync(
-    React.useCallback((state: State) => findAnsweringModelKey(state.message[child.sessionId] ?? []), [child.sessionId]),
+    React.useCallback((state: State) => (childId ? findAnsweringModelKey(state.message[childId] ?? []) : null), [childId]),
     directory ?? undefined,
   );
-  if (tokens <= 0) return null;
-  const limit = limitsForAnsweringModel(answeringKey, providers).context
+  const selection = useDirectorySync(
+    React.useCallback((state: State) => (childId ? state.snapshot[childId]?.selection : undefined), [childId]),
+    directory ?? undefined,
+  );
+  if (subagent?.contextTokens !== undefined && subagent.contextTokens > 0) {
+    const limit = subagent.contextWindow
+      || limitsForAnsweringModel(subagent.model ?? answeringKey, providers).context
+      || DEFAULT_CONTEXT_LIMIT;
+    return (subagent.contextTokens / limit) * 100;
+  }
+  if (tokensFromMessages <= 0) return null;
+  const sessionKey = findSessionModelKey(selection);
+  const limit = limitsForAnsweringModel(subagent?.model ?? answeringKey ?? sessionKey, providers).context
     || DEFAULT_CONTEXT_LIMIT;
-  return (tokens / limit) * 100;
+  return (tokensFromMessages / limit) * 100;
 };
 
 type SubagentContextTone = 'muted' | 'warning' | 'error';
@@ -95,9 +113,9 @@ const useActivityText = (activity: SubagentActivity | null): ActivityText => {
       const seconds = at !== null ? Math.ceil(Math.max(0, at - now) / 1000) : 0;
       const time = seconds > 0 ? formatRetryCountdown(seconds, locale) : null;
       const attempt = activity.attempt !== null && activity.attempt > 1 ? activity.attempt : null;
-      const retrying = time && attempt ? t('chat.agentStatus.retry.inAttempt', { time, attempt })
+      const retrying = time && attempt ? t('subagents.activity.retryInAttempt', { time, attempt })
         : time ? t('chat.agentStatus.retry.in', { time })
-          : attempt ? t('chat.agentStatus.retry.attempt', { attempt })
+          : attempt ? t('subagents.activity.retryAttempt', { attempt })
             : t('chat.agentStatus.retry');
       return { text: activity.error ? `${activity.error} · ${retrying}` : retrying, tone: 'warning' };
     }
@@ -124,9 +142,21 @@ const useActivityText = (activity: SubagentActivity | null): ActivityText => {
   }
 };
 
-export const SubagentActivityText: React.FC<{ childId: string; directory: string | null; identity: string; alertsOnly?: boolean }> = ({ childId, directory, identity, alertsOnly }) => {
+
+export const SubagentActivityText: React.FC<{
+  childId: string;
+  subagent?: Subagent;
+  directory: string | null;
+  identity: string;
+  alertsOnly?: boolean;
+}> = ({ childId, subagent, directory, identity, alertsOnly }) => {
+  const { t, locale } = useI18n();
   const activity = useSubagentActivity(childId, directory, alertsOnly ?? false);
-  const line = useActivityText(activity);
+  const messageLine = useActivityText(activity);
+  const liveFallback = formatSubagentLiveDetail(subagent, alertsOnly, t, locale);
+  const line = messageLine && (!alertsOnly || messageLine.tone === 'warning')
+    ? messageLine
+    : liveFallback;
   if (!line || (alertsOnly && line.tone !== 'warning')) return <>{identity}</>;
   return (
     <>
@@ -136,9 +166,14 @@ export const SubagentActivityText: React.FC<{ childId: string; directory: string
   );
 };
 
-export const SubagentContextValue: React.FC<{ child: Session; directory: string | null }> = ({ child, directory }) => {
+export const SubagentContextValue: React.FC<{
+  child: Session | undefined;
+  subagent?: Subagent;
+  directory: string | null;
+}> = ({ child, subagent, directory }) => {
   const { t } = useI18n();
-  const percent = useSubagentContextPercent(child, resolveGlobalSessionDirectory(child) || directory);
+  const targetDirectory = (child ? resolveGlobalSessionDirectory(child) : null) || directory;
+  const percent = useSubagentContextPercent(child, subagent, targetDirectory);
   if (percent === null) return null;
   const rounded = Math.round(percent);
   const tone = subagentContextTone(percent);

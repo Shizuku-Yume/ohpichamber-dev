@@ -79,7 +79,6 @@ import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { todoTrayI18n } from './todo-tray.i18n';
 import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
-import { subagentHudI18n } from './subagent-hud.i18n';
 import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { behaviorFilesI18n } from './behavior-files.i18n';
@@ -3962,7 +3961,6 @@ export const dict: Record<I18nKey, string> = {
   ...todoTrayI18n['zh-CN'],
   ...chatWorkbenchI18n['zh-CN'],
   ...btwI18n['zh-CN'],
-  ...subagentHudI18n['zh-CN'],
   ...ompSettingsI18n['zh-CN'],
   ...behaviorFilesI18n['zh-CN'],
   ...pluginsMarketplaceI18n['zh-CN'],

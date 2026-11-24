@@ -19,7 +19,7 @@ const safePath = (value: string) => value.length > 0 && !isAbsolute(value) && !v
 const RelativePathSchema = z.string().refine(safePath);
 const MemberSchema = z.string().regex(/^\d{8}$/);
 const FileSchema = z.strictObject({ member: MemberSchema, path: RelativePathSchema, sha256: z.string().regex(/^[a-f0-9]{64}$/) });
-const ChildSchema = SubagentSchema.extend({ file: RelativePathSchema, nativeId: z.string().min(1) });
+const ChildSchema = SubagentSchema.extend({ file: RelativePathSchema, nativeId: z.string().min(1) }).required({ childSessionId: true });
 const JsonRecordSchema = z.record(z.string(), JsonValueSchema);
 const ImageGenerationBlobSchema = z.object({ type: z.literal('image_generation_call'), result: z.string() });
 const ImageUrlBlobSchema = z.object({ image_url: z.string() });

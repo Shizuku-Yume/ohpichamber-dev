@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AttachmentPartSchema, MessageSchema, PartSchema, ReasoningPartSchema, StepSummaryPartSchema, TextPartSchema, TokenUsageSchema, ToolCallPartSchema, ToolResultPartSchema, ToolStatusSchema, TurnSchema, TurnStatusSchema } from './messages.ts';
-
+import { AsyncJobResultNoticePartSchema, AttachmentPartSchema, MessageSchema, NoticePartSchema, PartSchema, ReasoningPartSchema, StepSummaryPartSchema, TextPartSchema, TokenUsageSchema, ToolCallPartSchema, ToolResultPartSchema, ToolStatusSchema, TurnSchema, TurnStatusSchema } from './messages.ts';
 const turn = {
   turnId: 'turn-1',
   sessionId: 'session-1',
@@ -134,6 +133,36 @@ describe('message wire schemas', () => {
     expect(MessageSchema.safeParse({ ...message, timing: { startedAt: 1000, firstTokenAt: 1420 } }).success).toBe(true);
     expect(() => MessageSchema.parse({ ...message, timing: { startedAt: -1 } })).toThrow();
     expect(MessageSchema.parse({ ...message, timing: undefined }).timing).toBeUndefined();
+  });
+
+  test('round-trips async_job_result notice parts', () => {
+    const notice = {
+      type: 'notice' as const,
+      partId: 'part-async',
+      noticeType: 'async_job_result' as const,
+      level: 'info' as const,
+      details: {
+        jobs: [
+          {
+            jobId: 'SettingsAuditScout',
+            subagentId: 'SettingsAuditScout',
+            childSessionId: '01950000-0000-7000-8000-000000000001',
+            type: 'task',
+            status: 'completed' as const,
+            label: 'Audit settings',
+            durationMs: 1250,
+            reportText: '## Findings\nAll clear.',
+          },
+        ],
+      },
+    };
+    expect(AsyncJobResultNoticePartSchema.parse(notice)).toEqual(notice);
+    expect(NoticePartSchema.parse(notice)).toEqual(notice);
+    expect(PartSchema.parse(notice)).toEqual(notice);
+    expect(AsyncJobResultNoticePartSchema.safeParse({
+      ...notice,
+      details: { jobs: [{ jobId: 'j1', status: 'unknown', reportText: 'x' }] },
+    }).success).toBe(false);
   });
 });
 
