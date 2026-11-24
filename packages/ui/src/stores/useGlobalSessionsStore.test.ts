@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@openchamber/agent-contract';
+import type { Session, Subagent } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from './globalSessions';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from './useGlobalSessionsStore';
 
@@ -145,5 +145,35 @@ describe('native recency updates', () => {
     useGlobalSessionsStore.getState().upsertSession({ ...record, updatedAt: 3 });
     expect(useGlobalSessionsStore.getState().entityById.get('ses_one')?.updatedAt).toBe(3);
     expect(useGlobalSessionsStore.getState().entityById.get('ses_other')).toBe(other);
+  });
+
+  test('upsertSubagents uses child createdAt/updatedAt and falls back to parent when omitted', () => {
+    const parent = session('ses_parent', { createdAt: 1_000, updatedAt: 50_000 });
+    useGlobalSessionsStore.getState().upsertSession(parent);
+    const withTimestamps: Subagent = {
+      subagentId: 'BetaWorker-3',
+      parentSessionId: parent.sessionId,
+      childSessionId: 'child_stamped',
+      role: 'task',
+      status: 'cancelled',
+      createdAt: 10_000,
+      updatedAt: 22_000,
+    };
+    const withoutTimestamps: Subagent = {
+      subagentId: 'AlphaFallback',
+      parentSessionId: parent.sessionId,
+      childSessionId: 'child_fallback',
+      role: 'scout',
+      status: 'completed',
+    };
+    useGlobalSessionsStore.getState().upsertSubagents(parent, [withTimestamps, withoutTimestamps]);
+
+    const stamped = useGlobalSessionsStore.getState().entityById.get('child_stamped');
+    expect(stamped?.createdAt).toBe(10_000);
+    expect(stamped?.updatedAt).toBe(22_000);
+
+    const fallback = useGlobalSessionsStore.getState().entityById.get('child_fallback');
+    expect(fallback?.createdAt).toBe(1_000);
+    expect(fallback?.updatedAt).toBe(50_000);
   });
 });

@@ -1,7 +1,7 @@
 import { usePermissionFromSubagent, usePermissionResponse, type PermissionResponse } from './usePermissionResponse';
 import React from 'react';
 import { z } from 'zod';
-import { JsonValueSchema, type ApprovalRequest, type JsonValue } from '@openchamber/agent-contract';
+import type { ApprovalRequest } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { HighlightedCode } from '@/components/code/HighlightedCode';
@@ -29,12 +29,12 @@ const CODE_TAG_STYLE: React.CSSProperties = {
 };
 
 // The native approval request owns `details` as a JSON object. Project the
-// fields the card renders so expanded details can inspect full tool input safely.
+// fields the card renders instead of inspecting JSON values by hand; a raw
+// input is never rendered, even if an older event carried one.
 const ApprovalDetailsSchema = z.object({
     reason: z.string().optional(),
     command: z.string().optional(),
     path: z.string().optional(),
-    input: JsonValueSchema.optional(),
 });
 
 /** Summary, safe input preview and the reduced details disclosure. */
@@ -45,16 +45,14 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
     const reason = details.success ? details.data.reason : undefined;
     const command = details.success ? details.data.command : undefined;
     const path = details.success ? details.data.path : undefined;
-    const input = details.success ? details.data.input : undefined;
     const preview = command ?? path;
     const summaryTitle = presentation.titleKey === 'chat.permissionCard.summary.tool'
         ? t(presentation.titleKey, { tool: permission.toolName })
         : t(presentation.titleKey);
-    const safeDetails: Record<string, JsonValue> = {};
+    const safeDetails: Record<string, string> = {};
     if (reason) safeDetails.reason = reason;
     if (command) safeDetails.command = command;
     if (path) safeDetails.path = path;
-    if (input !== undefined) safeDetails.input = input;
     const hasDetails = Object.keys(safeDetails).length > 0;
     const policyPattern = permission.policyTarget?.pattern;
     const toolScopePolicy = isToolScopePolicy(permission);

@@ -42,7 +42,12 @@ import { fileURLToPath } from 'node:url';
  *      non-zero `space-y-*` in a `SettingsSection`/`SettingsControlGroup`
  *      `contentClassName`. Zero values (`m-0`, `gap-0`, `space-y-0`) and
  *      generic wrappers (a `div` may carry its own gap) stay allowed.
+ * - F/M/T/X  raw HTML form tags, manual Save/Apply chrome on autosave pages,
+ *            untranslated row labels, and boxed/padded row chrome.
  *
+ * Rule A (search-index <-> `data-settings-item` anchor parity) lives in
+ * `settingsSearchAnchors.test.ts` so layout scans stay decoupled from the search
+ * registry.
  * File exceptions are listed with their reason below and stay narrow:
  * navigation/sidebar chrome (layout.md "Exception"), the project settings
  * dialog shell, and two shared editors that are not settings field rows.
@@ -72,7 +77,7 @@ const PANE_VIEW_SOURCES: readonly string[] = [
   'update/ReleaseNotesBody.tsx',
 ];
 
-const RULES = ['W', 'S', 'P', 'B', 'N', 'G', 'F', 'M', 'T', 'X', 'A'] as const;
+const RULES = ['W', 'S', 'P', 'B', 'N', 'G', 'F', 'M', 'T', 'X'] as const;
 type Rule = (typeof RULES)[number];
 
 /** Attributes that carry class names for a control or its wrapper. */
@@ -413,8 +418,12 @@ const LABEL_EXEMPTIONS: ReadonlyArray<{ file: RegExp; reason: string }> = [
     reason: 'feature flags are plugin-declared capability names, not translatable copy',
   },
   {
-    file: /(^|\/)remote-instances\/RemoteInstancesPage\.tsx$/,
-    reason: 'deferred: SSH port-forward local/remote labels are untranslated strings (W7 follow-up)',
+    file: /(^|\/)openchamber\/PasskeySettings\.tsx$/,
+    reason: 'label renders user-supplied passkey.label entity data or inline rename Input',
+  },
+  {
+    file: /(^|\/)agents\/AgentPermissionsEditor\.tsx$/,
+    reason: 'label resolves tool name from t(TOOL_NAME_KEYS[id]) or tool.name entity identifier',
   },
 ];
 
@@ -465,12 +474,12 @@ interface FileException {
 const FILE_EXCEPTIONS: readonly FileException[] = [
   {
     match: /(^|\/)[A-Za-z0-9]*Sidebar\.tsx$/,
-    rules: ['W', 'S', 'P', 'B', 'N', 'G', 'T', 'X', 'A'],
+    rules: ['W', 'S', 'P', 'B', 'N', 'G', 'T', 'X'],
     reason: 'navigation chrome outside the pane (layout.md Exception); its bespoke list-toggle `<button>` is still rejected by F',
   },
   {
     match: /(^|\/)SettingsSidebar(?:Item|Layout|Search)?\.tsx$/,
-    rules: ['W', 'S', 'P', 'B', 'N', 'G', 'T', 'X', 'A'],
+    rules: ['W', 'S', 'P', 'B', 'N', 'G', 'T', 'X'],
     reason: 'navigation chrome outside the pane (layout.md Exception)',
   },
   {
@@ -505,6 +514,7 @@ interface JsxElement {
   readonly tag: string;
   readonly attrs: readonly JsxAttr[];
   readonly start: number;
+  end: number;
   readonly parent: JsxElement | null;
   /** Elements in child position (not ones nested in an attribute expression). */
   readonly children: JsxElement[];
@@ -778,7 +788,7 @@ function readElement(
   const nameStart = index;
   while (index < limit && isNamePart(source[index])) index += 1;
   const tag = source.slice(nameStart, index);
-  const node: JsxElement = { tag, attrs, start, parent, children: [] };
+  const node: JsxElement = { tag, attrs, start, end: start, parent, children: [] };
   const elementMark = context.elements.length;
   const childMark = parent === null ? 0 : parent.children.length;
 
@@ -834,6 +844,7 @@ function readElement(
       continue;
     }
     if (character === '/' && source[index + 1] === '>') {
+      node.end = index + 2;
       register();
       return index + 2;
     }
@@ -844,6 +855,7 @@ function readElement(
       if (sawTypeParameterModifier) return rollback();
       const end = readChildren(source, index + 1, node, context);
       if (end < 0) return rollback();
+      node.end = end;
       register();
       return end;
     }
@@ -999,27 +1011,57 @@ function rawFormExempted(file: string, element: JsxElement): string | null {
 }
 
 /** A `<Button>` counts as a manual save when its text names a save/apply action. */
-const SAVE_ACTION_PATTERN = /actions\.(?:save|apply|saveChanges)|\.action\.apply\b/i;
+const SAVE_ACTION_PATTERN = /actions\.(?:save|apply|saveChanges)|\.action\.apply\b|(?:common|actions)\.(?:save|apply|saveChanges)\b|['"]\s*(?:Save|Apply)(?:\s+changes)?\s*['"]|>\s*(?:Save|Apply)(?:\s+Changes)?\s*</i;
 
 function saveButtonExempted(file: string, element: JsxElement, source: string): string | null {
+  const text = source.slice(element.start, element.end);
   for (const exemption of SAVE_BUTTON_EXEMPTIONS) {
     if (!exemption.file.test(file)) continue;
-    const labelAttr = element.attrs.find((attr) => attr.name === 'children');
-    const text = source.slice(element.start, element.start + 400);
     if (exemption.actions.some((action) => text.includes(action))) return exemption.reason;
-    void labelAttr;
   }
   return null;
 }
+
+/** Return the source slice of one `toast.success(...)` call bounded by its closing `)`. */
+function readCallSlice(source: string, start: number): string {
+  const openParen = source.indexOf('(', start);
+  if (openParen < 0) return source.slice(start, start + 120);
+  let depth = 1;
+  let index = openParen + 1;
+  while (index < source.length && depth > 0) {
+    const character = source[index];
+    if (character === '"' || character === "'" || character === '`') {
+      const quote = character;
+      index += 1;
+      while (index < source.length) {
+        if (source[index] === '\\') {
+          index += 2;
+          continue;
+        }
+        if (source[index] === quote) {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      continue;
+    }
+    if (character === '(') depth += 1;
+    else if (character === ')') depth -= 1;
+    index += 1;
+  }
+  return source.slice(start, index);
+}
+
 /**
  * A `toast.success(...)` is exempt when the file entry's `keys` pattern matches
- * the i18n key inside that call, so an unrelated non-lifecycle toast in the
- * same file still fails.
+ * the i18n key inside that single call, so an unrelated non-lifecycle toast in
+ * the same file still fails.
  */
 function toastExempted(file: string, source: string, index: number): string | null {
+  const call = readCallSlice(source, index);
   for (const exemption of TOAST_EXEMPTIONS) {
     if (!exemption.file.test(file)) continue;
-    const call = source.slice(index, index + 260);
     if (exemption.keys.test(call)) return exemption.reason;
   }
   return null;
@@ -1032,17 +1074,21 @@ const LABEL_INSPECTED_TAGS = new Set([
   'SettingsCheckboxRow',
 ]);
 
+const TRANSLATE_CALL_PATTERN = /(?:^|[^\w$.])t\s*\(/;
+
 /** A `label` value routed through `t(...)` (or `null`/`undefined` for a
- * deliberately unlabeled continuation row) passes; a bare identifier does not. */
+ * deliberately unlabeled continuation row) passes; bare identifiers, non-t
+ * helpers (`format(...)`), and JSX carrying hardcoded English text do not. */
 function labelIsTranslated(attr: JsxAttr): boolean {
   const raw = attr.raw.trim();
   if (raw === 'null' || raw === 'undefined') return true;
-  // A label routed through `t(...)` anywhere in its expression passes, and so
-  // does a JSX label (which carries its own `t()`). The violation is a bare
-  // identifier or a non-t, non-JSX expression.
-  if (raw.includes('t(')) return true;
-  if (/^\{?\s*\(?\s*</.test(raw)) return true;
-  return /^\{?\s*t\(/.test(raw) || /^t\(/.test(raw);
+  if (!TRANSLATE_CALL_PATTERN.test(raw)) return false;
+  if (/^\{?\s*\(?\s*</.test(raw)) {
+    return !/>[^<{}]*[A-Za-z][^<{}]*</.test(raw)
+      && !/>[^<{}]*[A-Za-z][^<{}]*\{/.test(raw)
+      && !/\}[^<{}]*[A-Za-z][^<{}]*</.test(raw);
+  }
+  return true;
 }
 
 function labelExempted(file: string): string | null {
@@ -1061,6 +1107,7 @@ const ROW_PADDING_TAGS = new Set([
   'SettingsCheckboxRow',
   'SettingsSection',
   'SettingsControlGroup',
+  'SettingsDisclosure',
 ]);
 
 const PADDING_TOKEN = /^(?:p|px|py|ps|pe|pt|pb|pl|pr)-/;
@@ -1110,6 +1157,7 @@ const ROW_PRIMITIVE_TAGS = new Set([
   'OmpRowControl',
   'SettingsRadioOption',
   'SettingsChipGroup',
+  'SettingsDisclosure',
 ]);
 
 /** True when any descendant element is a settings row the chrome would box. */
@@ -1354,7 +1402,7 @@ function scanSourceDetailed(file: string, source: string): ScanDetail {
   if (AUTOSAVE_SOURCE_MARKERS.some((marker) => source.includes(marker))) {
     for (const element of parse.elements) {
       if (element.tag === 'Button' || element.tag === 'button') {
-        const slice = source.slice(element.start, element.start + 400);
+        const slice = source.slice(element.start, element.end);
         if (SAVE_ACTION_PATTERN.test(slice) && saveButtonExempted(file, element, source) === null) {
           report(
             element.start,
@@ -1709,20 +1757,45 @@ describe('settings layout guard', () => {
     expect(manualHits.filter((violation) => violation.rule === 'M').length).toBe(2);
 
     // T: a SettingsFieldRow/SettingsCheckboxRow label bound to a bare
-    // identifier or a hardcoded literal is not routed through t(...).
+    // identifier, a hardcoded literal, a non-t helper (`format(...)`), or
+    // JSX with hardcoded English text is rejected; JSX wrapping `t(...)` passes.
     const rows = `
       const view = (
         <div>
           <SettingsFieldRow label="Model" />
           <SettingsFieldRow label={field} />
           <SettingsCheckboxRow label={item.label} />
+          <SettingsFieldRow label={format(name)} />
+          <SettingsFieldRow label={<span>Model</span>} />
+          <SettingsFieldRow label={<span>Model {t('settings.fixture.model')}</span>} />
+          <SettingsFieldRow label={<span>{t('settings.fixture.model')}</span>} />
         </div>
       );
     `;
     const labelHits = scanSource('fixture/LabelsPage.tsx', rows);
-    expect(labelHits.filter((violation) => violation.rule === 'T')).toHaveLength(3);
+    expect(labelHits.filter((violation) => violation.rule === 'T')).toHaveLength(6);
 
-    // X: box chrome on a container that wraps a row primitive is a boxed row.
+    // M (tightened): generic Save/Apply button copy (`t('common.save')` and
+    // literal `Save`) trips, and an exempted neighbor cannot shield an
+    // unexempted `<Button>` or `toast.success(...)` next to it.
+    const neighborBleed = `
+      const page = useAutosave();
+      const actionsView = (
+        <>
+          <Button onClick={save}>{t('common.save')}</Button>
+          <Button onClick={apply}>Apply</Button>
+          <Button onClick={applyPending}>{t('settings.plugins.action.apply')}</Button>
+        </>
+      );
+      toast.success(t('settings.fixture.toast.saved'));
+      toast.success(t('settings.plugins.marketplace.toast.installed', { name }));
+    `;
+    const bleedHits = scanSource('plugins/PluginsPage.tsx', neighborBleed)
+      .filter((violation) => violation.rule === 'M');
+    expect(bleedHits).toHaveLength(3);
+
+    // X: box chrome on a container that wraps a row primitive (including
+    // SettingsDisclosure) is a boxed row.
     const boxed = `
       const view = (
         <div className="rounded-lg border border-edge bg-surface-1">
@@ -1733,9 +1806,19 @@ describe('settings layout guard', () => {
     const chromeHits = scanSource('fixture/BoxedPage.tsx', boxed);
     expect(chromeHits.some((violation) => violation.rule === 'X')).toBe(true);
 
-    // A row-level p-* utility on a row primitive is a layout override (X).
+    const boxedDisclosure = `
+      <div className="rounded-lg border border-edge">
+        <SettingsDisclosure title={t('settings.fixture.model')} expanded onToggle={() => undefined} />
+      </div>
+    `;
+    expect(scanSource('fixture/BoxedDisclosure.tsx', boxedDisclosure).some((violation) => violation.rule === 'X')).toBe(true);
+
+    // A row-level p-* utility on a row primitive (including SettingsDisclosure)
+    // is a layout override (X).
     const padded = `<SettingsFieldRow label={t('settings.fixture.model')} className="p-4" />`;
     expect(scanSource('fixture/PaddedPage.tsx', padded).some((violation) => violation.rule === 'X')).toBe(true);
+    const paddedDisclosure = `<SettingsDisclosure title={t('settings.fixture.model')} className="p-4" expanded onToggle={() => undefined} />`;
+    expect(scanSource('fixture/PaddedDisclosure.tsx', paddedDisclosure).some((violation) => violation.rule === 'X')).toBe(true);
   });
 
   test('sanctioned form widgets and lifecycle toasts pass rule F and M', () => {

@@ -191,8 +191,33 @@ const taskCallDescription = (input: JsonObject): string | null => {
     return inputText(input, 'context');
 };
 
-const taskProgressItemSchema = z.object({ status: z.string().optional() });
-const taskAsyncSchema = z.object({ state: z.string().optional() });
+const taskProgressItemSchema = z.object({
+    id: z.string().optional(),
+    status: z.string().optional(),
+});
+const taskAsyncSchema = z.object({
+    state: z.string().optional(),
+    jobId: z.string().optional(),
+});
+
+export interface TaskSubagentStatusEntry {
+    id: string;
+    childSessionId?: string;
+    name?: string;
+    status: string;
+}
+
+type NormalizedTaskState = 'running' | 'failed' | 'cancelled' | 'completed';
+
+const normalizeTaskStatus = (status: string | undefined): NormalizedTaskState | null => {
+    const normalized = status?.trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized === 'running' || normalized === 'idle' || normalized === 'pending') return 'running';
+    if (normalized === 'failed' || normalized.startsWith('failed')) return 'failed';
+    if (normalized === 'cancelled' || normalized === 'aborted') return 'cancelled';
+    if (normalized === 'completed' || normalized === 'parked') return 'completed';
+    return null;
+};
 
 const taskSummary: ToolPresentation['describeResult'] = (result) => {
     const results = z.array(z.unknown()).safeParse(detailValue(result, 'results')).data;
@@ -201,7 +226,7 @@ const taskSummary: ToolPresentation['describeResult'] = (result) => {
     const count = Math.max(progress?.length ?? 0, results?.length ?? 0);
     const countLabel = count > 0 ? `${count} ${count === 1 ? 'subagent' : 'subagents'}` : null;
     const asyncState = asyncInfo?.state?.trim();
-    if (asyncState === 'running' || asyncState === 'failed' || asyncState === 'completed') {
+    if (asyncState === 'running' || asyncState === 'failed' || asyncState === 'completed' || asyncState === 'cancelled') {
         return countLabel ? `${countLabel} · ${asyncState}` : asyncState;
     }
     if (progress && progress.length > 0 && (!results || results.length === 0)) {
@@ -211,6 +236,75 @@ const taskSummary: ToolPresentation['describeResult'] = (result) => {
         if (hasFailed) return `${countLabel} · failed`;
     }
     return countLabel;
+};
+
+export const describeTaskResultWithSubagents = (
+    details: JsonValue | undefined,
+    subagents: readonly TaskSubagentStatusEntry[],
+    reportStatuses?: ReadonlyMap<string, string>,
+    expectedIds?: readonly string[],
+): string | null => {
+    const results = z.array(z.unknown()).safeParse(detailValue(details, 'results')).data;
+    const progress = z.array(taskProgressItemSchema).safeParse(detailValue(details, 'progress')).data ?? [];
+    const asyncInfo = taskAsyncSchema.safeParse(detailValue(details, 'async')).data;
+
+    if (results && results.length > 0 && !asyncInfo) {
+        return taskSummary(details);
+    }
+
+    const resolvedStatuses: Array<NormalizedTaskState | null> = [];
+    if (subagents.length > 0) {
+        const storeMatched = new Set<string>();
+        for (const entry of subagents) {
+            resolvedStatuses.push(normalizeTaskStatus(entry.status));
+            if (entry.id) storeMatched.add(entry.id);
+            if (entry.childSessionId) storeMatched.add(entry.childSessionId);
+            if (entry.name) storeMatched.add(entry.name);
+        }
+        if (subagents.length < progress.length) {
+            for (const item of progress) {
+                if (item.id && storeMatched.has(item.id)) continue;
+                const reportStatus = item.id ? reportStatuses?.get(item.id) : undefined;
+                resolvedStatuses.push(normalizeTaskStatus(reportStatus ?? item.status) ?? 'running');
+            }
+        }
+    } else if (reportStatuses && reportStatuses.size > 0) {
+        const progressIds = progress
+            .map((item) => item.id?.trim())
+            .filter((id): id is string => Boolean(id));
+        const candidateIds = progressIds.length > 0
+            ? progressIds
+            : (expectedIds && expectedIds.length > 0
+                ? expectedIds
+                : (asyncInfo?.jobId?.trim() ? [asyncInfo.jobId.trim()] : []));
+        if (candidateIds.some((id) => reportStatuses.has(id))) {
+            const progressById = new Map<string, string | undefined>();
+            for (const item of progress) {
+                if (item.id) progressById.set(item.id.trim(), item.status);
+            }
+            for (const id of candidateIds) {
+                const reportStatus = reportStatuses.get(id);
+                resolvedStatuses.push(normalizeTaskStatus(reportStatus ?? progressById.get(id)) ?? 'running');
+            }
+        }
+    }
+
+    if (resolvedStatuses.length === 0) {
+        return taskSummary(details);
+    }
+
+    const count = Math.max(resolvedStatuses.length, progress.length, results?.length ?? 0);
+    const countLabel = count > 0 ? `${count} ${count === 1 ? 'subagent' : 'subagents'}` : null;
+    let aggregate: NormalizedTaskState | null = null;
+    if (resolvedStatuses.some((status) => status === 'running')) aggregate = 'running';
+    else if (resolvedStatuses.some((status) => status === 'failed')) aggregate = 'failed';
+    else if (resolvedStatuses.some((status) => status === 'cancelled')) aggregate = 'cancelled';
+    else if (resolvedStatuses.every((status) => status === 'completed')) aggregate = 'completed';
+
+    if (!aggregate) {
+        return taskSummary(details);
+    }
+    return countLabel ? `${countLabel} · ${aggregate}` : aggregate;
 };
 
 const waitJobSchema = z.object({ status: z.string().optional() });

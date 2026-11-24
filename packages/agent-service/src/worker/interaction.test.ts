@@ -252,7 +252,7 @@ test('steering signal cancels pending permission, removes handle, and prevents l
   } finally { interaction.close(); }
 });
 
-test('ordinary abort resolves undefined but preserves Host dialog without cancel message', async () => {
+test('aborting a pending permission emits cancel to clear the Host request and invalidates the local handle', async () => {
   const requests: WorkerInteractionMessage[] = [];
   const interaction = new WorkerInteraction({ request: request => requests.push(request), currentTurn: () => 'turn-1' });
   const options = [
@@ -268,13 +268,16 @@ test('ordinary abort resolves undefined but preserves Host dialog without cancel
     const request = requests[0];
     if (request?.kind !== 'approval') throw new Error('Expected canonical approval request');
 
-    // Trigger loop signal abort (ordinary abort)
+    // Aborting the tool call signal (e.g. subagent.cancel) must clear the Host request too.
     loopController.abort();
     const choice = await pendingChoice;
     expect(choice).toBeUndefined();
 
-    // Ordinary abort does NOT emit cancel interaction to Host
-    expect(requests).toHaveLength(1);
+    expect(requests).toEqual([
+      request,
+      { kind: 'cancel', approvalId: request.approvalId },
+    ]);
+    expect(interaction.resolveApproval(request.approvalId, 'approve')).toBe(false);
     expect(interaction.takeApprovalReceipt('call-loop-abort')).toBeUndefined();
   } finally { interaction.close(); }
 });
@@ -560,5 +563,64 @@ test('subagent tool approvals carry the child linkage on the canonical request',
     expect(questionReq.childSessionId).toBe('child-session-uuid');
     interaction.resolveQuestion(questionReq.questionId, 'cancel');
     await expect(askPromise).resolves.toBeUndefined();
+  } finally { interaction.close(); }
+});
+
+test('aborting a blocked subagent tool approval or question emits cancel and detached subagent dialogs fall back to turn-0', async () => {
+  const requests: WorkerInteractionMessage[] = [];
+  const links: Record<string, { subagentId: string; childSessionId?: string }> = {
+    'call-child-bash': { subagentId: 'BetaWorker-2', childSessionId: 'child-session-uuid' },
+  };
+  const interaction = new WorkerInteraction({
+    request: item => requests.push(item),
+    currentTurn: () => undefined,
+    subagentForToolCall: toolCallId => links[toolCallId],
+  });
+  try {
+    const approvalSignal = new AbortController();
+    const pendingApproval = interaction.approveBash('call-child-bash', { command: 'sleep 10' }, approvalSignal.signal);
+    expect(requests).toHaveLength(1);
+    const approvalReq = requests[0];
+    if (approvalReq?.kind !== 'approval') throw new Error('Expected approval request');
+    expect(approvalReq.turnId).toBe('turn-0');
+    expect(approvalReq.subagentId).toBe('BetaWorker-2');
+
+    approvalSignal.abort();
+    await expect(pendingApproval).resolves.toBe(false);
+    expect(requests[1]).toEqual({ kind: 'cancel', approvalId: approvalReq.approvalId });
+    expect(interaction.resolveApproval(approvalReq.approvalId, 'approve')).toBe(false);
+
+    const askSignal = new AbortController();
+    const pendingAsk = interaction.ui.askDialog!(
+      [{ id: 'q1', question: 'Continue?', options: [{ label: 'Yes' }] }],
+      { toolCallId: 'call-child-bash', signal: askSignal.signal },
+    );
+    expect(requests).toHaveLength(3);
+    const askReq = requests[2];
+    if (askReq?.kind !== 'question') throw new Error('Expected ask question request');
+    expect(askReq.turnId).toBe('turn-0');
+    expect(askReq.subagentId).toBe('BetaWorker-2');
+    expect(askReq.childSessionId).toBe('child-session-uuid');
+
+    askSignal.abort();
+    await expect(pendingAsk).resolves.toBeUndefined();
+    expect(requests[3]).toEqual({ kind: 'cancel', questionId: askReq.questionId });
+    expect(interaction.resolveQuestion(askReq.questionId, 'cancel')).toBe(false);
+
+    const formSignal = new AbortController();
+    const pendingForm = interaction.ui.formDialog!(
+      '<form><input name="note" type="text" /></form>',
+      { toolCallId: 'call-child-bash', signal: formSignal.signal },
+    );
+    expect(requests).toHaveLength(5);
+    const formReq = requests[4];
+    if (formReq?.kind !== 'question') throw new Error('Expected form question request');
+    expect(formReq.turnId).toBe('turn-0');
+    expect(formReq.subagentId).toBe('BetaWorker-2');
+    expect(formReq.childSessionId).toBe('child-session-uuid');
+
+    formSignal.abort();
+    await expect(pendingForm).resolves.toBeUndefined();
+    expect(requests[5]).toEqual({ kind: 'cancel', questionId: formReq.questionId });
   } finally { interaction.close(); }
 });

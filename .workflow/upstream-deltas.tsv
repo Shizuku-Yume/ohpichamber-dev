@@ -3079,10 +3079,6 @@ packages/ui/src/components/sections/openchamber/GeneralWorkspaceSettings.tsx	for
 packages/ui/src/components/sections/openchamber/GitHubComAccountSection.auth.test.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/ui/src/components/sections/openchamber/GitHubComAccountSection.test.tsx	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/ui/src/components/sections/openchamber/GitHubComAccountSection.tsx	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
-packages/ui/src/components/sections/openchamber/GitHubSettings.auth.test.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/ui/src/components/sections/openchamber/GitHubSettings.test.tsx	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/ui/src/components/sections/openchamber/GitHubSettings.tsx	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/ui/src/components/sections/openchamber/GitLabSettings.tsx	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/ui/src/components/sections/openchamber/GitSettings.tsx	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
 packages/ui/src/components/sections/openchamber/IsolatedSpacesSettings.tsx	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/ui/src/components/sections/openchamber/KeyboardShortcutsSettings.test.tsx	fork-differs	decision	2026-11-20 - Retain runtime-equivalent source compatibility cleanup	Only unused default React imports, recorded package naming and blank-line/indentation cleanup differ.
@@ -3128,7 +3124,7 @@ packages/ui/src/components/sections/openchamber/chatAttachmentOptions.ts	fork-on
 packages/ui/src/components/sections/openchamber/chatSettingsTabs.ts	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Keeps the fork's `chat.mobile-return-key-sends` Composer mapping; upstream's file has no entry for a setting whose control it still renders.
 packages/ui/src/components/sections/openchamber/ompSettingsLayout.test.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
 packages/ui/src/components/sections/openchamber/ompSettingsLayout.ts	fork-only	fork-added		Fork-owned source or guidance absent from upstream.
-packages/ui/src/components/sections/openchamber/sourceControlOAuthPolling.test.tsx	fork-differs	decision	2026-11-22 - Merge OpenChamber v2.8.0 on the Canonical and Host owners	Retain fork ownership and compatible upstream behavior under the v2.8.0 merge decision.
+packages/ui/src/components/sections/openchamber/sourceControlOAuthPolling.test.tsx	upstream-only	upstream-excluded		Upstream-only path deleted with the GitHub/GitLab settings sections under the OMP scope and settled v2.8.0 merge policy.
 packages/ui/src/components/sections/openchamber/spacePlacesDisk.test.ts	upstream-only	upstream-excluded		Upstream-only path excluded under the OMP scope and settled v2.8.0 merge policy.
 packages/ui/src/components/sections/openchamber/types.ts	fork-differs	decision	2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers	The section union has no `spaces` member: isolated spaces stay unreleased behind ISOLATED_SPACES_RELEASED.
 packages/ui/src/components/sections/openchamber/useProjectWorktrees.test.tsx	fork-differs	decision	2026-11-20 - Retain runtime-equivalent source compatibility cleanup	Only unused default React imports, recorded package naming and blank-line/indentation cleanup differ.

@@ -309,7 +309,16 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       // surfaces to re-list the addressed directory once; they coalesce it.
       fileTreeChanges.unknownChange(target.directory)
     }
-  }, [childStores, isCurrent, isKnownChildSession, wantsStream])
+    if (recoveryPrevious) {
+      const subagents = useSubagentsStore.getState()
+      const hasSubagentState = subagents.hydratedByParent[target.sessionId] === props.runtimeKey
+        || (subagents.byParent[target.sessionId]?.length ?? 0) > 0
+        || subagents.failedByParent[target.sessionId] === props.runtimeKey
+      if (hasSubagentState) {
+        void subagents.hydrateParent(target.sessionId, true)
+      }
+    }
+  }, [childStores, isCurrent, isKnownChildSession, props.runtimeKey, wantsStream])
   stores.callbacks.isCurrent = isCurrent
   stores.callbacks.onSnapshot = onSnapshot
   const disposalRef = useRef<number | NodeJS.Timeout | undefined>(undefined)

@@ -71,10 +71,14 @@ describe('useSubagentsStore.hydrateParent', () => {
 
       await store.hydrateParent('parent-1', true);
       expect(useSubagentsStore.getState().byParent['parent-1']).toEqual([known]);
+      expect(useSubagentsStore.getState().hydratedByParent['parent-1']).toBeUndefined();
       expect(useSubagentsStore.getState().failedByParent['parent-1']).toBeDefined();
 
-      await store.hydrateParent('parent-1', true);
+      // Because failure cleared hydratedByParent, a subsequent non-forced hydration retries.
+      await store.hydrateParent('parent-1', false);
+      expect(calls).toBe(3);
       expect(useSubagentsStore.getState().failedByParent['parent-1']).toBeUndefined();
+      expect(useSubagentsStore.getState().hydratedByParent['parent-1']).toBeDefined();
     } finally {
       spy.mockRestore();
     }

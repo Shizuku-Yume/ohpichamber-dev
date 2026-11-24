@@ -1,11 +1,12 @@
-import { act } from 'react';
+import React, { act } from 'react';
 import { expect, spyOn, test } from 'bun:test';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { Session, Subagent, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
+import type { Message, Session, Subagent, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { I18nProvider } from '@/lib/i18n';
 import { SyncProvider } from '@/sync/sync-context';
+import { useSyncRuntime } from '@/sync/sync-runtime-context';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { useGuestsStore } from '@/lib/guests/store';
@@ -54,8 +55,22 @@ type RenderOptions = {
   pairedResult?: boolean;
   customCall?: ToolCallPart;
   customResult?: ToolResultPart;
+  seedMessages?: Message[];
 };
 
+function SeedMessages({ sessionId, directory, messages }: { sessionId: string; directory: string; messages: Message[] }) {
+  const runtime = useSyncRuntime();
+  React.useLayoutEffect(() => {
+    const store = runtime.childStores.ensureChild(directory);
+    store.setState((state) => ({
+      message: {
+        ...state.message,
+        [sessionId]: messages,
+      },
+    }));
+  }, [directory, messages, runtime, sessionId]);
+  return null;
+}
 async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run: (harness: {
   container: HTMLElement; render: (options?: RenderOptions) => Promise<void>;
 }) => Promise<void>) {
@@ -82,7 +97,7 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const render = async ({ sessionId = parent.sessionId, directory = '/workspace', grouped = false, expanded = true, mobile = false, status = call.status, pairedResult = false, customCall, customResult }: RenderOptions = {}) => {
+  const render = async ({ sessionId = parent.sessionId, directory = '/workspace', grouped = false, expanded = true, mobile = false, status = call.status, pairedResult = false, customCall, customResult, seedMessages }: RenderOptions = {}) => {
     const effectiveCall = customCall ?? call;
     const effectiveResult = customResult ?? result;
     const tree = <I18nProvider><ThemeSystemContext.Provider value={themeContext}>
@@ -94,7 +109,14 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
       /> : <ToolPart part={pairedResult ? effectiveResult : { ...effectiveCall, status }} pairedCall={pairedResult ? effectiveCall : undefined} sessionId={sessionId} directory={directory} isExpanded={expanded} isMobile={mobile} onToggle={noAction} />}
     </ThemeSystemContext.Provider></I18nProvider>;
     await act(async () => {
-      root.render(pairedResult ? <SyncProvider directory="/workspace">{tree}</SyncProvider> : tree);
+      root.render(pairedResult
+        ? (
+          <SyncProvider directory="/workspace">
+            {seedMessages ? <SeedMessages sessionId={sessionId} directory={directory} messages={seedMessages} /> : null}
+            {tree}
+          </SyncProvider>
+        )
+        : tree);
     });
     await act(async () => { await new Promise<void>(resolve => happyWindow.requestAnimationFrame(() => resolve())); });
     await act(async () => { await new Promise<void>(resolve => happyWindow.requestAnimationFrame(() => resolve())); });
@@ -323,5 +345,130 @@ test('switching sessionId or toolCallId resets hydrating state and does not forc
     await act(async () => {
       slowFirst.resolve([]);
     });
+  });
+});
+
+test('collapsed async task hydrates subagent store and updates header summary from running to cancelled/completed', async () => {
+  const asyncCall: ToolCallPart = {
+    type: 'tool_call',
+    partId: 'restart-call',
+    toolCallId: 'restart-call-id',
+    toolName: 'task',
+    status: 'completed',
+    input: {
+      context: 'Restart test',
+      tasks: [{ name: 'BetaWorker-3', agent: 'task', task: 'Run sleep 15 && pwd' }],
+    },
+  };
+  const frozenRunningResult: ToolResultPart = {
+    type: 'tool_result',
+    partId: 'restart-result',
+    toolCallId: 'restart-call-id',
+    toolName: 'task',
+    isError: false,
+    output: {
+      content: [{ type: 'text', text: 'Spawned agent `BetaWorker-3`.' }],
+      details: {
+        results: [],
+        progress: [{ id: 'BetaWorker-3', agent: 'task', status: 'running' }],
+        async: { state: 'running', jobId: 'BetaWorker-3', type: 'task' },
+      },
+    },
+  };
+
+  let hydratedCalls = 0;
+  await withHarness(async () => {
+    hydratedCalls += 1;
+    return [{
+      subagentId: 'BetaWorker-3',
+      parentSessionId: parent.sessionId,
+      childSessionId: 'beta-worker-3-session',
+      toolCallId: 'restart-call-id',
+      name: 'BetaWorker-3',
+      role: 'task',
+      status: 'cancelled',
+    }];
+  }, async ({ container, render }) => {
+    await render({ pairedResult: true, expanded: false, customCall: asyncCall, customResult: frozenRunningResult });
+    expect(hydratedCalls).toBe(1);
+    expect(container.textContent).toContain('1 subagent · cancelled');
+    expect(container.textContent).not.toContain('1 subagent · running');
+
+    await act(async () => {
+      useSubagentsStore.getState().applySubagentUpdate(parent.sessionId, {
+        subagentId: 'BetaWorker-3',
+        parentSessionId: parent.sessionId,
+        childSessionId: 'beta-worker-3-session',
+        toolCallId: 'restart-call-id',
+        name: 'BetaWorker-3',
+        role: 'task',
+        status: 'completed',
+      });
+    });
+    expect(container.textContent).toContain('1 subagent · completed');
+  });
+});
+
+test('collapsed async task falls back to async_job_result notice when store has no rows', async () => {
+  const asyncCall: ToolCallPart = {
+    type: 'tool_call',
+    partId: 'notice-call',
+    toolCallId: 'notice-call-id',
+    toolName: 'task',
+    status: 'completed',
+    input: {
+      context: 'Report fallback',
+      tasks: [{ name: 'AlphaScout', agent: 'scout', task: 'Inspect' }],
+    },
+  };
+  const frozenRunningResult: ToolResultPart = {
+    type: 'tool_result',
+    partId: 'notice-result',
+    toolCallId: 'notice-call-id',
+    toolName: 'task',
+    isError: false,
+    output: {
+      content: [{ type: 'text', text: 'Spawned agent `AlphaScout`.' }],
+      details: {
+        results: [],
+        progress: [{ id: 'AlphaScout', agent: 'scout', status: 'running' }],
+        async: { state: 'running', jobId: 'AlphaScout', type: 'task' },
+      },
+    },
+  };
+  const seedMessages: Message[] = [{
+    messageId: 'async-notice-msg',
+    sessionId: parent.sessionId,
+    turnId: 'turn-async',
+    role: 'user',
+    createdAt: 2,
+    parts: [{
+      type: 'notice',
+      partId: 'async-notice-part',
+      noticeType: 'async_job_result',
+      level: 'info',
+      title: 'Subagent result: AlphaScout',
+      details: {
+        jobs: [{
+          jobId: 'AlphaScout',
+          subagentId: 'AlphaScout',
+          type: 'task',
+          status: 'completed',
+          reportText: 'Done.',
+        }],
+      },
+    }],
+  }];
+
+  await withHarness(async () => [], async ({ container, render }) => {
+    await render({
+      pairedResult: true,
+      expanded: false,
+      customCall: asyncCall,
+      customResult: frozenRunningResult,
+      seedMessages,
+    });
+    expect(container.textContent).toContain('1 subagent · completed');
+    expect(container.textContent).not.toContain('1 subagent · running');
   });
 });

@@ -102,10 +102,14 @@ export class SessionRegistry {
       this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime });
       const children = this.references.listSubagents(reference.rootSessionId);
       let settledAny = false;
+      const now = Date.now();
       const settledChildren = children.map(child => {
         if (child.status !== 'running' && child.status !== 'idle') return child;
         settledAny = true;
-        return { ...child, status: 'cancelled' as const };
+        const createdAt = child.createdAt ?? now;
+        const updatedAt = Math.max(createdAt, now);
+        const durationMs = child.durationMs ?? Math.max(0, updatedAt - createdAt);
+        return { ...child, status: 'cancelled' as const, createdAt, updatedAt, durationMs };
       });
       if (settledAny && !reference.deletedSpace) {
         await this.references.replaceSubagents(reference.rootSessionId, settledChildren);
@@ -1370,8 +1374,14 @@ export class SessionRegistry {
     return [...this.subagents.values()]
       .filter(record => record.rootSessionId === root && record.parentSessionId === sessionId)
       .map(({ rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...publicRecord }) => {
-        const settled = publicRecord.status === 'running' || publicRecord.status === 'idle' ? { ...publicRecord, status: 'cancelled' as const } : publicRecord;
-        return SubagentSchema.parse(settled);
+        if (publicRecord.status !== 'running' && publicRecord.status !== 'idle') {
+          return SubagentSchema.parse(publicRecord);
+        }
+        const now = Date.now();
+        const createdAt = publicRecord.createdAt ?? now;
+        const updatedAt = publicRecord.updatedAt !== undefined ? Math.max(createdAt, publicRecord.updatedAt) : now;
+        const durationMs = publicRecord.durationMs ?? Math.max(0, updatedAt - createdAt);
+        return SubagentSchema.parse({ ...publicRecord, status: 'cancelled' as const, createdAt, updatedAt, durationMs });
       });
   }
   async listHubSubagents(sessionId: string): Promise<Subagent[]> {
@@ -1381,25 +1391,29 @@ export class SessionRegistry {
       const result = await this.workers.request(sessionId, { type: 'subagents.list' }, undefined, 10_000);
       if (result.type !== 'subagents.list') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested subagents.list operation.');
       // Re-attached workers start with an empty AgentRegistry; merge the
-      // persisted roster underneath live entries so pre-restart settled rows
-      // remain visible and live rows keep their childSessionId/metadata.
+      // persisted roster underneath disk-revived entries (`live.persisted === true`)
+      // so pre-restart settled rows stay visible and keep their metadata, while
+      // fresh live runs never inherit stale metrics or childSessionId.
       const merged = new Map<string, Subagent>(persisted.map(item => [item.subagentId, item]));
       for (const live of result.subagents) {
         const prior = merged.get(live.subagentId);
-        const keepPriorStatus = prior !== undefined && live.persisted === true
-          && (prior.status === 'completed' || prior.status === 'failed' || prior.status === 'cancelled');
-        merged.set(live.subagentId, prior ? SubagentSchema.parse({
-          ...prior,
-          ...live,
-          status: keepPriorStatus ? prior.status : live.status,
-          childSessionId: live.childSessionId ?? prior.childSessionId,
-          name: live.name ?? prior.name,
-          role: (live.persisted ? prior.role : live.role) || prior.role || live.role,
-          solutionSpace: live.solutionSpace ?? prior.solutionSpace,
-          description: live.description ?? prior.description,
-          toolCallId: live.toolCallId ?? prior.toolCallId,
-          activeToolCallId: live.activeToolCallId ?? prior.activeToolCallId,
-        }) : live);
+        if (prior !== undefined && live.persisted === true) {
+          const keepPriorStatus = prior.status === 'completed' || prior.status === 'failed' || prior.status === 'cancelled';
+          merged.set(live.subagentId, SubagentSchema.parse({
+            ...prior,
+            ...live,
+            status: keepPriorStatus ? prior.status : live.status,
+            childSessionId: live.childSessionId ?? prior.childSessionId,
+            name: live.name ?? prior.name,
+            role: prior.role || live.role,
+            solutionSpace: live.solutionSpace ?? prior.solutionSpace,
+            description: live.description ?? prior.description,
+            toolCallId: live.toolCallId ?? prior.toolCallId,
+            activeToolCallId: live.activeToolCallId ?? prior.activeToolCallId,
+          }));
+        } else {
+          merged.set(live.subagentId, live);
+        }
       }
       return [...merged.values()];
     } catch (error) {

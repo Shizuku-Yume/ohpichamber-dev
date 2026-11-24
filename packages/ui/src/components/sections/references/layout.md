@@ -174,23 +174,31 @@ the offending `file:line` for:
   narrowed to the declared `type` so a raw text input in the same file still
   fails.
 - M — on an autosave page (`useAutosave`/`useOmpPageSettings`/
-  `reportSettingsSaveState`) a manual Save/Apply `Button` or a
-  `toast.success` reintroduces the save chrome the contract removed: saves
-  are silent and only failures toast. Exempt per file: entity/credential
-  lifecycle toasts (create/connect/delete/install/import) matched by their
-  i18n key, and explicit draft-buffer saves such as the plugins Apply or the
-  MCP key/value env-header commit.
+  `reportSettingsSaveState`) a manual Save/Apply `Button` (matched within the
+  element's own slice, including `t('common.save')`-style or literal Save/Apply
+  labels) or a `toast.success` (matched within its own call slice) reintroduces
+  the save chrome the contract removed: saves are silent and only failures
+  toast. Exempt per file: entity/credential lifecycle toasts (create/connect/
+  delete/install/import) matched by their i18n key, and explicit draft-buffer
+  saves such as the plugins Apply or the MCP key/value env-header commit.
 - T — a `SettingsFieldRow`/`SettingsCheckboxRow` `label` bound to a bare
-  identifier or a hardcoded literal instead of `t(...)` or a JSX label
-  carrying `t()`. Exempt per file: labels resolved from a `t()` alias, a
-  deliberately unlabeled continuation row (`label={null}`), and dynamic
-  model/entity keys (role names, tracker teams, modality enums, caller-
-  supplied `item.label`).
+  identifier, a hardcoded literal, a non-`t()` helper, or JSX containing
+  hardcoded text instead of a word-boundary `t(...)` call. Exempt per file:
+  labels resolved from a `t()` alias, a deliberately unlabeled continuation row
+  (`label={null}`), and dynamic model/entity keys (role names, tool names,
+  tracker teams, modality enums, user-named passkeys, caller-supplied `item.label`).
 - X — box chrome (`border`, `rounded-*`, `bg-surface-*`, `oc-tile`) on a
-  container tag that wraps a flat row primitive, or a `p-*` padding utility
-  on a row/control primitive whose own band owns the inset. Chrome inside a
-  `SettingsCard` grid or a status callout, and on non-container tags, passes.
-
+  container tag that wraps a flat row primitive (including
+  `SettingsDisclosure`), or a `p-*` padding utility on a row/control primitive
+  whose own band owns the inset. Chrome inside a `SettingsCard` grid or a
+  status callout, and on non-container tags, passes.
+- A — search-index and `data-settings-item` anchor parity (enforced by
+  `packages/ui/src/components/sections/settingsSearchAnchors.test.ts`; see
+  [search](search.md#required-integration)): every static `settingsItem`/
+  `data-settings-item` anchor is indexed or allowlisted, every `SETTINGS_SEARCH_ITEMS`
+  entry (including `omp.<id>` rows) resolves to its owning page's anchor or
+  OMP page placement, and synthetic probes reject unindexed anchors, wrong-page
+  items, and unanchored entries.
 File exceptions stay narrow: sidebar/navigation chrome (the Responsiveness
 exception above), the project settings dialog shell, and two shared editors
 that are not settings field rows (`SettingsColorField` for widths,

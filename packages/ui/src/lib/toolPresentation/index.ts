@@ -6,7 +6,7 @@ import type { ToolGroup, ToolPresentation } from './types';
 
 export { normalizeIntent } from './intent';
 export { parseEditInputPaths } from './editInputPaths';
-export { KNOWN_TOOL_NAMES } from './presentations';
+export { KNOWN_TOOL_NAMES, describeTaskResultWithSubagents, type TaskSubagentStatusEntry } from './presentations';
 export {
     categorizeTool,
     TOOL_PERMISSION_GROUPS,

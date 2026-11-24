@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -387,3 +387,99 @@ test('killing the worker while a subagent runs leaves a settled hub roster the r
     }
   }
 }, 60_000);
+
+test('listHubSubagents never inherits stale metrics or childSessionId onto a fresh live subagent with a reused id', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'worker-hub-merge-'));
+  const stateDir = join(root, 'service-state');
+  await mkdir(stateDir, { recursive: true });
+  const rootSessionId = 'root-hub-merge';
+  const refsPath = join(stateDir, 'session-references.json');
+  await writeFile(refsPath, JSON.stringify({
+    references: {
+      [rootSessionId]: {
+        rootSessionId, projectId: 'project', workspaceId: 'workspace',
+        cwd: root, agentDirectory: join(root, 'agent'), displayPath: 'workspace',
+        sessionFile: join(root, 'root.jsonl'), sessionsDirectory: root,
+        createdAt: 1000, updatedAt: 2000,
+      },
+    },
+    relocations: {},
+    subagents: {
+      [rootSessionId]: [
+        {
+          subagentId: 'AlphaScout', parentSessionId: rootSessionId, childSessionId: 'stale-child-uuid',
+          toolCallId: 'call-old', name: 'AlphaScout', role: 'scout',
+          solutionSpace: 'old brief', description: 'old desc',
+          status: 'completed', tokens: 450, cost: 0.12, durationMs: 9000,
+          rootSessionId, workspaceId: 'workspace', projectId: 'project',
+          sessionFile: join(root, 'AlphaScout.jsonl'),
+        },
+      ],
+    },
+  }), 'utf8');
+
+  const workers = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
+    startupTimeoutMs: 5_000, stopTimeoutMs: 1_000,
+    policyCheck: async () => ({ allowed: true }),
+  });
+  const registry = new SessionRegistry(stateDir, workers);
+  try {
+    await registry.initialize();
+    const requestSpy = spyOn(workers, 'request');
+
+    // Fresh live run reusing `AlphaScout` (`persisted` absent): must not inherit stale prior fields.
+    requestSpy.mockResolvedValueOnce({
+      type: 'subagents.list',
+      subagents: [{
+        subagentId: 'AlphaScout',
+        parentSessionId: rootSessionId,
+        name: 'AlphaScout',
+        role: 'scout',
+        status: 'running',
+      }],
+    });
+    const fresh = await registry.listHubSubagents(rootSessionId);
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0]).toMatchObject({ subagentId: 'AlphaScout', status: 'running', role: 'scout' });
+    expect(fresh[0]?.childSessionId).toBeUndefined();
+    expect(fresh[0]?.durationMs).toBeUndefined();
+    expect(fresh[0]?.tokens).toBeUndefined();
+    expect(fresh[0]?.cost).toBeUndefined();
+    expect(fresh[0]?.solutionSpace).toBeUndefined();
+    expect(fresh[0]?.toolCallId).toBeUndefined();
+
+    // Disk-revived entry (`persisted: true`): must retain pre-restart settled metadata.
+    requestSpy.mockResolvedValueOnce({
+      type: 'subagents.list',
+      subagents: [{
+        subagentId: 'AlphaScout',
+        parentSessionId: rootSessionId,
+        name: 'AlphaScout',
+        role: 'AlphaScout',
+        status: 'parked',
+        persisted: true,
+      }],
+    });
+    const revived = await registry.listHubSubagents(rootSessionId);
+    expect(revived).toHaveLength(1);
+    expect(revived[0]).toMatchObject({
+      subagentId: 'AlphaScout',
+      status: 'completed',
+      childSessionId: 'stale-child-uuid',
+      role: 'scout',
+      solutionSpace: 'old brief',
+      toolCallId: 'call-old',
+      durationMs: 9000,
+      tokens: 450,
+      cost: 0.12,
+      persisted: true,
+    });
+  } finally {
+    try { await registry.close(); } finally {
+      try { await workers.close(); } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  }
+});

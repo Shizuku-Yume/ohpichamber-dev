@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SETTINGS_SEARCH_ITEMS, shortcutSearchItemId } from '@/lib/settings/search';
+import { parsePlacement } from '@openchamber/agent-contract';
+import { SETTINGS_SEARCH_ITEMS, shortcutSearchItemId, type SettingsSearchItem } from '@/lib/settings/search';
 import { ompLayoutSettingIds } from '@/components/sections/openchamber/ompSettingsLayout';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
 import type { SettingsPageSlug } from '@/lib/settings/metadata';
@@ -51,15 +52,13 @@ function walk(directory: string, files: string[] = []): string[] {
 }
 
 /** Every literal id an attribute can write, plus template namespaces. */
-function collectAnchors(): Anchor[] {
+function collectAnchorsFromSources(sources: ReadonlyArray<{ readonly file: string; readonly source: string }>): Anchor[] {
   const anchors: Anchor[] = [];
   const ATTRIBUTE = /(?:settingsItem|data-settings-item)\s*=\s*(?:"([^"]*)"|\{`([^`]*)`\}|\{'([^']*)'\}|\{([^{}]+)\})/g;
   // `const settingsItem = `a.${x}`` assigned to a variable that flows into an
   // attribute: the variable's template claims its static prefix namespace.
   const CONST_NAMESPACE = /(?:settingsItem|itemAnchor|anchor)\s*=\s*`([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)\.\$\{/g;
-  for (const fullPath of walk(COMPONENTS_ROOT)) {
-    const source = readFileSync(fullPath, 'utf8');
-    const file = relative(COMPONENTS_ROOT, fullPath).split(sep).join('/');
+  for (const { file, source } of sources) {
     for (const match of source.matchAll(ATTRIBUTE)) {
       const literal = match[1] ?? match[3];
       const template = match[2];
@@ -97,6 +96,14 @@ function collectAnchors(): Anchor[] {
     }
   }
   return anchors;
+}
+
+function collectAnchors(): Anchor[] {
+  const sources = walk(COMPONENTS_ROOT).map((fullPath) => ({
+    file: relative(COMPONENTS_ROOT, fullPath).split(sep).join('/'),
+    source: readFileSync(fullPath, 'utf8'),
+  }));
+  return collectAnchorsFromSources(sources);
 }
 /**
  * The Settings page slug that renders each file. `sections/<dir>` maps
@@ -225,7 +232,41 @@ const UNANCHORED_SEARCH_ITEMS = new Map(Object.entries({
   'behavior.files.system-md': '`itemAnchor` expression picks system-md on the global scope in BehaviorSidebar',
 }));
 
+const OMP_PLACEMENT_PAGE_MAP = new Map<string, SettingsPageSlug>([
+  ['general', 'general'],
+  ['chat', 'chat'],
+  ['sessions', 'sessions'],
+  ['behavior', 'behavior'],
+  ['agents', 'agents'],
+  ['commands', 'commands'],
+  ['skills', 'skills.installed'],
+  ['memory', 'memory'],
+  ['tools', 'tools'],
+  ['usage', 'usage'],
+]);
+
+function readOmpPageSettingOwners(): Map<string, SettingsPageSlug> {
+  const settingsUiPath = join(COMPONENTS_ROOT, '../../../../packages/agent-service/src/worker/settings-ui.ts');
+  const source = readFileSync(settingsUiPath, 'utf8');
+  const match = source.match(/const RAW_PLACEMENTS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
+  if (!match) throw new Error('RAW_PLACEMENTS not found in settings-ui.ts');
+  const owners = new Map<string, SettingsPageSlug>();
+  for (const rawLine of match[1].split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('//')) continue;
+    const entry = line.match(/^'([^']+)':\s*'([^']+)',?(?:\s*\/\/.*)?$/);
+    if (!entry) throw new Error(`Unparseable RAW_PLACEMENTS entry: ${line}`);
+    const placement = parsePlacement(entry[2]);
+    if (placement.type !== 'page') continue;
+    const pageSlug = OMP_PLACEMENT_PAGE_MAP.get(placement.page);
+    if (!pageSlug) throw new Error(`Unmapped OMP settings page "${placement.page}" for "${entry[1]}"`);
+    owners.set(entry[1], pageSlug);
+  }
+  return owners;
+}
+
 const OMP_LAYOUT_IDS = new Set(ompLayoutSettingIds());
+const OMP_PAGE_OWNERS = readOmpPageSettingOwners();
 const SHORTCUT_IDS = new Set(getCustomizableShortcutActions().map((action) => shortcutSearchItemId(action.id)));
 
 /** Anchor id -> covered, when it lands inside a dynamic namespace. */
@@ -240,65 +281,116 @@ function isDynamicAnchor(id: string): boolean {
   );
 }
 
-function registryCovered(id: string): boolean {
+function registryCovered(
+  id: string,
+  searchItems: readonly SettingsSearchItem[],
+  ompLayoutIds: ReadonlySet<string>,
+): boolean {
   return (
-    SETTINGS_SEARCH_ITEMS.some((item) => item.id === id) ||
-    (id.startsWith('omp.') && OMP_LAYOUT_IDS.has(id.slice('omp.'.length))) ||
+    searchItems.some((item) => item.id === id) ||
+    (id.startsWith('omp.') && ompLayoutIds.has(id.slice('omp.'.length))) ||
     SHORTCUT_IDS.has(id)
   );
+}
+
+/** Forward Rule A: every static anchor must be indexed, dynamic, or allowlisted. */
+function findUnindexedAnchors(
+  anchors: readonly Anchor[],
+  searchItems: readonly SettingsSearchItem[],
+  ompLayoutIds: ReadonlySet<string> = OMP_LAYOUT_IDS,
+): string[] {
+  const offenders: string[] = [];
+  for (const anchor of anchors) {
+    if (anchor.namespace === true || anchor.mid === true) continue;
+    if (registryCovered(anchor.id, searchItems, ompLayoutIds)) continue;
+    if (isDynamicAnchor(anchor.id)) continue;
+    if (UNINDEXED_ANCHORS.get(anchor.id) !== undefined || NON_SETTING_ANCHORS.get(anchor.id) !== undefined) continue;
+    offenders.push(`${anchor.id} (${anchor.file})`);
+  }
+  return [...new Set(offenders)].sort();
+}
+
+/** Reverse Rule A: every registry item must resolve to an anchor (or OMP owner) on its declared page. */
+function findBrokenSearchItems(
+  anchors: readonly Anchor[],
+  searchItems: readonly SettingsSearchItem[],
+  ompLayoutIds: ReadonlySet<string> = OMP_LAYOUT_IDS,
+  ompPageOwners: ReadonlyMap<string, SettingsPageSlug> = OMP_PAGE_OWNERS,
+): string[] {
+  const anchorsByPage = new Map<string, Set<string>>();
+  const namespacesByPage = new Map<string, string[]>();
+  for (const anchor of anchors) {
+    const page = pageForFile(anchor.file);
+    if (page === null) continue;
+    if (anchor.namespace === true) {
+      if (!namespacesByPage.has(page)) namespacesByPage.set(page, []);
+      namespacesByPage.get(page)!.push(anchor.id);
+      continue;
+    }
+    if (anchor.mid === true) continue;
+    if (!anchorsByPage.has(page)) anchorsByPage.set(page, new Set());
+    anchorsByPage.get(page)!.add(anchor.id);
+  }
+  const hasAnchor = (id: string, page: string): boolean => {
+    if (anchorsByPage.get(page)?.has(id)) return true;
+    return (namespacesByPage.get(page) ?? []).some((ns) => id.startsWith(ns));
+  };
+  const offenders: string[] = [];
+  for (const item of searchItems) {
+    const target = SEARCH_TARGET_REDIRECTS.get(item.id) ?? item.id;
+    if (hasAnchor(target, item.page)) continue;
+    if (item.id.startsWith('shortcuts.action.')) continue;
+    if (item.id.startsWith('omp.')) {
+      const settingId = item.id.slice('omp.'.length);
+      if (ompLayoutIds.has(settingId)) {
+        if (item.page !== 'omp') offenders.push(`${item.id} -> omp (got page ${item.page})`);
+        continue;
+      }
+      const expectedPage = ompPageOwners.get(settingId);
+      if (expectedPage !== undefined) {
+        if (item.page !== expectedPage) offenders.push(`${item.id} -> ${expectedPage} (got page ${item.page})`);
+        continue;
+      }
+      offenders.push(`${item.id} -> ${target} (page ${item.page})`);
+      continue;
+    }
+    if (UNANCHORED_SEARCH_ITEMS.get(item.id) !== undefined) continue;
+    offenders.push(`${item.id} -> ${target} (page ${item.page})`);
+  }
+  return [...new Set(offenders)].sort();
+}
+
+/** Every `page:section` OMP setting rendered by a page must be indexed on that page. */
+function findMissingOmpPageSearchItems(
+  ompPageOwners: ReadonlyMap<string, SettingsPageSlug>,
+  searchItems: readonly SettingsSearchItem[],
+): string[] {
+  const byId = new Map(searchItems.map((item) => [item.id, item]));
+  const offenders: string[] = [];
+  for (const [settingId, expectedPage] of ompPageOwners) {
+    const item = byId.get(`omp.${settingId}`);
+    if (!item) {
+      offenders.push(`omp.${settingId} missing from SETTINGS_SEARCH_ITEMS (expected page ${expectedPage})`);
+    } else if (item.page !== expectedPage) {
+      offenders.push(`omp.${settingId} on page ${item.page} (expected ${expectedPage})`);
+    }
+  }
+  return offenders.sort();
 }
 
 describe('settings search anchors', () => {
   const anchors = collectAnchors().filter((a) => a.file.startsWith('sections/'));
 
   test('every anchor is either indexed or allowlisted', () => {
-    const offenders: string[] = [];
-    for (const anchor of anchors) {
-      if (anchor.namespace === true || anchor.mid === true) {
-        // Namespaces are claimed by prefix, not per resolved row.
-        continue;
-      }
-      if (registryCovered(anchor.id)) continue;
-      if (isDynamicAnchor(anchor.id)) continue;
-      if (UNINDEXED_ANCHORS.get(anchor.id) !== undefined || NON_SETTING_ANCHORS.get(anchor.id) !== undefined) continue;
-      offenders.push(`${anchor.id} (${anchor.file})`);
-    }
-    expect([...new Set(offenders)].sort()).toEqual([]);
+    expect(findUnindexedAnchors(anchors, SETTINGS_SEARCH_ITEMS)).toEqual([]);
   });
 
   test('every registry item resolves to an anchor on its page', () => {
-    const anchorsByPage = new Map<string, Set<string>>();
-    const namespacesByPage = new Map<string, string[]>();
-    for (const anchor of anchors) {
-      const page = pageForFile(anchor.file);
-      if (page === null) continue;
-      if (anchor.namespace === true) {
-        if (!namespacesByPage.has(page)) namespacesByPage.set(page, []);
-        namespacesByPage.get(page)!.push(anchor.id);
-        continue;
-      }
-      if (anchor.mid === true) continue;
-      if (!anchorsByPage.has(page)) anchorsByPage.set(page, new Set());
-      anchorsByPage.get(page)!.add(anchor.id);
-    }
-    const hasAnchor = (id: string, page: string): boolean => {
-      if (anchorsByPage.get(page)?.has(id)) return true;
-      return (namespacesByPage.get(page) ?? []).some((ns) => id.startsWith(ns));
-    };
-    const offenders: string[] = [];
-    for (const item of SETTINGS_SEARCH_ITEMS) {
-      const target = SEARCH_TARGET_REDIRECTS.get(item.id) ?? item.id;
-      if (hasAnchor(target, item.page)) continue;
-      if (item.id.startsWith('shortcuts.action.')) continue;
-      if (item.id.startsWith('omp.modelRoles.')) continue;
-      // `omp.<id>` renders through useOmpPageSettings + OmpRowControl
-      // (`omp.${setting.id}`) — dynamic from static JSX on every page,
-      // including the omp page whose rows come from ompSettingsLayout.
-      if (item.id.startsWith('omp.')) continue;
-      if (UNANCHORED_SEARCH_ITEMS.get(item.id) !== undefined) continue;
-      offenders.push(`${item.id} -> ${target} (page ${item.page})`);
-    }
-    expect([...new Set(offenders)].sort()).toEqual([]);
+    expect(findBrokenSearchItems(anchors, SETTINGS_SEARCH_ITEMS)).toEqual([]);
+  });
+
+  test('every page-placed OMP setting is indexed on its owning page', () => {
+    expect(findMissingOmpPageSearchItems(OMP_PAGE_OWNERS, SETTINGS_SEARCH_ITEMS)).toEqual([]);
   });
 
   test('allowlists name anchors and entries that still exist, with reasons', () => {
@@ -325,28 +417,44 @@ describe('settings search anchors', () => {
   });
 
   describe('synthetic probes (Rule A rejects drift)', () => {
-    const anchorIds = new Set(anchors.map((a) => a.id));
-    const registryIds = new Set(SETTINGS_SEARCH_ITEMS.map((item) => item.id));
-
-    test('an unindexed anchor is reported', () => {
-      expect(registryCovered('probe.unindexed-anchor')).toBe(false);
-      expect(UNINDEXED_ANCHORS.get('probe.unindexed-anchor')).toBeUndefined();
-      expect(NON_SETTING_ANCHORS.get('probe.unindexed-anchor')).toBeUndefined();
+    test('an unindexed settingsItem anchor in TSX is rejected by the forward check', () => {
+      const injected = collectAnchorsFromSources([
+        { file: 'agents/AgentsPage.tsx', source: '<SettingsFieldRow settingsItem="probe.unindexed-anchor" />' },
+      ]);
+      expect(findUnindexedAnchors(injected, SETTINGS_SEARCH_ITEMS)).toEqual([
+        'probe.unindexed-anchor (agents/AgentsPage.tsx)',
+      ]);
     });
 
-    test('an anchor on the wrong page is a page mismatch', () => {
-      // `agents.name` renders on the agents page; a registry hit on any other
-      // page would not find it via anchorsByPage.
-      const agentsAnchors = new Set(anchors.filter((a) => pageForFile(a.file) === 'agents').map((a) => a.id));
-      expect(agentsAnchors.has('agents.name')).toBe(true);
-      const chatAnchors = new Set(anchors.filter((a) => pageForFile(a.file) === 'chat').map((a) => a.id));
-      expect(chatAnchors.has('agents.name')).toBe(false);
+    test('a registry item on the wrong page is rejected by the reverse check', () => {
+      const wrongPageItem: SettingsSearchItem = {
+        id: 'agents.name',
+        page: 'chat',
+        titleKey: 'settings.agents.page.field.agentName',
+      };
+      expect(findBrokenSearchItems(anchors, [wrongPageItem])).toEqual([
+        'agents.name -> agents.name (page chat)',
+      ]);
+
+      const wrongOmpPageItem: SettingsSearchItem = {
+        id: 'omp.autoResume',
+        page: 'chat',
+        titleKey: 'settings.omp.items.autoResume.label',
+      };
+      expect(findBrokenSearchItems(anchors, [wrongOmpPageItem])).toEqual([
+        'omp.autoResume -> sessions (got page chat)',
+      ]);
     });
 
-    test('a registry id without an anchor fails the reverse check', () => {
-      expect(registryIds.size).toBeGreaterThan(0);
-      expect(anchorIds.has('probe.no-such-anchor')).toBe(false);
-      expect(UNANCHORED_SEARCH_ITEMS.get('probe.no-such-anchor')).toBeUndefined();
+    test('a registry item without an anchor is rejected by the reverse check', () => {
+      const unanchoredItem: SettingsSearchItem = {
+        id: 'probe.no-such-anchor',
+        page: 'agents',
+        titleKey: 'settings.agents.page.field.agentName',
+      };
+      expect(findBrokenSearchItems(anchors, [unanchoredItem])).toEqual([
+        'probe.no-such-anchor -> probe.no-such-anchor (page agents)',
+      ]);
     });
   });
 });

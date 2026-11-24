@@ -75,6 +75,19 @@ describe('subagentElapsedMs', () => {
     expect(row.elapsedMs).toBe(4_200);
   });
 
+  test('prefers subagent.updatedAt - subagent.createdAt over child session timestamps so settled rows do not tick with parent age', () => {
+    const child = session('child', { createdAt: 1_000, updatedAt: 99_000 });
+    const live = subagent({
+      subagentId: 'BetaWorker-3',
+      childSessionId: 'child',
+      status: 'cancelled',
+      createdAt: 10_000,
+      updatedAt: 22_061,
+    });
+    const row = deriveSubagentRows(input({ children: [child], liveSubagents: [live] }))[0];
+    expect(row.elapsedMs).toBe(12_061);
+  });
+
   test('falls back to the child session lifetime', () => {
     const child = session('child', { createdAt: 10, updatedAt: 25 });
     const row = deriveSubagentRows(input({ children: [child], statuses: { child: 'idle' }, statusReady: true }))[0];
@@ -183,6 +196,40 @@ describe('deriveSubagentRows', () => {
     expect(rows[0].blocked).toBe(false);
   });
 
+  test('terminal subagent statuses are never pinned as blocked or asked by stale pending requests', () => {
+    const staleApproval: ApprovalRequest = {
+      version: '1', epoch: 'epoch', workerGeneration: 'worker', approvalId: 'a-stale', sessionId: 'parent', turnId: 'run', toolCallId: 'call_bash',
+      toolName: 'bash', actionType: 'bash_command', commandSummary: 'sleep 15 && pwd', details: {}, status: 'pending', requestedAt: 1,
+      subagentId: 'CancelledChild', childSessionId: 'child-cancelled',
+    };
+    const cancelled = subagent({ subagentId: 'CancelledChild', status: 'cancelled', childSessionId: 'child-cancelled', createdAt: 10 });
+    const failed = subagent({ subagentId: 'FailedChild', status: 'failed', childSessionId: 'child-failed', createdAt: 9 });
+    const completed = subagent({ subagentId: 'DoneChild', status: 'completed', childSessionId: 'child-done', createdAt: 8 });
+    const running = subagent({ subagentId: 'RunningChild', status: 'running', childSessionId: 'child-running', createdAt: 5 });
+
+    const rows = deriveSubagentRows(input({
+      liveSubagents: [cancelled, failed, completed, running],
+      statuses: { 'child-cancelled': 'awaiting_approval', 'child-failed': 'awaiting_input' },
+      permissions: { parent: [staleApproval], 'child-cancelled': [staleApproval] },
+      forms: {
+        'child-failed': [{
+          version: '1', epoch: 'epoch', workerGeneration: 'worker', questionId: 'q-stale', sessionId: 'child-failed', turnId: 'run', prompt: 'Continue?',
+          status: 'pending', requestedAt: 1,
+        }],
+      },
+    }));
+
+    expect(rows.map((row) => row.subagentId)).toEqual(['RunningChild', 'CancelledChild', 'FailedChild', 'DoneChild']);
+    const cancelledRow = rows.find((row) => row.subagentId === 'CancelledChild')!;
+    expect(cancelledRow.blocked).toBe(false);
+    expect(cancelledRow.asked).toBe(false);
+    expect(cancelledRow.cancelled).toBe(true);
+    expect(cancelledRow.finished).toBe(true);
+    const failedRow = rows.find((row) => row.subagentId === 'FailedChild')!;
+    expect(failedRow.asked).toBe(false);
+    expect(failedRow.failed).toBe(true);
+    expect(failedRow.finished).toBe(true);
+  });
   test('looks up a report by subagentId for the row tooltip', () => {
     const report: SubagentReport = { subagentId: 'S1', state: 'completed', output: '## Summary\nAll clear.' };
     const rows = deriveSubagentRows(input({

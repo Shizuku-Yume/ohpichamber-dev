@@ -109,8 +109,31 @@ async function persistSubagent(deps: SubagentLifecycleDeps, rootSessionId: strin
       parentSessionId = parent.childSessionId;
     }
   }
+  const now = Date.now();
   const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'cancelled' : input.status;
-  const record: ChildRecord = { subagentId: input.subagentId, parentSessionId, childSessionId: identity.childSessionId, name: input.subagentId, role: input.role, status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
+  const createdAt = status === 'running'
+    ? (existing?.status === 'running' && existing.createdAt !== undefined ? existing.createdAt : now)
+    : (existing?.createdAt ?? now);
+  const updatedAt = Math.max(createdAt, now);
+  const record: ChildRecord = {
+    subagentId: input.subagentId,
+    parentSessionId,
+    childSessionId: identity.childSessionId,
+    name: input.subagentId,
+    role: input.role,
+    status,
+    createdAt,
+    updatedAt,
+    rootSessionId,
+    workspaceId: entry.input.workspaceId,
+    projectId: entry.input.projectId,
+    sessionFile: input.sessionFile,
+  };
+  if (status !== 'running') {
+    record.durationMs = existing?.status !== 'running' && existing?.durationMs !== undefined
+      ? existing.durationMs
+      : Math.max(0, updatedAt - createdAt);
+  }
   const toolCallId = input.toolCallId ?? existing?.toolCallId;
   if (toolCallId) record.toolCallId = toolCallId;
   const description = input.description ?? existing?.description;
@@ -142,8 +165,14 @@ async function persistSubagent(deps: SubagentLifecycleDeps, rootSessionId: strin
 export function settleSubagentsForExit(deps: SubagentLifecycleDeps, rootSessionId: string, opened: Opened): void {
   const orphans = [...deps.subagents.values()].filter(record => record.rootSessionId === rootSessionId && record.status === 'running');
   if (orphans.length === 0) return;
+  const now = Date.now();
+  const settledRecords: ChildRecord[] = [];
   for (const orphan of orphans) {
-    const record: ChildRecord = { ...orphan, status: 'cancelled' };
+    const createdAt = orphan.createdAt ?? now;
+    const updatedAt = Math.max(createdAt, now);
+    const durationMs = orphan.durationMs ?? Math.max(0, updatedAt - createdAt);
+    const record: ChildRecord = { ...orphan, status: 'cancelled', createdAt, updatedAt, durationMs };
+    settledRecords.push(record);
     deps.subagents.set(subagentKey(rootSessionId, record.subagentId), record);
     const { rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...subagent } = record;
     // A closed journal (relocation, service shutdown) rejects append; the
@@ -153,7 +182,7 @@ export function settleSubagentsForExit(deps: SubagentLifecycleDeps, rootSessionI
   }
   const previous = deps.tails.get(rootSessionId) ?? Promise.resolve();
   const settled = previous.then(async () => {
-    for (const orphan of orphans) await deps.references.putSubagent({ ...orphan, status: 'cancelled' });
+    for (const record of settledRecords) await deps.references.putSubagent(record);
   }).catch(() => { });
   deps.tails.set(rootSessionId, settled);
   void settled.finally(() => { if (deps.tails.get(rootSessionId) === settled) deps.tails.delete(rootSessionId); });

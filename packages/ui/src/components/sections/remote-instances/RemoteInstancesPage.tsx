@@ -2601,15 +2601,9 @@ export const RemoteInstancesPage: React.FC = () => {
                   }));
                 };
 
-                const localLabel = forward.type === 'remote'
-                  ? t('settings.remoteInstances.page.forward.localTarget')
-                  : t('settings.remoteInstances.page.forward.localListen');
                 const localHint = forward.type === 'remote'
                   ? t('settings.remoteInstances.page.forward.localTargetHint')
                   : t('settings.remoteInstances.page.forward.localListenHint');
-                const remoteLabel = forward.type === 'remote'
-                  ? t('settings.remoteInstances.page.forward.remoteListen')
-                  : t('settings.remoteInstances.page.forward.remoteTarget');
                 const remoteHint = forward.type === 'remote'
                   ? t('settings.remoteInstances.page.forward.remoteListenHint')
                   : t('settings.remoteInstances.page.forward.remoteTargetHint');
@@ -2701,7 +2695,12 @@ export const RemoteInstancesPage: React.FC = () => {
                           </Select>
                         </SettingsFieldRow>
 
-                        <SettingsFieldRow label={localLabel} info={localHint}>
+                        <SettingsFieldRow
+                          label={forward.type === 'remote'
+                            ? t('settings.remoteInstances.page.forward.localTarget')
+                            : t('settings.remoteInstances.page.forward.localListen')}
+                          info={localHint}
+                        >
                           <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex items-center gap-1.5')}>
                             <Input
                               inputSize="compact"
@@ -2741,7 +2740,12 @@ export const RemoteInstancesPage: React.FC = () => {
                         </SettingsFieldRow>
 
                         {forward.type !== 'dynamic' ? (
-                          <SettingsFieldRow label={remoteLabel} info={remoteHint}>
+                          <SettingsFieldRow
+                            label={forward.type === 'remote'
+                              ? t('settings.remoteInstances.page.forward.remoteListen')
+                              : t('settings.remoteInstances.page.forward.remoteTarget')}
+                            info={remoteHint}
+                          >
                             <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex items-center gap-1.5')}>
                               <Input
                                 inputSize="compact"

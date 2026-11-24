@@ -32,7 +32,7 @@ import type { ImageModel, Model, Provider } from '@openchamber/agent-contract';
  * The model fields the picker reads. Chat `Model` and `ImageModel` both carry
  * them; the kind-specific fields stay on the caller's own catalog types.
  */
-export type ModelPickerModel = Pick<Model | ImageModel, 'modelId' | 'name'> & {
+type ModelPickerModel = Pick<Model | ImageModel, 'modelId' | 'name'> & {
  contextWindow?: number;
  maxOutputTokens?: number;
 };

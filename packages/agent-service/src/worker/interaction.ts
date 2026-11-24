@@ -244,6 +244,7 @@ export class WorkerInteraction {
    * not pass through this method at all.
    */
   private async requestApproval(turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string, choices: [string, string], signal?: AbortSignal): Promise<string | undefined> {
+    if (this.closed || signal?.aborted) return undefined;
     const approvalId = randomUUID();
     const [approve, reject] = choices;
     const action = actionType(toolName);
@@ -257,13 +258,20 @@ export class WorkerInteraction {
     };
     const { promise, resolve } = Promise.withResolvers<string | undefined>();
     this.approvalHandles.set(approvalId, { toolCallId, resolve, approve, reject });
-    const abort = () => { this.approvalHandles.delete(approvalId); this.executionReceipts.delete(toolCallId); resolve(undefined); };
+    const abort = () => {
+      if (!this.approvalHandles.delete(approvalId)) return;
+      this.executionReceipts.delete(toolCallId);
+      this.callbacks.request({ kind: 'cancel', approvalId });
+      resolve(undefined);
+    };
     signal?.addEventListener('abort', abort, { once: true });
     try {
-      if (signal?.aborted) abort();
-      else this.callbacks.request(interaction);
+      this.callbacks.request(interaction);
       return await promise;
-    } finally { signal?.removeEventListener('abort', abort); }
+    } finally {
+      this.approvalHandles.delete(approvalId);
+      signal?.removeEventListener('abort', abort);
+    }
   }
 
   private approvalInput(toolCall: ClientBridgePermissionToolCall): JsonObject {
@@ -297,8 +305,8 @@ export class WorkerInteraction {
     const { promise, resolve } = Promise.withResolvers<NativePermissionChoice | undefined>();
     this.permissionHandles.set(approvalId, { toolCallId: toolCall.toolCallId, resolve });
     const abort = () => {
-      if (!this.permissionHandles.has(approvalId)) return;
-      this.permissionHandles.delete(approvalId);
+      if (!this.permissionHandles.delete(approvalId)) return;
+      this.callbacks.request({ kind: 'cancel', approvalId });
       resolve(undefined);
     };
     const steerAbort = () => {
@@ -337,18 +345,24 @@ export class WorkerInteraction {
       commandSummary: approvalInputSummary(action, input), details: {},
       policyTarget: { toolName: 'bash', pattern: JSON.stringify(input) }, turnId, nativeGrant: true,
     });
-    const abort = () => { this.approvalHandles.delete(approvalId); resolve(undefined); };
+    const abort = () => {
+      if (!this.approvalHandles.delete(approvalId)) return;
+      this.callbacks.request({ kind: 'cancel', approvalId });
+      resolve(undefined);
+    };
     signal?.addEventListener('abort', abort, { once: true });
     try {
       if (signal?.aborted) abort();
       return await promise === 'Approve';
-    } finally { signal?.removeEventListener('abort', abort); }
+    } finally {
+      this.approvalHandles.delete(approvalId);
+      signal?.removeEventListener('abort', abort);
+    }
   }
 
   private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: ExtensionUIDialogOptions, presentation?: JsonObject): Promise<ExtensionAskDialogResult | undefined> {
-    if (this.closed) return undefined;
-    const turnId = this.callbacks.currentTurn();
-    if (!turnId || questions.length === 0) return undefined;
+    if (this.closed || dialogOptions?.signal?.aborted || questions.length === 0) return undefined;
+    const turnId = this.callbacks.currentTurn() ?? 'turn-0';
     const questionId = randomUUID();
     const safeQuestions = questions.map((question): ExtensionAskDialogQuestion => {
       const options = question.options.map((option): ExtensionAskDialogOption => {
@@ -375,22 +389,28 @@ export class WorkerInteraction {
     const subagent = callId ? this.callbacks.subagentForToolCall?.(callId) : undefined;
     const { promise, resolve } = Promise.withResolvers<ExtensionAskDialogResult | undefined>();
     this.questionHandles.set(questionId, { questions, resolve });
-    this.callbacks.request({
-      kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'),
-      schema, timeout: dialogOptions?.timeout,
-      ...(subagent === undefined ? {} : { subagentId: subagent.subagentId, ...(subagent.childSessionId === undefined ? {} : { childSessionId: subagent.childSessionId }) }),
-    });
-    if (dialogOptions?.signal) {
-      const abort = () => { this.questionHandles.delete(questionId); resolve(undefined); };
-      if (dialogOptions.signal.aborted) abort();
-      else dialogOptions.signal.addEventListener('abort', abort, { once: true });
+    const abort = () => {
+      if (!this.questionHandles.delete(questionId)) return;
+      this.callbacks.request({ kind: 'cancel', questionId });
+      resolve(undefined);
+    };
+    dialogOptions?.signal?.addEventListener('abort', abort, { once: true });
+    try {
+      this.callbacks.request({
+        kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'),
+        schema, timeout: dialogOptions?.timeout,
+        ...(subagent === undefined ? {} : { subagentId: subagent.subagentId, ...(subagent.childSessionId === undefined ? {} : { childSessionId: subagent.childSessionId }) }),
+      });
+      return await promise;
+    } finally {
+      this.questionHandles.delete(questionId);
+      dialogOptions?.signal?.removeEventListener('abort', abort);
     }
-    return promise;
   }
 
   private async formDialog(html: string, options?: ExtensionUIDialogOptions): Promise<ExtensionFormDialogResult | undefined> {
-    const turnId = this.callbacks.currentTurn();
-    if (this.closed || !turnId || options?.signal?.aborted) return undefined;
+    if (this.closed || options?.signal?.aborted) return undefined;
+    const turnId = this.callbacks.currentTurn() ?? 'turn-0';
     const form = new NativeFormDialog(html, options?.timeout);
     const questionId = randomUUID();
     const { promise, resolve } = Promise.withResolvers<ExtensionFormDialogResult | undefined>();

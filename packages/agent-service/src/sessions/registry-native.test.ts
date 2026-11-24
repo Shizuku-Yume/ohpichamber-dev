@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { existsSync, watch } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -1205,4 +1205,64 @@ test('persisted subagent identity emits the resolved child UUID live and keeps l
       expect(child).toMatchObject({ subagentId: 'SettingsAuditScout', name: 'SettingsAuditScout', role: 'scout', description: 'Audit settings IA', solutionSpace: 'Check settings IA', childSessionId });
     } finally { subscription.unsubscribe(); }
   } finally { await harness.close(); }
+}, 60000);
+
+test('persisted subagent lifecycle records createdAt, updatedAt, and settled durationMs across restart and exit settle', async () => {
+  const harness = await fixture();
+  const nowSpy = spyOn(Date, 'now');
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+
+    nowSpy.mockReturnValue(1_700_000_000_000);
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'PersistedTimedChild', status: 'started', role: 'task', sessionFile: harness.childFile,
+    });
+    const started = harness.sessions.listSubagents(rootSessionId).find(item => item.subagentId === 'PersistedTimedChild');
+    expect(started?.createdAt).toBe(1_700_000_000_000);
+    expect(started?.updatedAt).toBe(1_700_000_000_000);
+    expect(started?.durationMs).toBeUndefined();
+
+    nowSpy.mockReturnValue(1_700_000_016_000);
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'PersistedTimedChild', status: 'completed', role: 'task', sessionFile: harness.childFile,
+    });
+    const completed = harness.sessions.listSubagents(rootSessionId).find(item => item.subagentId === 'PersistedTimedChild');
+    expect(completed?.createdAt).toBe(1_700_000_000_000);
+    expect(completed?.updatedAt).toBe(1_700_000_016_000);
+    expect(completed?.durationMs).toBe(16_000);
+
+    await harness.restart();
+    const afterRestart = harness.sessions.listSubagents(rootSessionId).find(item => item.subagentId === 'PersistedTimedChild');
+    expect(afterRestart).toEqual(completed);
+
+    await harness.sessions.reopen(harness.source);
+    const reopenedScope = harness.workers.authorizationScope(rootSessionId);
+    if (!reopenedScope) throw new Error('Reopened root worker generation is required');
+    const secondChildDir = dirname(harness.childFile);
+    const secondChild = await SessionManager.open(join(secondChildDir, 'child-2.jsonl'), secondChildDir, undefined, { initialCwd: harness.source.cwd, parentSession: harness.source.sessionFile });
+    secondChild.appendMessage({ role: 'user', content: 'Exit settled child task', timestamp: 1_700_000_019_000 });
+    await secondChild.ensureOnDisk();
+    await secondChild.flush();
+    const secondChildFile = secondChild.getSessionFile();
+    await secondChild.close();
+    if (!secondChildFile) throw new Error('Second native descendant storage is required');
+    nowSpy.mockReturnValue(1_700_000_020_000);
+    await harness.sessions.onSubagent(rootSessionId, reopenedScope.workerGeneration, {
+      subagentId: 'ExitSettledChild', status: 'started', role: 'task', sessionFile: secondChildFile,
+    });
+    nowSpy.mockReturnValue(1_700_000_032_500);
+    await harness.workers.stop(rootSessionId);
+    const cancelled = harness.sessions.listSubagents(rootSessionId).find(item => item.subagentId === 'ExitSettledChild');
+    expect(cancelled?.status).toBe('cancelled');
+    expect(cancelled?.createdAt).toBe(1_700_000_020_000);
+    expect(cancelled?.updatedAt).toBe(1_700_000_032_500);
+    expect(cancelled?.durationMs).toBe(12_500);
+
+    await harness.restart();
+    expect(harness.sessions.listSubagents(rootSessionId).find(item => item.subagentId === 'ExitSettledChild')).toEqual(cancelled);
+  } finally {
+    nowSpy.mockRestore();
+    await harness.close();
+  }
 }, 60000);

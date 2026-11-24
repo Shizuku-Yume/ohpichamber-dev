@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-
-import { OMP_SETTING_PLACEMENTS } from '../../../../../agent-service/src/worker/settings-ui';
-
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parsePlacement } from '@openchamber/agent-contract';
 import { dict as enDict } from '@/lib/i18n/messages/en';
 import { dict as esDict } from '@/lib/i18n/messages/es';
 import { dict as deDict } from '@/lib/i18n/messages/de';
@@ -50,8 +51,25 @@ const localeDictionaries = {
 } satisfies Record<string, Record<string, string>>;
 
 /** Engine ids the agent service places on the OMP page, read from its placement table. */
-const ENGINE_PLACED_IDS = Object.entries(OMP_SETTING_PLACEMENTS)
-  .flatMap(([id, placement]) => (placement.type === 'engine' ? [id] : []));
+const exposedEngineIds = (): string[] => {
+  const settingsUiPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../../../agent-service/src/worker/settings-ui.ts',
+  );
+  const source = readFileSync(settingsUiPath, 'utf8');
+  const match = source.match(/const RAW_PLACEMENTS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
+  if (!match) throw new Error('RAW_PLACEMENTS not found in settings-ui.ts');
+  const ids: string[] = [];
+  for (const rawLine of match[1].split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('//')) continue;
+    const entry = line.match(/^'([^']+)':\s*'([^']+)',?(?:\s*\/\/.*)?$/);
+    if (!entry) throw new Error(`Unparseable RAW_PLACEMENTS entry: ${line}`);
+    if (parsePlacement(entry[2]).type === 'engine') ids.push(entry[1]);
+  }
+  return ids;
+};
+const ENGINE_PLACED_IDS = exposedEngineIds();
 
 const groupSettingIds = (group: OmpLayoutGroup): string[] => group.entries.map(
   (entry) => (isPresetEntry(entry) ? 'read.summarize.enabled' : entry),

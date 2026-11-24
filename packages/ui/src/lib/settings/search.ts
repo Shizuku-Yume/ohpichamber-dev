@@ -47,18 +47,92 @@ const ompLayoutSearchItems = (): SettingsSearchItem[] => ompLayoutSettingIds().m
 }));
 
 /**
+ * Page-placed OMP settings rendered via `OmpRowControl` (or explicit row
+ * anchors like `omp.sharpshooter.model`) across concept Settings pages.
+ * `settingsSearchAnchors.test.ts` verifies 1:1 parity against
+ * `packages/agent-service/src/worker/settings-ui.ts` (`page:section` rows).
+ */
+const OMP_PAGE_SETTINGS: ReadonlyArray<readonly [page: SettingsPageSlug, settingIds: readonly string[]]> = [
+  ['general', ['power.sleepPrevention']],
+  ['chat', [
+    'images.autoResize', 'images.blockImages', 'images.describeForTextModels',
+    'btw.inject',
+    'magicKeywords.enabled', 'magicKeywords.ultrathink', 'magicKeywords.chillax',
+    'magicKeywords.orchestrate', 'magicKeywords.workflow', 'magicKeywords.jevify',
+    'hideThinkingBlock', 'expandThinkingBlocks', 'proseOnlyThinking', 'omitThinking', 'externalThinking',
+  ]],
+  ['sessions', [
+    'autoResume',
+    'session.worktreeScope', 'worktree.clone', 'worktree.cleanSource', 'worktree.onStart', 'worktree.onExit',
+    'contextPromotion.enabled', 'extendedContext', 'branchSummary.enabled',
+    'compaction.enabled', 'compaction.experimentalContextManagement', 'compaction.midTurnEnabled',
+    'compaction.thresholdPercent', 'compaction.thresholdTokens', 'compaction.handoffSaveToDisk',
+    'compaction.remoteStreamingV2Enabled', 'compaction.asyncEnabled', 'compaction.idleEnabled',
+    'compaction.idleThresholdTokens', 'compaction.idleTimeoutSeconds', 'compaction.supersedeReads',
+    'compaction.dropUseless',
+    'retry.maxRetries', 'retry.maxDelayMs', 'retry.waitForUsageReset', 'retry.modelFallback',
+    'retry.fallbackOn', 'retry.rateLimitWalksChain', 'retry.usageAwareFallback',
+    'retry.usageReservePct', 'retry.usageReservePolicy', 'retry.fallbackRevertPolicy',
+    'providers.anthropic.serverSideFallback',
+    'plan.enabled', 'plan.defaultOnStartup', 'plan.autosave', 'goal.enabled',
+    'title.generator', 'title.refreshOnReplan', 'title.refreshAfterPrompts',
+  ]],
+  ['behavior', [
+    'modelRoleStorage', 'personality', 'inlineToolDescriptors',
+    'includeModelInPrompt', 'includeWorkspaceTree', 'skillful',
+  ]],
+  ['agents', [
+    'prewalk.enabled', 'prewalk.from', 'prewalk.into', 'prewalk.auto', 'prewalk.autoTarget',
+    'advisor.enabled', 'advisor.syncBacklog', 'advisor.immuneTurns', 'advisor.continueSeverity',
+    'advisor.reviewMode', 'advisor.reviewInterval', 'advisor.maxNotesPerUpdate', 'advisor.evictStaleResults',
+    'task.eager', 'task.batch', 'task.structured', 'task.speculativeLaunch', 'task.enableEffort',
+    'task.perCallModel', 'task.workerThreads', 'task.enableLsp', 'task.maxRuntimeMs',
+    'task.completionProbe', 'task.agentIdleTtlMs', 'task.softRequestBudget',
+    'task.softRequestBudgetNotice', 'task.maxEffort', 'task.prewalk',
+  ]],
+  ['commands', ['commands.enableClaudeProject']],
+  ['skills.installed', [
+    'skills.enabled', 'skills.enableClaudeProject', 'skills.enablePiUser',
+    'skills.enablePiProject', 'skills.enableAgentsUser', 'skills.enableAgentsProject',
+  ]],
+  ['memory', [
+    'memory.backend', 'sharpshooter.model', 'autolearn.enabled', 'autolearn.autoContinue',
+    'mnemopi.bank', 'mnemopi.scoping', 'mnemopi.embeddingVariant', 'mnemopi.autoRecall',
+    'mnemopi.autoRetain', 'mnemopi.polyphonicRecall', 'mnemopi.enhancedRecall',
+    'mnemopi.proactiveLinking', 'mnemopi.noEmbeddings', 'mnemopi.embeddingModel',
+    'mnemopi.llmMode', 'mnemopi.llmModel',
+    'hindsight.bankId', 'hindsight.scoping', 'hindsight.globalScope', 'hindsight.autoRecall',
+    'hindsight.autoRetain', 'hindsight.retainMode', 'hindsight.mentalModelsEnabled', 'hindsight.mentalModelAutoSeed',
+  ]],
+  ['tools', [
+    'todo.enabled', 'glob.enabled', 'grep.enabled', 'astGrep.enabled', 'astEdit.enabled',
+    'find.enabled', 'debug.enabled', 'launch.enabled', 'speechgen.enabled', 'generate_image.enabled',
+    'computer.enabled', 'ratchet.enabled', 'archive.enabled', 'checkpoint.enabled', 'fetch.enabled',
+    'vault.enabled', 'github.enabled', 'web_search.enabled', 'security.enabled', 'ask.enabled',
+    'out.enabled', 'browser.enabled',
+    'todo.reminders', 'todo.remindersMax', 'todo.eager', 'tasks.todoClearDelay',
+    'grep.contextBefore', 'grep.contextAfter',
+    'computer.display', 'computer.maxWidth', 'computer.maxHeight', 'computer.backgroundFallback',
+    'github.cache.enabled', 'github.cache.softTtlSec', 'github.cache.hardTtlSec',
+    'browser.headless', 'browser.cmux', 'browser.tern', 'browser.freezeOnTurnEnd', 'browser.idleCloseSec',
+  ]],
+  ['usage', [
+    'codexResets.minBlockedMinutes', 'codexResets.keepCredits', 'codexResets.salvageHorizonHours',
+    'claudeResets.minBlockedMinutes', 'claudeResets.keepCredits', 'claudeResets.salvageHorizonHours',
+  ]],
+];
+
+const OMP_PAGE_SETTING_KEYWORDS: Readonly<Record<string, string[]>> = {
+  'sharpshooter.model': ['sharpshooter', 'model', 'memory'],
+};
+
+/**
  * The settings search index. Every `titleKey`/`descriptionKey` must exist in the
  * English dictionary: a key with no copy resolves to the key itself and shows a
  * raw `settings.…` string, so an entry without copy is dead weight, not a row.
  * `search.test.ts` holds that invariant.
  */
 export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
-  {
-    id: 'omp.power.sleepPrevention',
-    page: 'general',
-    titleKey: 'settings.omp.items.power.sleepPrevention.label',
-    descriptionKey: 'settings.omp.items.power.sleepPrevention.description',
-  },
   {
     id: 'omp.configFile',
     page: 'omp',
@@ -73,6 +147,18 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['model roles', 'roles', 'models', 'thinking effort', 'assignments'],
   },
   ...ompLayoutSearchItems(),
+  ...OMP_PAGE_SETTINGS.flatMap(([page, settingIds]) => (
+    settingIds.map((settingId) => {
+      const keywords = OMP_PAGE_SETTING_KEYWORDS[settingId];
+      return {
+        id: `omp.${settingId}`,
+        page,
+        titleKey: `settings.omp.items.${settingId}.label` as I18nKey,
+        descriptionKey: `settings.omp.items.${settingId}.description` as I18nKey,
+        ...(keywords ? { keywords } : {}),
+      };
+    })
+  )),
   {
     id: 'omp.modelRoles.default',
     page: 'model-roles',
@@ -163,180 +249,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.omp.modelRoles.role.image.label',
     descriptionKey: 'settings.omp.modelRoles.role.image.desc',
     keywords: ['model role', 'image', 'role'],
-  },
-  {
-    id: 'omp.autoResume',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.autoResume.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.autoResume.description' as I18nKey,
-  },
-  {
-    id: 'omp.btw.inject',
-    page: 'chat',
-    titleKey: 'settings.omp.items.btw.inject.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.btw.inject.description' as I18nKey,
-  },
-  {
-    id: 'omp.magicKeywords.enabled',
-    page: 'chat',
-    titleKey: 'settings.omp.items.magicKeywords.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.magicKeywords.enabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.magicKeywords.ultrathink',
-    page: 'chat',
-    titleKey: 'settings.omp.items.magicKeywords.ultrathink.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.magicKeywords.ultrathink.description' as I18nKey,
-  },
-  {
-    id: 'omp.magicKeywords.chillax',
-    page: 'chat',
-    titleKey: 'settings.omp.items.magicKeywords.chillax.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.magicKeywords.chillax.description' as I18nKey,
-  },
-  {
-    id: 'omp.magicKeywords.orchestrate',
-    page: 'chat',
-    titleKey: 'settings.omp.items.magicKeywords.orchestrate.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.magicKeywords.orchestrate.description' as I18nKey,
-  },
-  {
-    id: 'omp.magicKeywords.workflow',
-    page: 'chat',
-    titleKey: 'settings.omp.items.magicKeywords.workflow.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.magicKeywords.workflow.description' as I18nKey,
-  },
-  {
-    id: 'omp.magicKeywords.jevify',
-    page: 'chat',
-    titleKey: 'settings.omp.items.magicKeywords.jevify.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.magicKeywords.jevify.description' as I18nKey,
-  },
-  {
-    id: 'omp.contextPromotion.enabled',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.contextPromotion.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.contextPromotion.enabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.extendedContext',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.extendedContext.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.extendedContext.description' as I18nKey,
-  },
-  {
-    id: 'omp.branchSummary.enabled',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.branchSummary.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.branchSummary.enabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.compaction.enabled',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.compaction.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.compaction.enabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.compaction.thresholdPercent',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.compaction.thresholdPercent.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.compaction.thresholdPercent.description' as I18nKey,
-  },
-  {
-    id: 'omp.compaction.thresholdTokens',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.compaction.thresholdTokens.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.compaction.thresholdTokens.description' as I18nKey,
-  },
-  {
-    id: 'omp.compaction.idleEnabled',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.compaction.idleEnabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.compaction.idleEnabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.compaction.idleThresholdTokens',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.compaction.idleThresholdTokens.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.compaction.idleThresholdTokens.description' as I18nKey,
-  },
-  {
-    id: 'omp.compaction.idleTimeoutSeconds',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.compaction.idleTimeoutSeconds.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.compaction.idleTimeoutSeconds.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.maxRetries',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.maxRetries.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.maxRetries.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.waitForUsageReset',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.waitForUsageReset.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.waitForUsageReset.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.modelFallback',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.modelFallback.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.modelFallback.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.fallbackOn',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.fallbackOn.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.fallbackOn.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.usageAwareFallback',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.usageAwareFallback.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.usageAwareFallback.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.usageReservePct',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.usageReservePct.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.usageReservePct.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.usageReservePolicy',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.usageReservePolicy.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.usageReservePolicy.description' as I18nKey,
-  },
-  {
-    id: 'omp.retry.fallbackRevertPolicy',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.fallbackRevertPolicy.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.fallbackRevertPolicy.description' as I18nKey,
-  },
-  {
-    id: 'omp.plan.enabled',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.plan.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.plan.enabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.plan.defaultOnStartup',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.plan.defaultOnStartup.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.plan.defaultOnStartup.description' as I18nKey,
-  },
-  {
-    id: 'omp.plan.autosave',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.plan.autosave.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.plan.autosave.description' as I18nKey,
-  },
-  {
-    id: 'omp.goal.enabled',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.goal.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.goal.enabled.description' as I18nKey,
   },
   {
     id: 'chat.activity-default',
@@ -1833,13 +1745,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.memory.section.hindsight.title',
     descriptionKey: 'settings.memory.section.hindsight.description',
     keywords: ['hindsight', 'memory', 'recall'],
-  },
-  {
-    id: 'omp.sharpshooter.model',
-    page: 'memory',
-    titleKey: 'settings.omp.items.sharpshooter.model.label',
-    descriptionKey: 'settings.omp.items.sharpshooter.model.description',
-    keywords: ['sharpshooter', 'model', 'memory'],
   },
   {
     id: 'model-roles.section.kind',

@@ -113,7 +113,7 @@ const childSessionRecord = (parent: Session, child: Subagent): Session => {
   return SessionSchema.parse({
     sessionId: child.childSessionId, parentSessionId: parent.sessionId, rootSessionId: parent.rootSessionId,
     projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
-    createdAt: parent.createdAt, updatedAt: parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
+    createdAt: child.createdAt ?? parent.createdAt, updatedAt: child.updatedAt ?? parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
     mode: { kind: 'main' },
     runtimeStatus, activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : parent.activeRunId,
     title: child.role,

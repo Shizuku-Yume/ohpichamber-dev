@@ -128,6 +128,11 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
     if (!parentSessionId) return;
     const runtimeKey = getRuntimeKey();
     if (!force && get().hydratedByParent[parentSessionId] === runtimeKey) return;
+    if (force && get().hydratedByParent[parentSessionId] === runtimeKey) {
+      set((state) => ({
+        hydratedByParent: withoutParentKey(state.hydratedByParent, parentSessionId),
+      }));
+    }
     const inflightKey = `${runtimeKey}\0${parentSessionId}`;
     const capturedGeneration = storeGeneration;
 
@@ -160,6 +165,7 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
         // Failure is not empty: preserve prior byParent state and leave parent unhydrated so future triggers can retry.
         if (capturedGeneration === storeGeneration && getRuntimeKey() === runtimeKey) {
           set((state) => ({
+            hydratedByParent: withoutParentKey(state.hydratedByParent, parentSessionId),
             failedByParent: {
               ...state.failedByParent,
               [parentSessionId]: runtimeKey,

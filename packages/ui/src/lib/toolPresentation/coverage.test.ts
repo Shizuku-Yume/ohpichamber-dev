@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { overrides } from '../../../../../package.json';
-import { askAnswers, categorizeTool, getToolOneLineDescription, KNOWN_TOOL_NAMES, OMP_TOOL_NAMES, toolPresentation } from './index';
+import { askAnswers, categorizeTool, describeTaskResultWithSubagents, getToolOneLineDescription, KNOWN_TOOL_NAMES, OMP_TOOL_NAMES, toolPresentation } from './index';
 
 const known = (name: string): boolean => (KNOWN_TOOL_NAMES as readonly string[]).includes(name);
 
@@ -211,5 +211,54 @@ describe('OMP tool presentation coverage', () => {
             jobs: [{ id: 'j1', status: 'running' }, { id: 'j2', status: 'completed' }],
         })).toBe('2 jobs (1 running)');
         expect(wait.describeResult({ op: 'wait', jobs: [], interrupted: true })).toBe('interrupted');
+    });
+
+    test('describeTaskResultWithSubagents prefers authoritative store and report statuses over frozen spawn details', () => {
+        const frozenRunning = {
+            results: [],
+            progress: [{ id: 'BetaWorker-3', agent: 'task', status: 'running' }],
+            async: { state: 'running', jobId: 'BetaWorker-3', type: 'task' },
+        };
+        expect(describeTaskResultWithSubagents(
+            frozenRunning,
+            [{ id: 'BetaWorker-3', status: 'cancelled' }],
+        )).toBe('1 subagent · cancelled');
+
+        const batchFrozen = {
+            results: [],
+            progress: [
+                { id: 'AlphaScout', agent: 'scout', status: 'running' },
+                { id: 'BetaWorker-2', agent: 'task', status: 'pending' },
+            ],
+            async: { state: 'running', jobId: 'AlphaScout', type: 'task' },
+        };
+        expect(describeTaskResultWithSubagents(
+            batchFrozen,
+            [
+                { id: 'AlphaScout', status: 'completed' },
+                { id: 'BetaWorker-2', status: 'running' },
+            ],
+        )).toBe('2 subagents · running');
+        expect(describeTaskResultWithSubagents(
+            batchFrozen,
+            [
+                { id: 'AlphaScout', status: 'completed' },
+                { id: 'BetaWorker-2', status: 'completed' },
+            ],
+        )).toBe('2 subagents · completed');
+        expect(describeTaskResultWithSubagents(
+            batchFrozen,
+            [],
+            new Map([['AlphaScout', 'completed'], ['BetaWorker-2', 'failed']]),
+        )).toBe('2 subagents · failed');
+        expect(describeTaskResultWithSubagents(
+            batchFrozen,
+            [],
+            new Map([['AlphaScout', 'completed']]),
+        )).toBe('2 subagents · running');
+        expect(describeTaskResultWithSubagents(
+            { results: [{ id: 'a1' }, { id: 'a2' }] },
+            [{ id: 'a1', status: 'running' }],
+        )).toBe('2 subagents');
     });
 });

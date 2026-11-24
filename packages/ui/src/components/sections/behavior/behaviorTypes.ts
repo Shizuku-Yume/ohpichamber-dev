@@ -77,13 +77,13 @@ export function selectionKey(selection: BehaviorSelection): string {
   }
 }
 
-export function toStringList(value: string | string[] | null | undefined): string[] {
+function toStringList(value: string | string[] | null | undefined): string[] {
   if (value == null) return [];
   if (Array.isArray(value)) return [...value];
   return value === '' ? [] : [value];
 }
 
-export function stringListsEqual(left: readonly string[], right: readonly string[]): boolean {
+function stringListsEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 

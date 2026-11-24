@@ -2,8 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import { OMP_SETTING_PLACEMENTS } from '../../../../agent-service/src/worker/settings-ui';
+import { parsePlacement } from '@openchamber/agent-contract';
 
 /**
  * One settings item id, one owning page.
@@ -117,11 +116,19 @@ describe('settings item ownership', () => {
   test('every owned-by row names a control that writes its OMP key', () => {
     const claims = collectClaims();
     const claimsByOwner = new Map(claims.map((claim) => [claim.id, claim]));
-    const ownedByEntries = Object.entries(OMP_SETTING_PLACEMENTS)
-      .flatMap((entry): Array<readonly [string, string]> => {
-        const [id, placement] = entry;
-        return placement.type === 'owned-by' ? [[id, placement.owner]] : [];
-      });
+    const settingsUiPath = join(SECTIONS_ROOT, '../../../../packages/agent-service/src/worker/settings-ui.ts');
+    const settingsUiSource = readFileSync(settingsUiPath, 'utf8');
+    const rawPlacementsMatch = settingsUiSource.match(/const RAW_PLACEMENTS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
+    if (!rawPlacementsMatch) throw new Error('RAW_PLACEMENTS not found in settings-ui.ts');
+    const ownedByEntries: Array<readonly [string, string]> = [];
+    for (const rawLine of rawPlacementsMatch[1].split('\n')) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('//')) continue;
+      const entry = line.match(/^'([^']+)':\s*'([^']+)',?(?:\s*\/\/.*)?$/);
+      if (!entry) throw new Error(`Unparseable RAW_PLACEMENTS entry: ${line}`);
+      const placement = parsePlacement(entry[2]);
+      if (placement.type === 'owned-by') ownedByEntries.push([entry[1], placement.owner]);
+    }
     expect(ownedByEntries.length).toBeGreaterThan(0);
 
     for (const [id, owner] of ownedByEntries) {

@@ -97,6 +97,10 @@ const subagentElapsedMs = (row: Pick<SubagentRow, 'child' | 'subagent' | 'report
   if (row.report?.durationMs !== undefined && Number.isFinite(row.report.durationMs)) {
     return Math.max(0, row.report.durationMs);
   }
+  if (row.subagent?.createdAt !== undefined && row.subagent?.updatedAt !== undefined) {
+    const delta = row.subagent.updatedAt - row.subagent.createdAt;
+    return delta > 0 ? delta : 0;
+  }
   if (row.child) {
     const delta = row.child.updatedAt - row.child.createdAt;
     return delta > 0 ? delta : 0;
@@ -273,17 +277,18 @@ export const deriveSubagentRows = (input: DeriveSubagentRowsInput): SubagentRow[
     const liveStatus = lookupIds.map((id) => statuses[id]).find((value) => value !== undefined);
     const observed = lookupIds.map((id) => observedById.get(id)).find((value) => value !== undefined);
 
-    const blocked = hasPermission || liveStatus === 'awaiting_approval';
-    const asked = hasForm || liveStatus === 'awaiting_input';
-
     const subagentRunning = subagent?.status === 'running' || subagent?.status === 'idle';
     const subagentFailed = subagent?.status === 'failed';
     const subagentCancelled = subagent?.status === 'cancelled';
     const subagentCompleted = subagent?.status === 'completed' || subagent?.status === 'parked';
+    const subagentTerminal = subagentFailed || subagentCancelled || subagentCompleted;
+
+    const blocked = !subagentTerminal && (hasPermission || liveStatus === 'awaiting_approval');
+    const asked = !subagentTerminal && (hasForm || liveStatus === 'awaiting_input');
 
     const statusIsBusy = liveStatus === 'running' || liveStatus === 'awaiting_approval' || liveStatus === 'awaiting_input';
     const busy = subagent
-      ? (subagentRunning || statusIsBusy) && !subagentFailed && !subagentCancelled && !subagentCompleted
+      ? (subagentRunning || statusIsBusy) && !subagentTerminal
       : (statusIsBusy || (!liveStatus && observed === 'busy'));
     const cancelled = !busy && subagentCancelled;
     const failed = !busy && !cancelled && (subagentFailed || observed === 'failed');

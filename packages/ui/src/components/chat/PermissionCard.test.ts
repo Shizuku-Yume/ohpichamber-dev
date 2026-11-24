@@ -79,7 +79,7 @@ describe('native approval presentation', () => {
     expect(isToolScopePolicy(approval({ policyTarget: { toolName: 'bash', pattern: 'git status' } }))).toBe(false);
   });
 
-  test('renders details.input inside the expandable PermissionCard details disclosure', async () => {
+  test('renders safe approval details without exposing raw input at the browser boundary', async () => {
     const happyWindow = new Window({ url: 'http://localhost' });
     const globals = {
       window: happyWindow,
@@ -109,7 +109,7 @@ describe('native approval presentation', () => {
         details: {
           reason: 'Update target',
           path: 'src/app.ts',
-          input: { input: '[src/app.ts#A1B2]\nPUT 1.=1:\n+next' },
+          input: { token: 'raw-secret-never-shown', content: 'sensitive-file-body' },
         },
       });
       await act(async () => {
@@ -127,8 +127,11 @@ describe('native approval presentation', () => {
       });
       const pre = container.querySelector('details pre');
       expect(pre).not.toBeNull();
-      expect(pre?.textContent).toContain('"input"');
-      expect(pre?.textContent).toContain('[src/app.ts#A1B2]');
+      expect(pre?.textContent).toContain('Update target');
+      expect(pre?.textContent).toContain('src/app.ts');
+      expect(pre?.textContent).not.toContain('raw-secret-never-shown');
+      expect(pre?.textContent).not.toContain('sensitive-file-body');
+      expect(pre?.textContent).not.toContain('"input"');
     } finally {
       await act(async () => { root.unmount(); });
       await happyWindow.happyDOM.abort();

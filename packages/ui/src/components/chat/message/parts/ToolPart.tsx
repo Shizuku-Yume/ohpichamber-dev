@@ -35,7 +35,7 @@ import {
     toolInputPath,
     toolPresentation,
 } from '@/lib/toolHelpers';
-import { describeToolCall, describeToolResult, evalResultSummary, isMemoryTool, normalizeIntent } from '@/lib/toolPresentation';
+import { describeTaskResultWithSubagents, describeToolCall, describeToolResult, evalResultSummary, isMemoryTool, normalizeIntent, type TaskSubagentStatusEntry } from '@/lib/toolPresentation';
 import { TodoCard } from './TodoCard';
 import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
@@ -94,6 +94,8 @@ import { getDirectoryForFilePath, getRelativeFilePath, toAbsoluteFilePath } from
 import { useI18n } from '@/lib/i18n';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
+import { collectSubagentReports } from '../../work-status/useSubagentReports';
+import { SyncRuntimeContext } from '@/sync/sync-runtime-context';
 import { openSubagentsPanel } from '@/components/chat/subagents/panel';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { OpenSubtaskButton } from './toolRow/OpenSubtaskButton';
@@ -101,6 +103,67 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-sw
 import { WritePreview } from '../../DiffPreview';
 
 const EMPTY_SUBAGENTS: Subagent[] = [];
+const EMPTY_STRING_ARRAY: readonly string[] = [];
+
+const taskCallExpectedIdsSchema = z.object({
+    name: z.string().trim().min(1).optional(),
+    tasks: z.array(z.object({
+        name: z.string().trim().min(1).optional(),
+    })).optional(),
+});
+
+const serializeTaskSubagentStatuses = (
+    list: readonly Subagent[] | undefined,
+    taskSessionId: string,
+    toolCallId: string,
+): string => {
+    if (!list || list.length === 0) return '';
+    const rows: string[] = [];
+    for (const child of list) {
+        if (child.parentSessionId !== taskSessionId || child.toolCallId !== toolCallId) continue;
+        rows.push([
+            child.subagentId,
+            child.childSessionId ?? '',
+            child.name ?? '',
+            child.status,
+        ].join('\u0000'));
+    }
+    return rows.join('\n');
+};
+
+const parseTaskSubagentStatuses = (serialized: string): TaskSubagentStatusEntry[] => {
+    if (!serialized) return [];
+    return serialized.split('\n').map((line) => {
+        const [id = '', childSessionId = '', name = '', status = ''] = line.split('\u0000');
+        const entry: TaskSubagentStatusEntry = { id, status };
+        if (childSessionId) entry.childSessionId = childSessionId;
+        if (name) entry.name = name;
+        return entry;
+    });
+};
+
+const serializeReportStatuses = (
+    reports: ReadonlyMap<string, { state: string }>,
+    targetIds: readonly string[],
+): string => {
+    if (reports.size === 0 || targetIds.length === 0) return '';
+    const rows: string[] = [];
+    for (const id of targetIds) {
+        const report = reports.get(id);
+        if (report) rows.push(`${id}\u0000${report.state}`);
+    }
+    return rows.join('\n');
+};
+
+const parseReportStatuses = (serialized: string): Map<string, string> => {
+    const map = new Map<string, string>();
+    if (!serialized) return map;
+    for (const line of serialized.split('\n')) {
+        const sep = line.indexOf('\u0000');
+        if (sep > 0) map.set(line.slice(0, sep), line.slice(sep + 1));
+    }
+    return map;
+};
 
 const taskProgressItemSchema = z.object({
     id: z.string(),
@@ -1684,15 +1747,95 @@ const ToolPart: React.FC<ToolPartProps> = ({
         }
         return { text: describeToolCall(call.input, toolName) ?? '', path: null };
     }, [call, currentDirectory, t, toolName]);
+    const isSubagent = isSubagentTool(toolName);
+    const taskSessionId = sessionId ?? selection.sessionId;
+    const taskToolCallId = call?.toolCallId ?? part.toolCallId;
+    const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+    const parsedTaskDetails = React.useMemo(
+        () => (isSubagent ? taskResultDetailsSchema.safeParse(resultContent.details).data : undefined),
+        [isSubagent, resultContent.details],
+    );
+    const storeSubagentKey = useSubagentsStore(
+        React.useCallback(
+            (state) => (isSubagent && taskSessionId && taskToolCallId
+                ? serializeTaskSubagentStatuses(state.byParent[taskSessionId], taskSessionId, taskToolCallId)
+                : ''),
+            [isSubagent, taskSessionId, taskToolCallId],
+        ),
+    );
+    const storeSubagentStatuses = React.useMemo(
+        () => parseTaskSubagentStatuses(storeSubagentKey),
+        [storeSubagentKey],
+    );
+    const expectedTaskNames = React.useMemo(() => {
+        if (!isSubagent || !call) return EMPTY_STRING_ARRAY;
+        const parsedInput = taskCallExpectedIdsSchema.safeParse(call.input).data;
+        if (!parsedInput) return EMPTY_STRING_ARRAY;
+        if (parsedInput.tasks && parsedInput.tasks.length > 0) {
+            return parsedInput.tasks.map((item) => item.name).filter((name): name is string => Boolean(name));
+        }
+        return parsedInput.name ? [parsedInput.name] : EMPTY_STRING_ARRAY;
+    }, [call, isSubagent]);
+    const targetReportIds = React.useMemo(() => {
+        if (!isSubagent || !parsedTaskDetails?.async) return EMPTY_STRING_ARRAY;
+        const ids = new Set<string>();
+        for (const item of parsedTaskDetails.progress ?? []) {
+            if (item.id) ids.add(item.id);
+        }
+        if (parsedTaskDetails.async.jobId) ids.add(parsedTaskDetails.async.jobId);
+        for (const id of expectedTaskNames) ids.add(id);
+        return ids.size > 0 ? [...ids] : EMPTY_STRING_ARRAY;
+    }, [expectedTaskNames, isSubagent, parsedTaskDetails]);
+    const shouldReadReportStatuses = Boolean(
+        isSubagent
+        && result
+        && !result.isError
+        && taskSessionId
+        && parsedTaskDetails?.async?.state === 'running'
+        && targetReportIds.length > 0
+        && (storeSubagentStatuses.length === 0 || storeSubagentStatuses.length < (parsedTaskDetails.progress?.length ?? 0)),
+    );
+    const syncRuntime = React.useContext(SyncRuntimeContext);
+    const syncDirStore = React.useMemo(() => {
+        if (!syncRuntime || !shouldReadReportStatuses) return null;
+        const dir = currentDirectory || syncRuntime.currentDirectory.get();
+        return syncRuntime.childStores.ensureChild(dir);
+    }, [currentDirectory, shouldReadReportStatuses, syncRuntime]);
+    const reportSummaryKey = React.useSyncExternalStore(
+        React.useCallback(
+            (notify) => (syncDirStore && shouldReadReportStatuses ? syncDirStore.subscribe(notify) : () => undefined),
+            [shouldReadReportStatuses, syncDirStore],
+        ),
+        React.useCallback(() => {
+            if (!syncDirStore || !shouldReadReportStatuses || !taskSessionId) return '';
+            const messages = syncDirStore.getState().message[taskSessionId];
+            if (!messages || messages.length === 0) return '';
+            return serializeReportStatuses(collectSubagentReports(messages), targetReportIds);
+        }, [shouldReadReportStatuses, syncDirStore, targetReportIds, taskSessionId]),
+        () => '',
+    );
+    const reportStatuses = React.useMemo(
+        () => parseReportStatuses(reportSummaryKey),
+        [reportSummaryKey],
+    );
+
+    React.useEffect(() => {
+        if (!isSubagent || !taskSessionId) return;
+        if (parsedTaskDetails?.async?.state !== 'running') return;
+        void useSubagentsStore.getState().hydrateParent(taskSessionId);
+    }, [isSubagent, parsedTaskDetails?.async?.state, runtimeKey, taskSessionId]);
+
     // The result's own one-line summary (match counts, exit status, diff stats,
     // todo progress) sits beside the call's target, unless it repeats it.
     const resultSummary = React.useMemo(() => {
         if (!result || (result.isError && !isEvalTool(toolName))) return null;
         const summary = isEvalTool(toolName)
             ? evalResultSummary(resultContent.details, t as (key: string, params?: Record<string, unknown>) => string)
-            : describeToolResult(resultContent.details, toolName);
+            : isSubagent
+                ? describeTaskResultWithSubagents(resultContent.details, storeSubagentStatuses, reportStatuses, expectedTaskNames)
+                : describeToolResult(resultContent.details, toolName);
         return summary && summary !== described.text ? summary : null;
-    }, [described.text, result, resultContent.details, t, toolName]);
+    }, [described.text, expectedTaskNames, isSubagent, reportStatuses, result, resultContent.details, storeSubagentStatuses, t, toolName]);
     const intent = React.useMemo(() => {
         const rawIntent = call ? z.string().safeParse(call.input.i).data : undefined;
         return rawIntent === undefined ? null : normalizeIntent(rawIntent);
@@ -1707,27 +1850,12 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const callStatus = call?.status;
     const failed = result?.isError ?? (callStatus === 'failed' || callStatus === 'denied');
     const running = callStatus ? (callStatus === 'running' || callStatus === 'approved' || callStatus === 'pending_approval') : !result;
-    const taskSessionId = sessionId ?? selection.sessionId;
-    const hasStoreSubagentRows = useSubagentsStore(
-        React.useCallback(
-            (state) => Boolean(
-                isSubagentTool(toolName)
-                && call
-                && taskSessionId
-                && state.byParent[taskSessionId]?.some(
-                    (child) => child.parentSessionId === taskSessionId && child.toolCallId === call.toolCallId,
-                ),
-            ),
-            [call, taskSessionId, toolName],
-        ),
-    );
+    const hasStoreSubagentRows = storeSubagentStatuses.length > 0;
     const hasStructuredSubagentRows = React.useMemo(() => {
-        if (!isSubagentTool(toolName)) return false;
+        if (!isSubagent) return false;
         if (hasStoreSubagentRows) return true;
-        const parsed = taskResultDetailsSchema.safeParse(resultContent.details).data;
-        return Boolean(parsed?.progress && parsed.progress.length > 0);
-    }, [hasStoreSubagentRows, resultContent.details, toolName]);
-
+        return Boolean(parsedTaskDetails?.progress && parsedTaskDetails.progress.length > 0);
+    }, [hasStoreSubagentRows, isSubagent, parsedTaskDetails]);
     const diffStats = React.useMemo(() => {
         if (diffs.length === 0) return null;
         let added = 0;
