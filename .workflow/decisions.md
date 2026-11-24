@@ -2177,3 +2177,31 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** a search result scrolls to `[data-settings-item="<id>"]`, so either direction of drift produces an invisible or unreachable target; upstream v2.8.0 keeps upstream-only model pickers that the OMP roles hub replaced.
 - **Decided by:** agent (ux-v280-omp19-alignment task07).
 - **Revisit when:** a new settings surface adds anchors, a control moves pages, or the placement table moves to a shared contract module.
+
+## 2026-11-24 - Fold Usage auto-reset policy with auto-redeem controls and unify Model Roles with OMP 19.1 custom roles
+
+- **Effort:** ux-audit-remediation-2026-11-24
+- **Supersedes:** 2026-11-24 - Consolidate OMP model role editing onto ModelRolesPage and slim Sessions IA
+- **Decided:** expose OMP 19.1 `codexResets.autoRedeem*` and `claudeResets.autoRedeem*` on `usage:resets` and fold both Codex and Claude auto-reset rules inside default-collapsed `SettingsDisclosure` rows on `UsagePage`. Replace contextual `ModelRoleLinkRow` jump links on `Sessions` (`smol`, `slow`, `plan`), `Git` (`commit`), `Memory` (`memory`), `Agents` (`task`, `advisor`), and `Tools` (`image`) with inline `ModelRoleEditor` / `ImageModelSelector` controls backed directly by the canonical `omp.modelRoles` record; redesign remaining linked subsystem rows (`web`, `speech`, and `RetryFallbackChains`) to show catalog-resolved friendly names plus standard `Button variant="outline" size="xs"` with `arrow-right` instead of underlined text links or raw `provider/model:thinking` strings. Expose `modelTags` on `model-roles` and add a Custom roles section with `+ Add role` dialog, inline editing, rename, and delete.
+- **Instead of:** dumping six uncollapsed reset threshold steppers on `UsagePage` while hiding auto-redeem switches, forcing ugly underlined jump links with raw selector strings across contextual pages, or hardcoding 15 built-in roles without custom role authoring.
+- **Because:** contextual model pickers belong natively in OpenChamber's Settings chrome while sharing one canonical `modelRoles` store, Usage tuning knobs are incoherent without their auto-redeem toggles and default folding, and OMP 19.1 natively supports custom roles via `modelRoles` + `modelTags`.
+- **Decided by:** user.
+- **Revisit when:** OMP changes `modelRoles`/`modelTags` or auto-redeem schema semantics.
+
+## 2026-11-24 - Enforce progressive disclosure in Provider editing and scope OMP Plugins strictly to plugins/extensions
+
+- **Effort:** ux-audit-remediation-2026-11-24
+- **Decided:** redesign `CustomProviderForm` and `CustomProviderModelRow` around progressive disclosure (human-readable labels for all 16 provider / 24 model APIs, essential connection fields at top level, clean 2-line collapsed model rows, 5 essential expanded model fields, and ALL cosmetic/auth-override/headers/overrides/discovery/compat/bedrock/remote-compaction disclosures collapsed by default even when populated, auto-opening only on validation error or fresh Bedrock switch). Treat uncreated fixed Behavior files (`RULES.md`, `SYSTEM.md`) as ready-to-edit empty buffers mirroring `AGENTS.md` rather than red missing-file errors. Scope `PluginsPage`'s capability controls strictly to plugin/extension code surfaces (`extension-module`, `hook`, `tool`) excluding `ssh`/`OpenSSH Config`, `builtin-defaults`, and non-plugin capabilities; retire the permanently-failing `plugins.apply` button; and surface structured localized marketplace errors with per-source refresh resilience and guaranteed broken-source deletion.
+- **Instead of:** dumping all OMP wire parameters flat on provider/model edit, dead-ending on uncreated `RULES.md`/`SYSTEM.md`, dumping `~/.ssh/config` hosts and built-in rules inside `OMP 插件`, or swallowing all marketplace errors into one hardcoded English string.
+- **Because:** high-frequency setup paths must stay scannable per `PATTERNS.md` without losing advanced OMP fidelity, SSH hosts and built-in rules are not plugins, and broken marketplace sources must report actionable localized causes and remain removable.
+- **Decided by:** user.
+- **Revisit when:** OMP introduces a separate dedicated Capabilities settings page or hot-reloadable plugin runtime.
+
+## 2026-11-24 - Restore v2.8.0 side-by-side Work Status, right-rail subagent reachability, real vibe/subagent titles, and full OMP 19.1 tool cards
+
+- **Effort:** ux-audit-remediation-2026-11-24
+- **Decided:** restore upstream OpenChamber v2.8.0 (`30c70496a5`) `roomyBesidePanel` (`besidePanel`) in `useWorkStatusVisibility` and `ChatContainer` plus `useSidebarPeek` and `usePaletteShortcuts` in `MainLayout`; show the `subagents` right-rail icon automatically whenever the active session has subagents (`subagentsShown`); stamp synthesized child session titles from `name` → non-generic `description`/`task` → `role` (eliminating duplicate `sonic` titles); correlate `vibe_spawn` workers with `toolCallId` and prompt in `SubagentProjector` and `subagentTask`; and adapt ALL OMP 19.1 built-in/injected tools (`vibe_*` TV-wall `VibeToolCard`, `WaitToolCard`, `StructuredToolCards` for `debug`/`github`/`goal`/`security_scan`/`checkpoint`/`rewind`/`yield`/`think`/`report_issue`/`resolve`/`reject`/`propose`, `openchamber_usage`, `mcp__*` friendly labels, `web_search` answer/failures, and `displayContent` preference for `read`/`grep`/`ast_grep`) without raw JSON input dumps.
+- **Instead of:** hiding Work Status whenever a right Context Panel opens, hiding the `subagents` rail icon until a tab is opened elsewhere, titling vibe child sessions `sonic`, or dumping raw JSON for `vibe_*` and other OMP 19.1 tools.
+- **Because:** upstream v2.8.0's side-by-side Work Status + SubagentsPanel + Activity Rail layout is the target UX, vibe workers are first-class OMP 19.1 subagents, and every OMP tool call in the timeline must render cleanly in OpenChamber's visual idiom.
+- **Decided by:** user.
+- **Revisit when:** OMP changes `vibe_*` or built-in tool details schemas.
