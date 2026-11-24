@@ -323,6 +323,7 @@ describe('subagent status rows', () => {
       mode: 'chat',
       dedupeKey: 'session:vibe-child-uuid',
       label: 'home-disk-usage-2',
+      sessionTitleFallback: 'home-disk-usage-2',
       readOnly: true,
     }));
   });

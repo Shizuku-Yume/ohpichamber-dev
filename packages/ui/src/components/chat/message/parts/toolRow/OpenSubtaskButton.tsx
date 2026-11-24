@@ -2,6 +2,7 @@ import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { Icon } from '@/components/icon/Icon';
@@ -23,9 +24,16 @@ export const OpenSubtaskButton: React.FC<{
     const column = useChatColumnActions();
     const runtime = React.useContext(RuntimeAPIContext);
 
+    const sessionTitle = useGlobalSessionsStore((state) => state.entityById.get(sessionId)?.title?.trim() || null);
     const agentType = agent ?? 'subagent';
-    const tabLabel = customLabel?.trim() || agentType;
-    const label = t('chat.toolPart.openSubtask', { type: agentType });
+    const trimmedCustom = customLabel?.trim() || '';
+    const displayName = (trimmedCustom && trimmedCustom !== agentType
+        ? trimmedCustom
+        : sessionTitle || trimmedCustom) || agentType;
+    const sessionTitleFallback = (trimmedCustom && trimmedCustom !== agentType
+        ? trimmedCustom
+        : sessionTitle || trimmedCustom || agent?.trim()) || null;
+    const label = t('subagents.openSubtask', { name: displayName });
 
     const handleOpen = (event: React.MouseEvent) => {
         event.stopPropagation();
@@ -41,7 +49,8 @@ export const OpenSubtaskButton: React.FC<{
         useUIStore.getState().openContextPanelTab(currentDirectory, {
             mode: 'chat',
             dedupeKey: `session:${sessionId}`,
-            label: tabLabel,
+            label: displayName,
+            sessionTitleFallback,
             readOnly: true,
         });
     };

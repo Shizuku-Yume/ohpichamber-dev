@@ -146,14 +146,14 @@ describe('VibeToolCard', () => {
             });
             expect(container.textContent).toContain('Line 5 summarize');
 
-            const openBtn = container.querySelector('button[aria-label="Open sonic subtask"]');
+            const openBtn = container.querySelector('button[aria-label="Open home-disk-usage subtask"]');
             expect(openBtn).not.toBeNull();
             await act(async () => {
                 openBtn?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
             });
             expect(useSessionUIStore.getState().currentSessionId).toBe(PARENT_SESSION_ID);
             expect(useUIStore.getState().contextPanelByDirectory[WORKSPACE_DIR]?.tabs).toMatchObject([
-                { mode: 'chat', dedupeKey: 'session:child-session-disk', label: 'home-disk-usage', readOnly: true },
+                { mode: 'chat', dedupeKey: 'session:child-session-disk', label: 'home-disk-usage', sessionTitleFallback: 'home-disk-usage', readOnly: true },
             ]);
         });
     });
@@ -287,7 +287,7 @@ describe('VibeToolCard', () => {
             expect(container.querySelector('[data-testid="vibe-wait-running-worker-1"]')?.textContent).toContain('worker-1');
             expect(container.querySelector('[data-testid="vibe-wait-timeout-badge"]')?.textContent).toContain('timed out');
 
-            expect(container.querySelector('button[aria-label="Open task subtask"]')).not.toBeNull();
+            expect(container.querySelector('button[aria-label="Open worker-1 subtask"]')).not.toBeNull();
 
             const panelButton = Array.from(container.querySelectorAll('button')).find((btn) =>
                 btn.textContent?.includes('Open in the Subagents panel'),

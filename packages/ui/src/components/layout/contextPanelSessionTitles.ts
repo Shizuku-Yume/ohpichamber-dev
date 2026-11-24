@@ -18,7 +18,11 @@ const getSessionUpdatedAt = (session: Session): number => (
   Number.isFinite(session.updatedAt) ? session.updatedAt : 0
 );
 
-export const buildSessionTitleMap = (states: Iterable<SessionSlice>, sessionIDs: readonly string[]): ReadonlyMap<string, string> => {
+export const buildSessionTitleMap = (
+  states: Iterable<SessionSlice>,
+  sessionIDs: readonly string[],
+  globalSessionsById?: ReadonlyMap<string, Session>,
+): ReadonlyMap<string, string> => {
   if (sessionIDs.length === 0) return EMPTY_SESSION_TITLE_MAP;
   const wanted = new Set(sessionIDs);
   const updatedAtById = new Map<string, number>();
@@ -33,6 +37,19 @@ export const buildSessionTitleMap = (states: Iterable<SessionSlice>, sessionIDs:
       if (seenAt !== undefined && seenAt > updatedAt) continue;
       updatedAtById.set(session.sessionId, updatedAt);
       next.set(session.sessionId, title);
+    }
+  }
+  if (globalSessionsById) {
+    for (const sessionID of wanted) {
+      const session = globalSessionsById.get(sessionID);
+      if (!session) continue;
+      const title = session.title?.trim();
+      if (!title) continue;
+      const updatedAt = getSessionUpdatedAt(session);
+      const seenAt = updatedAtById.get(sessionID);
+      if (seenAt !== undefined && seenAt >= updatedAt) continue;
+      updatedAtById.set(sessionID, updatedAt);
+      next.set(sessionID, title);
     }
   }
   return next.size === 0 ? EMPTY_SESSION_TITLE_MAP : next;

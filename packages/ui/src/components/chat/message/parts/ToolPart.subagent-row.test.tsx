@@ -307,7 +307,7 @@ test('OMP 19.1 batch task shows subagent count/roles and async running summary w
     expect(container.textContent).toContain('ScoutAuth');
     expect(container.textContent).toContain('(scout)');
     expect(container.textContent).toContain('read: src/auth.ts');
-    expect(container.querySelector('button[aria-label="Open scout subtask"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Open ScoutAuth subtask"]')).not.toBeNull();
     expect(container.textContent).not.toContain('read proc://');
     expect(container.textContent).toContain('Open in the Subagents panel');
   });

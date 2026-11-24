@@ -237,7 +237,7 @@ describe('ToolPart OMP 19.1 tool wiring', () => {
             expect(container.textContent).toContain('Inspect disk usage under /home');
             expect(container.textContent).not.toContain('"prompt"');
 
-            const openButtons = container.querySelectorAll('button[aria-label="Open sonic subtask"]');
+            const openButtons = container.querySelectorAll('button[aria-label="Open home-disk-usage subtask"]');
             expect(openButtons.length).toBeGreaterThanOrEqual(2);
 
             await act(async () => {
@@ -246,7 +246,7 @@ describe('ToolPart OMP 19.1 tool wiring', () => {
 
             expect(useSessionUIStore.getState().currentSessionId).toBe(PARENT_SESSION.sessionId);
             expect(useUIStore.getState().contextPanelByDirectory[WORKSPACE_DIR]?.tabs).toMatchObject([
-                { mode: 'chat', dedupeKey: 'session:vibe-child-disk-session', label: 'home-disk-usage', readOnly: true },
+                { mode: 'chat', dedupeKey: 'session:vibe-child-disk-session', label: 'home-disk-usage', sessionTitleFallback: 'home-disk-usage', readOnly: true },
             ]);
         });
     });

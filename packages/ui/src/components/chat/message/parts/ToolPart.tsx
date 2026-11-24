@@ -346,7 +346,7 @@ const TaskToolSessions = ({ call, resultDetails, sessionId: addressedSessionId, 
         if (column.pinned) column.openSession(child.childSessionId, directory);
         else if (isMobile) useSessionUIStore.getState().setCurrentSession(child.childSessionId, directory);
         else useUIStore.getState().openContextPanelTab(directory, {
-            mode: 'chat', dedupeKey: `session:${child.childSessionId}`, label, readOnly: true,
+            mode: 'chat', dedupeKey: `session:${child.childSessionId}`, label, sessionTitleFallback: label, readOnly: true,
         });
     };
 

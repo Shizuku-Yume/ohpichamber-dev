@@ -116,9 +116,11 @@ so it survives the sidebar closing and reopening. A folder change remounts the t
   closure must retain the unsaved-edits prompt and reconcile the panel's tabs.
 - A file surface always shows its tree or editor. A hidden tree forces the
   editor back, so hiding one column cannot leave a blank panel.
-- Chat-tab titles read all live directories, select the most recently updated
-  duplicate session and retain stored fallbacks for unloaded directories.
-  Closed zones and zones showing other surfaces subscribe to no session titles.
+- Chat-tab titles read all live directories and global session records (so
+  subagent/child titles resolved in the global store survive reload), select
+  the most recently updated duplicate session and retain stored fallbacks for
+  unloaded directories. Closed zones and zones showing other surfaces subscribe
+  to no session titles.
 - Browser tabs use the current page identity before the stored opening label.
   Their identity includes directory and tab id, so equal ids across projects
   cannot reuse a view or a space's session in another project.

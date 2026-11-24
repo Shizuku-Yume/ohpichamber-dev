@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 
+import { buildSubagentChildSessionRecord } from '@/stores/subagentSessionTitle';
 import { areTitleMapsEqual, buildSessionTitleMap, EMPTY_SESSION_TITLE_MAP } from './contextPanelSessionTitles';
 
 type SessionFixture = Partial<Pick<Session, 'sessionId' | 'title' | 'updatedAt'>>;
@@ -66,5 +67,50 @@ describe('context panel session titles', () => {
   test('returns the shared empty map when nothing is wanted or found', () => {
     expect(buildSessionTitleMap([state({ sessionId: 'ses_a', title: 'Main chat' })], [])).toBe(EMPTY_SESSION_TITLE_MAP);
     expect(buildSessionTitleMap([state({ sessionId: 'ses_a', title: 'Main chat' })], ['ses_missing'])).toBe(EMPTY_SESSION_TITLE_MAP);
+  });
+
+  test('resolves post-reload child session titles from globalSessionsById when live directory stores lack the child', () => {
+    const parent: Session = {
+      sessionId: 'parent-1',
+      projectId: 'project_fixture',
+      workspaceId: 'workspace_fixture',
+      displayPath: '.',
+      rootSessionId: 'parent-1',
+      createdAt: 1,
+      updatedAt: 10,
+      epoch: 'epoch_1',
+      headSequence: '1',
+      runtimeStatus: 'idle',
+      activeRunId: null,
+      mode: { kind: 'main' },
+      metadata: null,
+      metadataRevision: '0',
+      archiveRevision: '0',
+    };
+    const childRecord = buildSubagentChildSessionRecord(parent, {
+      subagentId: 'home-disk-usage-2',
+      parentSessionId: 'parent-1',
+      childSessionId: 'vibe-child-2',
+      name: 'home-disk-usage-2',
+      role: 'sonic',
+      status: 'completed',
+      updatedAt: 20,
+    });
+    const globalById = new Map<string, Session>([[childRecord.sessionId, childRecord]]);
+
+    // Empty live directory store (e.g. immediately after page reload) or title-less child snapshot
+    const fromEmptyLive = buildSessionTitleMap([], ['vibe-child-2'], globalById);
+    expect(fromEmptyLive.get('vibe-child-2')).toBe('home-disk-usage-2');
+
+    const fromTitlelessLive = buildSessionTitleMap([state({ sessionId: 'vibe-child-2', updatedAt: 20 })], ['vibe-child-2'], globalById);
+    expect(fromTitlelessLive.get('vibe-child-2')).toBe('home-disk-usage-2');
+
+    // Live directory store renames at equal updatedAt still take precedence over global cache
+    const liveRenamed = buildSessionTitleMap(
+      [state({ sessionId: 'vibe-child-2', title: 'Live renamed', updatedAt: 20 })],
+      ['vibe-child-2'],
+      globalById,
+    );
+    expect(liveRenamed.get('vibe-child-2')).toBe('Live renamed');
   });
 });

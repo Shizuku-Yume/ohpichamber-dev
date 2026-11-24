@@ -46,6 +46,7 @@ import { clampContextEditorTreeWidth, isTrackerBranchTab, useUIStore, type Conte
 import { useContextZoneCloseAction } from './useContextZoneCloseAction';
 import { useGitStatus } from '@/stores/useGitStore';
 import { useChildStoreManager } from '@/sync/sync-context';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { ContextPanelContent } from './ContextSidebarTab';
@@ -302,12 +303,24 @@ const useSessionTitleMap = (sessionIDs: readonly string[]): ReadonlyMap<string, 
 
   return React.useSyncExternalStore(
     React.useCallback(
-      (notify: () => void) => (wanted ? childStores.subscribeAllSelected((state) => state.session, notify) : () => undefined),
+      (notify: () => void) => {
+        if (!wanted) return () => undefined;
+        const unsubscribeChildren = childStores.subscribeAllSelected((state) => state.session, notify);
+        const unsubscribeGlobal = useGlobalSessionsStore.subscribe((state, previous) => {
+          if (state.entityById !== previous.entityById) {
+            notify();
+          }
+        });
+        return () => {
+          unsubscribeChildren();
+          unsubscribeGlobal();
+        };
+      },
       [childStores, wanted],
     ),
     React.useCallback(() => {
       const liveStates = Array.from(childStores.children.values(), (store) => store.getState());
-      const next = buildSessionTitleMap(liveStates, sessionIDsRef.current);
+      const next = buildSessionTitleMap(liveStates, sessionIDsRef.current, useGlobalSessionsStore.getState().entityById);
       if (areTitleMapsEqual(snapshotRef.current, next)) {
         return snapshotRef.current;
       }

@@ -22,6 +22,7 @@ export const useOpenChildSession = (directory: string | null): ((childId: string
       mode: 'chat',
       dedupeKey: `session:${childId}`,
       label,
+      sessionTitleFallback: label,
       readOnly: true,
       targetDirectory: childDirectory && childDirectory !== directory ? childDirectory : null,
     });
