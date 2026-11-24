@@ -2,6 +2,7 @@ import React from 'react';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { sidebarPendingWidth } from '@/components/layout/sidebarPendingWidth';
+import { useChatAreaWidth } from '@/hooks/useChatAreaWidth';
 import {
   CONTEXT_ZONE_DEFAULT_WIDTH,
   isZoneShown,
@@ -68,13 +69,6 @@ type Result = {
  * is the only stable input.
  */
 export const useWorkStatusVisibility = ({ isMobile }: Options): Result => {
-  const [rowNode, setRowNode] = React.useState<HTMLDivElement | null>(null);
-  // Only the threshold decision is state: the chat area's width changes on
-  // every frame of a sidebar animation, and storing the width itself
-  // re-rendered the whole chat on each of those frames.
-  const [wideEnough, setWideEnough] = React.useState<boolean | null>(null);
-  const [wideEnoughBesidePanel, setWideEnoughBesidePanel] = React.useState(false);
-  const rowRef = React.useCallback((node: HTMLDivElement | null) => { setRowNode(node); }, []);
 
   // Keyed exactly like the rail and the panel itself: whichever directory the
   // app is effectively on, not the directory this panel reports about. A chat
@@ -127,48 +121,31 @@ export const useWorkStatusVisibility = ({ isMobile }: Options): Result => {
   // before layout is even measured.
   const panelEnabled = useUIStore((state) => state.workStatusPanelEnabled);
 
-  const areaWidthRef = React.useRef<number | null>(null);
-  const contextPanelWidthRef = React.useRef(contextPanelWidth);
-  contextPanelWidthRef.current = contextPanelWidth;
-  const applyAreaWidth = React.useCallback((measured: number) => {
-    areaWidthRef.current = measured;
-    const width = measured + sidebarPendingWidth();
-    setWideEnough(width >= WORK_STATUS_REQUIRED_ROW_WIDTH);
-    setWideEnoughBesidePanel(width >= WORK_STATUS_REQUIRED_ROW_WIDTH + contextPanelWidthRef.current);
-  }, []);
-
-  // Measures the chat AREA — the container holding the chat and the context
-  // panel together — not the chat row inside it.
-  //
-  // The row is what the context panel squeezes, and it squeezes it over its
-  // width animation. Measuring the row therefore reported a width that was
-  // still catching up while the context panel collapsed, so this panel only
-  // reappeared once that number crossed the threshold: the chat widened first
-  // and narrowed again afterwards. The chat area's width does not move when
-  // the context panel opens, so the reading is correct the instant it closes.
-  //
-  // It is also the stable input the oscillation argument needs: this panel's
-  // own visibility cannot change the width being measured.
-  React.useEffect(() => {
-    if (!rowNode || typeof ResizeObserver === 'undefined') return undefined;
-
-    const measured = rowNode.closest<HTMLElement>('[data-chat-area]') ?? rowNode;
-    applyAreaWidth(measured.getBoundingClientRect().width);
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      applyAreaWidth(entry.contentRect.width);
-    });
-    observer.observe(measured);
-    return () => observer.disconnect();
-  }, [applyAreaWidth, rowNode]);
-
   const sidebarOpen = useUIStore((state) => panelEnabled && state.isSidebarOpen);
-  React.useLayoutEffect(() => {
-    if (areaWidthRef.current !== null) applyAreaWidth(areaWidthRef.current);
-  }, [applyAreaWidth, contextPanelWidth, sidebarOpen]);
 
-  const roomy = !isMobile && wideEnough === true;
+  // Only the threshold decision is state: the chat area's width changes on
+  // every frame of a sidebar animation, and storing the width itself
+  // re-rendered the whole chat on each of those frames. `pick` re-arms the
+  // measurement when the context panel width or the sidebar's pending width
+  // changes, so the recompute lands on the store update, not the next resize.
+  const { rowRef, width: areaFit } = useChatAreaWidth(
+    React.useCallback(
+      (measured) => {
+        const width = measured + sidebarPendingWidth();
+        return {
+          wideEnough: width >= WORK_STATUS_REQUIRED_ROW_WIDTH,
+          wideEnoughBesidePanel: width >= WORK_STATUS_REQUIRED_ROW_WIDTH + contextPanelWidth,
+        };
+      },
+      [contextPanelWidth],
+    ),
+    React.useCallback((a, b) => a.wideEnough === b.wideEnough && a.wideEnoughBesidePanel === b.wideEnoughBesidePanel, []),
+    sidebarOpen,
+  );
+
+  const wideEnough = areaFit?.wideEnough === true;
+  const wideEnoughBesidePanel = areaFit?.wideEnoughBesidePanel === true;
+  const roomy = !isMobile && wideEnough;
   const roomyBesidePanel = roomy && wideEnoughBesidePanel && !contextPanelExpanded;
   const fits = contextPanelOpen ? roomyBesidePanel : roomy;
   const visible = panelEnabled && fits;

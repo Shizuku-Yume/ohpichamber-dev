@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Session, Subagent } from '@openchamber/agent-contract';
-import { SessionSchema, SubagentSchema } from '@openchamber/agent-contract';
+import { SubagentSchema } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { isSessionDiscoveryFailed, registerWorkspaceDirectory, resetWorkspaceDirectories, resolveWorkspaceDirectory, resolveWorkspaceDisplayPath, splitGlobalSessionsByArchived, subscribeWorkspaceDirectories } from '@/stores/globalSessions';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -17,6 +17,7 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { ensureChatsRootDirectory, getChatsRoot, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
 import { retry, STARTUP_RETRY } from '@/sync/retry';
+import { buildSubagentChildSessionRecord } from './subagentSessionTitle';
 import {
   applyGlobalSessionStructureMutations,
   buildGlobalSessionStructure,
@@ -107,50 +108,6 @@ let completeLoadAt = 0;
 
 type ChildDiscovery = { sessions: Session[]; succeededParents: Set<string>; failedParents: Set<string> };
 
-const SUBAGENT_GENERIC_DESCRIPTION = /^vibe\s+(?:fast|good)\s+session$/i;
-const SUBAGENT_TASK_TITLE_MAX = 80;
-
-const firstUsefulLine = (value: string | undefined, skipBoilerplate: boolean): string | undefined => {
-  if (!value) return undefined;
-  for (const line of value.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (skipBoilerplate && SUBAGENT_GENERIC_DESCRIPTION.test(trimmed)) continue;
-    return trimmed;
-  }
-  return undefined;
-};
-
-/**
- * Deterministic child-session title: the worker's given name when it has one,
- * else the first real line of its description or task, else its role. Keeps
- * vibe workers from surfacing as bare role names like "sonic" in the sidebar.
- */
-export const resolveSubagentSessionTitle = (child: Subagent): string => {
-  const role = child.role.trim();
-  const name = child.name?.trim();
-  if (name && name !== role) return name;
-  const description = firstUsefulLine(child.description, true);
-  if (description) return description;
-  const task = firstUsefulLine(child.task, false);
-  if (task) return task.length > SUBAGENT_TASK_TITLE_MAX ? task.slice(0, SUBAGENT_TASK_TITLE_MAX) : task;
-  return child.role;
-};
-
-const childSessionRecord = (parent: Session, child: Subagent): Session => {
-  const active = child.status === 'running' && parent.activeRunId !== null;
-  const runtimeStatus = parent.runtimeStatus === 'unavailable' ? 'unavailable' : active ? parent.runtimeStatus : 'idle';
-  return SessionSchema.parse({
-    sessionId: child.childSessionId, parentSessionId: parent.sessionId, rootSessionId: parent.rootSessionId,
-    projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
-    createdAt: child.createdAt ?? parent.createdAt, updatedAt: child.updatedAt ?? parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
-    mode: { kind: 'main' },
-    runtimeStatus, activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : parent.activeRunId,
-    title: resolveSubagentSessionTitle(child) || undefined,
-    metadata: null, metadataRevision: '0', archiveRevision: parent.archiveRevision,
-  });
-};
-
 // Children have history, but no snapshot or Host metadata endpoint. These stable
 // host records provide sidebar identity and routing, not a child event cursor.
 const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyMap<string, Session>, generation: number): Promise<ChildDiscovery> => {
@@ -176,7 +133,7 @@ const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyM
         if (child.parentSessionId !== root.sessionId || rootIds.has(child.childSessionId)
           || owner !== undefined
           || (previous && previous.parentSessionId !== root.sessionId)) continue;
-        children.push(childSessionRecord(root, child));
+        children.push(buildSubagentChildSessionRecord(root, child));
         owners.set(child.childSessionId, root.sessionId);
       }
       sessions.push(...children);
@@ -1113,15 +1070,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       const previous = state.entityById.get(child.childSessionId);
       if (child.parentSessionId !== parent.sessionId || child.childSessionId === parent.rootSessionId
         || (previous && previous.parentSessionId !== parent.sessionId)) return [];
-      const record = childSessionRecord(parent, child);
-      // Name/task metadata can arrive on a later progress update. Upgrade a
-      // child still wearing its role-only placeholder, but never clobber a
-      // real title a previous update already resolved.
-      const previousTitle = previous?.title?.trim();
-      if (previous && previousTitle && previousTitle !== child.role) {
-        return [{ type: 'upsert' as const, session: { ...record, title: previous.title } }];
-      }
-      return [{ type: 'upsert' as const, session: record }];
+      return [{ type: 'upsert' as const, session: buildSubagentChildSessionRecord(parent, child, previous) }];
     })));
   },
 

@@ -12,6 +12,7 @@ import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import { useSessionWorkflowRuns, useWorkflowRunsStore } from '@/lib/workflows/store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useParentSubagents } from '@/hooks/useParentSubagents';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
@@ -430,13 +431,7 @@ export const useSubagentsSurfaceShown = (
     [workflowRuns],
   );
   const sessions = useSessionsWithListedChildren(sessionId);
-  const liveSubagents = useSubagentsStore(
-    React.useCallback((state) => (sessionId && state.byParent[sessionId] ? state.byParent[sessionId] : EMPTY_SUBAGENTS), [sessionId]),
-  );
-  React.useEffect(() => {
-    if (!sessionId) return;
-    void useSubagentsStore.getState().hydrateParent(sessionId);
-  }, [sessionId]);
+  const liveSubagents = useParentSubagents(sessionId);
   return tabs.some((tab) => tab.mode === 'subagents')
     || hasSubagentRowInputs(sessionId, sessions, liveSubagents, workflowAgentIds);
 };
@@ -461,14 +456,7 @@ export const useSubagentRows = (sessionId: string | null, directory: string | nu
     [sessions, sessionId, workflowAgentIds],
   );
 
-  const liveSubagents = useSubagentsStore(
-    React.useCallback((state) => (sessionId && state.byParent[sessionId] ? state.byParent[sessionId] : EMPTY_SUBAGENTS), [sessionId]),
-  );
-
-  React.useEffect(() => {
-    if (!sessionId) return;
-    void useSubagentsStore.getState().hydrateParent(sessionId);
-  }, [sessionId]);
+  const liveSubagents = useParentSubagents(sessionId);
 
   const { perChildCost } = React.useMemo(() => computeRollup(sessions, sessionId), [sessions, sessionId]);
 

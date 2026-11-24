@@ -15,7 +15,8 @@ type PanelState = {
 let panelByDirectory: Record<string, PanelState> = {};
 let panelEnabled = true;
 let effectiveDirectory: string | undefined = '/repo';
-let contextZoneSizes: Record<string, number> = {};
+type ZoneSizes = { left?: number; right?: number; bottom?: number };
+let contextZoneSizes: ZoneSizes = {};
 
 mock.module('@/stores/useUIStore', () => ({
   useUIStore: (selector: (state: unknown) => unknown) =>
@@ -63,7 +64,7 @@ const installMinimalDom = () => {
     descriptors.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   };
-  class ElementStub {}
+  class ElementStub { }
   const documentStub: Record<string, unknown> = {
     nodeType: 9,
     defaultView: globalThis,

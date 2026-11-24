@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import type { Subagent } from '@openchamber/agent-contract';
 import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
+import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import { ProjectionError } from '../projection/journal.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
+import { VibeSpawnTracker } from './vibe-correlation.ts';
 
 export const SubagentLifecyclePayloadSchema = z.object({
   id: z.string(),
@@ -113,10 +115,22 @@ function resolveSubagentDescription(
  * raw bus write used at teardown so the terminal record reaches subscribers
  * after the emit gate has shut.
  */
+export function forwardSubagentLifecycle(
+  payload: SubagentLifecyclePayload,
+  subagent: Subagent,
+): SubagentLifecyclePayload & { assignment?: string; task?: string } {
+  const lifecycle: SubagentLifecyclePayload & { assignment?: string; task?: string } = { ...payload };
+  if (subagent.toolCallId !== undefined) lifecycle.parentToolCallId = subagent.toolCallId;
+  if (subagent.description !== undefined) lifecycle.description = subagent.description;
+  if (subagent.task !== undefined) lifecycle.task = subagent.task;
+  if (subagent.solutionSpace !== undefined) lifecycle.assignment = subagent.solutionSpace;
+  return lifecycle;
+}
+
 export class SubagentProjector {
   private readonly pendingVibeSpawns = new Map<string, VibeSpawnCorrelation>();
   private readonly lastLifecyclePayloads = new Map<string, SubagentLifecyclePayload>();
-
+  private readonly vibeTracker = new VibeSpawnTracker(correlation => this.correlateVibeSpawn(correlation));
   constructor(
     private readonly sessionId: string,
     private readonly liveSubagents: Map<string, Subagent>,
@@ -126,6 +140,9 @@ export class SubagentProjector {
     private readonly publish: (inputs: ProjectionInput[]) => void,
     private readonly onLifecycleBackfill?: (payload: SubagentLifecyclePayload & { assignment?: string; task?: string }) => void,
   ) { }
+  observeSessionEvent(event: AgentSessionEvent, publicText: (text: string) => string): void {
+    this.vibeTracker.observeSessionEvent(event, publicText);
+  }
 
   handleSubagentLifecycle(payload: SubagentLifecyclePayload): Subagent {
     this.lastLifecyclePayloads.set(payload.id, payload);

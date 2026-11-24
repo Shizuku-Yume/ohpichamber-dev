@@ -718,11 +718,11 @@ const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false }) => {
 };
 
 type ChatContainerProps = {
-    active?: boolean;
-    autoOpenDraft?: boolean;
-    readOnly?: boolean;
-    pinnedSession?: { sessionId: string; directory: string | null };
-    registerParentSessionBack?: (handler: (() => void) | null) => void;
+ active?: boolean;
+ autoOpenDraft?: boolean;
+ readOnly?: boolean;
+ pinnedSession?: { sessionId: string; directory: string | null };
+ registerParentSessionBack?: (handler: (() => void) | null) => void;
 };
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({
@@ -1005,9 +1005,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  // It yields to the context panel and to a narrow chat; `rowRef` goes on the
  // row that holds both columns, so its width never depends on the panel's
  // own visibility.
- const { rowRef: workStatusRowRef, visible: workStatusVisible, fits: workStatusFits, roomy: workStatusRoomy, roomyBesidePanel: workStatusRoomyBesidePanel } = useWorkStatusVisibility({
-  isMobile,
- });
+ const { rowRef: workStatusRowRef, visible: workStatusVisible, fits: workStatusFits, roomy: workStatusRoomy, roomyBesidePanel: workStatusRoomyBesidePanel } = useWorkStatusVisibility({ isMobile });
  const attachColumnRoot = React.useCallback((node: HTMLDivElement | null) => {
   columnRootRef.current = node;
   workStatusRowRef(node);
@@ -1764,110 +1762,110 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  const formsInChat = resolveFormsInChat({ questionsInChat, pinned, transcriptShown: hasRenderableSessionSnapshot && sessionMessageLoadState.status === 'ready' });
  return (
   <FormDockModeContext.Provider value={resolveFormDockMode(formsInChat, userOwnsScroll)}>
-  <div
-   ref={attachColumnRoot}
-   // App-wide handlers (double Escape to stop) find the pinned
-   // column's session and whether it runs here.
-   data-chat-column={pinned ? 'pinned' : 'main'}
-   data-chat-session-id={pinned ? currentSessionId ?? undefined : undefined}
-   data-chat-working={pinned && sessionIsWorking ? 'true' : undefined}
-   className="flex h-full min-h-0 bg-background"
-  >
-   <ChatColumnSessionContext.Provider value={chatColumnSession}>
-    <ChatColumnActionsContext.Provider value={columnActions}>
-     <ChatColumnExpandedInputContext.Provider value={pinnedExpandedInputValue}>
-      {/* One mobile comment controller per column: selections in this column
+   <div
+    ref={attachColumnRoot}
+    // App-wide handlers (double Escape to stop) find the pinned
+    // column's session and whether it runs here.
+    data-chat-column={pinned ? 'pinned' : 'main'}
+    data-chat-session-id={pinned ? currentSessionId ?? undefined : undefined}
+    data-chat-working={pinned && sessionIsWorking ? 'true' : undefined}
+    className="flex h-full min-h-0 bg-background"
+   >
+    <ChatColumnSessionContext.Provider value={chatColumnSession}>
+     <ChatColumnActionsContext.Provider value={columnActions}>
+      <ChatColumnExpandedInputContext.Provider value={pinnedExpandedInputValue}>
+       {/* One mobile comment controller per column: selections in this column
 		    comment into this column's composer, never a sibling's. */}
-      <MobileCommentComposerContext.Provider value={mobileCommentComposer}>
-       <ChatQuoteHighlightContext.Provider value={chatQuoteHighlights}>
-        <ChatQuoteHighlightLayer
-         store={chatQuoteHighlights}
-         scrollNode={scrollNode}
-         loadHistoryUntilMessage={(messageId) => loadHistoryUntilMessage(messageId, Number.POSITIVE_INFINITY)}
-         scrollToMessage={timelineController.scrollToMessage}
-        />
-        <div
-         ref={chatRootRef}
-         data-composer-bound
-         // A live reply can outrun the follow glide; while it streams and the
-         // view follows it (no scroll-to-bottom pill, no reader gesture), the
-         // transcript fades out above the composer (index.css). Once the
-         // reader leaves the end, the rows slide under its glass again.
-         data-live-tail={sessionStatusForCurrent === 'running' && isFollowingProgrammatically ? 'true' : undefined}
-         className="relative flex min-w-0 flex-1 flex-col h-full bg-background"
-        >
-         {returnToParentButton}
-         {sessionSurface}
-         {chatSearch.open && currentSessionId && messageSearchEnabled ? (
-          <div className="pointer-events-none absolute right-3 top-2 z-20">
-           <ChatSearchBar
-            sessionId={currentSessionId}
-            scrollNode={scrollNode}
-            focusRequest={chatSearch.focusRequest}
-            onClose={closeChatSearch}
-           />
-          </div>
-         ) : null}
-
+       <MobileCommentComposerContext.Provider value={mobileCommentComposer}>
+        <ChatQuoteHighlightContext.Provider value={chatQuoteHighlights}>
+         <ChatQuoteHighlightLayer
+          store={chatQuoteHighlights}
+          scrollNode={scrollNode}
+          loadHistoryUntilMessage={(messageId) => loadHistoryUntilMessage(messageId, Number.POSITIVE_INFINITY)}
+          scrollToMessage={timelineController.scrollToMessage}
+         />
          <div
-          ref={attachComposerSlot}
-          // The mobile pill morph pins a floating slot for its tween.
-          data-composer-slot={floatingComposer ? 'floating' : 'flow'}
-          className={cn(
-           'z-10 flex min-h-0',
-           floatingComposer
-            ? 'absolute inset-x-0 bottom-0'
-            : 'relative',
-           isDesktopExpandedInput
-            ? 'flex-1 min-h-0 bg-background'
-            : draftLayoutVisible && !useCompactDraftLayout
-             ? 'flex-1 items-center justify-center bg-background pb-[6vh]'
-             : !floatingComposer && 'bg-background'
-          )}
+          ref={chatRootRef}
+          data-composer-bound
+          // A live reply can outrun the follow glide; while it streams and the
+          // view follows it (no scroll-to-bottom pill, no reader gesture), the
+          // transcript fades out above the composer (index.css). Once the
+          // reader leaves the end, the rows slide under its glass again.
+          data-live-tail={sessionStatusForCurrent === 'running' && isFollowingProgrammatically ? 'true' : undefined}
+          className="relative flex min-w-0 flex-1 flex-col h-full bg-background"
          >
-          {/* A run is accepted before its first message is admitted, so
+          {returnToParentButton}
+          {sessionSurface}
+          {chatSearch.open && currentSessionId && messageSearchEnabled ? (
+           <div className="pointer-events-none absolute right-3 top-2 z-20">
+            <ChatSearchBar
+             sessionId={currentSessionId}
+             scrollNode={scrollNode}
+             focusRequest={chatSearch.focusRequest}
+             onClose={closeChatSearch}
+            />
+           </div>
+          ) : null}
+
+          <div
+           ref={attachComposerSlot}
+           // The mobile pill morph pins a floating slot for its tween.
+           data-composer-slot={floatingComposer ? 'floating' : 'flow'}
+           className={cn(
+            'z-10 flex min-h-0',
+            floatingComposer
+             ? 'absolute inset-x-0 bottom-0'
+             : 'relative',
+            isDesktopExpandedInput
+             ? 'flex-1 min-h-0 bg-background'
+             : draftLayoutVisible && !useCompactDraftLayout
+              ? 'flex-1 items-center justify-center bg-background pb-[6vh]'
+              : !floatingComposer && 'bg-background'
+           )}
+          >
+           {/* A run is accepted before its first message is admitted, so
                     the working state alone must mount this anchor: the chat
                     status live region lives here and has to announce the run
                     without waiting for timeline content. */}
-          {!draftLayoutVisible && !isDesktopExpandedInput && (sessionMessages.length > 0 || sessionIsWorking) && (
-           /* One zero-height anchor on the slot's top edge for
-              everything that floats above the composer, so the
-              mobile keyboard slide and the pill morph move them as
-              one rider with the box instead of leaving them to jump
-              when the slot resizes (see mobileComposerMorph). */
-           <div className="oc-composer-riders absolute bottom-full inset-x-0" data-composer-riders="true">
-            <ScrollToBottomButton
-             visible={timelineController.showScrollToBottom}
-             working={sessionIsWorking}
-             onClick={navigation.resumeToLatest}
-            />
-            {/* Same anchor and column as the pill, so the status
+           {!draftLayoutVisible && !isDesktopExpandedInput && (sessionMessages.length > 0 || sessionIsWorking) && (
+            /* One zero-height anchor on the slot's top edge for
+               everything that floats above the composer, so the
+               mobile keyboard slide and the pill morph move them as
+               one rider with the box instead of leaving them to jump
+               when the slot resizes (see mobileComposerMorph). */
+            <div className="oc-composer-riders absolute bottom-full inset-x-0" data-composer-riders="true">
+             <ScrollToBottomButton
+              visible={timelineController.showScrollToBottom}
+              working={sessionIsWorking}
+              onClick={navigation.resumeToLatest}
+             />
+             {/* Same anchor and column as the pill, so the status
                             row and the pill it hands off to share the exact
                             distance from the input and the same left edge. */}
-            <div
-             ref={registerFloatingPanelClearanceReader}
-             className={cn(
-              'pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-100',
-              userOwnsScroll && 'opacity-0',
-             )}
-             style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
-            >
-             <div className="chat-input-column">
-              {/* The glass chip itself is rendered inside
+             <div
+              ref={registerFloatingPanelClearanceReader}
+              className={cn(
+               'pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-100',
+               userOwnsScroll && 'opacity-0',
+              )}
+              style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
+             >
+              <div className="chat-input-column">
+               {/* The glass chip itself is rendered inside
                                     StatusRow (its root is a size container
                                     that cannot shrink-wrap). */}
-              <div
-               ref={onStatusOverlayNode}
-               className={cn(
-                '[&:not(:has(*))]:hidden',
-                userOwnsScroll ? 'pointer-events-none' : 'pointer-events-auto',
-               )}
-              >
-               <StatusRowContainer />
+               <div
+                ref={onStatusOverlayNode}
+                className={cn(
+                 '[&:not(:has(*))]:hidden',
+                 userOwnsScroll ? 'pointer-events-none' : 'pointer-events-auto',
+                )}
+               >
+                <StatusRowContainer />
+               </div>
               </div>
              </div>
-            </div>
-            {/* The recap hint shares the anchor but keys its fade
+             {/* The recap hint shares the anchor but keys its fade
                             on the measured distance to the end, not on the
                             user-owns-scroll intent flag or the list's at-end
                             transitions: a session switch or a sideways swipe
@@ -1875,107 +1873,107 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                             way. It stays out of the measured status node — it
                             lives inside the fixed composer gap, so its arrival
                             must not move the end. */}
-            {currentSessionId ? (
-             <div
-              ref={registerFloatingPanelClearanceReader}
-              className={cn(
-               'oc-recap-hint pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-300 ease-out',
-               !isPinned && 'opacity-0',
-              )}
-              style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
-             >
-              <div className="chat-input-column">
-               <SessionRecapNote
-                sessionId={currentSessionId}
-                directory={effectiveSessionDirectory}
-                isMobile={isMobile}
-               />
+             {currentSessionId ? (
+              <div
+               ref={registerFloatingPanelClearanceReader}
+               className={cn(
+                'oc-recap-hint pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-300 ease-out',
+                !isPinned && 'opacity-0',
+               )}
+               style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
+              >
+               <div className="chat-input-column">
+                <SessionRecapNote
+                 sessionId={currentSessionId}
+                 directory={effectiveSessionDirectory}
+                 isMobile={isMobile}
+                />
+               </div>
               </div>
-             </div>
-            ) : null}
-           </div>
-          )}
-          {promptReadOnly ? (
-           <>
-            {/* The docks live inside ChatInput, which a read-only
+             ) : null}
+            </div>
+           )}
+           {promptReadOnly ? (
+            <>
+             {/* The docks live inside ChatInput, which a read-only
                             chat does not mount. A subagent still asks for
                             permissions and answers, and they must be answerable
                             where the user is looking; the parent shows the same
                             requests, and answering one clears it in both. */}
-            <PermissionDock
-             sessionId={currentSessionId}
-             directory={effectiveSessionDirectory}
-             hidden={false}
+             <PermissionDock
+              sessionId={currentSessionId}
+              directory={effectiveSessionDirectory}
+              hidden={false}
+             />
+             <FormDock
+              sessionId={currentSessionId}
+              directory={effectiveSessionDirectory}
+              hidden={sessionPermissions.length > 0}
+             />
+             <ReadOnlyPromptBanner
+              text={spaceArchive
+               ? t('spaces.archive.readOnlyBanner', { name: spaceArchive.name })
+               : t('chat.container.readOnlySubagentPromptBanner')}
+              onStop={!spaceArchive && currentSessionId && sessionStatusForCurrent !== 'idle'
+               ? () => void abortCurrentOperation(currentSessionId)
+               : undefined}
+              stopLabel={t('chat.chatInput.actions.stopGeneratingAria')}
+             />
+            </>
+           ) : (
+            <ChatInput
+             active={active}
+             scrollToBottom={scrollToBottomOnSend}
+             scrollToLatest={resumeToLatestInstant}
+             draftPresentationExiting={draftPresentationExiting}
             />
-            <FormDock
-             sessionId={currentSessionId}
-             directory={effectiveSessionDirectory}
-             hidden={sessionPermissions.length > 0}
-            />
-            <ReadOnlyPromptBanner
-             text={spaceArchive
-              ? t('spaces.archive.readOnlyBanner', { name: spaceArchive.name })
-              : t('chat.container.readOnlySubagentPromptBanner')}
-             onStop={!spaceArchive && currentSessionId && sessionStatusForCurrent !== 'idle'
-              ? () => void abortCurrentOperation(currentSessionId)
-              : undefined}
-             stopLabel={t('chat.chatInput.actions.stopGeneratingAria')}
-            />
-           </>
-          ) : (
-           <ChatInput
-            active={active}
-            scrollToBottom={scrollToBottomOnSend}
-            scrollToLatest={resumeToLatestInstant}
-            draftPresentationExiting={draftPresentationExiting}
-           />
-          )}
-         </div>
+           )}
+          </div>
 
-         {/* Inside the chat column, not beside it: as a row sibling it took
+          {/* Inside the chat column, not beside it: as a row sibling it took
                 part in the flex layout and pushed the transcript, which is the
                 one thing an overlay must not do. */}
-         {workStatusOverlayMountable ? (
-          <WorkStatusPanel
-           overlay
-           visible={showWorkStatusOverlay}
-           sessionId={currentSessionId ?? null}
-           directory={workStatusDirectory ?? null}
-           repositoryEnabled={!isManagedChatContext}
-          />
-         ) : null}
+          {workStatusOverlayMountable ? (
+           <WorkStatusPanel
+            overlay
+            visible={showWorkStatusOverlay}
+            sessionId={currentSessionId ?? null}
+            directory={workStatusDirectory ?? null}
+            repositoryEnabled={!isManagedChatContext}
+           />
+          ) : null}
 
-         <TimelineDialog
-          open={isTimelineDialogOpen}
-          onOpenChange={setTimelineDialogOpen}
-          onScrollToMessage={timelineController.scrollToMessage}
-          onScrollByTurnOffset={navigation.scrollByTurnOffset}
-          onResumeToLatest={resumeToLatestInstant}
-          canLoadEarlier={timelineController.historySignals.canLoadEarlier}
-          isLoadingEarlier={timelineController.isLoadingOlder}
-          onLoadEarlier={handleLoadOlderClick}
-         />
-        </div>
-       </ChatQuoteHighlightContext.Provider>
-      </MobileCommentComposerContext.Provider>
-     </ChatColumnExpandedInputContext.Provider>
-    </ChatColumnActionsContext.Provider>
-   </ChatColumnSessionContext.Provider>
-   {/* Kept mounted while it could ever show, so it can fade out and back
+          <TimelineDialog
+           open={isTimelineDialogOpen}
+           onOpenChange={setTimelineDialogOpen}
+           onScrollToMessage={timelineController.scrollToMessage}
+           onScrollByTurnOffset={navigation.scrollByTurnOffset}
+           onResumeToLatest={resumeToLatestInstant}
+           canLoadEarlier={timelineController.historySignals.canLoadEarlier}
+           isLoadingEarlier={timelineController.isLoadingOlder}
+           onLoadEarlier={handleLoadOlderClick}
+          />
+         </div>
+        </ChatQuoteHighlightContext.Provider>
+       </MobileCommentComposerContext.Provider>
+      </ChatColumnExpandedInputContext.Provider>
+     </ChatColumnActionsContext.Provider>
+    </ChatColumnSessionContext.Provider>
+    {/* Kept mounted while it could ever show, so it can fade out and back
             in; `visible` drives that, and `reserved` keeps its column in the
             right slot while the context panel covers it. */}
-   {workStatusPanelMountable && workStatusHost ? createPortal(
-    <WorkStatusPanel
-     visible={showWorkStatusPanel}
-     reserved={workStatusReserved}
-     besidePanel={workStatusRoomyBesidePanel}
-     sessionId={currentSessionId ?? null}
-     directory={workStatusDirectory ?? null}
-     repositoryEnabled={!isManagedChatContext}
-    />,
-    workStatusHost,
-   ) : null}
-  </div>
+    {workStatusPanelMountable && workStatusHost ? createPortal(
+     <WorkStatusPanel
+      visible={showWorkStatusPanel}
+      reserved={workStatusReserved}
+      besidePanel={workStatusRoomyBesidePanel}
+      sessionId={currentSessionId ?? null}
+      directory={workStatusDirectory ?? null}
+      repositoryEnabled={!isManagedChatContext}
+     />,
+     workStatusHost,
+    ) : null}
+   </div>
   </FormDockModeContext.Provider>
  );
 };

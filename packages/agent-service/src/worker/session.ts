@@ -51,7 +51,7 @@ import { settleUsageSession } from './usage.ts';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { SubagentEventSchema, SubagentLifecyclePayloadSchema, SubagentProjector, SubagentProgressSchema, type SubagentEventObservation } from './subagent-projection.ts';
+import { forwardSubagentLifecycle, SubagentEventSchema, SubagentLifecyclePayloadSchema, SubagentProjector, SubagentProgressSchema, type SubagentEventObservation } from './subagent-projection.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { WorkerModeController } from './mode.ts';
 import { BRANCH_TYPE, nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
@@ -215,23 +215,8 @@ export class WorkerSession {
       () => this.publishContinuationPending(),
       mode => this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]),
     );
-    this.subagentProjector = new SubagentProjector(
-      this._sessionId,
-      this.liveSubagents,
-      this.pendingSubagentEvents,
-      this.toolCallToSubagentId,
-      inputs => this.emit(inputs),
-      inputs => this.publish(inputs),
-      payload => this.onSubagent(payload),
-    );
-    this.projection = new WorkerProjection(
-      session.sessionManager,
-      this._sessionId,
-      [],
-      () => session.getTodoPhases(),
-      sanitizeProviderError,
-      correlation => this.subagentProjector.correlateVibeSpawn(correlation),
-    );
+    this.subagentProjector = new SubagentProjector(this._sessionId, this.liveSubagents, this.pendingSubagentEvents, this.toolCallToSubagentId, inputs => this.emit(inputs), inputs => this.publish(inputs), payload => this.onSubagent(payload));
+    this.projection = new WorkerProjection(session.sessionManager, this._sessionId, [], () => session.getTodoPhases(), sanitizeProviderError);
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedToolCommandNames();
     this.defaultRegisteredNames = session.getAllToolNames();
@@ -252,13 +237,7 @@ export class WorkerSession {
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
       const parsed = SubagentLifecyclePayloadSchema.safeParse(data);
       if (!parsed.success) return;
-      const subagent = this.subagentProjector.handleSubagentLifecycle(parsed.data);
-      const lifecycle: SubagentLifecyclePayload & { assignment?: string; task?: string } = { ...parsed.data };
-      if (subagent.toolCallId !== undefined) lifecycle.parentToolCallId = subagent.toolCallId;
-      if (subagent.description !== undefined) lifecycle.description = subagent.description;
-      if (subagent.task !== undefined) lifecycle.task = subagent.task;
-      if (subagent.solutionSpace !== undefined) lifecycle.assignment = subagent.solutionSpace;
-      this.onSubagent(lifecycle);
+      this.onSubagent(forwardSubagentLifecycle(parsed.data, this.subagentProjector.handleSubagentLifecycle(parsed.data)));
     });
     this.subagentEventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, data => {
       const parsed = SubagentProgressSchema.safeParse(data);
@@ -325,6 +304,7 @@ export class WorkerSession {
         this.session.setTodoPhases([]);
       }
       const projected = this.projection.consume(event);
+      this.subagentProjector.observeSessionEvent(event, text => this.projection.publicText(text));
       for (const input of projected) {
         if (input.event.type === 'session.compacted') {
           this.lastEmittedCompaction = { compactionId: input.event.compactionId, completedAt: input.event.completedAt };
@@ -1688,14 +1668,7 @@ export class WorkerSession {
         this.hostToolsController?.rekey(newSessionId);
         this.mcp?.rekey(newSessionId);
         this.workerIdentity.rootSessionId = newSessionId;
-        this.projection = new WorkerProjection(
-          this.session.sessionManager,
-          newSessionId,
-          [],
-          () => this.session.getTodoPhases(),
-          this.sanitizeProviderError,
-          correlation => this.subagentProjector.correlateVibeSpawn(correlation),
-        );
+        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId, [], () => this.session.getTodoPhases(), this.sanitizeProviderError);
         this.projection.resetSelection();
         this.syncTodoAutoClear();
         await this.session.sessionManager.flush();
