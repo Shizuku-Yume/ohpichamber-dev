@@ -421,3 +421,65 @@ test('a file removed externally shows a notice instead of an editor that would r
   expect(element.querySelector('textarea')).toBeNull();
   expect(write).not.toHaveBeenCalled();
 });
+
+test('an uncreated RULES.md opens a ready-to-edit empty editor and saves as a new file', async () => {
+  let currentCatalog = catalog;
+  write.mockImplementation(async (_workspaceId: string, input: BehaviorFileWrite) => {
+    currentCatalog = {
+      ...currentCatalog,
+      revision: '4',
+      files: [
+        ...currentCatalog.files,
+        {
+          kind: 'sticky-rules',
+          scope: input.scope,
+          name: input.name,
+          version: 'd'.repeat(64),
+          content: input.content,
+          fields: {},
+        },
+      ],
+    };
+    return currentCatalog;
+  });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <NativeBehaviorFiles
+          directory="/workspace"
+          selection={{ type: 'native-file', scope: 'agent', kind: 'sticky-rules', name: 'RULES.md' }}
+          catalog={currentCatalog}
+          error={null}
+          unavailable={false}
+          onCatalogChange={(next) => {
+            currentCatalog = next;
+          }}
+          onSelect={() => { }}
+          onClearDraft={() => { }}
+        />
+      </I18nProvider>,
+    );
+  });
+
+  expect(element.querySelector('[role="alert"]')).toBeNull();
+  const textarea = element.querySelector<HTMLTextAreaElement>('textarea')!;
+  expect(textarea).not.toBeNull();
+  expect(textarea.value).toBe('');
+  expect(element.querySelector('button[aria-label="Delete"]')).toBeNull();
+
+  await setInput(textarea, 'Always answer in Spanish.');
+  await act(async () => {
+    textarea.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  });
+  await settle();
+
+  expect(write).toHaveBeenCalledWith('workspace', {
+    kind: 'sticky-rules',
+    scope: 'agent',
+    name: 'RULES.md',
+    expectedRevision: '3',
+    expectedVersion: null,
+    content: 'Always answer in Spanish.',
+  });
+});

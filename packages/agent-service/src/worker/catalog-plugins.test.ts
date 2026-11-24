@@ -3,11 +3,14 @@ import { existsSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { __resetDirsFromEnvForTests, getPluginsDir, getPluginsLockfile, getProjectPluginOverridesPath, setAgentDir } from '@oh-my-pi/pi-utils';
 import { PluginManager } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
 import { getEnabledPlugins, getPluginSettings } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/loader';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { MarketplaceErrorDetailsSchema } from '@openchamber/agent-contract';
+import { operationErrorDetail, WorkerReplySchema } from '../protocol.ts';
+import { ProjectionError } from '../projection/journal.ts';
 import { NativePlugins } from './catalog-plugins.ts';
 import { nativeExtensionRoots } from './native-runtime.ts';
 import { PluginLocalSource } from './plugin-local-source.ts';
@@ -20,18 +23,50 @@ const worker = { rootSessionId: 'plugin-root', workspaceId: 'plugin-workspace', 
 // move the SDK resolver. The suite re-executes itself once with an isolated HOME;
 // every fixture then runs against that process home and clears the shared native
 // plugin state between tests.
+const isPathWithin = (parent: string, target: string): boolean => {
+  const rel = relative(resolve(parent), resolve(target));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+};
+
 const fixtureHome = process.env.OPENCHAMBER_PLUGIN_FIXTURE_HOME;
 if (fixtureHome === undefined) {
   test('native plugin fixtures rerun with an isolated HOME', async () => {
+    const realHome = homedir();
     const home = await mkdtemp(join(tmpdir(), 'native-plugins-home-'));
+    if (resolve(home) === resolve(realHome)) {
+      throw new Error(`Refusing to run native plugin tests: temp home "${home}" matches real homedir()`);
+    }
     try {
-      const environment = { ...process.env, HOME: home, USERPROFILE: home, OPENCHAMBER_PLUGIN_FIXTURE_HOME: home };
+      const environment = {
+        ...process.env,
+        HOME: home, USERPROFILE: home,
+        OPENCHAMBER_PLUGIN_FIXTURE_HOME: home,
+        OPENCHAMBER_PLUGIN_REAL_HOME: realHome,
+      };
       for (const key of ['PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME']) delete environment[key];
       const child = Bun.spawn([process.execPath, 'test', import.meta.path], { env: environment, stdout: 'pipe', stderr: 'pipe' });
       const [status, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
       if (status !== 0) throw new Error(`Fresh-HOME native plugin fixture failed (${status}):\n${stdout}\n${stderr}`);
     } finally { await rm(home, { recursive: true, force: true }); }
   });
+} else {
+  // Fail-fast isolation guard: native plugin tests must NEVER touch the real user ~/.omp or ~/.config.
+  const resolvedFixtureHome = resolve(fixtureHome);
+  const resolvedHome = resolve(homedir());
+  const resolvedTmp = resolve(tmpdir());
+  const realHome = process.env.OPENCHAMBER_PLUGIN_REAL_HOME;
+  if (resolvedHome !== resolvedFixtureHome) {
+    throw new Error(`Native plugin test isolation violation: homedir() "${resolvedHome}" !== OPENCHAMBER_PLUGIN_FIXTURE_HOME "${resolvedFixtureHome}"`);
+  }
+  if ((realHome && resolvedHome === resolve(realHome)) || !isPathWithin(resolvedTmp, resolvedHome)) {
+    throw new Error(`Native plugin test isolation violation: refusing to run against non-temp HOME "${resolvedHome}"`);
+  }
+  __resetDirsFromEnvForTests();
+  for (const nativePath of [getPluginsDir(), getMarketplacesRegistryPath(), getInstalledPluginsRegistryPath(), getMarketplacesCacheDir(), getPluginsCacheDir()]) {
+    if (!isPathWithin(resolvedFixtureHome, nativePath)) {
+      throw new Error(`Native plugin test isolation violation: native path "${nativePath}" escaped isolated HOME "${resolvedFixtureHome}"`);
+    }
+  }
 }
 const nativeTest = fixtureHome === undefined ? test.skip : test;
 
@@ -50,6 +85,9 @@ async function fixture(configDir = '.omp') {
   const keys = ['HOME', 'USERPROFILE', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] as const;
   const environment: Record<(typeof keys)[number], string | undefined> = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const home = homedir();
+  if (!fixtureHome || resolve(home) !== resolve(fixtureHome)) {
+    throw new Error(`Native plugin fixture violation: homedir() "${home}" must match isolated OPENCHAMBER_PLUGIN_FIXTURE_HOME "${fixtureHome ?? ''}"`);
+  }
   const root = await mkdtemp(join(tmpdir(), 'native-plugins-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
@@ -732,5 +770,243 @@ nativeTest('batch upgrade installs only outdated marketplace plugins and preview
     const after = (await context.plugins.read('3')).plugins.map(plugin => [plugin.name, plugin.version]);
     expect(after).toEqual([['current', '1.0.0'], ['outdated', '2.0.0']]);
     expect((await context.plugins.read('3')).availableUpdates).toEqual([]);
+  } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
+});
+
+nativeTest('marketplace errors classify missing paths, duplicates, and invalid sources with sanitized paths', async () => {
+  const context = await fixture();
+  try {
+    const missingInsideHome = join(context.home, 'missing-marketplace');
+    let missingError: unknown;
+    try {
+      await context.plugins.operation({
+        type: 'plugins.marketplace.manage',
+        request: { action: 'add', expectedRevision: '0', source: missingInsideHome }
+      }, '1');
+    } catch (caught) { missingError = caught; }
+    expect(missingError).toBeInstanceOf(ProjectionError);
+    if (!(missingError instanceof ProjectionError)) throw new Error('Expected ProjectionError');
+    expect(missingError.status).toBe(404);
+    expect(missingError.code).toBe('MARKETPLACE_SOURCE_MISSING');
+    expect(missingError.message).not.toContain('Native marketplace operation failed');
+    expect(missingError.message).not.toContain(context.home);
+    expect(missingError.message).toContain('~/missing-marketplace');
+    expect(MarketplaceErrorDetailsSchema.parse(missingError.details)).toMatchObject({
+      action: 'add',
+      sourceUri: '~/missing-marketplace',
+    });
+
+    let badFormatError: unknown;
+    try {
+      await context.plugins.operation({
+        type: 'plugins.marketplace.manage',
+        request: { action: 'add', expectedRevision: '0', source: 'not-a-valid-source' }
+      }, '1');
+    } catch (caught) { badFormatError = caught; }
+    expect(badFormatError).toBeInstanceOf(ProjectionError);
+    if (!(badFormatError instanceof ProjectionError)) throw new Error('Expected ProjectionError');
+    expect(badFormatError.status).toBe(400);
+    expect(badFormatError.code).toBe('MARKETPLACE_INVALID_SOURCE');
+
+    const emptyExistingDir = join(context.root, 'not-a-marketplace');
+    await mkdir(emptyExistingDir, { recursive: true });
+    let missingCatalogInDirError: unknown;
+    try {
+      await context.plugins.operation({
+        type: 'plugins.marketplace.manage',
+        request: { action: 'add', expectedRevision: '0', source: emptyExistingDir }
+      }, '1');
+    } catch (caught) { missingCatalogInDirError = caught; }
+    expect(missingCatalogInDirError).toBeInstanceOf(ProjectionError);
+    if (!(missingCatalogInDirError instanceof ProjectionError)) throw new Error('Expected ProjectionError');
+    expect(missingCatalogInDirError.status).toBe(400);
+    expect(missingCatalogInDirError.code).toBe('MARKETPLACE_INVALID_SOURCE');
+
+    const validRoot = join(context.root, 'dup-marketplace');
+    await mkdir(join(validRoot, '.omp-plugin'), { recursive: true });
+    await writeFile(join(validRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('dup-proof', []));
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'add', expectedRevision: '0', source: validRoot }
+    }, '1');
+
+    let duplicateError: unknown;
+    try {
+      await context.plugins.operation({
+        type: 'plugins.marketplace.manage',
+        request: { action: 'add', expectedRevision: '1', source: validRoot }
+      }, '2');
+    } catch (caught) { duplicateError = caught; }
+    expect(duplicateError).toBeInstanceOf(ProjectionError);
+    if (!(duplicateError instanceof ProjectionError)) throw new Error('Expected ProjectionError');
+    expect(duplicateError.status).toBe(409);
+    expect(duplicateError.code).toBe('MARKETPLACE_SOURCE_EXISTS');
+    expect(MarketplaceErrorDetailsSchema.parse(duplicateError.details)).toMatchObject({
+      action: 'add',
+      sourceName: 'dup-proof',
+    });
+
+    const wireDetail = operationErrorDetail(missingError.code, missingError.message);
+    expect(wireDetail).toBe(missingError.message);
+    expect(WorkerReplySchema.safeParse({
+      type: 'operation.error',
+      workerGeneration: 'gen-1',
+      commandId: 'cmd-1',
+      code: missingError.code,
+      status: missingError.status,
+      detail: wireDetail,
+      details: missingError.details,
+    }).success).toBe(true);
+  } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
+});
+
+nativeTest('resilient updateAll refreshes healthy sources despite broken ones and guaranteed remove deletes broken sources', async () => {
+  const context = await fixture();
+  try {
+    const validRoot = join(context.root, 'valid-marketplace');
+    const brokenRoot = join(context.home, 'broken-marketplace');
+    await mkdir(join(validRoot, '.omp-plugin'), { recursive: true });
+    await mkdir(join(brokenRoot, '.omp-plugin'), { recursive: true });
+    await writeFile(join(validRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('valid-proof', [
+      { name: 'valid-plugin', source: './plugins/valid-plugin', version: '1.0.0', description: 'Valid plugin' },
+    ]));
+    await writeFile(join(brokenRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('broken-proof', [
+      { name: 'broken-plugin', source: './plugins/broken-plugin', version: '1.0.0', description: 'Broken plugin' },
+    ]));
+
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'add', expectedRevision: '0', source: validRoot }
+    }, '1');
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'add', expectedRevision: '1', source: brokenRoot }
+    }, '2');
+
+    // Update valid source catalog and delete broken source + its cache directory.
+    await writeFile(join(validRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('valid-proof', [
+      { name: 'valid-plugin', source: './plugins/valid-plugin', version: '2.0.0', description: 'Updated valid plugin' },
+    ]));
+    await rm(brokenRoot, { recursive: true, force: true });
+    await rm(join(getMarketplacesCacheDir(), 'broken-proof'), { recursive: true, force: true });
+
+    // Resilient updateAll should still update valid-proof to 2.0.0 before reporting broken-proof failure.
+    let updateAllError: unknown;
+    try {
+      await context.plugins.operation({
+        type: 'plugins.marketplace.manage',
+        request: { action: 'update', expectedRevision: '2' }
+      }, '3');
+    } catch (caught) { updateAllError = caught; }
+    expect(updateAllError).toBeInstanceOf(ProjectionError);
+    if (!(updateAllError instanceof ProjectionError)) throw new Error('Expected ProjectionError');
+    expect(updateAllError.status).toBe(404);
+    expect(updateAllError.code).toBe('MARKETPLACE_SOURCE_MISSING');
+    expect(updateAllError.message).toContain('broken-proof');
+    expect(updateAllError.message).not.toContain(context.home);
+    expect(MarketplaceErrorDetailsSchema.parse(updateAllError.details)).toMatchObject({
+      action: 'update',
+      sourceName: 'broken-proof',
+      sourceUri: '~/broken-marketplace',
+      updatedCount: 1,
+      failures: [{ name: 'broken-proof', code: 'MARKETPLACE_SOURCE_MISSING', sourceUri: '~/broken-marketplace' }],
+    });
+
+    // plugins.read and plugins.marketplace both survive the missing catalogPath of broken-proof AND reflect valid-proof v2.0.0!
+    const afterPartialUpdate = await context.plugins.read('2');
+    expect(afterPartialUpdate.marketplace).toEqual([
+      expect.objectContaining({ marketplace: 'valid-proof', name: 'valid-plugin', version: '2.0.0' }),
+    ]);
+    expect(afterPartialUpdate.marketplaceSources.map(source => source.name)).toEqual(['valid-proof', 'broken-proof']);
+    const marketplaceState = await context.plugins.operation({ type: 'plugins.marketplace' }, '2');
+    if (marketplaceState.type !== 'plugins.marketplace') throw new Error('Expected marketplace state');
+    expect(marketplaceState.result.entries).toEqual([
+      expect.objectContaining({ marketplace: 'valid-proof', name: 'valid-plugin', version: '2.0.0' }),
+    ]);
+
+    // Removing the broken source whose path and cache are both gone succeeds cleanly.
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'remove', expectedRevision: '2', name: 'broken-proof' }
+    }, '3');
+    const afterRemove = await context.plugins.read('3');
+    expect(afterRemove.marketplaceSources.map(source => source.name)).toEqual(['valid-proof']);
+  } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
+});
+
+nativeTest('plugins.read survives a corrupted cached catalogPath without failing', async () => {
+  const context = await fixture();
+  try {
+    const healthyRoot = join(context.root, 'healthy-marketplace');
+    const corruptRoot = join(context.root, 'corrupt-marketplace');
+    await mkdir(join(healthyRoot, '.omp-plugin'), { recursive: true });
+    await mkdir(join(corruptRoot, '.omp-plugin'), { recursive: true });
+    await writeFile(join(healthyRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('healthy-proof', [
+      { name: 'healthy-plugin', source: './plugins/healthy-plugin', version: '1.0.0', description: 'Healthy plugin' },
+    ]));
+    await writeFile(join(corruptRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('corrupt-proof', [
+      { name: 'corrupt-plugin', source: './plugins/corrupt-plugin', version: '1.0.0', description: 'Corrupt plugin' },
+    ]));
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'add', expectedRevision: '0', source: healthyRoot }
+    }, '1');
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'add', expectedRevision: '1', source: corruptRoot }
+    }, '2');
+
+    const sources = (await context.plugins.read('2')).marketplaceSources;
+    const corruptSource = sources.find(source => source.name === 'corrupt-proof');
+    if (!corruptSource) throw new Error('Expected corrupt-proof source');
+    await writeFile(corruptSource.catalogPath, '{not valid json');
+
+    const catalog = await context.plugins.read('2');
+    expect(catalog.marketplaceSources.map(source => source.name)).toEqual(['healthy-proof', 'corrupt-proof']);
+    expect(catalog.marketplace).toEqual([
+      expect.objectContaining({ marketplace: 'healthy-proof', name: 'healthy-plugin', version: '1.0.0' }),
+    ]);
+  } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
+});
+
+nativeTest('marketplace error sanitization redacts home paths after =, :, backtick, and file:// without mangling sibling names', async () => {
+  const context = await fixture();
+  try {
+    const validRoot = join(context.root, 'sanitize-marketplace');
+    await mkdir(validRoot, { recursive: true });
+
+    const spy = spyOn(MarketplaceManager.prototype, 'addMarketplace').mockRejectedValueOnce(
+      new Error(`Clone failed: path=${context.home}/a location:${context.home}/b file://${context.home}/c \`${context.home}/d\``),
+    );
+    let delimitedError: unknown;
+    try {
+      await context.plugins.operation({
+        type: 'plugins.marketplace.manage',
+        request: { action: 'add', expectedRevision: '0', source: validRoot }
+      }, '1');
+    } catch (caught) { delimitedError = caught; }
+    finally { spy.mockRestore(); }
+    expect(delimitedError).toBeInstanceOf(ProjectionError);
+    if (!(delimitedError instanceof ProjectionError)) throw new Error('Expected ProjectionError');
+    expect(delimitedError.message).not.toContain(context.home);
+    expect(delimitedError.message).toContain('path=~/a');
+    expect(delimitedError.message).toContain('location:~/b');
+    expect(delimitedError.message).toContain('file://~/c');
+    expect(delimitedError.message).toContain('`~/d`');
+
+    const siblingSpy = spyOn(MarketplaceManager.prototype, 'addMarketplace').mockRejectedValueOnce(
+      new Error(`Unrelated prefix=${context.home}_other/f`),
+    );
+    let siblingError: unknown;
+    try {
+      await context.plugins.operation({
+        type: 'plugins.marketplace.manage',
+        request: { action: 'add', expectedRevision: '0', source: validRoot }
+      }, '1');
+    } catch (caught) { siblingError = caught; }
+    finally { siblingSpy.mockRestore(); }
+    expect(siblingError).toBeInstanceOf(ProjectionError);
+    if (!(siblingError instanceof ProjectionError)) throw new Error('Expected ProjectionError');
+    expect(siblingError.message).toContain(`prefix=${context.home}_other/f`);
   } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
 });

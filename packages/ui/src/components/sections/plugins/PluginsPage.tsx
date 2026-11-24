@@ -44,7 +44,9 @@ import { usePluginsStore } from '@/stores/usePluginsStore';
 import { AddPluginDialog } from './AddPluginDialog';
 import { MarketplaceSourcesDialog } from './MarketplaceSourcesDialog';
 import { ExtensionControlCenter } from './ExtensionControlCenter';
+import { filterPluginCapabilities } from './pluginCapabilities';
 import { problemMessage } from '@/lib/problemMessage';
+import { formatMarketplaceProblem } from './marketplaceError';
 
 type PluginSelection = { kind: 'plugin'; id: string } | { kind: 'local'; extensionId: string };
 type DeleteTarget = { kind: 'plugin'; plugin: InstalledPluginEntry } | { kind: 'local'; extension: LocalExtensionEntry };
@@ -519,12 +521,10 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const isLoading = usePluginsStore(state => state.isLoading);
   const loadError = usePluginsStore(state => state.error);
   const isMutating = usePluginsStore(state => state.isMutating);
-  const lastMutation = usePluginsStore(state => state.lastMutation);
   const extensions = usePluginsStore(state => state.extensions);
   const [selection, setSelection] = React.useState<PluginSelection | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null);
-  const [applyOpen, setApplyOpen] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const [operationError, setOperationError] = React.useState<string | null>(null);
   const [marketplaceRefreshing, setMarketplaceRefreshing] = React.useState(false);
@@ -550,7 +550,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     try {
       await perform();
     } catch (error) {
-      setOperationError(error instanceof CanonicalApiError ? error.message : t('settings.plugins.error.operation'));
+      setOperationError(formatMarketplaceProblem(error instanceof CanonicalApiError ? error.problem : null, t));
     } finally {
       setPending(false);
     }
@@ -609,10 +609,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const toggleExtensionItem = (providerId: string, extensionId: string, enabled: boolean) => run(async () => {
     await usePluginsStore.getState().toggleExtensionItem(providerId, extensionId, enabled);
   });
-  const requestApply = () => {
-    setOperationError(null);
-    setApplyOpen(true);
-  };
   const remove = () => {
     void run(async () => {
       const target = deleteTarget;
@@ -680,32 +676,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={applyOpen} onOpenChange={open => { if (!open && !pending) setApplyOpen(false); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('settings.plugins.apply.confirmTitle')}</DialogTitle>
-            <DialogDescription>{t('settings.plugins.apply.confirmDescription')}</DialogDescription>
-          </DialogHeader>
-          {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
-          <DialogFooter>
-            <Button size="sm" variant="ghost" onClick={() => setApplyOpen(false)} disabled={pending}>
-              {t('settings.common.actions.cancel')}
-            </Button>
-            <Button
-              size="sm"
-              disabled={pending}
-              onClick={() => {
-                void run(async () => {
-                  await usePluginsStore.getState().applyPlugins();
-                  setApplyOpen(false);
-                });
-              }}
-            >
-              {t('settings.plugins.action.apply')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 
@@ -738,7 +708,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           {!directory ? <p className="typography-meta text-muted-foreground">{t('settings.plugins.error.workspaceRequired')}</p> : null}
           {loadError ? (
             <p role="alert" className="typography-meta text-[var(--status-error)]">
-              {loadError instanceof CanonicalApiError ? loadError.message : t('settings.plugins.error.operation')}
+              {formatMarketplaceProblem(loadError instanceof CanonicalApiError ? loadError.problem : null, t)}
             </p>
           ) : null}
         </SettingsPageLayout>
@@ -762,32 +732,10 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   );
 
   const hasActiveWorkers = catalog.workers.length > 0;
-  // A mutation's own outcome, in the vocabulary of the thing the user
-  // did. Worker identities and engine checks stay out of this view.
-  const lastMutationLabel = lastMutation
-    ? t(lastMutation.status === 'applied'
-      ? 'settings.plugins.apply.applied'
-      : lastMutation.status === 'partial'
-        ? 'settings.plugins.apply.partial'
-        : lastMutation.status === 'failed'
-          ? 'settings.plugins.apply.failed'
-          : 'settings.plugins.apply.noActiveWorkers', { failedCount: lastMutation.workers.filter(worker => worker.outcome === 'failed').length })
-    : null;
-  const showLifecycleSection = hasActiveWorkers || lastMutationLabel !== null;
+  const showLifecycleSection = hasActiveWorkers;
   const lifecycleSection = showLifecycleSection ? (
     <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
-      {hasActiveWorkers ? (
-        <SettingsFieldRow
-          label={t('settings.plugins.runtime.title')}
-          description={lastMutationLabel ? <span role="status">{lastMutationLabel}</span> : undefined}
-        >
-          <Button variant="outline" size="sm" disabled={disabled} onClick={requestApply}>
-            {t('settings.plugins.action.apply')}
-          </Button>
-        </SettingsFieldRow>
-      ) : (
-        <p role="status" className="typography-meta text-muted-foreground">{lastMutationLabel}</p>
-      )}
+      <p className="typography-meta text-muted-foreground">{t('settings.plugins.apply.nextSession')}</p>
     </SettingsSection>
   ) : null;
 
@@ -1017,19 +965,19 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           </div>
         </SettingsSection>
 
-        {/* Capability sources are the extension inventory's own view of the
-            workspace. The section renders even when it discovers nothing: its
-            empty state names the section and says so, which an absent section
-            could not. */}
-        {extensions !== null ? (
-          <ExtensionControlCenter
-            inventory={extensions}
-            disabled={disabled}
-            onToggleProvider={(providerId, enabled) => void toggleExtensionProvider(providerId, enabled)}
-            onToggleUserSource={(providerId, enabled) => void toggleExtensionUserSource(providerId, enabled)}
-            onToggleItem={(providerId, extensionId, enabled) => void toggleExtensionItem(providerId, extensionId, enabled)}
-          />
-        ) : null}
+        {(() => {
+          const pluginCapabilities = extensions ? filterPluginCapabilities(extensions) : null;
+          if (!pluginCapabilities || pluginCapabilities.items.length === 0) return null;
+          return (
+            <ExtensionControlCenter
+              inventory={pluginCapabilities}
+              disabled={disabled}
+              onToggleProvider={(providerId, enabled) => void toggleExtensionProvider(providerId, enabled)}
+              onToggleUserSource={(providerId, enabled) => void toggleExtensionUserSource(providerId, enabled)}
+              onToggleItem={(providerId, extensionId, enabled) => void toggleExtensionItem(providerId, extensionId, enabled)}
+            />
+          );
+        })()}
 
         <SettingsSection
           title={t('settings.plugins.marketplace.title')}
@@ -1108,7 +1056,11 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           ) : null}
 
           {catalog.marketplace.length === 0 ? (
-            <p className="py-2 typography-meta text-muted-foreground">{t('settings.plugins.marketplace.empty')}</p>
+            <p className="py-2 typography-meta text-muted-foreground">
+              {catalog.marketplaceSources.length === 0
+                ? t('settings.plugins.marketplace.empty')
+                : t('settings.plugins.marketplace.emptyInSources')}
+            </p>
           ) : marketplaceEntries.length === 0 ? (
             <p className="py-2 typography-meta text-muted-foreground">
               {t('settings.plugins.grid.noMatches', { query: marketplaceQuery.trim() })}

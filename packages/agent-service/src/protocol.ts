@@ -208,9 +208,15 @@ export const WorkerCommandSchema = z.discriminatedUnion('type', [
  * what fits.
  */
 const DefaultOperationErrorDetailLimit = 200;
+const MarketplaceOperationErrorDetailLimit = 500;
 const McpOAuthOperationErrorDetailLimit = 1_000;
+function operationErrorDetailLimit(code: string): number {
+  if (code.startsWith('MCP_OAUTH_')) return McpOAuthOperationErrorDetailLimit;
+  if (code.startsWith('MARKETPLACE_')) return MarketplaceOperationErrorDetailLimit;
+  return DefaultOperationErrorDetailLimit;
+}
 export function operationErrorDetail(code: string, detail: string): string {
-  return detail.slice(0, code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit);
+  return detail.slice(0, operationErrorDetailLimit(code));
 }
 
 export const WorkerReplySchema = z.discriminatedUnion('type', [
@@ -225,7 +231,8 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema,
     status: z.number().int().min(400).max(599), detail: z.string().min(1).max(McpOAuthOperationErrorDetailLimit),
-  }).refine(reply => reply.detail.length <= (reply.code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit), {
+    details: JsonObjectSchema.optional(),
+  }).refine(reply => reply.detail.length <= operationErrorDetailLimit(reply.code), {
     path: ['detail'], message: 'Operation error detail exceeds the limit for its code',
   }),
   z.strictObject({ type: z.literal('lifecycle'), workerGeneration: EntityIdSchema, state: z.enum(['initialized', 'closed']) }),

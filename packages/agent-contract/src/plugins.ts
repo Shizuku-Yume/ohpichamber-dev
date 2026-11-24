@@ -356,3 +356,26 @@ export const PluginApplyRequestSchema = z.strictObject({
  strategy: z.literal('restart-idle-sessions'),
 });
 export type PluginApplyRequest = z.infer<typeof PluginApplyRequestSchema>;
+export const MarketplaceErrorCodeSchema = z.enum([
+  'MARKETPLACE_SOURCE_MISSING',
+  'MARKETPLACE_SOURCE_EXISTS',
+  'MARKETPLACE_INVALID_SOURCE',
+  'MARKETPLACE_NETWORK_ERROR',
+]);
+export type MarketplaceErrorCode = z.infer<typeof MarketplaceErrorCodeSchema>;
+export const MarketplaceSourceFailureSchema = z.strictObject({
+  name: z.string().min(1),
+  code: MarketplaceErrorCodeSchema,
+  detail: z.string().min(1),
+  sourceUri: z.string().min(1).optional(),
+});
+export type MarketplaceSourceFailure = z.infer<typeof MarketplaceSourceFailureSchema>;
+export const MarketplaceErrorDetailsSchema = z.strictObject({
+  action: z.enum(['add', 'remove', 'update', 'upgradeAll']),
+  sourceName: z.string().min(1).optional(),
+  sourceUri: z.string().min(1).optional(),
+  detail: z.string().min(1),
+  updatedCount: z.number().int().nonnegative().optional(),
+  failures: z.array(MarketplaceSourceFailureSchema).optional(),
+});
+export type MarketplaceErrorDetails = z.infer<typeof MarketplaceErrorDetailsSchema>;

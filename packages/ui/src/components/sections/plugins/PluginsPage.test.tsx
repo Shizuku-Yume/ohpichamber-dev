@@ -23,10 +23,15 @@ installTestDomGlobals();
 mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/repo' }));
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
+const { CanonicalApiError } = await import('@/api/canonicalClient');
 const { getRuntimeKey } = await import('@/lib/runtime-switch');
 const { usePluginsStore } = await import('@/stores/usePluginsStore');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { PluginsPage } = await import('./PluginsPage');
+const { AddPluginDialog } = await import('./AddPluginDialog');
+const { MarketplaceSourcesDialog } = await import('./MarketplaceSourcesDialog');
+const { filterPluginCapabilities } = await import('./pluginCapabilities');
+const { formatMarketplaceProblemLines } = await import('./marketplaceError');
 
 const workspaceId = 'workspace_one';
 const worker = { rootSessionId: 'session_one', workspaceId, workerGeneration: 'generation_one' };
@@ -118,54 +123,7 @@ test('offline plugin settings say when changes will apply instead of disabling a
   expect(container.textContent).not.toContain('Restart idle sessions to apply');
 });
 
-test('applying plugin changes only calls the native apply after the confirmation dialog is accepted', async () => {
-  let applies = 0;
-  const applied: PluginMutationResult = {
-    workspaceId, revision: '3', persistence: 'committed', status: 'no-active-workers', workers: [],
-    catalog: { ...emptyCatalog, workers: [readyWorker] },
-  };
-  usePluginsStore.setState({
-    catalog: { ...emptyCatalog, workers: [readyWorker] },
-    loadedDirectory: '/repo',
-    loadedRuntimeKey: getRuntimeKey(),
-    requestedScope: JSON.stringify([getRuntimeKey(), '/repo']),
-    isLoading: false,
-    isMutating: false,
-    lastMutation: null,
-    doctor: null,
-    loadPlugins: async () => true,
-    applyPlugins: async () => {
-      applies += 1;
-      return applied;
-    },
-  });
-  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
-
-  const applyButtons = Array.from(container.querySelectorAll('button'))
-    .filter(button => button.textContent?.trim() === 'Restart idle sessions to apply');
-  expect(applyButtons).toHaveLength(1);
-  const applyButton = applyButtons[0];
-  if (!applyButton) throw new Error('Missing runtime apply action');
-  const applyActionName = applyButton.textContent?.trim();
-  await act(async () => { applyButton.click(); });
-  await settle();
-
-  expect(applies).toBe(0);
-  // The confirmation dialog mounts asynchronously; wait for its portal rather than one tick.
-  await waitFor(() => document.querySelector('[data-slot="dialog-content"]') !== null);
-  const dialog = document.querySelector('[data-slot="dialog-content"]');
-  if (!dialog) throw new Error('Missing apply confirmation dialog');
-
-  const confirm = Array.from(dialog.querySelectorAll('button'))
-    .find(button => !button.matches('[data-slot="dialog-close"]') && button.textContent?.trim() === applyActionName);
-  if (!confirm) throw new Error('Missing apply confirmation action');
-  await act(async () => { confirm.click(); });
-  await waitFor(() => applies === 1);
-
-  expect(applies).toBe(1);
-});
-
-test('plugin detail view renders the single page-level Apply action and preserves the zero-worker note', async () => {
+test('PluginsPage renders no dead Apply button even when active workers exist', async () => {
   usePluginsStore.setState({
     catalog: { ...emptyCatalog, plugins: [plugin], workers: [readyWorker] },
     loadedDirectory: '/repo',
@@ -174,20 +132,17 @@ test('plugin detail view renders the single page-level Apply action and preserve
     loadPlugins: async () => true,
   });
   await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+
+  expect(Array.from(container.querySelectorAll('button'))
+    .filter(button => button.textContent?.trim() === 'Restart idle sessions to apply')).toHaveLength(0);
+  expect(container.textContent).toContain('Plugin changes take effect when a new session starts.');
+
   const card = Array.from(container.querySelectorAll('button'))
     .find(button => button.textContent?.includes(plugin.name) && button.textContent?.includes(plugin.version));
   if (!card) throw new Error('Missing plugin card');
   await act(async () => { card.click(); });
   await settle();
 
-  const applyButtons = Array.from(container.querySelectorAll('button'))
-    .filter(button => button.textContent?.trim() === 'Restart idle sessions to apply');
-  expect(applyButtons).toHaveLength(1);
-  expect(container.textContent).not.toContain('Plugin changes take effect when a new session starts.');
-
-  usePluginsStore.setState({ catalog: { ...emptyCatalog, plugins: [plugin], workers: [] } });
-  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
-  await settle();
   expect(Array.from(container.querySelectorAll('button'))
     .filter(button => button.textContent?.trim() === 'Restart idle sessions to apply')).toHaveLength(0);
   expect(container.textContent).toContain('Plugin changes take effect when a new session starts.');
@@ -433,16 +388,24 @@ test('PluginsPage mounts without infinite re-render loop when catalog is null', 
   expect(container.textContent).toContain('Plugins');
 });
 
-const ruleItem = (overrides: Partial<ExtensionItem>): ExtensionItem => ({
-  id: 'ext_rule', kind: 'rule', name: 'rule', providerId: 'agents', providerName: 'Agent Dirs (.agent/.agents)',
-  scope: 'project', path: '<workspace>/.agents/rules/rule.md', enabled: true, shadowed: false, toggleable: true, triggers: [],
+const extensionItem = (overrides: Partial<ExtensionItem>): ExtensionItem => ({
+  id: 'ext_module', kind: 'extension-module', name: 'my-ext', providerId: 'agents', providerName: 'Agent Dirs (.agent/.agents)',
+  scope: 'project', path: '<workspace>/.omp/extensions/my-ext.ts', enabled: true, shadowed: false, toggleable: true, triggers: [],
   ...overrides,
 });
-const kindInventory = (items: ExtensionItem[]): ExtensionInventory => ({
-  providers: [{ id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['rule', 'skill'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: items.length }],
+const kindInventory = (items: ExtensionItem[], providers?: ExtensionInventory['providers']): ExtensionInventory => ({
+  providers: providers ?? [{ id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['extension-module', 'hook', 'tool', 'rule', 'skill', 'ssh'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: items.length }],
   items,
   warnings: [],
-  kinds: [{ kind: 'rule', label: 'Rules' }, { kind: 'skill', label: 'Skills' }],
+  kinds: [
+    { kind: 'extension-module', label: 'Extension modules' },
+    { kind: 'hook', label: 'Hooks' },
+    { kind: 'tool', label: 'Tools' },
+    { kind: 'rule', label: 'Rules' },
+    { kind: 'skill', label: 'Skills' },
+    { kind: 'mcp', label: 'MCP servers' },
+    { kind: 'ssh', label: 'SSH hosts' },
+  ],
 });
 const showCatalog = async (catalog: PluginCatalogState) => {
   usePluginsStore.setState({
@@ -463,57 +426,62 @@ const showCatalog = async (catalog: PluginCatalogState) => {
 };
 const buttonWith = (text: string) => Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(text));
 
-test('the bundled provider is named in the reader language while other providers keep their reported name', async () => {
-  useI18nStore.getState().setLocale('zh-CN');
-  for (let attempt = 0; attempt < 50 && useI18nStore.getState().loadingLocale !== null; attempt += 1) await settle();
-  const { dict: zhCn } = await import('@/lib/i18n/messages/zh-CN');
+test('filterPluginCapabilities keeps only extension-module, hook, and tool from non-excluded providers and recomputes counts', () => {
+  const inventory = kindInventory(
+    [
+      extensionItem({ id: 'ext_mod', kind: 'extension-module', name: 'custom-mod', providerId: 'agents' }),
+      extensionItem({ id: 'ext_hook', kind: 'hook', name: 'pre-tool-hook', providerId: 'agents' }),
+      extensionItem({ id: 'ext_rule', kind: 'rule', name: 'project-rule', providerId: 'agents' }),
+      extensionItem({ id: 'ext_ssh', kind: 'ssh', name: 'bohr', providerId: 'openssh-config', providerName: 'OpenSSH Config' }),
+      extensionItem({ id: 'ext_builtin_tool', kind: 'tool', name: 'builtin-tool', providerId: 'builtin-defaults', providerName: 'Builtin Defaults' }),
+      extensionItem({ id: 'ext_native_tool', kind: 'tool', name: 'native-tool', providerId: 'agents', scope: 'builtin' }),
+    ],
+    [
+      { id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['extension-module', 'hook', 'rule', 'tool'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 4 },
+      { id: 'openssh-config', displayName: 'OpenSSH Config', description: '', priority: 5, capabilities: ['ssh'], enabled: true, userSourceEnabled: true, foreignUserSource: true, itemCount: 1 },
+      { id: 'builtin-defaults', displayName: 'Builtin Defaults', description: '', priority: 9, capabilities: ['tool'], enabled: true, userSourceEnabled: false, foreignUserSource: false, itemCount: 1 },
+    ],
+  );
+
+  const filtered = filterPluginCapabilities(inventory);
+  expect(filtered.items.map(item => item.id)).toEqual(['ext_mod', 'ext_hook']);
+  expect(filtered.providers.map(provider => ({ id: provider.id, itemCount: provider.itemCount }))).toEqual([
+    { id: 'agents', itemCount: 2 },
+  ]);
+  expect(filtered.kinds.map(entry => entry.kind)).toEqual(['extension-module', 'hook', 'tool']);
+});
+
+test('PluginsPage hides Capabilities when only ssh, builtin-defaults, or non-plugin kinds are present', async () => {
   await showCatalog({
-    ...emptyCatalog, extensions: {
-      ...kindInventory([ruleItem({ name: 'project-rule' })]),
-      providers: [
-        { id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['rule', 'skill'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 1 },
-        { id: 'builtin-defaults', displayName: 'Builtin Defaults', description: '', priority: 9, capabilities: ['rule'], enabled: true, userSourceEnabled: false, foreignUserSource: false, itemCount: 1 },
+    ...emptyCatalog,
+    extensions: kindInventory(
+      [
+        extensionItem({ id: 'ext_rule', kind: 'rule', name: 'project-rule', providerId: 'agents' }),
+        extensionItem({ id: 'ext_ssh', kind: 'ssh', name: 'bohr', providerId: 'openssh-config', providerName: 'OpenSSH Config' }),
+        extensionItem({ id: 'ext_builtin', kind: 'tool', name: 'builtin-tool', providerId: 'builtin-defaults', providerName: 'Builtin Defaults' }),
       ],
-    },
+      [
+        { id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['rule'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 1 },
+        { id: 'openssh-config', displayName: 'OpenSSH Config', description: '', priority: 5, capabilities: ['ssh'], enabled: true, userSourceEnabled: true, foreignUserSource: true, itemCount: 1 },
+        { id: 'builtin-defaults', displayName: 'Builtin Defaults', description: '', priority: 9, capabilities: ['tool'], enabled: true, userSourceEnabled: false, foreignUserSource: false, itemCount: 1 },
+      ],
+    ),
   });
 
-  expect(container.textContent).toContain(zhCn['settings.plugins.provider.builtinDefaults']);
-  expect(container.textContent).toContain('Agent Dirs (.agent/.agents)');
+  expect(container.textContent).not.toContain('Capabilities');
+  expect(container.textContent).not.toContain('OpenSSH Config');
   expect(container.textContent).not.toContain('Builtin Defaults');
-  // The switch's accessible name uses the same localized label.
-  const bundledSwitch = [...container.querySelectorAll<HTMLElement>('[role="switch"]')]
-    .find((element) => element.getAttribute('aria-label')?.includes(zhCn['settings.plugins.provider.builtinDefaults']));
-  expect(bundledSwitch).toBeDefined();
-  expect(bundledSwitch?.getAttribute('aria-label')).toBe(
-    zhCn['settings.extensions.actions.disable.aria'].replace('{name}', zhCn['settings.plugins.provider.builtinDefaults']),
-  );
+  expect(container.textContent).not.toContain('bohr');
+  expect(container.textContent).not.toContain('project-rule');
 });
 
 test('capability kind tabs use localized labels instead of the worker English labels', async () => {
   useI18nStore.getState().setLocale('fr');
   for (let attempt = 0; attempt < 50 && useI18nStore.getState().loadingLocale !== null; attempt += 1) await settle();
-  await showCatalog({ ...emptyCatalog, extensions: kindInventory([ruleItem({ name: 'project-rule' })]) });
+  await showCatalog({ ...emptyCatalog, extensions: kindInventory([extensionItem({ name: 'my-ext' })]) });
 
-  expect(buttonWith('Règles')).toBeDefined();
-  expect(container.textContent).not.toContain('Rules');
-});
-
-test('bundled capabilities start collapsed behind a count and expand on demand', async () => {
-  await showCatalog({
-    ...emptyCatalog, extensions: kindInventory([
-      ruleItem({ id: 'ext_project', name: 'project-rule' }),
-      ruleItem({ id: 'ext_bundled', name: 'builtin-rule', providerId: 'builtin-defaults', providerName: 'Builtin Defaults', scope: 'user', path: 'builtin-defaults:builtin-rule' }),
-    ])
-  });
-
-  expect(container.textContent).toContain('project-rule');
-  expect(container.textContent).not.toContain('builtin-rule');
-  const toggle = buttonWith('Show 1 bundled');
-  if (!toggle) throw new Error('Missing bundled toggle');
-  await act(async () => { toggle.dispatchEvent(new Event('click', { bubbles: true })); });
-  await settle();
-
-  expect(container.textContent).toContain('builtin-rule');
+  expect(buttonWith('Modules d’extension')).toBeDefined();
+  expect(container.textContent).not.toContain('Extension modules');
 });
 
 test('Extension Control Center keeps raw triggers and paths out of rows and shows them in the inspector', async () => {
@@ -525,17 +493,17 @@ test('Extension Control Center keeps raw triggers and paths out of rows and show
   ];
   await showCatalog({
     ...emptyCatalog, extensions: kindInventory([
-      ruleItem({ id: 'ext_long_rule', name: 'long-trigger-rule', triggers: longTriggers, content: 'Rule body' }),
+      extensionItem({ id: 'ext_long_hook', kind: 'hook', name: 'long-trigger-hook', path: '<workspace>/.omp/hooks/hook.ts', triggers: longTriggers, content: 'Hook body' }),
     ])
   });
 
-  const row = buttonWith('long-trigger-rule')?.closest('.flex');
+  const row = buttonWith('long-trigger-hook')?.closest('.flex');
   if (!row) throw new Error('Missing capability row');
-  expect(row.textContent).toContain('long-trigger-rule');
+  expect(row.textContent).toContain('long-trigger-hook');
   for (const trigger of longTriggers) expect(row.textContent).not.toContain(trigger);
-  expect(row.textContent).not.toContain('<workspace>/.agents/rules/rule.md');
+  expect(row.textContent).not.toContain('<workspace>/.omp/hooks/hook.ts');
 
-  expect(container.textContent).toContain('<workspace>/.agents/rules/rule.md');
+  expect(container.textContent).toContain('<workspace>/.omp/hooks/hook.ts');
   for (const trigger of longTriggers) expect(container.textContent).toContain(trigger);
 });
 
@@ -546,14 +514,223 @@ test('an empty installed list offers an Add plugin card that explains the empty 
   expect(buttonWith('Add plugin')).toBeDefined();
 });
 
-test('the capability section and the marketplace source line stay visible when nothing was discovered', async () => {
-  // Both states used to be an absent element, so the section that explains them
-  // simply vanished: the reader saw no inventory and no reason for it.
+test('PluginsPage omits empty Capabilities and keeps the marketplace source line visible when nothing was discovered', async () => {
   await showCatalog(emptyCatalog);
 
-  expect(container.textContent).toContain('Capabilities');
-  expect(container.textContent).toContain('No extensions loaded.');
+  expect(container.textContent).not.toContain('Capabilities');
   expect(container.textContent).toContain('No marketplace sources yet.');
+});
+
+test('AddPluginDialog keys installed status by scope and distinguishes empty source vs empty plugin catalog copy', async () => {
+  const projectInstalled: InstalledPluginEntry = {
+    ...plugin,
+    id: 'plugin_market_project',
+    name: 'market-kit',
+    scope: 'workspace',
+    target: { kind: 'marketplace', name: 'market-kit', marketplace: 'official', scope: 'project' },
+  };
+  usePluginsStore.setState({
+    catalog: {
+      ...emptyCatalog,
+      plugins: [projectInstalled],
+      marketplaceSources: [],
+      marketplace: [],
+    },
+    loadedDirectory: '/repo',
+    loadedRuntimeKey: getRuntimeKey(),
+    isLoading: false,
+    loadMarketplace: async () => undefined,
+  });
+
+  await act(async () => {
+    root.render(<I18nProvider><AddPluginDialog open onOpenChange={() => undefined} /></I18nProvider>);
+  });
+  await waitFor(() => document.querySelector('[data-slot="dialog-content"]') !== null);
+  let dialog = document.querySelector('[data-slot="dialog-content"]');
+  expect(dialog?.textContent).toContain('No marketplace sources configured.');
+
+  usePluginsStore.setState({
+    catalog: {
+      ...emptyCatalog,
+      plugins: [projectInstalled],
+      marketplaceSources: [{ name: 'official', sourceType: 'github', sourceUri: 'owner/repo', catalogPath: '/tmp/cat.json', addedAt: '2026-01-01', updatedAt: '2026-01-01' }],
+      marketplace: [],
+    },
+  });
+  await act(async () => {
+    root.render(<I18nProvider><AddPluginDialog open onOpenChange={() => undefined} /></I18nProvider>);
+  });
+  await settle();
+  dialog = document.querySelector('[data-slot="dialog-content"]');
+  expect(dialog?.textContent).toContain('No plugins found in configured sources.');
+
+  usePluginsStore.setState({
+    catalog: {
+      ...emptyCatalog,
+      plugins: [projectInstalled],
+      marketplaceSources: [{ name: 'official', sourceType: 'github', sourceUri: 'owner/repo', catalogPath: '/tmp/cat.json', addedAt: '2026-01-01', updatedAt: '2026-01-01' }],
+      marketplace: [{ marketplace: 'official', name: 'market-kit', description: 'Kit', version: '1.0.0' }],
+    },
+  });
+  await act(async () => {
+    root.render(<I18nProvider><AddPluginDialog open onOpenChange={() => undefined} /></I18nProvider>);
+  });
+  await settle();
+  dialog = document.querySelector('[data-slot="dialog-content"]');
+  // Default scope in AddPluginDialog is 'user', while market-kit is installed only in 'project' scope.
+  const installButtons = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).filter(button => button.textContent?.trim() === 'Install');
+  expect(installButtons).toHaveLength(1);
+  expect(installButtons[0]?.disabled).toBe(false);
+});
+
+test('formatMarketplaceProblemLines maps structured MARKETPLACE_* codes and partial failures through i18n', async () => {
+  const { dict: zhCn } = await import('@/lib/i18n/messages/zh-CN');
+  const t = (key: keyof typeof zhCn, params?: Record<string, string | number>) => {
+    let text: string = zhCn[key];
+    if (params) {
+      for (const [paramKey, paramValue] of Object.entries(params)) {
+        text = text.replace(`{${paramKey}}`, String(paramValue));
+      }
+    }
+    return text;
+  };
+  const partialError = new CanonicalApiError({
+    type: 'urn:ohpichamber:problem:MARKETPLACE_SOURCE_MISSING',
+    title: 'Request refused',
+    status: 404,
+    code: 'MARKETPLACE_SOURCE_MISSING',
+    detail: 'Updated 1 marketplace source(s); failed for local-proof: Local marketplace path "~/gone-plugins" does not exist.',
+    retryable: false,
+    details: {
+      action: 'update',
+      sourceName: 'local-proof',
+      sourceUri: '~/gone-plugins',
+      detail: 'Local marketplace path "~/gone-plugins" does not exist.',
+      updatedCount: 1,
+      failures: [
+        {
+          name: 'local-proof',
+          code: 'MARKETPLACE_SOURCE_MISSING',
+          detail: 'Local marketplace path "~/gone-plugins" does not exist.',
+          sourceUri: '~/gone-plugins',
+        },
+      ],
+    },
+  });
+  const lines = formatMarketplaceProblemLines(partialError.problem, t);
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toContain('已更新 1 个来源');
+  expect(lines[0]).toContain('local-proof');
+  expect(lines[1]).toContain('找不到市场来源');
+  expect(lines[1]).toContain('local-proof (~/gone-plugins)');
+});
+
+test('MarketplaceSourcesDialog localizes structured errors and Delete on a broken source removes it and clears the error', async () => {
+  useI18nStore.getState().setLocale('zh-CN');
+  for (let attempt = 0; attempt < 50 && useI18nStore.getState().loadingLocale !== null; attempt += 1) await settle();
+  const { dict: zhCn } = await import('@/lib/i18n/messages/zh-CN');
+
+  const brokenSource = {
+    name: 'local-proof',
+    sourceType: 'local' as const,
+    sourceUri: '~/gone-plugins',
+    catalogPath: '/tmp/gone-catalog.json',
+    addedAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  };
+  const validSource = {
+    name: 'official',
+    sourceType: 'github' as const,
+    sourceUri: 'owner/repo',
+    catalogPath: '/tmp/official-catalog.json',
+    addedAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  };
+  const failure = new CanonicalApiError({
+    type: 'urn:ohpichamber:problem:MARKETPLACE_SOURCE_MISSING',
+    title: 'Request refused',
+    status: 404,
+    code: 'MARKETPLACE_SOURCE_MISSING',
+    detail: 'Updated 1 marketplace source(s); failed for local-proof.',
+    retryable: false,
+    details: {
+      action: 'update',
+      sourceName: 'local-proof',
+      sourceUri: '~/gone-plugins',
+      detail: 'Local marketplace path "~/gone-plugins" does not exist.',
+      updatedCount: 1,
+      failures: [
+        {
+          name: 'local-proof',
+          code: 'MARKETPLACE_SOURCE_MISSING',
+          detail: 'Local marketplace path "~/gone-plugins" does not exist.',
+          sourceUri: '~/gone-plugins',
+        },
+      ],
+    },
+  });
+
+  usePluginsStore.setState({
+    catalog: { ...emptyCatalog, marketplaceSources: [validSource, brokenSource] },
+    loadedDirectory: '/repo',
+    loadedRuntimeKey: getRuntimeKey(),
+    marketplaceFailures: {},
+    updateMarketplaceSource: async () => {
+      usePluginsStore.setState({
+        marketplaceFailures: {
+          'local-proof': {
+            name: 'local-proof',
+            code: 'MARKETPLACE_SOURCE_MISSING',
+            detail: 'Local marketplace path "~/gone-plugins" does not exist.',
+            sourceUri: '~/gone-plugins',
+          },
+        },
+      });
+      throw failure;
+    },
+    removeMarketplaceSource: async (name: string) => {
+      const currentCatalog = usePluginsStore.getState().catalog ?? emptyCatalog;
+      const nextCatalog = {
+        ...currentCatalog,
+        revision: '4',
+        marketplaceSources: currentCatalog.marketplaceSources.filter(source => source.name !== name),
+      };
+      const nextFailures = { ...usePluginsStore.getState().marketplaceFailures };
+      delete nextFailures[name];
+      usePluginsStore.setState({ catalog: nextCatalog, marketplaceFailures: nextFailures, error: null });
+      return { workspaceId, revision: '4', persistence: 'committed', status: 'no-active-workers', workers: [], catalog: nextCatalog };
+    },
+  });
+
+  await act(async () => {
+    root.render(<I18nProvider><MarketplaceSourcesDialog open onOpenChange={() => undefined} /></I18nProvider>);
+  });
+  await waitFor(() => document.querySelector('[data-slot="dialog-content"]') !== null);
+  const dialog = document.querySelector('[data-slot="dialog-content"]');
+  if (!dialog) throw new Error('Missing MarketplaceSourcesDialog');
+
+  const refreshAllButton = Array.from(dialog.querySelectorAll('button'))
+    .find(button => button.textContent?.trim() === zhCn['settings.plugins.action.refresh']);
+  if (!refreshAllButton) throw new Error('Missing refresh all button');
+  await act(async () => { refreshAllButton.click(); });
+  await settle();
+
+  const alert = dialog.querySelector('[role="alert"]');
+  expect(alert?.textContent).toContain('已更新 1 个来源');
+  expect(alert?.textContent).toContain('找不到市场来源');
+  expect(alert?.textContent).not.toContain('Native marketplace operation failed');
+  expect(dialog.textContent).toContain('local-proof (~/gone-plugins)');
+
+  const removeButtons = Array.from(dialog.querySelectorAll('button'))
+    .filter(button => button.getAttribute('aria-label') === zhCn['settings.plugins.marketplace.sources.remove']);
+  expect(removeButtons).toHaveLength(2);
+  await act(async () => { removeButtons[1]?.click(); });
+  await settle();
+
+  expect(dialog.querySelector('[role="alert"]')).toBeNull();
+  expect(dialog.textContent).not.toContain('local-proof');
+  expect(dialog.textContent).toContain('official');
+  expect(usePluginsStore.getState().marketplaceFailures).toEqual({});
 });
 
 test('a selected marketplace category resets when its source leaves the catalog, and every remaining plugin is listed', async () => {
@@ -622,7 +799,10 @@ test.each([false, true])('marketplace metadata and actions stay independently bo
 });
 
 test('plugin section headings stack above bounded, wrapping actions on narrow panes', async () => {
-  await showCatalog(emptyCatalog);
+  await showCatalog({
+    ...emptyCatalog,
+    extensions: kindInventory([extensionItem({ name: 'my-ext' })]),
+  });
   for (const title of ['Installed', 'Marketplace', 'Capabilities']) {
     const heading = Array.from(container.querySelectorAll('h2')).find(element => element.textContent === title);
     const header = heading?.parentElement?.parentElement?.parentElement;
