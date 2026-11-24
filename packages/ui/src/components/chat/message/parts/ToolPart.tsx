@@ -17,13 +17,11 @@ import {
     askAnswers,
     isAstEditTool,
     detectToolOutputLanguage,
-    flatScalarInputRows,
     formatToolInput,
     isEditTool,
     isEvalTool,
     isFindTool,
     isQuestionTool,
-    isRawInputSuppressedTool,
     isReadTool,
     isShellTool,
     isSubagentTool,
@@ -39,10 +37,10 @@ import {
     toolPresentation,
 } from '@/lib/toolHelpers';
 import { describeTaskResultWithSubagents, describeToolCall, describeToolResult, evalResultSummary, isMemoryTool, normalizeIntent, type TaskSubagentStatusEntry } from '@/lib/toolPresentation';
-import { VibeToolCard } from './VibeToolCard';
-import { WaitToolCard } from './WaitToolCard';
-import { StructuredToolCard } from './StructuredToolCards';
-import { isStructuredCardTool, preferredDisplayContent } from './toolDisplayContent';
+import { ToolScalarInputRows, ToolStructuredBody } from './ToolStructuredBody';
+import { isStructuredExpandedTool, preferToolDisplayContent, resolveExpandedInputPreview } from './toolDisplayContent';
+import { findScoreBadgeStyle, parseFindLines } from './findOutputParser';
+import { useVibeSpawnSubtask } from '@/hooks/useVibeSpawnSubtask';
 import { TodoCard } from './TodoCard';
 import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
@@ -111,54 +109,6 @@ import { WritePreview } from '../../DiffPreview';
 
 const EMPTY_SUBAGENTS: Subagent[] = [];
 const EMPTY_STRING_ARRAY: readonly string[] = [];
-
-const DISPLAY_CONTENT_TOOL_NAMES = {
-    read: true,
-    grep: true,
-    ast_grep: true,
-} as const;
-
-const VIBE_TOOL_NAMES = {
-    vibe_spawn: true,
-    vibe_send: true,
-    vibe_wait: true,
-    vibe_kill: true,
-    vibe_list: true,
-} as const;
-
-const WAIT_TOOL_NAMES = {
-    wait: true,
-} as const;
-
-
-const vibeSpawnInputSchema = z.object({
-    name: z.string().trim().min(1).optional(),
-});
-
-const vibeSpawnDetailsSchema = z.object({
-    spawned: z.object({
-        id: z.string().trim().min(1),
-    }).optional(),
-});
-
-const serializeVibeSpawnSubagent = (
-    list: readonly Subagent[] | undefined,
-    parentSessionId: string,
-    toolCallId: string,
-    workerId: string,
-): string => {
-    if (!list || list.length === 0) return '';
-    const byToolCall = toolCallId
-        ? list.find((child) => child.parentSessionId === parentSessionId && child.toolCallId === toolCallId && Boolean(child.childSessionId))
-        : undefined;
-    const byWorker = !byToolCall && workerId
-        ? list.find((child) => child.parentSessionId === parentSessionId && (child.name === workerId || child.subagentId === workerId) && Boolean(child.childSessionId))
-        : undefined;
-    const matched = byToolCall ?? byWorker;
-    if (!matched?.childSessionId) return '';
-    const label = matched.name?.trim() || workerId || matched.role;
-    return [matched.childSessionId, matched.role, label].join('\u0000');
-};
 
 const taskCallExpectedIdsSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -288,127 +238,6 @@ const bashStatusDetailsSchema = z.object({
     service: bashServiceDetailsSchema.optional(),
 });
 
-type ParsedFindLine =
-    | { kind: 'hit'; filePath: string; startLine: number; endLine?: string; score?: number; snippet: string }
-    | { kind: 'header'; filePath: string; score: number; meta: string }
-    | { kind: 'text'; text: string };
-
-const FIND_URL_SCHEME_RE = /^https?:\/\//i;
-const FIND_HIT_TARGET_RE = /^(.+):(\d+)(?:-(\d+))?$/;
-const FIND_SCORE_RE = /^([01]\.\d{2})$/;
-const FIND_COL_SEP_RE = /\s{2,}/;
-
-function parseFindScore(value: string): number | undefined {
-    if (!FIND_SCORE_RE.test(value)) return undefined;
-    const score = Number(value);
-    return score >= 0 && score <= 1 ? score : undefined;
-}
-
-function parseFindLine(line: string): ParsedFindLine {
-    const trimmed = line.trimStart();
-    const sep1 = FIND_COL_SEP_RE.exec(trimmed);
-    if (!sep1) return { kind: 'text', text: line };
-
-    const target = trimmed.slice(0, sep1.index);
-    if (!target || FIND_URL_SCHEME_RE.test(target)) {
-        return { kind: 'text', text: line };
-    }
-
-    const rest1 = trimmed.slice(sep1.index + sep1[0].length);
-    const sep2 = FIND_COL_SEP_RE.exec(rest1);
-    const hitTarget = FIND_HIT_TARGET_RE.exec(target);
-    if (hitTarget?.[1] && hitTarget[2]) {
-        const filePath = hitTarget[1];
-        if (FIND_URL_SCHEME_RE.test(filePath)) return { kind: 'text', text: line };
-        if (sep2) {
-            const score = parseFindScore(rest1.slice(0, sep2.index));
-            if (score !== undefined) {
-                return {
-                    kind: 'hit',
-                    filePath,
-                    startLine: parseInt(hitTarget[2], 10),
-                    endLine: hitTarget[3],
-                    score,
-                    snippet: rest1.slice(sep2.index + sep2[0].length),
-                };
-            }
-        } else {
-            const trailingScore = parseFindScore(rest1.trim());
-            if (trailingScore !== undefined) {
-                return {
-                    kind: 'hit',
-                    filePath,
-                    startLine: parseInt(hitTarget[2], 10),
-                    endLine: hitTarget[3],
-                    score: trailingScore,
-                    snippet: '',
-                };
-            }
-        }
-        return {
-            kind: 'hit',
-            filePath,
-            startLine: parseInt(hitTarget[2], 10),
-            endLine: hitTarget[3],
-            snippet: rest1,
-        };
-    }
-
-    if (!/^\s/.test(line) && sep2) {
-        const score = parseFindScore(rest1.slice(0, sep2.index));
-        const meta = rest1.slice(sep2.index + sep2[0].length);
-        if (score !== undefined && meta) {
-            return {
-                kind: 'header',
-                filePath: target,
-                score,
-                meta,
-            };
-        }
-    }
-
-    return { kind: 'text', text: line };
-}
-
-function parseFindLines(lines: readonly string[]): ParsedFindLine[] {
-    const parsed: ParsedFindLine[] = [];
-    let inFailures = false;
-    for (const line of lines) {
-        if (inFailures) {
-            parsed.push({ kind: 'text', text: line });
-            continue;
-        }
-        if (line.trim() === 'failures:') {
-            inFailures = true;
-            parsed.push({ kind: 'text', text: line });
-            continue;
-        }
-        parsed.push(parseFindLine(line));
-    }
-    return parsed;
-}
-
-function findScoreBadgeStyle(score: number): React.CSSProperties {
-    if (score >= 0.7) {
-        return {
-            color: 'var(--status-success)',
-            backgroundColor: 'var(--status-success-background)',
-            borderColor: 'var(--status-success-border)',
-        };
-    }
-    if (score >= 0.4) {
-        return {
-            color: 'var(--status-warning)',
-            backgroundColor: 'var(--status-warning-background)',
-            borderColor: 'var(--status-warning-border)',
-        };
-    }
-    return {
-        color: 'var(--muted-foreground)',
-        backgroundColor: 'color-mix(in srgb, var(--surface-muted) 40%, transparent)',
-        borderColor: 'var(--border)',
-    };
-}
 
 const isActiveCallStatus = (status: ToolCallPart['status'] | undefined): boolean =>
     status === 'running' || status === 'approved' || status === 'pending_approval';
@@ -1143,21 +972,15 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const writeContent = writeInput?.content;
     const writePath = writeInput?.path;
 
-    const suppressRawInput = isRawInputSuppressedTool(toolName);
-    const scalarInputRows = React.useMemo(() => {
-        if (!input || Object.keys(input).length === 0) return null;
-        if (isWrite || isShellTool(toolName) || isEvalTool(toolName) || isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch' || isQuestionTool(toolName) || suppressRawInput) {
-            return null;
-        }
-        return flatScalarInputRows(input);
-    }, [input, isWrite, suppressRawInput, toolName]);
-    const inputTextContent = React.useMemo(() => {
-        if (!input || Object.keys(input).length === 0) return '';
-        if (isWrite || suppressRawInput || scalarInputRows !== null) return '';
-        return formatToolInput(input, toolName);
-    }, [input, isWrite, scalarInputRows, suppressRawInput, toolName]);
-    const hasInputText = !hideToolInputPreview && !writeContent && inputTextContent.trim().length > 0;
-    const hasScalarInputRows = !hideToolInputPreview && !writeContent && scalarInputRows !== null && scalarInputRows.length > 0;
+    const {
+        scalarInputRows,
+        inputTextContent,
+        hasInputText,
+        hasScalarInputRows,
+    } = React.useMemo(
+        () => resolveExpandedInputPreview({ input, toolName, isWrite, hideToolInputPreview, writeContent }),
+        [hideToolInputPreview, input, isWrite, toolName, writeContent],
+    );
 
     const webSearchOutput = React.useMemo(
         () => (isWebSearchTool(toolName) && part.type === 'tool_result' && !part.isError && hasStringOutput
@@ -1565,91 +1388,26 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                 />
             ) : isQuestionTool(toolName) ? (
                 renderResultContent()
-            ) : Object.hasOwn(VIBE_TOOL_NAMES, toolBaseName(toolName)) ? (
-                <>
-                    <VibeToolCard
-                        toolName={toolName}
-                        toolCallId={call?.toolCallId ?? part.toolCallId}
-                        input={input}
-                        details={resultContent.details}
-                        outputText={outputString}
-                        sessionId={sessionId}
-                        directory={currentDirectory}
-                        isMobile={isMobile}
-                        isError={part.type === 'tool_result' ? part.isError : false}
-                    />
-                    {part.type === 'tool_result' && part.error && part.error !== outputString.trim() ? (
-                        <div>
-                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
-                            <div className="typography-meta p-2 rounded-xl border" style={{
-                                backgroundColor: 'var(--status-error-background)',
-                                color: 'var(--status-error)',
-                                borderColor: 'var(--status-error-border)',
-                            }}>
-                                {part.error}
-                            </div>
-                        </div>
-                    ) : null}
-                </>
-            ) : Object.hasOwn(WAIT_TOOL_NAMES, toolBaseName(toolName)) ? (
-                <>
-                    {resultContent.details !== undefined || outputString.trim().length > 0 ? (
-                        <WaitToolCard
-                            details={resultContent.details}
-                            outputText={outputString}
-                            isError={part.type === 'tool_result' ? part.isError : false}
-                        />
-                    ) : (
-                        <div className="typography-meta text-muted-foreground/70">{t('chat.toolPart.awaitingResponse')}</div>
-                    )}
-                    {part.type === 'tool_result' && part.error && part.error !== outputString.trim() ? (
-                        <div>
-                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
-                            <div className="typography-meta p-2 rounded-xl border" style={{
-                                backgroundColor: 'var(--status-error-background)',
-                                color: 'var(--status-error)',
-                                borderColor: 'var(--status-error-border)',
-                            }}>
-                                {part.error}
-                            </div>
-                        </div>
-                    ) : null}
-                </>
-            ) : isStructuredCardTool(toolName) ? (
-                <>
-                    <StructuredToolCard
-                        toolName={toolName}
-                        input={input}
-                        details={resultContent.details}
-                        output={outputString}
-                        onShowPopup={onShowPopup}
-                    />
-                    {part.type === 'tool_result' && part.error && part.error !== outputString.trim() ? (
-                        <div>
-                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">{t('chat.toolPart.error')}</div>
-                            <div className="typography-meta p-2 rounded-xl border" style={{
-                                backgroundColor: 'var(--status-error-background)',
-                                color: 'var(--status-error)',
-                                borderColor: 'var(--status-error-border)',
-                            }}>
-                                {part.error}
-                            </div>
-                        </div>
-                    ) : null}
-                </>
+            ) : isStructuredExpandedTool(toolName) ? (
+                <ToolStructuredBody
+                    toolName={toolName}
+                    toolCallId={call?.toolCallId ?? part.toolCallId}
+                    input={input}
+                    details={resultContent.details}
+                    outputText={outputString}
+                    sessionId={sessionId}
+                    directory={currentDirectory}
+                    isMobile={isMobile}
+                    isError={part.type === 'tool_result' ? part.isError : false}
+                    errorText={part.type === 'tool_result' ? part.error : undefined}
+                    onShowPopup={onShowPopup}
+                />
             ) : (
                 <>
                     {hasScalarInputRows && scalarInputRows ? (
                         <div className="my-1">
                             {renderScrollableBlock(
-                                <dl data-testid="tool-input-kv-rows" className="space-y-1">
-                                    {scalarInputRows.map((row) => (
-                                        <div key={row.key} className="grid grid-cols-[minmax(5.5rem,auto)_minmax(0,1fr)] items-baseline gap-x-3 typography-meta">
-                                            <dt dir="auto" className="truncate font-mono typography-micro text-muted-foreground">{row.key}</dt>
-                                            <dd dir="auto" className="min-w-0 whitespace-pre-wrap break-words text-foreground">{row.value}</dd>
-                                        </div>
-                                    ))}
-                                </dl>,
+                                <ToolScalarInputRows rows={scalarInputRows} />,
                                 {
                                     maxHeightClass: 'max-h-60',
                                     className: 'tool-input-surface',
@@ -1870,11 +1628,10 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const result = part.type === 'tool_result' ? part : undefined;
     const presentation = useGuestToolPresentation(part.toolName);
     const rawResultContent = React.useMemo(() => nativeToolResultContent(result), [result]);
-    const resultContent = React.useMemo(() => {
-        if (!result || result.isError || !Object.hasOwn(DISPLAY_CONTENT_TOOL_NAMES, toolBaseName(toolName))) return rawResultContent;
-        const preferred = preferredDisplayContent(rawResultContent.details, rawResultContent.text);
-        return preferred === rawResultContent.text ? rawResultContent : { ...rawResultContent, text: preferred };
-    }, [rawResultContent, result, toolName]);
+    const resultContent = React.useMemo(
+        () => (result && !result.isError ? preferToolDisplayContent(toolName, rawResultContent) : rawResultContent),
+        [rawResultContent, result, toolName],
+    );
     const toolRow = toolPresentation(toolName, resultContent.details);
     const displayName = toolRow.label;
     const fileChanges = React.useMemo(() => getToolFileChanges(part, call), [part, call]);
@@ -1909,26 +1666,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const taskSessionId = sessionId ?? selection.sessionId;
     const taskToolCallId = call?.toolCallId ?? part.toolCallId;
     const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
-    const vibeSpawnWorkerId = React.useMemo(() => {
-        if (!isVibeSpawn) return '';
-        const fromDetails = vibeSpawnDetailsSchema.safeParse(resultContent.details).data?.spawned?.id;
-        if (fromDetails) return fromDetails;
-        return vibeSpawnInputSchema.safeParse(call?.input).data?.name ?? '';
-    }, [call?.input, isVibeSpawn, resultContent.details]);
-    const vibeSubtaskKey = useSubagentsStore(
-        React.useCallback(
-            (state) => (isVibeSpawn && taskSessionId
-                ? serializeVibeSpawnSubagent(state.byParent[taskSessionId], taskSessionId, taskToolCallId, vibeSpawnWorkerId)
-                : ''),
-            [isVibeSpawn, taskSessionId, taskToolCallId, vibeSpawnWorkerId],
-        ),
-    );
-    const vibeSubtask = React.useMemo(() => {
-        if (!vibeSubtaskKey) return null;
-        const [childSessionId = '', role = '', label = ''] = vibeSubtaskKey.split('\u0000');
-        if (!childSessionId) return null;
-        return { childSessionId, role: role || 'subagent', label: label || role || 'subagent' };
-    }, [vibeSubtaskKey]);
+    const vibeSubtask = useVibeSpawnSubtask({
+        enabled: isVibeSpawn,
+        parentSessionId: taskSessionId,
+        toolCallId: taskToolCallId,
+        input: call?.input,
+        details: resultContent.details,
+        runtimeKey,
+    });
     const parsedTaskDetails = React.useMemo(
         () => (isSubagent ? taskResultDetailsSchema.safeParse(resultContent.details).data : undefined),
         [isSubagent, resultContent.details],
@@ -1998,12 +1743,10 @@ const ToolPart: React.FC<ToolPartProps> = ({
     );
 
     React.useEffect(() => {
-        if (!taskSessionId) return;
-        const shouldHydrateTask = isSubagent && parsedTaskDetails?.async?.state === 'running';
-        const shouldHydrateVibe = isVibeSpawn && !vibeSubtaskKey;
-        if (!shouldHydrateTask && !shouldHydrateVibe) return;
+        if (!isSubagent || !taskSessionId) return;
+        if (parsedTaskDetails?.async?.state !== 'running') return;
         void useSubagentsStore.getState().hydrateParent(taskSessionId);
-    }, [isSubagent, isVibeSpawn, parsedTaskDetails?.async?.state, runtimeKey, taskSessionId, vibeSubtaskKey]);
+    }, [isSubagent, parsedTaskDetails?.async?.state, runtimeKey, taskSessionId]);
 
     // The result's own one-line summary (match counts, exit status, diff stats,
     // todo progress) sits beside the call's target, unless it repeats it.

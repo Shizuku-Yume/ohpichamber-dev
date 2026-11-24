@@ -134,3 +134,5 @@ Verification (isolated `HOME=/tmp/uxfix-05-land`):
 Logs: `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-audit-remediation-2026-11-24/task05/{final-check,final-i18n,final-extra,final-oxlint,final-deadcode}.log`.
 
 Known pre-existing failure (outside this task's files): `usage-stats.i18n.test.ts` — see above.
+
+**Rework round 1:** Dropped unused/duplicate exports (`StructuredToolCardProps`, `StructuredCardToolName`, `VibeToolName`, `VibeOp`, `VibeCli`, `VibeSettledStatus`, `NativeSearchFailure`, `formatMcpToolLabel`, `vibeScreenSnapshotSchema`, `vibeToolDetailsSchema`, `VibeScreenSnapshot`, `VibeToolDetails`), split `StructuredToolCards.tsx` (1162 → 62 lines + `structuredCards/*`), split `presentations.ts` (1013 → 597 lines + `helpers.ts`/`vibePresentations.ts`/`structuredPresentations.ts`), and extracted task-05 additions and `findOutputParser.ts` from `ToolPart.tsx` (2329 → 2071 lines vs 2140 baseline). Verified with focused `packages/ui` tests (162/162 pass), `bun run type-check`, `bun run lint`, `bunx oxlint`, `bun run dead-code` (0 task-05 symbols), and `bun run check:changed -- --base main --ratchet-only` (all pass). Logs in `task05/rework1-*.log`.

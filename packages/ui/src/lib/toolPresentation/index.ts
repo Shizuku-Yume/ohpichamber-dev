@@ -9,12 +9,7 @@ export { parseEditInputPaths } from './editInputPaths';
 export {
     KNOWN_TOOL_NAMES,
     describeTaskResultWithSubagents,
-    formatMcpToolLabel,
-    vibeScreenSnapshotSchema,
-    vibeToolDetailsSchema,
     type TaskSubagentStatusEntry,
-    type VibeScreenSnapshot,
-    type VibeToolDetails,
 } from './presentations';
 export {
     categorizeTool,

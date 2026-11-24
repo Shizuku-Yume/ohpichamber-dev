@@ -16,10 +16,9 @@ import { useSubagentsStore } from '@/stores/useSubagentsStore';
 
 import { OpenSubtaskButton } from './toolRow/OpenSubtaskButton';
 
-export type VibeToolName = 'vibe_spawn' | 'vibe_send' | 'vibe_wait' | 'vibe_kill' | 'vibe_list';
-export type VibeOp = 'spawn' | 'send' | 'wait' | 'kill' | 'list';
-export type VibeCli = 'fast' | 'good';
-export type VibeSettledStatus = 'completed' | 'failed' | 'cancelled';
+type VibeToolName = 'vibe_spawn' | 'vibe_send' | 'vibe_wait' | 'vibe_kill' | 'vibe_list';
+type VibeOp = 'spawn' | 'send' | 'wait' | 'kill' | 'list';
+type VibeSettledStatus = 'completed' | 'failed' | 'cancelled';
 
 export interface VibeToolCardProps {
     toolName: string;

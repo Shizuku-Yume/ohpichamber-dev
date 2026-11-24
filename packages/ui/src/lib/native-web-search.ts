@@ -26,7 +26,6 @@ const output = z.object({
   details: z.object({ response, error: z.string().optional(), failures: z.array(failure).optional() }),
 });
 export type NativeSearchSource = z.infer<typeof source>;
-export type NativeSearchFailure = z.infer<typeof failure>;
 export type NativeSearchOutput = z.infer<typeof output>;
 export const parseNativeSearchOutput = (value: JsonValue | undefined): NativeSearchOutput | null => {
   try {
