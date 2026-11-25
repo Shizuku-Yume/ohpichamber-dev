@@ -175,7 +175,7 @@ const SessionTabItem: React.FC<{
                           aria-label={t('header.sessionTabs.closeTab')}
                           onClick={(event) => { event.stopPropagation(); onClose(tab.id); }}
                           onPointerDown={(event) => event.stopPropagation()}
-                          className="absolute inset-0 flex items-center justify-center rounded text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover/session-tab:opacity-100"
+                          className="absolute inset-0 flex items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:opacity-100 group-hover/session-tab:opacity-100"
                         >
                           <Icon name="close" className="size-3.5" />
                         </button>
@@ -450,7 +450,7 @@ export const SessionTabsStrip: React.FC<{
             type="button"
             onClick={openNewSessionHere}
             aria-label={t('sessions.sidebar.header.actions.newSession')}
-            className="app-region-no-drag ms-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="app-region-no-drag ms-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Icon name="add" className="size-4" />
           </button>

@@ -78,7 +78,7 @@ function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
   }
   const isPower = setting.id === 'power.sleepPrevention';
   const placement = OMP_SETTING_PLACEMENTS[setting.id];
-  const isResetPolicy = placement?.type === 'page' && placement.page === 'usage' && placement.section === 'resets';
+  const isResetPolicy = placement?.type === 'page' && placement.page === 'omp' && placement.section === 'resets';
   const isDiscovery = placement?.type === 'page' && (placement.page === 'commands' || placement.page === 'skills');
   if (!isPower && !isResetPolicy && !isDiscovery) return undefined;
   const provenance = settings.getProvenance(setting);
@@ -251,7 +251,7 @@ export class NativeSettings {
       const isRetryChains = setting.id === cfgRetryFallbackChains.id;
       // OMP uses insertion order to break ties between matching model keys.
       if (change.expectedValue !== undefined && (!isDeepStrictEqual(current, change.expectedValue) ||
-          (isRetryChains && !isDeepStrictEqual(recordEntries(current), recordEntries(change.expectedValue))))) {
+        (isRetryChains && !isDeepStrictEqual(recordEntries(current), recordEntries(change.expectedValue))))) {
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Native OMP setting changed on disk');
       }
       const inactiveCondition = inactiveWriteCondition(setting, this.settings);

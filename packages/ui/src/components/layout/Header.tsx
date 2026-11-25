@@ -57,7 +57,7 @@ import { useLayoutAnimationMs } from '@/hooks/useLayoutAnimationMs';
 import { LAYOUT_ANIMATION_EASING } from '@/lib/layoutAnimation';
 import { findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
 
-const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-6 w-6 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-muted-foreground hover:text-foreground data-[popup-open]:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 transition-colors';
+const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-6 w-6 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-muted-foreground hover:bg-interactive-hover hover:text-foreground data-[popup-open]:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 transition-colors';
 
 
 const normalize = (value: string): string => {
@@ -790,7 +790,7 @@ export const Header: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="app-region-no-drag me-1 size-6 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  className="app-region-no-drag me-1 size-6 text-muted-foreground hover:text-foreground"
                   aria-label={t('header.mainSurface.backToChat')}
                   onClick={() => useUIStore.getState().closeMainSurfaces()}
                 >
@@ -853,7 +853,7 @@ export const Header: React.FC = () => {
                     type="submit"
                     aria-label={t('sessions.sidebar.session.rename.save')}
                     title={t('sessions.sidebar.session.rename.save')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
                   >
                     <Icon name="check" className="size-4" />
                   </button>
@@ -862,7 +862,7 @@ export const Header: React.FC = () => {
                     onClick={() => setIsRenamingHeaderSession(false)}
                     aria-label={t('sessions.sidebar.session.rename.cancel')}
                     title={t('sessions.sidebar.session.rename.cancel')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
                   >
                     <Icon name="close" className="size-4" />
                   </button>
@@ -914,7 +914,7 @@ export const Header: React.FC = () => {
                   }}
                 >
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="xs" className="h-[1.125rem] w-6 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground" aria-label={t('header.sessionActions.openAria')}>
+                    <Button variant="ghost" size="xs" className="h-[1.125rem] w-6 px-0 text-muted-foreground hover:text-foreground" aria-label={t('header.sessionActions.openAria')}>
                       <Icon name="more" className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -951,8 +951,8 @@ export const Header: React.FC = () => {
                 {isRenamingHeaderSession ? (
                   <form
                     ref={headerRenameFormRef}
-                  data-session-rename-form="header"
-                  className="flex w-full min-w-0 items-center gap-2 leading-tight"
+                    data-session-rename-form="header"
+                    className="flex w-full min-w-0 items-center gap-2 leading-tight"
                     onPointerDown={(event) => event.stopPropagation()}
                     onSubmit={(event) => {
                       event.preventDefault();
@@ -971,7 +971,7 @@ export const Header: React.FC = () => {
                       type="submit"
                       aria-label={t('sessions.sidebar.session.rename.save')}
                       title={t('sessions.sidebar.session.rename.save')}
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
                     >
                       <Icon name="check" className="size-4" />
                     </button>
@@ -980,7 +980,7 @@ export const Header: React.FC = () => {
                       onClick={() => setIsRenamingHeaderSession(false)}
                       aria-label={t('sessions.sidebar.session.rename.cancel')}
                       title={t('sessions.sidebar.session.rename.cancel')}
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
                     >
                       <Icon name="close" className="size-4" />
                     </button>

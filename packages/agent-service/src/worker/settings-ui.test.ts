@@ -210,17 +210,18 @@ test('discovery exposes only the pinned boolean controls on Commands and Skills'
   expect(OMP_SETTING_PLACEMENTS['skills.registryUrl']).toEqual({ type: 'boundary' });
 });
 
-test('Usage edits reset tuning including automatic redemption', async () => {
+test('OMP resets placement exposes reset tuning including automatic redemption on the OMP page', async () => {
   const f = await fixture();
   try {
     const state = await f.native.read('workspace_1', '0');
-    const usage = state.settings.filter((setting) => setting.placement.type === 'page' && setting.placement.page === 'usage');
-    expect(usage.map((setting) => setting.id).sort()).toEqual([
+    const resets = state.settings.filter((setting) => setting.placement.type === 'page' && setting.placement.page === 'omp' && setting.placement.section === 'resets');
+    expect(resets.map((setting) => setting.id).sort()).toEqual([
       'claudeResets.autoRedeem5h', 'claudeResets.autoRedeemFable', 'claudeResets.autoRedeemWeekly',
       'claudeResets.keepCredits', 'claudeResets.minBlockedMinutes', 'claudeResets.salvageHorizonHours',
       'codexResets.autoRedeem5h', 'codexResets.autoRedeemWeekly',
       'codexResets.keepCredits', 'codexResets.minBlockedMinutes', 'codexResets.salvageHorizonHours',
     ]);
+    expect(state.settings.some((setting) => setting.placement.type === 'page' && setting.placement.page === 'usage')).toBe(false);
     const saved = await f.native.write('workspace_1', '1', {
       expectedRevision: state.revision,
       changes: [
@@ -801,6 +802,12 @@ function renderedSections(page: string): ReadonlySet<string> | undefined {
     if (!source.includes(`useOmpPageSettings('${page}')`) && !ownPage.test(source)) continue;
     for (const match of source.matchAll(/getSectionRows\('([^']+)'\)/g)) sections.add(match[1]);
     for (const match of source.matchAll(/getSectionSettings\('([^']+)'\)/g)) sections.add(match[1]);
+    // A page that filters the snapshot inline (the OMP settings page reads its
+    // own state rather than the shared hook) names each section it draws by
+    // the literal comparison `placement.section === '<section>'`.
+    if (ownPage.test(source)) {
+      for (const match of source.matchAll(/placement\.section === '([^']+)'/g)) sections.add(match[1]);
+    }
   }
   return sections.size > 0 ? sections : undefined;
 }

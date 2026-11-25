@@ -1,7 +1,13 @@
 import React from 'react';
 import {
+  SettingsFieldRow,
+  SettingsStackedField,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +52,16 @@ export const FieldError: React.FC<{ message?: string }> = ({ message }) => (
   message ? <p className="typography-meta text-[var(--status-error)]">{message}</p> : null
 );
 
+const SourceNote: React.FC<{ model: ModelRow; field: ModelAutoFillField }> = ({ model, field }) => {
+  const { t } = useI18n();
+  const source = model.filledFrom[field];
+  if (!source) return null;
+  const label = source === 'omp-catalog'
+    ? t('settings.providers.page.custom.models.source.omp-catalog')
+    : t('settings.providers.page.custom.models.source.openrouter');
+  return <p className={SETTINGS_HELPER_CLASS}>{label}</p>;
+};
+
 export const ModelProtocolFields: React.FC<ModelDisclosureFieldsProps> = ({
   model,
   errors,
@@ -56,72 +72,68 @@ export const ModelProtocolFields: React.FC<ModelDisclosureFieldsProps> = ({
 }) => {
   const { t } = useI18n();
   return (
-    <div className="space-y-2.5 ps-4 pt-1">
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.api')}</label>
-          <Select
-            value={model.api || UNSET_VALUE}
-            onValueChange={(next) => {
-              if (next === UNSET_VALUE) {
-                onUpdate((row) => ({ ...row, api: '' }));
-                return;
-              }
-              const matched = OMP_MODEL_APIS.find((entry) => entry === next);
-              if (matched) onUpdate((row) => ({ ...row, api: matched }));
-            }}
-            disabled={disabled}
-          >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.api')} className="w-full">
-              <SelectValue>
-                {model.api ? modelApiDisplayLabel(model.api) : t('settings.providers.page.custom.omp.model.apiInherit')}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.model.apiInherit')}</SelectItem>
-              {OMP_MODEL_APIS.map((api) => (
-                <SelectItem key={api} value={api}>{modelApiDisplayLabel(api)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.kind')}</label>
-          <Select
-            value={model.kind || UNSET_VALUE}
-            onValueChange={(next) => {
-              if (next === UNSET_VALUE) {
-                onUpdate((row) => ({ ...row, kind: '', nativeKind: 'chat' }));
-                return;
-              }
-              const matched = OMP_MODEL_KINDS.find((entry) => entry === next);
-              if (matched) {
-                onUpdate((row) => ({
-                  ...row,
-                  kind: matched,
-                  nativeKind: matched,
-                }));
-              }
-            }}
-            disabled={disabled}
-          >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.kind')} className="w-full">
-              <SelectValue>{model.kind || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
-              {OMP_MODEL_KINDS.map((kind) => (
-                <SelectItem key={kind} value={kind}>{kind}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'ps-4 pt-2')}>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.api')}>
+        <Select
+          value={model.api || UNSET_VALUE}
+          onValueChange={(next) => {
+            if (next === UNSET_VALUE) {
+              onUpdate((row) => ({ ...row, api: '' }));
+              return;
+            }
+            const matched = OMP_MODEL_APIS.find((entry) => entry === next);
+            if (matched) onUpdate((row) => ({ ...row, api: matched }));
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.api')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+            <SelectValue>
+              {model.api ? modelApiDisplayLabel(model.api) : t('settings.providers.page.custom.omp.model.apiInherit')}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.model.apiInherit')}</SelectItem>
+            {OMP_MODEL_APIS.map((api) => (
+              <SelectItem key={api} value={api}>{modelApiDisplayLabel(api)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsFieldRow>
 
-      <div className={cn('grid grid-cols-1 gap-2', mode === 'definition' && '@xl:grid-cols-2')}>
-        {mode === 'definition' ? (
-          <div className="flex flex-col gap-1">
-            <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.baseUrl')}</label>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.kind')}>
+        <Select
+          value={model.kind || UNSET_VALUE}
+          onValueChange={(next) => {
+            if (next === UNSET_VALUE) {
+              onUpdate((row) => ({ ...row, kind: '', nativeKind: 'chat' }));
+              return;
+            }
+            const matched = OMP_MODEL_KINDS.find((entry) => entry === next);
+            if (matched) {
+              onUpdate((row) => ({
+                ...row,
+                kind: matched,
+                nativeKind: matched,
+              }));
+            }
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.kind')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+            <SelectValue>{model.kind || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
+            {OMP_MODEL_KINDS.map((kind) => (
+              <SelectItem key={kind} value={kind}>{kind}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsFieldRow>
+
+      {mode === 'definition' ? (
+        <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.baseUrl')}>
+          <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
             <Input
               value={model.baseUrl}
               onChange={(event) => {
@@ -130,16 +142,19 @@ export const ModelProtocolFields: React.FC<ModelDisclosureFieldsProps> = ({
                 onClearError('baseUrl');
               }}
               placeholder="https://..."
-              className="h-8 w-full rounded-md px-3 font-mono text-xs"
+              inputSize="compact"
+              className="w-full rounded-md px-3 font-mono text-xs"
               aria-invalid={Boolean(errors?.baseUrl)}
               aria-label={t('settings.providers.page.custom.omp.model.baseUrl')}
               disabled={disabled}
             />
             <FieldError message={errors?.baseUrl} />
           </div>
-        ) : null}
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.maxContextWindow')}</label>
+        </SettingsFieldRow>
+      ) : null}
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.maxContextWindow')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
           <Input
             inputMode="numeric"
             value={model.maxContextWindow}
@@ -149,14 +164,15 @@ export const ModelProtocolFields: React.FC<ModelDisclosureFieldsProps> = ({
               onClearError('maxContextWindow');
             }}
             placeholder="1000000"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors?.maxContextWindow)}
             aria-label={t('settings.providers.page.custom.omp.model.maxContextWindow')}
             disabled={disabled}
           />
           <FieldError message={errors?.maxContextWindow} />
         </div>
-      </div>
+      </SettingsFieldRow>
     </div>
   );
 };
@@ -170,53 +186,44 @@ export const ModelThinkingFields: React.FC<ModelDisclosureFieldsProps> = ({
   onUserEdit,
 }) => {
   const { t } = useI18n();
-  const sourceNote = (field: ModelAutoFillField) => {
-    const source = model.filledFrom[field];
-    if (!source) return null;
-    const label = source === 'omp-catalog'
-      ? t('settings.providers.page.custom.models.source.omp-catalog')
-      : t('settings.providers.page.custom.models.source.openrouter');
-    return <p className={SETTINGS_HELPER_CLASS}>{label}</p>;
-  };
   return (
-    <div className="space-y-2.5 ps-4 pt-1">
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.mode')}</label>
-          <Select
-            value={model.thinkingMode || UNSET_VALUE}
-            onValueChange={(next) => {
-              onUserEdit('thinking');
-              onClearError('thinkingEfforts');
-              if (next === UNSET_VALUE) {
-                onUpdate((row) => ({ ...row, thinkingMode: '', thinkingEfforts: [], thinkingDefaultLevel: '' }));
-                return;
-              }
-              const matched = OMP_THINKING_MODES.find((entry) => entry === next);
-              if (matched) {
-                onUpdate((row) => ({
-                  ...row,
-                  thinkingMode: matched,
-                  thinkingEfforts: row.thinkingEfforts.length > 0 ? row.thinkingEfforts : ['low', 'medium', 'high'],
-                }));
-              }
-            }}
-            disabled={disabled}
-          >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.thinking.mode')} className="w-full">
-              <SelectValue>{model.thinkingMode || t('settings.providers.page.custom.omp.model.thinking.none')}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.model.thinking.none')}</SelectItem>
-              {OMP_THINKING_MODES.map((thinkingMode) => (
-                <SelectItem key={thinkingMode} value={thinkingMode}>{thinkingMode}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {model.thinkingMode ? (
-          <div className="flex flex-col gap-1">
-            <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.defaultLevel')}</label>
+    <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'ps-4 pt-2')}>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.thinking.mode')}>
+        <Select
+          value={model.thinkingMode || UNSET_VALUE}
+          onValueChange={(next) => {
+            onUserEdit('thinking');
+            onClearError('thinkingEfforts');
+            if (next === UNSET_VALUE) {
+              onUpdate((row) => ({ ...row, thinkingMode: '', thinkingEfforts: [], thinkingDefaultLevel: '' }));
+              return;
+            }
+            const matched = OMP_THINKING_MODES.find((entry) => entry === next);
+            if (matched) {
+              onUpdate((row) => ({
+                ...row,
+                thinkingMode: matched,
+                thinkingEfforts: row.thinkingEfforts.length > 0 ? row.thinkingEfforts : ['low', 'medium', 'high'],
+              }));
+            }
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.thinking.mode')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+            <SelectValue>{model.thinkingMode || t('settings.providers.page.custom.omp.model.thinking.none')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.model.thinking.none')}</SelectItem>
+            {OMP_THINKING_MODES.map((thinkingMode) => (
+              <SelectItem key={thinkingMode} value={thinkingMode}>{thinkingMode}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsFieldRow>
+
+      {model.thinkingMode ? (
+        <>
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.thinking.defaultLevel')}>
             <Select
               value={model.thinkingDefaultLevel || UNSET_VALUE}
               onValueChange={(next) => {
@@ -230,7 +237,7 @@ export const ModelThinkingFields: React.FC<ModelDisclosureFieldsProps> = ({
               }}
               disabled={disabled}
             >
-              <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.thinking.defaultLevel')} className="w-full">
+              <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.thinking.defaultLevel')} className={SETTINGS_WIDTH_SELECT_CLASS}>
                 <SelectValue>{model.thinkingDefaultLevel || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -240,95 +247,93 @@ export const ModelThinkingFields: React.FC<ModelDisclosureFieldsProps> = ({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        ) : null}
-      </div>
+          </SettingsFieldRow>
 
-      {model.thinkingMode ? (
-        <>
-          <div className="flex flex-col gap-1">
-            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.efforts')}</span>
-            <div className="flex flex-wrap gap-1.5">
-              {OMP_THINKING_EFFORTS.map((effort) => {
-                const active = model.thinkingEfforts.includes(effort);
-                return (
-                  <Button
-                    key={effort}
-                    type="button"
-                    variant="chip"
-                    size="xs"
-                    aria-pressed={active}
-                    disabled={disabled}
-                    onClick={() => {
-                      onUserEdit('thinking');
-                      onClearError('thinkingEfforts');
-                      onUpdate((row) => ({
-                        ...row,
-                        thinkingEfforts: active
-                          ? row.thinkingEfforts.filter((entry) => entry !== effort)
-                          : OMP_THINKING_EFFORTS.filter((entry) => entry === effort || row.thinkingEfforts.includes(entry)),
-                      }));
-                    }}
-                  >
-                    {effort}
-                  </Button>
-                );
-              })}
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.thinking.efforts')}>
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex flex-wrap gap-1.5">
+                {OMP_THINKING_EFFORTS.map((effort) => {
+                  const active = model.thinkingEfforts.includes(effort);
+                  return (
+                    <Button
+                      key={effort}
+                      type="button"
+                      variant="chip"
+                      size="xs"
+                      aria-pressed={active}
+                      disabled={disabled}
+                      onClick={() => {
+                        onUserEdit('thinking');
+                        onClearError('thinkingEfforts');
+                        onUpdate((row) => ({
+                          ...row,
+                          thinkingEfforts: active
+                            ? row.thinkingEfforts.filter((entry) => entry !== effort)
+                            : OMP_THINKING_EFFORTS.filter((entry) => entry === effort || row.thinkingEfforts.includes(entry)),
+                        }));
+                      }}
+                    >
+                      {effort}
+                    </Button>
+                  );
+                })}
+              </div>
+              <FieldError message={errors?.thinkingEfforts} />
             </div>
-            <FieldError message={errors?.thinkingEfforts} />
-          </div>
+          </SettingsFieldRow>
 
-          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.supportsDisplay')}</label>
-              <TriStateSelect
-                value={model.thinkingSupportsDisplay}
-                onChange={(thinkingSupportsDisplay) => {
-                  onUserEdit('thinking');
-                  onUpdate((row) => ({ ...row, thinkingSupportsDisplay }));
-                }}
-                ariaLabel={t('settings.providers.page.custom.omp.model.thinking.supportsDisplay')}
-                disabled={disabled}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.requiresEffort')}</label>
-              <TriStateSelect
-                value={model.thinkingRequiresEffort}
-                onChange={(thinkingRequiresEffort) => {
-                  onUserEdit('thinking');
-                  onUpdate((row) => ({ ...row, thinkingRequiresEffort }));
-                }}
-                ariaLabel={t('settings.providers.page.custom.omp.model.thinking.requiresEffort')}
-                disabled={disabled}
-              />
-            </div>
-          </div>
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.thinking.supportsDisplay')}>
+            <TriStateSelect
+              value={model.thinkingSupportsDisplay}
+              onChange={(thinkingSupportsDisplay) => {
+                onUserEdit('thinking');
+                onUpdate((row) => ({ ...row, thinkingSupportsDisplay }));
+              }}
+              ariaLabel={t('settings.providers.page.custom.omp.model.thinking.supportsDisplay')}
+              disabled={disabled}
+            />
+          </SettingsFieldRow>
+
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.thinking.requiresEffort')}>
+            <TriStateSelect
+              value={model.thinkingRequiresEffort}
+              onChange={(thinkingRequiresEffort) => {
+                onUserEdit('thinking');
+                onUpdate((row) => ({ ...row, thinkingRequiresEffort }));
+              }}
+              ariaLabel={t('settings.providers.page.custom.omp.model.thinking.requiresEffort')}
+              disabled={disabled}
+            />
+          </SettingsFieldRow>
         </>
       ) : null}
 
       {model.thinkingMode || Boolean(model.thinkingEffortMapJson.trim()) || Boolean(errors?.thinkingEffortMapJson) ? (
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.thinking.effortMap')}</label>
-          <Textarea
-            value={model.thinkingEffortMapJson}
-            onChange={(event) => {
-              const value = event.target.value;
-              onUserEdit('thinking');
-              onUpdate((row) => ({ ...row, thinkingEffortMapJson: value }));
-              onClearError('thinkingEffortMapJson');
-            }}
-            placeholder={'{"high": "model-thinking"}'}
-            rows={2}
-            className="w-full font-mono text-xs"
-            aria-invalid={Boolean(errors?.thinkingEffortMapJson)}
-            aria-label={t('settings.providers.page.custom.omp.model.thinking.effortMap')}
-            disabled={disabled}
-          />
-          <FieldError message={errors?.thinkingEffortMapJson} />
-        </div>
+        <SettingsStackedField
+          label={t('settings.providers.page.custom.omp.model.thinking.effortMap')}
+          controlClassName="w-full max-w-none"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <Textarea
+              value={model.thinkingEffortMapJson}
+              onChange={(event) => {
+                const value = event.target.value;
+                onUserEdit('thinking');
+                onUpdate((row) => ({ ...row, thinkingEffortMapJson: value }));
+                onClearError('thinkingEffortMapJson');
+              }}
+              placeholder={'{"high": "model-thinking"}'}
+              rows={2}
+              className="font-mono text-xs"
+              aria-invalid={Boolean(errors?.thinkingEffortMapJson)}
+              aria-label={t('settings.providers.page.custom.omp.model.thinking.effortMap')}
+              disabled={disabled}
+            />
+            <FieldError message={errors?.thinkingEffortMapJson} />
+          </div>
+        </SettingsStackedField>
       ) : null}
-      {sourceNote('thinking')}
+      <SourceNote model={model} field="thinking" />
     </div>
   );
 };
@@ -342,92 +347,85 @@ export const ModelPricingFields: React.FC<ModelDisclosureFieldsProps> = ({
   onUserEdit,
 }) => {
   const { t } = useI18n();
-  const sourceNote = (field: ModelAutoFillField) => {
-    const source = model.filledFrom[field];
-    if (!source) return null;
-    const label = source === 'omp-catalog'
-      ? t('settings.providers.page.custom.models.source.omp-catalog')
-      : t('settings.providers.page.custom.models.source.openrouter');
-    return <p className={SETTINGS_HELPER_CLASS}>{label}</p>;
-  };
   return (
-    <div className="space-y-2.5 ps-4 pt-1">
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.pricing.input')}</label>
-          <Input
-            inputMode="decimal"
-            value={model.costInput}
-            onChange={(event) => {
-              const value = event.target.value;
-              onUserEdit('pricing');
-              onUpdate((row) => ({ ...row, costInput: value }));
-              onClearError('cost');
-            }}
-            placeholder="0"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
-            aria-label={t('settings.providers.page.custom.omp.model.pricing.input')}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.pricing.output')}</label>
-          <Input
-            inputMode="decimal"
-            value={model.costOutput}
-            onChange={(event) => {
-              const value = event.target.value;
-              onUserEdit('pricing');
-              onUpdate((row) => ({ ...row, costOutput: value }));
-              onClearError('cost');
-            }}
-            placeholder="0"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
-            aria-label={t('settings.providers.page.custom.omp.model.pricing.output')}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.pricing.cacheRead')}</label>
-          <Input
-            inputMode="decimal"
-            value={model.costCacheRead}
-            onChange={(event) => {
-              const value = event.target.value;
-              onUserEdit('pricing');
-              onUpdate((row) => ({ ...row, costCacheRead: value }));
-              onClearError('cost');
-            }}
-            placeholder="0"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
-            aria-label={t('settings.providers.page.custom.omp.model.pricing.cacheRead')}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.pricing.cacheWrite')}</label>
-          <Input
-            inputMode="decimal"
-            value={model.costCacheWrite}
-            onChange={(event) => {
-              const value = event.target.value;
-              onUserEdit('pricing');
-              onUpdate((row) => ({ ...row, costCacheWrite: value }));
-              onClearError('cost');
-            }}
-            placeholder="0"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
-            aria-label={t('settings.providers.page.custom.omp.model.pricing.cacheWrite')}
-            disabled={disabled}
-          />
-        </div>
-      </div>
-      <FieldError message={errors?.cost} />
-      {sourceNote('pricing')}
+    <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'ps-4 pt-2')}>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.pricing.input')}>
+        <Input
+          inputMode="decimal"
+          value={model.costInput}
+          onChange={(event) => {
+            const value = event.target.value;
+            onUserEdit('pricing');
+            onUpdate((row) => ({ ...row, costInput: value }));
+            onClearError('cost');
+          }}
+          placeholder="0"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+          aria-label={t('settings.providers.page.custom.omp.model.pricing.input')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
 
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-3">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.pricing.cacheShort')}</label>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.pricing.output')}>
+        <Input
+          inputMode="decimal"
+          value={model.costOutput}
+          onChange={(event) => {
+            const value = event.target.value;
+            onUserEdit('pricing');
+            onUpdate((row) => ({ ...row, costOutput: value }));
+            onClearError('cost');
+          }}
+          placeholder="0"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+          aria-label={t('settings.providers.page.custom.omp.model.pricing.output')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.pricing.cacheRead')}>
+        <Input
+          inputMode="decimal"
+          value={model.costCacheRead}
+          onChange={(event) => {
+            const value = event.target.value;
+            onUserEdit('pricing');
+            onUpdate((row) => ({ ...row, costCacheRead: value }));
+            onClearError('cost');
+          }}
+          placeholder="0"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+          aria-label={t('settings.providers.page.custom.omp.model.pricing.cacheRead')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.pricing.cacheWrite')}>
+        <Input
+          inputMode="decimal"
+          value={model.costCacheWrite}
+          onChange={(event) => {
+            const value = event.target.value;
+            onUserEdit('pricing');
+            onUpdate((row) => ({ ...row, costCacheWrite: value }));
+            onClearError('cost');
+          }}
+          placeholder="0"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+          aria-label={t('settings.providers.page.custom.omp.model.pricing.cacheWrite')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
+
+      <FieldError message={errors?.cost} />
+      <SourceNote model={model} field="pricing" />
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.pricing.cacheShort')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
           <Input
             inputMode="numeric"
             value={model.promptCacheShort}
@@ -437,15 +435,18 @@ export const ModelPricingFields: React.FC<ModelDisclosureFieldsProps> = ({
               onClearError('promptCacheShort');
             }}
             placeholder="300"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors?.promptCacheShort)}
             aria-label={t('settings.providers.page.custom.omp.model.pricing.cacheShort')}
             disabled={disabled}
           />
           <FieldError message={errors?.promptCacheShort} />
         </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.pricing.cacheLong')}</label>
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.pricing.cacheLong')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
           <Input
             inputMode="numeric"
             value={model.promptCacheLong}
@@ -455,15 +456,18 @@ export const ModelPricingFields: React.FC<ModelDisclosureFieldsProps> = ({
               onClearError('promptCacheLong');
             }}
             placeholder="3600"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors?.promptCacheLong)}
             aria-label={t('settings.providers.page.custom.omp.model.pricing.cacheLong')}
             disabled={disabled}
           />
           <FieldError message={errors?.promptCacheLong} />
         </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.pricing.premiumMultiplier')}</label>
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.pricing.premiumMultiplier')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
           <Input
             inputMode="decimal"
             value={model.premiumMultiplier}
@@ -473,14 +477,15 @@ export const ModelPricingFields: React.FC<ModelDisclosureFieldsProps> = ({
               onClearError('premiumMultiplier');
             }}
             placeholder="1"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors?.premiumMultiplier)}
             aria-label={t('settings.providers.page.custom.omp.model.pricing.premiumMultiplier')}
             disabled={disabled}
           />
           <FieldError message={errors?.premiumMultiplier} />
         </div>
-      </div>
+      </SettingsFieldRow>
     </div>
   );
 };
@@ -495,40 +500,28 @@ export const ModelAdvancedFields: React.FC<ModelDisclosureFieldsProps> = ({
   onUserEdit,
 }) => {
   const { t } = useI18n();
-  const sourceNote = (field: ModelAutoFillField) => {
-    const source = model.filledFrom[field];
-    if (!source) return null;
-    const label = source === 'omp-catalog'
-      ? t('settings.providers.page.custom.models.source.omp-catalog')
-      : t('settings.providers.page.custom.models.source.openrouter');
-    return <p className={SETTINGS_HELPER_CLASS}>{label}</p>;
-  };
   return (
-    <div className="space-y-3 ps-4 pt-1">
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.preferWebsockets')}</label>
-          <TriStateSelect
-            value={model.preferWebsockets}
-            onChange={(preferWebsockets) => onUpdate((row) => ({ ...row, preferWebsockets }))}
-            ariaLabel={t('settings.providers.page.custom.omp.model.preferWebsockets')}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.omitMaxOutputTokens')}</label>
-          <TriStateSelect
-            value={model.omitMaxOutputTokens}
-            onChange={(omitMaxOutputTokens) => onUpdate((row) => ({ ...row, omitMaxOutputTokens }))}
-            ariaLabel={t('settings.providers.page.custom.omp.model.omitMaxOutputTokens')}
-            disabled={disabled}
-          />
-        </div>
-      </div>
+    <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'ps-4 pt-2')}>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.preferWebsockets')}>
+        <TriStateSelect
+          value={model.preferWebsockets}
+          onChange={(preferWebsockets) => onUpdate((row) => ({ ...row, preferWebsockets }))}
+          ariaLabel={t('settings.providers.page.custom.omp.model.preferWebsockets')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
 
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-3">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.imageCountBudget')}</label>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.omitMaxOutputTokens')}>
+        <TriStateSelect
+          value={model.omitMaxOutputTokens}
+          onChange={(omitMaxOutputTokens) => onUpdate((row) => ({ ...row, omitMaxOutputTokens }))}
+          ariaLabel={t('settings.providers.page.custom.omp.model.omitMaxOutputTokens')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.imageCountBudget')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
           <Input
             inputMode="numeric"
             value={model.imageCountBudget}
@@ -539,155 +532,156 @@ export const ModelAdvancedFields: React.FC<ModelDisclosureFieldsProps> = ({
               onClearError('imageCountBudget');
             }}
             placeholder="5"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors?.imageCountBudget)}
             aria-label={t('settings.providers.page.custom.omp.model.imageCountBudget')}
             disabled={disabled}
           />
           <FieldError message={errors?.imageCountBudget} />
-          {sourceNote('imageCountBudget')}
+          <SourceNote model={model} field="imageCountBudget" />
         </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.imageInputDecoder')}</label>
-          <Select
-            value={model.imageInputDecoder || UNSET_VALUE}
-            onValueChange={(next) => onUpdate((row) => ({ ...row, imageInputDecoder: next === 'stb' ? 'stb' : '' }))}
-            disabled={disabled}
-          >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.imageInputDecoder')} className="w-full">
-              <SelectValue>{model.imageInputDecoder || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
-              <SelectItem value="stb">stb</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.tokenizer')}</label>
-          <Select
-            value={model.tokenizer || UNSET_VALUE}
-            onValueChange={(next) => {
-              if (next === UNSET_VALUE) {
-                onUpdate((row) => ({ ...row, tokenizer: '' }));
-                return;
-              }
-              const matched = OMP_MODEL_TOKENIZERS.find((entry) => entry === next);
-              if (matched) onUpdate((row) => ({ ...row, tokenizer: matched }));
-            }}
-            disabled={disabled}
-          >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.tokenizer')} className="w-full">
-              <SelectValue>{model.tokenizer || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
-              {OMP_MODEL_TOKENIZERS.map((tokenizer) => (
-                <SelectItem key={tokenizer} value={tokenizer}>{tokenizer}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      </SettingsFieldRow>
 
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.contextPromotionTarget')}</label>
-          <Input
-            value={model.contextPromotionTarget}
-            onChange={(event) => {
-              const value = event.target.value;
-              onUpdate((row) => ({ ...row, contextPromotionTarget: value }));
-            }}
-            placeholder="provider/model"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
-            aria-label={t('settings.providers.page.custom.omp.model.contextPromotionTarget')}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.model.compactionModel')}</label>
-          <Input
-            value={model.compactionModel}
-            onChange={(event) => {
-              const value = event.target.value;
-              onUpdate((row) => ({ ...row, compactionModel: value }));
-            }}
-            placeholder="provider/model"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
-            aria-label={t('settings.providers.page.custom.omp.model.compactionModel')}
-            disabled={disabled}
-          />
-        </div>
-      </div>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.imageInputDecoder')}>
+        <Select
+          value={model.imageInputDecoder || UNSET_VALUE}
+          onValueChange={(next) => onUpdate((row) => ({ ...row, imageInputDecoder: next === 'stb' ? 'stb' : '' }))}
+          disabled={disabled}
+        >
+          <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.imageInputDecoder')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+            <SelectValue>{model.imageInputDecoder || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
+            <SelectItem value="stb">stb</SelectItem>
+          </SelectContent>
+        </Select>
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.tokenizer')}>
+        <Select
+          value={model.tokenizer || UNSET_VALUE}
+          onValueChange={(next) => {
+            if (next === UNSET_VALUE) {
+              onUpdate((row) => ({ ...row, tokenizer: '' }));
+              return;
+            }
+            const matched = OMP_MODEL_TOKENIZERS.find((entry) => entry === next);
+            if (matched) onUpdate((row) => ({ ...row, tokenizer: matched }));
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger aria-label={t('settings.providers.page.custom.omp.model.tokenizer')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+            <SelectValue>{model.tokenizer || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
+            {OMP_MODEL_TOKENIZERS.map((tokenizer) => (
+              <SelectItem key={tokenizer} value={tokenizer}>{tokenizer}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.contextPromotionTarget')}>
+        <Input
+          value={model.contextPromotionTarget}
+          onChange={(event) => {
+            const value = event.target.value;
+            onUpdate((row) => ({ ...row, contextPromotionTarget: value }));
+          }}
+          placeholder="provider/model"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+          aria-label={t('settings.providers.page.custom.omp.model.contextPromotionTarget')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.compactionModel')}>
+        <Input
+          value={model.compactionModel}
+          onChange={(event) => {
+            const value = event.target.value;
+            onUpdate((row) => ({ ...row, compactionModel: value }));
+          }}
+          placeholder="provider/model"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+          aria-label={t('settings.providers.page.custom.omp.model.compactionModel')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
 
       <div className="space-y-2">
         <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.models.compatFlags')}</span>
-        <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-          {COMPAT_BOOLEAN_FLAGS.map((flag) => (
-            <div key={flag} className="flex flex-col gap-1">
-              <label className="font-mono typography-micro text-muted-foreground">{flag}</label>
-              <TriStateSelect
-                value={readCompatBooleanFlag(model.compatJson, flag)}
-                onChange={(nextValue) => {
-                  onUpdate((row) => ({
-                    ...row,
-                    compatJson: updateCompatJsonFlag(row.compatJson, flag, nextValue),
-                  }));
-                  onClearError('compatJson');
-                }}
-                ariaLabel={flag}
-                disabled={disabled}
-              />
-            </div>
-          ))}
-          <div className="flex flex-col gap-1">
-            <label className="font-mono typography-micro text-muted-foreground">
-              {t('settings.providers.page.custom.omp.models.compatMaxTokensField')}
-            </label>
-            <Select
-              value={readCompatMaxTokensField(model.compatJson) || UNSET_VALUE}
-              onValueChange={(next) => {
+        {COMPAT_BOOLEAN_FLAGS.map((flag) => (
+          <SettingsStackedField
+            key={flag}
+            label={<span className="font-mono typography-micro text-muted-foreground">{flag}</span>}
+          >
+            <TriStateSelect
+              value={readCompatBooleanFlag(model.compatJson, flag)}
+              onChange={(nextValue) => {
                 onUpdate((row) => ({
                   ...row,
-                  compatJson: updateCompatJsonFlag(row.compatJson, 'maxTokensField', next === UNSET_VALUE ? '' : next),
+                  compatJson: updateCompatJsonFlag(row.compatJson, flag, nextValue),
                 }));
                 onClearError('compatJson');
               }}
+              ariaLabel={flag}
               disabled={disabled}
-            >
-              <SelectTrigger aria-label={t('settings.providers.page.custom.omp.models.compatMaxTokensField')} className="w-full">
-                <SelectValue>{readCompatMaxTokensField(model.compatJson) || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
-                {COMPAT_MAX_TOKENS_FIELDS.map((field) => (
-                  <SelectItem key={field} value={field}>{field}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+            />
+          </SettingsStackedField>
+        ))}
+        <SettingsFieldRow label={<span className="font-mono typography-micro text-muted-foreground">{t('settings.providers.page.custom.omp.models.compatMaxTokensField')}</span>}>
+          <Select
+            value={readCompatMaxTokensField(model.compatJson) || UNSET_VALUE}
+            onValueChange={(next) => {
+              onUpdate((row) => ({
+                ...row,
+                compatJson: updateCompatJsonFlag(row.compatJson, 'maxTokensField', next === UNSET_VALUE ? '' : next),
+              }));
+              onClearError('compatJson');
+            }}
+            disabled={disabled}
+          >
+            <SelectTrigger aria-label={t('settings.providers.page.custom.omp.models.compatMaxTokensField')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+              <SelectValue>{readCompatMaxTokensField(model.compatJson) || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
+              {COMPAT_MAX_TOKENS_FIELDS.map((field) => (
+                <SelectItem key={field} value={field}>{field}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingsFieldRow>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.compat.label')}</label>
-        <Textarea
-          value={model.compatJson}
-          onChange={(event) => {
-            const value = event.target.value;
-            onUpdate((row) => ({ ...row, compatJson: value }));
-            onClearError('compatJson');
-          }}
-          placeholder={'{"supportsStore": true}'}
-          rows={2}
-          className="w-full font-mono text-xs"
-          aria-invalid={Boolean(errors?.compatJson)}
-          aria-label={t('settings.providers.page.custom.omp.compat.label')}
-          disabled={disabled}
-        />
-        <FieldError message={errors?.compatJson} />
-      </div>
+      <SettingsStackedField
+        label={t('settings.providers.page.custom.omp.compat.label')}
+        controlClassName="w-full max-w-none"
+      >
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <Textarea
+            value={model.compatJson}
+            onChange={(event) => {
+              const value = event.target.value;
+              onUpdate((row) => ({ ...row, compatJson: value }));
+              onClearError('compatJson');
+            }}
+            placeholder={'{"supportsStore": true}'}
+            rows={2}
+            className="font-mono text-xs"
+            aria-invalid={Boolean(errors?.compatJson)}
+            aria-label={t('settings.providers.page.custom.omp.compat.label')}
+            disabled={disabled}
+          />
+          <FieldError message={errors?.compatJson} />
+        </div>
+      </SettingsStackedField>
 
       <div className="space-y-1.5">
         <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.title')}</span>

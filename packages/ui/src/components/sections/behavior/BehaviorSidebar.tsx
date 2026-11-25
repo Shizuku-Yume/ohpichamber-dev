@@ -103,48 +103,61 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
     }
 
     return (
-      <div key={scopeKey} className="pt-2">
-        <div className="px-2 pb-1 pt-2 text-xs font-semibold tracking-wide text-muted-foreground">
+      <div key={scopeKey} className="space-y-1">
+        <div className="px-2 pb-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
           {groupLabel}
         </div>
 
         {showAgentsMd ? (
           <SettingsSidebarItem
             title="AGENTS.md"
+            className="px-2 py-1.5"
             icon={<Icon name="file-text" className="size-3.5 shrink-0 text-muted-foreground" />}
             selected={activeKey === `agents-md:${scopeKey}`}
             onSelect={() => onSelect({ type: 'agents-md', scope: scopeKey })}
           />
         ) : null}
 
-        {visibleFixed.map((file) => {
-          const itemAnchor =
-            scopeKey === 'global'
-              ? file.kind === 'sticky-rules'
-                ? 'behavior.files.rules-md'
-                : 'behavior.files.system-md'
-              : undefined;
-          return (
-            <div key={`${fileScope}:${file.kind}`} data-settings-item={itemAnchor}>
-              <SettingsSidebarItem
-                title={file.name}
-                icon={<Icon name="file-text" className="size-3.5 shrink-0 text-muted-foreground" />}
-                selected={activeKey === `native-file:${fileScope}:${file.kind}:${file.name}`}
-                onSelect={() =>
-                  onSelect({ type: 'native-file', scope: fileScope, kind: file.kind, name: file.name })
-                }
-              />
-            </div>
-          );
-        })}
+        {visibleFixed.length > 0 ? (
+          <div className="space-y-1">
+            {visibleFixed.map((file) => {
+              const itemAnchor =
+                scopeKey === 'global'
+                  ? file.kind === 'sticky-rules'
+                    ? 'behavior.files.rules-md'
+                    : 'behavior.files.system-md'
+                  : undefined;
+              const exists = catalog?.files.some(
+                (entry) => entry.scope === fileScope && entry.kind === file.kind && entry.name === file.name,
+              ) === true;
+              const selected = activeKey === `native-file:${fileScope}:${file.kind}:${file.name}`;
+              return (
+                <div key={`${fileScope}:${file.kind}`} data-settings-item={itemAnchor}>
+                  <SettingsSidebarItem
+                    title={exists || selected ? file.name : (
+                      <span className="text-muted-foreground">{file.name}</span>
+                    )}
+                    className="px-2 py-1.5"
+                    icon={<Icon name="file-text" className="size-3.5 shrink-0 text-muted-foreground" />}
+                    selected={selected}
+                    onSelect={() =>
+                      onSelect({ type: 'native-file', scope: fileScope, kind: file.kind, name: file.name })
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
 
         {(visibleRules.length > 0 || showDraftRule) ? (
-          <div data-settings-item={scopeKey === 'global' ? 'behavior.rules' : undefined} className="pt-1">
-            <div className="px-2 pb-0.5 pt-1 typography-micro font-medium text-muted-foreground">
+          <div data-settings-item={scopeKey === 'global' ? 'behavior.rules' : undefined} className="pt-3 space-y-1">
+            <div className="px-2 pb-1 typography-micro font-medium text-muted-foreground">
               {t('settings.behavior.files.rules')}
             </div>
             {showDraftRule && draftRule ? (
               <SettingsSidebarItem
+                className="px-2 py-1.5"
                 title={(
                   <span className="inline-flex min-w-0 items-center gap-1.5">
                     <span className="truncate">{draftRule.name}</span>
@@ -160,6 +173,7 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
             ) : null}
             {visibleRules.map((rule) => (
               <SettingsSidebarItem
+                className="px-2 py-1.5"
                 key={`${fileScope}:rule:${rule.name}`}
                 title={(
                   <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -181,12 +195,13 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
         ) : null}
 
         {(visibleInstructions.length > 0 || showDraftInstruction) ? (
-          <div data-settings-item={scopeKey === 'global' ? 'behavior.instructions' : undefined} className="pt-1">
-            <div className="px-2 pb-0.5 pt-1 typography-micro font-medium text-muted-foreground">
+          <div data-settings-item={scopeKey === 'global' ? 'behavior.instructions' : undefined} className="pt-3 space-y-1">
+            <div className="px-2 pb-1 typography-micro font-medium text-muted-foreground">
               {t('settings.behavior.files.instructions')}
             </div>
             {showDraftInstruction && draftInstruction ? (
               <SettingsSidebarItem
+                className="px-2 py-1.5"
                 title={(
                   <span className="inline-flex min-w-0 items-center gap-1.5">
                     <span className="truncate">{draftInstruction.name}</span>
@@ -207,6 +222,7 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
             ) : null}
             {visibleInstructions.map((instruction) => (
               <SettingsSidebarItem
+                className="px-2 py-1.5"
                 key={`${fileScope}:instruction:${instruction.name}`}
                 title={instruction.name}
                 metadata={instruction.fields.applyTo || undefined}
@@ -250,9 +266,9 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
 
   return (
     <SettingsSidebarLayout
-      variant="sidebar"
+      variant="background"
       header={(
-        <div className="border-b px-3 pt-4 pb-3" style={{ borderColor: 'var(--interactive-border)' }}>
+        <div className="border-b px-4 pt-4 pb-3" style={{ borderColor: 'var(--interactive-border)' }}>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className={SETTINGS_SECTION_TITLE_CLASS}>{t('settings.behavior.page.title')}</h2>
             {canCreate ? (
@@ -274,27 +290,38 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
         </div>
       )}
     >
-      {promptMatches ? (
-        <SettingsSidebarItem
-          title={t('settings.behavior.section.prompt.title')}
-          icon={<Icon name="settings-3" className="size-3.5 shrink-0 text-muted-foreground" />}
-          selected={activeKey === 'prompt'}
-          onSelect={() => onSelect({ type: 'prompt' })}
-        />
-      ) : null}
+      <div className="space-y-4 py-1">
+        {promptMatches ? (
+          <SettingsSidebarItem
+            className="px-2 py-1.5"
+            title={t('settings.behavior.section.prompt.title')}
+            icon={<Icon name="settings-3" className="size-3.5 shrink-0 text-muted-foreground" />}
+            selected={activeKey === 'prompt'}
+            onSelect={() => onSelect({ type: 'prompt' })}
+          />
+        ) : null}
 
-      {nativeLoadError ? (
-        <div role="alert" className="space-y-2 px-2 py-2 typography-meta text-[var(--status-error)]">
-          <p>{t('settings.behavior.files.loadFailed')}</p>
-          <Button type="button" size="xs" variant="outline" onClick={onRetryNative}>
-            {t('settings.agents.page.permissionsEditor.actions.retry')}
-          </Button>
-        </div>
-      ) : null}
+        {nativeLoadError ? (
+          <div role="alert" className="space-y-2 px-2 py-2 typography-meta text-[var(--status-error)]">
+            <p>{t('settings.behavior.files.loadFailed')}</p>
+            <Button type="button" size="xs" variant="outline" onClick={onRetryNative}>
+              {t('settings.agents.page.permissionsEditor.actions.retry')}
+            </Button>
+          </div>
+        ) : null}
 
-      {globalGroup}
-      {projectGroup}
-      {noMatches ? <SettingsSidebarNoMatches query={query} /> : null}
+        {globalGroup ? (
+          <div className={promptMatches ? 'border-t border-border/50 pt-3' : undefined}>
+            {globalGroup}
+          </div>
+        ) : null}
+        {projectGroup ? (
+          <div className="border-t border-border/50 pt-3">
+            {projectGroup}
+          </div>
+        ) : null}
+        {noMatches ? <SettingsSidebarNoMatches query={query} /> : null}
+      </div>
     </SettingsSidebarLayout>
   );
 };

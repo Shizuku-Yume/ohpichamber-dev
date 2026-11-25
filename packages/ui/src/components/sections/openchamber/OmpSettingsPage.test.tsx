@@ -115,6 +115,56 @@ const state: OmpSettingsState = {
     }),
     // Advanced tab.
     setting({ id: 'tools.format', type: 'enum', value: 'auto', label: 'Tool Calling Mode', group: 'Experimental', enumValues: ['auto', 'native'] }),
+    // Reset-credit rules live on the OMP page's resets section, drawn as two collapsed provider disclosures.
+    setting({
+      id: 'codexResets.autoRedeem5h', type: 'enum', value: 'yes',
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+      enumValues: ['unset', 'yes', 'no'],
+    }),
+    setting({
+      id: 'codexResets.autoRedeemWeekly', type: 'enum', value: 'no',
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+      enumValues: ['unset', 'yes', 'no'],
+    }),
+    setting({
+      id: 'codexResets.minBlockedMinutes', type: 'number', value: 45,
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+    }),
+    setting({
+      id: 'codexResets.keepCredits', type: 'number', value: 2,
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+    }),
+    setting({
+      id: 'codexResets.salvageHorizonHours', type: 'number', value: 8,
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+    }),
+    setting({
+      id: 'claudeResets.autoRedeem5h', type: 'enum', value: 'unset',
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+      enumValues: ['unset', 'yes', 'no'],
+    }),
+    setting({
+      id: 'claudeResets.autoRedeemWeekly', type: 'enum', value: 'unset',
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+      enumValues: ['unset', 'yes', 'no'],
+    }),
+    setting({
+      id: 'claudeResets.autoRedeemFable', type: 'enum', value: 'unset',
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+      enumValues: ['unset', 'yes', 'no'],
+    }),
+    setting({
+      id: 'claudeResets.minBlockedMinutes', type: 'number', value: 60,
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+    }),
+    setting({
+      id: 'claudeResets.keepCredits', type: 'number', value: 0,
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+    }),
+    setting({
+      id: 'claudeResets.salvageHorizonHours', type: 'number', value: 12,
+      placement: { type: 'page', page: 'omp', section: 'resets' },
+    }),
     // Two short, unexplained choices stay chips; a longer or explained list is a select.
     setting({ id: 'ttsr.contextMode', type: 'enum', value: 'keep', label: 'TTSR Context Mode', group: 'Rules (TTSR)', enumValues: ['discard', 'keep'] }),
     // Terminal presentation, page rows, owned-by rows and egress rows are never drawn.
@@ -453,4 +503,58 @@ test('renders every drawn row and heading translated in zh-CN with no raw settin
       await settle();
     }
   }
+});
+
+test('reset credit disclosures render collapsed on the advanced tab, expand, and save through updateOmpSettings', async () => {
+  await render();
+  // Reset rows stay off the non-advanced tabs.
+  for (const tabName of ['common', 'editing', 'execution'] as const) {
+    await switchTab(tabName);
+    expect(container.querySelector('[data-settings-item="omp.codexResets.autoRedeem5h"]')).toBeNull();
+  }
+  await switchTab('advanced');
+
+  const triggers = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'));
+  const codexTrigger = triggers.find((button) => button.textContent?.includes('Codex'));
+  const claudeTrigger = triggers.find((button) => button.textContent?.includes('Claude'));
+  if (!codexTrigger || !claudeTrigger) throw new Error('reset disclosures missing on the advanced tab');
+  // Both providers start collapsed: no reset rows in the DOM.
+  expect(codexTrigger.getAttribute('aria-expanded')).toBe('false');
+  expect(claudeTrigger.getAttribute('aria-expanded')).toBe('false');
+  expect(container.querySelector('[data-settings-item="omp.codexResets.autoRedeem5h"]')).toBeNull();
+  expect(container.querySelector('[data-settings-item="omp.claudeResets.autoRedeem5h"]')).toBeNull();
+
+  // Expand Codex: its auto-redeem and threshold rows appear in order.
+  await act(async () => { codexTrigger.click(); });
+  await settle();
+  expect(codexTrigger.getAttribute('aria-expanded')).toBe('true');
+  const codexRowIds = Array.from(container.querySelectorAll<HTMLElement>('[data-settings-item^="omp.codexResets."]'))
+    .map((node) => node.getAttribute('data-settings-item'));
+  expect(codexRowIds).toEqual([
+    'omp.codexResets.autoRedeem5h',
+    'omp.codexResets.autoRedeemWeekly',
+    'omp.codexResets.minBlockedMinutes',
+    'omp.codexResets.keepCredits',
+    'omp.codexResets.salvageHorizonHours',
+  ]);
+
+  // An enum row with explained options renders as a select: open it and pick
+  // Never, which writes through the page autosave like every other row.
+  updateSettings.mockClear();
+  const autoRedeemRow = row('codexResets.autoRedeem5h');
+  if (!(autoRedeemRow instanceof HTMLElement)) throw new Error('autoRedeem5h row missing');
+  const trigger = autoRedeemRow.querySelector<HTMLElement>('[role="combobox"]');
+  if (!trigger) throw new Error('autoRedeem5h trigger missing');
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+  });
+  const neverOption = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+    .find((option) => option.textContent?.includes(en['settings.omp.items.codexResets.autoRedeem5h.options.no']));
+  if (!neverOption) throw new Error('autoRedeem5h Never option missing');
+  await act(async () => { neverOption.click(); });
+  await settle();
+  expect(updateSettings).toHaveBeenCalledWith('workspace_1', {
+    expectedRevision: '7',
+    changes: [{ id: 'codexResets.autoRedeem5h', value: 'no' }],
+  });
 });

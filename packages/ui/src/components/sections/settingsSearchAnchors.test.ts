@@ -243,6 +243,7 @@ const OMP_PLACEMENT_PAGE_MAP = new Map<string, SettingsPageSlug>([
   ['memory', 'memory'],
   ['tools', 'tools'],
   ['usage', 'usage'],
+  ['omp', 'omp'],
 ]);
 
 function readOmpPageSettingOwners(): Map<string, SettingsPageSlug> {

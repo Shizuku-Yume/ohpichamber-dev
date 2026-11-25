@@ -1,9 +1,13 @@
 import React from 'react';
 import {
   SettingsCheckboxRow,
+  SettingsFieldRow,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
@@ -40,7 +44,7 @@ export const TriStateSelect: React.FC<{
       }}
       disabled={disabled}
     >
-      <SelectTrigger aria-label={ariaLabel} className={triggerClassName ?? 'w-full'}>
+      <SelectTrigger aria-label={ariaLabel} className={triggerClassName ?? SETTINGS_WIDTH_SELECT_CLASS}>
         <SelectValue>{labelFor(value)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -139,30 +143,31 @@ export const OmpHeadersEditor: React.FC<{
         ) : null}
 
         {headers.map((header, index) => (
-          <div key={header.row} className="flex items-start gap-2">
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <div className="flex flex-col gap-1">
-                <label className={SETTINGS_FIELD_LABEL_CLASS}>
-                  {t('settings.providers.page.custom.headers.keyLabel')}
-                </label>
-                <Input
-                  value={header.name}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    onHeadersChange(headers.map((row, rowIndex) => (rowIndex === index ? { ...row, name: value } : row)));
-                    onClearHeaderError?.(index, 'name');
-                  }}
-                  disabled={disabled}
-                  placeholder={t('settings.providers.page.custom.headers.keyPlaceholder')}
-                  className="h-7 w-full rounded-md px-3 font-mono text-xs"
-                  aria-invalid={Boolean(headerErrors[index]?.name)}
-                  aria-label={t('settings.providers.page.custom.headers.keyLabel')}
-                />
-                {headerErrors[index]?.name ? (
-                  <p className="typography-meta text-[var(--status-error)]">{headerErrors[index]?.name}</p>
-                ) : null}
-              </div>
-              <div className="flex flex-col gap-1">
+          <div key={header.row} className="flex flex-col gap-2 @xl:flex-row @xl:items-start">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <label className={SETTINGS_FIELD_LABEL_CLASS}>
+                {t('settings.providers.page.custom.headers.keyLabel')}
+              </label>
+              <Input
+                value={header.name}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onHeadersChange(headers.map((row, rowIndex) => (rowIndex === index ? { ...row, name: value } : row)));
+                  onClearHeaderError?.(index, 'name');
+                }}
+                disabled={disabled}
+                placeholder={t('settings.providers.page.custom.headers.keyPlaceholder')}
+                inputSize="compact"
+                className="font-mono text-xs"
+                aria-invalid={Boolean(headerErrors[index]?.name)}
+                aria-label={t('settings.providers.page.custom.headers.keyLabel')}
+              />
+              {headerErrors[index]?.name ? (
+                <p className="typography-meta text-[var(--status-error)]">{headerErrors[index]?.name}</p>
+              ) : null}
+            </div>
+            <div className="flex min-w-0 flex-1 items-start gap-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <label className={SETTINGS_FIELD_LABEL_CLASS}>
                   {t('settings.providers.page.custom.headers.valueLabel')}
                 </label>
@@ -177,7 +182,8 @@ export const OmpHeadersEditor: React.FC<{
                   disabled={disabled}
                   placeholder={t('settings.providers.page.custom.headers.valuePlaceholder')}
                   autoComplete="new-password"
-                  className="h-7 w-full rounded-md px-3 font-mono text-xs"
+                  inputSize="compact"
+                  className="font-mono text-xs"
                   aria-invalid={Boolean(headerErrors[index]?.value)}
                   aria-label={t('settings.providers.page.custom.headers.valueLabel')}
                 />
@@ -185,21 +191,21 @@ export const OmpHeadersEditor: React.FC<{
                   <p className="typography-meta text-[var(--status-error)]">{headerErrors[index]?.value}</p>
                 ) : null}
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={SETTINGS_ICON_BUTTON_CLASS}
+                disabled={disabled || (replaceHeaders && !isEdit && headers.length <= 1)}
+                onClick={() => {
+                  onHeadersChange(headers.filter((_, rowIndex) => rowIndex !== index));
+                  onRemoveHeaderError?.(index);
+                }}
+                aria-label={t('settings.providers.page.custom.headers.remove')}
+              >
+                <Icon name="delete-bin" className="size-4" />
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={SETTINGS_ICON_BUTTON_CLASS}
-              disabled={disabled || (replaceHeaders && !isEdit && headers.length <= 1)}
-              onClick={() => {
-                onHeadersChange(headers.filter((_, rowIndex) => rowIndex !== index));
-                onRemoveHeaderError?.(index);
-              }}
-              aria-label={t('settings.providers.page.custom.headers.remove')}
-            >
-              <Icon name="delete-bin" className="size-4" />
-            </Button>
           </div>
         ))}
 
@@ -244,108 +250,109 @@ export const OmpRemoteCompactionFields: React.FC<{
   const { t } = useI18n();
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.enabled')}</label>
-          <TriStateSelect
-            value={values.enabled}
-            onChange={(enabled) => onChange({ enabled })}
-            ariaLabel={t('settings.providers.page.custom.omp.remoteCompaction.enabled')}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.api')}</label>
-          <Select
-            value={values.api || UNSET_VALUE}
-            onValueChange={(next) => {
-              if (next === UNSET_VALUE) {
-                onChange({ api: '' });
-                return;
-              }
-              const matched = OMP_PROVIDER_APIS.find((entry) => entry === next);
-              if (matched) onChange({ api: matched });
-            }}
-            disabled={disabled}
-          >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.omp.remoteCompaction.api')} className="w-full">
-              <SelectValue>{values.api ? apiDisplayLabel(values.api) : t('settings.providers.page.custom.omp.option.default')}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
-              {OMP_PROVIDER_APIS.map((api) => (
-                <SelectItem key={api} value={api}>{apiDisplayLabel(api)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.remoteCompaction.enabled')}>
+        <TriStateSelect
+          value={values.enabled}
+          onChange={(enabled) => onChange({ enabled })}
+          ariaLabel={t('settings.providers.page.custom.omp.remoteCompaction.enabled')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
 
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.endpoint')}</label>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.remoteCompaction.api')}>
+        <Select
+          value={values.api || UNSET_VALUE}
+          onValueChange={(next) => {
+            if (next === UNSET_VALUE) {
+              onChange({ api: '' });
+              return;
+            }
+            const matched = OMP_PROVIDER_APIS.find((entry) => entry === next);
+            if (matched) onChange({ api: matched });
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger aria-label={t('settings.providers.page.custom.omp.remoteCompaction.api')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+            <SelectValue>{values.api ? apiDisplayLabel(values.api) : t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
+            {OMP_PROVIDER_APIS.map((api) => (
+              <SelectItem key={api} value={api}>{apiDisplayLabel(api)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.remoteCompaction.endpoint')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
           <Input
             value={values.endpoint}
             onChange={(event) => onChange({ endpoint: event.target.value })}
             placeholder="https://..."
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors.endpoint)}
             aria-label={t('settings.providers.page.custom.omp.remoteCompaction.endpoint')}
             disabled={disabled}
           />
           {errors.endpoint ? <p className="typography-meta text-[var(--status-error)]">{errors.endpoint}</p> : null}
         </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.model')}</label>
-          <Input
-            value={values.model}
-            onChange={(event) => onChange({ model: event.target.value })}
-            placeholder="gpt-5-mini"
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
-            aria-label={t('settings.providers.page.custom.omp.remoteCompaction.model')}
-            disabled={disabled}
-          />
-        </div>
-      </div>
+      </SettingsFieldRow>
 
-      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-3">
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.v2Streaming')}</label>
-          <TriStateSelect
-            value={values.v2StreamingEnabled}
-            onChange={(v2StreamingEnabled) => onChange({ v2StreamingEnabled })}
-            ariaLabel={t('settings.providers.page.custom.omp.remoteCompaction.v2Streaming')}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.v2Endpoint')}</label>
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.remoteCompaction.model')}>
+        <Input
+          value={values.model}
+          onChange={(event) => onChange({ model: event.target.value })}
+          placeholder="gpt-5-mini"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
+          aria-label={t('settings.providers.page.custom.omp.remoteCompaction.model')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.remoteCompaction.v2Streaming')}>
+        <TriStateSelect
+          value={values.v2StreamingEnabled}
+          onChange={(v2StreamingEnabled) => onChange({ v2StreamingEnabled })}
+          ariaLabel={t('settings.providers.page.custom.omp.remoteCompaction.v2Streaming')}
+          disabled={disabled}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.remoteCompaction.v2Endpoint')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
           <Input
             value={values.v2Endpoint}
             onChange={(event) => onChange({ v2Endpoint: event.target.value })}
             placeholder="https://..."
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors.v2Endpoint)}
             aria-label={t('settings.providers.page.custom.omp.remoteCompaction.v2Endpoint')}
             disabled={disabled}
           />
           {errors.v2Endpoint ? <p className="typography-meta text-[var(--status-error)]">{errors.v2Endpoint}</p> : null}
         </div>
-        <div className="flex flex-col gap-1">
-          <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.remoteCompaction.streamingEndpoint')}</label>
+      </SettingsFieldRow>
+
+      <SettingsFieldRow label={t('settings.providers.page.custom.omp.remoteCompaction.streamingEndpoint')}>
+        <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
           <Input
             value={values.streamingEndpoint}
             onChange={(event) => onChange({ streamingEndpoint: event.target.value })}
             placeholder="https://..."
-            className="h-8 w-full rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="w-full rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(errors.streamingEndpoint)}
             aria-label={t('settings.providers.page.custom.omp.remoteCompaction.streamingEndpoint')}
             disabled={disabled}
           />
           {errors.streamingEndpoint ? <p className="typography-meta text-[var(--status-error)]">{errors.streamingEndpoint}</p> : null}
         </div>
-      </div>
+      </SettingsFieldRow>
     </div>
   );
 };

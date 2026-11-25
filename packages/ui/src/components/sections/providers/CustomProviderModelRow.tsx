@@ -3,9 +3,11 @@ import {
   SettingsCheckboxRow,
   SettingsChipGroup,
   SettingsDisclosure,
+  SettingsFieldRow,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -270,10 +272,9 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
       </div>
 
       {expanded ? (
-        <div id={editorId} className="space-y-3 pb-4 ps-7 pe-1 pt-1">
-          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.idLabel')}</label>
+        <div id={editorId} className="space-y-4 pb-5 ps-6 pe-1 pt-2">
+          <SettingsFieldRow label={t('settings.providers.page.custom.models.idLabel')}>
+            <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
               <Input
                 value={model.modelId}
                 onChange={(event) => {
@@ -282,15 +283,18 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                   onClearError('modelId');
                 }}
                 placeholder={t('settings.providers.page.custom.models.idPlaceholder')}
-                className="h-8 w-full rounded-md px-3 font-mono text-xs"
+                inputSize="compact"
+                className="w-full rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.modelId)}
                 aria-label={t('settings.providers.page.custom.models.idLabel')}
                 disabled={disabled}
               />
               <FieldError message={errors?.modelId} />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.nameLabel')}</label>
+          </SettingsFieldRow>
+
+          <SettingsFieldRow label={t('settings.providers.page.custom.models.nameLabel')}>
+            <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
               <Input
                 value={model.name}
                 onChange={(event) => {
@@ -299,18 +303,18 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                   onClearError('name');
                 }}
                 placeholder={t('settings.providers.page.custom.models.namePlaceholder')}
-                className="h-8 w-full rounded-md px-3"
+                inputSize="compact"
+                className="w-full rounded-md px-3"
                 aria-invalid={Boolean(errors?.name)}
                 aria-label={t('settings.providers.page.custom.models.nameLabel')}
                 disabled={disabled}
               />
               <FieldError message={errors?.name} />
             </div>
-          </div>
+          </SettingsFieldRow>
 
-          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.contextWindow')}</label>
+          <SettingsFieldRow label={t('settings.providers.page.custom.models.contextWindow')}>
+            <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
               <Input
                 inputMode="numeric"
                 value={model.contextWindow}
@@ -321,7 +325,8 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                   onClearError('contextWindow');
                 }}
                 placeholder="128000"
-                className="h-8 w-full rounded-md px-3 font-mono text-xs"
+                inputSize="compact"
+                className="w-full rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.contextWindow)}
                 aria-label={t('settings.providers.page.custom.models.contextWindow')}
                 disabled={disabled}
@@ -329,8 +334,10 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
               <FieldError message={errors?.contextWindow} />
               {sourceNote('contextWindow')}
             </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.maxOutputTokens')}</label>
+          </SettingsFieldRow>
+
+          <SettingsFieldRow label={t('settings.providers.page.custom.models.maxOutputTokens')}>
+            <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
               <Input
                 inputMode="numeric"
                 value={model.maxOutputTokens}
@@ -341,7 +348,8 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                   onClearError('maxOutputTokens');
                 }}
                 placeholder="16384"
-                className="h-8 w-full rounded-md px-3 font-mono text-xs"
+                inputSize="compact"
+                className="w-full rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.maxOutputTokens)}
                 aria-label={t('settings.providers.page.custom.models.maxOutputTokens')}
                 disabled={disabled}
@@ -349,52 +357,52 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
               <FieldError message={errors?.maxOutputTokens} />
               {sourceNote('maxOutputTokens')}
             </div>
-          </div>
+          </SettingsFieldRow>
 
-          <div className="space-y-2">
-            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.models.coreCapabilities')}</span>
-            <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <span className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.models.tools')}</span>
-                <div>
-                  <SettingsChipGroup
-                    value={toolsTriState}
-                    options={triStateOptions}
-                    aria-label={t('settings.providers.page.custom.models.tools')}
-                    onChange={(next) => {
-                      onUserEdit('toolsSupported');
-                      onUpdate((row) => ({
-                        ...row,
-                        toolsSupported: next === 'true' ? true : next === 'false' ? false : undefined,
-                      }));
-                    }}
-                  />
-                </div>
-                {sourceNote('toolsSupported')}
+          <SettingsFieldRow label={t('settings.providers.page.custom.models.tools')}>
+            <div className="flex min-w-0 flex-col gap-1">
+              <div>
+                <SettingsChipGroup
+                  value={toolsTriState}
+                  options={triStateOptions}
+                  aria-label={t('settings.providers.page.custom.models.tools')}
+                  onChange={(next) => {
+                    onUserEdit('toolsSupported');
+                    onUpdate((row) => ({
+                      ...row,
+                      toolsSupported: next === 'true' ? true : next === 'false' ? false : undefined,
+                    }));
+                  }}
+                />
               </div>
-              <div className="flex flex-col gap-1">
-                <span className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.omp.model.reasoning')}</span>
-                <div>
-                  <SettingsChipGroup
-                    value={reasoningTriState}
-                    options={triStateOptions}
-                    aria-label={t('settings.providers.page.custom.omp.model.reasoning')}
-                    onChange={(next) => {
-                      onUserEdit('reasoning');
-                      onUpdate((row) => ({
-                        ...row,
-                        reasoning: next === 'true' ? true : next === 'false' ? false : undefined,
-                        reasoningEffortSupported: next === 'true' ? true : next === 'false' ? false : undefined,
-                      }));
-                    }}
-                  />
-                </div>
-                {sourceNote('reasoning')}
-              </div>
+              {sourceNote('toolsSupported')}
             </div>
-            <div className="space-y-1">
-              <span className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.models.inputCapabilities')}</span>
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
+          </SettingsFieldRow>
+
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.model.reasoning')}>
+            <div className="flex min-w-0 flex-col gap-1">
+              <div>
+                <SettingsChipGroup
+                  value={reasoningTriState}
+                  options={triStateOptions}
+                  aria-label={t('settings.providers.page.custom.omp.model.reasoning')}
+                  onChange={(next) => {
+                    onUserEdit('reasoning');
+                    onUpdate((row) => ({
+                      ...row,
+                      reasoning: next === 'true' ? true : next === 'false' ? false : undefined,
+                      reasoningEffortSupported: next === 'true' ? true : next === 'false' ? false : undefined,
+                    }));
+                  }}
+                />
+              </div>
+              {sourceNote('reasoning')}
+            </div>
+          </SettingsFieldRow>
+
+          <SettingsFieldRow label={t('settings.providers.page.custom.models.inputCapabilities')}>
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
                 {modalities.map((modality) => (
                   <SettingsCheckboxRow
                     key={modality}
@@ -421,7 +429,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
               </div>
               {sourceNote('modalities')}
             </div>
-          </div>
+          </SettingsFieldRow>
 
           <SettingsDisclosure
             title={t('settings.providers.page.custom.omp.model.protocol.title')}

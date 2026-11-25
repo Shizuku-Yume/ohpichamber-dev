@@ -181,7 +181,7 @@ const SubagentDetails: React.FC<{
               type="button"
               onClick={() => setTaskOpen((open) => !open)}
               aria-expanded={taskOpen}
-              className="flex items-center gap-1 typography-micro font-medium text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 -mx-1.5 typography-micro font-medium text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
             >
               <Icon name="arrow-right-s" className={cn('size-3.5 transition-transform', taskOpen && 'rotate-90 rtl:-rotate-90')} />
               {t('subagents.panel.task')}

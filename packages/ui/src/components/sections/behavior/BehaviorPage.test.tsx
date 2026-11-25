@@ -124,9 +124,11 @@ test('a slow prompt save preserves and then persists the newer blurred draft', a
     root.render(<ThemeSystemProvider><I18nProvider><BehaviorPage /></I18nProvider></ThemeSystemProvider>);
   });
   await settle();
-  const prompt = container.querySelector<HTMLTextAreaElement>('textarea[rows="12"]');
+  const prompt = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="AGENTS.md"]');
   if (!prompt) throw new Error('Missing system prompt field');
   expect(prompt.disabled).toBe(false);
+  expect(prompt.className).toContain('font-mono');
+  expect(prompt.getAttribute('rows')).toBeNull();
   expect(container.textContent).toContain('Global rules are combined with project rules');
 
   const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;

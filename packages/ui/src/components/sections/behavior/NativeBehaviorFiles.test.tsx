@@ -483,3 +483,111 @@ test('an uncreated RULES.md opens a ready-to-edit empty editor and saves as a ne
     content: 'Always answer in Spanish.',
   });
 });
+
+test('the triggers disclosure starts collapsed on a rule without triggers, expands on toggle, and shows a count summary when populated', async () => {
+  write.mockResolvedValue({ ...catalog, revision: '4' });
+  const noTriggerCatalog: BehaviorFileCatalog = {
+    ...catalog,
+    files: [
+      catalog.files[0],
+      {
+        ...catalog.files[1],
+        fields: { enabled: true, globs: ['src/**/*.ts'] },
+      },
+    ],
+  };
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <NativeBehaviorFiles
+          directory="/workspace"
+          selection={{ type: 'native-file', scope: 'workspace', kind: 'rule', name: 'no-console.mdc' }}
+          catalog={noTriggerCatalog}
+          error={null}
+          unavailable={false}
+          onCatalogChange={() => { }}
+          onSelect={() => { }}
+          onClearDraft={() => { }}
+        />
+      </I18nProvider>,
+    );
+  });
+
+  const disclosureToggle = Array.from(element.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'))
+    .find((button) => button.textContent?.includes('Triggers'));
+  expect(disclosureToggle).toBeDefined();
+  // No trigger fields populated → collapsed, no trigger rows in the DOM.
+  expect(disclosureToggle!.getAttribute('aria-expanded')).toBe('false');
+  expect(element.querySelector('input[aria-label="Judge question"]')).toBeNull();
+
+  await act(async () => {
+    disclosureToggle!.click();
+  });
+  await settle();
+  expect(disclosureToggle!.getAttribute('aria-expanded')).toBe('true');
+  expect(element.querySelector('input[aria-label="Judge question"]')).not.toBeNull();
+});
+
+test('the triggers disclosure starts expanded with a count summary when the rule carries trigger fields', async () => {
+  write.mockResolvedValue({ ...catalog, revision: '4' });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <NativeBehaviorFiles
+          directory="/workspace"
+          selection={{ type: 'native-file', scope: 'workspace', kind: 'rule', name: 'no-console.mdc' }}
+          catalog={catalog}
+          error={null}
+          unavailable={false}
+          onCatalogChange={() => { }}
+          onSelect={() => { }}
+          onClearDraft={() => { }}
+        />
+      </I18nProvider>,
+    );
+  });
+
+  // catalog's rule has astCondition + interruptMode + repeatMode set: starts expanded.
+  const disclosureToggle = Array.from(element.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'))
+    .find((button) => button.textContent?.includes('Triggers'));
+  expect(disclosureToggle).toBeDefined();
+  expect(disclosureToggle!.getAttribute('aria-expanded')).toBe('true');
+  expect(element.querySelector('input[aria-label="Judge question"]')).not.toBeNull();
+
+  // Collapsing surfaces the count summary next to the title.
+  await act(async () => {
+    disclosureToggle!.click();
+  });
+  await settle();
+  expect(disclosureToggle!.getAttribute('aria-expanded')).toBe('false');
+  expect(disclosureToggle!.textContent).toMatch(/\d+ configured/);
+});
+
+test('an uncreated RULES.md editor fills the vertical height with a generous min-height', async () => {
+  write.mockResolvedValue({ ...catalog, revision: '4' });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <NativeBehaviorFiles
+          directory="/workspace"
+          selection={{ type: 'native-file', scope: 'agent', kind: 'sticky-rules', name: 'RULES.md' }}
+          catalog={catalog}
+          error={null}
+          unavailable={false}
+          onCatalogChange={() => { }}
+          onSelect={() => { }}
+          onClearDraft={() => { }}
+        />
+      </I18nProvider>,
+    );
+  });
+
+  const textarea = element.querySelector<HTMLTextAreaElement>('textarea')!;
+  expect(textarea).not.toBeNull();
+  expect(textarea.className).toContain('min-h-[360px]');
+  expect(textarea.className).toContain('flex-1');
+  expect(textarea.getAttribute('rows')).toBeNull();
+});

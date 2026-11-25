@@ -42,7 +42,7 @@ const SortableListRow: React.FC<{
             {...attributes}
             {...listeners}
             aria-label={t('contextRail.configure.reorder', { label: item.label })}
-            className="shrink-0 touch-none select-none cursor-grab text-muted-foreground hover:bg-transparent active:cursor-grabbing"
+            className="shrink-0 touch-none select-none cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
           >
             <Icon name="draggable" className="size-4" />
           </Button>

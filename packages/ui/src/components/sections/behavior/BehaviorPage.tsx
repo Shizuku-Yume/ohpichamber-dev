@@ -565,6 +565,8 @@ export const BehaviorPage: React.FC = () => {
           title={title}
           description={scopeDescription}
           titleLeading={mobileBackButton}
+          showSaveStatus
+          fillHeight
           onBlurCapture={autosave.onBlurCapture}
         >
           {loadFailed ? (
@@ -575,25 +577,21 @@ export const BehaviorPage: React.FC = () => {
 
           <SettingsSection
             title={t('settings.behavior.page.warning.title')}
-            description={t('settings.behavior.page.warning.description', { path: AGENTS_MD_FILE_NAME })}
+            info={t('settings.behavior.page.warning.description', { path: AGENTS_MD_FILE_NAME })}
             divider={false}
             settingsItem={scope === 'global' ? 'behavior.system-prompt' : undefined}
-            contentClassName={SETTINGS_SPACE_ROW_CLASS}
+            className="flex min-h-0 flex-1 flex-col"
+            contentClassName="flex min-h-0 flex-1 flex-col"
           >
-            <SettingsStackedField
-              label={AGENTS_MD_FILE_NAME}
-              controlClassName="w-full max-w-none flex-col items-stretch"
-            >
-              <Textarea
-                value={rulesValue}
-                onChange={(event) => setRulesValue(event.target.value)}
-                placeholder={t('settings.behavior.page.field.systemPromptPlaceholder')}
-                rows={12}
-                disabled={rulesDisabled}
-                outerClassName="min-h-[160px]"
-                className="w-full font-mono typography-meta bg-transparent"
-              />
-            </SettingsStackedField>
+            <Textarea
+              aria-label={AGENTS_MD_FILE_NAME}
+              value={rulesValue}
+              onChange={(event) => setRulesValue(event.target.value)}
+              placeholder={t('settings.behavior.page.field.systemPromptPlaceholder')}
+              disabled={rulesDisabled}
+              outerClassName="min-h-[360px] flex-1"
+              className="w-full font-mono typography-meta bg-transparent"
+            />
           </SettingsSection>
         </SettingsPageLayout>
       );
@@ -623,8 +621,8 @@ export const BehaviorPage: React.FC = () => {
       {(!isMobile || !mobileShowDetail) ? (
         <div
           className={cn(
-            'h-full min-h-0 shrink-0 border-r bg-sidebar',
-            isMobile ? 'w-full border-r-0' : 'w-64',
+            'h-full min-h-0 shrink-0 border-r bg-background',
+            isMobile ? 'w-full border-r-0' : 'w-[280px]',
           )}
           style={{ borderColor: 'var(--interactive-border)' }}
         >

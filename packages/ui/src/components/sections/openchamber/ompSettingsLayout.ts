@@ -325,6 +325,7 @@ export const ompSettingsTabForSearchTarget = (anchor: string): OmpSettingsTab | 
   const key = anchor.slice('omp.'.length);
   if (key === 'preset.readSummary' || key === 'read.summarize.enabled') return 'editing';
   if (key === 'configFile') return 'advanced';
+  if (key.startsWith('codexResets.') || key.startsWith('claudeResets.')) return 'advanced';
   const tab = TAB_BY_ENTRY.get(key);
   return tab ?? null;
 };

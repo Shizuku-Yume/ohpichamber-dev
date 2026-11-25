@@ -88,10 +88,7 @@ export const WorkStatusCollapsibleSection: React.FC<{
           onClick={() => setExpandedInStore(id, !expanded)}
           className={cn(
             'group/section flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 text-left',
-            // No hover fill anywhere in the panel: at this row density the blocks
-            // of colour read as selection, not as affordance. Interactivity shows
-            // through the text instead.
-            'transition-colors hover:text-foreground',
+            'transition-colors hover:bg-interactive-hover hover:text-foreground',
           )}
         >
           {iconNode ?? (icon ? (
@@ -218,7 +215,7 @@ export const WorkStatusRow: React.FC<RowProps> = ({
   // a row action). The row's button is stretched under the content instead:
   // the whole row still answers a press, and controls inside it sit above.
   const row = onClick ? (
-    <div className={cn(shared, 'relative transition-colors hover:text-foreground')}>
+    <div className={cn(shared, 'relative transition-colors hover:bg-interactive-hover hover:text-foreground')}>
       <button
         type="button"
         onClick={onClick}

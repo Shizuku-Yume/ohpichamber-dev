@@ -52,7 +52,7 @@ type Props = {
   expandAll: () => void;
 };
 
-const IDLE_BUTTON_CLASS = 'text-muted-foreground hover:text-foreground hover:bg-transparent';
+const IDLE_BUTTON_CLASS = 'text-muted-foreground hover:text-foreground';
 
 function MarkAllReadItem(): React.ReactNode {
   const { t } = useI18n();

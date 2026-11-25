@@ -2,14 +2,16 @@ import React from 'react';
 import {
   SettingsCheckboxRow,
   SettingsDisclosure,
+  SettingsFieldRow,
   SettingsSection,
+  SettingsStackedField,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
-  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -176,7 +178,7 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
         expanded={headersOpen}
         onToggle={onToggleHeaders}
       >
-        <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'space-y-3 ps-4 pt-1')}>
+        <div className="space-y-3 ps-4 pt-1">
           <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.headers.description')}</p>
           <OmpHeadersEditor
             isEdit={isEdit}
@@ -224,7 +226,7 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
         expanded={discoveryOpen}
         onToggle={onToggleDiscovery}
       >
-        <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'space-y-3 ps-4 pt-1')}>
+        <div className="space-y-3 ps-4 pt-1">
           <SettingsCheckboxRow
             checked={form.discoveryEnabled}
             onChange={(discoveryEnabled) => setForm((previous) => ({ ...previous, discoveryEnabled }))}
@@ -233,30 +235,28 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
             ariaLabel={t('settings.providers.page.custom.omp.discovery.enable')}
           />
           {form.discoveryEnabled ? (
-            <div className="space-y-2.5">
-              <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-                <div className="flex flex-col gap-1">
-                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.discovery.type')}</label>
-                  <Select
-                    value={form.discoveryType}
-                    onValueChange={(next) => {
-                      const matched = OMP_DISCOVERY_TYPES.find((entry) => entry === next);
-                      if (matched) setForm((previous) => ({ ...previous, discoveryType: matched }));
-                    }}
-                    disabled={busy}
-                  >
-                    <SelectTrigger aria-label={t('settings.providers.page.custom.omp.discovery.type')} className="w-full">
-                      <SelectValue>{form.discoveryType}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {OMP_DISCOVERY_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>{type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.discovery.timeoutMs')}</label>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
+              <SettingsFieldRow label={t('settings.providers.page.custom.omp.discovery.type')}>
+                <Select
+                  value={form.discoveryType}
+                  onValueChange={(next) => {
+                    const matched = OMP_DISCOVERY_TYPES.find((entry) => entry === next);
+                    if (matched) setForm((previous) => ({ ...previous, discoveryType: matched }));
+                  }}
+                  disabled={busy}
+                >
+                  <SelectTrigger aria-label={t('settings.providers.page.custom.omp.discovery.type')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+                    <SelectValue>{form.discoveryType}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OMP_DISCOVERY_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingsFieldRow>
+              <SettingsFieldRow label={t('settings.providers.page.custom.omp.discovery.timeoutMs')}>
+                <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
                   <Input
                     inputMode="numeric"
                     value={form.discoveryTimeoutMs}
@@ -266,7 +266,8 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
                       setFieldErrors((previous) => ({ ...previous, discoveryTimeoutMs: undefined }));
                     }}
                     placeholder="10000"
-                    className="h-8 w-full rounded-md px-3 font-mono text-xs"
+                    inputSize="compact"
+                    className="w-full rounded-md px-3 font-mono text-xs"
                     aria-invalid={Boolean(fieldErrors.discoveryTimeoutMs)}
                     aria-label={t('settings.providers.page.custom.omp.discovery.timeoutMs')}
                     disabled={busy}
@@ -275,28 +276,26 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
                     <p className="typography-meta text-[var(--status-error)]">{fieldErrors.discoveryTimeoutMs}</p>
                   ) : null}
                 </div>
-              </div>
+              </SettingsFieldRow>
               {form.discoveryType === 'openai-models-list' ? (
-                <div className="flex flex-col gap-1">
-                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.discovery.injectV1')}</label>
+                <SettingsFieldRow label={t('settings.providers.page.custom.omp.discovery.injectV1')}>
                   <TriStateSelect
                     value={form.discoveryInjectV1}
                     onChange={(discoveryInjectV1) => setForm((previous) => ({ ...previous, discoveryInjectV1 }))}
                     ariaLabel={t('settings.providers.page.custom.omp.discovery.injectV1')}
                     disabled={busy}
                   />
-                </div>
+                </SettingsFieldRow>
               ) : null}
               {(form.discoveryType === 'openai-models-list' || form.discoveryType === 'lm-studio' || form.discoveryType === 'proxy') ? (
-                <div className="flex flex-col gap-1">
-                  <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.discovery.advertisedReasoning')}</label>
+                <SettingsFieldRow label={t('settings.providers.page.custom.omp.discovery.advertisedReasoning')}>
                   <TriStateSelect
                     value={form.discoveryAdvertisedReasoning}
                     onChange={(discoveryAdvertisedReasoning) => setForm((previous) => ({ ...previous, discoveryAdvertisedReasoning }))}
                     ariaLabel={t('settings.providers.page.custom.omp.discovery.advertisedReasoning')}
                     disabled={busy}
                   />
-                </div>
+                </SettingsFieldRow>
               ) : null}
             </div>
           ) : null}
@@ -309,16 +308,15 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
         expanded={compatOpen}
         onToggle={onToggleCompat}
       >
-        <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'space-y-3 ps-4 pt-1')}>
-          <div className="flex flex-col gap-1">
-            <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.disableStrictTools')}</label>
+        <div className="space-y-3 ps-4 pt-1">
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.disableStrictTools')}>
             <TriStateSelect
               value={form.disableStrictTools}
               onChange={(disableStrictTools) => setForm((previous) => ({ ...previous, disableStrictTools }))}
               ariaLabel={t('settings.providers.page.custom.omp.disableStrictTools')}
               disabled={busy}
             />
-          </div>
+          </SettingsFieldRow>
           <SettingsCheckboxRow
             checked={form.transportPiNative}
             onChange={(transportPiNative) => setForm((previous) => ({ ...previous, transportPiNative }))}
@@ -326,27 +324,29 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
             label={t('settings.providers.page.custom.omp.transportPiNative')}
             ariaLabel={t('settings.providers.page.custom.omp.transportPiNative')}
           />
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1.5">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.compat.label')}</label>
-              <SettingsInfoHint>{t('settings.providers.page.custom.omp.compat.info')}</SettingsInfoHint>
+          <SettingsStackedField
+            label={t('settings.providers.page.custom.omp.compat.label')}
+            info={t('settings.providers.page.custom.omp.compat.info')}
+            controlClassName="w-full max-w-none"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <Textarea
+                value={form.compatJson}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setForm((previous) => ({ ...previous, compatJson: value }));
+                  setFieldErrors((previous) => ({ ...previous, compatJson: undefined }));
+                }}
+                placeholder={'{"supportsStore": true}'}
+                rows={3}
+                className="font-mono text-xs"
+                aria-invalid={Boolean(fieldErrors.compatJson)}
+                aria-label={t('settings.providers.page.custom.omp.compat.label')}
+                disabled={busy}
+              />
+              {fieldErrors.compatJson ? <p className="typography-meta text-[var(--status-error)]">{fieldErrors.compatJson}</p> : null}
             </div>
-            <Textarea
-              value={form.compatJson}
-              onChange={(event) => {
-                const value = event.target.value;
-                setForm((previous) => ({ ...previous, compatJson: value }));
-                setFieldErrors((previous) => ({ ...previous, compatJson: undefined }));
-              }}
-              placeholder={'{"supportsStore": true}'}
-              rows={3}
-              className="w-full font-mono text-xs"
-              aria-invalid={Boolean(fieldErrors.compatJson)}
-              aria-label={t('settings.providers.page.custom.omp.compat.label')}
-              disabled={busy}
-            />
-            {fieldErrors.compatJson ? <p className="typography-meta text-[var(--status-error)]">{fieldErrors.compatJson}</p> : null}
-          </div>
+          </SettingsStackedField>
         </div>
       </SettingsDisclosure>
 
@@ -356,89 +356,87 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
         expanded={bedrockOpen}
         onToggle={onToggleBedrock}
       >
-        <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'space-y-3 ps-4 pt-1')}>
-          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-3">
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.bedrock.guardrailId')}</label>
-              <Input
-                value={form.guardrailIdentifier}
-                onChange={(event) => setForm((previous) => ({ ...previous, guardrailIdentifier: event.target.value }))}
-                className="h-8 w-full rounded-md px-3 font-mono text-xs"
-                aria-label={t('settings.providers.page.custom.omp.bedrock.guardrailId')}
-                disabled={busy}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.bedrock.guardrailVersion')}</label>
-              <Input
-                value={form.guardrailVersion}
-                onChange={(event) => setForm((previous) => ({ ...previous, guardrailVersion: event.target.value }))}
-                placeholder="DRAFT"
-                className="h-8 w-full rounded-md px-3 font-mono text-xs"
-                aria-label={t('settings.providers.page.custom.omp.bedrock.guardrailVersion')}
-                disabled={busy}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.bedrock.guardrailTrace')}</label>
-              <Select
-                value={form.guardrailTrace || UNSET_VALUE}
-                onValueChange={(next) => {
-                  if (next === UNSET_VALUE) {
-                    setForm((previous) => ({ ...previous, guardrailTrace: '' }));
-                    return;
-                  }
-                  const matched = OMP_BEDROCK_GUARDRAIL_TRACES.find((entry) => entry === next);
-                  if (matched) setForm((previous) => ({ ...previous, guardrailTrace: matched }));
-                }}
-                disabled={busy}
-              >
-                <SelectTrigger aria-label={t('settings.providers.page.custom.omp.bedrock.guardrailTrace')} className="w-full">
-                  <SelectValue>{form.guardrailTrace || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
-                  {OMP_BEDROCK_GUARDRAIL_TRACES.map((trace) => (
-                    <SelectItem key={trace} value={trace}>{trace}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <div className="space-y-3 ps-4 pt-1">
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.bedrock.guardrailId')}>
+            <Input
+              value={form.guardrailIdentifier}
+              onChange={(event) => setForm((previous) => ({ ...previous, guardrailIdentifier: event.target.value }))}
+              inputSize="compact"
+              className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+              aria-label={t('settings.providers.page.custom.omp.bedrock.guardrailId')}
+              disabled={busy}
+            />
+          </SettingsFieldRow>
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.bedrock.guardrailVersion')}>
+            <Input
+              value={form.guardrailVersion}
+              onChange={(event) => setForm((previous) => ({ ...previous, guardrailVersion: event.target.value }))}
+              placeholder="DRAFT"
+              inputSize="compact"
+              className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
+              aria-label={t('settings.providers.page.custom.omp.bedrock.guardrailVersion')}
+              disabled={busy}
+            />
+          </SettingsFieldRow>
+          <SettingsFieldRow label={t('settings.providers.page.custom.omp.bedrock.guardrailTrace')}>
+            <Select
+              value={form.guardrailTrace || UNSET_VALUE}
+              onValueChange={(next) => {
+                if (next === UNSET_VALUE) {
+                  setForm((previous) => ({ ...previous, guardrailTrace: '' }));
+                  return;
+                }
+                const matched = OMP_BEDROCK_GUARDRAIL_TRACES.find((entry) => entry === next);
+                if (matched) setForm((previous) => ({ ...previous, guardrailTrace: matched }));
+              }}
+              disabled={busy}
+            >
+              <SelectTrigger aria-label={t('settings.providers.page.custom.omp.bedrock.guardrailTrace')} className={SETTINGS_WIDTH_SELECT_CLASS}>
+                <SelectValue>{form.guardrailTrace || t('settings.providers.page.custom.omp.option.default')}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNSET_VALUE}>{t('settings.providers.page.custom.omp.option.default')}</SelectItem>
+                {OMP_BEDROCK_GUARDRAIL_TRACES.map((trace) => (
+                  <SelectItem key={trace} value={trace}>{trace}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsFieldRow>
 
           <div className="space-y-2">
             <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.omp.bedrock.requestMetadata')}</span>
             {form.requestMetadata.map((entry, index) => (
-              <div key={entry.row} className="flex items-start gap-2">
-                <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 @xl:grid-cols-2">
-                  <div className="flex flex-col gap-1">
-                    <Input
-                      value={entry.name}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setForm((previous) => ({
-                          ...previous,
-                          requestMetadata: previous.requestMetadata.map((item, rowIndex) => (
-                            rowIndex === index ? { ...item, name: value } : item
-                          )),
-                        }));
-                        setMetadataErrors((previous) => {
-                          const next = [...previous];
-                          next[index] = { ...(next[index] ?? {}), name: undefined };
-                          return next;
-                        });
-                      }}
-                      placeholder={t('settings.providers.page.custom.omp.bedrock.metadataKey')}
-                      className="h-7 w-full rounded-md px-3 font-mono text-xs"
-                      aria-invalid={Boolean(metadataErrors[index]?.name)}
-                      aria-label={t('settings.providers.page.custom.omp.bedrock.metadataKey')}
-                      disabled={busy}
-                    />
-                    {metadataErrors[index]?.name ? (
-                      <p className="typography-meta text-[var(--status-error)]">{metadataErrors[index]?.name}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col gap-1">
+              <div key={entry.row} className="flex flex-col gap-2 @xl:flex-row @xl:items-start">
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <Input
+                    value={entry.name}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setForm((previous) => ({
+                        ...previous,
+                        requestMetadata: previous.requestMetadata.map((item, rowIndex) => (
+                          rowIndex === index ? { ...item, name: value } : item
+                        )),
+                      }));
+                      setMetadataErrors((previous) => {
+                        const next = [...previous];
+                        next[index] = { ...(next[index] ?? {}), name: undefined };
+                        return next;
+                      });
+                    }}
+                    placeholder={t('settings.providers.page.custom.omp.bedrock.metadataKey')}
+                    inputSize="compact"
+                    className="font-mono text-xs"
+                    aria-invalid={Boolean(metadataErrors[index]?.name)}
+                    aria-label={t('settings.providers.page.custom.omp.bedrock.metadataKey')}
+                    disabled={busy}
+                  />
+                  {metadataErrors[index]?.name ? (
+                    <p className="typography-meta text-[var(--status-error)]">{metadataErrors[index]?.name}</p>
+                  ) : null}
+                </div>
+                <div className="flex min-w-0 flex-1 items-start gap-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <Input
                       value={entry.value}
                       onChange={(event) => {
@@ -456,7 +454,8 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
                         });
                       }}
                       placeholder={t('settings.providers.page.custom.omp.bedrock.metadataValue')}
-                      className="h-7 w-full rounded-md px-3 font-mono text-xs"
+                      inputSize="compact"
+                      className="font-mono text-xs"
                       aria-invalid={Boolean(metadataErrors[index]?.value)}
                       aria-label={t('settings.providers.page.custom.omp.bedrock.metadataValue')}
                       disabled={busy}
@@ -465,24 +464,24 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
                       <p className="typography-meta text-[var(--status-error)]">{metadataErrors[index]?.value}</p>
                     ) : null}
                   </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={SETTINGS_ICON_BUTTON_CLASS}
+                    disabled={busy}
+                    onClick={() => {
+                      setForm((previous) => ({
+                        ...previous,
+                        requestMetadata: previous.requestMetadata.filter((_, rowIndex) => rowIndex !== index),
+                      }));
+                      setMetadataErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
+                    }}
+                    aria-label={t('settings.providers.page.custom.headers.remove')}
+                  >
+                    <Icon name="delete-bin" className="size-4" />
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={SETTINGS_ICON_BUTTON_CLASS}
-                  disabled={busy}
-                  onClick={() => {
-                    setForm((previous) => ({
-                      ...previous,
-                      requestMetadata: previous.requestMetadata.filter((_, rowIndex) => rowIndex !== index),
-                    }));
-                    setMetadataErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
-                  }}
-                  aria-label={t('settings.providers.page.custom.headers.remove')}
-                >
-                  <Icon name="delete-bin" className="size-4" />
-                </Button>
               </div>
             ))}
             <div>
@@ -509,7 +508,7 @@ export const CustomProviderAdvancedSection: React.FC<CustomProviderAdvancedSecti
         expanded={remoteCompactionOpen}
         onToggle={onToggleRemoteCompaction}
       >
-        <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'ps-4 pt-1')}>
+        <div className="ps-4 pt-1">
           <OmpRemoteCompactionFields
             values={{
               enabled: form.remoteCompactionEnabled,

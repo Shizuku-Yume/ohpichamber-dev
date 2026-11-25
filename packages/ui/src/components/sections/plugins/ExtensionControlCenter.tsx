@@ -87,7 +87,7 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
        status; the full patterns stay behind a disclosure here. */}
    {item.triggers.length === 0 ? null : (
     <details className="min-w-0">
-     <summary className="cursor-pointer typography-micro text-muted-foreground">
+     <summary className="cursor-pointer typography-micro text-muted-foreground transition-colors hover:text-foreground">
       {t('settings.plugins.capabilities.triggers', { count: item.triggers.length })}
      </summary>
      <div className="flex min-w-0 flex-wrap items-center gap-1 pt-1">
@@ -118,7 +118,7 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
    )}
    {item.content === undefined ? null : (
     <details className="min-w-0">
-     <summary className="cursor-pointer typography-micro text-muted-foreground">
+     <summary className="cursor-pointer typography-micro text-muted-foreground transition-colors hover:text-foreground">
       {t('settings.skills.page.section.instructions')}
      </summary>
      <pre className="oc-tile-inset mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words p-2 typography-micro text-muted-foreground">{item.content}</pre>

@@ -41,9 +41,9 @@ import {
   SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
   SettingsCheckboxRow,
+  SettingsDisclosure,
   SettingsFieldRow,
   SettingsSection,
-  SettingsStackedField,
 } from '@/components/sections/shared/SettingsSection';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -140,6 +140,7 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
   const [creating, setCreating] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
+  const [triggersOverride, setTriggersOverride] = React.useState<{ key: string; open: boolean } | null>(null);
 
   const baselineRef = React.useRef<FormBaseline | null>(null);
   const hydratedIdentityRef = React.useRef<string | null>(null);
@@ -351,6 +352,19 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
         ? t('settings.behavior.files.systemMd.description')
         : null;
 
+  const triggerCount =
+    fields.condition.length +
+    fields.astCondition.length +
+    (fields.question.trim().length > 0 ? 1 : 0) +
+    (fields.interruptMode !== null ? 1 : 0) +
+    (fields.repeatMode !== null ? 1 : 0);
+  const triggersDefaultOpen = triggerCount > 0;
+  const triggersOpen =
+    triggersOverride !== null && triggersOverride.key === identityKey ? triggersOverride.open : triggersDefaultOpen;
+  const toggleTriggers = () =>
+    setTriggersOverride({ key: identityKey, open: !triggersOpen });
+
+
   if (unavailable || (!catalog && !error)) {
     return (
       <SettingsPageLayout title={name} titleLeading={titleLeading} description={subtitle}>
@@ -383,6 +397,7 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
       titleLeading={titleLeading}
       description={subtitle}
       showSaveStatus
+      fillHeight={isFixedStandardFile}
       onBlurCapture={isDraft ? undefined : autosave.onBlurCapture}
       headerEnd={
         !isDraft && existingEntry ? (
@@ -521,162 +536,165 @@ export const NativeBehaviorFiles: React.FC<NativeBehaviorFilesProps> = ({
             </SettingsFieldRow>
           </SettingsSection>
 
-          <SettingsSection
-            title={t('settings.behavior.files.section.triggers')}
-            contentClassName={SETTINGS_SPACE_ROW_CLASS}
-          >
-            <SettingsFieldRow
-              label={t('settings.behavior.files.field.condition.label')}
-              info={t('settings.behavior.files.field.condition.info')}
-              controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
+          <SettingsSection contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+            <SettingsDisclosure
+              title={t('settings.behavior.files.section.triggers')}
+              secondary={triggerCount > 0 ? t('settings.behavior.files.triggersSummary', { count: triggerCount }) : undefined}
+              expanded={triggersOpen}
+              onToggle={toggleTriggers}
             >
-              <BehaviorListField
-                values={fields.condition}
-                ariaLabel={t('settings.behavior.files.field.condition.label')}
-                placeholder={t('settings.behavior.files.field.condition.placeholder')}
-                mono
-                onChange={(next, immediate) =>
-                  updateFields((prev) => ({ ...prev, condition: next }), Boolean(immediate))
-                }
-              />
-            </SettingsFieldRow>
-
-            <SettingsFieldRow
-              label={t('settings.behavior.files.field.astCondition.label')}
-              info={t('settings.behavior.files.field.astCondition.info')}
-              controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
-            >
-              <BehaviorListField
-                values={fields.astCondition}
-                ariaLabel={t('settings.behavior.files.field.astCondition.label')}
-                placeholder={t('settings.behavior.files.field.astCondition.placeholder')}
-                mono
-                onChange={(next, immediate) =>
-                  updateFields((prev) => ({ ...prev, astCondition: next }), Boolean(immediate))
-                }
-              />
-            </SettingsFieldRow>
-
-            <SettingsFieldRow
-              label={t('settings.behavior.files.field.question.label')}
-              info={t('settings.behavior.files.field.question.info')}
-            >
-              <Input
-                value={fields.question}
-                aria-label={t('settings.behavior.files.field.question.label')}
-                placeholder={t('settings.behavior.files.field.question.placeholder')}
-                inputSize="compact"
-                onChange={(event) => updateFields((prev) => ({ ...prev, question: event.target.value }))}
-                className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
-              />
-            </SettingsFieldRow>
-
-            <SettingsFieldRow
-              label={t('settings.behavior.files.field.interruptMode.label')}
-              info={t('settings.behavior.files.field.interruptMode.info')}
-            >
-              <Select
-                value={fields.interruptMode ?? 'default'}
-                onValueChange={(next) =>
-                  updateFields(
-                    (prev) => ({
-                      ...prev,
-                      interruptMode: isInterruptMode(next) ? next : null,
-                    }),
-                    true,
-                  )
-                }
+              <SettingsFieldRow
+                label={t('settings.behavior.files.field.condition.label')}
+                info={t('settings.behavior.files.field.condition.info')}
+                controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
               >
-                <SelectTrigger
-                  className={SETTINGS_WIDTH_SELECT_CLASS}
-                  aria-label={t('settings.behavior.files.field.interruptMode.label')}
-                >
-                  <SelectValue>
-                    {(value) => {
-                      if (!value || value === 'default') return t('settings.openchamber.defaults.option.default');
-                      return isInterruptMode(value) ? t(INTERRUPT_MODE_LABEL_KEY[value]) : value;
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">{t('settings.openchamber.defaults.option.default')}</SelectItem>
-                  {INTERRUPT_MODES.map((mode) => (
-                    <SelectItem key={mode} value={mode}>
-                      {t(INTERRUPT_MODE_LABEL_KEY[mode])}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsFieldRow>
+                <BehaviorListField
+                  values={fields.condition}
+                  ariaLabel={t('settings.behavior.files.field.condition.label')}
+                  placeholder={t('settings.behavior.files.field.condition.placeholder')}
+                  mono
+                  onChange={(next, immediate) =>
+                    updateFields((prev) => ({ ...prev, condition: next }), Boolean(immediate))
+                  }
+                />
+              </SettingsFieldRow>
 
-            <SettingsFieldRow
-              label={t('settings.behavior.files.field.repeatMode.label')}
-              info={t('settings.behavior.files.field.repeatMode.info')}
-            >
-              <Select
-                value={fields.repeatMode ?? 'default'}
-                onValueChange={(next) =>
-                  updateFields(
-                    (prev) => ({
-                      ...prev,
-                      repeatMode: isRepeatMode(next) ? next : null,
-                    }),
-                    true,
-                  )
-                }
+              <SettingsFieldRow
+                label={t('settings.behavior.files.field.astCondition.label')}
+                info={t('settings.behavior.files.field.astCondition.info')}
+                controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
               >
-                <SelectTrigger
-                  className={SETTINGS_WIDTH_SELECT_CLASS}
-                  aria-label={t('settings.behavior.files.field.repeatMode.label')}
+                <BehaviorListField
+                  values={fields.astCondition}
+                  ariaLabel={t('settings.behavior.files.field.astCondition.label')}
+                  placeholder={t('settings.behavior.files.field.astCondition.placeholder')}
+                  mono
+                  onChange={(next, immediate) =>
+                    updateFields((prev) => ({ ...prev, astCondition: next }), Boolean(immediate))
+                  }
+                />
+              </SettingsFieldRow>
+
+              <SettingsFieldRow
+                label={t('settings.behavior.files.field.question.label')}
+                info={t('settings.behavior.files.field.question.info')}
+              >
+                <Input
+                  value={fields.question}
+                  aria-label={t('settings.behavior.files.field.question.label')}
+                  placeholder={t('settings.behavior.files.field.question.placeholder')}
+                  inputSize="compact"
+                  onChange={(event) => updateFields((prev) => ({ ...prev, question: event.target.value }))}
+                  className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
+                />
+              </SettingsFieldRow>
+
+              <SettingsFieldRow
+                label={t('settings.behavior.files.field.interruptMode.label')}
+                info={t('settings.behavior.files.field.interruptMode.info')}
+              >
+                <Select
+                  value={fields.interruptMode ?? 'default'}
+                  onValueChange={(next) =>
+                    updateFields(
+                      (prev) => ({
+                        ...prev,
+                        interruptMode: isInterruptMode(next) ? next : null,
+                      }),
+                      true,
+                    )
+                  }
                 >
-                  <SelectValue>
-                    {(value) => {
-                      if (!value || value === 'default') return t('settings.openchamber.defaults.option.default');
-                      return isRepeatMode(value) ? t(REPEAT_MODE_LABEL_KEY[value]) : value;
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">{t('settings.openchamber.defaults.option.default')}</SelectItem>
-                  {REPEAT_MODES.map((mode) => (
-                    <SelectItem key={mode} value={mode}>
-                      {t(REPEAT_MODE_LABEL_KEY[mode])}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsFieldRow>
+                  <SelectTrigger
+                    className={SETTINGS_WIDTH_SELECT_CLASS}
+                    aria-label={t('settings.behavior.files.field.interruptMode.label')}
+                  >
+                    <SelectValue>
+                      {(value) => {
+                        if (!value || value === 'default') return t('settings.openchamber.defaults.option.default');
+                        return isInterruptMode(value) ? t(INTERRUPT_MODE_LABEL_KEY[value]) : value;
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">{t('settings.openchamber.defaults.option.default')}</SelectItem>
+                    {INTERRUPT_MODES.map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {t(INTERRUPT_MODE_LABEL_KEY[mode])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingsFieldRow>
+
+              <SettingsFieldRow
+                label={t('settings.behavior.files.field.repeatMode.label')}
+                info={t('settings.behavior.files.field.repeatMode.info')}
+              >
+                <Select
+                  value={fields.repeatMode ?? 'default'}
+                  onValueChange={(next) =>
+                    updateFields(
+                      (prev) => ({
+                        ...prev,
+                        repeatMode: isRepeatMode(next) ? next : null,
+                      }),
+                      true,
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    className={SETTINGS_WIDTH_SELECT_CLASS}
+                    aria-label={t('settings.behavior.files.field.repeatMode.label')}
+                  >
+                    <SelectValue>
+                      {(value) => {
+                        if (!value || value === 'default') return t('settings.openchamber.defaults.option.default');
+                        return isRepeatMode(value) ? t(REPEAT_MODE_LABEL_KEY[value]) : value;
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">{t('settings.openchamber.defaults.option.default')}</SelectItem>
+                    {REPEAT_MODES.map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {t(REPEAT_MODE_LABEL_KEY[mode])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingsFieldRow>
+            </SettingsDisclosure>
           </SettingsSection>
         </>
       ) : null}
 
       <SettingsSection
         title={t('settings.behavior.files.section.content')}
-        description={fixedDescription ?? undefined}
+        description={isFixedStandardFile ? undefined : fixedDescription ?? undefined}
+        info={isFixedStandardFile ? fixedDescription ?? undefined : undefined}
         divider={kind === 'rule' || kind === 'instruction'}
-        contentClassName={SETTINGS_SPACE_ROW_CLASS}
+        className={isFixedStandardFile ? 'flex min-h-0 flex-1 flex-col' : undefined}
+        contentClassName={isFixedStandardFile ? 'flex min-h-0 flex-1 flex-col gap-4' : SETTINGS_SPACE_ROW_CLASS}
       >
         {isFixedStandardFile && catalog && !existingEntry ? (
           <p className="typography-meta text-muted-foreground">
             {t('settings.behavior.files.fixed.notCreated')}
           </p>
         ) : null}
-        <SettingsStackedField
-          label={t('settings.snippets.page.field.content')}
-          controlClassName="w-full max-w-none flex-col items-stretch"
-        >
-          <Textarea
-            aria-label={t('settings.snippets.page.field.content')}
-            placeholder={t('settings.behavior.files.field.content.placeholder')}
-            rows={12}
-            value={content}
-            onChange={(event) => {
-              setContent(event.target.value);
-              setDraftError(null);
-            }}
-            className="w-full font-mono typography-meta min-h-[160px] bg-transparent"
-          />
-        </SettingsStackedField>
+        <Textarea
+          aria-label={t('settings.snippets.page.field.content')}
+          placeholder={t('settings.behavior.files.field.content.placeholder')}
+          value={content}
+          onChange={(event) => {
+            setContent(event.target.value);
+            setDraftError(null);
+          }}
+          outerClassName={isFixedStandardFile ? 'flex flex-1 flex-col min-h-[360px]' : 'min-h-[240px]'}
+          className={isFixedStandardFile
+            ? 'min-h-[360px] flex-1 w-full resize-y font-mono typography-meta bg-transparent'
+            : 'min-h-[240px] w-full resize-y font-mono typography-meta bg-transparent'}
+        />
 
         {isDraft ? (
           <div className="flex items-center gap-2 pt-2">

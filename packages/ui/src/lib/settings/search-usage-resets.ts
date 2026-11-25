@@ -16,7 +16,7 @@ const USAGE_RESETS_SETTING_IDS = [
 
 export const usageResetsSearchItems = (): SettingsSearchItem[] => USAGE_RESETS_SETTING_IDS.map((settingId) => ({
   id: `omp.${settingId}`,
-  page: 'usage',
+  page: 'omp',
   titleKey: `settings.omp.items.${settingId}.label`,
   descriptionKey: `settings.omp.items.${settingId}.description`,
 }));

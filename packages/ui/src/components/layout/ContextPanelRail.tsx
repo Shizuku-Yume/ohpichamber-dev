@@ -129,7 +129,7 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
               'flex h-7 w-7 touch-none select-none items-center justify-center rounded-md transition-colors',
               isActive
                 ? 'oc-selected text-interactive-selection-foreground'
-                : 'text-muted-foreground hover:text-foreground',
+                : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
             )}
           >
             <GuestIcon
@@ -477,7 +477,7 @@ export const ContextPanelRail: React.FC = () => {
             type="button"
             aria-label={t('contextRail.configure.open')}
             onClick={() => setIsSurfacesDialogOpen(true)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
           >
             <Icon name="list-settings" className="h-[17px] w-[17px]" />
           </button>

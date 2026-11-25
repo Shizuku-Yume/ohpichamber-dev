@@ -376,7 +376,7 @@ export const SettingsDisclosure: React.FC<SettingsDisclosureProps> = ({
           aria-expanded={expanded}
           aria-controls={expanded ? contentId : undefined}
           onClick={onToggle}
-          className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
+          className="flex h-auto min-w-0 flex-1 justify-start gap-2 -mx-1 px-2 py-1.5"
         >
           <Icon
             name="arrow-right-s"
@@ -462,6 +462,7 @@ export const SettingsCheckboxRow: React.FC<SettingsCheckboxRowProps> = ({
       data-settings-item={footer != null ? undefined : settingsItem}
       className={cn(
         'group flex cursor-pointer gap-2 py-0.5',
+        !disabled && 'rounded-md -mx-1.5 px-1.5 transition-colors hover:bg-interactive-hover',
         hasDescription ? 'items-start' : 'items-center',
         disabled && 'cursor-not-allowed',
         className,
@@ -531,6 +532,7 @@ export const SettingsRadioOption: React.FC<SettingsRadioOptionProps> = ({
     <div
       className={cn(
         'flex cursor-pointer gap-2 py-0.5',
+        !disabled && 'rounded-md -mx-1.5 px-1.5 transition-colors hover:bg-interactive-hover',
         description != null ? 'items-start' : 'items-center',
         disabled && 'cursor-not-allowed opacity-60',
         className,
@@ -685,7 +687,7 @@ export function SettingsChipGroup<T extends string>({
               selected
                 ? option.selectedClassName
                 ?? 'oc-raised bg-[var(--surface-background)] text-foreground hover:bg-[var(--surface-background)] dark:bg-[var(--surface-elevated)] dark:hover:bg-[var(--surface-elevated)]'
-                : 'text-muted-foreground hover:bg-transparent hover:text-foreground',
+                : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
             )}
             onClick={() => onChange(option.value)}
           >

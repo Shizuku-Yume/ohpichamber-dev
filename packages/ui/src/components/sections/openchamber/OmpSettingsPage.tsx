@@ -27,6 +27,7 @@ import {
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { OmpReadSummaryPresetRow } from '@/components/sections/shared/OmpReadSummaryPresetRow';
 import { Icon } from '@/components/icon/Icon';
+import { OmpResetCreditSettings } from './OmpResetCreditSettings';
 import {
   OMP_SETTINGS_LAYOUT,
   READ_SUMMARY_PRESET_SETTING_IDS,
@@ -283,7 +284,9 @@ export const OmpSettingsPage: React.FC = () => {
   }
 
   const activeTab = OMP_SETTINGS_LAYOUT.find((layoutTab) => layoutTab.id === tab) ?? OMP_SETTINGS_LAYOUT[0];
-  // Tab content is resolved per group, so a group whose rows are all missing
+  const resetSettings = state.settings.filter(
+    (setting) => setting.placement.type === 'page' && setting.placement.page === 'omp' && setting.placement.section === 'resets',
+  );
   // from the snapshot (or gated off by a condition) does not leave a heading.
   const activeGroups = activeTab.groups
     .map((group) => ({
@@ -322,11 +325,21 @@ export const OmpSettingsPage: React.FC = () => {
           <div className={SETTINGS_SPACE_ROW_CLASS}>{group.rows}</div>
         </SettingsSection>
       ))}
+      {activeTab.id === 'advanced' && resetSettings.length > 0 ? (
+        <OmpResetCreditSettings
+          settings={resetSettings}
+          form={form}
+          disabled={loading}
+          divider={activeGroups.length > 0}
+          onChange={onChange}
+          onImmediate={onImmediate}
+        />
+      ) : null}
       {activeTab.id === 'advanced' ? (
         <SettingsSection
           title={t('settings.omp.configFile.title')}
           settingsItem="omp.configFile"
-          divider={activeGroups.length > 0}
+          divider={activeGroups.length > 0 || resetSettings.length > 0}
           className="space-y-0"
           contentClassName="hidden"
           headerAction={

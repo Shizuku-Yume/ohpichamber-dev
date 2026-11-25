@@ -147,10 +147,24 @@ describe('OMP settings layout', () => {
       const matches = ompPageIds.filter((candidate) => candidate === `omp.${id}`);
       expect({ id, count: matches.length }).toEqual({ id, count: 1 });
     }
-    // The page's own non-row anchor: the closing config.yml section. Model
-    // roles moved to their own page.
+    // The page's own non-row anchors: the closing config.yml section and the
+    // reset-credit rules, which the advanced tab draws as two provider
+    // disclosures rather than as layout rows. Model roles moved to their own page.
     const extra = ompPageIds.filter((candidate) => !OMP_SETTING_IDS.some((id) => candidate === `omp.${id}`));
-    expect(extra.sort()).toEqual(['omp.configFile']);
+    expect(extra.sort()).toEqual([
+      'omp.claudeResets.autoRedeem5h',
+      'omp.claudeResets.autoRedeemFable',
+      'omp.claudeResets.autoRedeemWeekly',
+      'omp.claudeResets.keepCredits',
+      'omp.claudeResets.minBlockedMinutes',
+      'omp.claudeResets.salvageHorizonHours',
+      'omp.codexResets.autoRedeem5h',
+      'omp.codexResets.autoRedeemWeekly',
+      'omp.codexResets.keepCredits',
+      'omp.codexResets.minBlockedMinutes',
+      'omp.codexResets.salvageHorizonHours',
+      'omp.configFile',
+    ]);
     for (const id of ['omp.dev.autoqa', 'omp.spotlight.experiment.enabled', 'omp.read.renderMarkdown']) {
       expect(`${id}: ${ompPageIds.includes(id)}`).toBe(`${id}: false`);
     }
@@ -162,6 +176,8 @@ describe('OMP settings layout', () => {
     }
     expect(ompSettingsTabForSearchTarget('omp.preset.readSummary')).toBe('editing');
     expect(ompSettingsTabForSearchTarget('omp.configFile')).toBe('advanced');
+    expect(ompSettingsTabForSearchTarget('omp.codexResets.autoRedeem5h')).toBe('advanced');
+    expect(ompSettingsTabForSearchTarget('omp.claudeResets.keepCredits')).toBe('advanced');
     expect(ompSettingsTabForSearchTarget('chat.streaming')).toBeNull();
   });
 });

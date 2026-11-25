@@ -623,7 +623,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         overridesOpen={overridesOpen}
         onToggleOverrides={() => setOverridesOpen((prev) => !prev)}
         overrides={(
-          <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'space-y-3 ps-4 pt-1')}>
+          <div className="space-y-3 ps-4 pt-1">
             <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.omp.overrides.description')}</p>
             {form.modelOverrides.length > 0 ? (
               <div className="divide-y divide-border/50">

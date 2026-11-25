@@ -122,7 +122,7 @@ export const CustomProviderModelsSection: React.FC<CustomProviderModelsSectionPr
       divider
       contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
-      <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex flex-col gap-2')}>
+      <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <Button
             type="button"
@@ -172,7 +172,7 @@ export const CustomProviderModelsSection: React.FC<CustomProviderModelsSectionPr
       </div>
 
       {showModelSearch || showModelApiChips ? (
-        <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex flex-col gap-2')}>
+        <div className="flex flex-col gap-2">
           {showModelSearch ? (
             <Input
               value={modelSearch}
@@ -180,7 +180,7 @@ export const CustomProviderModelsSection: React.FC<CustomProviderModelsSectionPr
               placeholder={t('settings.providers.page.custom.omp.models.searchPlaceholder')}
               aria-label={t('settings.providers.page.custom.omp.models.searchPlaceholder')}
               inputSize="compact"
-              className="w-full rounded-md px-3"
+              className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'rounded-md px-3')}
               disabled={busy}
             />
           ) : null}
@@ -215,7 +215,7 @@ export const CustomProviderModelsSection: React.FC<CustomProviderModelsSectionPr
       ) : null}
 
       {form.models.length > 0 ? (
-        <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'divide-y divide-border/50')}>
+        <div className="divide-y divide-border/50">
           {form.models.map((model, index) => {
             const resolvedApi = model.api || form.api || 'inherited';
             if (activeModelApiFilter !== 'all' && resolvedApi !== activeModelApiFilter) return null;

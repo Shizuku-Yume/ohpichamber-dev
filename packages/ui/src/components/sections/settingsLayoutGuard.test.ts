@@ -1535,18 +1535,25 @@ describe('settings UX regression guards', () => {
     }
   });
 
-  test('UsagePage reset-policy and CustomProviderForm advanced disclosures start collapsed', () => {
+  test('OmpResetCreditSettings disclosures start collapsed and UsagePage no longer renders reset rules', () => {
     const scanned = new Map(scanSections().map((entry) => [entry.file, entry.source]));
+    const resetsSource = scanned.get('openchamber/OmpResetCreditSettings.tsx');
     const usageSource = scanned.get('usage/UsagePage.tsx');
     const providerSource = scanned.get('providers/CustomProviderForm.tsx');
     const advancedSource = scanned.get('providers/CustomProviderAdvancedSection.tsx');
+    expect(resetsSource, 'openchamber/OmpResetCreditSettings.tsx must be scanned').toBeDefined();
     expect(usageSource, 'usage/UsagePage.tsx must be scanned').toBeDefined();
     expect(providerSource, 'providers/CustomProviderForm.tsx must be scanned').toBeDefined();
     expect(advancedSource, 'providers/CustomProviderAdvancedSection.tsx must be scanned').toBeDefined();
     // `expanded` maps key->open; the empty initial map keeps every group
     // collapsed, and a `true` literal would resurface one section open on load.
-    expect(usageSource!.includes('expanded[provider.key] === true')).toBe(true);
-    expect(/SettingsDisclosure[^]*expanded=\{true\}/.test(usageSource!)).toBe(false);
+    expect(resetsSource!.includes('expanded[provider.key] === true')).toBe(true);
+    expect(/SettingsDisclosure[^]*expanded=\{true\}/.test(resetsSource!)).toBe(false);
+    // The maintainer directed the auto-redeem rules out of Usage entirely;
+    // the page must not re-introduce them.
+    expect(usageSource!.includes('ResetCreditSettings')).toBe(false);
+    expect(usageSource!.includes('codexResets')).toBe(false);
+    expect(usageSource!.includes('claudeResets')).toBe(false);
     for (const state of ['discoveryOpen', 'compatOpen', 'bedrockOpen', 'remoteCompactionOpen']) {
       expect(
         new RegExp(`const \\[${state},\\s*set[A-Z]\\w*\\] = React\\.useState\\(false\\)`).test(providerSource!),
