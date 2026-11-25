@@ -56,6 +56,36 @@ export const createArchiveStore = ({ dataDir, fsPromises = fs.promises, path: no
     return null;
   };
   const getState = (id) => lifecycle.run(() => { const sessionID = asNonEmptyString(id); return sessionID ? resolveCurrent(sessionID) : null; });
+  /**
+   * One bulk read for a page of session ids, mirroring `getState` row
+   * semantics: per-row corrupt records land in `errors` keyed by session id,
+   * store-wide failures throw.
+   */
+  const getStates = (sessionIds) => lifecycle.run(async () => {
+    const ids = [...new Set((Array.isArray(sessionIds) ? sessionIds : []).map(asNonEmptyString).filter(Boolean))];
+    const entries = new Map();
+    const errors = new Map();
+    if (ids.length === 0) return { entries, errors };
+    const converted = await conversion.convert();
+    if (converted.error) throw converted.error;
+    let rows;
+    try {
+      rows = db.prepare(`SELECT session_id, revision, archived_at FROM session_archive WHERE session_id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+    } catch (error) { throw new MetadataReadError('Could not read Host archive state', error); }
+    const rowById = new Map(rows.map((row) => [row.session_id, row]));
+    for (const id of ids) {
+      const row = rowById.get(id);
+      if (!row) {
+        if (converted.errors[id]) errors.set(id, 'METADATA_CORRUPT');
+        else entries.set(id, null);
+        continue;
+      }
+      const parsed = ArchiveRowSchema.safeParse({ revision: row.revision, archived_at: row.archived_at });
+      if (!parsed.success) { errors.set(id, 'METADATA_CORRUPT'); continue; }
+      entries.set(id, { archivedAt: parsed.data.archived_at, revision: String(parsed.data.revision) });
+    }
+    return { entries, errors };
+  });
   const listAll = () => lifecycle.run(async () => {
     const converted = await conversion.convert();
     let rows;
@@ -99,7 +129,7 @@ export const createArchiveStore = ({ dataDir, fsPromises = fs.promises, path: no
     }));
   };
   return {
-    getState, listAll, getAll, convertLegacy: () => lifecycle.run(conversion.convert),
+    getState, getStates, listAll, getAll, convertLegacy: () => lifecycle.run(conversion.convert),
     isArchived: async (id) => {
       const state = await getState(id);
       return state !== null && state.archivedAt !== null;

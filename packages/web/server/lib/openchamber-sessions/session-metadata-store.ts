@@ -105,6 +105,45 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
     return id ? resolveCurrent(id) : null;
   });
   const get = async (id) => (await getState(id))?.metadata ?? null;
+  /**
+   * One bulk read for a page of session ids: a single SQLite query instead of
+   * a point read per session. Per-row corrupt payloads surface in `errors`
+   * keyed by session id, the same failure `getState` would throw for that row;
+   * store-wide failures (conversion, the query itself) throw.
+   */
+  const getStates = (sessionIds) => lifecycle.run(async () => {
+    const ids = [...new Set((Array.isArray(sessionIds) ? sessionIds : []).map(asNonEmptyString).filter(Boolean))];
+    const entries = new Map();
+    const errors = new Map();
+    if (ids.length === 0) return { entries, errors };
+    const converted = await conversion.convert();
+    if (converted.error) throw converted.error;
+    let rows;
+    try {
+      rows = db.prepare(`SELECT session_id, revision, payload FROM session_metadata WHERE session_id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+    } catch (error) { throw readFailure(error); }
+    const rowById = new Map(rows.map((row) => [row.session_id, row]));
+    for (const id of ids) {
+      const row = rowById.get(id);
+      if (!row) {
+        if (converted.errors[id]) errors.set(id, 'METADATA_CORRUPT');
+        else entries.set(id, null);
+        continue;
+      }
+      try {
+        const parsed = readJsonObject(row.payload, 'Session metadata');
+        const metadata = MetadataSchema.safeParse(parsed);
+        if (!metadata.success || !RevisionSchema.safeParse(row.revision).success) {
+          errors.set(id, 'METADATA_CORRUPT');
+          continue;
+        }
+        entries.set(id, { metadata: withoutLegacyTitle(metadata.data), revision: String(row.revision) });
+      } catch {
+        errors.set(id, 'METADATA_CORRUPT');
+      }
+    }
+    return { entries, errors };
+  });
 
   const mutate = (sessionID, decide) => {
     const id = asNonEmptyString(sessionID);
@@ -204,7 +243,7 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
     } catch (error) { throw writeFailure(error); }
     return { results, errors, complete: Object.keys(errors).length === 0 };
   });
-  return { get, getState, listAll, setSessionMetadata, updateSessionMetadata, importOperationalSessions,
+  return { get, getState, getStates, listAll, setSessionMetadata, updateSessionMetadata, importOperationalSessions,
     convertLegacy: () => lifecycle.run(conversion.convert), flush: lifecycle.flush, close: lifecycle.close, databasePath: filePath };
 };
 export { MetadataCorruptError, MetadataWriteError };
