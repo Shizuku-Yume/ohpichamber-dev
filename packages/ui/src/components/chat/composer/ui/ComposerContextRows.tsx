@@ -10,7 +10,7 @@ import { toast } from '@/components/ui';
 import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { readBrowserAnnotationPrompt, withoutBrowserAnnotationComment, withoutBrowserAnnotationScreenshot } from '@/lib/browser/annotationPrompt';
-import { legacyChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
+import { legacyChatQuoteAnchor } from '@/lib/legacyChatQuoteAnchor';
 import { quoteDisplayText } from '@/lib/messages/quoteDisplayText';
 import { fileWithDiffCommentOrigin } from '@/lib/diffCommentOrigin';
 import { useI18n } from '@/lib/i18n';

@@ -10,11 +10,11 @@ import {
     chatQuoteAnchorSchema,
     findChatQuoteRoots,
     findUiRenderQuoteRoot,
-    legacyChatQuoteAnchor,
     locateChatQuote,
     resolveChatQuoteAnchor,
     resolveChatQuoteRanges,
 } from './chatQuoteAnchor';
+import { legacyChatQuoteAnchor } from './legacyChatQuoteAnchor';
 
 const previousDocument = globalThis.document;
 beforeEach(() => {
