@@ -186,11 +186,13 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
         observeChildren();
 
         // The renderer swaps subtrees as it settles; re-observe the new children.
-        const mutationObserver = new MutationObserver(() => {
-            observeChildren();
-            checkTruncation();
-        });
-        mutationObserver.observe(el, { childList: true, subtree: true });
+        // Only direct child replacement matters for observation, and the
+        // observer above already reports every size change those swaps cause —
+        // deep mutations never need a measurement of their own, so this stays
+        // childList-only and skips the synchronous re-read that would force a
+        // layout inside every settle mutation batch.
+        const mutationObserver = new MutationObserver(observeChildren);
+        mutationObserver.observe(el, { childList: true });
 
         return () => {
             window.cancelAnimationFrame(initialFrame);

@@ -7,7 +7,34 @@ export function compareCounters(left: string, right: string): number {
  return left.length === right.length ? (left < right ? -1 : left > right ? 1 : 0) : left.length < right.length ? -1 : 1
 }
 
-const same = <T>(left: T, right: T): boolean => left === right || JSON.stringify(left) === JSON.stringify(right)
+/**
+ * Allocation-free structural equality for the plain JSON-shaped records the
+ * canonical contract carries. Objects compare key-set-wise (order is not
+ * semantic), strings bail on length before the engine's byte comparison, and
+ * recursion exits at the first difference instead of serializing both sides
+ * whole. NaN never appears in validated payloads; it compares unequal here.
+ */
+function structuralEquals(left: unknown, right: unknown): boolean {
+ if (left === right) return true
+ if (typeof left !== "object" || typeof right !== "object" || left === null || right === null) return false
+ if (Array.isArray(left)) {
+  if (!Array.isArray(right) || left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+   if (!structuralEquals(left[index], right[index])) return false
+  }
+  return true
+ }
+ if (Array.isArray(right)) return false
+ const leftKeys = Object.keys(left)
+ const rightKeys = Object.keys(right)
+ if (leftKeys.length !== rightKeys.length) return false
+ const leftRecord = left as Record<string, unknown>
+ const rightRecord = right as Record<string, unknown>
+ for (const key of leftKeys) {
+  if (!Object.hasOwn(rightRecord, key) || !structuralEquals(leftRecord[key], rightRecord[key])) return false
+ }
+ return true
+}
 const clearInvalidation = (invalidated: Record<string, true> | undefined, sessionId: string): Record<string, true> | undefined => {
  if (!invalidated?.[sessionId]) return invalidated
  const next = { ...invalidated }
@@ -39,7 +66,7 @@ export function clearSessionAdvisor(state: State, sessionId: string): State {
 }
 const retain = <T>(current: readonly T[], incoming: readonly T[], key: (item: T) => string): T[] => {
  const prior = new Map(current.map((item) => [key(item), item]))
- const next = incoming.map((item) => { const old = prior.get(key(item)); return old && same(old, item) ? old : item })
+ const next = incoming.map((item) => { const old = prior.get(key(item)); return old && structuralEquals(old, item) ? old : item })
  return next.length === current.length && next.every((item, index) => item === current[index]) ? current as T[] : next
 }
 
@@ -58,7 +85,7 @@ export function mergeHostSession(incoming: Session, previous?: Session): Session
   if (previous.archivedAt === undefined) delete next.archivedAt
   else next.archivedAt = previous.archivedAt
  }
- return same(previous, next) ? previous : next
+ return structuralEquals(previous, next) ? previous : next
 }
 
 export function installHostSession(state: State, incoming: Session): State {
@@ -136,7 +163,7 @@ export function installSessionMetadata(
   // announced for a session created moments ago. Dropping it left the sidebar
   // stale until a reload, so it is held until a session record arrives.
   const pending = state.pendingMetadata?.[metadata.sessionId]
-  if (pending && (compareCounters(metadata.revision, pending.revision) < 0 || same(pending, metadata))) return state
+  if (pending && (compareCounters(metadata.revision, pending.revision) < 0 || structuralEquals(pending, metadata))) return state
   const buffered = { ...state.pendingMetadata, [metadata.sessionId]: metadata }
   if (pending === undefined) {
    // Oldest first: object keys keep insertion order, so the records dropped
@@ -152,7 +179,7 @@ export function installSessionMetadata(
 
 export function installQueue(state: State, queue: QueueState): State {
  const previous = state.queue[queue.sessionId]
- if (previous && (compareCounters(queue.revision, previous.revision) < 0 || same(previous, queue))) return state
+ if (previous && (compareCounters(queue.revision, previous.revision) < 0 || structuralEquals(previous, queue))) return state
  return { ...state, queue: { ...state.queue, [queue.sessionId]: queue } }
 }
 
@@ -170,7 +197,12 @@ export function installSessionSnapshot(state: State, snapshot: SessionSnapshot):
  const messages = retain(state.message[id] ?? [], snapshot.messages, (message) => message.messageId)
  const approvals = retain(state.permission[id] ?? [], snapshot.approvals, (request) => request.approvalId)
  const questions = retain(state.form[id] ?? [], snapshot.questions, (request) => request.questionId)
- const nextSnapshot = old && same(old, snapshot) ? old : { ...snapshot, messages, approvals, questions }
+ // Compare the candidate with its retained arrays substituted, never the raw
+ // payload: `retain` has already canonicalized unchanged elements by deep
+ // equality, so element references decide the arrays in O(count) instead of
+ // re-walking every byte of transcript content on each snapshot install.
+ const candidate = { ...snapshot, messages, approvals, questions }
+ const nextSnapshot = old && structuralEquals(old, candidate) ? old : candidate
  let next: State = {
   ...state,
   snapshot: nextSnapshot === old ? state.snapshot : { ...state.snapshot, [id]: nextSnapshot },
@@ -230,7 +262,7 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
  // have advanced; it only fills a binding that is missing.
  const settledLive = !terminal && snapshot?.session.activeRunId === run.runId && snapshot.activeRun !== null && snapshot.session.runtimeStatus === "running"
  let next = state
- if (snapshot && !settledLive && (snapshot.session.activeRunId !== (terminal ? null : run.runId) || snapshot.session.runtimeStatus !== status || !same(snapshot.activeRun, activeRun))) {
+ if (snapshot && !settledLive && (snapshot.session.activeRunId !== (terminal ? null : run.runId) || snapshot.session.runtimeStatus !== status || !structuralEquals(snapshot.activeRun, activeRun))) {
   next = {
    ...next,
    snapshot: {
@@ -262,7 +294,7 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
  // snapshot's run identity invariant when its first in-flight read lands.
  const pendingRun = next.runControlActiveRun?.[id]
  const wantsPendingRun = !terminal && snapshot === undefined
- if (wantsPendingRun ? !same(pendingRun, activeRun) : pendingRun !== undefined) {
+ if (wantsPendingRun ? !structuralEquals(pendingRun, activeRun) : pendingRun !== undefined) {
   const runControlActiveRun = { ...next.runControlActiveRun }
   if (wantsPendingRun && activeRun) runControlActiveRun[id] = activeRun
   else delete runControlActiveRun[id]
@@ -454,11 +486,11 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
   if (owners[part.partId] !== undefined && owners[part.partId] !== messageId) { recover = true; return }
   updateMessage(messageId, (message) => {
    const index = message.parts.findIndex((item) => item.partId === part.partId)
-   if (index >= 0 && same(message.parts[index], part)) return message
+   if (index >= 0 && structuralEquals(message.parts[index], part)) return message
    const parts = [...message.parts]
    if (index < 0) parts.push(part)
    else parts[index] = part
-   owners = { ...owners, [part.partId]: messageId }
+   if (owners[part.partId] !== messageId) owners = { ...owners, [part.partId]: messageId }
    return { ...message, parts }
   })
  }
@@ -560,7 +592,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     const modelId = event.modelId ?? message.modelId
     const usage = event.usage ?? message.usage
     const timing = event.timing ?? message.timing
-    return providerId === message.providerId && modelId === message.modelId && same(usage, message.usage) && same(timing, message.timing) ? message : { ...message, ...(providerId === undefined ? {} : { providerId }), ...(modelId === undefined ? {} : { modelId }), ...(usage === undefined ? {} : { usage }), ...(timing === undefined ? {} : { timing }) }
+    return providerId === message.providerId && modelId === message.modelId && structuralEquals(usage, message.usage) && structuralEquals(timing, message.timing) ? message : { ...message, ...(providerId === undefined ? {} : { providerId }), ...(modelId === undefined ? {} : { modelId }), ...(usage === undefined ? {} : { usage }), ...(timing === undefined ? {} : { timing }) }
    })
    break
   case "part.started": upsertPart(event.messageId, event.part); break

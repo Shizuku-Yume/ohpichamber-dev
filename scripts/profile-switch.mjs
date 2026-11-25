@@ -259,7 +259,17 @@ const buildProbeSource = (sessionId, shiftWindowMs) => `(() => {
     const shown = fresh.filter((el) => onScreen(el, viewport))
     if (shown.length === 0 || !shown.every((el) => effectiveOpacity(el) >= 0.99)) return
     state.visible = elapsed()
-    state.anchors = shown.slice(-12).map((el) => ({ id: el.getAttribute('data-message-id'), offset: el.getBoundingClientRect().top - viewport.top, last: null }))
+    // Anchor identity is the element itself, not its message id: one long
+    // message mounts as several slice rows that share data-message-id, so
+    // re-querying by id can land on a different slice and read its height as
+    // movement. A probe-owned attribute re-finds the exact row; virtualized
+    // remounts of the same content count as anchor loss, not as movement.
+    for (const stale of document.querySelectorAll('[data-switch-probe-anchor]')) stale.removeAttribute('data-switch-probe-anchor')
+    state.anchors = shown.slice(-12).map((el, index) => {
+      const key = 'probe-anchor-' + index
+      el.setAttribute('data-switch-probe-anchor', key)
+      return { key, offset: el.getBoundingClientRect().top - viewport.top, last: null }
+    })
     for (const anchor of state.anchors) anchor.last = anchor.offset
     state.scrollHeight = state.scroller?.scrollHeight ?? null
     state.scrollTop = state.scroller?.scrollTop ?? null
@@ -268,7 +278,7 @@ const buildProbeSource = (sessionId, shiftWindowMs) => `(() => {
     const viewport = viewportOf(state.scroller)
     let movedThisFrame = false
     for (const anchor of state.anchors) {
-      const el = document.querySelector('[data-message-id="' + CSS.escape(anchor.id) + '"]')
+      const el = document.querySelector('[data-switch-probe-anchor="' + anchor.key + '"]')
       if (!el) { anchor.lost = true; continue }
       const offset = el.getBoundingClientRect().top - viewport.top
       state.shift.maxPx = Math.max(state.shift.maxPx, Math.abs(offset - anchor.offset))
