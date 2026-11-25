@@ -4511,7 +4511,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.projects.actions.field.useOutputManualUrl": "使用输出/手动 URL",
   "settings.projects.actions.toast.saveFailed": "保存操作失败",
   "settings.openchamber.about.title": "关于 OhPiChamber",
-  "settings.openchamber.about.credit": "基于 OhPiChamber",
+  "settings.openchamber.about.credit": "基于 OpenChamber · 由 ShizukuYume 提供",
   "settings.openchamber.about.creditLicense": "依据 MIT 许可证使用。Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "版本",
   "settings.openchamber.about.field.appVersion": "应用版本",

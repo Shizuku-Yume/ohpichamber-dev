@@ -4520,7 +4520,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.projects.actions.field.useOutputManualUrl": "출력/수동 URL 사용",
   "settings.projects.actions.toast.saveFailed": "작업을 저장하지 못했습니다",
   "settings.openchamber.about.title": "OhPiChamber 정보",
-  "settings.openchamber.about.credit": "OhPiChamber 기반",
+  "settings.openchamber.about.credit": "OpenChamber 기반 · ShizukuYume 제공",
   "settings.openchamber.about.creditLicense": "MIT 라이선스에 따라 사용됩니다. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "버전",
   "settings.openchamber.about.field.appVersion": "앱 버전",

@@ -1,4 +1,5 @@
 import React from 'react';
+import { z } from 'zod';
 import { AboutLogo } from '@/components/ui/AboutLogo';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
@@ -17,9 +18,20 @@ import {
 const GITHUB_URL = 'https://github.com/Shizuku-Yume/ohpichamber';
 const UPSTREAM_GITHUB_URL = 'https://github.com/openchamber/openchamber';
 
-/** Version of the server this page is served by, from `/api/system/info`. */
-function useServerVersion(): string | null {
-  const [version, setVersion] = React.useState<string | null>(null);
+const SystemInfoSchema = z.object({
+  openchamberVersion: z.string().min(1).nullish(),
+  ompVersion: z.string().min(1).nullish(),
+});
+
+type SystemInfo = {
+  openchamberVersion: string | null;
+  ompVersion: string | null;
+};
+
+const EMPTY_SYSTEM_INFO: SystemInfo = { openchamberVersion: null, ompVersion: null };
+
+function useSystemInfo(): SystemInfo {
+  const [info, setInfo] = React.useState<SystemInfo>(EMPTY_SYSTEM_INFO);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -28,20 +40,24 @@ function useServerVersion(): string | null {
       headers: { Accept: 'application/json' },
     })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { openchamberVersion?: unknown } | null) => {
+      .then((data: unknown) => {
         if (cancelled) return;
-        const value = typeof data?.openchamberVersion === 'string' ? data.openchamberVersion.trim() : '';
-        setVersion(value || null);
+        const parsed = SystemInfoSchema.safeParse(data);
+        if (!parsed.success) return;
+        setInfo({
+          openchamberVersion: parsed.data.openchamberVersion ?? null,
+          ompVersion: parsed.data.ompVersion ?? null,
+        });
       })
       .catch(() => {
-        if (!cancelled) setVersion(null);
+        if (!cancelled) setInfo(EMPTY_SYSTEM_INFO);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return version;
+  return info;
 }
 
 function useDesktopAppVersion(enabled: boolean): string | null {
@@ -62,16 +78,23 @@ function useDesktopAppVersion(enabled: boolean): string | null {
 }
 
 /**
- * Settings > About: the brand and its links, the version that is running,
- * and what that version brought. Updates are not offered here: the desktop
- * app updates itself, and no other runtime updates from the app.
+ * Settings > About: the brand and its links, the versions that are running
+ * (the app or server, and the OMP runtime behind the Agent Service), and what
+ * those versions brought. Updates are not offered here: the desktop app
+ * updates itself through the sidebar footer and the native menu flow.
  */
 export const AboutSettings: React.FC = () => {
   const { t } = useI18n();
   const isDesktopRemote = useDesktopRemoteHostActive();
-  const serverVersion = useServerVersion();
+  const { openchamberVersion: serverVersion, ompVersion } = useSystemInfo();
   const desktopAppVersion = useDesktopAppVersion(isDesktopRemote);
   const appVersion = desktopAppVersion || serverVersion;
+
+  const valueRow = { alignEnd: false, controlClassName: 'min-h-8 flex-wrap @xl:flex-initial' } as const;
+  const versionValue = (version: string) => (
+    <span className="typography-meta font-mono text-muted-foreground">{version}</span>
+  );
+  const unknown = t('settings.openchamber.about.state.unknown');
 
   return (
     <>
@@ -80,9 +103,11 @@ export const AboutSettings: React.FC = () => {
           <AboutLogo size={48} />
           <div className="min-w-0 space-y-1">
             <h2 className={SETTINGS_BRAND_TITLE_CLASS}>OhPiChamber</h2>
+            <p className="typography-meta text-muted-foreground">{t('settings.openchamber.about.credit')}</p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {[
                 { href: GITHUB_URL, icon: 'github-fill' as const, label: 'GitHub' },
+                { href: UPSTREAM_GITHUB_URL, icon: 'external-link' as const, label: 'OpenChamber' },
               ].map((link) => (
                 <a
                   key={link.href}
@@ -104,16 +129,21 @@ export const AboutSettings: React.FC = () => {
         <div>
           {isDesktopRemote ? (
             <>
-              <SettingsFieldRow label={t('settings.openchamber.about.field.appVersion')}>
-                <span className="typography-meta font-mono text-muted-foreground">{appVersion || t('settings.openchamber.about.state.unknown')}</span>
+              <SettingsFieldRow label={t('settings.openchamber.about.field.appVersion')} {...valueRow}>
+                {versionValue(appVersion || unknown)}
               </SettingsFieldRow>
-              <SettingsFieldRow label={t('settings.openchamber.about.field.serverVersion')}>
-                <span className="typography-meta font-mono text-muted-foreground">{serverVersion || t('settings.openchamber.about.state.unknown')}</span>
+              <SettingsFieldRow label={t('settings.openchamber.about.field.serverVersion')} {...valueRow}>
+                {versionValue(serverVersion || unknown)}
               </SettingsFieldRow>
             </>
           ) : (
-            <SettingsFieldRow label={t('settings.openchamber.about.field.version')}>
-              <span className="typography-meta font-mono text-muted-foreground">{serverVersion || t('settings.openchamber.about.state.unknown')}</span>
+            <SettingsFieldRow label={t('settings.openchamber.about.field.version')} {...valueRow}>
+              {versionValue(serverVersion || unknown)}
+            </SettingsFieldRow>
+          )}
+          {ompVersion !== null && (
+            <SettingsFieldRow label={t('settings.openchamber.about.field.ompVersion')} {...valueRow}>
+              {versionValue(ompVersion)}
             </SettingsFieldRow>
           )}
           <InstanceServiceUrls label={t('settings.openchamber.about.field.instanceUrls')} />
@@ -122,23 +152,7 @@ export const AboutSettings: React.FC = () => {
 
       <AboutReleaseNotes version={serverVersion || appVersion} />
 
-      <div className="space-y-2 text-center">
-        <p className="text-muted-foreground">{t('aboutDialog.footerNote')}</p>
-        <div className="space-y-0.5 typography-meta text-muted-foreground">
-          <p>
-            <a
-              href={UPSTREAM_GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-            >
-              <span>{t('settings.openchamber.about.credit')}</span>
-              <Icon name="external-link" className="size-3.5" />
-            </a>
-          </p>
-          <p>{t('settings.openchamber.about.creditLicense')}</p>
-        </div>
-      </div>
+      <p className="typography-meta text-muted-foreground">{t('settings.openchamber.about.creditLicense')}</p>
     </>
   );
 };

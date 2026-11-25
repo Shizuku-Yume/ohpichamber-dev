@@ -64,6 +64,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     // and the endpoint reports null.
     getServerPort = () => null,
     getTunnelUrl = () => null,
+    getOmpVersion = null,
     // Stable server identity (hash of the public signing key — not a secret).
     // Exposed on /health and /api/version so a client can verify that a
     // learned/probed address belongs to the expected server BEFORE sending its
@@ -374,8 +375,21 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     // Open before login: the CLI matches `pid` against its pid file to tell
     // its own server from whatever else holds the port. Where this server is
     // reachable (port, tunnel address) is for signed-in callers only.
+    const readOmpVersion = (value) => (isString(value) && value.trim().length > 0 ? value.trim() : null);
+    const resolveOmpVersion = () => {
+      try {
+        const direct = getOmpVersion?.();
+        if (readOmpVersion(direct) !== null) return readOmpVersion(direct);
+      } catch { }
+      try {
+        const snapshotValue = getHealthSnapshot()?.agentService?.ompVersion;
+        if (readOmpVersion(snapshotValue) !== null) return readOmpVersion(snapshotValue);
+      } catch { }
+      return null;
+    };
     const info = {
       openchamberVersion,
+      ompVersion: resolveOmpVersion(),
       runtime: runtimeName,
       pid: process.pid,
       startedAt: serverStartedAt,
@@ -413,8 +427,8 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     readSettingsFromDiskMigrated,
     normalizeTunnelSessionTtlMs,
     getRelayPairingCandidate = async () => null,
-    reconcileRelay = async () => {},
-    removeClientPushDevices = async () => {},
+    reconcileRelay = async () => { },
+    removeClientPushDevices = async () => { },
     getLegacyDataPresence = hasLegacyOpenCodeData,
     getPairingTransports = () => ({ local: null, lan: null, relayAvailable: true }),
     getDirectCandidateUrls = () => [],
@@ -556,7 +570,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
         const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: includeRelay === true });
         if (relayCandidate)
           candidates.push(relayCandidate);
-      } catch {}
+      } catch { }
     }
     return candidates;
   };
@@ -822,7 +836,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
           const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: false });
           if (relayCandidate)
             candidates.push(relayCandidate);
-        } catch {}
+        } catch { }
       }
       let serverId = null;
       try {

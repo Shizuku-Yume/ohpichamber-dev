@@ -3,6 +3,7 @@
 /** Release notes in Settings > About, merged into each locale's main dictionary. */
 export const aboutReleaseNotesI18n = {
   en: {
+  'settings.openchamber.about.field.ompVersion': 'OMP version',
   'settings.openchamber.about.releaseNotes.current': "What's new in {version}",
   'settings.openchamber.about.releaseNotes.app.current': "This app: what's new in {version}",
   'settings.openchamber.about.releaseNotes.app.since': "This app: what's new since {version}",
@@ -17,6 +18,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Misc'
 },
   nl: {
+  'settings.openchamber.about.field.ompVersion': 'OMP-versie',
   'settings.openchamber.about.releaseNotes.current': 'Nieuw in {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'Deze app: nieuw in {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'Deze app: nieuw sinds {version}',
@@ -31,6 +33,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Overig'
 },
   de: {
+  'settings.openchamber.about.field.ompVersion': 'OMP-Version',
   'settings.openchamber.about.releaseNotes.current': 'Neu in {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'Diese App: neu in {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'Diese App: neu seit {version}',
@@ -45,6 +48,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Sonstiges'
 },
   es: {
+  'settings.openchamber.about.field.ompVersion': 'Versión de OMP',
   'settings.openchamber.about.releaseNotes.current': 'Novedades de {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'Esta app: novedades de {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'Esta app: novedades desde {version}',
@@ -59,6 +63,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Otros'
 },
   fr: {
+  'settings.openchamber.about.field.ompVersion': 'Version d’OMP',
   'settings.openchamber.about.releaseNotes.current': 'Nouveautés de la {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'Cette app : nouveautés de la {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'Cette app : nouveautés depuis la {version}',
@@ -73,6 +78,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Divers'
 },
   ja: {
+  'settings.openchamber.about.field.ompVersion': 'OMP バージョン',
   'settings.openchamber.about.releaseNotes.current': '{version} の新機能',
   'settings.openchamber.about.releaseNotes.app.current': 'このアプリ: {version} の新機能',
   'settings.openchamber.about.releaseNotes.app.since': 'このアプリ: {version} 以降の新機能',
@@ -87,6 +93,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'その他'
 },
   'pt-BR': {
+  'settings.openchamber.about.field.ompVersion': 'Versão do OMP',
   'settings.openchamber.about.releaseNotes.current': 'Novidades da {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'Este app: novidades da {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'Este app: novidades desde a {version}',
@@ -101,6 +108,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Outros'
 },
   uk: {
+  'settings.openchamber.about.field.ompVersion': 'Версія OMP',
   'settings.openchamber.about.releaseNotes.current': 'Що нового в {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'Цей застосунок: що нового в {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'Цей застосунок: що нового після {version}',
@@ -115,6 +123,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Інше'
 },
   ko: {
+  'settings.openchamber.about.field.ompVersion': 'OMP 버전',
   'settings.openchamber.about.releaseNotes.current': '{version}의 새로운 기능',
   'settings.openchamber.about.releaseNotes.app.current': '이 앱: {version}의 새로운 기능',
   'settings.openchamber.about.releaseNotes.app.since': '이 앱: {version} 이후 새로운 기능',
@@ -129,6 +138,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': '기타'
 },
   pl: {
+  'settings.openchamber.about.field.ompVersion': 'Wersja OMP',
   'settings.openchamber.about.releaseNotes.current': 'Nowości w {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'Ta aplikacja: nowości w {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'Ta aplikacja: nowości od {version}',
@@ -143,6 +153,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Inne'
 },
   'zh-CN': {
+  'settings.openchamber.about.field.ompVersion': 'OMP 版本',
   'settings.openchamber.about.releaseNotes.current': '{version} 新增内容',
   'settings.openchamber.about.releaseNotes.app.current': '此应用：{version} 新增内容',
   'settings.openchamber.about.releaseNotes.app.since': '此应用：{version} 以来的新内容',
@@ -157,6 +168,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': '其他'
 },
   'zh-TW': {
+  'settings.openchamber.about.field.ompVersion': 'OMP 版本',
   'settings.openchamber.about.releaseNotes.current': '{version} 新增內容',
   'settings.openchamber.about.releaseNotes.app.current': '此應用程式：{version} 新增內容',
   'settings.openchamber.about.releaseNotes.app.since': '此應用程式：{version} 以來的新內容',
@@ -171,6 +183,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': '其他'
 },
   tr: {
+  'settings.openchamber.about.field.ompVersion': 'OMP sürümü',
   'settings.openchamber.about.releaseNotes.current': '{version} sürümündeki yenilikler',
   'settings.openchamber.about.releaseNotes.app.current': 'Bu uygulama: {version} sürümündeki yenilikler',
   'settings.openchamber.about.releaseNotes.app.since': 'Bu uygulama: {version} sürümünden bu yana yenilikler',
@@ -185,6 +198,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'Diğer'
 },
   ar: {
+  'settings.openchamber.about.field.ompVersion': 'إصدار OMP',
   'settings.openchamber.about.releaseNotes.current': 'الجديد في {version}',
   'settings.openchamber.about.releaseNotes.app.current': 'هذا التطبيق: الجديد في {version}',
   'settings.openchamber.about.releaseNotes.app.since': 'هذا التطبيق: الجديد منذ {version}',
@@ -199,6 +213,7 @@ export const aboutReleaseNotesI18n = {
   'releaseNotes.group.misc': 'متفرقات'
 },
   he: {
+  'settings.openchamber.about.field.ompVersion': 'גרסת OMP',
   'settings.openchamber.about.releaseNotes.current': 'מה חדש ב-{version}',
   'settings.openchamber.about.releaseNotes.app.current': 'האפליקציה הזו: מה חדש ב-{version}',
   'settings.openchamber.about.releaseNotes.app.since': 'האפליקציה הזו: מה חדש מאז {version}',

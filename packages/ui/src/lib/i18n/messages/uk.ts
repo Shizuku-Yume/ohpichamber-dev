@@ -4520,7 +4520,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.projects.actions.field.useOutputManualUrl": "Використовувати вихід/вручну URL",
   "settings.projects.actions.toast.saveFailed": "Не вдалося зберегти дії",
   "settings.openchamber.about.title": "Про OhPiChamber",
-  "settings.openchamber.about.credit": "На основі OhPiChamber",
+  "settings.openchamber.about.credit": "На основі OpenChamber · Надається ShizukuYume",
   "settings.openchamber.about.creditLicense": "Використовується за ліцензією MIT. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "Версія",
   "settings.openchamber.about.field.appVersion": "Версія застосунку",

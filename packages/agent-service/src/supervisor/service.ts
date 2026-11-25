@@ -42,6 +42,7 @@ import { WorkspaceRoutes } from './workspace-routes.ts';
 import { WebSearchCoordinator } from './websearch.ts';
 import { ShellCoordinator } from './shell.ts';
 import type { PermissionMode } from './host-authorization-protocol.ts';
+import { getOmpSdkVersion } from './omp-version.ts';
 import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostSessionPermissionModeSchema, HostSessionForkAckSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema, HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
 import type { BehaviorFileCatalog, CommandCatalogState, PromptTemplateCatalogState, FileResourceSkillCatalog, FileResourceExpandResult, FileResourcePromptInputResult, SkillSourceRevisions } from '@openchamber/agent-contract';
@@ -464,7 +465,7 @@ export class AgentService {
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/health') { respondHealth(response, this.ready && !this.closing); return; }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/ready') {
         if (!this.ready) respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'SDK initialization is unavailable');
-        else respondJson(response, 200, AgentServiceReadySchema.parse({ ready: true, engine: 'omp', version: '1.0.0' }));
+        else respondJson(response, 200, AgentServiceReadySchema.parse({ ready: true, engine: 'omp', version: '1.0.0', ompVersion: getOmpSdkVersion() }));
         return;
       }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/capabilities') {

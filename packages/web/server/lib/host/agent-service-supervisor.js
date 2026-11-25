@@ -128,7 +128,7 @@ export const createAgentServiceSupervisor = ({
   const processRegistry = registry ?? (dataDir
     ? createManagedProcessRegistry({ registryDir: path.join(dataDir, 'managed-processes'), bunPath })
     : defaultRegistry);
-  let phase = 'stopped'; let child = null; let port = null; let secret = null;
+  let phase = 'stopped'; let child = null; let port = null; let secret = null; let ompVersion = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
   let restartAttempts = 0; let restartTimer = null; let restartStabilityTimer = null; let terminating = null;
   // A held archive keeps its replacement generation from starting: its in-memory
@@ -189,7 +189,7 @@ export const createAgentServiceSupervisor = ({
   });
   let policyStore = approvalPolicyStore;
   let ownsPolicyStore = false;
-  const state = () => ({ phase, pid: child?.pid ?? null, port });
+  const state = () => ({ phase, pid: child?.pid ?? null, port, ompVersion });
   const assertAdmitted = () => { if (!accepting || phase !== 'ready' || !child) throw new Error('Agent service is not accepting requests'); };
   const pendingModeSessions = new Set();
   const pushPermissionMode = async (sessionId) => {
@@ -504,6 +504,7 @@ export const createAgentServiceSupervisor = ({
           if (restartStabilityTimer) { clearTimeout(restartStabilityTimer); restartStabilityTimer = null; }
           child = null;
           port = null;
+          ompVersion = null;
           phase = 'failed';
           relocationScopes.clear(); forkTickets.clear(); scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
           accepting = false;
@@ -524,7 +525,9 @@ export const createAgentServiceSupervisor = ({
           const response = await fetchImpl(`http://127.0.0.1:${port}/api/agent/v1/ready`, { method: 'GET', headers: { [SECRET_HEADER]: secret, Accept: 'application/json' }, signal: AbortSignal.any([startupController.signal, timeoutSignal(Math.min(1500, remaining()))]) });
           if (response.status === 200) {
             const body = await response.json();
-            if (AgentServiceReadySchema.parse(body) && lifecycle === myLifecycle) {
+            const parsedReady = AgentServiceReadySchema.parse(body);
+            if (parsedReady && lifecycle === myLifecycle) {
+              ompVersion = parsedReady.ompVersion ?? null;
               phase = 'ready';
               accepting = true;
               if (fromRestart) {
@@ -548,6 +551,7 @@ export const createAgentServiceSupervisor = ({
       accepting = false;
       await killChild();
       port = null;
+      ompVersion = null;
       throw error;
     }).finally(() => {
       const startupFinished = startupPromise;
@@ -587,6 +591,7 @@ export const createAgentServiceSupervisor = ({
       await killChild();
       secret = null;
       port = null;
+      ompVersion = null;
       relocationScopes.clear(); forkTickets.clear(); scopes.clear();
       workspaceScopes.clear();
       if (ownsPolicyStore) { policyStore.close(); policyStore = null; ownsPolicyStore = false; }

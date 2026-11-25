@@ -4712,7 +4712,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.openchamber.about.field.tunnelUrl": "Tunel",
   "settings.openchamber.about.state.unknown": "nieznane",
   "settings.openchamber.about.title": "O OhPiChamber",
-  "settings.openchamber.about.credit": "Oparte na OhPiChamber",
+  "settings.openchamber.about.credit": "Oparte na OpenChamber · Dostarczone przez ShizukuYume",
   "settings.openchamber.about.creditLicense": "Używane na licencji MIT. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.defaults.field.defaultAgent": "Domyślny Agent",
   "settings.openchamber.defaults.field.autoApplyAgentModel": "Automatycznie stosuj skonfigurowany model agenta",

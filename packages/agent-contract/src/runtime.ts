@@ -4,6 +4,7 @@ export const AgentServiceReadySchema = z.strictObject({
   ready: z.literal(true),
   engine: z.literal('omp'),
   version: z.literal('1.0.0'),
+  ompVersion: z.string().min(1).optional(),
 });
 export type AgentServiceReady = z.infer<typeof AgentServiceReadySchema>;
 

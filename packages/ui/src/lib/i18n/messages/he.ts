@@ -4648,7 +4648,7 @@ const part2 = {
   "settings.projects.actions.field.useOutputManualUrl": "להשתמש ב-URL מהפלט או ידני",
   "settings.projects.actions.toast.saveFailed": "שמירת הפעולות נכשלה",
   "settings.openchamber.about.title": "אודות OhPiChamber",
-  "settings.openchamber.about.credit": "מבוסס על OhPiChamber",
+  "settings.openchamber.about.credit": "מבוסס על OpenChamber · מסופק על ידי ShizukuYume",
   "settings.openchamber.about.creditLicense": "בשימוש תחת רישיון MIT. Copyright (c) 2025 Bohdan Triapitsyn.",
 } as const;
 

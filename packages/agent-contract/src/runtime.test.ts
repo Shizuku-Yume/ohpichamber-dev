@@ -1,5 +1,27 @@
 import { describe, expect, test } from 'bun:test';
-import { ProposedWorkflowResultSchema } from './runtime.ts';
+import { AgentServiceReadySchema, ProposedWorkflowResultSchema } from './runtime.ts';
+
+describe('AgentServiceReadySchema', () => {
+  test('accepts the canonical ready payload without an OMP version', () => {
+    const parsed = AgentServiceReadySchema.safeParse({ ready: true, engine: 'omp', version: '1.0.0' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.ompVersion).toBeUndefined();
+    }
+  });
+
+  test('accepts a real OMP runtime version when the service reports one', () => {
+    const parsed = AgentServiceReadySchema.safeParse({ ready: true, engine: 'omp', version: '1.0.0', ompVersion: '19.1.0' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.ompVersion).toBe('19.1.0');
+    }
+  });
+
+  test('rejects an empty OMP version string', () => {
+    expect(AgentServiceReadySchema.safeParse({ ready: true, engine: 'omp', version: '1.0.0', ompVersion: '' }).success).toBe(false);
+  });
+});
 
 describe('ProposedWorkflowResultSchema', () => {
   test('accepts valid workflow.run proposal envelope', () => {

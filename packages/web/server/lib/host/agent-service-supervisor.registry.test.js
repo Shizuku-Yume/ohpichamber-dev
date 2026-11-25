@@ -61,7 +61,7 @@ describe('Agent Service managed-process lifecycle', () => {
     const captured = {};
     const service = createSupervisor({ registry, events, captured });
 
-    expect(await service.start()).toEqual({ phase: 'ready', pid: 4242, port: 41000 });
+    expect(await service.start()).toEqual({ phase: 'ready', pid: 4242, port: 41000, ompVersion: null });
     const registration = events[2][1];
     expect(events.slice(0, 3)).toEqual(['reap', 'spawn', ['register', registration]]);
     expect(registration).toMatchObject({
@@ -86,8 +86,8 @@ describe('Agent Service managed-process lifecycle', () => {
     };
     const service = createSupervisor({ registry, events: [] });
 
-    expect(await service.start()).toEqual({ phase: 'ready', pid: 4242, port: 41000 });
+    expect(await service.start()).toEqual({ phase: 'ready', pid: 4242, port: 41000, ompVersion: null });
     await expect(service.stop()).resolves.toBeUndefined();
-    expect(service.getState()).toEqual({ phase: 'stopped', pid: null, port: null });
+    expect(service.getState()).toEqual({ phase: 'stopped', pid: null, port: null, ompVersion: null });
   });
 });

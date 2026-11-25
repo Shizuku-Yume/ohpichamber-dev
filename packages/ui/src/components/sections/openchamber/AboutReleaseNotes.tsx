@@ -5,7 +5,7 @@ import { fetchReleaseNotes, formatReleaseDate, type ReleaseNotesRelease } from '
 import { ReleaseNotesBody } from '@/components/update/ReleaseNotesBody';
 import { useI18n } from '@/lib/i18n';
 
-const GITHUB_RELEASES_URL = 'https://github.com/openchamber/openchamber/releases';
+export const ABOUT_GITHUB_RELEASES_URL = 'https://github.com/Shizuku-Yume/ohpichamber/releases';
 
 type ReleaseCardProps = {
   release: ReleaseNotesRelease;
@@ -52,7 +52,7 @@ export const AboutReleaseNotes: React.FC<{ version: string | null }> = ({ versio
       )}
       headerAction={(
         <a
-          href={GITHUB_RELEASES_URL}
+          href={ABOUT_GITHUB_RELEASES_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 typography-meta text-muted-foreground transition-colors hover:text-foreground"

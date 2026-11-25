@@ -6,8 +6,8 @@ import { createAgentServiceSupervisor } from './agent-service-supervisor.js';
 
 const registry = {
   reapOrphanedProcesses: vi.fn(async () => ({ inspected: 0, reaped: 0 })),
-  registerManagedProcess: vi.fn(async () => {}),
-  unregisterManagedProcess: vi.fn(async () => {}),
+  registerManagedProcess: vi.fn(async () => { }),
+  unregisterManagedProcess: vi.fn(async () => { }),
   terminateManagedProcess: vi.fn(async () => false),
 };
 
@@ -130,6 +130,34 @@ describe('Agent Service crash recovery', () => {
     expect(children).toHaveLength(1);
     expect(service.getState().phase).toBe('stopped');
   });
+  it('caches the OMP version reported at readiness and clears it when the service goes down', async () => {
+    const children = [];
+    const service = createSupervisor(children, {
+      fetchImpl: async () => Response.json({ ready: true, engine: 'omp', version: '1.0.0', ompVersion: '19.1.0' }),
+    });
+    await service.start();
+    expect(service.getState().phase).toBe('ready');
+    expect(service.getState().ompVersion).toBe('19.1.0');
+
+    children[0].emit('exit', 1, null);
+    children[0].emit('close');
+    expect(service.getState().ompVersion).toBeNull();
+
+    await waitFor(() => children.length === 2 && service.getState().phase === 'ready');
+    expect(service.getState().ompVersion).toBe('19.1.0');
+
+    await service.stop();
+    expect(service.getState().ompVersion).toBeNull();
+  });
+
+  it('reports a null OMP version when the service omits it', async () => {
+    const children = [];
+    const service = createSupervisor(children);
+    await service.start();
+    expect(service.getState().phase).toBe('ready');
+    expect(service.getState().ompVersion).toBeNull();
+  });
+
 
   it('reports starting while a restart attempt initializes', async () => {
     const children = [];

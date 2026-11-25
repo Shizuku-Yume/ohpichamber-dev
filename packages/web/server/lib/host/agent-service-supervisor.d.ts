@@ -14,6 +14,8 @@ export interface AgentServiceSupervisorState {
   phase: 'stopped' | 'starting' | 'restarting' | 'ready' | 'stopping' | 'failed';
   pid: number | null;
   port: number | null;
+  /** Installed `@oh-my-pi/pi-coding-agent` version the ready service reported; null while unknown or down. */
+  ompVersion: string | null;
 }
 export interface AgentServiceRegistry {
   registerManagedProcess: typeof registerManagedProcess;

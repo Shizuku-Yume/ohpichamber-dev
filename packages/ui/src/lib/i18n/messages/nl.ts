@@ -4556,7 +4556,7 @@ const part2 = {
   "settings.projects.actions.field.useOutputManualUrl": "URL uit uitvoer of handmatig gebruiken",
   "settings.projects.actions.toast.saveFailed": "Kan de acties niet opslaan",
   "settings.openchamber.about.title": "Over OhPiChamber",
-  "settings.openchamber.about.credit": "Gebaseerd op OhPiChamber",
+  "settings.openchamber.about.credit": "Gebaseerd op OpenChamber · Aangeboden door ShizukuYume",
   "settings.openchamber.about.creditLicense": "Gebruikt onder de MIT-licentie. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "Versie",
   "settings.openchamber.about.field.appVersion": "Appversie",

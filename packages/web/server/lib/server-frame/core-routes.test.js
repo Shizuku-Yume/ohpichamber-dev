@@ -599,7 +599,7 @@ describe('core-routes', () => {
   });
 
   it('removes the push registrations of the device record a pairing replaces before answering', async () => {
-    const removeClientPushDevices = vi.fn(async () => {});
+    const removeClientPushDevices = vi.fn(async () => { });
     const { app, dependencies } = createPairingRouteApp({ removeClientPushDevices });
     dependencies.clientPairingRuntime.redeemPairingSession.mockResolvedValueOnce({
       pairing: { fingerprint: 'ABCD-1234' },
@@ -1056,6 +1056,61 @@ describe('client auth routes', () => {
     expect(response.body.port).toBe(9988);
     expect(response.body.tunnelUrl).toBe('https://worktree-a.example.trycloudflare.com');
   });
+  it('reports the OMP runtime version on /api/system/info from the wired getter', async () => {
+    const app = express();
+    registerServerStatusRoutes(app, {
+      process,
+      serverStartedAt: '2026-01-01T00:00:00.000Z',
+      gracefulShutdown: vi.fn(async () => { }),
+      getHealthSnapshot: () => ({ status: 'ok' }),
+      openchamberVersion: '1.0.0',
+      runtimeName: 'test',
+      express,
+      getOmpVersion: () => '19.1.0',
+      uiAuthController: signedIn,
+    });
+
+    const response = await request(app).get('/api/system/info');
+    expect(response.status).toBe(200);
+    expect(response.body.ompVersion).toBe('19.1.0');
+  });
+
+  it('falls back to the health snapshot agent-service state for the OMP version', async () => {
+    const app = express();
+    registerServerStatusRoutes(app, {
+      process,
+      serverStartedAt: '2026-01-01T00:00:00.000Z',
+      gracefulShutdown: vi.fn(async () => { }),
+      getHealthSnapshot: () => ({ status: 'ok', agentService: { phase: 'ready', pid: 123, port: 4567, ompVersion: '19.1.0' } }),
+      openchamberVersion: '1.0.0',
+      runtimeName: 'test',
+      express,
+      uiAuthController: signedIn,
+    });
+
+    const response = await request(app).get('/api/system/info');
+    expect(response.status).toBe(200);
+    expect(response.body.ompVersion).toBe('19.1.0');
+  });
+
+  it('reports a null OMP version when no source has one', async () => {
+    const app = express();
+    registerServerStatusRoutes(app, {
+      process,
+      serverStartedAt: '2026-01-01T00:00:00.000Z',
+      gracefulShutdown: vi.fn(async () => { }),
+      getHealthSnapshot: () => ({ status: 'ok', agentService: { phase: 'starting', pid: null, port: null, ompVersion: null } }),
+      openchamberVersion: '1.0.0',
+      runtimeName: 'test',
+      express,
+      uiAuthController: signedIn,
+    });
+
+    const response = await request(app).get('/api/system/info');
+    expect(response.status).toBe(200);
+    expect(response.body.ompVersion).toBeNull();
+  });
+
 
   it('keeps the pid but not where the server is reachable on /api/system/info before login', async () => {
     const app = express();

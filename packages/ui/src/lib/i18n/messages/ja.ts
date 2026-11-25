@@ -4553,7 +4553,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.projects.actions.field.useOutputManualUrl": "出力/手動 URL を使用",
   "settings.projects.actions.toast.saveFailed": "アクションの保存に失敗しました",
   "settings.openchamber.about.title": "OhPiChamber について",
-  "settings.openchamber.about.credit": "OhPiChamber をベースに構築",
+  "settings.openchamber.about.credit": "OpenChamber をベースに構築 · ShizukuYume 提供",
   "settings.openchamber.about.creditLicense": "MIT ライセンスのもとで使用されています。Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "バージョン",
   "settings.openchamber.about.field.appVersion": "アプリのバージョン",
