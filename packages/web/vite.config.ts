@@ -134,6 +134,16 @@ export default defineConfig({
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,
     chunkSizeWarningLimit: 500,
+    modulePreload: {
+      // Vite resolves preload dependencies transitively, including nested
+      // dynamic-import targets. That puts the KaTeX engine chunk into the
+      // preload list of the markdown renderer, which the shell preloads at
+      // startup — defeating the lazy import in markdown/katexRender.tsx.
+      // Drop it from preload hints only; the dynamic import itself still
+      // fetches the chunk normally when math first renders.
+      resolveDependencies: (_filename, deps) =>
+        deps.filter((dep) => !dep.includes('vendor-katex')),
+    },
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
@@ -152,9 +162,9 @@ export default defineConfig({
             return 'vendor-vite-runtime';
           }
           if (!id.includes('node_modules')) return undefined;
-          // A stylesheet stays with the chunk that imports it. Grouping KaTeX's
-          // eager stylesheet into `vendor-katex` made that chunk eager, and with
-          // it the 260KB KaTeX engine only the lazy markdown renderer uses.
+          // A stylesheet stays with the chunk that imports it. KaTeX's
+          // stylesheet is imported lazily together with the engine
+          // (`markdown/katexRender.tsx`), so neither enters the eager graph.
           if (id.endsWith('.css')) return undefined;
 
           // Resolve the real package from the LAST `node_modules/` segment.
