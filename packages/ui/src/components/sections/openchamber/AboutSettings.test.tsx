@@ -36,6 +36,7 @@ const { I18nProvider } = await import('@/lib/i18n');
 const runtimeFetchModule = await import('@/lib/runtime-fetch');
 const desktopModule = await import('@/lib/desktop');
 const releaseNotesModule = await import('@/components/update/releaseNotes');
+const { useUpdateStore } = await import('@/stores/useUpdateStore');
 const { AboutSettings } = await import('./AboutSettings');
 const { ThemeSystemProvider } = await import('@/contexts/ThemeSystemContext');
 
@@ -83,7 +84,23 @@ describe('AboutSettings', () => {
     await settle();
   };
 
+  const resetUpdateStore = () => {
+    useUpdateStore.setState({
+      checking: false,
+      available: false,
+      downloading: false,
+      downloaded: false,
+      installing: false,
+      info: null,
+      progress: null,
+      error: null,
+      runtimeType: null,
+      lastChecked: null,
+    });
+  };
+
   beforeEach(() => {
+    resetUpdateStore();
     systemInfo = { openchamberVersion: '1.4.2', ompVersion: '19.1.0' };
     electronShellActive = false;
     host = document.createElement('div');
@@ -117,12 +134,19 @@ describe('AboutSettings', () => {
     expect(text).toContain('19.1.0');
   });
 
-  test('names OpenChamber and ShizukuYume in the attribution and never OhPiChamber-as-upstream', async () => {
+  test('names OpenChamber in the credit without author wording, and never OhPiChamber-as-upstream', async () => {
     await render();
     const text = host.textContent ?? '';
     expect(text).toContain('Based on OpenChamber');
-    expect(text).toContain('ShizukuYume');
+    expect(text).not.toContain('Provided by');
     expect(text).not.toContain('Based on OhPiChamber');
+  });
+
+  test('links the maintainer homepage from the quiet link row', async () => {
+    await render();
+    const anchors = Array.from(host.querySelectorAll('a'));
+    const maintainerLink = anchors.find((anchor) => anchor.textContent?.includes('ShizukuYume'));
+    expect(maintainerLink?.getAttribute('href')).toBe('https://github.com/Shizuku-Yume');
   });
 
   test('links GitHub to the fork and OpenChamber to upstream', async () => {
@@ -160,16 +184,70 @@ describe('AboutSettings', () => {
     expect(text).toContain('Copyright (c) 2025 Bohdan Triapitsyn');
   });
 
-  test('renders no update-check control or channel switch even on the Electron shell', async () => {
-    electronShellActive = true;
+  test('the web shell renders no update section, because no updater exists there', async () => {
+    electronShellActive = false;
     await render();
     const text = host.textContent ?? '';
     const buttons = Array.from(host.querySelectorAll('button'));
     const labels = buttons.map((button) => button.textContent ?? '');
     expect(labels.some((label) => label.includes('Check updates'))).toBe(false);
-    expect(text).not.toContain('Check updates');
-    expect(text).not.toContain('Canary');
+    expect(text).not.toContain('Last checked');
+  });
+
+  test('the desktop shell shows the update section with a check action', async () => {
+    electronShellActive = true;
+    await render();
+    const text = host.textContent ?? '';
+    const buttons = Array.from(host.querySelectorAll('button'));
+    const labels = buttons.map((button) => button.textContent ?? '');
+    expect(labels.some((label) => label.includes('Check updates'))).toBe(true);
+    expect(text).toContain('Last checked');
+  });
+
+  test('the desktop shell reads as up to date after a check that found nothing', async () => {
+    electronShellActive = true;
+    useUpdateStore.setState({ lastChecked: Date.now(), runtimeType: 'desktop' });
+    await render();
+    const text = host.textContent ?? '';
+    expect(text).toContain('OhPiChamber is up to date');
     expect(text).not.toContain('is available');
+  });
+
+  test('the desktop shell shows the checking state while a check runs', async () => {
+    electronShellActive = true;
+    useUpdateStore.setState({ checking: true, runtimeType: 'desktop' });
+    await render();
+    const text = host.textContent ?? '';
+    expect(text).toContain('Checking…');
+    expect(text).not.toContain('is available');
+  });
+
+  test('the desktop shell names the offered version and the update action', async () => {
+    electronShellActive = true;
+    useUpdateStore.setState({
+      available: true,
+      runtimeType: 'desktop',
+      lastChecked: Date.now(),
+      info: { available: true, version: '1.9.0', currentVersion: '1.4.2' },
+    });
+    await render();
+    const text = host.textContent ?? '';
+    const buttons = Array.from(host.querySelectorAll('button'));
+    const labels = buttons.map((button) => button.textContent ?? '');
+    expect(text).toContain('1.9.0 is available');
+    expect(labels.some((label) => label.trim() === 'Update')).toBe(true);
+  });
+
+  test('the desktop shell shows the check failure cause instead of a status', async () => {
+    electronShellActive = true;
+    useUpdateStore.setState({
+      error: "Couldn't reach GitHub to check for updates. Check your internet connection and try again.",
+      runtimeType: 'desktop',
+    });
+    await render();
+    const text = host.textContent ?? '';
+    expect(text).toContain("Couldn't reach GitHub");
+    expect(text).not.toContain('up to date');
   });
 });
 

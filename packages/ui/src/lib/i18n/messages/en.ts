@@ -4554,7 +4554,7 @@ const part2 = {
   "settings.projects.actions.field.useOutputManualUrl": "Use output/manual URL",
   "settings.projects.actions.toast.saveFailed": "Failed to save actions",
   "settings.openchamber.about.title": "About OhPiChamber",
-  "settings.openchamber.about.credit": "Based on OpenChamber · Provided by ShizukuYume",
+  "settings.openchamber.about.credit": "Based on OpenChamber",
   "settings.openchamber.about.creditLicense": "Used under the MIT License. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "Version",
   "settings.openchamber.about.field.appVersion": "App version",

@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-26 - About offers update status and a check-for-updates action
+
+- **Decided:** Settings > About carries an Updates section on every retained surface that has an updater — today the Electron desktop shell, the only runtime that updates itself in place. The section shows the current status (checking, up to date, offered version with the update action, or the check failure with its cause), a check-for-updates action, and the last-checked time. Web, hosted and mobile runtimes install updates outside the app, so they render no section rather than a dead control. A release feed without published releases reads as up to date, never as an error. This supersedes the rebrand rule that the About page offers no update control (`.workflow/specs/rebrand.md`); the CLI update check and the `ohpichamber update` command stay removed.
+- **Mine:** yes (maintainer request).
+- **Revisit when:** a non-desktop surface gains its own updater.
+
 ## 2026-11-23 - Keep Behavior authoring within native OMP file scopes
 
 - Add an opt-in Behavior file catalog; leave the existing AGENTS.md route and all legacy response shapes unchanged. Author only flat native rules and instructions and the fixed `RULES.md` and `SYSTEM.md` in the selected workspace's `.omp` or selected agent directory. Native ancestor and foreign-provider discoveries confer no write capability. Keep hooks and SSH out of the route.

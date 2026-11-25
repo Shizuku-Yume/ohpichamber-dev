@@ -4528,7 +4528,7 @@ export const dict = {
   "settings.projects.actions.field.useOutputManualUrl": "Çıktı/manuel URL kullan",
   "settings.projects.actions.toast.saveFailed": "Eylemler kaydedilemedi",
   "settings.openchamber.about.title": "OhPiChamber hakkında",
-  "settings.openchamber.about.credit": "OpenChamber tabanlı · ShizukuYume tarafından sağlanır",
+  "settings.openchamber.about.credit": "OpenChamber tabanlı",
   "settings.openchamber.about.creditLicense": "MIT Lisansı kapsamında kullanılmaktadır. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "Sürüm",
   "settings.openchamber.about.field.appVersion": "Uygulama sürümü",

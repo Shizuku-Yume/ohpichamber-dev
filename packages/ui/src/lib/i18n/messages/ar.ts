@@ -4646,7 +4646,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.projects.actions.field.useOutputManualUrl": "استخدام URL من المخرجات/يدوي",
   "settings.projects.actions.toast.saveFailed": "تعذّر حفظ الإجراءات",
   "settings.openchamber.about.title": "حول OhPiChamber",
-  "settings.openchamber.about.credit": "مبني على OpenChamber · بتوفير من ShizukuYume",
+  "settings.openchamber.about.credit": "مبني على OpenChamber",
   "settings.openchamber.about.creditLicense": "مستخدم بموجب رخصة MIT. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "الإصدار",
   "settings.openchamber.about.field.appVersion": "إصدار التطبيق",

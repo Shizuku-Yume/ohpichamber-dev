@@ -4432,7 +4432,7 @@ const part2 = {
   "settings.projects.actions.field.useOutputManualUrl": "Utiliser l’URL de sortie ou l’URL manuelle",
   "settings.projects.actions.toast.saveFailed": "Échec de l'enregistrement des actions",
   "settings.openchamber.about.title": "À propos d’OhPiChamber",
-  "settings.openchamber.about.credit": "Basé sur OpenChamber · Fourni par ShizukuYume",
+  "settings.openchamber.about.credit": "Basé sur OpenChamber",
   "settings.openchamber.about.creditLicense": "Utilisé sous licence MIT. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "Version",
   "settings.openchamber.about.actions.checkUpdates": "Vérifier les mises à jour",

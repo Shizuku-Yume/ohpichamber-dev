@@ -4511,7 +4511,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.projects.actions.field.useOutputManualUrl": "Usar URL de saída/manual",
   "settings.projects.actions.toast.saveFailed": "Não foi possível salvar as ações",
   "settings.openchamber.about.title": "Sobre o OhPiChamber",
-  "settings.openchamber.about.credit": "Baseado no OpenChamber · Fornecido por ShizukuYume",
+  "settings.openchamber.about.credit": "Baseado no OpenChamber",
   "settings.openchamber.about.creditLicense": "Usado sob a licença MIT. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "Versão",
   "settings.openchamber.about.field.appVersion": "Versão do app",

@@ -4528,7 +4528,7 @@ export const dict = {
   "settings.projects.actions.field.useOutputManualUrl": "Ausgabe-/manuelle URL verwenden",
   "settings.projects.actions.toast.saveFailed": "Aktionen konnten nicht gespeichert werden",
   "settings.openchamber.about.title": "Über OhPiChamber",
-  "settings.openchamber.about.credit": "Basiert auf OpenChamber · Bereitgestellt von ShizukuYume",
+  "settings.openchamber.about.credit": "Basiert auf OpenChamber",
   "settings.openchamber.about.creditLicense": "Verwendet unter der MIT-Lizenz. Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "Version",
   "settings.openchamber.about.field.appVersion": "App-Version",

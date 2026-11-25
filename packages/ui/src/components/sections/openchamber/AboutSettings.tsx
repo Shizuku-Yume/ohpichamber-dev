@@ -8,6 +8,7 @@ import { useDesktopRemoteHostActive } from '@/hooks/useDesktopRemoteHostActive';
 import { getDesktopAppVersion } from '@/lib/desktopNative';
 import { InstanceServiceUrls } from './InstanceServiceUrls';
 import { AboutReleaseNotes } from './AboutReleaseNotes';
+import { AboutUpdatesSection } from './AboutUpdatesSection';
 import {
   SettingsSection,
   SettingsFieldRow,
@@ -17,6 +18,7 @@ import {
 
 const GITHUB_URL = 'https://github.com/Shizuku-Yume/ohpichamber';
 const UPSTREAM_GITHUB_URL = 'https://github.com/openchamber/openchamber';
+const MAINTAINER_URL = 'https://github.com/Shizuku-Yume';
 
 const SystemInfoSchema = z.object({
   openchamberVersion: z.string().min(1).nullish(),
@@ -77,12 +79,6 @@ function useDesktopAppVersion(enabled: boolean): string | null {
   return version;
 }
 
-/**
- * Settings > About: the brand and its links, the versions that are running
- * (the app or server, and the OMP runtime behind the Agent Service), and what
- * those versions brought. Updates are not offered here: the desktop app
- * updates itself through the sidebar footer and the native menu flow.
- */
 export const AboutSettings: React.FC = () => {
   const { t } = useI18n();
   const isDesktopRemote = useDesktopRemoteHostActive();
@@ -108,6 +104,7 @@ export const AboutSettings: React.FC = () => {
               {[
                 { href: GITHUB_URL, icon: 'github-fill' as const, label: 'GitHub' },
                 { href: UPSTREAM_GITHUB_URL, icon: 'external-link' as const, label: 'OpenChamber' },
+                { href: MAINTAINER_URL, icon: 'user' as const, label: 'ShizukuYume' },
               ].map((link) => (
                 <a
                   key={link.href}
@@ -149,6 +146,8 @@ export const AboutSettings: React.FC = () => {
           <InstanceServiceUrls label={t('settings.openchamber.about.field.instanceUrls')} />
         </div>
       </SettingsSection>
+
+      <AboutUpdatesSection />
 
       <AboutReleaseNotes version={serverVersion || appVersion} />
 

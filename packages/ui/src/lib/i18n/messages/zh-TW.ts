@@ -4509,7 +4509,7 @@ export const dict: Record<I18nKey, string> = {
   "settings.projects.actions.field.useOutputManualUrl": "使用輸出/手動 URL",
   "settings.projects.actions.toast.saveFailed": "儲存操作失敗",
   "settings.openchamber.about.title": "關於 OhPiChamber",
-  "settings.openchamber.about.credit": "基於 OpenChamber · 由 ShizukuYume 提供",
+  "settings.openchamber.about.credit": "基於 OpenChamber",
   "settings.openchamber.about.creditLicense": "依 MIT 授權條款使用。Copyright (c) 2025 Bohdan Triapitsyn.",
   "settings.openchamber.about.field.version": "版本",
   "settings.openchamber.about.field.appVersion": "應用程式版本",
