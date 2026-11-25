@@ -272,13 +272,87 @@ describe("native session deletion", () => {
 
   test("preserves committed batch deletions and stops issuing requests after a runtime switch", async () => {
     const store = seed([session(), session("session-b"), session("session-c")])
-    const remove = spyOn(canonicalClient, "deleteSession").mockImplementation(async sessionId => {
-      if (sessionId === "session-b") changeRuntime()
+    const started: string[] = []
+    const gate = deferred<void>()
+    const allStarted = deferred<void>()
+    spyOn(canonicalClient, "deleteSession").mockImplementation(async sessionId => {
+      started.push(sessionId)
+      if (started.length === 3) allStarted.resolve()
+      await gate.promise
       return { sessionId, deletedSessionIds: [sessionId] }
     })
-    expect(await deleteSessions(["session-a", "session-b", "session-c"])).toEqual({ deletedIds: ["session-a"], failedIds: ["session-b", "session-c"] })
-    expect(remove.mock.calls.map(call => call[0])).toEqual(["session-a", "session-b"])
-    expect(store.getState().session.map(item => item.sessionId)).toEqual(["session-b", "session-c"])
+    const pending = deleteSessions(["session-a", "session-b", "session-c"])
+    // All lanes dispatch before the switch; nothing may issue after it.
+    await allStarted.promise
+    changeRuntime()
+    gate.resolve()
+    expect(await pending).toEqual({ deletedIds: [], failedIds: ["session-a", "session-b", "session-c"] })
+    expect(started.sort()).toEqual(["session-a", "session-b", "session-c"])
+    expect(store.getState().session.map(item => item.sessionId)).toEqual(["session-a", "session-b", "session-c"])
+  })
+
+  test("a lane stops dispatching further deletions once the runtime switches", async () => {
+    seed([session(), session("session-b"), session("session-c"), session("session-d"), session("session-e")])
+    const started: string[] = []
+    const gate = deferred<void>()
+    const lanesFull = deferred<void>()
+    spyOn(canonicalClient, "deleteSession").mockImplementation(async sessionId => {
+      started.push(sessionId)
+      if (started.length === 4) lanesFull.resolve()
+      await gate.promise
+      return { sessionId, deletedSessionIds: [sessionId] }
+    })
+    const pending = deleteSessions(["session-a", "session-b", "session-c", "session-d", "session-e"])
+    // Four lanes take the first four; the fifth waits for a free lane.
+    await lanesFull.promise
+    changeRuntime()
+    gate.resolve()
+    const outcome = await pending
+    expect(started).toHaveLength(4)
+    expect(outcome.failedIds).toContain("session-e")
+  })
+
+  test("one failed deletion does not block the rest of a bulk batch", async () => {
+    const store = seed([session(), session("session-b"), session("session-c")])
+    spyOn(canonicalClient, "deleteSession").mockImplementation(async sessionId => {
+      if (sessionId === "session-b") throw new Error("host unavailable")
+      return { sessionId, deletedSessionIds: [sessionId] }
+    })
+    expect(await deleteSessions(["session-a", "session-b", "session-c"])).toEqual({ deletedIds: ["session-a", "session-c"], failedIds: ["session-b"] })
+    expect(store.getState().session.map((item) => item.sessionId)).toEqual(["session-b"])
+    expect(useGlobalSessionsStore.getState().entityById.has("session-a")).toBe(false)
+    expect(useGlobalSessionsStore.getState().entityById.has("session-c")).toBe(false)
+    expect(useGlobalSessionsStore.getState().entityById.has("session-b")).toBe(true)
+  })
+
+  test("deletion skips the metadata read when a held record already answers the review question", async () => {
+    seed([session("session-a", { metadata: { openchamber: { pinned: { at: 1 } } }, metadataRevision: "2" })])
+    const metadataRead = spyOn(canonicalClient, "getSessionMetadata")
+    spyOn(canonicalClient, "deleteSession").mockResolvedValue({ sessionId: "session-a", deletedSessionIds: ["session-a"] })
+    expect(await deleteSession("session-a")).toBe(true)
+    expect(metadataRead).not.toHaveBeenCalled()
+  })
+
+  test("deletion unlinks the parent review reference from a held review record without a metadata read", async () => {
+    seed([
+      session("original", { metadata: { openchamber: { reviewSessionID: "review" } }, metadataRevision: "2" }),
+      session("review", { metadata: { openchamber: { kind: "review", originalSessionID: "original" } }, metadataRevision: "2" }),
+    ])
+    const metadataRead = spyOn(canonicalClient, "getSessionMetadata")
+    spyOn(canonicalClient, "deleteSession").mockResolvedValue({ sessionId: "review", deletedSessionIds: ["review"] })
+    expect(await deleteSession("review")).toBe(true)
+    // The deleted session's own cleanup read is skipped; the parent's CAS
+    // patch loop still reads the parent's metadata, which is not this path.
+    expect(metadataRead.mock.calls.map((call) => call[0])).not.toContain("review")
+    expect(useGlobalSessionsStore.getState().entityById.has("review")).toBe(false)
+  })
+
+  test("deletion still reads metadata for a session no store holds", async () => {
+    useGlobalSessionsStore.getState().applySnapshot([], [])
+    const metadataRead = spyOn(canonicalClient, "getSessionMetadata").mockResolvedValue({ sessionId: "ghost", revision: "0", metadata: null })
+    spyOn(canonicalClient, "deleteSession").mockResolvedValue({ sessionId: "ghost", deletedSessionIds: ["ghost"] })
+    expect(await deleteSession("ghost")).toBe(true)
+    expect(metadataRead).toHaveBeenCalledWith("ghost")
   })
 
   test("keeps shared chat storage while a sibling root references its mapped workspace", async () => {
@@ -394,6 +468,40 @@ describe("Host archive transitions over native records", () => {
     expect(await pending).toEqual({ archivedIds: [], failedIds: ["session-a", "session-b"] })
     expect(store.getState().session).toHaveLength(2)
   })
+  test("a partial bulk restore commits exactly the sessions the server restored", async () => {
+    seed([
+      session("root-a", { archivedAt: 3 }),
+      session("child-a", { parentSessionId: "root-a", rootSessionId: "root-a", archivedAt: 3 }),
+      session("root-b", { archivedAt: 3 }),
+    ])
+    spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).includes("/auth/url-token")) return Response.json({ token: "actions-token", expiresAt: 999 })
+      const request = unarchiveRequestSchema.parse(JSON.parse(String(init?.body)))
+      // The batch restores child-a and root-b but fails root-a: the server's
+      // per-id outcome is authoritative even when a parent fails.
+      return restoreResponse(request.ids.filter((id) => id !== "root-a"), ["root-a"])
+    })
+    spyOn(canonicalClient, "getSnapshot").mockImplementation(async id => nativeSnapshot(id, []))
+    expect(await unarchiveSessions(["root-a", "child-a", "root-b"])).toEqual({ restoredIds: ["child-a", "root-b"], failedIds: ["root-a"] })
+    const global = useGlobalSessionsStore.getState()
+    expect(global.activeSessions.map((item) => item.sessionId).sort()).toEqual(["child-a", "root-b"])
+    expect(global.archivedSessions.map((item) => item.sessionId)).toEqual(["root-a"])
+  })
+
+  test("one unarchive batch request serves a multi-root selection", async () => {
+    seed([session("root-a", { archivedAt: 3 }), session("root-b", { archivedAt: 3 }), session("root-c", { archivedAt: 3 })])
+    const requests: string[][] = []
+    spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).includes("/auth/url-token")) return Response.json({ token: "actions-token", expiresAt: 999 })
+      const request = unarchiveRequestSchema.parse(JSON.parse(String(init?.body)))
+      requests.push(request.ids)
+      return restoreResponse(request.ids)
+    })
+    spyOn(canonicalClient, "getSnapshot").mockImplementation(async id => nativeSnapshot(id, []))
+    expect(await unarchiveSessions(["root-a", "root-b", "root-c"])).toEqual({ restoredIds: ["root-a", "root-b", "root-c"], failedIds: [] })
+    expect(requests).toEqual([["root-a", "root-b", "root-c"]])
+  })
+
 
   test("restores a parent and archived descendants but refuses a child by itself", async () => {
     seed([session("root", { archivedAt: 3 }), session("child", { parentSessionId: "root", rootSessionId: "root", archivedAt: 3 })])
@@ -495,7 +603,7 @@ describe("native delivery and execution controls", () => {
       snapshot.session.runtimeStatus = status
       store.setState({ snapshot: { "session-a": snapshot } })
     }
-    const ensure = mock(() => {})
+    const ensure = mock(() => { })
     setActionRefs(manager, () => directory, undefined, ensure)
     const pending = deferred<{ run: Run }>()
     const create = spyOn(canonicalClient, "createRun").mockImplementation(() => pending.promise)
@@ -511,7 +619,7 @@ describe("native delivery and execution controls", () => {
 
   test.each(["failure", "runtime-switch"])("an unaccepted or stale cold send does not request recovery (%s)", async outcome => {
     seed()
-    const ensure = mock(() => {})
+    const ensure = mock(() => { })
     setActionRefs(manager, () => directory, undefined, ensure)
     spyOn(canonicalClient, "createRun").mockImplementation(async () => { if (outcome === "failure") throw new Error("Refused"); changeRuntime(); return { run } })
     await expect(sendMessage({ sessionId: "session-a", directory, request })).rejects.toThrow()

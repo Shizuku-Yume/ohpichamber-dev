@@ -1034,13 +1034,23 @@ async function cleanupReviewMetadataBeforeDelete(
  expectedRuntimeKey?: string,
 ): Promise<void> {
  if (isStaleRuntime(expectedRuntimeKey)) return
+ // The Host metadata projection rides on every session record the stores
+ // hold, so a record whose metadata is already here answers the review-kind
+ // question without a round trip: `null` at revision 0 confirms none exists,
+ // and a written object either carries the review marker or not. Only a
+ // session no store holds needs the read.
+ const known = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
  let metadata: CanonicalSession["metadata"]
+ if (known) {
+  metadata = known.metadata ?? null
+ } else {
  try {
   metadata = (await canonicalClient.getSessionMetadata(sessionId)).metadata
  } catch {
   return
  }
  if (isStaleRuntime(expectedRuntimeKey)) return
+ }
 
  const unlinkParent = async (originalSessionID: string, unlink: (metadata: SessionMetadataRecord) => SessionMetadataRecord) => {
   try {
@@ -1273,18 +1283,66 @@ export async function deleteSessions(
  const deletedIds: string[] = []
  const failedIds: string[] = []
  const expectedRuntimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
+ if (ids.length === 0) return { deletedIds, failedIds }
+ if (ids.length === 1) {
+  if (await deleteSession(ids[0], { expectedRuntimeKey })) deletedIds.push(ids[0])
+  else failedIds.push(ids[0])
+  return { deletedIds, failedIds }
+ }
 
- for (const [index, id] of ids.entries()) {
-  if (isStaleRuntime(expectedRuntimeKey)) {
-   failedIds.push(...ids.slice(index))
-   break
+ // Bounded concurrency: each delete is two serialized Host round trips (the
+ // transcript drop and its scope bookkeeping), so a bulk archive cleanup
+ // idled on latency it does not need. The lanes stop dispatching when the
+ // runtime switches; in-flight deletes finish but discard their results, and
+ // everything never dispatched joins the failures.
+ const settled = new Map<string, boolean>()
+ // Cleanup plans are captured before dispatch: after a delete commits, the
+ // record is gone from every store, so a late re-check could not name its
+ // directory at all.
+ const cleanupPlanById = new Map<string, ChatDirectoryCleanupPlan>()
+ for (const id of ids) {
+  const directory = getSessionDirectory(id)
+  const snapshot = getGlobalSessionSnapshot(id)
+  if (!snapshot || snapshot.parentSessionId != null || !directory) continue
+  cleanupPlanById.set(id, { directory, rootDeleted: true, cascadeIds: new Set() })
   }
-  if (await deleteSession(id, { expectedRuntimeKey })) deletedIds.push(id)
+ let cursor = 0
+ const lanes = Array.from({ length: Math.min(DELETE_CONCURRENCY, ids.length) }, async () => {
+  while (cursor < ids.length) {
+   if (isStaleRuntime(expectedRuntimeKey)) return
+   const id = ids[cursor]
+   cursor += 1
+   settled.set(id, await deleteSession(id, { expectedRuntimeKey }))
+  }
+ })
+ await Promise.all(lanes)
+ for (const id of ids) {
+  const outcome = settled.get(id)
+  if (outcome === true) deletedIds.push(id)
   else failedIds.push(id)
+ }
+
+ // Concurrent deletion can hide the last chat-directory reference: a lane's
+ // own cleanup checked the store while a sibling's delete was still in
+ // flight. The plans captured before dispatch re-check against the settled
+ // state — but only the deletions that actually landed count as removed, or
+ // a failed sibling's session would lose the directory it still lives in.
+ if (!isStaleRuntime(expectedRuntimeKey) && cleanupPlanById.size > 0) {
+  const removed = new Set(deletedIds)
+  const checked = new Set<string>()
+  for (const id of deletedIds) {
+   const plan = cleanupPlanById.get(id)
+   if (!plan?.directory || checked.has(plan.directory)) continue
+   checked.add(plan.directory)
+   await cleanupDeletedChatDirectory({ ...plan, cascadeIds: removed }, expectedRuntimeKey)
+  }
  }
 
  return { deletedIds, failedIds }
 }
+
+/** Lanes in one bulk delete; each round trip is independent per session. */
+const DELETE_CONCURRENCY = 4
 
 export async function archiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
  if (isStaleRuntime(expectedRuntimeKey)) return false
@@ -1434,7 +1492,7 @@ function commitArchivedSessions(stamps: SessionArchiveStamp[], directory: string
 }
 
 export async function unarchiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
- const { restoredIds } = await restoreSessionTree(sessionId, expectedRuntimeKey)
+ const { restoredIds } = await unarchiveSessions([sessionId], { expectedRuntimeKey })
  return restoredIds.includes(sessionId)
 }
 
@@ -1461,81 +1519,79 @@ function archivedSubsessionIds(rootId: string): string[] {
  return ids
 }
 
-async function restoreSessionTree(
- rootId: string,
- expectedRuntimeKey: string,
-): Promise<{ restoredIds: string[]; failedIds: string[] }> {
- const { entityById } = useGlobalSessionsStore.getState()
- const root = entityById.get(rootId)
- if (root && !isRestorableOnItsOwn(root, entityById)) {
-  recordSessionActionFailure(rootId, new Error("a subsession is restored with its parent"))
-  return { restoredIds: [], failedIds: [rootId] }
+
+/** Live status re-reads during one restore batch; each is one cold snapshot GET. */
+const RESTORE_COMMIT_CONCURRENCY = 4
+
+/**
+ * Commit a batch of restored sessions. The store updates are cheap and land
+ * in one pass before the first read, so a listener never observes a half-
+ * restored selection; the live status re-reads are the cost, so they run
+ * with bounded concurrency instead of one serialized round trip per session.
+ */
+async function commitRestoredSessions(ids: readonly string[], directories: ReadonlyMap<string, string | undefined>, expectedRuntimeKey: string): Promise<void> {
+ // One mutation pass for the whole batch: a store update per session would
+ // re-render every subscriber once per row.
+ const restoredRecords: CanonicalSession[] = []
+ for (const id of ids) {
+  const restored = withArchivedAt(id, null)
+  if (restored) restoredRecords.push(restored)
  }
- // Read before the root changes state: the walk follows the archived records.
- const subsessionIds = archivedSubsessionIds(rootId)
- if (!await restoreArchivedSession(rootId, expectedRuntimeKey)) return { restoredIds: [], failedIds: [rootId] }
- const restoredIds = [rootId]
- const failedIds: string[] = []
- for (const id of subsessionIds) {
-  if (await restoreArchivedSession(id, expectedRuntimeKey)) restoredIds.push(id)
-  else failedIds.push(id)
+ if (restoredRecords.length > 0) useGlobalSessionsStore.getState().upsertSessions(restoredRecords)
+ for (const id of ids) {
+  const directory = directories.get(id)
+  markSessionUnreadSeen(id)
+  if (directory) registerSessionDirectory(id, directory)
+  promoteRestoredSessionOrdering(id)
  }
- return { restoredIds, failedIds }
+ let index = 0
+ const lanes = Array.from({ length: Math.min(RESTORE_COMMIT_CONCURRENCY, ids.length) }, async () => {
+  while (index < ids.length) {
+   if (isStaleRuntime(expectedRuntimeKey)) return
+   const id = ids[index]
+   index += 1
+   await rereadRestoredSessionStatus(id, directories.get(id), expectedRuntimeKey)
+  }
+ })
+ await Promise.all(lanes)
+ for (const id of ids) relocateRestoredSession(id, expectedRuntimeKey)
 }
 
-async function restoreArchivedSession(sessionId: string, expectedRuntimeKey: string): Promise<boolean> {
- if (isStaleRuntime(expectedRuntimeKey)) return false
- const sessionDirectory = getSessionDirectory(sessionId)
- try {
-  const result = await requestSessionUnarchiveBatch([sessionId], sessionDirectory)
-  if (isStaleRuntime(expectedRuntimeKey)) return false
-  if (result.outcome !== "restored") {
-   throw new Error(`unarchive failed: ${result.reason}`)
-  }
-  if (!result.restored.includes(sessionId)) {
-   throw new Error("unarchive failed: server did not return the restored session")
-  }
-  const restored = withArchivedAt(sessionId, null)
-  if (restored) useGlobalSessionsStore.getState().upsertSession(restored)
-  markSessionUnreadSeen(sessionId)
-  if (sessionDirectory) registerSessionDirectory(sessionId, sessionDirectory)
-  promoteRestoredSessionOrdering(sessionId)
-  // Archive discarded this session's status. An older directory snapshot
-  // cannot certify it idle after restore; only a fresh live read can.
-  const store = sessionDirectory ? _childStores?.getChild(sessionDirectory) : undefined
-  if (store) {
-   const before = store.getState()
-   // The restore already committed. A rejected status read is unknown, not
-   // an action failure or a reason to mark this session idle.
-   const snapshot = await canonicalClient.getSnapshot(sessionId).catch(() => null)
-   if (!isStaleRuntime(expectedRuntimeKey) && snapshot !== null) {
-    store.setState((current) => {
-     if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
-      || current.session_status[sessionId] !== before.session_status[sessionId]) return current
-     const invalidated = { ...(current.sessionStatusInvalidated ?? {}) }
-     delete invalidated[sessionId]
-     return { ...installSessionSnapshot(current, snapshot), sessionStatusInvalidated: invalidated }
-    })
-   }
-  }
-  // Its worktree may have been removed while it sat in the archive; such a
-  // session moves to its project root so it can be written to again. Loaded
-  // lazily: the relocation module builds on this one.
-  if (!isStaleRuntime(expectedRuntimeKey)) {
+/**
+ * Archive discarded this session's status. An older directory snapshot cannot
+ * certify it idle after restore; only a fresh live read can. A rejected read
+ * is unknown, not an action failure or a reason to mark this session idle.
+ */
+async function rereadRestoredSessionStatus(sessionId: string, sessionDirectory: string | undefined, expectedRuntimeKey: string): Promise<void> {
+ const store = sessionDirectory ? _childStores?.getChild(sessionDirectory) : undefined
+ if (!store) return
+ const before = store.getState()
+ const snapshot = await canonicalClient.getSnapshot(sessionId).catch(() => null)
+ if (isStaleRuntime(expectedRuntimeKey) || snapshot === null) return
+ store.setState((current) => {
+   if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
+    || current.session_status[sessionId] !== before.session_status[sessionId]) return current
+   const invalidated = { ...(current.sessionStatusInvalidated ?? {}) }
+   delete invalidated[sessionId]
+   return { ...installSessionSnapshot(current, snapshot), sessionStatusInvalidated: invalidated }
+ })
+}
+
+
+/**
+ * Its worktree may have been removed while it sat in the archive; such a
+ * session moves to its project root so it can be written to again. Loaded
+ * lazily: the relocation module builds on this one.
+ */
+function relocateRestoredSession(sessionId: string, expectedRuntimeKey: string): void {
+ if (isStaleRuntime(expectedRuntimeKey)) return
    void import("@/lib/worktrees/relocateRestoredSession")
     .then((module) => {
      if (!isStaleRuntime(expectedRuntimeKey)) return module.relocateRestoredSessionWithNotice(sessionId)
     })
     .catch((error: unknown) => console.warn("[session-actions] restored session relocation failed", error))
   }
-  return true
- } catch (error) {
-  if (isStaleRuntime(expectedRuntimeKey)) return false
-  console.error("[session-actions] unarchiveSession failed", error)
-  recordSessionActionFailure(sessionId, toError(error))
-  return false
- }
-}
+
 
 export type UnarchiveSessionsOptions = {
   expectedRuntimeKey?: string
@@ -1549,33 +1605,103 @@ export async function unarchiveSessions(
  const restoredIds: string[] = []
  const failedIds: string[] = []
  const expectedRuntimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
- const settled = new Set<string>()
- // Parents first, so a subsession listed next to its parent comes back with
- // it instead of being refused on its own.
  const entityById = useGlobalSessionsStore.getState().entityById
+
+ // Plan locally, in the same order the serial loop produced: parents first,
+ // each parent ahead of its archived subsessions. Undo puts back exactly what
+ // an archive moved, so it restores the listed ids without the tree walk.
+ // A subsession whose archived parent is outside the batch is refused without
+ // a request, matching the per-tree rule.
+ const flatIds: string[] = []
+ const planned = new Set<string>()
+ const planRoot = (rootId: string) => {
+  if (planned.has(rootId)) return
+  planned.add(rootId)
+  flatIds.push(rootId)
+  for (const childId of archivedSubsessionIds(rootId)) {
+   if (planned.has(childId)) continue
+   planned.add(childId)
+   flatIds.push(childId)
+  }
+ }
  const ordered = options?.undo
   ? ids
   : [...ids.filter((id) => !entityById.get(id)?.parentSessionId), ...ids.filter((id) => entityById.get(id)?.parentSessionId)]
-
- for (const [index, id] of ordered.entries()) {
-  if (isStaleRuntime(expectedRuntimeKey)) {
-   failedIds.push(...ordered.slice(index).filter((pending) => !settled.has(pending)))
-   break
-  }
-  if (settled.has(id)) continue
-  if (options?.undo) {
-   if (await restoreArchivedSession(id, expectedRuntimeKey)) restoredIds.push(id)
-   else failedIds.push(id)
-   settled.add(id)
+ for (const id of ordered) {
+  if (planned.has(id)) continue
+  const entity = entityById.get(id)
+  if (!options?.undo && entity && !isRestorableOnItsOwn(entity, entityById)) {
+   planned.add(id)
+   recordSessionActionFailure(id, new Error("a subsession is restored with its parent"))
+   failedIds.push(id)
    continue
   }
-  // A parent listed in the batch brings its subsessions back with it.
-  const outcome = await restoreSessionTree(id, expectedRuntimeKey)
-  for (const restored of outcome.restoredIds) settled.add(restored)
-  for (const failed of outcome.failedIds) settled.add(failed)
-  restoredIds.push(...outcome.restoredIds)
-  failedIds.push(...outcome.failedIds)
+  planRoot(id)
  }
+
+ if (flatIds.length === 0) return { restoredIds, failedIds }
+  if (isStaleRuntime(expectedRuntimeKey)) {
+  failedIds.push(...flatIds)
+  return { restoredIds, failedIds }
+ }
+
+ const directories = new Map(flatIds.map((id) => [id, getSessionDirectory(id)] as const))
+ // One batch for the whole selection: restore is a metadata move, so per-id
+ // round trips only repeated the same write. The Host caps one batch at 500
+ // ids; larger selections chunk, and one chunk's failure does not excuse the
+ // next chunk from trying.
+ const restored: string[] = []
+ const serverFailed = new Set<string>()
+ let batchFailure: Error | null = null
+ let batchCovered = 0
+ for (let offset = 0; offset < flatIds.length; offset += 500) {
+  const chunk = flatIds.slice(offset, offset + 500)
+  let outcome
+  try {
+   outcome = await requestSessionUnarchiveBatch(chunk, directories.get(chunk[0]))
+  } catch (error) {
+   batchFailure = toError(error)
+   break
+  }
+  if (isStaleRuntime(expectedRuntimeKey)) {
+   failedIds.push(...flatIds.slice(offset))
+   return { restoredIds, failedIds }
+  }
+  if (outcome.outcome !== "restored") {
+   batchFailure = new Error(`unarchive failed: ${outcome.reason}`)
+   break
+ }
+  batchCovered = offset + chunk.length
+  restored.push(...outcome.restored)
+  for (const id of outcome.failedIds) serverFailed.add(id)
+ }
+ if (isStaleRuntime(expectedRuntimeKey) && batchCovered === 0) {
+  failedIds.push(...flatIds)
+  return { restoredIds, failedIds }
+ }
+
+ // Settle in plan order. The server's per-id outcome is authoritative: a
+ // subsession the server restored is active even when its parent failed —
+ // reporting it as failed would misrepresent server state until the next
+ // discovery. Ids the batch never reached share the batch failure rather
+ // than a per-id verdict.
+ const commitIds: string[] = []
+ for (const [index, id] of flatIds.entries()) {
+  const unreachable = index >= batchCovered
+  if (unreachable || serverFailed.has(id) || !restored.includes(id)) {
+   failedIds.push(id)
+   if (unreachable) {
+    if (batchFailure) recordSessionActionFailure(id, batchFailure)
+   } else {
+    recordSessionActionFailure(id, new Error("unarchive failed: server did not return the restored session"))
+   }
+  } else {
+   restoredIds.push(id)
+   commitIds.push(id)
+  }
+ }
+ if (batchFailure) console.error("[session-actions] unarchiveSession failed", batchFailure)
+ if (commitIds.length > 0) await commitRestoredSessions(commitIds, directories, expectedRuntimeKey)
 
  return { restoredIds, failedIds }
 }
