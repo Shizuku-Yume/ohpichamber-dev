@@ -513,4 +513,210 @@ describe('ToolPart OMP 19.1 tool wiring', () => {
             expect(container.textContent).not.toContain('1#Q4:hashline ast match');
         });
     });
+
+    test('expanded task card renders OMP 19.1 tasks[] structurally without raw JSON', async () => {
+        const subagent: Subagent = {
+            subagentId: 'AlphaScout',
+            parentSessionId: PARENT_SESSION.sessionId,
+            childSessionId: 'alpha-scout-session',
+            toolCallId: 'call-task-omp19',
+            name: 'AlphaScout',
+            role: 'task',
+            status: 'completed',
+        };
+
+        await withToolPartHarness(async () => [subagent], async ({ container, renderPart }) => {
+            const taskCall: ToolCallPart = {
+                type: 'tool_call',
+                partId: 'part-task-call',
+                toolCallId: 'call-task-omp19',
+                toolName: 'task',
+                status: 'completed',
+                input: {
+                    agent: 'task',
+                    tasks: [
+                        {
+                            name: 'AlphaScout',
+                            agent: 'task',
+                            description: 'Inspect package exports in packages/ui',
+                            assignment: 'Read packages/ui/src/index.ts and list all public exports.',
+                        },
+                    ],
+                },
+            };
+            const taskResult: ToolResultPart = {
+                type: 'tool_result',
+                partId: 'part-task-res',
+                toolCallId: 'call-task-omp19',
+                toolName: 'task',
+                isError: false,
+                output: {
+                    content: [
+                        {
+                            type: 'text',
+                            text: '<task-result id="AlphaScout" status="completed"><output>Listed 14 public exports in packages/ui/src/index.ts.</output></task-result>',
+                        },
+                    ],
+                    details: {
+                        results: [{ id: 'AlphaScout' }],
+                    },
+                },
+            };
+
+            await renderPart(taskResult, { pairedCall: taskCall, expanded: true });
+
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            const text = container.textContent ?? '';
+            expect(text).not.toContain('{"');
+            expect(text).not.toContain('"tasks"');
+
+            const card = container.querySelector('[data-testid="task-input-card"]');
+            expect(card).not.toBeNull();
+            expect(card?.textContent).toContain('AlphaScout');
+            expect(card?.textContent).toContain('task');
+            expect(card?.textContent).toContain('Inspect package exports in packages/ui');
+            expect(card?.textContent).toContain('Read packages/ui/src/index.ts and list all public exports.');
+
+            const batchCall: ToolCallPart = {
+                type: 'tool_call',
+                partId: 'part-task-batch-call',
+                toolCallId: 'call-task-batch',
+                toolName: 'task',
+                status: 'running',
+                input: {
+                    context: 'Shared repository rules',
+                    tasks: [
+                        {
+                            name: 'WorkerOne',
+                            agent: 'scout',
+                            steps: ['Scan entrypoints', 'Report exports'],
+                            solutionSpace: 'Read-only search',
+                            isolated: true,
+                        },
+                    ],
+                },
+            };
+            await renderPart(batchCall, { expanded: true });
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            const batchText = container.textContent ?? '';
+            expect(batchText).not.toContain('{"');
+            expect(batchText).not.toContain('"tasks"');
+            expect(batchText).toContain('Shared repository rules');
+            expect(batchText).toContain('WorkerOne');
+            expect(batchText).toContain('Scan entrypoints');
+            expect(batchText).toContain('Read-only search');
+        });
+    });
+
+    test('ast_edit, todo, retain, and generate_image with array inputs never dump raw JSON', async () => {
+        await withToolPartHarness(async () => [], async ({ container, renderPart }) => {
+            const astEditCall: ToolCallPart = {
+                type: 'tool_call',
+                partId: 'call-ast-edit',
+                toolCallId: 'id-ast-edit',
+                toolName: 'ast_edit',
+                status: 'running',
+                input: {
+                    ops: [{ pat: 'oldApi($$$ARGS)', out: 'newApi($$$ARGS)' }],
+                    paths: ['src/a.ts', 'src/b.ts'],
+                },
+            };
+            await renderPart(astEditCall, { expanded: true });
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            expect(container.querySelector('[data-testid="ast-edit-input-card"]')?.textContent).toContain('oldApi($$$ARGS) → newApi($$$ARGS)');
+            expect(container.textContent).toContain('src/a.ts');
+
+            const astEditMetaOnlyRes: ToolResultPart = {
+                type: 'tool_result',
+                partId: 'res-ast-edit-meta',
+                toolCallId: 'id-ast-edit',
+                toolName: 'ast_edit',
+                isError: false,
+                output: {
+                    content: [{ type: 'text', text: 'Updated 2 files' }],
+                    details: {
+                        fileReplacements: [{ path: 'src/a.ts', count: 1 }],
+                    },
+                },
+            };
+            await renderPart(astEditMetaOnlyRes, { pairedCall: astEditCall, expanded: true });
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            expect(container.querySelector('[data-testid="ast-edit-input-card"]')?.textContent).toContain('oldApi($$$ARGS) → newApi($$$ARGS)');
+
+            const todoCall: ToolCallPart = {
+                type: 'tool_call',
+                partId: 'call-todo-init',
+                toolCallId: 'id-todo-init',
+                toolName: 'todo',
+                status: 'running',
+                input: {
+                    op: 'init',
+                    list: [{ phase: 'Plan', items: ['Check exports', 'Add tests'] }],
+                },
+            };
+            await renderPart(todoCall, { expanded: true });
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            expect(container.querySelector('[data-testid="todo-input-card"]')?.textContent).toContain('Check exports');
+
+            const todoResult: ToolResultPart = {
+                type: 'tool_result',
+                partId: 'res-todo-init',
+                toolCallId: 'id-todo-init',
+                toolName: 'todo',
+                isError: false,
+                output: {
+                    content: [],
+                    details: {
+                        phases: [{ name: 'Plan', tasks: [{ content: 'Check exports', status: 'in_progress' }] }],
+                    },
+                },
+            };
+            await renderPart(todoResult, { pairedCall: todoCall, expanded: true });
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            expect(container.querySelector('[data-testid="todo-card"]')).not.toBeNull();
+            expect(container.querySelector('[data-testid="todo-input-card"]')).toBeNull();
+
+            const retainCall: ToolCallPart = {
+                type: 'tool_call',
+                partId: 'call-retain',
+                toolCallId: 'id-retain',
+                toolName: 'retain',
+                status: 'completed',
+                input: {
+                    items: [{ content: 'Remember structured task cards', context: 'UX audit', scope: 'project' }],
+                },
+            };
+            const retainResult: ToolResultPart = {
+                type: 'tool_result',
+                partId: 'res-retain',
+                toolCallId: 'id-retain',
+                toolName: 'retain',
+                isError: false,
+                output: { content: [{ type: 'text', text: 'Saved 1 memory' }], details: { count: 1 } },
+            };
+            await renderPart(retainResult, { pairedCall: retainCall, expanded: true });
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            expect(container.querySelector('[data-testid="memory-tool-card"]')?.textContent).toContain('Remember structured task cards');
+
+            const imageCall: ToolCallPart = {
+                type: 'tool_call',
+                partId: 'call-gen-img',
+                toolCallId: 'id-gen-img',
+                toolName: 'generate_image',
+                status: 'completed',
+                input: {
+                    subject: 'Mountain sunrise',
+                    changes: ['Add warm clouds'],
+                    input: [{ data: 'BASE64_SECRET_BLOB', mime_type: 'image/png' }],
+                },
+            };
+            await renderPart(imageCall, { expanded: true });
+            expect(container.querySelector('blockquote.tool-input-text')).toBeNull();
+            const imageCardText = container.querySelector('[data-testid="generate-image-input-card"]')?.textContent ?? '';
+            expect(imageCardText).toContain('Mountain sunrise');
+            expect(imageCardText).toContain('Add warm clouds');
+            expect(imageCardText).toContain('1 reference image');
+            expect(container.textContent).not.toContain('BASE64_SECRET_BLOB');
+        });
+    });
 });

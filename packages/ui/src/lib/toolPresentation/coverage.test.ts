@@ -396,9 +396,10 @@ describe('OMP tool presentation coverage', () => {
 
         for (const name of [
             'vibe_spawn', 'vibe_send', 'vibe_wait', 'vibe_kill', 'vibe_list',
-            'wait', 'yield', 'think', 'report_issue', 'resolve', 'reject',
-            'propose', 'checkpoint', 'rewind', 'goal', 'debug', 'github',
-            'security_scan', 'new_context',
+            'task', 'wait', 'todo', 'ast_edit', 'retain', 'recall', 'reflect',
+            'learn', 'memory_edit', 'generate_image', 'yield', 'think',
+            'report_issue', 'resolve', 'reject', 'propose', 'checkpoint',
+            'rewind', 'goal', 'debug', 'github', 'security_scan', 'new_context',
         ]) {
             expect(`${name}: ${isRawInputSuppressedTool(name)}`).toBe(`${name}: true`);
         }

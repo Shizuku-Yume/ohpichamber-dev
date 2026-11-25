@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { preferredDisplayContent } from './toolDisplayContent';
-
+import type { JsonObject } from '@openchamber/agent-contract';
+import { preferredDisplayContent, resolveExpandedInputPreview } from './toolDisplayContent';
 describe('preferredDisplayContent', () => {
     test('prefers non-empty string displayContent for grep and ast_grep', () => {
         const cleanGrep = 'src/app.ts:12: const answer = 42;';
@@ -40,5 +40,53 @@ describe('preferredDisplayContent', () => {
         expect(preferredDisplayContent({ displayContent: { text: '   ' } }, fallback)).toBe(fallback);
         expect(preferredDisplayContent({ displayContent: 42 }, fallback)).toBe(fallback);
         expect(preferredDisplayContent('not-an-object', fallback)).toBe(fallback);
+    });
+});
+
+describe('resolveExpandedInputPreview', () => {
+    test('suppresses raw JSON for task, ast_edit, todo, retain, and generate_image array inputs', () => {
+        const samples: Array<{ toolName: string; input: JsonObject }> = [
+            {
+                toolName: 'task',
+                input: {
+                    agent: 'task',
+                    tasks: [{
+                        name: 'AlphaScout',
+                        agent: 'task',
+                        description: 'Inspect package exports in packages/ui',
+                        assignment: 'Read packages/ui/src/index.ts and list all public exports.',
+                    }],
+                },
+            },
+            {
+                toolName: 'ast_edit',
+                input: { ops: [{ pat: 'old()', out: 'new()' }], paths: ['src/a.ts'] },
+            },
+            {
+                toolName: 'todo',
+                input: { op: 'init', list: [{ phase: 'Plan', items: ['Step 1'] }] },
+            },
+            {
+                toolName: 'retain',
+                input: { items: [{ content: 'Remember this fact', scope: 'project' }] },
+            },
+            {
+                toolName: 'generate_image',
+                input: { subject: 'Sunset', changes: ['Add clouds'] },
+            },
+        ];
+
+        for (const sample of samples) {
+            const preview = resolveExpandedInputPreview({
+                input: sample.input,
+                toolName: sample.toolName,
+                isWrite: false,
+                hideToolInputPreview: false,
+                writeContent: undefined,
+            });
+            expect(preview.hasInputText).toBe(false);
+            expect(preview.inputTextContent).toBe('');
+            expect(preview.hasScalarInputRows).toBe(false);
+        }
     });
 });

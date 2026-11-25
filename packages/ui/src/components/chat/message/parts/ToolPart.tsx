@@ -38,7 +38,8 @@ import {
 } from '@/lib/toolHelpers';
 import { describeTaskResultWithSubagents, describeToolCall, describeToolResult, evalResultSummary, isMemoryTool, normalizeIntent, type TaskSubagentStatusEntry } from '@/lib/toolPresentation';
 import { ToolScalarInputRows, ToolStructuredBody } from './ToolStructuredBody';
-import { isStructuredExpandedTool, preferToolDisplayContent, resolveExpandedInputPreview } from './toolDisplayContent';
+import { StructuredToolInputPreview } from './StructuredToolInputs';
+import { isStructuredExpandedTool, preferToolDisplayContent, resolveExpandedInputPreview, resolveStructuredToolInput } from './toolDisplayContent';
 import { findScoreBadgeStyle, parseFindLines } from './findOutputParser';
 import { useVibeSpawnSubtask } from '@/hooks/useVibeSpawnSubtask';
 import { TodoCard } from './TodoCard';
@@ -929,6 +930,8 @@ interface ToolExpandedContentProps {
     resultContent: NativeResultContent;
     fileChanges: ToolFileChange[];
     toolName: string;
+    hasStructuredTodoCard?: boolean;
+    hasMemoryCard?: boolean;
     hasStructuredSubagentRows?: boolean;
 }
 
@@ -945,6 +948,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     fileChanges,
     toolName,
     hasStructuredSubagentRows = false,
+    hasStructuredTodoCard = false,
+    hasMemoryCard = false,
 }) => {
     const { t } = useI18n();
     const runtime = React.useContext(RuntimeAPIContext);
@@ -966,7 +971,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         setDiffViewMode('unified');
     }, [part.partId]);
 
-    const hideToolInputPreview = (isEditTool(toolName) || toolBaseName(toolName) === 'apply_patch') && fileChanges.length > 0;
+    const hasVisualDiffEntry = fileChanges.some((entry) => Boolean(entry.diff));
+    const hideToolInputPreview = (isEditTool(toolName) || isAstEditTool(toolName) || toolBaseName(toolName) === 'apply_patch') && hasVisualDiffEntry;
     const isWrite = isWriteTool(toolName);
     const writeInput = isWrite ? writeInputSchema.safeParse(input).data : undefined;
     const writeContent = writeInput?.content;
@@ -980,6 +986,13 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     } = React.useMemo(
         () => resolveExpandedInputPreview({ input, toolName, isWrite, hideToolInputPreview, writeContent }),
         [hideToolInputPreview, input, isWrite, toolName, writeContent],
+    );
+    const structuredInput = React.useMemo(
+        () => resolveStructuredToolInput(toolName, input, {
+            hideAstEditInput: hasVisualDiffEntry,
+            hideTodoInput: hasStructuredTodoCard,
+        }),
+        [hasStructuredTodoCard, hasVisualDiffEntry, input, toolName],
     );
 
     const webSearchOutput = React.useMemo(
@@ -1346,7 +1359,6 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const shouldRenderResult = isSubagentTool(toolName) && hasStructuredSubagentRows
         ? (hasVisibleOutput || fileChanges.length > 0)
         : (part.type === 'tool_result' || (isShellTool(toolName) && hasVisibleOutput) || fileChanges.length > 0);
-    const hasVisualDiffEntry = fileChanges.some((entry) => !!entry.diff);
     const bashStatus = React.useMemo(() => {
         if (!isShellTool(toolName)) return null;
         const parsed = bashStatusDetailsSchema.safeParse(resultContent.details);
@@ -1354,7 +1366,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (!parsed.data.async && !parsed.data.service) return null;
         return parsed.data;
     }, [resultContent.details, toolName]);
-    const hasExpandedBody = hasInputText
+    const hasExpandedBody = Boolean(structuredInput)
+        || hasStructuredTodoCard
+        || hasMemoryCard
+        || hasInputText
         || hasScalarInputRows
         || Boolean(writeContent && !hasVisualDiffEntry)
         || shouldRenderResult
@@ -1404,6 +1419,11 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                 />
             ) : (
                 <>
+                    {structuredInput ? (
+                        <div className="my-1">
+                            <StructuredToolInputPreview resolved={structuredInput} />
+                        </div>
+                    ) : null}
                     {hasScalarInputRows && scalarInputRows ? (
                         <div className="my-1">
                             {renderScrollableBlock(
@@ -1996,28 +2016,38 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 >
                     {shouldRenderExpandedContent ? (
                         <div className="relative ml-2 pl-3">
-                            {isTodoTool(toolName) && result && !result.isError ? (() => {
-                                const phases = extractTodoPhases(resultContent.details);
-                                return phases && hasTodoTasks(phases) ? <TodoCard phases={phases} defaultExpanded /> : null;
-                            })() : null}
-                            {isMemoryTool(toolName) && result && !result.isError ? (
-                                <MemoryToolCard toolName={toolName} input={call?.input ?? {}} result={resultContent} />
-                            ) : null}
-                            <BlockLine onToggle={toggleRow} topOffset={1} />
-                            <ToolExpandedContent
-                                part={part}
-                                call={call}
-                                sessionId={sessionId}
-                                isMobile={isMobile}
-                                currentDirectory={currentDirectory}
-                                isExpanded={isExpanded}
-                                onShowPopup={onShowPopup}
-                                presentation={presentation}
-                                resultContent={resultContent}
-                                fileChanges={fileChanges}
-                                toolName={toolName}
-                                hasStructuredSubagentRows={hasStructuredSubagentRows}
-                            />
+                            {(() => {
+                                const todoPhases = isTodoTool(toolName) && result && !result.isError
+                                    ? extractTodoPhases(resultContent.details)
+                                    : null;
+                                const hasStructuredTodoCard = Boolean(todoPhases && hasTodoTasks(todoPhases));
+                                const hasMemoryCard = isMemoryTool(toolName) && (!result || !result.isError);
+                                return (
+                                    <>
+                                        {hasStructuredTodoCard && todoPhases ? <TodoCard phases={todoPhases} defaultExpanded /> : null}
+                                        {hasMemoryCard ? (
+                                            <MemoryToolCard toolName={toolName} input={call?.input ?? {}} result={resultContent} />
+                                        ) : null}
+                                        <BlockLine onToggle={toggleRow} topOffset={1} />
+                                        <ToolExpandedContent
+                                            part={part}
+                                            call={call}
+                                            sessionId={sessionId}
+                                            isMobile={isMobile}
+                                            currentDirectory={currentDirectory}
+                                            isExpanded={isExpanded}
+                                            onShowPopup={onShowPopup}
+                                            presentation={presentation}
+                                            resultContent={resultContent}
+                                            fileChanges={fileChanges}
+                                            toolName={toolName}
+                                            hasStructuredSubagentRows={hasStructuredSubagentRows}
+                                            hasStructuredTodoCard={hasStructuredTodoCard}
+                                            hasMemoryCard={hasMemoryCard}
+                                        />
+                                    </>
+                                );
+                            })()}
                             {call && isSubagentTool(toolName) ? (
                                 <TaskToolSessions call={call} resultDetails={resultContent.details} sessionId={sessionId} directory={directory} isMobile={isMobile} />
                             ) : null}
