@@ -83,5 +83,9 @@ contamination). Evidence `task07/08-test.log`, `task07/08b-rerun.log`.
 - Console-cleanliness: one `GET /api/agent/v1/sessions/<seeded-id>/tools` 404 is a
   harness-seeded session absent from the live agent-service — expected fixture
   fetch, `pageErrors` empty.
-- Linux Electron AppImage local reinstall: recorded in this session's Step 3
-  output (atomic install only when OhPiChamber is not running).
+- Linux Electron AppImage rebuilt and **reinstalled**: OhPiChamber was not
+  running, so the verified `OhPiChamber-1.0.0-linux-x86_64.AppImage` (Bun 1.4.5,
+  123 Agent packages, 19 Host native modules) was atomically installed to
+  `~/.local/opt/ohpichamber/` (AppImage + `squashfs-root`), `BUILD-COMMIT` set to
+  `10ad866b1f`, icon/desktop DB refreshed; the extracted binary launches and
+  loads `app.asar/dist-bundle/main.mjs` (display needed only for a full window).
