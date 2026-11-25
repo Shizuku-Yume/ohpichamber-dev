@@ -1,6 +1,6 @@
 
 import { cjk } from '@streamdown/cjk';
-import { createMathPlugin } from '@streamdown/math';
+import remarkMath from 'remark-math';
 import { defaultRehypePlugins, defaultRemarkPlugins, type CjkPlugin, type MathPlugin, type StreamdownProps } from 'streamdown';
 import type { Pluggable, Plugin, Processor } from 'unified';
 import type { Root, RootContent } from 'mdast';
@@ -32,12 +32,22 @@ export function getMarkdownCjk(singleTilde = false): CjkPlugin {
   return singleTilde ? cjk : markdownCjk;
 }
 
-const officialMath = createMathPlugin({ singleDollarTextMath: false });
+// The math plugin is assembled from `remark-math` directly rather than
+// `@streamdown/math`'s `createMathPlugin`: that package statically imports
+// rehype-katex, whose own static import is the 260 KB KaTeX engine, so merely
+// referencing the factory dragged the engine into the eager module graph.
+// Typesetting happens in the render layer (`katexRender.tsx`), which loads
+// the engine lazily; the rehype half is a passthrough so math stays as
+// `language-math` code elements until then.
 // external: https://github.com/vercel/streamdown Streamdown appends the math remark plugin after configured remark plugins; compatibility runs inside it after remark-math.
 export const markdownMath: MathPlugin = {
-  ...officialMath,
+  name: 'katex',
+  type: 'math',
+  rehypePlugin: function rehypeMathPassthrough() {
+    return undefined;
+  },
   remarkPlugin: function markdownMathSyntax(this: Processor) {
-    this.use([officialMath.remarkPlugin]);
+    this.use([[remarkMath, { singleDollarTextMath: false }]]);
     return remarkMathCompatibility.call(this);
   },
 };

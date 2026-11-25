@@ -3,13 +3,12 @@
 @import "./styles/design-system.css";
 @import "./styles/typography.css";
 @import "./styles/mobile.css";
-/* KaTeX styles are loaded eagerly through `styles/katex-css` (a JS import) at
-   every app entry point. Keeping them eager avoids a late stylesheet injection
-   on the first markdown render, whose style recalc briefly lost the layered
-   `.chat-message-column` width clamp and flashed message text to full width.
-   A JS import is required because Lightning CSS inlines a CSS `@import`
-   without resolving the relative `url(fonts/...)` references, leaving the
-   KaTeX font files unbundled (openchamber/openchamber#1880). */
+/* KaTeX's base stylesheet loads lazily with the engine the first time a math
+   node renders (`markdown/katexRender.tsx`); the theme overrides below stay
+   eager because they only apply once the base styles exist. The lazy import
+   goes through Vite's JS pipeline because Lightning CSS inlines a CSS
+   `@import` without resolving the relative `url(fonts/...)` references,
+   leaving the KaTeX font files unbundled (openchamber/openchamber#1880). */
 @source "./**/*.{ts,tsx,css}";
 @source "../node_modules/streamdown/dist/**/*.js";
 @source "../node_modules/@streamdown/math/dist/**/*.js";
@@ -32,6 +31,18 @@
 }
 .katex-error {
   color: var(--destructive);
+}
+
+/* Display math renders through the lazy KaTeX boundary instead of
+   rehype-katex, so the markdown `pre` shell stays in the tree. It carries no
+   code: strip the pre look so the formula keeps its own layout. */
+.markdown-content pre:has(> .katex-display) {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  white-space: normal;
+  font: inherit;
 }
 
 /* Math reads left to right in every locale, so the scroll range starts at

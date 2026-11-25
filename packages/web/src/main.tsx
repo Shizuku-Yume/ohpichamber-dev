@@ -6,7 +6,6 @@ import { resolveHostedSurface, watchHostedSurfaceViewport, type HostedSurface } 
 import { importWithChunkRecovery } from '@openchamber/ui/lib/chunkLoadRecovery';
 import '@openchamber/ui/index.css';
 import '@openchamber/ui/styles/fonts';
-import '@openchamber/ui/styles/katex-css';
 
 declare global {
   interface Window {
