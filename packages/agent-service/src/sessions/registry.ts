@@ -1555,6 +1555,12 @@ export class SessionRegistry {
     const opening = this.openings.get(sessionId);
     if (opening) await opening;
     this.assertControlAvailable(sessionId);
+    // A live worker holds unflushed transcript writes, so it must flush and
+    // stop before its file is dropped. Without one there is nothing to flush:
+    // the eviction and exit paths settle persistence before the worker leaves,
+    // and spawning a replacement only to stop it again doubles the delete cost
+    // and evicts an unrelated warm worker at capacity.
+    if (!this.workers.info(sessionId)) return this.dropColdSession(sessionId);
     const reference = this.references.get(sessionId);
     const journal = this.journal(sessionId);
     if (journal.runtime().activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session already has an active or pending run');
@@ -1576,6 +1582,44 @@ export class SessionRegistry {
       await this.references.removeSubagents(sessionId);
       this.interactions.closeSession(sessionId);
       journal.close();
+      await this.references.remove(sessionId);
+      // A listed native record must not outlive its deleted transcript and
+      // resurrect a reference on the next reopen.
+      this.nativeCold.delete(sessionId);
+      const deletedSessionIds = [sessionId];
+      await this.onSessionDeleted?.(deletedSessionIds);
+      return { sessionId, deletedSessionIds };
+    } finally {
+      this.deleting.delete(sessionId);
+      this.controls.delete(sessionId);
+    }
+  }
+
+  /**
+   * Delete a session whose worker is not running: nothing exists that could
+   * flush transcript writes, so the transcript is dropped directly. The run
+   * check is structural instead of projected — a pending admission is the only
+   * run a workerless session can still gain, and `withStoppedRoot` refuses the
+   * drop if a worker registers for this root while it is in flight.
+   */
+  private async dropColdSession(sessionId: string) {
+    if (this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session already has an active or pending run');
+    const reference = this.references.get(sessionId) ?? (this.nativeCold.has(sessionId) ? this.coldRoot(sessionId).reference : undefined);
+    if (!reference) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND', 'Session not found');
+    this.controls.add(sessionId);
+    this.deleting.add(sessionId);
+    try {
+      await this.subagentLifecycleTails.get(sessionId);
+      await this.workers.withStoppedRoot(sessionId, async () => {
+        const manager = SessionManager.create(reference.cwd, reference.sessionsDirectory);
+        try { await manager.dropSession(reference.sessionFile); } finally { await manager.close(); }
+      });
+      const entry = this.entries.get(sessionId);
+      if (entry?.state !== 'unloaded') entry?.opened?.journal.close();
+      this.entries.delete(sessionId);
+      for (const [key, record] of this.subagents) if (record.rootSessionId === sessionId || record.childSessionId === sessionId) this.subagents.delete(key);
+      await this.references.removeSubagents(sessionId);
+      this.interactions.closeSession(sessionId);
       await this.references.remove(sessionId);
       // A listed native record must not outlive its deleted transcript and
       // resurrect a reference on the next reopen.

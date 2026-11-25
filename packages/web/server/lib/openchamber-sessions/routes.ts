@@ -965,11 +965,12 @@ const createCanonicalSessionService = (dependencies) => {
     const scope = await scopeFor(id, adopt);
     const reservation = await agentScopeStore.reserveSessionDelete(id);
     try {
-      // Deleting retires the worker, so no send may treat this root as live. The
-      // reopen below is a one-off restore for the DELETE itself, and the finally
-      // clears the confirmation it publishes.
+      // Deleting retires the worker, so no send may treat this root as live.
+      // No reopen here: the Agent Service flushes and stops a live worker
+      // itself, and a cold root's transcript drops without booting one, so a
+      // restore would only burn a worker spawn (and a capacity eviction) on
+      // the delete it precedes.
       forgetLive(scope.rootSessionId);
-      if (!scope.workspaceId.startsWith('archive_')) await reopen(scope);
       const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }));
       if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502);
       if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack);

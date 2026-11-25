@@ -461,6 +461,22 @@ test('deletes a cold session reopened with an MCP path absent from its reference
   } finally { await harness.close(); }
 }, 60000);
 
+test('permanent deletion of a workerless session drops its transcript without starting a worker', async () => {
+  const harness = await fixture();
+  try {
+    // The service restart leaves every entry unloaded with no worker behind it;
+    // the delete must not boot one only to stop it again.
+    await harness.restart();
+    expect(harness.workers.info(rootSessionId)).toBeUndefined();
+    expect(await harness.sessions.delete(rootSessionId)).toEqual({ sessionId: rootSessionId, deletedSessionIds: [rootSessionId] });
+    expect(existsSync(harness.source.sessionFile)).toBe(false);
+    expect(existsSync(harness.sourceArtifacts)).toBe(false);
+    expect(harness.workers.info(rootSessionId)).toBeUndefined();
+    await harness.restart();
+    expect((await harness.sessions.list(harness.source)).items).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
+
 test('permanent deletion removes the transcript and artifacts of a session with assistant history', async () => {
   const harness = await fixture();
   try {

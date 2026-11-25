@@ -32,10 +32,12 @@ const fixture = async () => {
   for (const sessionId of ['public-root', 'public-child']) await store.bindSession({ sessionId, rootSessionId: 'public-root', workspaceId: source.workspaceId });
   const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [], readSignals: [], compactResult: { type: 'compact', compactionId: 'compact-id', tokensBefore: 9000, completedAt: 1700000000002 } };
   const runtime = (sessionId = 'public-root') => {
-    const session = { sessionId, rootSessionId: 'public-root',
+    const session = {
+      sessionId, rootSessionId: 'public-root',
       projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
       mode: { kind: 'main' },
-      epoch: 'epoch-native', headSequence: '0', runtimeStatus: native.active ? 'running' : 'idle', activeRunId: native.active ? 'active-run' : null };
+      epoch: 'epoch-native', headSequence: '0', runtimeStatus: native.active ? 'running' : 'idle', activeRunId: native.active ? 'active-run' : null
+    };
     if (sessionId === 'public-child') session.parentSessionId = 'public-root';
     return session;
   };
@@ -102,7 +104,7 @@ const fixture = async () => {
     resolveSessionScope: (id) => state.agentScopeStore.getSession(id), resolveHostSessionScope: (id) => state.agentScopeStore.getSession(id),
     resolveWorkspaceScope: async (id) => { const scope = await state.agentScopeStore.getWorkspace(id); return scope && { ...scope, displayPath: '.' }; }, registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
     listWorkspaceScopes: async () => ({ items: [{ workspaceId: source.workspaceId }], errors: {} }),
-    resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
+    resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => { }, onPromptAccepted: async () => { },
     directCommandAdmissionStore: state.directCommandAdmissionStore,
     archiveStore: state.archiveStore, sessionMetadataStore: state.sessionMetadataStore,
   });
@@ -415,7 +417,7 @@ describe('Host native session control saga', () => {
     expect(native.calls.findIndex((call) => call.pathname.endsWith('/relocation/finalize'))).toBeLessThan(native.calls.findIndex((call) => call.pathname.endsWith('/branch')));
     await expect(store.getRelocation('public-root')).resolves.toBeNull();
   });
-  it('reopens a cold root before non-abort control and delete, but not before abort', async () => {
+  it('reopens a cold root before non-abort control but not before abort or delete', async () => {
     const { native, makeService } = await fixture();
     const service = makeService();
     await service.control('public-root', { type: 'mode.set', mode: 'plan' });
@@ -429,9 +431,10 @@ describe('Host native session control saga', () => {
       '/api/agent/v1/sessions/public-root/runs/active-run/abort',
     ]);
     native.calls.length = 0;
+    // Delete must not reopen: the Agent Service flushes a live worker itself
+    // and drops a cold root's transcript without booting one.
     expect(await service.delete('public-root')).toEqual({ sessionId: 'public-root', deletedSessionIds: ['public-root'] });
     expect(native.calls.map(call => call.pathname)).toEqual([
-      '/internal/sessions/public-root/reopen',
       '/api/agent/v1/sessions/public-root',
     ]);
   });

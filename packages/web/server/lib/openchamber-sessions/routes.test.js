@@ -1432,7 +1432,7 @@ describe('speculative session preparation', () => {
     return { app, sessionService };
   };
 
-  const setupPreparedSession = async ({ waitForPrepare = true, onReopen = async () => {}, onRun = async () => {} } = {}) => {
+  const setupPreparedSession = async ({ waitForPrepare = true, onReopen = async () => {}, onRun = async () => {}, onDelete = async () => {} } = {}) => {
     const ws = await createTestWorkspace();
     const deleted = [];
     let runtime;
@@ -1444,6 +1444,7 @@ describe('speculative session preparation', () => {
       }
       if (pathname.endsWith('/reopen')) { await onReopen(); return Response.json(runtime); }
       if (init.method === 'DELETE') {
+        await onDelete();
         deleted.push(runtime.sessionId);
         return Response.json({ sessionId: runtime.sessionId, deletedSessionIds: [runtime.sessionId] });
       }
@@ -1521,7 +1522,7 @@ describe('speculative session preparation', () => {
     let entered;
     const waiting = new Promise(resolve => { release = resolve; });
     const reopening = new Promise(resolve => { entered = resolve; });
-    const { sessionService, sessionId, prompt, ws, deleted } = await setupPreparedSession({ onReopen: async () => { entered(); await waiting; } });
+    const { sessionService, sessionId, prompt, ws, deleted } = await setupPreparedSession({ onDelete: async () => { entered(); await waiting; } });
     const discarding = sessionService.discardPrepared(ws);
     try {
       await reopening;
