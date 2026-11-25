@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { CanonicalEventSchema, EntityIdSchema, HistoryPageSchema, ProblemDetailsSchema, QueueStateSchema, RunSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { EntityIdSchema, HistoryPageSchema, ProblemDetailsSchema, QueueStateSchema, RunSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { parseCanonicalEvent } from '../event-stream/validated-event.js';
 import { PromptQueueError } from './sqlite-store.js';
 import { assertRootPromptAdmission } from './prompt-admission.js';
 
@@ -237,7 +238,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
     },
     reorder: async (scope, request) => changed(scope, await store.reorder(queueScope(scope), request)),
     observe: async (scope, input) => {
-      const event = CanonicalEventSchema.parse(input);
+      const event = parseCanonicalEvent(input);
       if (stopped || event.sessionId !== scope.sessionId) return;
       const owner = queueScope(scope);
       if (event.type === 'run.started' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled') {

@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import type { BigIntStats } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { CanonicalEventSchema, RuntimeSessionSchema, SessionSchema, SessionSnapshotSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
+import { RuntimeSessionSchema, SessionSchema, SessionSnapshotSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
+import { safeParseCanonicalEvent } from '../event-stream/validated-event.js';
 import type { CanonicalEvent, RuntimeSession, SessionSnapshot } from '@openchamber/agent-contract';
 import { canonicalDirectoryPath } from '../fs/canonical-path.js';
 import type { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
@@ -335,7 +336,7 @@ export const createChatDirectoryCleanupRuntime = <Owner>({ roots, sessionService
     },
     processPayload(payload: CanonicalEvent | undefined, scope?: SessionDirectoryScope) {
       if (stopped || !adoptOwner()) return;
-      const parsed = CanonicalEventSchema.safeParse(payload);
+      const parsed = safeParseCanonicalEvent(payload);
       if (!parsed.success) return;
       const event = parsed.data;
       touched?.add(event.sessionId);

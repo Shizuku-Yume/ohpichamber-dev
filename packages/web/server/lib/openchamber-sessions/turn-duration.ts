@@ -13,7 +13,7 @@
  * paired with the next run's end; forgetting starts on any subscribe or
  * reconnect would need the same bookkeeping and would not improve on it.
  */
-import { CanonicalEventSchema } from '@openchamber/agent-contract';
+import { safeParseCanonicalEvent } from '../event-stream/validated-event.js';
 
 const TERMINAL_OUTCOMES = { 'run.completed': 'completed', 'run.failed': 'failed', 'run.cancelled': 'cancelled' };
 const DEFAULT_LIMIT = 5000;
@@ -49,7 +49,7 @@ export const createTurnDurationRecorder = ({ persistSessionMetadataPatch, isChil
 
  /** Takes the Hub's validated canonical events, with the session's Host scope. */
  const processCanonicalEvent = (payload, scope) => {
-  const parsed = CanonicalEventSchema.safeParse(payload);
+  const parsed = safeParseCanonicalEvent(payload);
   if (!parsed.success) return;
   const event = parsed.data;
   if (event.type === 'session.deleted') {

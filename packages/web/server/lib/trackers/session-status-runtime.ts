@@ -1,4 +1,4 @@
-import { CanonicalEventSchema } from '@openchamber/agent-contract';
+import { safeParseCanonicalEvent } from '../event-stream/validated-event.js';
 import type { TrackerRuntimeEvent, TrackerSessionStatusInput, TrackerSessionStatusResult } from './tracker-contract.js';
 
 type SessionStatusOptions = {
@@ -17,7 +17,7 @@ export function createSessionStatusRuntime({ post, label, warn = (...args) => co
   return {
     processPayload: (payload: TrackerRuntimeEvent) => {
       if (stopped) return;
-      const parsed = CanonicalEventSchema.safeParse(payload);
+      const parsed = safeParseCanonicalEvent(payload);
       if (!parsed.success) return;
       const event = parsed.data;
       if (event.type === 'run.failed') {
