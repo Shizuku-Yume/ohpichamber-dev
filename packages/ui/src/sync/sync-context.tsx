@@ -577,13 +577,19 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         onSnapshot({ directory, sessionId: snapshot.session.sessionId }, snapshot)
       }
     }
+    // Session mutations are event-driven: creates arrive through
+    // `openchamber:session-created`, archive/delete/rename through the canonical
+    // stream, and both reset paths re-list on stream restart. This timer is only
+    // the recovery backstop for mutations no event covers yet — sessions created
+    // or deleted outside the Host (OMP CLI) and cold renames — so it runs on a
+    // long cadence instead of re-listing every workspace every few seconds.
     const discoveryTimer = setInterval(() => {
       if (!isCurrent()) return
       for (const [directory, store] of childStores.children) {
         if (!store.getState().workspace || !childStores.pinned(directory)) continue
         void loadSessions(directory).catch(() => { })
       }
-    }, 15_000)
+    }, 120_000)
     const resume = () => {
       if (!isCurrent()) return
       pipeline.reconnect()
