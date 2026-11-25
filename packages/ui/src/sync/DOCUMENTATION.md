@@ -105,6 +105,8 @@ Host metadata revisions stay attached to projected sessions, HTTP write response
 - Rejects incoming metadata if `incoming.metadataRevision` is older than `previous.metadataRevision`
 - Rejects incoming archive state if `incoming.archiveRevision` is older than `previous.archiveRevision`
 
+Discovery is event-first: Host session creates arrive through `openchamber:session-created` and refresh only the affected directory, and stream restarts re-list through the reset path. The periodic re-list in `sync-context.tsx` is a recovery backstop for mutations no event covers — sessions created or deleted outside the Host (OMP CLI) and cold renames — and runs on a 120 s cadence, so out-of-band mutations surface in the sidebar within two minutes while in-Host mutations are immediate.
+
 Discovery failures are scoped. `client.listSessions(workspaceId)` returns `{ items: Session[], errors: Record<string, string> }`. When an error is keyed by a session, workspace or project, `isSessionDiscoveryFailed` in `globalSessions.ts` preserves the cached `Session` records in that scope instead of treating their absence as an authoritative empty result. Sibling sessions outside the failed scope reconcile normally. Partial discovery failures preserve prior valid cached entities and do not produce an authoritative empty snapshot.
 
 Web, PWA, and Electron use the retained Host owner. Hosted mobile and Capacitor use the active Host through shared runtime transport. VS Code is retired and receives no new support.

@@ -5,7 +5,7 @@ import { canKeepScreenAwake, getClientPlatform } from '@/lib/platform';
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import { useSpaceDirectoryStopped, useSpacesStore } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
-import { hasActiveSubagent, useGlobalSessionStatusStore } from '@/sync/global-session-status';
+import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 interface KeepAwakePlugin {
@@ -22,7 +22,7 @@ export const useKeepScreenAwake = (connected: boolean): void => {
   const mode = useUIStore((state) => state.mobileKeepScreenAwake);
   const sessionId = useSessionUIStore((state) => state.currentSessionId);
   const working = useGlobalSessionStatusStore((state) => (
-    sessionId !== null && (state.activeSessionIds.has(sessionId) || hasActiveSubagent(sessionId, state.activeSessionIds))
+    sessionId !== null && state.activeWithAncestors.has(sessionId)
   ));
   const directory = useSessionUIStore((state) => state.currentSessionDirectory);
   const spaceId = spaceIdOfDirectory(directory);

@@ -21,9 +21,9 @@ let testAgentDirectory;
 const createMemorySessionMetadataStore = () => {
   const entries = new Map(); const revisions = new Map();
   const merge = mergeMetadataPatch;
-  return { entries, get: async id => entries.get(id) ?? null, getState: async id => entries.has(id) ? { metadata: entries.get(id), revision: String(revisions.get(id) ?? 1) } : null, setSessionMetadata: async (id, patch) => { const current = entries.get(id); const metadata = merge(current, patch); const changed = JSON.stringify(current) !== JSON.stringify(metadata); const revision = (revisions.get(id) ?? (current ? 1 : 0)) + (changed ? 1 : 0); entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed }; }, updateSessionMetadata: async (id, decide) => { const current = entries.get(id) ?? {}; const patch = decide(current); if (!patch) return { metadata: current, revision: String(revisions.get(id) ?? (entries.has(id) ? 1 : 0)), changed: false }; const metadata = merge(current, patch); const revision = (revisions.get(id) ?? (entries.has(id) ? 1 : 0)) + 1; entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed: true }; } };
+  return { entries, get: async id => entries.get(id) ?? null, getState: async id => entries.has(id) ? { metadata: entries.get(id), revision: String(revisions.get(id) ?? 1) } : null, getStates: async ids => { const page = { entries: new Map(), errors: new Map() }; for (const id of ids) page.entries.set(id, entries.has(id) ? { metadata: entries.get(id), revision: String(revisions.get(id) ?? 1) } : null); return page; }, setSessionMetadata: async (id, patch) => { const current = entries.get(id); const metadata = merge(current, patch); const changed = JSON.stringify(current) !== JSON.stringify(metadata); const revision = (revisions.get(id) ?? (current ? 1 : 0)) + (changed ? 1 : 0); entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed }; }, updateSessionMetadata: async (id, decide) => { const current = entries.get(id) ?? {}; const patch = decide(current); if (!patch) return { metadata: current, revision: String(revisions.get(id) ?? (entries.has(id) ? 1 : 0)), changed: false }; const metadata = merge(current, patch); const revision = (revisions.get(id) ?? (entries.has(id) ? 1 : 0)) + 1; entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed: true }; } };
 };
-const createMemoryArchiveStore = () => { const entries = new Map(); return { entries, getState: async id => entries.has(id) ? { archivedAt: entries.get(id), revision: '1' } : null, archive: async (ids, archivedAt) => ({ archived: ids.map(id => { entries.set(id, archivedAt ?? 1); return { id, archivedAt: archivedAt ?? 1 }; }), failedIds: [] }), unarchive: async ids => ({ restored: ids.map(id => { entries.delete(id); return { id, archivedAt: null }; }), failedIds: [] }) }; };
+const createMemoryArchiveStore = () => { const entries = new Map(); return { entries, getState: async id => entries.has(id) ? { archivedAt: entries.get(id), revision: '1' } : null, getStates: async ids => { const page = { entries: new Map(), errors: new Map() }; for (const id of ids) page.entries.set(id, entries.has(id) ? { archivedAt: entries.get(id), revision: '1' } : null); return page; }, archive: async (ids, archivedAt) => ({ archived: ids.map(id => { entries.set(id, archivedAt ?? 1); return { id, archivedAt: archivedAt ?? 1 }; }), failedIds: [] }), unarchive: async ids => ({ restored: ids.map(id => { entries.delete(id); return { id, archivedAt: null }; }), failedIds: [] }) }; };
 const validScope = (sessionId) => ({
   sessionId,
   rootSessionId: sessionId,
@@ -1139,8 +1139,8 @@ describe('POST /api/agent/v1/sessions/:sessionId/move-to-worktree', () => {
       capturePrompt: async () => { throw new Error('not used'); },
       beforeDispatch: async () => { },
       onPromptAccepted: async () => { },
-      sessionMetadataStore: { getState: async () => null, get: async () => null },
-      archiveStore: { getState: async () => null },
+      sessionMetadataStore: { getState: async () => null, get: async () => null, getStates: async ids => ({ entries: new Map(ids.map(id => [id, null])), errors: new Map() }) },
+      archiveStore: { getState: async () => null, getStates: async ids => ({ entries: new Map(ids.map(id => [id, null])), errors: new Map() }) },
       directCommandAdmissionStore: { claim: async () => true, accept: async () => true },
       worktreeMove: {
         getPathsWithoutChanges: async () => [],
@@ -1210,8 +1210,8 @@ describe('session.moveToWorktree', () => {
       capturePrompt: async () => { throw new Error('not used'); },
       beforeDispatch: async () => { },
       onPromptAccepted: async () => { },
-      sessionMetadataStore: { getState: async () => null, get: async () => null },
-      archiveStore: { getState: async () => null },
+      sessionMetadataStore: { getState: async () => null, get: async () => null, getStates: async ids => ({ entries: new Map(ids.map(id => [id, null])), errors: new Map() }) },
+      archiveStore: { getState: async () => null, getStates: async ids => ({ entries: new Map(ids.map(id => [id, null])), errors: new Map() }) },
       directCommandAdmissionStore: { claim: async () => true, accept: async () => true },
       ...overrides,
       worktreeMove: {

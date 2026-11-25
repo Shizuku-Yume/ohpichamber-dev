@@ -24,9 +24,16 @@ type GlobalSessionStatusState = {
   observedById: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>;
   statusById: Map<string, GlobalSessionStatusEntry>;
   activeSessionIds: ReadonlySet<string>;
+  /**
+   * The active ids plus every ancestor of an active session, resolved once per
+   * publication. Subagent-activity selectors are O(1) membership lookups
+   * against this set instead of walking every active session's ancestry per
+   * subscriber.
+   */
+  activeWithAncestors: ReadonlySet<string>;
 };
 const EMPTY_ACTIVE_SESSION_IDS: ReadonlySet<string> = new Set();
-const initialState: GlobalSessionStatusState = { observedById: new Map(), statusById: new Map(), activeSessionIds: EMPTY_ACTIVE_SESSION_IDS };
+const initialState: GlobalSessionStatusState = { observedById: new Map(), statusById: new Map(), activeSessionIds: EMPTY_ACTIVE_SESSION_IDS, activeWithAncestors: EMPTY_ACTIVE_SESSION_IDS };
 const activeRunIdBySession = new Map<string, string>();
 export const useGlobalSessionStatusStore: UseBoundStore<StoreApi<GlobalSessionStatusState>> = create<GlobalSessionStatusState>(() => initialState);
 useGlobalSessionStatusStore.subscribe(() => countSyncPerformance('globalStatusPublications'));
@@ -35,15 +42,27 @@ const isLiveStatus = (status: SessionRuntimeStatus): boolean => status === 'runn
 const sameSet = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolean => left.size === right.size && [...left].every((id) => right.has(id));
 const sameStatusMap = (left: ReadonlyMap<string, GlobalSessionStatusEntry>, right: ReadonlyMap<string, GlobalSessionStatusEntry>): boolean => left.size === right.size && [...left].every(([id, entry]) => right.get(id)?.directory === entry.directory && right.get(id)?.status === entry.status);
 const sameObservedMap = (left: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>, right: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>): boolean => left.size === right.size && [...left].every(([id, entry]) => right.get(id)?.directory === entry.directory && right.get(id)?.outcome === entry.outcome);
+const resolveAncestorClosure = (activeSessionIds: ReadonlySet<string>): ReadonlySet<string> => {
+  if (activeSessionIds.size === 0) return EMPTY_ACTIVE_SESSION_IDS;
+  const closure = new Set<string>(activeSessionIds);
+  for (const id of activeSessionIds) forEachAncestorId(id, (ancestorId) => { closure.add(ancestorId); });
+  return closure;
+};
 const setState = (statusById: Map<string, GlobalSessionStatusEntry>, observedById: Map<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>): void => {
   const active = new Set<string>();
   for (const [id, entry] of statusById) if (isLiveStatus(entry.status)) active.add(id);
   const current = useGlobalSessionStatusStore.getState();
   if (sameStatusMap(current.statusById, statusById) && sameObservedMap(current.observedById, observedById)) return;
+  const activeSessionIds = sameSet(current.activeSessionIds, active) ? current.activeSessionIds : active;
+  // The closure is resolved once per publication rather than once per
+  // subscriber per publication. Parentage is read live from the resolver
+  // here, so a publication always sees the currently known hierarchy —
+  // the same resolution moment the per-subscriber scans used.
   useGlobalSessionStatusStore.setState({
     statusById,
     observedById,
-    activeSessionIds: sameSet(current.activeSessionIds, active) ? current.activeSessionIds : active,
+    activeSessionIds,
+    activeWithAncestors: resolveAncestorClosure(activeSessionIds),
   });
 };
 
@@ -91,6 +110,12 @@ const forEachAncestorId = (sessionId: string, visit: (ancestorId: string) => voi
   let current = resolveSessionParentId(sessionId);
   for (let depth = 0; current && depth < MAX_SUBAGENT_DEPTH; depth += 1) { visit(current); current = resolveSessionParentId(current); }
 };
+/**
+ * True when `sessionId` has at least one active descendant. Callers that can
+ * read the store's published `activeWithAncestors` should prefer the O(1)
+ * membership lookup `activeWithAncestors.has(id) && !activeSessionIds.has(id)`;
+ * this standalone form resolves the closure per call for direct use.
+ */
 export const hasActiveSubagent = (sessionId: string, activeSessionIds: ReadonlySet<string>): boolean => {
   for (const activeId of activeSessionIds) {
     if (activeId === sessionId) continue;
@@ -123,16 +148,16 @@ type SessionTurnActivity = 'running' | 'subagent' | 'shell';
 export const useSessionTurnActivity = (sessionId: string): SessionTurnActivity | null => {
   const status = useGlobalSessionStatusStore((state): 'running' | 'subagent' | null => {
     if (state.activeSessionIds.has(sessionId)) return 'running';
-    return hasActiveSubagent(sessionId, state.activeSessionIds) ? 'subagent' : null;
+    return state.activeWithAncestors.has(sessionId) ? 'subagent' : null;
   });
   const shell = useBackgroundShellsStore((state) => state.sessionIds.has(sessionId));
   return status ?? (shell ? 'shell' : null);
 };
 useBackgroundShellsStore.subscribe((state, previous) => {
   if (state.sessionIds === previous.sessionIds) return;
-  const active = useGlobalSessionStatusStore.getState().activeSessionIds;
+  const store = useGlobalSessionStatusStore.getState();
   const mutations: SessionActivityTimingMutation[] = [];
-  for (const id of previous.sessionIds) if (!state.sessionIds.has(id) && !active.has(id) && !hasActiveSubagent(id, active)) mutations.push({ type: 'settled', sessionId: id });
+  for (const id of previous.sessionIds) if (!state.sessionIds.has(id) && !store.activeSessionIds.has(id) && !store.activeWithAncestors.has(id)) mutations.push({ type: 'settled', sessionId: id });
   applySessionActivityTimingMutations(mutations);
 });
 
@@ -296,7 +321,7 @@ export const applyGlobalSessionStatusSnapshot = (
 /** The first of the sessions `useSessionTurnActivity` reads as working, or null. */
 export const useFirstSessionWithOpenTurn = (sessionIds: readonly string[]): string | null => {
   const inTurn = useGlobalSessionStatusStore((state) => (
-    sessionIds.find((id) => state.activeSessionIds.has(id) || hasActiveSubagent(id, state.activeSessionIds)) ?? null
+    sessionIds.find((id) => state.activeWithAncestors.has(id)) ?? null
   ));
   const inWorkflow = useWorkflowActivityStore((state) => sessionIds.find((id) => state.runningSessionIds.has(id)) ?? null);
   const onShell = useBackgroundShellsStore((state) => sessionIds.find((id) => state.sessionIds.has(id)) ?? null);

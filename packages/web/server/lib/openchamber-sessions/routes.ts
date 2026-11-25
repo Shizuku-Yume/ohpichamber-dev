@@ -380,7 +380,7 @@ const createCanonicalSessionService = (dependencies) => {
     if (requestedMetadata) await metadata.set(session.sessionId, requestedMetadata, workspace.cwd);
     const stored = await sessionMetadataStore.getState(session.sessionId);
     const result = SessionCreateAckSchema.parse({ session: SessionSchema.parse({ ...session, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: '0' }) });
-    emit({ type: 'openchamber:session-created', properties: { sessionId: session.sessionId, projectId, workspaceId } });
+    emit({ type: 'openchamber:session-created', properties: { sessionId: session.sessionId, projectId, workspaceId, directory: workspace.cwd } });
     return result;
   };
   const prepareDelivery = async (scope, requestBody, identity = {}, capturedRequest = null) => {
@@ -546,11 +546,21 @@ const createCanonicalSessionService = (dependencies) => {
         if (!workspace) throw new OpenChamberControlError('Workspace scope is unavailable during global session listing', workspaceId ? 404 : 503, { code: workspaceId ? 'SESSION_NOT_FOUND' : 'SERVICE_UNAVAILABLE' });
         return await withSessionAdmission(workspace, 'discovery', id, async () => {
           const raw = NativeSessionListSchema.parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`, { signal }));
+          // One bulk SQLite read per store replaces two point reads per session:
+          // the per-session latency of a 200-session page is paid once, not 400 times.
+          const ids = raw.items.map((session) => session.sessionId);
+          const metadataPage = await sessionMetadataStore.getStates(ids);
+          const archivePage = await archiveStore.getStates(ids);
+          const missing = new Error('Host metadata store omitted a requested session');
           const sessionResults = await Promise.all(raw.items.map(async session => {
             try {
               if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502, { code: 'INTERNAL_ERROR' });
-              const metadataState = await sessionMetadataStore.getState(session.sessionId);
-              const archiveState = await archiveStore.getState(session.sessionId);
+              if (!metadataPage.entries.has(session.sessionId) && !metadataPage.errors.has(session.sessionId)) throw missing;
+              if (!archivePage.entries.has(session.sessionId) && !archivePage.errors.has(session.sessionId)) throw missing;
+              if (metadataPage.errors.has(session.sessionId)) throw new OpenChamberControlError('Session metadata is corrupt', 503, { code: metadataPage.errors.get(session.sessionId) });
+              if (archivePage.errors.has(session.sessionId)) throw new OpenChamberControlError('Session archive state is corrupt', 503, { code: archivePage.errors.get(session.sessionId) });
+              const metadataState = metadataPage.entries.get(session.sessionId) ?? null;
+              const archiveState = archivePage.entries.get(session.sessionId) ?? null;
               if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500, { code: 'INTERNAL_ERROR' });
               const projected = { ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', archiveRevision: archiveState?.revision ?? '0' };
               if (archiveState?.archivedAt != null) projected.archivedAt = archiveState.archivedAt;
