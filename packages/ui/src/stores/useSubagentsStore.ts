@@ -76,7 +76,7 @@ const mergeHydratedList = (existing: readonly Subagent[], fetched: readonly Suba
 };
 
 let storeGeneration = 0;
-type InflightHydration = { promise: Promise<void>; pendingForce: boolean };
+type InflightHydration = { promise: Promise<void> };
 const inflightHydrations = new Map<string, InflightHydration>();
 const mutationRevisionByParent = new Map<string, number>();
 
@@ -177,28 +177,18 @@ export const useSubagentsStore = create<SubagentsStore>()((set, get) => ({
 
     const existing = inflightHydrations.get(inflightKey);
     if (existing) {
-      if (!force || existing.pendingForce) return existing.promise;
-      const chainedEntry: InflightHydration = {
-        promise: Promise.resolve(),
-        pendingForce: true,
-      };
-      chainedEntry.promise = existing.promise.then(() => {
-        chainedEntry.pendingForce = false;
-        if (capturedGeneration !== storeGeneration || getRuntimeKey() !== runtimeKey) return;
-        return runFetch();
-      });
-      inflightHydrations.set(inflightKey, chainedEntry);
-      void chainedEntry.promise.finally(() => {
-        if (inflightHydrations.get(inflightKey) === chainedEntry) {
-          inflightHydrations.delete(inflightKey);
-        }
-      });
-      return chainedEntry.promise;
+      // A forced hydrate shares the in-flight read instead of chaining a second
+      // fetch behind it: the service answers the read with its state at
+      // processing time, which is already newer than the moment the force
+      // caller acted, and mergeHydratedList keeps newer live fields by
+      // mutation revision when the response lands. The force callers'
+      // freshness concern — a server-side mutation nobody saw — is what the
+      // fetched list itself reconciles.
+      return existing.promise;
     }
 
     const entry: InflightHydration = {
       promise: runFetch(),
-      pendingForce: false,
     };
     inflightHydrations.set(inflightKey, entry);
     void entry.promise.finally(() => {

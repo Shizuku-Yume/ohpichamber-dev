@@ -19,13 +19,12 @@ describe('useSubagentsStore.hydrateParent', () => {
     useSubagentsStore.getState().resetForRuntimeSwitch();
   });
 
-  test('chains a forced refresh after an in-flight non-forced hydration settles', async () => {
+  test('shares one in-flight read between forced and non-forced hydration of the same parent', async () => {
     const initialFetch = Promise.withResolvers<Subagent[]>();
-    const settledFetch = Promise.withResolvers<Subagent[]>();
     let calls = 0;
     const spy = spyOn(canonicalClient, 'listSubagents').mockImplementation(async () => {
       calls += 1;
-      return calls === 1 ? initialFetch.promise : settledFetch.promise;
+      return initialFetch.promise;
     });
 
     try {
@@ -33,20 +32,52 @@ describe('useSubagentsStore.hydrateParent', () => {
       const first = store.hydrateParent('parent-1', false);
       const forced = store.hydrateParent('parent-1', true);
       const duplicateForced = store.hydrateParent('parent-1', true);
+      const duplicatePlain = store.hydrateParent('parent-1', false);
 
       expect(calls).toBe(1);
 
-      initialFetch.resolve([]);
-      await first;
-      // The forced fetch runs right after the early empty non-forced fetch completes.
-      expect(calls).toBe(2);
+      const child = makeSubagent();
+      initialFetch.resolve([child]);
+      await Promise.all([first, forced, duplicateForced, duplicatePlain]);
 
-      const settledChild = makeSubagent();
-      settledFetch.resolve([settledChild]);
-      await Promise.all([forced, duplicateForced]);
+      expect(calls).toBe(1);
+      expect(useSubagentsStore.getState().byParent['parent-1']).toEqual([child]);
+      expect(useSubagentsStore.getState().hydratedByParent['parent-1']).toBeDefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
 
+  test('a shared forced hydration failure is not empty and stays retriable', async () => {
+    const inFlight = Promise.withResolvers<Subagent[]>();
+    let calls = 0;
+    const known = makeSubagent();
+    const spy = spyOn(canonicalClient, 'listSubagents').mockImplementation(async () => {
+      calls += 1;
+      if (calls === 1) return [known];
+      if (calls === 2) return inFlight.promise;
+      return [known];
+    });
+
+    try {
+      const store = useSubagentsStore.getState();
+      await store.hydrateParent('parent-1', false);
+      expect(useSubagentsStore.getState().byParent['parent-1']).toEqual([known]);
+
+      const plain = store.hydrateParent('parent-1', true);
+      const forced = store.hydrateParent('parent-1', true);
       expect(calls).toBe(2);
-      expect(useSubagentsStore.getState().byParent['parent-1']).toEqual([settledChild]);
+      inFlight.reject(new Error('Service unavailable'));
+      await Promise.all([plain, forced]);
+
+      // Failure is not empty: prior rows survive, the parent is unhydrated and
+      // marked failed, so the next non-forced hydration retries.
+      expect(useSubagentsStore.getState().byParent['parent-1']).toEqual([known]);
+      expect(useSubagentsStore.getState().hydratedByParent['parent-1']).toBeUndefined();
+      expect(useSubagentsStore.getState().failedByParent['parent-1']).toBeDefined();
+
+      await store.hydrateParent('parent-1', false);
+      expect(calls).toBe(3);
       expect(useSubagentsStore.getState().hydratedByParent['parent-1']).toBeDefined();
     } finally {
       spy.mockRestore();
