@@ -128,7 +128,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     });
 
     React.useEffect(() => {
-        setExpandedTools(readExpandedToolsCache(message.messageId));
+        // The cache read returns a fresh Set every time, so writing it back
+        // unconditionally re-rendered every mounted message once after mount.
+        // Only a genuinely different expansion state is a state change.
+        const cached = readExpandedToolsCache(message.messageId);
+        setExpandedTools((current) => {
+            if (cached.size === current.size && [...cached].every((item) => current.has(item))) return current;
+            return cached;
+        });
     }, [message.messageId]);
 
     const isUser = message.role === 'user';
