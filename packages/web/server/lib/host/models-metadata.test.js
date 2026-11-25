@@ -37,18 +37,14 @@ describe('toClientModelsMetadata', () => {
         id: 'openai',
         models: {
           'gpt-5': {
-            id: 'gpt-5',
             name: 'GPT-5',
             tool_call: true,
             reasoning: true,
-            attachment: true,
-            temperature: false,
             modalities: { input: ['text', 'image'], output: ['text'] },
             cost: { input: 1.25, output: 10, cache_read: 0.125 },
             limit: { context: 400000, output: 128000 },
             knowledge: '2024-09',
             release_date: '2025-08-07',
-            last_updated: '2025-08-07',
           },
         },
       },
@@ -64,5 +60,23 @@ describe('toClientModelsMetadata', () => {
 
   it('projects one catalog object once', () => {
     expect(toClientModelsMetadata(catalog)).toBe(toClientModelsMetadata(catalog));
+  });
+});
+
+describe('toSerializedClientModelsMetadata', () => {
+  it('serializes one catalog once with a stable entity tag', async () => {
+    const { toSerializedClientModelsMetadata } = await import('./models-metadata.js');
+    const first = toSerializedClientModelsMetadata(catalog);
+    const second = toSerializedClientModelsMetadata(catalog);
+    expect(first).toBe(second);
+    expect(first.etag).toMatch(/^"[A-Za-z0-9_-]+"$/);
+    expect(JSON.parse(first.body)).toEqual(toClientModelsMetadata(catalog));
+  });
+
+  it('changes the entity tag when the catalog content changes', async () => {
+    const { toSerializedClientModelsMetadata } = await import('./models-metadata.js');
+    const changed = JSON.parse(JSON.stringify(catalog));
+    changed.openai.models['gpt-5'].cost.input = 2.5;
+    expect(toSerializedClientModelsMetadata(changed).etag).not.toBe(toSerializedClientModelsMetadata(catalog).etag);
   });
 });

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -61,26 +63,43 @@ export async function getModelsMetadata({
 // The model fields the UI reads (packages/ui stores/useConfigStore.ts,
 // transformModelsDevResponse). The full catalog is several megabytes; the
 // browser needs only these, so the route sends nothing else.
+// `id` is not projected: it always equals the model's key in the catalog, and
+// the UI falls back to that key. `temperature`, `attachment` and
+// `last_updated` have no reader anywhere in the UI, so they are not worth the
+// bytes either (the UI metadata type treats every field as optional).
 const CLIENT_MODEL_FIELDS = [
-  'id',
   'name',
   'tool_call',
   'reasoning',
-  'temperature',
-  'attachment',
   'structured_output',
   'modalities',
   'cost',
   'limit',
   'knowledge',
   'release_date',
-  'last_updated',
 ];
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // The catalog object is reused until the next fetch, so its projection is too.
 const projections = new WeakMap();
+
+// The serialized projection and its entity tag are cached beside it: the
+// catalog is several megabytes, so the route should neither re-serialize nor
+// re-send it when nothing changed upstream.
+const serializedProjections = new WeakMap();
+
+/** Serializes the client projection once per catalog object, with a strong entity tag. */
+export function toSerializedClientModelsMetadata(metadata) {
+  const projected = toClientModelsMetadata(metadata);
+  const cached = serializedProjections.get(projected);
+  if (cached) return cached;
+  const body = JSON.stringify(projected);
+  const etag = `"${createHash('sha256').update(body).digest('base64url')}"`;
+  const entry = { body, etag };
+  serializedProjections.set(projected, entry);
+  return entry;
+}
 
 /** Projects the models.dev catalog to the provider ids and model fields the UI reads. */
 export function toClientModelsMetadata(metadata) {
