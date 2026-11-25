@@ -4,7 +4,7 @@
  * OpenCode parent field or inferred directory relationship is used.
  */
 import { z } from 'zod';
-import { CanonicalEventSchema } from '@openchamber/agent-contract';
+import { safeParseCanonicalEvent } from './event-stream/validated-event.js';
 
 const DEFAULT_LIMIT = 5000;
 
@@ -30,7 +30,7 @@ export function createSessionLineage({ limit = DEFAULT_LIMIT } = {}) {
 
   /** Learn session lineage only from validated canonical Host events. */
   const observe = (payload) => {
-    const parsed = CanonicalEventSchema.safeParse(payload);
+    const parsed = safeParseCanonicalEvent(payload);
     if (!parsed.success) return;
     const event = parsed.data;
     if (event.type === 'session.updated' && event.session) {

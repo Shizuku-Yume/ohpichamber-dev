@@ -144,6 +144,12 @@ const transformModelsDevResponse = (payload: unknown): Map<string, ModelMetadata
     }
     return metadataMap;
 };
+// The catalog is several megabytes and changes upstream a handful of times a
+// day, so re-reads revalidate against the proxy's entity tag instead of
+// downloading and parsing it again: an unchanged catalog is a 304 and the
+// metadata map already in memory is the answer.
+let modelsMetadataCache: { etag: string; metadata: Map<string, ModelMetadata> } | null = null;
+
 const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => {
     if (typeof fetch !== 'function') {
         return new Map();
@@ -154,10 +160,12 @@ const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => 
         const timeout = controller ? setTimeout(() => controller.abort(), 8000) : undefined;
         try {
             const isAbsoluteUrl = /^https?:\/\//i.test(source);
+            const conditional = !isAbsoluteUrl && modelsMetadataCache !== null;
             const requestInit: RequestInit = {
                 signal: controller?.signal,
                 headers: {
-                    Accept: 'application/json'
+                    Accept: 'application/json',
+                    ...(conditional ? { 'If-None-Match': modelsMetadataCache!.etag } : {})
                 },
                 cache: 'no-store'
             };
@@ -167,11 +175,19 @@ const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => 
                 requestInit.credentials = 'same-origin';
             }
             const response = isAbsoluteUrl ? await fetch(source, requestInit) : await runtimeFetch(source, requestInit);
+            if (conditional && response.status === 304) {
+                return modelsMetadataCache!.metadata;
+            }
             if (!response.ok) {
                 throw new Error(`Metadata request to ${source} returned status ${response.status}`);
             }
             const data = await response.json();
-            return transformModelsDevResponse(data);
+            const metadata = transformModelsDevResponse(data);
+            if (!isAbsoluteUrl) {
+                const etag = response.headers.get('etag');
+                modelsMetadataCache = etag ? { etag, metadata } : null;
+            }
+            return metadata;
         } catch (error: unknown) {
             if ((error as Error)?.name === 'AbortError') {
                 console.warn(`Model metadata request aborted (${source})`);
@@ -229,6 +245,7 @@ export const ensureModelsMetadataFetch = (getModelsMetadata: () => Map<string, M
 export const createMetadataActions: ConfigSlice<"invalidateModelMetadataCache"> = (set, _get) => ({
     invalidateModelMetadataCache: () => {
         modelsMetadataInFlight = null;
+        modelsMetadataCache = null;
         set({
             modelsMetadata: new Map<string, ModelMetadata>()
         });

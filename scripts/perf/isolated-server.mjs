@@ -238,6 +238,9 @@ export const startIsolatedServer = async ({ repo, dist, state, project, port, fi
     PI_CONFIG_DIR: agentDirectory(state),
   }
   if (ompBinary) env.OMP_BINARY = ompBinary
+  // Attribution runs need the server's own Node flags (e.g. --cpu-prof); pass
+  // them through explicitly since the isolated environment is built from scratch.
+  if (process.env.OPENCHAMBER_PERF_NODE_OPTIONS) env.NODE_OPTIONS = process.env.OPENCHAMBER_PERF_NODE_OPTIONS
   const child = spawn(process.execPath, [join(repo, "packages/web/bin/cli.js"), "serve", "--port", String(port), "--foreground"], {
     cwd: project,
     env,

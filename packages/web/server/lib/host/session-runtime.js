@@ -1,4 +1,5 @@
-import { CanonicalEventSchema, EntityIdSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { EntityIdSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { parseCanonicalEvent } from '../event-stream/validated-event.js';
 
 const SESSION_COOLDOWN_DURATION_MS = 2000;
 const SESSION_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -85,7 +86,7 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
   const processCanonicalEvent = (input, scope) => {
     if (disposed) return;
     requireScope(scope);
-    const event = CanonicalEventSchema.parse(input);
+    const event = parseCanonicalEvent(input);
     const sessionId = event.sessionId;
     const eventId = `${event.epoch}:${event.sequence}`;
     if (event.type === 'session.deleted') { for (const id of event.deletedSessionIds) removeSession(id); return; }

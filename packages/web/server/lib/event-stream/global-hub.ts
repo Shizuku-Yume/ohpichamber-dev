@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { translateWireEvent } from './translate-v2.js';
 import { CanonicalEventSchema, CursorSchema, EntityIdSchema, SessionSnapshotSchema, StreamInvalidatedSchema } from '@openchamber/agent-contract';
+import { markValidatedCanonicalEvent } from './validated-event.js';
 
 const REPLAY_LIMIT = 2048;
 const REPLAY_BYTES = 8 * 1024 * 1024;
@@ -44,13 +45,19 @@ export function createGlobalMessageStreamHub({
     type, sessionId: entry.sessionId, timestamp: now(), ...extra,
   });
   const clearReplay = () => { replay.length = 0; replayBytes = 0; latestEventId = undefined; };
-  const commit = (entry, event) => {
+  const commit = (entry, event, rawData) => {
     const run = delivery.then(async () => {
       if (entry.controller.signal.aborted || sessions.get(entry.sessionId) !== entry) return;
       await notify(eventSubscribers, event, entry.scope);
       if (entry.controller.signal.aborted || sessions.get(entry.sessionId) !== entry) return;
       const eventId = `${prefix}${++sequence}`;
-      const serializedFrame = JSON.stringify({ type: 'event', eventId, payload: event });
+      // The upstream SSE `data` line is the canonical event as compact JSON,
+      // so the fanout frame embeds those bytes verbatim instead of paying a
+      // second JSON.stringify of the parsed event. `rawData` can only be
+      // absent for injected events, which serialize the parsed payload.
+      const serializedFrame = rawData === undefined
+        ? JSON.stringify({ type: 'event', eventId, payload: event })
+        : `{"type":"event","eventId":${JSON.stringify(eventId)},"payload":${rawData}}`;
       const bytes = Buffer.byteLength(serializedFrame);
       latestEventId = eventId;
       if (bytes > replayByteLimit) {
@@ -156,7 +163,8 @@ export function createGlobalMessageStreamHub({
       }
       lines = [];
       if (data.length === 0) return true;
-      const raw = JSON.parse(data.join('\n'));
+      const dataText = data.join('\n');
+      const raw = JSON.parse(dataText);
       if (name === 'stream.invalidated' || raw?.type === 'stream.invalidated') {
         const invalidation = StreamInvalidatedSchema.parse(raw);
         if (invalidation.sessionId !== entry.sessionId || invalidation.epoch !== epoch) throw new Error('INVALID_STREAM_SCOPE');
@@ -165,14 +173,14 @@ export function createGlobalMessageStreamHub({
         entry.cursor = undefined;
         return false;
       }
-      const event = CanonicalEventSchema.parse(raw);
+      const event = markValidatedCanonicalEvent(CanonicalEventSchema.parse(raw));
       if (event.sessionId !== entry.sessionId || event.epoch !== epoch || name !== event.type || id !== `${event.epoch}:${event.sequence}`) {
         throw new Error('INVALID_STREAM_EVENT');
       }
       const next = BigInt(event.sequence);
       if (next <= head) return true;
       if (next !== head + 1n) throw new Error('STREAM_SEQUENCE_GAP');
-      await commit(entry, event);
+      await commit(entry, event, dataText);
       if (entry.controller.signal.aborted) return false;
       head = next;
       entry.cursor = id;

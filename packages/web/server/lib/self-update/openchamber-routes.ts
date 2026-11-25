@@ -37,15 +37,22 @@ export const registerOpenChamberRoutes = (app: Application, dependencies: OpenCh
   });
 
   registerOpenRouterModelInfoRoute(app);
-  app.get('/api/openchamber/models-metadata', async (_req, res) => {
+  app.get('/api/openchamber/models-metadata', async (req, res) => {
     try {
-      const { getModelsMetadata, toClientModelsMetadata } = await import('../host/models-metadata.js');
+      const { getModelsMetadata, toSerializedClientModelsMetadata } = await import('../host/models-metadata.js');
       const { metadata, fromCache, stale } = await getModelsMetadata({
         url: modelsDevApiUrl,
         ttlMs: modelsMetadataCacheTtl,
       });
+      // The projection is serialized once per upstream catalog revision; an
+      // unchanged catalog answers 304 instead of re-sending megabytes.
+      const { body, etag } = toSerializedClientModelsMetadata(metadata);
       res.setHeader('Cache-Control', fromCache && !stale ? 'public, max-age=60' : 'public, max-age=300');
-      res.json(toClientModelsMetadata(metadata));
+      res.setHeader('ETag', etag);
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+      res.type('application/json').send(body);
     } catch (error) {
       console.warn('Failed to fetch models.dev metadata via server:', error);
       const statusCode = MetadataTimeoutSchema.safeParse(error).success ? 504 : 502;

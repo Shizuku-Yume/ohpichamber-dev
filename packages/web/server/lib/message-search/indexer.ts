@@ -1,4 +1,5 @@
-import { CanonicalEventSchema, EntityIdSchema, HistoryPageSchema, SessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { EntityIdSchema, HistoryPageSchema, SessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { parseCanonicalEvent } from '../event-stream/validated-event.js';
 
 const LIVE_DEBOUNCE_MS = 1500;
 const joinParts = (message, type) => message.parts.filter((part) => part.type === type && part.content.trim())
@@ -123,7 +124,7 @@ export const createMessageSearchIndexer = ({
   return {
     async processCanonicalEvent(input, scope) {
       if (stopped) return;
-      const event = CanonicalEventSchema.parse(input);
+      const event = parseCanonicalEvent(input);
       if (!scope?.workspaceId) throw new Error('Host event scope is required');
       if (event.type === 'session.deleted') { for (const id of event.deletedSessionIds) removeSession(id); return; }
       if (event.type === 'session.updated') {

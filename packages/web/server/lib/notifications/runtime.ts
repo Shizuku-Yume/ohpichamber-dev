@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { CanonicalEventSchema, SessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { SessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { parseCanonicalEvent } from '../event-stream/validated-event.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 import { redactGitText } from '../git/redaction.js';
 import { genericNotificationTitle, truncateNotificationText } from './message.js';
@@ -184,7 +185,7 @@ export const createNotificationTriggerRuntime = (deps) => {
   };
   const processCanonicalEvent = async (input, scope) => {
     if (stopped) return;
-    const event = CanonicalEventSchema.parse(input);
+    const event = parseCanonicalEvent(input);
     if (!scope?.workspaceId || !scope?.rootSessionId) throw new Error('Host event scope is required');
     if (event.type === 'run.started') await advanceShareRun(event.sessionId, event.runId);
     if (event.type === 'session.updated' && event.mode?.kind === 'goal' && event.mode.status === 'active') goalNotified.delete(event.sessionId);
