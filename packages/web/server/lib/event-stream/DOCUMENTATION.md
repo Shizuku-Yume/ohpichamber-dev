@@ -29,6 +29,7 @@ The Host's canonical session stream connects to the private Agent Service. `tran
 - `sendMessageStreamWsFrame(socket, payload)`: serializes and sends a JSON WS frame.
 - `sendMessageStreamWsEvent(socket, payload, options)`: sends an event frame with optional `eventId` and `directory`.
 - `serializeMessageStreamWsEvent(payload, options)` and `sendSerializedMessageStreamWsFrame(socket, frame)` separate encoding from per-socket delivery. Delivery retains ready-state and backpressure checks.
+- `parseCanonicalEvent(input)` / `safeParseCanonicalEvent(input)` (`validated-event.ts`): canonical event validation memoized by object identity. The hub validates once at the upstream SSE boundary and marks the parsed object; downstream Host consumers reuse that proof instead of re-running zod per subscriber per event. Anything that did not cross the boundary is validated in full.
 
 ### Runtime helpers
 - `createGlobalMessageStreamHub(...)`: reads canonical session events from the Host-supervised Agent Service and owns bounded cursor replay and per-session recovery. Provides reference-counted session lease management (`retainSession(sessionId, leaseKey)`, `releaseSession(sessionId, leaseKey)`) that shares active per-session SSE streams across concurrent consumers (runs, browser SSE/WS, initial observation) and tears down the stream once all leases release.
@@ -40,6 +41,7 @@ The Host's canonical session stream connects to the private Agent Service. `tran
 
 ## Runtime behavior
 - Browser clients receive canonical session events from the Host stream. The UI parses Canonical API records directly.
+- Fanout frames embed the upstream SSE `data` bytes verbatim instead of re-serializing the parsed event; the payload is byte-identical content and JSON.parse treats both the same.
 - No space event connection is made and no OpenCode SSE stream is read. The removed `space-events.js` and its upstream reader were the last production path for that traffic.
 - A space's journey progress events are injected by `host.js` into the hub for space-scoped subscribers. They are Host events, not session events, and they carry no OpenCode wire id.
 - Global canonical streams use Host-issued cursors, bounded replay, snapshot repair and reconnect handling; they do not depend on OpenCode SSE ids.
