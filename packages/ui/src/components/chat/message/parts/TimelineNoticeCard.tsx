@@ -190,7 +190,7 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({
               <span>{isExpanded ? t('chat.notice.hide') : t('chat.notice.details')}</span>
               <Icon
                 name="arrow-down-s"
-                className={cn('size-3.5 transition-transform duration-200', isExpanded && 'rotate-180')}
+                className={cn('size-3.5 transition-transform duration-150 motion-reduce:transition-none', isExpanded && 'rotate-180')}
               />
             </button>
           )}

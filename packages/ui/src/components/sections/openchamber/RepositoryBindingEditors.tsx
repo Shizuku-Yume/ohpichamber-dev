@@ -316,7 +316,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
     <Collapsible open={open} onOpenChange={setOpen} className={cn('min-w-0', className)}>
       <CollapsibleTrigger className="w-auto justify-start gap-1.5">
         <SettingsGroupTitle>{t('gitView.hydration.title')}</SettingsGroupTitle>
-        <Icon name={open ? 'arrow-up-s' : 'arrow-down-s'} className="h-4 w-4 text-muted-foreground" />
+        <Icon name="arrow-right-s" className={cn('h-4 w-4 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-90 rtl:-rotate-90')} />
       </CollapsibleTrigger>
       <CollapsibleContent>
         <SettingsControlGroup

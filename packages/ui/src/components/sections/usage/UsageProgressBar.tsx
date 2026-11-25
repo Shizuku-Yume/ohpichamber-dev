@@ -25,7 +25,7 @@ export const UsageProgressBar: React.FC<UsageProgressBarProps> = ({
   return (
     <div className={cn('relative h-2.5 rounded-full bg-[var(--interactive-border)] overflow-hidden', className)}>
       <div
-        className="h-full transition-all duration-300"
+        className="h-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
         style={{ ...fillStyle, width: `${clamped}%` }}
         role="progressbar"
         aria-valuenow={clamped}

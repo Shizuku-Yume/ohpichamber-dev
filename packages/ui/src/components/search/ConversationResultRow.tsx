@@ -32,7 +32,7 @@ export const ConversationResultRow: React.FC<Props> = ({ result, leading, age, c
     branch: t('search.omni.result.context.branch'),
     space: t('search.omni.result.context.space'),
   }) : [];
-  return <div data-conversation-result={result.sessionId} className={cn('flex min-w-0 items-start gap-2 rounded-md px-2 py-1.5', selected ? 'bg-interactive-selection text-interactive-selection-foreground' : 'hover:bg-interactive-hover')}>
+  return <div data-conversation-result={result.sessionId} className={cn('flex min-w-0 items-start gap-2 rounded-md px-2 py-1.5 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none', selected ? 'oc-selected' : 'hover:bg-interactive-hover')}>
     <div className="min-w-0 flex-1">
       <button data-conversation-title-action type="button" onClick={onOpen} className={cn('flex w-full min-w-0 flex-col overflow-hidden text-start', mobile && (result.excerpt ? 'min-h-9 justify-end pb-0.5' : 'min-h-11 justify-center py-1'))}>
         <span className="flex w-full min-w-0 items-center gap-1.5">

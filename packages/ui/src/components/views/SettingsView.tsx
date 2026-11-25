@@ -894,8 +894,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                           onClick={() => openSearchResult(result)}
                           className={cn(
                             'flex w-full flex-col rounded-md px-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            'transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
                             hasDescription ? 'min-h-11 py-1.5' : 'py-2',
-                            active ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
+                            active ? 'oc-selected' : 'hover:bg-interactive-hover'
                           )}
                         >
                           <span className="typography-ui-label text-foreground truncate">{result.title}</span>
@@ -953,6 +954,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                             aria-current={selected ? 'page' : undefined}
                             className={cn(
                               'flex h-11 w-full items-center gap-2.5 rounded-md px-3 overflow-hidden sm:h-8 sm:gap-2 sm:px-2',
+                              'transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
                               selected
                                 ? 'oc-selected text-foreground'
                                 : 'text-foreground hover:bg-interactive-hover'
@@ -1034,7 +1036,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (activePageMeta.kind === 'split') {
       return (
         <div className="flex h-full min-h-0 overflow-hidden">
-          <div className="border-r bg-sidebar" style={{ width: SETTINGS_SPLIT_SIDEBAR_WIDTH, minWidth: SETTINGS_SPLIT_SIDEBAR_WIDTH, borderColor: 'var(--interactive-border)' }}>
+          <div className="border-r bg-background" style={{ width: SETTINGS_SPLIT_SIDEBAR_WIDTH, minWidth: SETTINGS_SPLIT_SIDEBAR_WIDTH, borderColor: 'var(--interactive-border)' }}>
             <ErrorBoundary>{renderPageSidebar(settingsSlug, {})}</ErrorBoundary>
           </div>
           <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal verticalTrackStart={scrollbarTopClearance}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
 import { useMagicPromptsStore } from '@/stores/useMagicPromptsStore';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -53,39 +53,41 @@ export const MagicPromptsSidebar: React.FC<MagicPromptsSidebarProps> = ({ onItem
   }, []);
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="border-b px-3 pt-4 pb-3">
-        <h2 className={SETTINGS_SECTION_TITLE_CLASS}>{t('settings.magicPrompts.sidebar.title')}</h2>
-        <p className="typography-meta mt-1 text-muted-foreground">{t('settings.magicPrompts.sidebar.description')}</p>
-        <SettingsProjectSelector className="mt-3" />
-      </div>
-
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-3 px-3 py-2 overflow-x-hidden">
-        {grouped.map((group) => (
-          <div key={group.groupKey} className="space-y-1">
-            <div className="typography-micro px-1 text-muted-foreground">{t(group.groupKey)}</div>
-            {group.items.map((item) => {
-              const selected = selectedPromptId === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedPromptId(item.id);
-                    onItemSelect?.();
-                  }}
-                  className={cn(
-                    'flex w-full items-center rounded-md px-2 py-1.5 text-start transition-colors',
-                    selected ? 'bg-interactive-selection text-foreground' : 'text-foreground hover:bg-interactive-hover'
-                  )}
-                >
-                  <span className="typography-ui-label truncate font-normal">{t(item.titleKey)}</span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </ScrollableOverlay>
-    </div>
+    <SettingsSidebarLayout
+      variant="background"
+      header={(
+        <div className="border-b px-3 pt-4 pb-3">
+          <h2 className={SETTINGS_SECTION_TITLE_CLASS}>{t('settings.magicPrompts.sidebar.title')}</h2>
+          <p className="typography-meta mt-1 text-muted-foreground">{t('settings.magicPrompts.sidebar.description')}</p>
+          <SettingsProjectSelector className="mt-3" />
+        </div>
+      )}
+    >
+      {grouped.map((group, groupIndex) => (
+        <div key={group.groupKey} className="space-y-1">
+          {groupIndex > 0 ? <div className="border-t border-border/50 pt-3" /> : null}
+          <div className="px-2 pb-1.5 text-xs font-semibold tracking-wide text-muted-foreground">{t(group.groupKey)}</div>
+          {group.items.map((item) => {
+            const selected = selectedPromptId === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setSelectedPromptId(item.id);
+                  onItemSelect?.();
+                }}
+                className={cn(
+                  'flex w-full items-center rounded-md px-2 py-1.5 text-start transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
+                  selected ? 'oc-selected' : 'hover:bg-interactive-hover'
+                )}
+              >
+                <span className="typography-ui-label truncate font-normal text-foreground">{t(item.titleKey)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </SettingsSidebarLayout>
   );
 };

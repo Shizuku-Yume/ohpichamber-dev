@@ -80,7 +80,7 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
               'w-[90vw] max-w-[1200px] h-[85vh] max-h-[900px]',
               'oc-window-corners oc-modal-shadow overflow-hidden origin-center',
               'bg-background',
-              'transition-all duration-150 ease-out',
+              'transition-[opacity,scale,filter] duration-150 ease-out motion-reduce:transition-none',
               'data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98]',
               'data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98]',
               'data-[nested-dialog-open]:brightness-[0.55] dark:data-[nested-dialog-open]:brightness-[0.4]',

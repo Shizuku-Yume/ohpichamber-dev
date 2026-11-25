@@ -242,7 +242,7 @@ export function GoToLineDialog({ open, onOpenChange, viewRef, variant = 'overlay
       ref={panelRef}
       data-editor-overlay
       className={cn(
-        'absolute inset-s-3 top-3 z-40 w-[min(32rem,calc(100%-1.5rem))] rounded-xl border border-[var(--interactive-border)] bg-[color:color-mix(in_srgb,var(--surface-elevated)_94%,transparent)] p-2.5 shadow-lg backdrop-blur-sm transition-all',
+        'absolute inset-s-3 top-3 z-40 w-[min(32rem,calc(100%-1.5rem))] rounded-xl border border-[var(--interactive-border)] bg-[color:color-mix(in_srgb,var(--surface-elevated)_94%,transparent)] p-2.5 shadow-lg backdrop-blur-sm transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
         open ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0',
       )}
     >

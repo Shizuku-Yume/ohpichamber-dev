@@ -141,7 +141,7 @@ const SessionFolderItemBase = <TSessionNode,>({
         style={{ paddingInlineStart: sessionTreeRowPaddingLeft(depth) }}
         className={cn(
           'group/folder relative flex items-center justify-between gap-1.5 py-1 min-w-0 rounded-md',
-          'cursor-pointer',
+          'cursor-pointer transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none hover:bg-interactive-hover/60',
           isDropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/30',
         )}
         onClick={!toggleable ? undefined : (event) => {
@@ -155,11 +155,11 @@ const SessionFolderItemBase = <TSessionNode,>({
           !toggleable
             ? undefined
             : (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onToggle();
-                }
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onToggle();
               }
+            }
         }
         aria-label={!toggleable ? undefined : isCollapsed
           ? t('sessions.sidebar.folderItem.expandAria', { folderName: folder.name })
@@ -328,6 +328,6 @@ const SessionFolderItemBase = <TSessionNode,>({
 export const SessionFolderItem = (
   /* SAFETY: React.memo preserves the generic component's props and return type. */
   React.memo(SessionFolderItemBase) as <TSessionNode>(
-  props: SessionFolderItemProps<TSessionNode>,
+    props: SessionFolderItemProps<TSessionNode>,
   ) => React.ReactElement
 );

@@ -375,7 +375,7 @@ const TaskToolSessions = ({ call, resultDetails, sessionId: addressedSessionId, 
                     <div
                         key={child.subagentId}
                         className={cn(
-                            'flex items-center gap-2 rounded-lg px-2 py-1 border border-border/20 bg-muted/15 min-w-0',
+                            'flex items-center gap-2 rounded-lg px-2 py-1 border border-border/20 bg-muted/15 min-w-0 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
                             child.childSessionId && 'hover:bg-interactive-hover cursor-pointer',
                         )}
                         onClick={child.childSessionId ? (event) => { event.stopPropagation(); openChild(child); } : undefined}

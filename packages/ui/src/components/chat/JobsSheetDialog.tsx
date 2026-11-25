@@ -128,7 +128,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
                   </div>
                   <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${toneToProgressClass(item.tone)}`}
+                      className={`h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none ${toneToProgressClass(item.tone)}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -151,7 +151,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
           </div>
           <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${toneToProgressClass(tone)}`}
+              className={`h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none ${toneToProgressClass(tone)}`}
               style={{ width: `${pct}%` }}
             />
           </div>

@@ -11,7 +11,7 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
 import { SettingsSidebarNoMatches, SettingsSidebarSearch } from '@/components/sections/shared/SettingsSidebarSearch';
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
@@ -107,32 +107,36 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
 
   const shownAgents = agents.filter((agent) => matchesRankQuery([agent.name, agent.description], query));
   return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="border-b px-3 pt-4 pb-3">
-        <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.agents.sidebar.title')}</h2>
-        <SettingsProjectSelector className="mb-3" />
-        <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.agents.sidebar.total', { count: agents.length })}</span>
-          <Button size="sm" data-settings-item="agents.create" variant="ghost" className="h-7 w-7 px-0 -my-1 text-muted-foreground" onClick={handleCreateNew} disabled={revision === undefined || Boolean(error)} aria-label={t('settings.common.actions.create')}>
-            <Icon name="add" className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        {agents.length > 0 && <SettingsSidebarSearch value={query} onChange={setQuery} />}
-      </div>
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
+    <>
+      <SettingsSidebarLayout
+        variant="background"
+        header={(
+          <div className="border-b px-3 pt-4 pb-3">
+            <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.agents.sidebar.title')}</h2>
+            <SettingsProjectSelector className="mb-3" />
+            <div className="flex items-center justify-between gap-2">
+              <span className="typography-meta text-muted-foreground">{t('settings.agents.sidebar.total', { count: agents.length })}</span>
+              <Button size="sm" data-settings-item="agents.create" variant="ghost" className="h-7 w-7 px-0 -my-1 text-muted-foreground" onClick={handleCreateNew} disabled={revision === undefined || Boolean(error)} aria-label={t('settings.common.actions.create')}>
+                <Icon name="add" className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {agents.length > 0 && <SettingsSidebarSearch value={query} onChange={setQuery} />}
+          </div>
+        )}
+      >
         <button
           type="button"
           onClick={() => { setSelectedAgent(null); onItemSelect?.(); }}
           data-settings-item="agents.global-settings"
           className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-start mb-2',
+            'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none text-start',
             selectedAgentName === null
-              ? 'bg-[var(--interactive-active)] text-foreground font-medium'
-              : 'hover:bg-[var(--interactive-hover)] text-muted-foreground'
+              ? 'oc-selected'
+              : 'hover:bg-interactive-hover'
           )}
         >
-          <Icon name="ai-agent" className="size-4 shrink-0" />
-          <span className="truncate">{t('settings.agents.sidebar.globalSettings')}</span>
+          <Icon name="ai-agent" className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="typography-ui-label font-normal truncate text-foreground">{t('settings.agents.sidebar.globalSettings')}</span>
         </button>
         {error ? (
           <div role="alert" className="space-y-2 py-3 typography-meta text-destructive">
@@ -160,7 +164,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
             onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.agentId : null)}
           />
         ))}
-      </ScrollableOverlay>
+      </SettingsSidebarLayout>
       <Dialog open={deleteAction !== null} onOpenChange={(open) => { if (!open && !pendingAction) setDeleteAction(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -186,7 +190,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };
 
@@ -214,7 +218,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ agent, isSelected, onSele
   );
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (event) => { event.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
+      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-2 py-1.5 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none select-none', isSelected ? 'oc-selected' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (event) => { event.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
         <div className="flex min-w-0 flex-1 items-center">
           <button
             type="button"

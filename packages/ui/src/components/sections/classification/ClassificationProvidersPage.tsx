@@ -74,13 +74,14 @@ const GeminiKeyField: React.FC = () => {
         <div className="flex w-full min-w-0 items-center gap-2">
           <Input
             type="password"
+            inputSize="compact"
             autoComplete="off"
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') save(); }}
             placeholder={keyPresent ? t('settings.routing.token.replacePlaceholder') : t('settings.routing.token.placeholder')}
             aria-label={t('settings.classification.gemini.key.label')}
-            className="h-8 rounded-md px-3 min-w-0 flex-1"
+            className="min-w-0 flex-1"
             disabled={busy}
           />
           <Button size="sm" variant="outline" onClick={save} disabled={busy || input.trim().length === 0}>
@@ -282,13 +283,14 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
                   <div className="flex w-full min-w-0 items-center gap-2">
                     <Input
                       type="password"
+                      inputSize="compact"
                       autoComplete="off"
                       value={tokenInput}
                       onChange={(event) => setTokenInput(event.target.value)}
                       onKeyDown={(event) => { if (event.key === 'Enter') void handleSaveToken(); }}
                       placeholder={tokenPresent ? t('settings.routing.token.replacePlaceholder') : t('settings.routing.token.placeholder')}
                       aria-label={t('settings.routing.token.label')}
-                      className="h-8 rounded-md px-3 min-w-0 flex-1"
+                      className="min-w-0 flex-1"
                       disabled={tokenBusy}
                     />
                     <Button size="sm" variant="outline" onClick={() => void handleSaveToken()} disabled={tokenBusy || tokenInput.trim().length === 0}>

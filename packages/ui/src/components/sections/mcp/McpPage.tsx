@@ -891,7 +891,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
           </SettingsSection>
         ) : null}
         {isReadOnly ? (
-          <div className="mb-4 rounded-md border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <div className="mb-4 rounded-md border border-border/40 bg-muted/30 px-3 py-2 typography-meta text-muted-foreground">
             {t('settings.mcp.page.unmanagedNotice')}
           </div>
         ) : null}

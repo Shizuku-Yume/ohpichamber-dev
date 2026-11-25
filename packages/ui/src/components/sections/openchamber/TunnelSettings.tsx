@@ -1409,9 +1409,10 @@ export const TunnelSettings: React.FC = () => {
                             className="group flex-1 justify-start gap-2 rounded-md px-0 py-1 pe-1 text-start hover:bg-[var(--interactive-hover)]"
                             disabled={state === 'starting' || state === 'stopping' || isSavingMode}
                           >
-                            {isOpen
-                              ? <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground" />
-                              : <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground" />}
+                            <Icon
+                              name="arrow-right-s"
+                              className={cn('h-4 w-4 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', isOpen && 'rotate-90 rtl:-rotate-90')}
+                            />
                             <span className="typography-ui-label min-w-0 flex-1 truncate text-foreground">{preset.name}</span>
                           </CollapsibleTrigger>
 

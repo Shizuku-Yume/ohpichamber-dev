@@ -8,7 +8,7 @@ import { fileContentMatchKey, type FileContentSearchState } from './useFileConte
 
 const render = (state: FileContentSearchState, activeMatchKey: string | null = null) => renderToStaticMarkup(
   <I18nProvider>
-    <FileContentSearchResults state={state} activeMatchKey={activeMatchKey} onOpen={() => {}} />
+    <FileContentSearchResults state={state} activeMatchKey={activeMatchKey} onOpen={() => { }} />
   </I18nProvider>,
 );
 
@@ -29,6 +29,6 @@ describe('FileContentSearchResults', () => {
     });
     const matches = [match(3), match(7)];
     const markup = render({ status: 'results', matches, stopped: null }, fileContentMatchKey(matches[1]));
-    expect(markup.match(/bg-interactive-selection /g)?.length).toBe(1);
+    expect(markup.match(/oc-selected /g)?.length).toBe(1);
   });
 });

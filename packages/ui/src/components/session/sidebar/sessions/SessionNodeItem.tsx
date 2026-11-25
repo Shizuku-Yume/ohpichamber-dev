@@ -303,8 +303,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         : isActive
           ? 'text-foreground'
           : showUnreadStatus || hasPendingPermission || hasPendingForm
-          ? 'font-semibold text-foreground'
-          : isStreaming ? 'text-foreground' : 'oc-title-rest'}
+            ? 'font-semibold text-foreground'
+            : isStreaming ? 'text-foreground' : 'oc-title-rest'}
       branchLabel={tooltipBranchLabel}
       spaceMark={branchInSpace ? t('sessions.sidebar.group.space') : null}
       statusDot={liveStateMark}
@@ -347,6 +347,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                 style={{ paddingInlineStart: isTwoLineRow ? sessionDetailedRowPaddingLeft(depth) : sessionTreeRowPaddingLeft(depth) }}
                 className={cn(
                   'group relative my-0.5 flex cursor-pointer items-center rounded-md pe-2.5',
+                  'transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
                   !isTwoLineRow && 'gap-1.5',
                   isTwoLineRow ? 'py-1.5' : 'py-[5px]',
                   !(isRowSelected || (isActive && !repeat)) && 'hover:bg-interactive-hover/60',
@@ -356,85 +357,85 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
               />
             }
           >
-          {treeSlot}
-          <div className="flex min-w-0 flex-1 items-center">
-            <Tooltip actionsRef={rowTooltip.actionsRef} onOpenChange={rowTooltip.onOpenChange}>
-              <TooltipTrigger asChild closeDelay={0} disabled={isVSCode}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  data-session-row-main=""
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
-                    event.preventDefault();
-                    event.currentTarget.click();
-                  }}
-                  aria-pressed={selectionModeEnabled ? isRowSelected : undefined}
-                  onPointerDown={interactions.handleRowPointerDown}
-                  onPointerUp={interactions.handleRowPointerEnd}
-                  onPointerCancel={interactions.handleRowPointerEnd}
-                  onPointerEnter={interactions.handleRowPointerEnter}
-                  onPointerLeave={interactions.handleRowHoverEnd}
-                  onFocus={interactions.handleRowFocus}
-                  onBlur={interactions.handleRowHoverEnd}
-                  onMouseDown={interactions.handleRowMouseDown}
-                  onClick={(event) => interactions.handleRowSelect(event)}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    handleSessionDoubleClick(session.sessionId, sessionTitle);
-                  }}
-                  className={cn(
-                    'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground select-none',
-                    interactions.isTouchPressed && 'bg-interactive-hover/70',
-                    isTimelineRow || !alwaysShowActions
-                      ? undefined
-                      : (isVSCode ? vscodeAlwaysActionPaddingClass : alwaysActionPaddingClass),
-                  )}
-                >
-                  {rowBody}
-                </div>
-              </TooltipTrigger>
-              {!isVSCode ? (
-                <TooltipContent side="right" sideOffset={8} className="max-w-xs text-start">
-                  <SessionRowTooltipBody
-                    sessionTitle={sessionTitle}
-                    updatedLabel={sessionUpdatedLabel}
-                    compactUpdatedLabel={sessionCompactUpdatedLabel}
-                    projectLabel={tooltipProjectLabel}
-                    branchLabel={tooltipBranchLabel}
-                    branchInSpace={branchInSpace}
-                    branchPrIconColor={branchPrIconColor}
-                    refLines={refLines}
-                    trackerDirectory={trackerDirectory}
-                    guestMarks={guestMarks}
-                    recap={currentRecap}
-                  />
-                </TooltipContent>
-              ) : null}
-            </Tooltip>
-          </div>
+            {treeSlot}
+            <div className="flex min-w-0 flex-1 items-center">
+              <Tooltip actionsRef={rowTooltip.actionsRef} onOpenChange={rowTooltip.onOpenChange}>
+                <TooltipTrigger asChild closeDelay={0} disabled={isVSCode}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    data-session-row-main=""
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                      event.preventDefault();
+                      event.currentTarget.click();
+                    }}
+                    aria-pressed={selectionModeEnabled ? isRowSelected : undefined}
+                    onPointerDown={interactions.handleRowPointerDown}
+                    onPointerUp={interactions.handleRowPointerEnd}
+                    onPointerCancel={interactions.handleRowPointerEnd}
+                    onPointerEnter={interactions.handleRowPointerEnter}
+                    onPointerLeave={interactions.handleRowHoverEnd}
+                    onFocus={interactions.handleRowFocus}
+                    onBlur={interactions.handleRowHoverEnd}
+                    onMouseDown={interactions.handleRowMouseDown}
+                    onClick={(event) => interactions.handleRowSelect(event)}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      handleSessionDoubleClick(session.sessionId, sessionTitle);
+                    }}
+                    className={cn(
+                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground select-none',
+                      interactions.isTouchPressed && 'bg-interactive-hover/70',
+                      isTimelineRow || !alwaysShowActions
+                        ? undefined
+                        : (isVSCode ? vscodeAlwaysActionPaddingClass : alwaysActionPaddingClass),
+                    )}
+                  >
+                    {rowBody}
+                  </div>
+                </TooltipTrigger>
+                {!isVSCode ? (
+                  <TooltipContent side="right" sideOffset={8} className="max-w-xs text-start">
+                    <SessionRowTooltipBody
+                      sessionTitle={sessionTitle}
+                      updatedLabel={sessionUpdatedLabel}
+                      compactUpdatedLabel={sessionCompactUpdatedLabel}
+                      projectLabel={tooltipProjectLabel}
+                      branchLabel={tooltipBranchLabel}
+                      branchInSpace={branchInSpace}
+                      branchPrIconColor={branchPrIconColor}
+                      refLines={refLines}
+                      trackerDirectory={trackerDirectory}
+                      guestMarks={guestMarks}
+                      recap={currentRecap}
+                    />
+                  </TooltipContent>
+                ) : null}
+              </Tooltip>
+            </div>
 
 
-          <SessionRowActions
-            layout={actionLayout}
-            session={session}
-            sessionTitle={sessionTitle}
-            archivedBucket={archivedBucket}
-            isCurrentSession={isCurrentSession}
-            isTimelineRow={isTimelineRow}
-            isOneLineTimelineRow={isOneLineTimelineRow}
-            alwaysShowActions={alwaysShowActions}
-            isVSCode={isVSCode}
-            isInWork={isInWork}
-            toggleWork={toggleWork}
-            setOpenSidebarMenuKey={setOpenSidebarMenuKey}
-            handleDeleteSession={handleDeleteSession}
-            isMenuOpen={menus.isMenuOpen}
-            isSessionMenuOpen={isSessionMenuOpen}
-            onMenuOpenChange={menus.handleMenuOpenChange}
-            onMenuOpenChangeComplete={menus.handleMenuOpenChangeComplete}
-            menuContent={menus.sessionMenuContent}
-          />
+            <SessionRowActions
+              layout={actionLayout}
+              session={session}
+              sessionTitle={sessionTitle}
+              archivedBucket={archivedBucket}
+              isCurrentSession={isCurrentSession}
+              isTimelineRow={isTimelineRow}
+              isOneLineTimelineRow={isOneLineTimelineRow}
+              alwaysShowActions={alwaysShowActions}
+              isVSCode={isVSCode}
+              isInWork={isInWork}
+              toggleWork={toggleWork}
+              setOpenSidebarMenuKey={setOpenSidebarMenuKey}
+              handleDeleteSession={handleDeleteSession}
+              isMenuOpen={menus.isMenuOpen}
+              isSessionMenuOpen={isSessionMenuOpen}
+              onMenuOpenChange={menus.handleMenuOpenChange}
+              onMenuOpenChangeComplete={menus.handleMenuOpenChangeComplete}
+              menuContent={menus.sessionMenuContent}
+            />
           </ContextMenu.Trigger>
           {menus.contextMenuContent}
         </ContextMenuRoot>

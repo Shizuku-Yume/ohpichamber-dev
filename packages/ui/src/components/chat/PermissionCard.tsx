@@ -106,7 +106,7 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
             {hasDetails ? (
                 <details className="group">
                     <summary className="typography-meta flex cursor-pointer list-none items-center gap-1 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-                        <Icon name="arrow-right-s" className="size-3.5 transition-transform group-open:rotate-90" />
+                        <Icon name="arrow-right-s" className="size-3.5 transition-transform duration-150 motion-reduce:transition-none group-open:rotate-90 rtl:group-open:-rotate-90" />
                         {t('chat.permissionCard.showDetails')}
                     </summary>
                     <ScrollableOverlay outerClassName="mt-1 max-h-48" className="p-0">

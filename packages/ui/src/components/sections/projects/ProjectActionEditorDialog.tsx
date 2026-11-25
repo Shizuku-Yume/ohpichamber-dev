@@ -107,154 +107,154 @@ export const ProjectActionEditorDialog: React.FC<{
 
         <div className={isMobile ? 'flex flex-col gap-5' : 'grid grid-cols-2 gap-x-10'}>
           <div className="flex min-w-0 flex-col gap-5">
-              <div className="flex items-center gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="icon" className="shrink-0" aria-label={t('settings.projects.actions.field.selectIconAria')}>
-                      <Icon name={projectActionIconName(draft.icon)} className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-[18.75rem] p-2">
-                    <div className="grid grid-cols-8 gap-1">
-                      {PROJECT_ACTION_ICONS.map((entry) => {
-                        const selected = (draft.icon || 'play') === entry.key;
-                        return (
-                          <button
-                            key={entry.key}
-                            type="button"
-                            onClick={() => update({ icon: entry.key })}
-                            aria-pressed={selected}
-                            className={cn(
-                              'inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-[var(--interactive-hover)]',
-                              selected && 'bg-interactive-selection text-interactive-selection-foreground',
-                            )}
-                            aria-label={t('settings.projects.actions.field.iconAria', { icon: entry.label })}
-                          >
-                            <Icon name={entry.Icon} className="h-4 w-4" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Input
-                  value={draft.name}
-                  autoFocus={isNew}
-                  onChange={(event) => update({ name: event.target.value })}
-                  placeholder={t('settings.projects.actions.field.actionNamePlaceholder')}
-                  aria-label={t('settings.projects.actions.field.actionNamePlaceholder')}
-                  className="min-w-0 flex-1"
-                />
-              </div>
-              <SettingsStackedField label={t('settings.projects.actions.field.command')} controlClassName="max-w-none">
-                <Textarea
-                  dir="ltr"
-                  value={draft.command}
-                  onChange={(event) => update({ command: event.target.value })}
-                  placeholder={t('settings.projects.actions.field.commandPlaceholder')}
-                  aria-label={t('settings.projects.actions.field.command')}
-                  className="min-h-[132px] w-full font-mono text-xs"
-                />
-              </SettingsStackedField>
-              <SettingsStackedField
-                label={t('settings.projects.actionEditor.savedIn')}
-                descriptionPlacement="after"
-                description={(
-                  <span className="block min-h-[2lh]">
-                    {!canShare && source === 'shared'
-                      ? t('settings.projects.actionEditor.savedIn.teamUnavailable')
-                      : source === 'shared'
-                        ? t('settings.projects.actionEditor.savedIn.teamHint')
-                        : t('settings.projects.actionEditor.savedIn.personalHint')}
-                  </span>
-                )}
-              >
-                <SettingsChipGroup<ProjectSetupSource>
-                  value={source}
-                  onChange={setSource}
-                  aria-label={t('settings.projects.actionEditor.savedIn')}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" size="icon" className="shrink-0" aria-label={t('settings.projects.actions.field.selectIconAria')}>
+                    <Icon name={projectActionIconName(draft.icon)} className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[18.75rem] p-2">
+                  <div className="grid grid-cols-8 gap-1">
+                    {PROJECT_ACTION_ICONS.map((entry) => {
+                      const selected = (draft.icon || 'play') === entry.key;
+                      return (
+                        <button
+                          key={entry.key}
+                          type="button"
+                          onClick={() => update({ icon: entry.key })}
+                          aria-pressed={selected}
+                          className={cn(
+                            'inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-[var(--interactive-hover)] transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
+                            selected && 'oc-selected',
+                          )}
+                          aria-label={t('settings.projects.actions.field.iconAria', { icon: entry.label })}
+                        >
+                          <Icon name={entry.Icon} className="h-4 w-4" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Input
+                value={draft.name}
+                autoFocus={isNew}
+                onChange={(event) => update({ name: event.target.value })}
+                placeholder={t('settings.projects.actions.field.actionNamePlaceholder')}
+                aria-label={t('settings.projects.actions.field.actionNamePlaceholder')}
+                className="min-w-0 flex-1"
+              />
+            </div>
+            <SettingsStackedField label={t('settings.projects.actions.field.command')} controlClassName="max-w-none">
+              <Textarea
+                dir="ltr"
+                value={draft.command}
+                onChange={(event) => update({ command: event.target.value })}
+                placeholder={t('settings.projects.actions.field.commandPlaceholder')}
+                aria-label={t('settings.projects.actions.field.command')}
+                className="min-h-[132px] w-full font-mono text-xs"
+              />
+            </SettingsStackedField>
+            <SettingsStackedField
+              label={t('settings.projects.actionEditor.savedIn')}
+              descriptionPlacement="after"
+              description={(
+                <span className="block min-h-[2lh]">
+                  {!canShare && source === 'shared'
+                    ? t('settings.projects.actionEditor.savedIn.teamUnavailable')
+                    : source === 'shared'
+                      ? t('settings.projects.actionEditor.savedIn.teamHint')
+                      : t('settings.projects.actionEditor.savedIn.personalHint')}
+                </span>
+              )}
+            >
+              <SettingsChipGroup<ProjectSetupSource>
+                value={source}
+                onChange={setSource}
+                aria-label={t('settings.projects.actionEditor.savedIn')}
+                options={[
+                  { value: 'shared', label: t('settings.projects.scope.team'), disabled: !canShare && source !== 'shared' },
+                  { value: 'personal', label: t('settings.projects.scope.personal') },
+                ]}
+              />
+            </SettingsStackedField>
+          </div>
+          <div className="flex min-w-0 flex-col gap-5">
+            <div className="flex flex-col gap-5">
+              <SettingsStackedField label={t('settings.projects.actions.runIn.label')} info={t('settings.projects.actions.runIn.info')}>
+                <SettingsChipGroup<'worktree' | 'parent'>
+                  value={draft.runIn === 'parent' ? 'parent' : 'worktree'}
+                  onChange={(value) => update({ runIn: value === 'parent' ? 'parent' : undefined })}
+                  aria-label={t('settings.projects.actions.runIn.aria')}
                   options={[
-                    { value: 'shared', label: t('settings.projects.scope.team'), disabled: !canShare && source !== 'shared' },
-                    { value: 'personal', label: t('settings.projects.scope.personal') },
+                    { value: 'worktree', label: t('settings.projects.actions.runIn.worktree') },
+                    { value: 'parent', label: t('settings.projects.actions.runIn.project') },
                   ]}
                 />
               </SettingsStackedField>
-          </div>
-          <div className="flex min-w-0 flex-col gap-5">
-              <div className="flex flex-col gap-5">
-                <SettingsStackedField label={t('settings.projects.actions.runIn.label')} info={t('settings.projects.actions.runIn.info')}>
-                  <SettingsChipGroup<'worktree' | 'parent'>
-                    value={draft.runIn === 'parent' ? 'parent' : 'worktree'}
-                    onChange={(value) => update({ runIn: value === 'parent' ? 'parent' : undefined })}
-                    aria-label={t('settings.projects.actions.runIn.aria')}
-                    options={[
-                      { value: 'worktree', label: t('settings.projects.actions.runIn.worktree') },
-                      { value: 'parent', label: t('settings.projects.actions.runIn.project') },
-                    ]}
-                  />
-                </SettingsStackedField>
 
-                <SettingsStackedField label={t('settings.projects.actionEditor.platforms')}>
-                  <div role="group" aria-label={t('settings.projects.actionEditor.platforms')} className="flex flex-wrap items-center gap-1">
-                    <Button type="button" variant="chip" size="xs" className="!font-normal" aria-pressed={platforms.length === 0} onClick={() => update({ platforms: undefined })}>
-                      {t('settings.projects.actionEditor.platformsAll')}
-                    </Button>
-                    {PLATFORMS.map((platform) => (
-                      <Button
-                        key={platform.value}
-                        type="button"
-                        variant="chip"
-                        size="xs"
-                        className="!font-normal"
-                        aria-pressed={platforms.includes(platform.value)}
-                        onClick={() => togglePlatform(platform.value)}
-                      >
-                        {platform.label}
-                      </Button>
-                    ))}
-                  </div>
-                </SettingsStackedField>
-              </div>
-              <div className="space-y-2">
-                <SettingsCheckboxRow
-                  checked={draft.autoOpenUrl === true}
-                  onChange={(checked) => update({ autoOpenUrl: checked ? true : undefined })}
-                  label={t('settings.projects.actionEditor.openUrl')}
-                  info={t('settings.projects.actions.field.overrideUrlTooltip')}
-                />
-                <div className="space-y-2 ps-6">
-                  <Input
-                    value={draft.openUrl ?? ''}
-                    disabled={!openUrl}
-                    onChange={(event) => update({ openUrl: event.target.value })}
-                    placeholder={t('settings.projects.actions.field.overrideUrlPlaceholder')}
-                    aria-label={t('settings.projects.actions.field.overrideUrlPlaceholder')}
-                    className="w-full font-mono text-xs"
-                  />
-                  <p className={cn(SETTINGS_HELPER_CLASS, !openUrl && 'opacity-60')}>{t('settings.projects.actions.field.overrideUrlVariables')}</p>
-                  {isDesktopShellApp ? (
-                    <Select
-                      value={draft.desktopOpenSshForward && desktopForwardOptions.some((entry) => entry.id === draft.desktopOpenSshForward) ? draft.desktopOpenSshForward : NO_SSH_FORWARD}
-                      onValueChange={(value) => update({ desktopOpenSshForward: value === NO_SSH_FORWARD ? undefined : value })}
-                      disabled={!openUrl || desktopForwardOptions.length === 0}
+              <SettingsStackedField label={t('settings.projects.actionEditor.platforms')}>
+                <div role="group" aria-label={t('settings.projects.actionEditor.platforms')} className="flex flex-wrap items-center gap-1">
+                  <Button type="button" variant="chip" size="xs" className="!font-normal" aria-pressed={platforms.length === 0} onClick={() => update({ platforms: undefined })}>
+                    {t('settings.projects.actionEditor.platformsAll')}
+                  </Button>
+                  {PLATFORMS.map((platform) => (
+                    <Button
+                      key={platform.value}
+                      type="button"
+                      variant="chip"
+                      size="xs"
+                      className="!font-normal"
+                      aria-pressed={platforms.includes(platform.value)}
+                      onClick={() => togglePlatform(platform.value)}
                     >
-                      <SelectTrigger className="w-full" aria-label={t('settings.projects.actions.field.desktopSshForward')}>
-                        <SelectValue>
-                          {(value) => (desktopForwardOptions.length === 0
-                            ? t('settings.projects.actions.state.noDesktopSshForwards')
-                            : desktopForwardOptions.find((entry) => entry.id === value)?.label ?? t('settings.projects.actions.field.useOutputManualUrl'))}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NO_SSH_FORWARD}>{t('settings.projects.actions.field.useOutputManualUrl')}</SelectItem>
-                        {desktopForwardOptions.map((entry) => (
-                          <SelectItem key={entry.id} value={entry.id}>{entry.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
+                      {platform.label}
+                    </Button>
+                  ))}
                 </div>
+              </SettingsStackedField>
+            </div>
+            <div className="space-y-2">
+              <SettingsCheckboxRow
+                checked={draft.autoOpenUrl === true}
+                onChange={(checked) => update({ autoOpenUrl: checked ? true : undefined })}
+                label={t('settings.projects.actionEditor.openUrl')}
+                info={t('settings.projects.actions.field.overrideUrlTooltip')}
+              />
+              <div className="space-y-2 ps-6">
+                <Input
+                  value={draft.openUrl ?? ''}
+                  disabled={!openUrl}
+                  onChange={(event) => update({ openUrl: event.target.value })}
+                  placeholder={t('settings.projects.actions.field.overrideUrlPlaceholder')}
+                  aria-label={t('settings.projects.actions.field.overrideUrlPlaceholder')}
+                  className="w-full font-mono text-xs"
+                />
+                <p className={cn(SETTINGS_HELPER_CLASS, !openUrl && 'opacity-60')}>{t('settings.projects.actions.field.overrideUrlVariables')}</p>
+                {isDesktopShellApp ? (
+                  <Select
+                    value={draft.desktopOpenSshForward && desktopForwardOptions.some((entry) => entry.id === draft.desktopOpenSshForward) ? draft.desktopOpenSshForward : NO_SSH_FORWARD}
+                    onValueChange={(value) => update({ desktopOpenSshForward: value === NO_SSH_FORWARD ? undefined : value })}
+                    disabled={!openUrl || desktopForwardOptions.length === 0}
+                  >
+                    <SelectTrigger className="w-full" aria-label={t('settings.projects.actions.field.desktopSshForward')}>
+                      <SelectValue>
+                        {(value) => (desktopForwardOptions.length === 0
+                          ? t('settings.projects.actions.state.noDesktopSshForwards')
+                          : desktopForwardOptions.find((entry) => entry.id === value)?.label ?? t('settings.projects.actions.field.useOutputManualUrl'))}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_SSH_FORWARD}>{t('settings.projects.actions.field.useOutputManualUrl')}</SelectItem>
+                      {desktopForwardOptions.map((entry) => (
+                        <SelectItem key={entry.id} value={entry.id}>{entry.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </div>
+            </div>
           </div>
         </div>
 

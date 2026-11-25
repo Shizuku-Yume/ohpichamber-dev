@@ -172,8 +172,8 @@ test('each template row selects by id and offers rename, duplicate and delete', 
   expect(useCommandsStore.getState().selectedCommandId).toBe('command_first');
 
   const rowContainers = container!.querySelectorAll('.group.relative.flex.items-center');
-  expect(rowContainers[0].className).toContain('bg-interactive-selection');
-  expect(rowContainers[1].className).not.toContain('bg-interactive-selection');
+  expect(rowContainers[0].className).toContain('oc-selected');
+  expect(rowContainers[1].className).not.toContain('oc-selected');
 
   const triggers = container!.querySelectorAll<HTMLButtonElement>('button[aria-label="first"]');
   expect(triggers).toHaveLength(1);

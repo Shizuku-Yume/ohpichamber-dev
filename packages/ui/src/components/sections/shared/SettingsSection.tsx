@@ -381,7 +381,7 @@ export const SettingsDisclosure: React.FC<SettingsDisclosureProps> = ({
           <Icon
             name="arrow-right-s"
             className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform duration-150',
+              'size-4 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none',
               expanded && 'rotate-90 rtl:-rotate-90',
             )}
           />

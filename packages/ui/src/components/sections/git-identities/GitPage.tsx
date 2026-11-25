@@ -32,7 +32,7 @@ import type { IconName } from "@/components/icon/icons";
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
+import { SettingsBadge, SettingsSection } from '@/components/sections/shared/SettingsSection';
 
 const ICON_MAP: Record<string, IconName> = {
   branch: 'git-branch',
@@ -53,7 +53,6 @@ const COLOR_MAP: Record<string, string> = {
 
 export const GitPage: React.FC = () => {
   const { t } = useI18n();
-  const { isMobile } = useDeviceInfo();
   const { sourceControl } = useRuntimeAPIs();
   const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
   const {
@@ -123,7 +122,7 @@ export const GitPage: React.FC = () => {
           )}
           settingsItem="git.identities"
         >
-          <div className={cn('flex flex-col', !isMobile && 'overflow-hidden rounded-lg bg-[var(--surface-elevated)]/70')}>
+          <div className="flex flex-col space-y-1">
             {globalIdentity && (
               <IdentityRow
                 profile={globalIdentity}
@@ -131,11 +130,10 @@ export const GitPage: React.FC = () => {
                 onEdit={() => openEditor('global')}
                 onToggleDefault={() => handleToggleDefault('global')}
                 isReadOnly
-                hasBorder={profiles.length > 0}
               />
             )}
 
-            {profiles.map((profile, i) => (
+            {profiles.map((profile) => (
               <IdentityRow
                 key={profile.id}
                 profile={profile}
@@ -143,7 +141,6 @@ export const GitPage: React.FC = () => {
                 onEdit={() => openEditor(profile.id)}
                 onToggleDefault={() => handleToggleDefault(profile.id)}
                 onDelete={() => setDeleteDialogProfile(profile)}
-                hasBorder={i < profiles.length - 1}
               />
             ))}
 
@@ -206,7 +203,6 @@ interface IdentityRowProps {
   onToggleDefault: () => void;
   onDelete?: () => void;
   isReadOnly?: boolean;
-  hasBorder?: boolean;
 }
 
 const IdentityRow: React.FC<IdentityRowProps> = ({
@@ -216,7 +212,6 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
   onToggleDefault,
   onDelete,
   isReadOnly,
-  hasBorder,
 }) => {
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
@@ -275,11 +270,9 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
         render={
           <div
             className={cn(
-              'group flex cursor-pointer items-center justify-between gap-3',
-              isMobile
-                ? 'min-h-11 rounded-md px-0 py-1.5 active:bg-interactive-hover'
-                : 'px-4 py-2.5 transition-colors hover:bg-[var(--interactive-hover)]/30',
-              !isMobile && hasBorder && 'border-b border-[var(--surface-subtle)]',
+              'group flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5',
+              'transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
+              isMobile ? 'min-h-11 active:bg-interactive-hover' : 'hover:bg-interactive-hover',
             )}
             onClick={onEdit}
             role="button"
@@ -304,9 +297,7 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="typography-ui-label text-foreground truncate">{identityDisplayName(profile, t)}</span>
               {isDefault && (
-                <span className="typography-micro text-primary bg-primary/12 px-1 rounded flex-shrink-0 leading-none pb-px border border-primary/25">
-                  {t('settings.gitIdentities.page.badge.default')}
-                </span>
+                <SettingsBadge>{t('settings.gitIdentities.page.badge.default')}</SettingsBadge>
               )}
             </div>
             <div className="typography-micro text-muted-foreground truncate leading-tight">

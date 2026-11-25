@@ -21,7 +21,7 @@ export const FileTreeIndentGuides: React.FC<{ depth: number }> = ({ depth }) => 
 export const FileTreeChevron: React.FC<{ expanded: boolean }> = ({ expanded }) => (
   <Icon
     name="arrow-right-s"
-    className={cn('size-3.5 flex-shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90 rtl:-rotate-90')}
+    className={cn('size-3.5 flex-shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', expanded && 'rotate-90 rtl:-rotate-90')}
   />
 );
 

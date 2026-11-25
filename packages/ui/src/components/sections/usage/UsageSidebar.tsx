@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -76,119 +76,119 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
     void persistUsageSettings({ usageDisplayMode: value });
   }, [persistUsageSettings, setUsageDisplayMode]);
 
-  const bgClass = 'bg-background';
 
   return (
-    <div className={cn('flex h-full flex-col', bgClass)}>
-      <div className="border-b px-3 pt-4 pb-3">
-        <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.usage.sidebar.title')}</h2>
-        <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.usage.sidebar.total', { count: rows.length })}</span>
-          <div className="flex items-center gap-2">
-            <Button size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0 text-muted-foreground"
-              onClick={() => {
-                refreshSettingsReport();
-                void fetchAllQuotas();
-              }}
-              aria-label={t('settings.usage.sidebar.actions.refreshAria')}
-              title={t('settings.usage.sidebar.actions.refreshTitle')}
-              disabled={isLoading}
-            >
-              <Icon name="refresh" className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
-            </Button>
+    <SettingsSidebarLayout
+      variant="background"
+      header={(
+        <div className="border-b px-3 pt-4 pb-3">
+          <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.usage.sidebar.title')}</h2>
+          <div className="flex items-center justify-between gap-2">
+            <span className="typography-meta text-muted-foreground">{t('settings.usage.sidebar.total', { count: rows.length })}</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0 text-muted-foreground"
+                onClick={() => {
+                  refreshSettingsReport();
+                  void fetchAllQuotas();
+                }}
+                aria-label={t('settings.usage.sidebar.actions.refreshAria')}
+                title={t('settings.usage.sidebar.actions.refreshTitle')}
+                disabled={isLoading}
+              >
+                <Icon name="refresh" className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
+              </Button>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="typography-micro text-muted-foreground">{t('settings.usage.sidebar.field.display')}</span>
+            <Select value={usageDisplayMode} onValueChange={handleUsageDisplayModeChange}>
+              <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
+                <SelectValue>
+                  {usageDisplayMode === 'remaining'
+                    ? t('settings.usage.sidebar.field.displayModeRemaining')
+                    : t('settings.usage.sidebar.field.displayModeUsage')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="usage">{t('settings.usage.sidebar.field.displayModeUsage')}</SelectItem>
+                <SelectItem value="remaining">{t('settings.usage.sidebar.field.displayModeRemaining')}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="typography-micro text-muted-foreground">{t('settings.usage.sidebar.field.display')}</span>
-          <Select value={usageDisplayMode} onValueChange={handleUsageDisplayModeChange}>
-            <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
-              <SelectValue>
-                {usageDisplayMode === 'remaining'
-                  ? t('settings.usage.sidebar.field.displayModeRemaining')
-                  : t('settings.usage.sidebar.field.displayModeUsage')}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="usage">{t('settings.usage.sidebar.field.displayModeUsage')}</SelectItem>
-              <SelectItem value="remaining">{t('settings.usage.sidebar.field.displayModeRemaining')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      )}
+    >
+      {/* All providers row */}
+      <div
+        className={cn(
+          'group relative flex items-center rounded-md px-2 py-1.5 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
+          selectedProvider === null ? 'oc-selected' : 'hover:bg-interactive-hover'
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedProvider(null);
+            onItemSelect?.();
+          }}
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Icon name="bar-chart-2" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
+            {t('usageStats.providers.allProviders')}
+          </span>
+        </button>
       </div>
 
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
-        {/* All providers row */}
-        <div
-          className={cn(
-            'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
-            selectedProvider === null ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedProvider(null);
-              onItemSelect?.();
-            }}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      {quotaPhase === 'unknown' && rows.length === 0 ? (
+        <p className="typography-meta px-1 text-muted-foreground">{t('settings.usage.state.unknown')}</p>
+      ) : null}
+      {rows.map((row) => {
+        const result = results.find((entry) => entry.providerId === row.quotaProviderId);
+        const percent = getUsagePercent(result?.usage);
+        const tone = resolveUsageTone(percent);
+        const isSelected = row.statsProviderId === selectedProvider;
+        const configured = result?.configured ?? true;
+
+        const statusStyle = !configured
+          ? { backgroundColor: 'var(--surface-muted-foreground)', opacity: 0.4 }
+          : tone === 'critical'
+            ? { backgroundColor: 'var(--status-error)' }
+            : tone === 'warn'
+              ? { backgroundColor: 'var(--status-warning)' }
+              : { backgroundColor: 'var(--status-success)' };
+
+        return (
+          <div
+            key={row.quotaProviderId}
+            className={cn(
+              'group relative flex items-center rounded-md px-2 py-1.5 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
+              isSelected ? 'oc-selected' : 'hover:bg-interactive-hover'
+            )}
           >
-            <Icon name="bar-chart-2" className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="typography-ui-label font-medium truncate flex-1 min-w-0 text-foreground">
-              {t('usageStats.providers.allProviders')}
-            </span>
-          </button>
-        </div>
-
-        {quotaPhase === 'unknown' && rows.length === 0 ? (
-          <p className="typography-meta px-1 text-muted-foreground">{t('settings.usage.state.unknown')}</p>
-        ) : null}
-        {rows.map((row) => {
-          const result = results.find((entry) => entry.providerId === row.quotaProviderId);
-          const percent = getUsagePercent(result?.usage);
-          const tone = resolveUsageTone(percent);
-          const isSelected = row.statsProviderId === selectedProvider;
-          const configured = result?.configured ?? true;
-
-          const statusStyle = !configured
-            ? { backgroundColor: 'var(--surface-muted-foreground)', opacity: 0.4 }
-            : tone === 'critical'
-              ? { backgroundColor: 'var(--status-error)' }
-              : tone === 'warn'
-                ? { backgroundColor: 'var(--status-warning)' }
-                : { backgroundColor: 'var(--status-success)' };
-
-          return (
-            <div
-              key={row.quotaProviderId}
-              className={cn(
-                'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
-                isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
-              )}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProvider(row.statsProviderId);
+                onItemSelect?.();
+              }}
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedProvider(row.statsProviderId);
-                  onItemSelect?.();
-                }}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {result?.usage ? (
-                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={statusStyle} />
-                ) : (
-                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0 bg-transparent" />
-                )}
-                <ProviderLogo providerId={row.statsProviderId} alt={row.name} className="h-4 w-4 flex-shrink-0" />
-                <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
-                  {row.name}
-                </span>
-              </button>
-            </div>
-          );
-        })}
-      </ScrollableOverlay>
-    </div>
+              {result?.usage ? (
+                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={statusStyle} />
+              ) : (
+                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0 bg-transparent" />
+              )}
+              <ProviderLogo providerId={row.statsProviderId} alt={row.name} className="h-4 w-4 flex-shrink-0" />
+              <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
+                {row.name}
+              </span>
+            </button>
+          </div>
+        );
+      })}
+    </SettingsSidebarLayout>
   );
 };

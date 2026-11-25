@@ -121,8 +121,8 @@ const SessionTabItem: React.FC<{
         onOpenChangeComplete={(open) => onMenuOpenChangeComplete?.(open)}
       >
         <Tooltip>
-        <TooltipTrigger asChild>
-        <ContextMenu.Trigger
+          <TooltipTrigger asChild>
+            <ContextMenu.Trigger
               render={(triggerProps) => (
                 <div
                   {...triggerProps}
@@ -156,8 +156,9 @@ const SessionTabItem: React.FC<{
                   }}
                   className={cn(
                     'session-tab group/session-tab relative flex h-7 w-full min-w-0 select-none items-center rounded-md px-2',
+                    'transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
                     isActive
-                      ? 'bg-interactive-selection text-interactive-selection-foreground'
+                      ? 'oc-selected'
                       : 'cursor-pointer text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
                   )}
                 >
@@ -169,18 +170,18 @@ const SessionTabItem: React.FC<{
                       />
                       {!suppressControls ? (
                         <Tooltip>
-                        <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={t('header.sessionTabs.closeTab')}
-                          onClick={(event) => { event.stopPropagation(); onClose(tab.id); }}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          className="absolute inset-0 flex items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:opacity-100 group-hover/session-tab:opacity-100"
-                        >
-                          <Icon name="close" className="size-3.5" />
-                        </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" sideOffset={6}><TooltipLabelWithShortcut label={t('header.sessionTabs.closeTab')} shortcut={isActive ? formatShortcutForDisplay(isDesktopShell() ? 'mod+w' : getEffectiveShortcutCombo('close_session_tab', shortcutOverrides), '') : undefined} /></TooltipContent>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={t('header.sessionTabs.closeTab')}
+                              onClick={(event) => { event.stopPropagation(); onClose(tab.id); }}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              className="absolute inset-0 flex items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:opacity-100 group-hover/session-tab:opacity-100"
+                            >
+                              <Icon name="close" className="size-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}><TooltipLabelWithShortcut label={t('header.sessionTabs.closeTab')} shortcut={isActive ? formatShortcutForDisplay(isDesktopShell() ? 'mod+w' : getEffectiveShortcutCombo('close_session_tab', shortcutOverrides), '') : undefined} /></TooltipContent>
                         </Tooltip>
                       ) : null}
                     </span>
@@ -204,9 +205,9 @@ const SessionTabItem: React.FC<{
                   </div>
                 </div>
               )}
-        />
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}><TooltipLabelWithShortcut label={title} shortcut={tabShortcut} /></TooltipContent>
+            />
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}><TooltipLabelWithShortcut label={title} shortcut={tabShortcut} /></TooltipContent>
         </Tooltip>
         <ContextMenuContent finalFocus={() => menuReturnsFocus?.() ?? true} className="min-w-[190px]">
           {renderMenu(menuArgs)}
@@ -421,7 +422,7 @@ export const SessionTabsStrip: React.FC<{
           <div
             role="tab"
             aria-selected
-            className="app-region-no-drag session-tab-slot flex h-7 w-44 shrink-0 items-center rounded-md bg-interactive-selection px-2 text-interactive-selection-foreground"
+            className="app-region-no-drag session-tab-slot flex h-7 w-44 shrink-0 items-center rounded-md oc-selected px-2 text-interactive-selection-foreground"
             data-active="true"
             data-active-session-tab
           >
@@ -437,7 +438,7 @@ export const SessionTabsStrip: React.FC<{
           <div
             role="tab"
             aria-selected
-            className="app-region-no-drag session-tab-slot flex h-7 w-44 shrink-0 items-center rounded-md bg-interactive-selection px-2"
+            className="app-region-no-drag session-tab-slot flex h-7 w-44 shrink-0 items-center rounded-md oc-selected px-2"
             data-active="true"
           >
             <div className="min-w-0 flex-1">{children}</div>

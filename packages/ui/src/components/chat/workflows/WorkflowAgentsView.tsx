@@ -120,7 +120,7 @@ const AgentDetails: React.FC<{ run: WorkflowRun; agent: WorkflowAgent; onOpenSes
                   aria-expanded={promptOpen}
                   className="flex items-center gap-1 typography-micro font-medium text-muted-foreground hover:text-foreground"
                 >
-                  <Icon name="arrow-right-s" className={cn('size-3.5 transition-transform', promptOpen && 'rotate-90 rtl:-rotate-90')} />
+                  <Icon name="arrow-right-s" className={cn('size-3.5 transition-transform duration-150 motion-reduce:transition-none', promptOpen && 'rotate-90 rtl:-rotate-90')} />
                   {t('workflows.panel.agent.prompt')}
                 </button>
               </TooltipTrigger>
@@ -251,7 +251,7 @@ export const WorkflowAgentsView: React.FC<{ run: WorkflowRun; directory: string 
                 aria-expanded={expanded}
                 className="flex h-7 w-full min-w-0 items-center gap-1.5 text-start typography-micro font-medium text-muted-foreground hover:text-foreground"
               >
-                <Icon name="arrow-right-s" className={cn('size-3.5 shrink-0 transition-transform', expanded && 'rotate-90 rtl:-rotate-90')} />
+                <Icon name="arrow-right-s" className={cn('size-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none', expanded && 'rotate-90 rtl:-rotate-90')} />
                 <span className="min-w-0 truncate" dir="auto">{group.title ?? t('chat.workflow.phase.unphased')}</span>
                 {model ? <span className="min-w-0 truncate font-normal" dir="ltr">{`· ${model}`}</span> : null}
                 {spend ? <span className="ms-auto shrink-0 tabular-nums font-normal" dir="ltr">{spend}</span> : null}

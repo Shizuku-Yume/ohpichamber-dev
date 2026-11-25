@@ -39,7 +39,7 @@ export const PlanTodos: React.FC<{ projectRef: ProjectRef; planId: string }> = (
         aria-expanded={open}
         className="flex items-center gap-1 typography-meta text-muted-foreground hover:text-foreground focus-visible:outline-none"
       >
-        <Icon name={open ? 'arrow-down-s' : 'arrow-right-s'} className={cn('size-3.5', !open && 'rtl:rotate-180')} />
+        <Icon name="arrow-right-s" className={cn('size-3.5 transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-90 rtl:-rotate-90')} />
         <span>{t('planView.todos.title')}</span>
         <span className="tabular-nums">{`${done}/${linked.length}`}</span>
       </button>

@@ -322,7 +322,7 @@ export const ContextPanelContent: React.FC = () => {
           <div className="mt-2.5 flex h-1 w-full overflow-hidden rounded-full bg-[var(--surface-subtle)]">
             {viewModel.usagePercent > 0 && (
               <div
-                className="rounded-full transition-all duration-300"
+                className="rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                 style={{
                   width: `${Math.max(0.5, viewModel.usagePercent)}%`,
                   backgroundColor: viewModel.usagePercent > 80 ? 'var(--status-warning)' : 'var(--primary-base)',

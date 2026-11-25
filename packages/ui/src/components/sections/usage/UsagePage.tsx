@@ -267,8 +267,8 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
                     <span className="typography-micro text-muted-foreground">({familyModels.length})</span>
                   </span>
                   <Icon
-                    name={isCollapsed ? 'arrow-right-s' : 'arrow-down-s'}
-                    className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors"
+                    name="arrow-right-s"
+                    className={`h-4 w-4 text-muted-foreground group-hover:text-foreground transition-transform duration-150 motion-reduce:transition-none ${isCollapsed ? '' : 'rotate-90 rtl:-rotate-90'}`}
                   />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -288,8 +288,8 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
                   <span className="typography-micro text-muted-foreground">({otherModels.length})</span>
                 </span>
                 <Icon
-                  name={collapsedFamilies.other ? 'arrow-right-s' : 'arrow-down-s'}
-                  className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors"
+                  name="arrow-right-s"
+                  className={`h-4 w-4 text-muted-foreground group-hover:text-foreground transition-transform duration-150 motion-reduce:transition-none ${collapsedFamilies.other ? '' : 'rotate-90 rtl:-rotate-90'}`}
                 />
               </CollapsibleTrigger>
               <CollapsibleContent>

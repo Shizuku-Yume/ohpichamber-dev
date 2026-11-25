@@ -310,11 +310,11 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         onClick={interactive ? () => setStoredTab(section.id) : undefined}
         aria-current={isActive ? 'page' : undefined}
         className={cn(
-          'flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md px-2 transition-colors',
+          'flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md px-2 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           isActive
-            ? 'bg-interactive-selection text-interactive-selection-foreground'
-            : 'text-muted-foreground hover:text-foreground',
+            ? 'oc-selected'
+            : 'text-muted-foreground hover:text-foreground hover:bg-interactive-hover',
         )}
       >
         <Icon name={section.icon} className="h-3.5 w-3.5 flex-shrink-0" />

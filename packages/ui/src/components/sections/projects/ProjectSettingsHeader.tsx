@@ -137,8 +137,9 @@ const ProjectAppearancePicker: React.FC<{
                   aria-label={entry.label}
                   className={cn(
                     ICON_CELL_CLASS,
+                    'transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
                     selected
-                      ? 'bg-interactive-selection text-interactive-selection-foreground'
+                      ? 'oc-selected'
                       : 'text-foreground hover:bg-[var(--interactive-hover)]',
                   )}
                 >

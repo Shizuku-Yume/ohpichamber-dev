@@ -103,7 +103,7 @@ export const GoalCard: React.FC<StructuredCardBodyProps> = ({ input, details, ou
                     {budgetProgress !== null ? (
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
                             <div
-                                className="h-full rounded-full transition-all"
+                                className="h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                                 style={{
                                     width: `${budgetProgress}%`,
                                     backgroundColor: goal.status === 'budget-limited' ? 'var(--status-warning)' : 'var(--status-info)',

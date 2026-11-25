@@ -267,7 +267,7 @@ export const OmpSettingsPage: React.FC = () => {
   if (loading && !state) {
     return (
       <SettingsPageLayout title={t('settings.page.omp.title')} description={t('settings.page.omp.description')}>
-        <div className="py-8 text-center text-sm text-muted-foreground">...</div>
+        <div className="py-8 text-center typography-ui-label text-muted-foreground">...</div>
       </SettingsPageLayout>
     );
   }

@@ -11,7 +11,7 @@ import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
-import { SETTINGS_WIDTH_SHORT_TEXT_CLASS, SettingsRadioGroup, SettingsRadioOption } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS, SettingsRadioGroup, SettingsRadioOption } from '@/components/sections/shared/SettingsSection';
 import {
   SETTINGS_CARD_GRID_CLASS,
   SettingsAddCard,
@@ -151,7 +151,7 @@ export const McpGrid: React.FC = () => {
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0 text-muted-foreground"
+            className={SETTINGS_ICON_BUTTON_CLASS}
             disabled={isRefreshing}
             onClick={handleRefresh}
             aria-label={t('settings.mcp.sidebar.actions.refreshStatusAria')}

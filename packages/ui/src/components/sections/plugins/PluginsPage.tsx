@@ -31,6 +31,7 @@ import {
   SettingsControlGroup,
   SettingsFieldRow,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
   SettingsSection,
   SettingsStackedField,
 } from '@/components/sections/shared/SettingsSection';
@@ -689,7 +690,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 shrink-0 text-muted-foreground"
+              className={SETTINGS_ICON_BUTTON_CLASS}
               onClick={() => void usePluginsStore.getState().loadPlugins({ directory, force: true })}
               disabled={isLoading || !directory}
               aria-label={t('settings.plugins.action.refresh')}
@@ -876,7 +877,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 shrink-0 text-muted-foreground"
+              className={SETTINGS_ICON_BUTTON_CLASS}
               onClick={() => void usePluginsStore.getState().loadPlugins({ directory, force: true })}
               disabled={isLoading || isMutating}
               aria-label={t('settings.plugins.action.refresh')}
@@ -1067,7 +1068,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             </p>
           ) : null}
 
-          <div className="divide-y divide-[var(--surface-subtle)]">
+          <div className="space-y-1">
             {marketplaceEntries.map(entry => {
               const installed = installedMarketplaceKeys.has(`${entry.name}@${entry.marketplace}@${marketplaceScope}`);
               return (

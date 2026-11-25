@@ -23,7 +23,7 @@ import { FileResourcePathSchema } from '@openchamber/agent-contract';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
 import { SettingsSidebarNoMatches, SettingsSidebarSearch } from '@/components/sections/shared/SettingsSidebarSearch';
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
@@ -219,33 +219,35 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
   ];
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="border-b px-3 pt-4 pb-3">
-        <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.skills.sidebar.title')}</h2>
-        <SettingsProjectSelector className="mb-3" />
-        <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.skills.sidebar.total', { count: entries.length })}</span>
-          <Button
-            size="sm"
-            data-settings-item="skills.create"
-            variant="ghost"
-            className="h-7 w-7 px-0 -my-1 text-muted-foreground"
-            onClick={create}
-            aria-label={t('settings.common.actions.create')}
-          >
-            <Icon name="add" className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        {entries.length > 0 ? <SettingsSidebarSearch value={query} onChange={setQuery} /> : null}
-      </div>
-
-      {applyFailed ? (
-        <p role="alert" className="px-3 py-2 typography-meta text-[var(--status-warning)]">
-          {t('settings.skills.page.status.sourceCommittedApplyFailed')}
-        </p>
-      ) : null}
-
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
+    <>
+      <SettingsSidebarLayout
+        variant="background"
+        header={(
+          <div className="border-b px-3 pt-4 pb-3">
+            <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.skills.sidebar.title')}</h2>
+            <SettingsProjectSelector className="mb-3" />
+            <div className="flex items-center justify-between gap-2">
+              <span className="typography-meta text-muted-foreground">{t('settings.skills.sidebar.total', { count: entries.length })}</span>
+              <Button
+                size="sm"
+                data-settings-item="skills.create"
+                variant="ghost"
+                className="h-7 w-7 px-0 -my-1 text-muted-foreground"
+                onClick={create}
+                aria-label={t('settings.common.actions.create')}
+              >
+                <Icon name="add" className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {entries.length > 0 ? <SettingsSidebarSearch value={query} onChange={setQuery} /> : null}
+          </div>
+        )}
+      >
+        {applyFailed ? (
+          <p role="alert" className="typography-meta text-[var(--status-warning)]">
+            {t('settings.skills.page.status.sourceCommittedApplyFailed')}
+          </p>
+        ) : null}
         {entries.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 opacity-50" />
@@ -256,17 +258,23 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
           <SettingsSidebarNoMatches query={query} />
         ) : (
           <>
-            {groups.map(({ scope, label }) => {
-              const groupEntries = shownEntries
-                .filter(entry => entry.scope === scope)
-                .sort((a, b) => a.name.localeCompare(b.name));
-              if (groupEntries.length === 0) return null;
-              return (
-                <React.Fragment key={scope}>
-                  <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {label}
+            {(() => {
+              const visibleGroups = groups
+                .map(({ scope, label }) => ({
+                  scope,
+                  label,
+                  groupEntries: shownEntries
+                    .filter(entry => entry.scope === scope)
+                    .sort((a, b) => a.name.localeCompare(b.name)),
+                }))
+                .filter((group) => group.groupEntries.length > 0);
+              return visibleGroups.map((group, groupIndex) => (
+                <React.Fragment key={group.scope}>
+                  {groupIndex > 0 ? <div className="border-t border-border/50 pt-3" /> : null}
+                  <div className="px-2 pb-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
+                    {group.label}
                   </div>
-                  {groupEntries.map(entry => {
+                  {group.groupEntries.map(entry => {
                     return (
                       <SkillListItem
                         key={entry.key}
@@ -274,7 +282,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                         isSelected={entry.kind === 'native'
                           ? selectedSkillName === entry.reference
                           : selectedAuthoredSkill?.scope === entry.reference.scope
-                            && selectedAuthoredSkill.authoredSkillId === entry.reference.authoredSkillId}
+                          && selectedAuthoredSkill.authoredSkillId === entry.reference.authoredSkillId}
                         onSelect={() => {
                           if (entry.kind === 'native') setSelectedSkill(entry.reference);
                           else setSelectedAuthoredSkill(entry.reference);
@@ -289,11 +297,11 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                     );
                   })}
                 </React.Fragment>
-              );
-            })}
+              ));
+            })()}
           </>
         )}
-      </ScrollableOverlay>
+      </SettingsSidebarLayout>
 
       <Dialog
         open={deleteDialogSkill !== null}
@@ -357,7 +365,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };
 
@@ -407,7 +415,7 @@ const SkillListItem: React.FC<SkillListItemProps> = ({
   );
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? event => { event.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
+      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-2 py-1.5 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none select-none', isSelected ? 'oc-selected' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? event => { event.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
         <div className="flex min-w-0 flex-1 items-center">
           <button
             onClick={onSelect}

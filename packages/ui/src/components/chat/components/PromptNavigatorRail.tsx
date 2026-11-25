@@ -603,7 +603,7 @@ export function PromptNavigatorRail({
                                         <span
                                             aria-hidden="true"
                                             className={cn(
-                                                'block h-0.5 rounded-full transition-all duration-200 ease-out',
+                                                'block h-0.5 rounded-full transition-[width,background-color] duration-200 ease-out motion-reduce:transition-none',
                                                 isActive
                                                     ? 'bg-[var(--surface-foreground)]'
                                                     : isHighlighted

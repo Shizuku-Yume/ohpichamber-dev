@@ -68,7 +68,7 @@ const JsonSummarySection = React.memo(({
                 <Icon
                     name="arrow-right-s"
                     className={cn(
-                        'h-3.5 w-3.5 shrink-0 transition-transform',
+                        'h-3.5 w-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
                         expanded && 'rotate-90 rtl:-rotate-90',
                     )}
                 />
@@ -98,7 +98,7 @@ const JsonSummaryValue = React.memo(({
         return (
             <JsonSummarySection summary={summary} initiallyOpen={depth < 2}>
                 <div className="space-y-1">
-                {value.map((item, index) => <JsonSummaryValue key={index} value={item} depth={depth + 1} />)}
+                    {value.map((item, index) => <JsonSummaryValue key={index} value={item} depth={depth + 1} />)}
                 </div>
             </JsonSummarySection>
         );

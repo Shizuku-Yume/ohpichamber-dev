@@ -512,7 +512,7 @@ function ProviderDetail({
               {t('settings.providers.page.models.noModelsMatchFilter')}
             </p>
           ) : (
-            <div className="divide-y divide-[var(--surface-subtle)]">
+            <div className="space-y-1">
               {filteredModels.map((model) => {
                 const isHidden = hiddenModelIds.has(model.modelId);
                 const contextTokens = formatTokens(model.contextWindow);

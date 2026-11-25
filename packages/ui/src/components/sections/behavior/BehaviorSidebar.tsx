@@ -111,7 +111,6 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
         {showAgentsMd ? (
           <SettingsSidebarItem
             title="AGENTS.md"
-            className="px-2 py-1.5"
             icon={<Icon name="file-text" className="size-3.5 shrink-0 text-muted-foreground" />}
             selected={activeKey === `agents-md:${scopeKey}`}
             onSelect={() => onSelect({ type: 'agents-md', scope: scopeKey })}
@@ -137,7 +136,6 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
                     title={exists || selected ? file.name : (
                       <span className="text-muted-foreground">{file.name}</span>
                     )}
-                    className="px-2 py-1.5"
                     icon={<Icon name="file-text" className="size-3.5 shrink-0 text-muted-foreground" />}
                     selected={selected}
                     onSelect={() =>
@@ -157,7 +155,6 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
             </div>
             {showDraftRule && draftRule ? (
               <SettingsSidebarItem
-                className="px-2 py-1.5"
                 title={(
                   <span className="inline-flex min-w-0 items-center gap-1.5">
                     <span className="truncate">{draftRule.name}</span>
@@ -173,7 +170,6 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
             ) : null}
             {visibleRules.map((rule) => (
               <SettingsSidebarItem
-                className="px-2 py-1.5"
                 key={`${fileScope}:rule:${rule.name}`}
                 title={(
                   <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -201,7 +197,6 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
             </div>
             {showDraftInstruction && draftInstruction ? (
               <SettingsSidebarItem
-                className="px-2 py-1.5"
                 title={(
                   <span className="inline-flex min-w-0 items-center gap-1.5">
                     <span className="truncate">{draftInstruction.name}</span>
@@ -222,7 +217,6 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
             ) : null}
             {visibleInstructions.map((instruction) => (
               <SettingsSidebarItem
-                className="px-2 py-1.5"
                 key={`${fileScope}:instruction:${instruction.name}`}
                 title={instruction.name}
                 metadata={instruction.fields.applyTo || undefined}
@@ -268,7 +262,7 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
     <SettingsSidebarLayout
       variant="background"
       header={(
-        <div className="border-b px-4 pt-4 pb-3" style={{ borderColor: 'var(--interactive-border)' }}>
+        <div className="border-b px-3 pt-4 pb-3">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className={SETTINGS_SECTION_TITLE_CLASS}>{t('settings.behavior.page.title')}</h2>
             {canCreate ? (
@@ -293,7 +287,6 @@ export const BehaviorSidebar: React.FC<BehaviorSidebarProps> = ({
       <div className="space-y-4 py-1">
         {promptMatches ? (
           <SettingsSidebarItem
-            className="px-2 py-1.5"
             title={t('settings.behavior.section.prompt.title')}
             icon={<Icon name="settings-3" className="size-3.5 shrink-0 text-muted-foreground" />}
             selected={activeKey === 'prompt'}

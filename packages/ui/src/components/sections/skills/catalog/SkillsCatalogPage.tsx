@@ -107,9 +107,10 @@ const SourceCard: React.FC<{
       aria-pressed={isActive}
       className={cn(
         'oc-tile w-full min-h-24 text-start rounded-lg p-3.5 flex gap-3 items-start',
+        'transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isActive
-          ? 'bg-interactive-selection text-interactive-selection-foreground'
+          ? 'oc-selected'
           : 'oc-tile-hover'
       )}
     >
@@ -710,8 +711,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
         </SettingsSection>
       </SettingsPageLayout>
 
-        <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
-        <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
+      <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
+      <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
 
       <Dialog open={uninstallItems.length > 0} onOpenChange={(open) => !open && !isUninstalling && setUninstallItems([])}>
         <DialogContent className="max-w-md">

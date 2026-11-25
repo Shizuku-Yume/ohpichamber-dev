@@ -253,8 +253,8 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
   const title = isNewProfile
     ? t('settings.gitIdentities.editor.title.newIdentity')
     : isGlobalProfile
-    ? t('settings.gitIdentities.editor.title.globalIdentity')
-    : (selectedProfile?.name || t('settings.gitIdentities.editor.title.editIdentity'));
+      ? t('settings.gitIdentities.editor.title.globalIdentity')
+      : (selectedProfile?.name || t('settings.gitIdentities.editor.title.editIdentity'));
 
   return (
     <>
@@ -319,8 +319,8 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                                 aria-label={entry.label}
                                 title={entry.label}
                                 className={cn(
-                                  'inline-flex size-8 items-center justify-center rounded-md',
-                                  selected ? 'bg-interactive-selection' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
+                                  'inline-flex size-8 items-center justify-center rounded-md transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none',
+                                  selected ? 'oc-selected' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
                                 )}
                               >
                                 <span className="inline-flex" style={selected ? { color: currentColorValue } : undefined}>{entry.mark('size-4')}</span>

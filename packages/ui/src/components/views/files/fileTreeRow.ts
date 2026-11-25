@@ -9,7 +9,7 @@ export const fileTreeRowPaddingLeft = (depth: number, basePaddingPx = FILE_TREE_
 
 export const fileTreeRowStateClassName = (isActive: boolean): string => (
   isActive
-    ? 'bg-interactive-selection text-interactive-selection-foreground [--oc-file-tree-row-fill:var(--interactive-selection)]'
+    ? 'oc-selected [--oc-file-tree-row-fill:var(--interactive-selection)]'
     : 'text-foreground/90 hover:bg-interactive-hover hover:text-foreground hover:[--oc-file-tree-row-fill:var(--interactive-hover)]'
 );
 

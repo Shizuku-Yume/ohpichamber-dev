@@ -76,7 +76,7 @@ export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({
     return (
         <div
             className={cn(
-                'w-full transition-all duration-300 ease-out',
+                'w-full transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none',
                 visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2',
                 className
             )}

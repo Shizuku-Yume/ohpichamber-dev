@@ -131,7 +131,7 @@ function DialogContent({
           className={cn(
             "relative pointer-events-auto outline-none bg-background flex flex-col w-full max-w-lg max-h-full gap-4 p-5 oc-modal-shadow overflow-y-auto overlay-scrollbar-target origin-center",
             !fullWindow && "oc-window-corners pwa-dialog-content",
-            "transition-all duration-150 ease-out",
+            "transition-[opacity,scale,filter] duration-150 ease-out motion-reduce:transition-none",
             "data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98]",
             "data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98]",
             "data-[nested-dialog-open]:brightness-[0.55] dark:data-[nested-dialog-open]:brightness-[0.4]",
@@ -139,16 +139,16 @@ function DialogContent({
           )}
           {...props}
         >
-        <DockedPanelSurfaceContext.Provider value={false}>{children}</DockedPanelSurfaceContext.Provider>
-        {showCloseButton && (
-          <BaseDialog.Close
-            data-slot="dialog-close"
-            className="ring-offset-background focus-visible:ring-ring data-[open]:bg-interactive-active data-[open]:text-foreground absolute top-2.5 inset-e-2.5 z-10 inline-flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus:outline-hidden disabled:pointer-events-none text-muted-foreground hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <Icon name="close"/>
-            <span className="sr-only">{t('dialog.common.actions.close')}</span>
-          </BaseDialog.Close>
-        )}
+          <DockedPanelSurfaceContext.Provider value={false}>{children}</DockedPanelSurfaceContext.Provider>
+          {showCloseButton && (
+            <BaseDialog.Close
+              data-slot="dialog-close"
+              className="ring-offset-background focus-visible:ring-ring data-[open]:bg-interactive-active data-[open]:text-foreground absolute top-2.5 inset-e-2.5 z-10 inline-flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus:outline-hidden disabled:pointer-events-none text-muted-foreground hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            >
+              <Icon name="close" />
+              <span className="sr-only">{t('dialog.common.actions.close')}</span>
+            </BaseDialog.Close>
+          )}
         </BaseDialog.Popup>
         <PopupOverlayScrollbar scroller={popup} />
       </div>

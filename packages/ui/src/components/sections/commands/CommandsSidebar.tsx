@@ -21,7 +21,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { selectCommandsForDirectory, useCommandsStore, type Command } from '@/stores/useCommandsStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useShallow } from 'zustand/react/shallow';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
 import { cn } from '@/lib/utils';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
 import { SettingsSidebarNoMatches, SettingsSidebarSearch } from '@/components/sections/shared/SettingsSidebarSearch';
@@ -70,7 +70,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   // template files, so it lists only the entries a file owns.
   const templateItems = React.useMemo(() => commands.filter((command) => command.editable), [commands]);
 
-  const bgClass = 'bg-background';
 
   const handleCreateNew = () => {
     const baseName = 'new-command';
@@ -178,26 +177,29 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const shownCommands = templateItems.filter((command) => matchesRankQuery([command.name, command.description], query));
 
   return (
-    <div className={cn('flex h-full flex-col', bgClass)}>
-      <div className="border-b px-3 pt-4 pb-3">
-        <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.commands.sidebar.title')}</h2>
-        <SettingsProjectSelector className="mb-3" />
-        <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.commands.sidebar.total', { count: templateItems.length })}</span>
-          <Button size="sm"
-            data-settings-item="commands.create"
-            variant="ghost"
-            className="h-7 w-7 px-0 -my-1 text-muted-foreground"
-            onClick={handleCreateNew}
-            aria-label={t('settings.common.actions.create')}
-          >
-            <Icon name="add" className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        {templateItems.length > 0 ? <SettingsSidebarSearch value={query} onChange={setQuery} /> : null}
-      </div>
-
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2">
+    <>
+      <SettingsSidebarLayout
+        variant="background"
+        header={(
+          <div className="border-b px-3 pt-4 pb-3">
+            <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.commands.sidebar.title')}</h2>
+            <SettingsProjectSelector className="mb-3" />
+            <div className="flex items-center justify-between gap-2">
+              <span className="typography-meta text-muted-foreground">{t('settings.commands.sidebar.total', { count: templateItems.length })}</span>
+              <Button size="sm"
+                data-settings-item="commands.create"
+                variant="ghost"
+                className="h-7 w-7 px-0 -my-1 text-muted-foreground"
+                onClick={handleCreateNew}
+                aria-label={t('settings.common.actions.create')}
+              >
+                <Icon name="add" className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {templateItems.length > 0 ? <SettingsSidebarSearch value={query} onChange={setQuery} /> : null}
+          </div>
+        )}
+      >
         {templateItems.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="terminal-box" className="mx-auto mb-3 h-10 w-10 opacity-50" />
@@ -224,7 +226,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
             />
           ))
         )}
-      </ScrollableOverlay>
+      </SettingsSidebarLayout>
 
       {confirmActionCommand ? (
         <Dialog
@@ -292,7 +294,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };
 
@@ -342,7 +344,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   );
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (e) => { e.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
+      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-2 py-1.5 transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none select-none', isSelected ? 'oc-selected' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (e) => { e.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
         <div className="flex min-w-0 flex-1 items-center">
           <button
             onClick={onSelect}

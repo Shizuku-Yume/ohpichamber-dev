@@ -27,7 +27,7 @@ export const SettingsSidebarLayout: React.FC<SettingsSidebarLayoutProps> = ({
   const bgVar = bgClass === 'bg-background'
     ? 'var(--surface-background)'
     : 'var(--surface-muted)';
-  
+
   const updateScrollShadows = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) {
@@ -71,7 +71,7 @@ export const SettingsSidebarLayout: React.FC<SettingsSidebarLayoutProps> = ({
         <ScrollableOverlay
           ref={scrollRef as unknown as React.Ref<HTMLElement>}
           outerClassName="flex-1 min-h-0"
-          className="space-y-0.5 px-3 py-2 overflow-x-hidden"
+          className="space-y-1 px-3 py-2 overflow-x-hidden"
         >
           {children}
         </ScrollableOverlay>

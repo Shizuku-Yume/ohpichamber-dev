@@ -122,11 +122,12 @@ const SocketOverrideRow: React.FC<{
       {editing ? (
         <div className="flex min-w-0 items-center gap-1">
           <Input
+            inputSize="compact"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             placeholder={t('settings.extensions.service.socket.path', { id: binding.id })}
             aria-label={t('settings.extensions.service.socket.path.aria', { id: binding.id })}
-            className="h-8 min-w-0 flex-1 rounded-md px-3"
+            className="min-w-0 flex-1"
             disabled={busy || saving}
             autoFocus
           />
@@ -1132,7 +1133,7 @@ export const ExtensionsPage: React.FC = () => {
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9 shrink-0 text-muted-foreground"
+              className={SETTINGS_ICON_BUTTON_CLASS}
               data-settings-item="extensions.updates.check"
               disabled={busy || checking || status !== 'ready'}
               aria-label={t('settings.extensions.updates.check.aria')}

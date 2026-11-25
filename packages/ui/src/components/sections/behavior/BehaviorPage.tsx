@@ -624,7 +624,6 @@ export const BehaviorPage: React.FC = () => {
             'h-full min-h-0 shrink-0 border-r bg-background',
             isMobile ? 'w-full border-r-0' : 'w-[280px]',
           )}
-          style={{ borderColor: 'var(--interactive-border)' }}
         >
           <BehaviorSidebar
             selection={selection}

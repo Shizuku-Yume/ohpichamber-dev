@@ -140,7 +140,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-5 border-[var(--interactive-border)]" showCloseButton={true}>
-        
+
         <div className="flex items-center mb-1">
           <DialogTitle className="flex items-center gap-2.5">
             <Icon name="download-cloud" className="h-5 w-5 text-[var(--primary-base)]" />
@@ -167,7 +167,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
         <div className="space-y-2">
 
           {changelog && (
-              <div className="rounded-lg border border-border bg-surface-elevated/20 overflow-hidden">
+            <div className="rounded-lg border border-border bg-surface-elevated/20 overflow-hidden">
               <ScrollableOverlay
                 className="max-h-[400px] p-0"
                 fillContainer={false}
@@ -231,7 +231,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
               </div>
               <div className="h-1.5 bg-[var(--surface-subtle)] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[var(--primary-base)] transition-all duration-300"
+                  className="h-full bg-[var(--primary-base)] transition-[width] duration-300 ease-out motion-reduce:transition-none"
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>

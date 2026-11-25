@@ -2268,7 +2268,7 @@ export const RemoteInstancesPage: React.FC = () => {
         <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
           <CollapsibleTrigger className="w-auto justify-start gap-1.5">
             <span className={SETTINGS_SECTION_TITLE_CLASS}>{t('settings.remoteInstances.page.section.advanced')}</span>
-            <Icon name={advancedOpen ? 'arrow-up-s' : 'arrow-down-s'} className="h-4 w-4 text-muted-foreground" />
+            <Icon name="arrow-right-s" className={cn('h-4 w-4 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', advancedOpen && 'rotate-90 rtl:-rotate-90')} />
           </CollapsibleTrigger>
           <CollapsibleContent>
             <p className="pb-2 typography-micro text-muted-foreground">{t('settings.remoteInstances.page.section.advancedHint')}</p>
@@ -2635,7 +2635,7 @@ export const RemoteInstancesPage: React.FC = () => {
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex items-center gap-2">
                         <CollapsibleTrigger className="flex items-center gap-2 group">
-                          <Icon name="arrow-down-s" className={`h-4 w-4 text-muted-foreground transition-transform ${isForwardOpen ? 'rotate-180' : ''}`} />
+                          <Icon name="arrow-right-s" className={cn('h-4 w-4 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none', isForwardOpen && 'rotate-90 rtl:-rotate-90')} />
                           <span className="typography-ui-label text-foreground truncate">{buildForwardLabel(forward)}</span>
                           <span className="typography-micro text-muted-foreground shrink-0">{typeLabel}</span>
                         </CollapsibleTrigger>

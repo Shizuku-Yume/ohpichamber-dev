@@ -634,12 +634,12 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
             onNewSession={() => {
               if (projectId && projectId !== activeProjectId) setActiveProjectIdOnly(projectId);
               if (mobileVariant) setSessionSwitcherOpen(false);
-               openNewSessionDraft({
-                 selectedProjectId: projectId,
-                 directoryOverride: scopeDirectory ?? group.directory,
-                 targetFolderId: folder.id,
-                 target: group.draftTarget,
-               });
+              openNewSessionDraft({
+                selectedProjectId: projectId,
+                directoryOverride: scopeDirectory ?? group.directory,
+                targetFolderId: folder.id,
+                target: group.draftTarget,
+              });
             }}
             hideActions={false}
             archivedBucket={group.isArchivedBucket === true}
@@ -651,7 +651,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
               expandedParents={expandedParents}
               editingId={editingId}
               editingRowKey={editingRowKey}
-               editTitle={editTitle}
+              editTitle={editTitle}
               openSidebarMenuKey={openSidebarMenuKey}
               mobileVariant={mobileVariant}
               alwaysShowActions={alwaysShowActions}
@@ -664,15 +664,15 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
               setEditingId={props.setEditingId}
               setEditingRowKey={props.setEditingRowKey}
               setEditTitle={props.setEditTitle}
-               toggleParent={props.toggleParent}
-               setOpenSidebarMenuKey={props.setOpenSidebarMenuKey}
-               allowReselect={props.allowReselect}
-               onSessionSelected={props.onSessionSelected}
-               deleteSessionConfirm={props.deleteSessionConfirm}
+              toggleParent={props.toggleParent}
+              setOpenSidebarMenuKey={props.setOpenSidebarMenuKey}
+              allowReselect={props.allowReselect}
+              onSessionSelected={props.onSessionSelected}
+              deleteSessionConfirm={props.deleteSessionConfirm}
               setDeleteSessionConfirm={props.setDeleteSessionConfirm}
               startFolderRename={props.startFolderRename}
               startSessionWorktreeMenuLoad={props.startSessionWorktreeMenuLoad}
-             />)}
+            />)}
           </SessionFolderItem>
         )}
       </DroppableFolderWrapper>
@@ -759,7 +759,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     expandedParents={expandedParents}
     editingId={editingId}
     editingRowKey={editingRowKey}
-     editTitle={editTitle}
+    editTitle={editTitle}
     openSidebarMenuKey={openSidebarMenuKey}
     mobileVariant={mobileVariant}
     alwaysShowActions={alwaysShowActions}
@@ -772,15 +772,15 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     setEditingId={props.setEditingId}
     setEditingRowKey={props.setEditingRowKey}
     setEditTitle={props.setEditTitle}
-     toggleParent={props.toggleParent}
-     setOpenSidebarMenuKey={props.setOpenSidebarMenuKey}
-     allowReselect={props.allowReselect}
-     onSessionSelected={props.onSessionSelected}
-     deleteSessionConfirm={props.deleteSessionConfirm}
-     setDeleteSessionConfirm={props.setDeleteSessionConfirm}
-     startFolderRename={props.startFolderRename}
-     startSessionWorktreeMenuLoad={props.startSessionWorktreeMenuLoad}
-   />;
+    toggleParent={props.toggleParent}
+    setOpenSidebarMenuKey={props.setOpenSidebarMenuKey}
+    allowReselect={props.allowReselect}
+    onSessionSelected={props.onSessionSelected}
+    deleteSessionConfirm={props.deleteSessionConfirm}
+    setDeleteSessionConfirm={props.setDeleteSessionConfirm}
+    startFolderRename={props.startFolderRename}
+    startSessionWorktreeMenuLoad={props.startSessionWorktreeMenuLoad}
+  />;
 
   const body = (
     <SessionFolderDndScope
@@ -805,9 +805,9 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
       {totalSessions === 0 && allFoldersForGroup.length === 0 ? (
         !group.isArchivedBucket && !bootstrapLoading && !bootstrapFailureNotice && group.directory && !group.emptyMessage ? (
           <Button variant="link" size="xs" className="w-full justify-start ps-[26px] text-start font-normal normal-case text-muted-foreground underline-offset-auto hover:text-foreground hover:underline" onClick={() => {
-              if (projectId && projectId !== activeProjectId) setActiveProjectIdOnly(projectId);
-              if (mobileVariant) setSessionSwitcherOpen(false);
-              openNewSessionDraft({ selectedProjectId: projectId, directoryOverride: group.directory, target: group.draftTarget });
+            if (projectId && projectId !== activeProjectId) setActiveProjectIdOnly(projectId);
+            if (mobileVariant) setSessionSwitcherOpen(false);
+            openNewSessionDraft({ selectedProjectId: projectId, directoryOverride: group.directory, target: group.draftTarget });
           }}>{t('sessions.sidebar.group.empty.startSession')}</Button>
         ) : <div className="py-1 ps-[26px] text-start typography-micro text-muted-foreground">
           {group.isArchivedBucket
@@ -821,7 +821,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
               )
               : bootstrapFailureNotice
                 ? bootstrapFailureNotice
-            : group.emptyMessage ?? t('sessions.sidebar.group.empty.noSessionsInWorkspace')}
+                : group.emptyMessage ?? t('sessions.sidebar.group.empty.noSessionsInWorkspace')}
         </div>
       ) : null}
       {totalSessions > 0 && bootstrapFailureNotice ? (
@@ -870,173 +870,173 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
 
   return (
     <><div className="oc-group">
-      <div className={cn('group/gh relative flex items-start justify-between gap-1 py-1 min-w-0 rounded-md', 'cursor-pointer')}>
-      <Tooltip disabled={groupPrSummary ? !groupPrStatusLabel : !primaryGroupIssue}>
-      <TooltipTrigger asChild closeDelay={SIDEBAR_REF_TOOLTIP_CLOSE_DELAY_MS}>
-      <div
-        className="min-w-0 flex-1"
-        {...(isEmpty ? {} : {
-          onClick: () => onToggleCollapsedGroup(groupKey),
-          role: 'button',
-          tabIndex: 0,
-          onKeyDown: (event: React.KeyboardEvent) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              onToggleCollapsedGroup(groupKey);
-            }
-          },
-          'aria-label': isCollapsed
-            ? t('sessions.sidebar.group.expandAria', { label: group.label })
-            : t('sessions.sidebar.group.collapseAria', { label: group.label }),
-          'aria-expanded': !isCollapsed,
-        })}
-      >
-        <div
-          style={{ paddingInlineStart: sessionTreeRowPaddingLeft(0) }}
-          className={cn(
-            '@container min-w-0 flex flex-1 items-start gap-1 overflow-hidden',
-            groupHeaderRightPadding,
-          )}
-        >
-          <div className={cn('min-w-0 flex flex-1 flex-col justify-center gap-0.5 overflow-hidden', headerActionsMaskClass)}>
-            <p className="typography-ui-label font-normal truncate text-foreground/92">
-              {group.isArchivedBucket ? (
-                <span className="inline-flex min-w-0 max-w-full items-center gap-0.5">
-                  {headerSlot(<Icon name="archive" className="h-3 w-3 shrink-0 text-muted-foreground" />)}
-                  <span className="min-w-0 flex-1 truncate">{group.label}</span>
-                  {groupActivityIndicator}
-                </span>
-              ) : !group.isMain ? (
-                <span className="flex w-full min-w-0 items-center gap-0.5">
-                  {headerSlot(
-                    <Icon name="worktree"
-                      className={cn('h-3 w-3 shrink-0', groupPrColor ? 'oc-ref-tint' : 'text-muted-foreground')}
-                      style={groupPrColor ? refTintStyle(groupPrColor) : undefined}
-                    />,
-                  )}
-                  <span className="min-w-0 truncate typography-ui-label font-medium oc-group-label">
-                    {group.label}
-                  </span>
-                  {groupActivityIndicator}
-                  {groupPrSummary ? (
-                    <button
-                      type="button"
-                      className={cn('ms-auto flex-shrink-0 rounded text-[0.72rem] font-medium leading-none text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:no-underline', headerCoveredFadeClass)}
-                      disabled={!groupPrSummary.url}
-                      aria-label={groupPrLabel}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (groupPrSummary.url) openTrackerItem(groupPrSummary.url, boardDirectory, event);
-                      }}
-                    >
-                      {groupPrReference}
-                    </button>
-                  ) : primaryGroupIssue ? (
-                    <button
-                      type="button"
-                      className={cn(
-                        'ms-auto inline-flex flex-shrink-0 items-center gap-1 rounded text-[0.72rem] font-medium leading-none hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        'text-muted-foreground',
-                        headerCoveredFadeClass,
-                      )}
-                      aria-label={groupIssueItems.map((item) => item.text).join(', ')}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (event.target instanceof Element && event.target.closest('[data-ref-more]')) return;
-                        openTrackerItem(primaryGroupIssue.url, boardDirectory, event);
-                      }}
-                    >
-                      <Icon name={primaryGroupIssue.icon} className={cn('h-3 w-3', primaryGroupIssue.color && 'oc-ref-tint')} style={primaryGroupIssue.color ? refTintStyle(primaryGroupIssue.color) : undefined} />
-                      {primaryGroupIssue.label}
-                      {groupIssueItems.length > 1 ? <span data-ref-more className="text-muted-foreground">+{groupIssueItems.length - 1}</span> : null}
-                    </button>
-                  ) : null}
-                </span>
-              ) : (
-                <span className="inline-flex min-w-0 max-w-full items-center gap-1">
-                  {headerChevron}
-                  <span className="min-w-0 truncate">{group.label}</span>
-                  {groupActivityIndicator}
-                </span>
-              )}
-            </p>
-            {showBranchSubtitle && statusLine ? (
-              <span className="inline-flex min-w-0 items-center gap-1.5 leading-tight">
-                {group.isArchivedBucket ? (
-                  <Icon name="archive" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                ) : (
-                  <Icon name="git-branch" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+      <div className={cn('group/gh relative flex items-start justify-between gap-1 py-1 min-w-0 rounded-md transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none hover:bg-interactive-hover/60', 'cursor-pointer')}>
+        <Tooltip disabled={groupPrSummary ? !groupPrStatusLabel : !primaryGroupIssue}>
+          <TooltipTrigger asChild closeDelay={SIDEBAR_REF_TOOLTIP_CLOSE_DELAY_MS}>
+            <div
+              className="min-w-0 flex-1"
+              {...(isEmpty ? {} : {
+                onClick: () => onToggleCollapsedGroup(groupKey),
+                role: 'button',
+                tabIndex: 0,
+                onKeyDown: (event: React.KeyboardEvent) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onToggleCollapsedGroup(groupKey);
+                  }
+                },
+                'aria-label': isCollapsed
+                  ? t('sessions.sidebar.group.expandAria', { label: group.label })
+                  : t('sessions.sidebar.group.collapseAria', { label: group.label }),
+                'aria-expanded': !isCollapsed,
+              })}
+            >
+              <div
+                style={{ paddingInlineStart: sessionTreeRowPaddingLeft(0) }}
+                className={cn(
+                  '@container min-w-0 flex flex-1 items-start gap-1 overflow-hidden',
+                  groupHeaderRightPadding,
                 )}
-                <span className="min-w-0 truncate text-[0.6875rem] font-medium text-muted-foreground">
-                  {statusLine.label}
-                </span>
-              </span>
-            ) : null}
-          </div>
-          {!group.isArchivedBucket && group.directory ? <DirectoryActionIndicator directory={group.directory} className={cn('self-center', headerCoveredFadeClass)} /> : null}
-        </div>
-      </div>
-      </TooltipTrigger>
-      {groupPrLinks.length > 0 ? (
-        <TooltipContent side="right" sideOffset={8} className="max-w-xs">
-          <SidebarRefLinks items={groupPrLinks} directory={boardDirectory} />
-        </TooltipContent>
-      ) : !groupPrSummary && primaryGroupIssue ? (
-        <TooltipContent side="right" sideOffset={8} className="max-w-xs">
-          <SidebarRefLinks items={groupIssueItems} directory={boardDirectory} />
-        </TooltipContent>
-      ) : null}
-      </Tooltip>
+              >
+                <div className={cn('min-w-0 flex flex-1 flex-col justify-center gap-0.5 overflow-hidden', headerActionsMaskClass)}>
+                  <p className="typography-ui-label font-normal truncate text-foreground/92">
+                    {group.isArchivedBucket ? (
+                      <span className="inline-flex min-w-0 max-w-full items-center gap-0.5">
+                        {headerSlot(<Icon name="archive" className="h-3 w-3 shrink-0 text-muted-foreground" />)}
+                        <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                        {groupActivityIndicator}
+                      </span>
+                    ) : !group.isMain ? (
+                      <span className="flex w-full min-w-0 items-center gap-0.5">
+                        {headerSlot(
+                          <Icon name="worktree"
+                            className={cn('h-3 w-3 shrink-0', groupPrColor ? 'oc-ref-tint' : 'text-muted-foreground')}
+                            style={groupPrColor ? refTintStyle(groupPrColor) : undefined}
+                          />,
+                        )}
+                        <span className="min-w-0 truncate typography-ui-label font-medium oc-group-label">
+                          {group.label}
+                        </span>
+                        {groupActivityIndicator}
+                        {groupPrSummary ? (
+                          <button
+                            type="button"
+                            className={cn('ms-auto flex-shrink-0 rounded text-[0.72rem] font-medium leading-none text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:no-underline', headerCoveredFadeClass)}
+                            disabled={!groupPrSummary.url}
+                            aria-label={groupPrLabel}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (groupPrSummary.url) openTrackerItem(groupPrSummary.url, boardDirectory, event);
+                            }}
+                          >
+                            {groupPrReference}
+                          </button>
+                        ) : primaryGroupIssue ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              'ms-auto inline-flex flex-shrink-0 items-center gap-1 rounded text-[0.72rem] font-medium leading-none hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              'text-muted-foreground',
+                              headerCoveredFadeClass,
+                            )}
+                            aria-label={groupIssueItems.map((item) => item.text).join(', ')}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (event.target instanceof Element && event.target.closest('[data-ref-more]')) return;
+                              openTrackerItem(primaryGroupIssue.url, boardDirectory, event);
+                            }}
+                          >
+                            <Icon name={primaryGroupIssue.icon} className={cn('h-3 w-3', primaryGroupIssue.color && 'oc-ref-tint')} style={primaryGroupIssue.color ? refTintStyle(primaryGroupIssue.color) : undefined} />
+                            {primaryGroupIssue.label}
+                            {groupIssueItems.length > 1 ? <span data-ref-more className="text-muted-foreground">+{groupIssueItems.length - 1}</span> : null}
+                          </button>
+                        ) : null}
+                      </span>
+                    ) : (
+                      <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+                        {headerChevron}
+                        <span className="min-w-0 truncate">{group.label}</span>
+                        {groupActivityIndicator}
+                      </span>
+                    )}
+                  </p>
+                  {showBranchSubtitle && statusLine ? (
+                    <span className="inline-flex min-w-0 items-center gap-1.5 leading-tight">
+                      {group.isArchivedBucket ? (
+                        <Icon name="archive" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                      ) : (
+                        <Icon name="git-branch" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 truncate text-[0.6875rem] font-medium text-muted-foreground">
+                        {statusLine.label}
+                      </span>
+                    </span>
+                  ) : null}
+                </div>
+                {!group.isArchivedBucket && group.directory ? <DirectoryActionIndicator directory={group.directory} className={cn('self-center', headerCoveredFadeClass)} /> : null}
+              </div>
+            </div>
+          </TooltipTrigger>
+          {groupPrLinks.length > 0 ? (
+            <TooltipContent side="right" sideOffset={8} className="max-w-xs">
+              <SidebarRefLinks items={groupPrLinks} directory={boardDirectory} />
+            </TooltipContent>
+          ) : !groupPrSummary && primaryGroupIssue ? (
+            <TooltipContent side="right" sideOffset={8} className="max-w-xs">
+              <SidebarRefLinks items={groupIssueItems} directory={boardDirectory} />
+            </TooltipContent>
+          ) : null}
+        </Tooltip>
         <TooltipProvider delayDuration={400}>
-        {group.isArchivedBucket && allGroupSessions.length > 0 ? (
-          <div className={cn('absolute inset-e-0.5 top-1/2 -translate-y-1/2 z-10', alwaysShowActions ? 'opacity-100' : 'opacity-0 group-hover/gh:opacity-100 group-has-[:focus-visible]/gh:opacity-100')}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    sessionEvents.requestDelete({
-                      sessions: allGroupSessions,
-                      mode: 'session',
-                    });
-                  }}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t('sessions.sidebar.group.actions.deleteArchivedInGroupAria', { label: group.label })}
-                >
-                  <Icon name="delete-bin" className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.group.actions.deleteArchivedSessions')}</p></TooltipContent>
-            </Tooltip>
-          </div>
-        ) : null}
-        {group.directory ? (
-          <div className={cn('absolute inset-e-0.5 top-1/2 -translate-y-1/2 z-10', alwaysShowActions ? 'opacity-100' : 'opacity-0 group-hover/gh:opacity-100 group-has-[:focus-visible]/gh:opacity-100')}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (projectId && projectId !== activeProjectId) setActiveProjectIdOnly(projectId);
-                    if (mobileVariant) setSessionSwitcherOpen(false);
-                    openNewSessionDraft({ selectedProjectId: projectId, directoryOverride: group.directory });
-                  }}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t('sessions.sidebar.group.actions.newDraftInGroupAria', { label: group.label })}
-                 >
-                   <Icon name="add" className="h-4 w-4" />
-                 </button>
-               </TooltipTrigger>
-               <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.project.actions.newDraftSession')}</p></TooltipContent>
-             </Tooltip>
-           </div>
-         ) : null}
+          {group.isArchivedBucket && allGroupSessions.length > 0 ? (
+            <div className={cn('absolute inset-e-0.5 top-1/2 -translate-y-1/2 z-10', alwaysShowActions ? 'opacity-100' : 'opacity-0 group-hover/gh:opacity-100 group-has-[:focus-visible]/gh:opacity-100')}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      sessionEvents.requestDelete({
+                        sessions: allGroupSessions,
+                        mode: 'session',
+                      });
+                    }}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t('sessions.sidebar.group.actions.deleteArchivedInGroupAria', { label: group.label })}
+                  >
+                    <Icon name="delete-bin" className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.group.actions.deleteArchivedSessions')}</p></TooltipContent>
+              </Tooltip>
+            </div>
+          ) : null}
+          {group.directory ? (
+            <div className={cn('absolute inset-e-0.5 top-1/2 -translate-y-1/2 z-10', alwaysShowActions ? 'opacity-100' : 'opacity-0 group-hover/gh:opacity-100 group-has-[:focus-visible]/gh:opacity-100')}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (projectId && projectId !== activeProjectId) setActiveProjectIdOnly(projectId);
+                      if (mobileVariant) setSessionSwitcherOpen(false);
+                      openNewSessionDraft({ selectedProjectId: projectId, directoryOverride: group.directory });
+                    }}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t('sessions.sidebar.group.actions.newDraftInGroupAria', { label: group.label })}
+                  >
+                    <Icon name="add" className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.project.actions.newDraftSession')}</p></TooltipContent>
+              </Tooltip>
+            </div>
+          ) : null}
         </TooltipProvider>
       </div>
       {!isCollapsed && renderBody ? <div className={cn('oc-group-body', groupBodyPaddingClass)}>{body}</div> : null}

@@ -247,7 +247,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                   onClick={() => setColor(null)}
                   aria-label={t('projectEditDialog.option.none')}
                   className={cn(
-                    'flex size-9 items-center justify-center rounded-xl border-2 transition-all',
+                    'flex size-9 items-center justify-center rounded-xl border-2 transition-[background-color,border-color,color] duration-150 ease-out motion-reduce:transition-none',
                     color === null ? 'border-foreground' : 'border-edge hover:border-edge',
                   )}
                   style={{ touchAction: 'manipulation' }}
@@ -262,7 +262,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                     aria-label={t('settings.projects.appearance.colorSwatchAria', { color: preset })}
                     title={preset}
                     className={cn(
-                      'size-9 rounded-xl border-2 transition-all',
+                      'size-9 rounded-xl border-2 transition-[background-color,border-color,color] duration-150 ease-out motion-reduce:transition-none',
                       color === preset ? 'border-foreground' : 'border-transparent hover:border-edge',
                     )}
                     style={{ backgroundColor: preset, touchAction: 'manipulation' }}
@@ -281,7 +281,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                   onClick={() => setIcon(null)}
                   aria-label={t('projectEditDialog.option.none')}
                   className={cn(
-                    'flex size-9 items-center justify-center rounded-xl border-2 transition-all',
+                    'flex size-9 items-center justify-center rounded-xl border-2 transition-[background-color,border-color,color] duration-150 ease-out motion-reduce:transition-none',
                     icon === null ? 'border-foreground bg-[var(--surface-elevated)]' : 'border-edge hover:border-edge',
                   )}
                   style={{ touchAction: 'manipulation' }}
@@ -295,7 +295,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                     onClick={() => setIcon(i.key)}
                     aria-label={i.label}
                     className={cn(
-                      'flex size-9 items-center justify-center rounded-xl border-2 transition-all',
+                      'flex size-9 items-center justify-center rounded-xl border-2 transition-[background-color,border-color,color] duration-150 ease-out motion-reduce:transition-none',
                       icon === i.key ? 'border-foreground bg-[var(--surface-elevated)]' : 'border-edge hover:border-edge',
                     )}
                     style={{ touchAction: 'manipulation' }}
