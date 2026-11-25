@@ -140,9 +140,10 @@ export default defineConfig({
       // preload list of the markdown renderer, which the shell preloads at
       // startup — defeating the lazy import in markdown/katexRender.tsx.
       // Drop it from preload hints only; the dynamic import itself still
-      // fetches the chunk normally when math first renders.
+      // fetches the chunk normally when math first renders. The chunk name is
+      // rollup-assigned, so match the engine by its single-module filename.
       resolveDependencies: (_filename, deps) =>
-        deps.filter((dep) => !dep.includes('vendor-katex')),
+        deps.filter((dep) => !dep.includes('katex')),
     },
     rollupOptions: {
       input: {
@@ -201,6 +202,7 @@ export default defineConfig({
           if (packageName === '@pierre/diffs' || packageName === '@pierre/highlights') {
             return undefined;
           }
+
 
           if (packageName === 'react' || packageName === 'react-dom') return 'vendor-react';
           if (packageName === 'zustand' || packageName === 'zustand/middleware') return 'vendor-zustand';
