@@ -208,7 +208,7 @@ const LocalModelPicker = ({
                 const selected = selectedModelId === entry.id;
                 const state = models.get(entry.id) ?? null;
                 return (
-                    <div key={entry.id} className="flex items-start justify-between gap-2">
+                    <div key={entry.id} className="flex items-start justify-between gap-2 py-1.5">
                         <SettingsRadioOption
                             selected={selected}
                             onSelect={() => onSelect(entry.id)}
@@ -925,6 +925,7 @@ export const VoiceSettings: React.FC = () => {
             <SettingsSection
                 settingsItem="voice.speech-recognition"
                 title={t('settings.voice.page.section.speechRecognition')}
+                contentClassName={SETTINGS_SPACE_ROW_CLASS}
             >
                 <SettingsCheckboxRow
                     checked={dictationEnabled}
