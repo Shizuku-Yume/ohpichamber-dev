@@ -108,6 +108,25 @@ let completeLoadAt = 0;
 
 type ChildDiscovery = { sessions: Session[]; succeededParents: Set<string>; failedParents: Set<string> };
 
+// Concurrent discovery passes — the unscoped startup load and per-directory
+// refreshes fire within the same window and would otherwise fetch the same
+// parent's children twice. The in-flight read is shared per parent and per
+// load generation: a runtime switch bumps the generation and orphans the
+// previous runtime's entries, which delete themselves on settlement.
+const inflightChildDiscovery = new Map<string, { generation: number; promise: Promise<unknown[]> }>();
+
+const fetchChildRecordsShared = (parentSessionId: string, generation: number): Promise<unknown[]> => {
+  const existing = inflightChildDiscovery.get(parentSessionId);
+  if (existing && existing.generation === generation) return existing.promise;
+  const promise = canonicalClient.listSubagents(parentSessionId) as Promise<unknown[]>;
+  inflightChildDiscovery.set(parentSessionId, { generation, promise });
+  const clear = () => {
+    if (inflightChildDiscovery.get(parentSessionId)?.promise === promise) inflightChildDiscovery.delete(parentSessionId);
+  };
+  promise.then(clear, clear);
+  return promise;
+};
+
 // Children have history, but no snapshot or Host metadata endpoint. These stable
 // host records provide sidebar identity and routing, not a child event cursor.
 const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyMap<string, Session>, generation: number): Promise<ChildDiscovery> => {
@@ -121,7 +140,7 @@ const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyM
     try {
       const records = await withDirectorySessionRefreshSlot(() => {
         if (generation !== loadGeneration) throw new Error('Runtime changed before child discovery');
-        return canonicalClient.listSubagents(root.sessionId);
+        return fetchChildRecordsShared(root.sessionId, generation);
       });
       if (generation !== loadGeneration) return;
       const children: Session[] = [];
