@@ -133,6 +133,7 @@ const OPENCHAMBER_FILE_PAGE = new Map<string, SettingsPageSlug>(Object.entries({
   'DesktopQuakeModeSettings.tsx': 'general',
   'EnvironmentVariablesSettings.tsx': 'general',
   'MobileAppSettings.tsx': 'general',
+  'OpenChamberToolsSettings.tsx': 'general',
   'OpenChamberVisualSettings.tsx': 'appearance',
   'ThemeAppearancePicker.tsx': 'appearance',
   'ThemeImportButton.tsx': 'appearance',

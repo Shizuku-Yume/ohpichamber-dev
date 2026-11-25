@@ -14,6 +14,7 @@ import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
+import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
 import { GeneralFilesAndTerminalSettings, GeneralInterfaceSettings, GeneralPowerSettings } from './GeneralWorkspaceSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -73,7 +74,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         sessions: t('settings.page.sessions.title'),
         shortcuts: t('settings.page.shortcuts.title'),
         git: t('settings.page.git.title'),
-        github: t('settings.page.git.title'),
         notifications: t('settings.page.notifications.title'),
         voice: t('settings.page.voice.title'),
         tunnel: t('settings.page.tunnel.title'),
@@ -86,7 +86,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         sessions: t('settings.page.sessions.description'),
         shortcuts: t('settings.page.shortcuts.description'),
         git: undefined,
-        github: undefined,
         notifications: t('settings.page.notifications.description'),
         voice: t('settings.page.voice.description'),
         tunnel: t('settings.page.tunnel.description'),
@@ -118,6 +117,7 @@ const GeneralSectionContent: React.FC = () => {
     return (
         <>
             {isDesktopShell() && <DesktopAppSettings />}
+            <OpenChamberToolsSettings />
             {isLocalDesktop && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <GeneralInterfaceSettings />

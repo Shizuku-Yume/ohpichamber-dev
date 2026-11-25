@@ -157,16 +157,17 @@ export const OPENCHAMBER_WORKFLOW_ACTIONS = Object.freeze([
  * What the managed `openchamber` tool may ask for. Scheduling stays in this
  * tool: the Host declares one control tool and moving schedule actions to a
  * second name would leave them unreachable. Workflow actions join it because
- * the Agent Service exposes no separate workflow tool; knowledge has its own
- * tool (`openchamber_knowledge`), so its verbs stay out and a bare `delete`
- * keeps meaning schedule.delete here.
+ * an agent without the separate `openchamber_workflow` tool still proposes,
+ * follows and answers a run through the control tool it already carries;
+ * knowledge has its own tool (`openchamber_knowledge`), so its verbs stay out
+ * and a bare `delete` keeps meaning schedule.delete here.
  */
 const OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS = Object.freeze([
   ...AGENT_EXPOSED_CONTROL_ACTION_DEFINITIONS,
-  // Workflow actions ride this one tool: the Agent Service's managed catalog
-  // has no separate workflow tool, and without them an agent could not
-  // propose, follow or answer a run. The runtime answers 503 when the feature
-  // is off.
+  // Workflow actions ride this one tool too: the separate `openchamber_workflow`
+  // tool can be switched off in Settings while session control stays on, and an
+  // agent then still needs these verbs to propose, follow or answer a run. The
+  // runtime answers 503 when the feature is off.
   ...OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS,
 ]);
 
@@ -187,9 +188,9 @@ export const OPENCHAMBER_AGENT_TOOL_ACTIONS = Object.freeze(
 const ACTIONS_BY_TOOL = Object.freeze({
   openchamber_usage: OPENCHAMBER_USAGE_ACTIONS,
   openchamber: OPENCHAMBER_AGENT_TOOL_ACTIONS,
-  openchamber_web: OPENCHAMBER_WEB_ACTIONS,
+  web: OPENCHAMBER_WEB_ACTIONS,
   openchamber_knowledge: OPENCHAMBER_KNOWLEDGE_ACTIONS,
-  openchamber_notify: OPENCHAMBER_NOTIFY_ACTIONS,
+  notify: OPENCHAMBER_NOTIFY_ACTIONS,
   openchamber_render: OPENCHAMBER_RENDER_ACTIONS,
   openchamber_secret: OPENCHAMBER_SECRET_ACTIONS,
   openchamber_workflow: OPENCHAMBER_WORKFLOW_ACTIONS,

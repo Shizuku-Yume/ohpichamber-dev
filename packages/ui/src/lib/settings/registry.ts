@@ -282,7 +282,7 @@ export const SETTINGS_REGISTRY = {
  themeVariant: field({ scope: 'profile', effect: ['server', 'shell', 'ui'], derived: true, parse: parseOneOf(['light', 'dark']) }),
  lightThemeId: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseNonEmptyString }),
  darkThemeId: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseNonEmptyString }),
-  sttPrompt: field({ scope: 'profile', effect: ['store', 'ui', 'server'], parse: parseTextUpTo(STT_PROMPT_MAX_LENGTH), ui: { read: readTranscriptionPrompt, write: setTranscriptionPrompt, autoSave: false } }),
+ sttPrompt: field({ scope: 'profile', effect: ['store', 'ui', 'server'], parse: parseTextUpTo(STT_PROMPT_MAX_LENGTH), ui: { read: readTranscriptionPrompt, write: setTranscriptionPrompt, autoSave: false } }),
 
  // ── Interface language (profile; the i18n store owns the live copy and keeps
  // browser storage as the first-paint copy; the language picker writes it) ──
@@ -337,6 +337,9 @@ export const SETTINGS_REGISTRY = {
   ui: uiStore('messageSearchReasoningEnabled', (v) => useUIStore.getState().setMessageSearchReasoningEnabled(v)),
  }),
  agentControlToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentControlToolEnabled', (v) => useUIStore.getState().setAgentControlToolEnabled(v)) }),
+ agentScheduleToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentScheduleToolEnabled', (v) => useUIStore.getState().setAgentScheduleToolEnabled(v)) }),
+ agentUsageToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentUsageToolEnabled', (v) => useUIStore.getState().setAgentUsageToolEnabled(v)) }),
+ agentSecretToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentSecretToolEnabled', (v) => useUIStore.getState().setAgentSecretToolEnabled(v)) }),
  agentWebToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentWebToolEnabled', (v) => useUIStore.getState().setAgentWebToolEnabled(v)) }),
  // `builtin` or an installed extension id; the server falls back to `builtin` when that extension cannot serve.
  browserProvider: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseNonEmptyString, ui: uiStore('browserProvider', (v) => useUIStore.getState().setBrowserProvider(v)) }),
@@ -698,15 +701,12 @@ export const LOCAL_DEVICE_KEYS = [
  'summaryLength',
  'summarizeLastMessage',
  'summaryThreshold',
- 'agentScheduleToolEnabled',
  'agentMemoryToolEnabled',
- 'agentUsageToolEnabled',
  'agentImageToolEnabled',
  'agentImageModel',
  'agentMemoryDreamingEnabled',
  'agentMemoryDreamingModel',
  'agentMemoryDreamingVariant',
- 'agentSecretToolEnabled',
  'agentMemoryViewedAt',
  'theme',
  'isSidebarOpen',
@@ -825,15 +825,15 @@ export const MIRRORED_KEYS = SETTINGS_KEYS.filter((key) => {
 });
 
 type SettingsRegistrySnapshotField = {
-  scope: SettingsScope;
-  perSurface?: true;
-  surfaces?: readonly SettingsSurface[];
-  adopt?: 'bootstrap-only';
-  derived?: true;
-  secret?: true;
-  computed?: true;
-  local?: true;
-  owner?: 'desktop-shell';
+ scope: SettingsScope;
+ perSurface?: true;
+ surfaces?: readonly SettingsSurface[];
+ adopt?: 'bootstrap-only';
+ derived?: true;
+ secret?: true;
+ computed?: true;
+ local?: true;
+ owner?: 'desktop-shell';
 };
 
 type SettingsRegistrySnapshot = {

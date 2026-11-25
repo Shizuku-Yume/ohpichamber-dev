@@ -27,6 +27,7 @@ const CREDENTIAL_ALLOWLIST: Record<string, true> = {
   'settings.providers.page.quotaCredentials.exeDevTokenInstructions': true,
   'settings.providers.page.quotaCredentials.refreshToken': true,
   'settings.providers.page.quotaCredentials.tokenPlaceholder': true,
+  'settings.openchamber.tools.field.agentSecretToolSummary': true,
   'settings.remoteInstances.direct.sidebarDescription': true,
   'settings.remoteInstances.direct.addDialog.description': true,
   'settings.remoteInstances.direct.field.tokenPlaceholder': true,

@@ -55,10 +55,6 @@ describe('Model roles page', () => {
     const spies = [
       spyOn(directory, 'useSettingsDirectory').mockReturnValue(null),
       spyOn(models, 'useSettingsModels').mockReturnValue([]),
-      spyOn(models, 'useSettingsImageModels').mockReturnValue([
-        { provider: 'provider', modelId: 'image-one', name: 'Image generator' },
-        { provider: 'provider', modelId: 'image-two', name: 'Disabled image generator', enabled: false },
-      ]),
       spyOn(omp, 'useOmpPageSettings').mockReturnValue({
         state, form: {}, loading: false, saving: false, pageSettings: [], getSectionSettings: () => [],
         updateSetting: async () => { },
@@ -86,7 +82,7 @@ describe('Model roles page', () => {
     await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
     const directRoles = [
       'default', 'smol', 'slow', 'plan', 'vision', 'commit',
-      'tiny', 'memory', 'task', 'advisor', 'widget', 'judge', 'image',
+      'tiny', 'memory', 'task', 'advisor', 'widget', 'judge',
     ];
     for (const role of directRoles) {
       const row = host.querySelector(`[data-settings-item="omp.modelRoles.${role}"]`);
@@ -110,71 +106,19 @@ describe('Model roles page', () => {
     expect(jump).toHaveBeenCalledWith(LINKED_ROLES.web.page, LINKED_ROLES.web.item ?? null);
   });
 
-  test('the image role uses the searchable picker over enabled image models only and preserves other roles', async () => {
+  test('the image role is linked to the OpenChamber tools row that owns it', async () => {
+    const jump = spyOn(useUIStore.getState(), 'requestSettingsJump').mockImplementation(() => { });
+    restore.push(() => jump.mockRestore());
     await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
-    const trigger = host.querySelector<HTMLElement>('[data-settings-item="omp.modelRoles.image"] [data-slot="dropdown-menu-trigger"]');
-    expect(trigger).not.toBeNull();
-    await act(async () => trigger?.click());
-    const searchInput = document.body.querySelector<HTMLInputElement>('input[role="combobox"]');
-    expect(searchInput).not.toBeNull();
-
-    const options = Array.from(document.body.querySelectorAll('[role="option"]'));
-    expect(options.map((option) => option.textContent)).toEqual(['Image generator']);
-    expect(document.body.textContent).not.toContain('Disabled image generator');
-
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-    await act(async () => {
-      setter?.call(searchInput, 'nomatch');
-      searchInput?.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(document.body.querySelectorAll('[role="option"]').length).toBe(0);
-
-    await act(async () => {
-      setter?.call(searchInput, 'Image');
-      searchInput?.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    const filteredOptions = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'));
-    expect(filteredOptions.length).toBe(1);
-    await act(async () => filteredOptions[0]?.click());
-
-    expect(changes).toEqual([{
-      id: 'modelRoles',
-      value: {
-        smol: 'provider/small,provider/backup',
-        task: ['provider/worker', 'provider/second'],
-        web: 'web/exa',
-        image: 'provider/image-one',
-      },
-    }]);
-  });
-
-  test('the image role picker clears back to default via Use the default model', async () => {
-    const imageState: OmpSettingsState = {
-      ...state,
-      settings: [{
-        ...modelRoles,
-        value: { smol: 'provider/small,provider/backup', image: 'provider/image-one' },
-      }],
-    };
-    const localChanges: OmpSettingsChange[] = [];
-    const customOmp = spyOn(omp, 'useOmpPageSettings').mockReturnValue({
-      state: imageState, form: {}, loading: false, saving: false, pageSettings: [], getSectionSettings: () => [],
-      updateSetting: async () => { },
-      updateSettings: async (build) => { localChanges.push(...build(imageState)); return true; },
-    });
-    restore.push(() => customOmp.mockRestore());
-    await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
-    const trigger = host.querySelector<HTMLElement>('[data-settings-item="omp.modelRoles.image"] [data-slot="dropdown-menu-trigger"]');
-    expect(trigger?.textContent).toContain('Image generator');
-    await act(async () => trigger?.click());
-    const clearButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="listbox"] button'))
-      .find((button) => button.textContent?.includes('Use the default model'));
-    expect(clearButton).toBeDefined();
-    await act(async () => clearButton?.click());
-    expect(localChanges).toEqual([{
-      id: 'modelRoles',
-      value: { smol: 'provider/small,provider/backup' },
-    }]);
+    const row = host.querySelector('[data-settings-item="omp.modelRoles.image"]');
+    expect(row).not.toBeNull();
+    // One control owns the image role: the hub links to it instead of drawing
+    // a second picker, so no dropdown trigger may render here.
+    expect(row?.querySelector('[data-slot="dropdown-menu-trigger"]')).toBeNull();
+    const link = Array.from(row?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Set in General');
+    expect(link).toBeDefined();
+    await act(async () => link?.click());
+    expect(jump).toHaveBeenCalledWith(LINKED_ROLES.image.page, LINKED_ROLES.image.item ?? null);
   });
 
   test('renders Custom roles section empty state and creates a custom role in one batch updateSettings call', async () => {

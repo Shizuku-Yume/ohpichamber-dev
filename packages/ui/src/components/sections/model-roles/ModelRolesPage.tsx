@@ -1,29 +1,25 @@
 import React from 'react';
-import { formatModelRef, parseModelSelector, type ProblemDetails } from '@openchamber/agent-contract';
+import type { ProblemDetails } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
-import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Icon } from '@/components/icon/Icon';
 import type { I18nKey } from '@/lib/i18n/store';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { useSettingsImageModels, useSettingsModels } from '@/hooks/useSettingsModels';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
-  SettingsFieldRow,
   SettingsSection,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
-  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { ImageModelSelector } from './ImageModelSelector';
 import { CustomRoleDialog, type CustomRoleDialogState } from './CustomRoleDialog';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { ModelRoleLinkRow } from '@/components/sections/shared/ModelRoleLinkRow';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
-import { modelRoleChange, parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { modelRoleChange, parseRolesRecord, reportModelRoleSaveProblem, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import {
   CHAT_ROLES,
   KIND_ROLES,
@@ -40,7 +36,6 @@ export const ModelRolesPage: React.FC = () => {
   const { t } = useI18n();
   const directory = useSettingsDirectory();
   const models = useSettingsModels(directory);
-  const imageModels = useSettingsImageModels(directory);
   const { state, updateSettings, loading, saving } = useOmpPageSettings('model-roles');
   const [customDialog, setCustomDialog] = React.useState<CustomRoleDialogState>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
@@ -64,11 +59,7 @@ export const ModelRolesPage: React.FC = () => {
   }, [state]);
 
   const reportSaveProblem = React.useCallback((problem: ProblemDetails | null) => {
-    if (problem?.status === 409 && problem.code === 'CATALOG_CONFLICT') {
-      toast.error(t('settings.omp.modelRoles.catalogConflict'));
-      return;
-    }
-    toast.error(t('settings.omp.modelRoles.saveFailed'));
+    reportModelRoleSaveProblem(problem, t);
   }, [t]);
 
   const setRole = React.useCallback(async (role: string, selector: string) => {
@@ -127,7 +118,6 @@ export const ModelRolesPage: React.FC = () => {
     if (!saved) reportSaveProblem(observedProblem);
   }, [confirm, modelTags, reportSaveProblem, t, updateSettings]);
 
-  const parsedImage = React.useMemo(() => parseModelSelector(roleSelectors.image ?? ''), [roleSelectors.image]);
   const renderRole = (role: string) => {
     const label = t(`settings.omp.modelRoles.role.${role}.label` as I18nKey);
     const info = t(`settings.omp.modelRoles.role.${role}.desc` as I18nKey);
@@ -143,27 +133,6 @@ export const ModelRolesPage: React.FC = () => {
           onOpen={() => useUIStore.getState().requestSettingsJump(linked.page, linked.item ?? null)}
           settingsItem={`omp.modelRoles.${role}`}
         />
-      );
-    }
-    if (role === 'image') {
-      return (
-        <SettingsFieldRow key={role} label={label} info={info} settingsItem={`omp.modelRoles.${role}`}>
-          <ImageModelSelector
-            providerId={parsedImage?.providerId ?? ''}
-            modelId={parsedImage?.modelId ?? ''}
-            imageModels={imageModels}
-            directory={directory ?? undefined}
-            disabled={loading || !state}
-            loading={loading && !state}
-            placeholder={t('settings.omp.modelRoles.inheritFallback')}
-            ariaLabel={label}
-            className={SETTINGS_WIDTH_SELECT_CLASS}
-            onChange={(providerId, modelId) => {
-              const selector = providerId && modelId ? formatModelRef({ provider: providerId, modelId }) : '';
-              void setRole('image', selector);
-            }}
-          />
-        </SettingsFieldRow>
       );
     }
     return (

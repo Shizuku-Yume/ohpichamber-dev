@@ -13,8 +13,10 @@ import {
   type Model,
   type OmpSettingsChange,
   type OmpSettingsState,
+  type ProblemDetails,
 } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
+import { toast } from '@/components/ui';
 
 /** Level ids a picker may show, in OMP's display order minus the grammar-only `inherit`. */
 const EFFORT_LEVELS = THINKING_LEVELS.filter((level) => level !== 'inherit');
@@ -212,4 +214,20 @@ export function formatRoleDisplayValue(
   const effortText = effort ? levelLabel(t, effort) : '';
   const base = effortText ? `${modelLabel} · ${effortText}` : modelLabel;
   return extraCount > 0 ? `${base} +${extraCount}` : base;
+}
+
+/**
+ * The one way a model-role write failure surfaces: a catalog conflict means the
+ * project's own config file overrides the value, anything else is a plain save
+ * failure. Every role editor reports through here so the wording cannot drift.
+ */
+export function reportModelRoleSaveProblem(
+  problem: ProblemDetails | null,
+  translate: (key: I18nKey) => string,
+): void {
+  if (problem?.status === 409 && problem.code === 'CATALOG_CONFLICT') {
+    toast.error(translate('settings.omp.modelRoles.catalogConflict'));
+    return;
+  }
+  toast.error(translate('settings.omp.modelRoles.saveFailed'));
 }

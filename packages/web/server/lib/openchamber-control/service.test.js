@@ -109,7 +109,8 @@ describe('OhPiChamber control service canonical consumers', () => {
 
   it('tracks and marks done using Canonical eligibility and queued Host metadata patches', async () => {
     const patches = [];
-    const { control, sessionService } = createHarness({}, { now: () => 100,
+    const { control, sessionService } = createHarness({}, {
+      now: () => 100,
       updateSessionMetadata: async (id, decide, options) => { patches.push({ id, patch: decide({}), options }); return { changed: true }; },
     });
     sessionService.open = async () => ({ session: { sessionId: 'session-1', rootSessionId: 'session-1', title: 'Work' } });
@@ -228,6 +229,22 @@ describe('OhPiChamber control service canonical consumers', () => {
     await expect(createHarness().control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 403 });
     await expect(createHarness({ agentTerminalToolEnabled: true }).control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 503 });
   });
+  it('gates schedule actions on the schedule tool setting, on by default', async () => {
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const invoke = (control, action) => control.invokeHostAction(scope, { sessionId: 'session-1', toolName: 'openchamber', action, input: {} });
+    const disabled = createHarness({ agentScheduleToolEnabled: false });
+    await expect(invoke(disabled.control, 'schedule.list')).resolves.toMatchObject({ ok: false, status: 403 });
+    // `schedule.status` is not agent-exposed, so the internal executor path checks the same gate.
+    await expect(disabled.control.execute('schedule.status', {})).rejects.toMatchObject({ statusCode: 403 });
+    await expect(disabled.control.execute('schedule.list', {}, '/repo/app', { contextSessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 403 });
+    const enabled = createHarness({ agentScheduleToolEnabled: true });
+    await expect(invoke(enabled.control, 'schedule.list')).resolves.toMatchObject({ ok: true });
+    await expect(enabled.control.execute('schedule.status', {})).resolves.toEqual({ enabledScheduledTasksCount: 0 });
+    const defaulted = createHarness();
+    await expect(invoke(defaulted.control, 'schedule.list')).resolves.toMatchObject({ ok: true });
+    await expect(defaulted.control.execute('schedule.status', {})).resolves.toEqual({ enabledScheduledTasksCount: 0 });
+  });
+
   it('reads complete and most-recent messages through the canonical paginated journal across workspaces', async () => {
     const sessionId = 'session-other';
     const turns = Array.from({ length: 205 }, (_, index) => ({

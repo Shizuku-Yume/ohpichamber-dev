@@ -502,7 +502,10 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'debug.enabled': 'tools:available',
   'launch.enabled': 'tools:available',
   'speechgen.enabled': 'tools:available',
-  'generate_image.enabled': 'tools:available',
+  // The image generation switch is the OpenChamber Tools image row on General,
+  // not an OMP tools row: the fork gives image generation one owner, beside the
+  // image model role it uses.
+  'generate_image.enabled': 'general:tools',
   'computer.enabled': 'tools:available',
   'ratchet.enabled': 'tools:available',
   'archive.enabled': 'tools:available',

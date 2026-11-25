@@ -1062,8 +1062,12 @@ export const createOpenChamberControlService = (dependencies) => {
    if (action === 'projects.list') return projects();
    if (action === 'models.list') return models(input, options.contextSessionId, contextDirectory);
    if (action === 'models.search') return searchModels(input, options.contextSessionId, contextDirectory);
-   if (action === 'schedule.status') return scheduledTaskService.status();
    if (action.startsWith('schedule.')) {
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    if (settings?.agentScheduleToolEnabled === false) {
+     throw new OpenChamberControlError('The scheduled tasks tool is turned off in OpenChamber settings', 403);
+    }
+    if (action === 'schedule.status') return scheduledTaskService.status();
     const taskID = asNonEmptyString(input.taskId);
     if (SCHEDULE_TASK_ID_ACTIONS.has(action) && !taskID) {
      throw new OpenChamberControlError('taskId is required', 400);
@@ -1244,9 +1248,9 @@ export const createOpenChamberControlService = (dependencies) => {
      ? await secretRequests.run(input, { sessionId: request.sessionId, callId: request.toolCallId, directory: scope.cwd, signal })
      : request.action === 'secret.forget' ? secretRequests.forget(request.sessionId) : await secretRequests.request()
     : await execute(request.action, input, scope.cwd, {
-    signal, contextSessionId: request.sessionId,
-    contextCallId: typeof request.toolCallId === 'string' ? request.toolCallId : undefined,
-   });
+     signal, contextSessionId: request.sessionId,
+     contextCallId: typeof request.toolCallId === 'string' ? request.toolCallId : undefined,
+    });
    return { ok: true, value: value === undefined ? null : value };
   } catch (error) {
    const status = Number.isInteger(error?.statusCode) ? error.statusCode : Number.isInteger(error?.status) ? error.status : 500;

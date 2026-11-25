@@ -10,7 +10,7 @@ describe('a namespace the tool name already implies', () => {
   test('resolves a bare action inside the calling tool', () => {
     expect(resolveAgentToolAction('show', 'openchamber_knowledge')).toEqual({ action: 'knowledge.show' });
     expect(resolveAgentToolAction('save', 'openchamber_knowledge')).toEqual({ action: 'knowledge.save' });
-    expect(resolveAgentToolAction('click', 'openchamber_web')).toEqual({ action: 'browser.click' });
+    expect(resolveAgentToolAction('click', 'web')).toEqual({ action: 'browser.click' });
   });
 
   test('resolves a bare name that is ambiguous only across tools', () => {
@@ -56,7 +56,7 @@ describe('what an unresolvable action reports', () => {
   });
 
   test('reports a missing action rather than resolving to something', () => {
-    const { error, action } = resolveAgentToolAction('', 'openchamber_memory');
+    const { error, action } = resolveAgentToolAction('', 'openchamber_knowledge');
 
     expect(action).toBeUndefined();
     expect(error).toContain('missing');

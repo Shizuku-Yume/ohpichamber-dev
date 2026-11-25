@@ -13,6 +13,7 @@ interface LinkedRole {
 }
 
 export const LINKED_ROLES: Readonly<Record<string, LinkedRole>> = {
+  image: { page: 'general', item: 'sessions.agent-image-tool', linkKey: 'settings.omp.modelRoles.link.general' },
   web: { page: 'web-search', linkKey: 'settings.omp.modelRoles.link.webSearch' },
   speech: { page: 'voice', linkKey: 'settings.omp.modelRoles.link.voice' },
 };
