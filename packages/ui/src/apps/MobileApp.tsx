@@ -104,8 +104,10 @@ import {
   IPAD_WORKSPACE_SIDEBAR_MAX_WIDTH,
   useIpadSidebarResize,
 } from './ipadSidebarResize';
-import { ReceivedPagePanel } from '@/components/chat/sharePages/received/ReceivedPagePanel';
+
 import { focusChatInput } from '@/components/chat/composer/editor/dom';
+
+const ReceivedPagePanel = React.lazy(() => import('@/components/chat/sharePages/received/ReceivedPagePanel').then((module) => ({ default: module.ReceivedPagePanel })));
 
 type MobileAppProps = {
   apis: RuntimeAPIs;
@@ -632,6 +634,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
             title={openReceivedPage.title}
           >
             <ErrorBoundary>
+              <React.Suspense fallback={null}>
               <ReceivedPagePanel
                 receivedId={openReceivedPage.receivedId}
                 onAddedToChat={() => {
@@ -644,6 +647,7 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
                   else focusChatInput();
                 }}
               />
+              </React.Suspense>
             </ErrorBoundary>
           </MobileFullscreenSurface>
         ) : null}
