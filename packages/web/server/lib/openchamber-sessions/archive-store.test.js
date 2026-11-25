@@ -52,6 +52,24 @@ describe('createArchiveStore', () => {
     await reopened.close();
   });
 
+  it('reads a page of sessions in one bulk query with per-row corruption isolation', async () => {
+    const dataDir = makeDataDir();
+    const store = createArchiveStore({ dataDir, now: () => 1_700_000 });
+    await store.archive(['ses_1']);
+    await store.close();
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    db.prepare('INSERT INTO session_archive (session_id, revision, archived_at) VALUES (?, ?, ?)').run('ses_bad', 'not-a-number', 1_700_000);
+    db.close();
+
+    const reopened = createArchiveStore({ dataDir });
+    const page = await reopened.getStates(['ses_1', 'ses_bad', 'ses_missing']);
+    expect(page.entries.get('ses_1')).toEqual({ archivedAt: 1_700_000, revision: '1' });
+    expect(page.entries.get('ses_missing')).toBeNull();
+    expect(page.entries.has('ses_bad')).toBe(false);
+    expect(page.errors.get('ses_bad')).toBe('METADATA_CORRUPT');
+    await reopened.close();
+  });
+
   it('honours an explicit archivedAt and ignores a nonsense one', async () => {
     const store = createArchiveStore({ dataDir: makeDataDir(), now: () => 42 });
     await expect(store.archive(['ses_1'], 999)).resolves.toMatchObject({ archived: [{ id: 'ses_1', archivedAt: 999 }] });

@@ -73,6 +73,29 @@ describe('createSessionMetadataStore Host SQLite persistence', () => {
     db.close();
   });
 
+  it('reads a page of sessions in one bulk query with per-row corruption isolation', async () => {
+    const dataDir = makeDataDir();
+    const store = createSessionMetadataStore({ dataDir });
+    await store.setSessionMetadata('ses_a', { openchamber: { goal: { id: 'g1' } } });
+    await store.setSessionMetadata('ses_b', { openchamber: { assist: { recap: 'r' } } });
+    await store.close();
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    db.prepare('INSERT INTO session_metadata (session_id, revision, payload) VALUES (?, ?, ?)').run('ses_bad', 1, '{broken');
+    db.close();
+
+    const reopened = createSessionMetadataStore({ dataDir });
+    const page = await reopened.getStates(['ses_a', 'ses_b', 'ses_bad', 'ses_missing']);
+    expect(page.entries.get('ses_a')).toEqual({ metadata: { openchamber: { goal: { id: 'g1' } } }, revision: '1' });
+    expect(page.entries.get('ses_b')).toEqual({ metadata: { openchamber: { assist: { recap: 'r' } } }, revision: '1' });
+    expect(page.entries.get('ses_missing')).toBeNull();
+    expect(page.entries.has('ses_bad')).toBe(false);
+    expect(page.errors.get('ses_bad')).toBe('METADATA_CORRUPT');
+    const empty = await reopened.getStates([]);
+    expect(empty.entries.size).toBe(0);
+    expect(empty.errors.size).toBe(0);
+    await reopened.close();
+  });
+
   it('distinguishes a corrupt row from unrelated usable rows', async () => {
     const dataDir = makeDataDir();
     const store = createSessionMetadataStore({ dataDir });
