@@ -127,6 +127,32 @@ test('an idle root is evicted and reopens cold with native history; a turn and a
   }
 }, 60_000);
 
+test('an idle workspace catalog worker is stopped and starts again on the next catalog request', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'worker-eviction-stateless-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await Promise.all([cwd, agentDirectory].map(directory => mkdir(directory, { recursive: true })));
+  const workers = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
+    startupTimeoutMs: 30_000, stopTimeoutMs: 3_000,
+    capacityPolicy: { ...WORKER_CAPACITY_POLICY, reapIntervalMs: 20 },
+    statelessIdleTimeoutMs: 150,
+  });
+  const input = {
+    rootSessionId: 'catalog-root', projectId: 'project', workspaceId: 'workspace', cwd,
+    agentDirectory, agentDirectoryId: 'agent-owner', catalogRevision: '0',
+  };
+  try {
+    const first = await workers.startStateless(input);
+    await waitFor(() => workers.info(input.rootSessionId) === undefined);
+    const second = await workers.startStateless(input);
+    expect(second.state).toBe('ready');
+    expect(second.workerGeneration).not.toBe(first.workerGeneration);
+  } finally {
+    try { await workers.close(); } finally { await rm(root, { recursive: true, force: true }); }
+  }
+}, 60_000);
+
 test('a running subagent blocks eviction and worker stop settles it to cancelled', async () => {
   const root = await mkdtemp(join(tmpdir(), 'worker-eviction-subagent-'));
   const previousHome = process.env.HOME;

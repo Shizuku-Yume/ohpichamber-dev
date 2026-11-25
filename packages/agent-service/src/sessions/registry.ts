@@ -118,7 +118,7 @@ export class SessionRegistry {
     }
   }
 
-  async open(input: SessionBootstrap, replace = false, forkOf?: string, forkTicketId?: string): Promise<RuntimeSession> {
+  async open(input: SessionBootstrap, replace = false, forkOf?: string, forkTicketId?: string, expectReference = false): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
     this.assertBootstrapWritable(parsed);
@@ -131,7 +131,7 @@ export class SessionRegistry {
     }
     const pending = this.openings.get(parsed.rootSessionId);
     if (pending) return pending;
-    const operation = this.openResolved(parsed, replace, undefined, true, undefined, forkOf, forkTicketId);
+    const operation = this.openResolved(parsed, replace, undefined, true, undefined, forkOf, forkTicketId, expectReference);
     this.openings.set(parsed.rootSessionId, operation);
     void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => { });
     return operation;
@@ -204,7 +204,7 @@ export class SessionRegistry {
     const parsed = HostSessionBootstrapSchema.parse(input);
     await this.assertReopenable(parsed.rootSessionId);
     await this.ensureNativeReference(parsed.rootSessionId, parsed);
-    return this.open(parsed);
+    return this.open(parsed, false, undefined, undefined, true);
   }
   /** Returns the live runtime for an already-open healthy root; callers keep admission for anything else. */
   async liveReopenRuntime(input: SessionBootstrap): Promise<RuntimeSession | undefined> {
@@ -1501,6 +1501,10 @@ export class SessionRegistry {
     if (entry.state === 'opening') return false;
     const runtime = entry.opened.journal.runtime();
     if (runtime.runtimeStatus !== 'idle' || runtime.activeRunId !== null) return false;
+    // A pending goal continuation is a run the worker owes itself: evicting
+    // the process cancels work the user never asked to stop. The mode alone
+    // is not an obligation — a paused or completed goal holds no wake.
+    if (runtime.continuationPending === true) return false;
     return this.interactions.approvals(sessionId).length === 0 && this.interactions.questions(sessionId).length === 0;
   }
 
@@ -1574,6 +1578,11 @@ export class SessionRegistry {
       await this.workers.stop(sessionId);
       // Native disposal can write exit diagnostics to the transcript.
       await this.workers.withStoppedRoot(sessionId, async () => {
+        // Inside the worker root lock: an open that slipped past the entry
+        // check during the stop — its admission began before the openings
+        // registration — must refuse this drop rather than lose its transcript
+        // underneath the worker it is about to spawn.
+        if (this.openings.has(sessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being reopened');
         const manager = SessionManager.create(reference.cwd, reference.sessionsDirectory);
         try { await manager.dropSession(reference.sessionFile); } finally { await manager.close(); }
       });
@@ -1611,6 +1620,10 @@ export class SessionRegistry {
     try {
       await this.subagentLifecycleTails.get(sessionId);
       await this.workers.withStoppedRoot(sessionId, async () => {
+        // Inside the worker root lock, no open of this root may be in flight:
+        // one that registered after the entry check would spawn its worker on
+        // the transcript this drop is about to remove.
+        if (this.openings.has(sessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being reopened');
         const manager = SessionManager.create(reference.cwd, reference.sessionsDirectory);
         try { await manager.dropSession(reference.sessionFile); } finally { await manager.close(); }
       });
@@ -1749,7 +1762,7 @@ export class SessionRegistry {
     await this.references.close();
   }
 
-  private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true, restartGeneration?: string, forkOf?: string, forkTicketId?: string): Promise<RuntimeSession> {
+  private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true, restartGeneration?: string, forkOf?: string, forkTicketId?: string, expectReference = false): Promise<RuntimeSession> {
     this.assertBootstrapWritable(input);
     const previous = this.entries.get(input.rootSessionId);
     const previousRuntime = replace ? undefined : this.liveRuntime(previous);
@@ -1776,6 +1789,16 @@ export class SessionRegistry {
         policies = await this.policyLoad(policyRequest);
       }
       this.interactions.loadPolicies(input.rootSessionId, input.workspaceId, policies);
+      // Re-verify deletion state after the asynchronous policy load, at the
+      // last point before the worker start: the admission that led here ran
+      // before this open was registered, so a delete may have started — or
+      // already finished — in that window. `deleting` covers the in-flight
+      // delete; the reference check covers one that already completed, because
+      // a finished delete removes both the flag and the reference. A reopen
+      // that overtakes its own deletion must fail here instead of spawning a
+      // worker that recreates the dropped transcript.
+      if (this.deleting.has(input.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted');
+      if (expectReference && !this.references.get(input.rootSessionId)) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND', 'The session was deleted while it was reopening');
       await this.workers.start(bootstrap, replace || previous?.state === 'live', policies, restartGeneration);
       workerStarted = true;
       if (!entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The live session has no opened projection');

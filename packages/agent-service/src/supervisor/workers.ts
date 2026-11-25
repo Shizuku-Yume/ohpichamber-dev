@@ -129,6 +129,10 @@ export interface WorkerRegistryOptions {
   /** Test seam for the asynchronous path canonicalization race. */
   canonicalizeDirectory?: (directory: string) => Promise<string>;
   capacityPolicy?: WorkerCapacityPolicy;
+  /** Lifecycle values for the spare pool; production uses the defaults, tests and measurement harnesses override them. */
+  sparePolicy?: { spareLifetimeMs?: number; sparePoolSize?: number };
+  /** Idle bound for workspace catalog and usage workers; defaults to the production session idle bound, independent of `capacityPolicy` overrides. */
+  statelessIdleTimeoutMs?: number;
 }
 
 const defaultExecFileAsync = promisify(execFile);
@@ -402,32 +406,28 @@ export class WorkerRegistry {
    * directory, and a spare that dies or ages out is simply dropped.
    */
   private readonly spareWorkers: SpareWorker[] = [];
-  private readonly spareLifetimeMs = 120_000;
+  private readonly spareLifetimeMs: number;
+  private readonly statelessIdleTimeoutMs: number;
   /**
-   * Total loaded-or-loading spares the service keeps, across every workspace
-   * that asked for one. It is a total and not a per-workspace size because a
-   * spare costs a whole worker process (~250 MB resident): the pool is a memory
-   * commitment, so it needs one ceiling rather than one per directory.
-   *
-   * The Host registers a project and the managed chats root at startup, so a
-   * pool that only held one workspace let the second registration take the
-   * whole budget and leave the workspace the user then typed in with none. The
-   * wish list therefore holds the last two askers rather than one, and spares
-   * are only retired once their workspace drops out of it.
-   *
-   * A second asker that arrives with the budget already spent gets nothing until
-   * a spare is adopted or ages out: the incumbent keeps its spares because it is
-   * still in the wish list. That is deliberate — the asker the user is in returns
-   * on every new chat, while the other registration is idle — so the newest
-   * asker wins the *next* slot, not the current one. This also bounds a third
-   * asker: with more askers than slots the wish list keeps `sparePoolSize` of
-   * them and the rest churn through one eviction each, transient and capped at
-   * one process per evicted spare rather than an unbounded spawn loop.
+   * Total loaded-or-loading spares the service keeps. It is a total and not a
+   * per-workspace size because a spare costs a whole worker process (~270 MB
+   * resident): the pool is a memory commitment, so it needs one ceiling rather
+   * than one per directory. The ceiling is one: a second spare only ever
+   * served the rare case of two new chats inside a single spawn window, and
+   * keeping it cost ~270 MB of idle memory permanently. A launch re-asks for
+   * its workspace's spare, so the workspace the user is actually typing in
+   * wins the single slot even when another workspace registered after it.
    */
-  private readonly sparePoolSize = 2;
+  private readonly sparePoolSize: number;
   private spareRefill: Promise<void> | undefined;
-  /** Workspaces that asked for a pool, most recently wanted last. Bounded by the pool size. */
-  private readonly spareWanted = new Map<string, { input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>; environment: NodeJS.ProcessEnv }>();
+  /**
+   * Workspaces that asked for a pool, most recently wanted last. Bounded by
+   * the pool size. `lastActivityAt` tracks the ask and every session launch
+   * in the workspace: the reaper refills a pool only for a workspace with
+   * activity inside the spare lifetime, so an idle service releases its
+   * spares instead of replacing them forever.
+   */
+  private readonly spareWanted = new Map<string, { input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>; environment: NodeJS.ProcessEnv; lastActivityAt: number }>();
   /**
    * Set when a refill was refused by a worktree lease or a spawn failed. The
    * reaper's next sweep clears it. Retrying such an attempt on the settle of the
@@ -439,6 +439,9 @@ export class WorkerRegistry {
   constructor(private readonly options: WorkerRegistryOptions) {
     this.capacityPolicy = options.capacityPolicy ?? WORKER_CAPACITY_POLICY;
     this.canonicalizeDirectory = options.canonicalizeDirectory ?? realpath;
+    this.spareLifetimeMs = options.sparePolicy?.spareLifetimeMs ?? 120_000;
+    this.sparePoolSize = options.sparePolicy?.sparePoolSize ?? 1;
+    this.statelessIdleTimeoutMs = options.statelessIdleTimeoutMs ?? WORKER_CAPACITY_POLICY.idleEvictionTimeoutMs;
     this.reapTimer = setInterval(() => { void this.reapIdleWorkers(); }, this.capacityPolicy.reapIntervalMs);
     this.reapTimer.unref();
   }
@@ -864,6 +867,18 @@ export class WorkerRegistry {
       for (const candidate of candidates) {
         try { await this.evictIfIdle(candidate); } catch { /* one failed candidate must not stop the scan */ }
       }
+      // Workspace catalog and usage workers are as large as a session worker
+      // (~290 MB each) and the Host keeps one per registered workspace, so an
+      // idle service otherwise holds one per project forever. They carry no
+      // transcript; every catalog or usage request starts them again, so after
+      // `statelessIdleTimeoutMs` (by default the production session idle bound)
+      // they are stopped rather than kept. Pending work, an open action or a
+      // queued mutation keeps one.
+      const stateless = [...this.workerEntries.values()].filter(entry => (entry.kind === 'stateless' || entry.kind === 'usage')
+        && entry.info.state === 'ready' && now - entry.lastActivityAt >= this.statelessIdleTimeoutMs);
+      for (const candidate of stateless) {
+        try { await this.retireIdleStateless(candidate); } catch { /* one failed candidate must not stop the scan */ }
+      }
       for (const spare of [...this.spareWorkers]) {
         if (now - spare.createdAt < this.spareLifetimeMs) continue;
         this.spareWorkers.splice(this.spareWorkers.indexOf(spare), 1);
@@ -874,10 +889,13 @@ export class WorkerRegistry {
       // it runs on a fixed interval whether or not anything asked for a spare, so
       // a refusal costs one attempt per interval instead of one per microtask.
       this.spareRefillBlocked = false;
-      // Top the pool up from the wish list, newest workspace first: the one the
-      // user is in now gets its spare before an older registration does.
-      for (const { input, environment } of [...this.spareWanted.values()].reverse()) {
-        this.warmSessionWorker(input, environment);
+      // Top the pool up from the wish list, newest workspace first, but only
+      // where the workspace saw a launch or an ask inside the spare lifetime:
+      // a service nobody is typing in releases its spares instead of paying
+      // ~270 MB per pool forever. The next real launch re-asks anyway.
+      for (const { input, environment, lastActivityAt } of [...this.spareWanted.values()].reverse()) {
+        if (now - lastActivityAt >= this.spareLifetimeMs) continue;
+        this.warmSessionWorker(input, environment, false);
       }
     } finally { this.reaping = false; }
   }
@@ -886,6 +904,20 @@ export class WorkerRegistry {
     if (candidate.kind !== 'session' || this.closing || !this.sessionIsIdle(candidate.info.rootSessionId) || this.sessionIsKeptWarm(candidate.info.rootSessionId)) return;
     if (Date.now() - candidate.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs) return;
     await this.evictCandidate(candidate, true);
+  }
+
+  private async retireIdleStateless(candidate: WorkerEntry): Promise<void> {
+    const rootSessionId = candidate.info.rootSessionId;
+    // A queued lifecycle mutation is checked before taking the root lock,
+    // because `withRoot` registers this retirement as one.
+    if (this.mutations.has(rootSessionId)) return;
+    await this.withRoot(rootSessionId, async () => {
+      if (this.closing || this.workerEntries.get(rootSessionId) !== candidate || candidate.info.state !== 'ready') return;
+      if (candidate.pending.size > 0) return;
+      if ([...this.actions.values()].some(action => action.entry === candidate)) return;
+      if (Date.now() - candidate.lastActivityAt < this.statelessIdleTimeoutMs) return;
+      await this.stopEntry(candidate);
+    });
   }
 
   /**
@@ -1119,19 +1151,22 @@ export class WorkerRegistry {
    * session. Failures are silent: a spare that cannot start only means the
    * next session pays the load itself.
    */
-  warmSessionWorker(input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>, environment = this.workerEnvironment(input as WorkerBootstrap)): void {
+  warmSessionWorker(input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>, environment = this.workerEnvironment(input as WorkerBootstrap), refreshActivity = true): void {
     if (this.closing) return;
     if (input.cwd.includes('ohpichamber-agent-ready-') || input.cwd.includes('worker-process-tree-') || input.cwd.includes('worker-lease-')) return;
     // The workspace asked for a pool, so it joins the wish list. The map is
     // insertion-ordered and the caller is the workspace the user is in now, so
-    // it moves to the end and wins the budget below.
+    // it moves to the end and wins the budget below. Only a real ask or launch
+    // refreshes the activity the reaper's refill gate reads: a sweep or chain
+    // refill passing through here must not keep the pool alive on its own.
+    const previousActivity = this.spareWanted.get(input.cwd)?.lastActivityAt ?? 0;
     this.spareWanted.delete(input.cwd);
     while (this.spareWanted.size >= this.sparePoolSize) {
       const oldest = this.spareWanted.keys().next();
       if (oldest.done) break;
       this.spareWanted.delete(oldest.value);
     }
-    this.spareWanted.set(input.cwd, { input, environment });
+    this.spareWanted.set(input.cwd, { input, environment, lastActivityAt: refreshActivity ? Date.now() : previousActivity });
     // Spares belong to a directory the user has left only while the budget has
     // room for them. Keeping a stale workspace's spare past that would spend a
     // worker process the current workspace needs.
@@ -1206,8 +1241,9 @@ export class WorkerRegistry {
       // One serialized attempt adds one spare, so a pool of two needs a second
       // attempt. Ask again only when this attempt actually added one: a spawn
       // that failed or was refused has set the block and must wait for the
-      // sweep instead of retrying immediately.
-      if (!this.closing && !this.spareRefillBlocked) this.warmSessionWorker(input, environment);
+      // sweep instead of retrying immediately. The chain is not user activity:
+      // it must not refresh the reaper's refill gate.
+      if (!this.closing && !this.spareRefillBlocked) this.warmSessionWorker(input, environment, false);
     });
   }
 

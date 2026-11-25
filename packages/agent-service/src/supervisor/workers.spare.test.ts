@@ -45,12 +45,19 @@ const fixture = async (options: { slowLoad?: boolean } = {}) => {
   return { root, cwd, agentDirectory, entrypoint, log, remove: () => rm(root, { recursive: true, force: true }) };
 };
 
-const registryFor = (entrypoint: string) => new WorkerRegistry({
+const registryFor = (entrypoint: string, sparePolicy?: { spareLifetimeMs?: number; sparePoolSize?: number }, capacityPolicy?: ConstructorParameters<typeof WorkerRegistry>[0]['capacityPolicy']) => new WorkerRegistry({
   workerEntrypoint: entrypoint,
   workerRuntime: process.execPath,
   isSessionIdle: () => true,
   prepareBootstrap: async input => input,
+  ...(sparePolicy ? { sparePolicy } : {}),
+  ...(capacityPolicy ? { capacityPolicy } : {}),
 });
+
+// The wish-list mechanics these tests pin are independent of the pool size,
+// and the production default is one: pass the two-slot policy the scenarios
+// were written for wherever the count matters.
+const TWO_SPARES = { sparePoolSize: 2 };
 
 const bootstrap = (rootSessionId: string, cwd: string, agentDirectory: string): WorkerBootstrap =>
 ({ rootSessionId, projectId: 'project', workspaceId: 'workspace', cwd, agentDirectory });
@@ -86,7 +93,7 @@ const waitFor = async (predicate: () => Promise<boolean> | boolean, timeoutMs = 
 // platform clock, so the pool is observed through its effect on process starts.
 test('adopting a spare leaves a replacement loading so the next new chat adopts too', async () => {
   const f = await fixture();
-  const registry = registryFor(f.entrypoint);
+  const registry = registryFor(f.entrypoint, TWO_SPARES);
   try {
     registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
     await waitFor(async () => await spawnCount(f.log) >= 1);
@@ -111,7 +118,7 @@ test('adopting a spare leaves a replacement loading so the next new chat adopts 
 // actually distinguishes the two behaviours.
 test('the second new chat adopts the replacement instead of spawning a third worker', async () => {
   const f = await fixture();
-  const registry = registryFor(f.entrypoint);
+  const registry = registryFor(f.entrypoint, TWO_SPARES);
   try {
     registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
     await waitFor(async () => await spawnCount(f.log) >= 2);
@@ -191,7 +198,7 @@ test('a second workspace does not take the first workspace\'s spares', async () 
   const f = await fixture({ slowLoad: true });
   const other = join(f.root, 'other-workspace');
   await mkdir(other);
-  const registry = registryFor(f.entrypoint);
+  const registry = registryFor(f.entrypoint, TWO_SPARES);
   try {
     // Both startup registrations happen before either worker finishes loading,
     // which is the state the real service is in.
@@ -234,7 +241,7 @@ test('a deliberate eviction does not refuse refills until the next reaper sweep'
   const second = join(f.root, 'second-workspace');
   const third = join(f.root, 'third-workspace');
   await Promise.all([mkdir(second), mkdir(third)]);
-  const registry = registryFor(f.entrypoint);
+  const registry = registryFor(f.entrypoint, TWO_SPARES);
   // SAFETY: Accessing private `spareWorkers` for test-only inspection.
   const pool = () => (registry as unknown as { spareWorkers: { cwd: string; retired?: boolean }[] }).spareWorkers;
   try {
@@ -276,6 +283,85 @@ test('a deliberate eviction does not refuse refills until the next reaper sweep'
     // whole reap interval is not set.
     // SAFETY: Accessing private `spareRefillBlocked` for test-only inspection.
     expect((registry as unknown as { spareRefillBlocked: boolean }).spareRefillBlocked).toBe(false);
+  } finally {
+    await registry.close();
+    await f.remove();
+  }
+}, 30_000);
+
+// The production default holds one spare, not two: the second slot only ever
+// served two new chats inside one spawn window, and it cost a whole worker
+// process of idle memory permanently.
+test('the default pool holds a single spare', async () => {
+  const f = await fixture();
+  const registry = registryFor(f.entrypoint);
+  // SAFETY: Accessing private `spareWorkers` for test-only inspection.
+  const pool = () => (registry as unknown as { spareWorkers: unknown[] }).spareWorkers;
+  try {
+    registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
+    await waitFor(async () => await spawnCount(f.log) >= 1);
+    // Even after the first spare finished loading and the refill chain settled,
+    // the pool never grows past one.
+    await Bun.sleep(500);
+    expect(pool().length).toBe(1);
+    expect(await spawnCount(f.log)).toBe(1);
+  } finally {
+    await registry.close();
+    await f.remove();
+  }
+}, 30_000);
+
+// A spare nobody uses must die with its lifetime instead of being replaced
+// forever: the reaper refills the pool only for a workspace with a launch or
+// an ask inside the spare lifetime, so an idle service returns to zero spares.
+test('an idle workspace loses its spare and the sweep does not replace it', async () => {
+  const f = await fixture();
+  const registry = registryFor(f.entrypoint,
+    { spareLifetimeMs: 300 },
+    { maxActiveRootWorkers: 5, idleEvictionTimeoutMs: 600_000, reapIntervalMs: 100 });
+  // SAFETY: Accessing private `spareWorkers` for test-only inspection.
+  const pool = () => (registry as unknown as { spareWorkers: unknown[] }).spareWorkers;
+  try {
+    registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
+    await waitFor(async () => await spawnCount(f.log) >= 1);
+    expect(pool().length).toBe(1);
+    // Past the lifetime with no launch, several sweeps pass: the spare dies
+    // and stays dead. The spawn count must not grow either — a refill that
+    // only replaced the corpse would leave memory constant while looking idle.
+    const spawnsAtExpiry = await spawnCount(f.log);
+    await waitFor(async () => pool().length === 0, 5_000);
+    await Bun.sleep(500);
+    expect(pool().length).toBe(0);
+    expect(await spawnCount(f.log)).toBe(spawnsAtExpiry);
+  } finally {
+    await registry.close();
+    await f.remove();
+  }
+}, 30_000);
+
+// The same sweep must refill the pool when the workspace did have activity
+// inside the lifetime: a launch re-asks for the pool, so while the user keeps
+// opening chats the spare is there, and taking it away would cost the next new
+// chat its warm start.
+test('a launch inside the spare lifetime keeps the pool refilled', async () => {
+  const f = await fixture();
+  const registry = registryFor(f.entrypoint,
+    { spareLifetimeMs: 1_000 },
+    { maxActiveRootWorkers: 5, idleEvictionTimeoutMs: 600_000, reapIntervalMs: 100 });
+  // SAFETY: Accessing private `spareWorkers` for test-only inspection.
+  const pool = () => (registry as unknown as { spareWorkers: unknown[] }).spareWorkers;
+  try {
+    registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
+    await waitFor(async () => await spawnCount(f.log) >= 1);
+    // Consume the spare in a real launch. The launch is the activity the refill
+    // gate reads, and the refill after adoption must produce a replacement.
+    await registry.start(bootstrap('first', f.cwd, f.agentDirectory));
+    expect(registry.info('first')?.state).toBe('ready');
+    await waitFor(async () => pool().length >= 1, 5_000);
+    // The replacement is within its own lifetime now. While the launch is still
+    // inside the gate window the pool must stay filled even across sweeps.
+    await Bun.sleep(400);
+    expect(pool().length).toBeGreaterThanOrEqual(1);
   } finally {
     await registry.close();
     await f.remove();
