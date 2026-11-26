@@ -29,7 +29,7 @@ let outside = '';
 const makeAuthorizer = (fileTools: string[]) => {
   const policy = HostWorkspacePolicySchema.parse({
     projectId, workspaceId, agentDirectoryId, cwd, agentDirectory,
-    providers: [], mcpServers: [], fileTools, shellCommands: [], agentIds: [], providerEntry: true,
+    providers: [], imageProviders: [], mcpServers: [], fileTools, shellCommands: [], agentIds: [], providerEntry: true,
   });
   const scope: HostAuthorizationScope = { rootSessionId, workerGeneration, projectId, workspaceId, agentDirectoryId, cwd, agentDirectory };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: (value: string) => value });

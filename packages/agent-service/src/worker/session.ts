@@ -720,6 +720,11 @@ export class WorkerSession {
         get options() { return nativeSkillOptions(settings, pluginExtensionPaths); },
         availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
         assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
+        authorizeImageUse: async use => {
+          const input: JsonObject = { providerId: use.providerId, modelId: use.modelId, purpose: 'image' };
+          if (use.endpoint) input.endpoint = use.endpoint;
+          await authorizeTool('provider.use', input);
+        },
         publishSkills: async staged => {
           type SkillPayload = (typeof staged)[number] & { content?: string };
           const capture = (skills: readonly SkillPayload[]) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, content: skill.content, metadata: skill._source })).sort();

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { ProjectionError } from '../projection/journal.ts';
-import type { CompletionWorkerBootstrap } from '../protocol.ts';
+import type { CompletionWorkerBootstrap, WorkerPolicyRequest } from '../protocol.ts';
 import { StatelessWorker } from './stateless.ts';
 import { openNativeRuntime } from './native-runtime.ts';
 import { NativeCredentials } from './catalog-credentials.ts';
@@ -257,5 +257,138 @@ test('the stateless workspace catalog reports runtime tool metadata and real tie
   } finally {
     await worker?.close();
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+const IMAGE_GENERATION_FIXTURE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+/**
+ * An image generation workspace: one credential-backed image model whose
+ * endpoint is a loopback capture server, so a test can count the provider
+ * requests a generation actually sends.
+ */
+async function openImageGenerationFixture(authorize: (request: WorkerPolicyRequest) => Promise<void>) {
+  let providerRequests = 0;
+  const provider = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch: () => {
+      providerRequests++;
+      return Response.json({
+        created: Date.now(),
+        data: [{ b64_json: IMAGE_GENERATION_FIXTURE_PNG }],
+      });
+    }
+  });
+  const root = await mkdtemp(join(tmpdir(), 'image-policy-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const providerId = 'image-policy-provider';
+  const modelId = 'image-policy-model';
+  const workspaceId = 'image-policy-workspace';
+  const endpoint = new URL('/v1', provider.url).href;
+  // The credential sits in the provider configuration itself, so a Host refusal
+  // is the only thing standing between the model and a minted key.
+  await writeFile(join(agentDirectory, 'models.yml'), `
+providers:
+  ${providerId}:
+    api: openai-responses
+    baseUrl: ${endpoint}
+    apiKey: image-policy-fixture-key
+    models:
+      - id: ${modelId}
+        name: Image policy model
+        kind: image
+        api: openai-images
+        input: [text]
+`);
+  const bootstrap: CompletionWorkerBootstrap = {
+    type: 'completion.bootstrap', workerGeneration: 'image-policy-generation',
+    authorizationRootId: 'image-policy-owner',
+    workspaceId, projectId: 'image-policy-project', cwd,
+    agentDirectory, agentDirectoryId: 'image-policy-agent', catalogRevision: '0',
+  };
+  const worker = await StatelessWorker.open(bootstrap, authorize);
+  return {
+    worker, workspaceId, providerId, modelId, endpoint,
+    providerRequests: () => providerRequests,
+    async close() {
+      await worker.close();
+      provider.stop(true);
+      await rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
+function imageGenerationOperation(workspaceId: string, providerId: string, modelId: string) {
+  return {
+    type: 'catalog' as const, revision: '1', operation: {
+      type: 'catalog.image.generate' as const, request: {
+        workspaceId,
+        selection: { providerId, modelId },
+        prompt: 'Draw a cat',
+      },
+    },
+  };
+}
+
+test('image generation with provider.use refused sends nothing to the provider and surfaces the Host refusal', async () => {
+  const hostRequests: WorkerPolicyRequest[] = [];
+  const fixture = await openImageGenerationFixture(async request => {
+    hostRequests.push(request);
+    if (request.type === 'tool' && request.toolName === 'provider.use') {
+      throw new ProjectionError(403, 'UNAUTHORIZED', 'The workspace has no enabled image-policy-provider provider at the image endpoint');
+    }
+  });
+  try {
+    const error = await fixture.worker.operation(imageGenerationOperation(fixture.workspaceId, fixture.providerId, fixture.modelId))
+      .then(() => undefined, (rejection) => rejection);
+    if (!(error instanceof ProjectionError)) throw new Error('Image generation did not surface the Host refusal');
+    expect(error.message).toContain('The workspace has no enabled image-policy-provider provider at the image endpoint');
+    expect(fixture.providerRequests()).toBe(0);
+    const providerUses = hostRequests.filter(request => request.type === 'tool' && request.toolName === 'provider.use');
+    expect(providerUses).toHaveLength(1);
+    const use = providerUses[0];
+    if (use?.type !== 'tool') throw new Error('Expected a provider.use tool request');
+    expect(use.input).toMatchObject({
+      providerId: fixture.providerId,
+      modelId: fixture.modelId,
+      endpoint: fixture.endpoint,
+      purpose: 'image',
+    });
+    // Generation is a provider use, never a credential entry: no provider-entry
+    // grant may be requested for it.
+    expect(hostRequests.some(request => request.type === 'provider-entry')).toBe(false);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('image generation with provider.use admitted reaches the provider', async () => {
+  const hostRequests: WorkerPolicyRequest[] = [];
+  const fixture = await openImageGenerationFixture(async request => { hostRequests.push(request); });
+  try {
+    const result = await fixture.worker.operation(imageGenerationOperation(fixture.workspaceId, fixture.providerId, fixture.modelId));
+    expect(result).toMatchObject({
+      type: 'catalog', result: {
+        type: 'catalog.image.generated', result: {
+          model: { providerId: fixture.providerId, modelId: fixture.modelId },
+          images: [{ data: IMAGE_GENERATION_FIXTURE_PNG, mimeType: 'image/png' }],
+        },
+      },
+    });
+    expect(fixture.providerRequests()).toBe(1);
+    const providerUses = hostRequests.filter(request => request.type === 'tool' && request.toolName === 'provider.use');
+    expect(providerUses).toHaveLength(1);
+    const use = providerUses[0];
+    if (use?.type !== 'tool') throw new Error('Expected a provider.use tool request');
+    expect(use.input).toMatchObject({
+      providerId: fixture.providerId,
+      modelId: fixture.modelId,
+      endpoint: fixture.endpoint,
+      purpose: 'image',
+    });
+  } finally {
+    await fixture.close();
   }
 });

@@ -74,6 +74,8 @@ export type NativeModelsContext = {
  rememberProviderSecrets?: (values: Iterable<string | undefined>) => void;
 };
 
+export type AuthorizeImageUse = (use: { providerId: string; modelId: string; endpoint?: string }) => Promise<void>;
+
 // These are canonical records, stored alongside native models/overrides in the native file.
 // OMP owns execution fields; application-only names, status and labels are not invented SDK fields.
 const MetadataSchema = z.object({
@@ -1241,7 +1243,7 @@ export class NativeModels {
   * request leaves the service. The result carries bytes; the caller writes them
   * to a file instead of returning a multi-megabyte inline picture.
   */
- async generate(input: ImageGenerateRequest, signal?: AbortSignal): Promise<ImageGenerateResult> {
+ async generate(input: ImageGenerateRequest, authorizeImageUse: AuthorizeImageUse, signal?: AbortSignal): Promise<ImageGenerateResult> {
   const request = ImageGenerateRequestSchema.parse(input);
   await this.load();
   await this.reloadCredentials();
@@ -1262,6 +1264,9 @@ export class NativeModels {
   }
   const nativeModel = rawImageModels.find(model => model.provider === providerId && model.id === modelId);
   if (!nativeModel) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected image model is disabled or unavailable');
+  await authorizeImageUse(nativeModel.baseUrl
+   ? { providerId, modelId, endpoint: nativeModel.baseUrl }
+   : { providerId, modelId });
   const source = this.context.authStorage.keys.source(providerId);
   const reference = source && source.kind !== 'api_key' && source.kind !== 'oauth'
    ? null : this.defaultCredentialRef(providerId);

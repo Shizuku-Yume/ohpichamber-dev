@@ -979,7 +979,7 @@ providers:
       workspaceId: 'workspace_1',
       selection: { providerId: 'fixture-image-provider', modelId: 'custom-generator-disabled' },
       prompt: 'Draw a cat',
-    })).rejects.toThrow('Selected image model is disabled');
+    }, async () => { })).rejects.toThrow('Selected image model is disabled');
 
     // Test real local SDK provider execution via loopback server without credential cost
     const { createServer } = await import('node:http');
@@ -1015,7 +1015,7 @@ providers:
         workspaceId: 'workspace_1',
         selection: { providerId: 'fixture-image-provider', modelId: 'custom-generator-1' },
         prompt: 'Draw a cat',
-      });
+      }, async () => { });
       expect(generated.model).toEqual({ providerId: 'fixture-image-provider', modelId: 'custom-generator-1' });
       expect(generated.images).toHaveLength(1);
       expect(generated.images[0].mimeType).toBe('image/png');

@@ -259,7 +259,7 @@ async function bootHarness(): Promise<void> {
     const realAgentDirectory = await fs.realpath(agentDirectory);
     const policy: HostWorkspacePolicy = {
       projectId, workspaceId, agentDirectoryId, cwd, agentDirectory: realAgentDirectory,
-      providers: [], mcpServers: [mcpServer], fileTools: ['read', 'write'],
+      providers: [], imageProviders: [], mcpServers: [mcpServer], fileTools: ['read', 'write'],
       shellCommands: [], agentIds: [], providerEntry: true,
     };
     const scope: HostAuthorizationScope = {

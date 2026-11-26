@@ -82,17 +82,6 @@ claim that the carried-over bodies have been type-verified.
 - **Solution:** either force project scope for every credential-carrying catalog install, or make user-file references resolvable from any workspace (workspace-independent provider name) while keeping project-file references workspace-scoped. Whichever path is chosen, add a save-from-another-workspace test.
 - **Cost:** small in the UI (same scope guard as env installs); the credential-name change touches the store's provider naming and needs a migration story for existing refs.
 
-## Security docs enterprise mode still mentions update checks
-
-- **Where:** `packages/docs/content/docs/security.mdx:157` (and localized `packages/docs/content/docs/*/security.mdx`)
-- **Added:** 2026-11-18
-- **Effort:** rebrand
-- **Priority:** worth-doing
-- **Problem:** the enterprise mode section still states that "Update checks keep running, so security fixes still reach you, but they never report usage, not even the anonymous install ID", even though Phase A removed the CLI/host update check and telemetry reporting (`rebrand/03`, `rebrand/05`).
-- **Impact:** readers configuring enterprise mode are told update checks run when the fork has removed that check.
-- **Solution:** update or remove that bullet in `packages/docs/content/docs/security.mdx` and its localized translations.
-- **Cost:** small docs-only edit across the security MDX files.
-
 ## Composer model label temporarily shows the previous model during a new-session run
 
 - **Where:** shared composer model presentation during new-session streaming.
@@ -102,26 +91,6 @@ claim that the carried-over bodies have been type-verified.
 - **Impact:** display-only; the run uses devin-swe-2. No routing or response-loss regression is established by this report.
 - **Solution:** identify the stale presentation owner and derive the streaming label from the authoritative session/run selection, preserving ordinary draft selection outside a run. Cover promotion, streaming, completion and interruption ordering.
 - **Cost:** focused composer state investigation and regression coverage; the source cause is not yet verified.
-
-## Advisor overflow compaction refusal has no behavioral test
-
-- **Where:** SDK patch `session/session-advisors.ts` overflow compaction candidate loop; `packages/agent-service/src/worker/session-native.test.ts`
-- **Added:** 2026-11-26
-- **Priority:** worth-doing
-- **Problem:** The advisor overflow compaction loop skips Host-refused candidates and surfaces the refusal when none remains, but no test drives advisor overflow compaction with `provider.use` denied. The identical pattern is covered for manual compaction and job widgets.
-- **Impact:** A regression in that one loop would go unnoticed. The registry wrapper still blocks the credential, so a regression costs diagnosability, not egress.
-- **Solution:** Drive an advisor overflow through the existing WATCHDOG.yml fixture with the compaction candidate denied; assert no provider request and a visible refusal.
-- **Cost:** Involved harness setup: an asynchronous maintenance trigger and a forced context overflow.
-
-## Image generation authorizes provider entry instead of provider use
-
-- **Where:** `packages/agent-service/src/worker/stateless.ts` (~330), `packages/agent-service/src/worker/catalog-models.ts` (~1274)
-- **Added:** 2026-11-26
-- **Priority:** worth-doing
-- **Problem:** `catalog.image.generate` asks only for the `provider-entry` grant before resolving a credential through the unwrapped runtime registry. It never requests a `provider.use` admission for the image model's provider, model and endpoint.
-- **Impact:** Image generation is checked by a weaker rule than every agent-driven provider request: its provider, model and endpoint never pass the `provider.use` policy.
-- **Solution:** Request `provider.use` for the image tuple. Decide whether image models join the workspace provider policy or get their own purpose, as embeddings did.
-- **Cost:** Host policy shape for image models and its Settings presentation; focused stateless worker and authorizer tests.
 
 ## Exact slash-command matches need a second Enter
 

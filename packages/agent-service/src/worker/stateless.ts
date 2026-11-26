@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { NativeProviderOAuth } from './provider-oauth.ts';
-import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type MCPConfigurationState, type ToolCatalogEntry } from '@openchamber/agent-contract';
+import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type JsonObject, type MCPConfigurationState, type ToolCatalogEntry } from '@openchamber/agent-contract';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import {
   BUILTIN_TOOLS, HIDDEN_TOOLS,
@@ -328,8 +328,13 @@ export class StatelessWorker {
         await providerEntry();
         result = { type: 'catalog.image.mutated', result: await this.models.configureImageModel(operation.request, revision) }; break;
       case 'catalog.image.generate':
-        await providerEntry();
-        result = { type: 'catalog.image.generated', result: await this.models.generate(operation.request) }; break;
+        result = {
+          type: 'catalog.image.generated', result: await this.models.generate(operation.request, async use => {
+            const input: JsonObject = { providerId: use.providerId, modelId: use.modelId, purpose: 'image' };
+            if (use.endpoint) input.endpoint = use.endpoint;
+            await this.authorize({ type: 'tool', toolName: 'provider.use', input });
+          })
+        }; break;
       case 'catalog.model.delete': result = { type: 'catalog.model.mutated', result: await this.models.deleteModel(operation.request, revision) }; break;
       case 'catalog.credential.write':
         await providerEntry();
