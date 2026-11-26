@@ -77,8 +77,10 @@ const readParts: Part[] = [
 ];
 const editParts: Part[] = [
     { type: 'tool_call', partId: 'edit-call-part', toolCallId: 'edit-call', toolName: 'edit', input: { path: 'src/source.ts', old_string: 'old', new_string: 'new' }, status: 'completed' },
-    { type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-call', toolName: 'edit', isError: false,
-      output: { content: [{ type: 'text', text: 'Updated src/source.ts' }], details: { path: '[workspace]/src/source.ts', diff: '-1|old\n+1|new\n+2|added', op: 'update' } } },
+    {
+        type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-call', toolName: 'edit', isError: false,
+        output: { content: [{ type: 'text', text: 'Updated src/source.ts' }], details: { path: '[workspace]/src/source.ts', diff: '-1|old\n+1|new\n+2|added', op: 'update' } }
+    },
 ];
 
 function turn(messages: ChatMessageEntry[]): TurnRecord {
@@ -204,7 +206,7 @@ describe('live Activity with the real message body', () => {
         restore();
     });
 
-        test('keeps active prose and tools visible; stop folds history but leaves the answer', async () => {
+    test('keeps active prose and tools visible; stop folds history but leaves the answer', async () => {
         const progress = assistant('progress', [text('progress-text', 'Checking the source'), ...readParts]);
         await act(async () => root.render(<Harness record={turn([progress])} />));
         expect(container.textContent).toContain('Checking the source');
