@@ -31,9 +31,11 @@ interface QueuedMessageRowProps {
     message: QueuedMessage;
     target: MessageQueueTarget;
     lead: React.ReactNode;
+    onEdit: (messageId: string) => void;
+    onSend: (messageId: string) => void;
 }
 
-const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, lead }) => {
+const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, lead, onEdit, onSend }) => {
     const { t } = useI18n();
     const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
     const firstLine = getQueuedMessagePreview(message);
@@ -60,8 +62,7 @@ const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, le
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                disabled
-                                title={t('common.unavailable')}
+                                onClick={() => onEdit(message.id)}
                                 onMouseDown={(event) => event.preventDefault()}
                                 className={ROW_ACTION_CLASS}
                             >
@@ -69,7 +70,7 @@ const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, le
                                 {t('chat.queuedMessage.edit')}
                             </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="top" sideOffset={6}>{t('common.unavailable')}</TooltipContent>
+                        <TooltipContent side="top" sideOffset={6}>{t('chat.queuedMessage.edit')}</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -77,8 +78,7 @@ const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, le
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                disabled
-                                title={t('common.unavailable')}
+                                onClick={() => onSend(message.id)}
                                 onMouseDown={(event) => event.preventDefault()}
                                 className={ROW_ACTION_CLASS}
                             >
@@ -86,7 +86,7 @@ const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, le
                                 {t('chat.queuedMessage.send')}
                             </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="top" sideOffset={6}>{t('common.unavailable')}</TooltipContent>
+                        <TooltipContent side="top" sideOffset={6}>{t('chat.queuedMessage.send')}</TooltipContent>
                     </Tooltip>
                 </>
             ) : null}
@@ -149,7 +149,7 @@ SortableQueuedMessageRow.displayName = 'SortableQueuedMessageRow';
 
 interface QueuedMessagesStripProps {
     target: MessageQueueTarget | null;
-    onEditMessage: (message: QueuedMessage) => void;
+    onEditMessage: (messageId: string) => void;
     onSendMessage: (messageId: string) => void;
 }
 
@@ -160,7 +160,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
  * the background commands. One message is its own row; several collapse into
  * a count that expands in place into a reorderable list.
  */
-export const QueuedMessagesStrip = memo(({ target }: QueuedMessagesStripProps) => {
+export const QueuedMessagesStrip = memo(({ target, onEditMessage, onSendMessage }: QueuedMessagesStripProps) => {
     const { t } = useI18n();
     const expanded = useUIStore((state) => state.messageQueueExpanded);
     const setMessageQueueExpanded = useUIStore((state) => state.setMessageQueueExpanded);
@@ -196,6 +196,8 @@ export const QueuedMessagesStrip = memo(({ target }: QueuedMessagesStripProps) =
                 <QueuedMessageRow
                     message={queuedMessages[0]}
                     target={target}
+                    onEdit={onEditMessage}
+                    onSend={onSendMessage}
                     lead={<Icon name="time" className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
                 />
             </div>
@@ -243,6 +245,8 @@ export const QueuedMessagesStrip = memo(({ target }: QueuedMessagesStripProps) =
                                     key={message.id}
                                     message={message}
                                     target={target}
+                                    onEdit={onEditMessage}
+                                    onSend={onSendMessage}
                                 />
                             ))}
                         </ScrollableOverlay>

@@ -2,10 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import {
   QueueAppendRequestSchema,
   QueueDeleteRequestSchema,
+  QueueDraftAttachmentSchema,
   QueueItemContentSchema,
   QueueItemSchema,
+  QueueOriginalDraftSchema,
   QueueReorderRequestSchema,
   QueueStateSchema,
+  QueueTakeRequestSchema,
+  QueueTakeResultSchema,
 } from './queue.ts';
 
 const options = { providerId: 'provider_1', modelId: 'model_1', agentId: null, variant: 'careful', reasoningEffort: 'medium' };
@@ -20,6 +24,33 @@ const content = {
   agentMention: { agentId: 'agent_1' },
   options,
   createdAt: 1000,
+  originalAvailable: true,
+};
+const draftAttachment = {
+  attachmentId: 'attachment_1',
+  name: 'issue.txt',
+  mediaType: 'text/plain',
+  size: 128,
+  uri: 'attachment://attachment_1',
+  agentPath: '/private/workspace/issue.txt',
+  original: { mimeType: 'text/plain', dataUrl: 'data:text/plain;base64,aGVsbG8=', saveOnSend: true },
+};
+const draft = {
+  content: content.content,
+  text: content.text,
+  attachments: [draftAttachment],
+  context: [{ kind: 'context' as const, text: 'Full captured issue', metadata: { issueId: 42 }, instructions: 'Inspect before replying' }],
+  agentMention: { agentId: 'agent_1' },
+  options,
+  goal: { objective: 'Close the issue', tokenBudget: 5000 },
+  contextPreview: content.contextPreview,
+};
+const takeResult = {
+  queue: { sessionId: 'session_1', revision: '8', items: [] },
+  draft,
+  text: content.text,
+  content: content.content,
+  createdAt: 1000,
 };
 const queued = { ...content, status: 'queued' };
 const leased = { ...content, status: 'leased', lease: { leaseId: 'lease_1', expiresAt: 2000 } };
@@ -28,7 +59,7 @@ const request = {
   input: {
     text: content.text,
     attachments: [attachment],
-    context: [{ kind: 'context', text: 'Full captured issue', metadata: { issueId: 42 }, instructions: 'Inspect before replying', deliveryReceiptId: 'receipt_1' }],
+    context: [{ kind: 'context' as const, text: 'Full captured issue', metadata: { issueId: 42 }, instructions: 'Inspect before replying', deliveryReceiptId: 'receipt_1' }],
     agentMention: { agentId: 'agent_1' },
   },
   options,
@@ -42,6 +73,7 @@ const boundaries = [
       { ...content, context: [{ index: 1, kind: 'context', hasInstructions: true }] },
       { ...content, attachments: [{ ...attachment, uri: '/host/private/issue.txt' }] },
       { ...content, contextPreview: 'x'.repeat(101) },
+      { ...content, originalAvailable: undefined },
     ],
   },
   {
@@ -59,10 +91,43 @@ const boundaries = [
   },
   {
     name: 'QueueAppendRequest', schema: QueueAppendRequestSchema,
-    valid: { expectedRevision: '7', content: content.content, contextPreview: content.contextPreview, request },
+    valid: { expectedRevision: '7', content: content.content, contextPreview: content.contextPreview, request, draft },
     invalid: [
       { expectedRevision: '7', content: content.content, request: { ...request, options: { modelId: 'model_1' } } },
       { expectedRevision: 7, content: content.content, request },
+      { expectedRevision: '7', content: content.content, request, draft: { ...draft, attachments: [{ ...draftAttachment, original: null }] } },
+    ],
+  },
+  {
+    name: 'QueueDraftAttachment', schema: QueueDraftAttachmentSchema,
+    valid: draftAttachment,
+    invalid: [
+      { ...draftAttachment, name: '' },
+      { ...draftAttachment, original: { mimeType: 'text/plain' } },
+      { ...draftAttachment, agentPath: null },
+    ],
+  },
+  {
+    name: 'QueueOriginalDraft', schema: QueueOriginalDraftSchema,
+    valid: draft,
+    invalid: [
+      { ...draft, goal: { objective: 'Close the issue' } },
+      { ...draft, options: { providerId: 'provider_1' } },
+      { ...draft, context: [{ index: 0, kind: 'context', hasInstructions: true }] },
+    ],
+  },
+  {
+    name: 'QueueTakeRequest', schema: QueueTakeRequestSchema,
+    valid: { expectedRevision: '7', queueItemId: 'queue_1' },
+    invalid: [{ queueItemId: 'queue_1' }, { expectedRevision: '-1', queueItemId: 'queueItem_1' }, { expectedRevision: '7' }],
+  },
+  {
+    name: 'QueueTakeResult', schema: QueueTakeResultSchema,
+    valid: takeResult,
+    invalid: [
+      { ...takeResult, draft: undefined },
+      { ...takeResult, queue: { sessionId: 'session_1', revision: '8' } },
+      { ...takeResult, createdAt: -1 },
     ],
   },
   {
@@ -84,6 +149,14 @@ describe('Host durable queue wire boundaries', () => {
       for (const invalid of boundary.invalid) expect(boundary.schema.safeParse(invalid).success).toBe(false);
     });
   }
+
+  test('an old append without a draft and an old projection without original availability stay parseable history', () => {
+    const append = { expectedRevision: '7', content: content.content, request };
+    expect(QueueAppendRequestSchema.parse(JSON.parse(JSON.stringify(append)))).toEqual(append);
+    expect(QueueAppendRequestSchema.parse({ ...append, draft }).draft).toEqual(draft);
+    expect(QueueTakeResultSchema.parse({ ...takeResult, draft: null }).draft).toBeNull();
+    expect(QueueItemSchema.safeParse({ ...queued, originalAvailable: undefined }).success).toBe(false);
+  });
 
   test('the public projection keeps complete immutable configuration but excludes delivery context and transcript copies', () => {
     expect(QueueItemSchema.parse(queued).options).toEqual(options);

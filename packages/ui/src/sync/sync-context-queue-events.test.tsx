@@ -78,6 +78,7 @@ describe('SyncProvider message queue synchronization', () => {
           content: 'Delivered prompt',
           text: 'Delivered prompt',
           createdAt: 100,
+          originalAvailable: true,
         }],
       },
     });

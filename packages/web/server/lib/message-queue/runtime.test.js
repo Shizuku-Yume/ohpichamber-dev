@@ -8,7 +8,7 @@ import express from 'express';
 import supertest from 'supertest';
 import { createCanonicalQueueRuntime } from './canonical-runtime.js';
 import { createPromptQueueStore } from './sqlite-store.js';
-import { registerMessageQueueRoutes } from './runtime.js';
+import { registerCanonicalQueueRoutes, registerMessageQueueRoutes } from './runtime.js';
 
 const roots = [];
 const stores = [];
@@ -374,5 +374,334 @@ describe('canonical queue runtime', () => {
     const child = await runtime.append({ ...scope, parentSessionId: 'ses_parent' }, randomUUID(), { expectedRevision: '0', content: 'delegate', request: delegated });
     assert.equal(child.items[0].options.agentId, 'task-subagent');
     await runtime.stop();
+  });
+
+  it('takes an item back through both route families with the preserved draft and refusals', async () => {
+    const store = storeFor();
+    const busy = { ...runtimeSession, runtimeStatus: 'running', activeRunId: 'busy-run' };
+    const service = {
+      calls: [],
+      request: async (pathname) => {
+        service.calls.push({ pathname });
+        if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(busy);
+        throw new Error(`Unexpected service path: ${pathname}`);
+      },
+    };
+    const published = [];
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: (event) => published.push(event),
+      reportFailure: () => {},
+    });
+    const app = express();
+    app.use(express.json());
+    registerMessageQueueRoutes(app, runtime, {
+      resolveSessionScope: async () => scope,
+      listQueueScopes: async () => ({ items: [scope], errors: [] }),
+    });
+    const draft = {
+      content: 'editable content', text: 'editable content',
+      attachments: [],
+      context: [{ kind: 'context', text: 'user chip', metadata: { issue: 7 } }],
+      options,
+    };
+    const queued = await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'editable content', request, draft });
+    assert.equal(queued.items[0].originalAvailable, true);
+    const queueItemId = queued.items[0].queueItemId;
+    const publishedBefore = published.length;
+
+    const taken = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items/${queueItemId}/take`)
+      .send({ expectedRevision: '1' });
+    assert.equal(taken.status, 200);
+    assert.deepEqual(taken.body.draft, draft);
+    assert.equal(taken.body.text, 'captured prompt');
+    assert.equal(taken.body.content, 'editable content');
+    assert.equal(taken.body.createdAt, queued.items[0].createdAt);
+    assert.equal(taken.body.queue.items.length, 0);
+    assert.equal(published.length > publishedBefore, true);
+    assert.equal((await runtime.getState(scope)).items.length, 0);
+
+    // A replay after a successful take is a clean 404 carrying the current queue.
+    const replay = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items/${queueItemId}/take`)
+      .send({ expectedRevision: taken.body.queue.revision });
+    assert.equal(replay.status, 404);
+    assert.equal(replay.body.code, 'SESSION_NOT_FOUND');
+    assert.equal(replay.body.details.queue.items.length, 0);
+    await runtime.stop();
+  });
+
+  it('refuses a take with a stale revision, a route/body mismatch, a leased item and an unknown item', async () => {
+    const store = storeFor();
+    const service = createService();
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    const app = express();
+    app.use(express.json());
+    registerMessageQueueRoutes(app, runtime, {
+      resolveSessionScope: async () => scope,
+      listQueueScopes: async () => ({ items: [scope], errors: [] }),
+    });
+    const activeSession = { ...runtimeSession, runtimeStatus: 'running', activeRunId: 'busy-run' };
+    service.request = async (pathname) => {
+      if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(activeSession);
+      throw new Error(`Unexpected service path: ${pathname}`);
+    };
+    const queued = await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'held', request });
+    const queueItemId = queued.items[0].queueItemId;
+
+    const stale = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items/${queueItemId}/take`)
+      .send({ expectedRevision: '0' });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'QUEUE_CONFLICT');
+    assert.equal(stale.body.details.queue.items.length, 1);
+
+    const mismatch = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items/${queueItemId}/take`)
+      .send({ expectedRevision: '1', queueItemId: randomUUID() });
+    assert.equal(mismatch.status, 400);
+    assert.equal(mismatch.body.code, 'INVALID_REQUEST');
+
+    const missing = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items/${randomUUID()}/take`)
+      .send({ expectedRevision: '1' });
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.code, 'SESSION_NOT_FOUND');
+
+    assert.equal((await runtime.getState(scope)).items.length, 1);
+
+    // Lease the head through the store, then the take must be refused while delivery proceeds.
+    const privateScope = { sessionId: SESSION, projectId: PROJECT, workspaceId: WORKSPACE };
+    const claim = await store.claimHead(privateScope, '1', { epoch: EPOCH, expiresAt: Date.now() + 30_000 });
+    const leased = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items/${queueItemId}/take`)
+      .send({ expectedRevision: '2' });
+    assert.equal(leased.status, 409);
+    assert.equal(leased.body.code, 'QUEUE_CONFLICT');
+    assert.equal((await runtime.getState(scope)).items[0].status, 'leased');
+    await store.markSubmitting(privateScope, claim.capture.leaseId);
+    await store.acknowledge(privateScope, claim.capture.leaseId);
+    assert.equal((await runtime.getState(scope)).items.length, 0);
+    await runtime.stop();
+  });
+
+  it('serves the canonical take route with the same draft and refuse semantics', async () => {
+    const store = storeFor();
+    const service = createService();
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    const router = express.Router();
+    router.use(express.json());
+    registerCanonicalQueueRoutes(router, runtime, { resolveSessionScope: async () => scope });
+    const app = express();
+    app.use('/api/agent/v1', router);
+    const draft = {
+      content: 'canonical content', text: 'canonical content',
+      attachments: [],
+      context: [],
+      options,
+    };
+    const queued = await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'canonical content', request, draft });
+    const queueItemId = queued.items[0].queueItemId;
+    const taken = await supertest(app)
+      .post(`/api/agent/v1/sessions/${SESSION}/queue/${queueItemId}/take`)
+      .send({ expectedRevision: '1' });
+    assert.equal(taken.status, 200);
+    assert.deepEqual(taken.body.draft, draft);
+    assert.equal(taken.body.queue.sessionId, SESSION);
+    // A stale replay is a conflict; a replay at the current revision is a clean 404.
+    const stale = await supertest(app)
+      .post(`/api/agent/v1/sessions/${SESSION}/queue/${queueItemId}/take`)
+      .send({ expectedRevision: '1' });
+    assert.equal(stale.status, 409);
+    const replay = await supertest(app)
+      .post(`/api/agent/v1/sessions/${SESSION}/queue/${queueItemId}/take`)
+      .send({ expectedRevision: taken.body.queue.revision });
+    assert.equal(replay.status, 404);
+    await runtime.stop();
+  });
+
+  it('an old record without a draft takes with the partial-restore shape', async () => {
+    const store = storeFor();
+    const busy = { ...runtimeSession, runtimeStatus: 'running', activeRunId: 'busy-run' };
+    const service = {
+      calls: [],
+      request: async (pathname) => {
+        service.calls.push({ pathname });
+        if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(busy);
+        throw new Error(`Unexpected service path: ${pathname}`);
+      },
+    };
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    // No draft on append: the take response is the partial-restore shape.
+    const queued = await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'legacy record', request });
+    assert.equal(queued.items[0].originalAvailable, false);
+    const taken = await runtime.take(scope, { expectedRevision: '1', queueItemId: queued.items[0].queueItemId });
+    assert.equal(taken.stored.draft, undefined);
+    assert.equal(taken.stored.content, 'legacy record');
+    assert.equal(taken.stored.request.input.text, 'captured prompt');
+    assert.equal(taken.queue.items.length, 0);
+    await runtime.stop();
+  });
+
+  it('a take that beats the delivery claim leaves nothing to admit and nothing lost', async () => {
+    const store = storeFor();
+    const session = { ...runtimeSession, runtimeStatus: 'running', activeRunId: 'busy-run' };
+    const service = {
+      calls: [],
+      request: async (pathname) => {
+        service.calls.push({ pathname });
+        if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(session);
+        if (pathname === `/internal/sessions/${SESSION}/runs`) return response({ run }, 202);
+        throw new Error(`Unexpected service path: ${pathname}`);
+      },
+    };
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    const queued = await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'raced', request });
+    const taken = await runtime.take(scope, { expectedRevision: '1', queueItemId: queued.items[0].queueItemId });
+    assert.equal(taken.queue.items.length, 0);
+    // The session goes idle after the take: the dispatch the take re-armed must
+    // admit nothing, because the item is already gone.
+    session.runtimeStatus = 'idle';
+    session.activeRunId = null;
+    await runtime.dispatch(scope);
+    assert.equal(service.calls.filter((entry) => entry.pathname === `/internal/sessions/${SESSION}/runs`).length, 0);
+    assert.equal((await runtime.getState(scope)).items.length, 0);
+    await runtime.stop();
+  });
+
+  it('take while a delivery is in flight is refused and the delivery completes undisturbed', async () => {
+    const store = storeFor();
+    const admissions = Promise.withResolvers();
+    const admissionStarted = Promise.withResolvers();
+    const service = {
+      calls: [],
+      request: async (pathname, init) => {
+        service.calls.push({ pathname, init });
+        if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(runtimeSession);
+        if (pathname === `/internal/sessions/${SESSION}/runs`) {
+          admissionStarted.resolve();
+          await admissions.promise;
+          return response({ run: { ...run, runId: JSON.parse(init.body).runId } }, 202);
+        }
+        throw new Error(`Unexpected service path: ${pathname}`);
+      },
+    };
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    const queued = await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'in flight', request });
+    const queueItemId = queued.items[0].queueItemId;
+    const dispatched = runtime.dispatch(scope);
+    // The admission request only starts after the head lease is written, so its
+    // arrival proves the lease exists; the take must lose to it.
+    await admissionStarted.promise;
+    await assert.rejects(runtime.take(scope, { expectedRevision: '2', queueItemId }), { code: 'QUEUE_CONFLICT' });
+    admissions.resolve();
+    await dispatched;
+    assert.equal(service.calls.filter((entry) => entry.pathname === `/internal/sessions/${SESSION}/runs`).length, 1);
+    assert.equal((await runtime.getState(scope)).items.length, 0);
+    await runtime.stop();
+  });
+
+  describe('canonical gateway queue take authorization', () => {
+    const gateway = async ({ authenticate }) => {
+      const { registerCanonicalHostRoutes } = await import('../host/canonical-routes.js');
+      const store = storeFor();
+      const service = {
+        getState: () => ({ phase: 'ready' }),
+        request: async () => {
+          throw new Error('The take must not reach the Agent Service proxy');
+        },
+      };
+      const runtime = createCanonicalQueueRuntime({
+        store,
+        service,
+        resolveAttachments: async () => [],
+        publishQueue: () => {},
+        reportFailure: () => {},
+      });
+      const app = express();
+      registerCanonicalHostRoutes(app, {
+        express,
+        service,
+        uiAuthController: { resolveAuthContext: async () => (authenticate ? { type: 'client' } : null) },
+        tunnelAuthController: { classifyRequestScope: () => 'local', getTunnelSessionFromRequest: () => null },
+        isRequestOriginAllowed: () => true,
+        enterprisePolicyOptions: {},
+        resolveWorkspaceScope: async () => null,
+        resolveWorkspaceDirectory: async () => null,
+        resolveSessionScope: async () => scope,
+        resolveHostSessionScope: async () => scope,
+        listProjects: async () => ({ items: [], errors: {} }),
+        listWorkspaces: async () => ({ items: [], errors: {} }),
+        resolveCredentialHandoff: async () => { throw new Error('no credentials'); },
+        queueRoutes: (router) => registerCanonicalQueueRoutes(router, runtime, { resolveSessionScope: async () => scope }),
+        sessionRoutes: (router) => router,
+        attachmentRoutes: (router) => router,
+        skillFileOwner: {},
+        getSkillRepositoryDependencies: () => ({}),
+      });
+      return { app, runtime };
+    };
+
+    it('rejects an unauthenticated canonical take before it can touch the queue', async () => {
+      const { app, runtime } = await gateway({ authenticate: false });
+      const res = await supertest(app)
+        .post(`/api/agent/v1/sessions/${SESSION}/queue/${randomUUID()}/take`)
+        .set('Authorization', 'Bearer fixture-client')
+        .send({ expectedRevision: '0' });
+      assert.equal(res.status, 401);
+      assert.equal(res.body.code, 'UNAUTHORIZED');
+      await runtime.stop();
+    });
+
+    it('serves an authenticated canonical take through the gateway middleware', async () => {
+      const { app, runtime } = await gateway({ authenticate: true });
+      const queued = await runtime.append(scope, randomUUID(), {
+        expectedRevision: '0',
+        content: 'gateway take',
+        request: { input: { text: 'gateway take', attachments: [], context: [] }, options },
+        draft: { content: 'gateway take', text: 'gateway take', attachments: [], context: [], options },
+      });
+      const res = await supertest(app)
+        .post(`/api/agent/v1/sessions/${SESSION}/queue/${queued.items[0].queueItemId}/take`)
+        .set('Authorization', 'Bearer fixture-client')
+        .send({ expectedRevision: '1' });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.content, 'gateway take');
+      assert.equal(res.body.draft.text, 'gateway take');
+      await runtime.stop();
+    });
   });
 });

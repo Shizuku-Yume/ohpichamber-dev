@@ -71,6 +71,7 @@ const serverItem = (id: string, content: string, extra: Partial<QueueItem> = {})
     attachments: [],
     context: [],
     options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: null },
+    originalAvailable: true,
     ...extra,
   };
   if (base.status === "leased") {
@@ -133,7 +134,7 @@ describe("server-owned message queue", () => {
   test("hydrate uploads messages queued by an older build before reading the server", async () => {
     useMessageQueueStore.setState({
       queuedMessages: {
-        [key]: [{ id: "local-1", content: "from before", text: "from before", createdAt: 1, sendConfig: { providerID: "p", modelID: "m" } }],
+        [key]: [{ id: "local-1", content: "from before", text: "from before", createdAt: 1, originalAvailable: true, sendConfig: { providerID: "p", modelID: "m" } }],
       },
     })
     respond = (call) => (call.method === "POST"
@@ -148,6 +149,13 @@ describe("server-owned message queue", () => {
         expectedRevision: "0", content: "from before",
         request: {
           input: { text: "from before", attachments: [], context: [] },
+          options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: null },
+        },
+        draft: {
+          content: "from before",
+          text: "from before",
+          attachments: [],
+          context: [],
           options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: null },
         },
       },
@@ -212,7 +220,7 @@ describe("server-owned message queue", () => {
     const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
     if (!legacyTarget) throw new Error("Missing test target")
     const legacyKey = getMessageQueueKey(legacyTarget)
-    useMessageQueueStore.setState({ queuedMessages: { [legacyKey]: [{ id: "local", content: "legacy", text: "legacy", createdAt: 1, sendConfig: { providerID: "p", modelID: "m" } }] } })
+    useMessageQueueStore.setState({ queuedMessages: { [legacyKey]: [{ id: "local", content: "legacy", text: "legacy", createdAt: 1, originalAvailable: true, sendConfig: { providerID: "p", modelID: "m" } }] } })
     const upload = deferredResponse()
     respond = (call) => call.method === "POST" ? upload.promise : json(snapshot([]))
     const bootstrap = useMessageQueueStore.getState().hydrate()
@@ -271,7 +279,7 @@ describe("server-owned message queue", () => {
     const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
     if (!legacyTarget) throw new Error("Missing test target")
     const legacyKey = getMessageQueueKey(legacyTarget)
-    useMessageQueueStore.setState({ queuedMessages: { [legacyKey]: ["first", "second"].map((id) => ({ id, content: id, text: id, createdAt: 1, sendConfig: { providerID: "p", modelID: "m" } })) } })
+    useMessageQueueStore.setState({ queuedMessages: { [legacyKey]: ["first", "second"].map((id) => ({ id, content: id, text: id, createdAt: 1, originalAvailable: true, sendConfig: { providerID: "p", modelID: "m" } })) } })
     const first = deferredResponse()
     respond = (call) => call.method === "POST"
       ? calls.length === 1 ? first.promise : json(queueState([], "2"))
@@ -314,7 +322,7 @@ describe("server-owned message queue", () => {
   })
 
   test("resync drops a queue the server no longer lists", async () => {
-    useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "dropped", text: "dropped", createdAt: 1 }] } })
+    useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "dropped", text: "dropped", createdAt: 1, originalAvailable: true }] } })
     respond = () => json(snapshot([]))
     await useMessageQueueStore.getState().resync()
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBe(undefined)
@@ -353,6 +361,20 @@ describe("server-owned message queue", () => {
             reasoningEffort: null,
           },
         },
+        draft: {
+          content: "hi @reviewer",
+          text: "hi",
+          attachments: [{ attachmentId: "att-1", name: "note.txt", mediaType: "text/plain", size: 2, uri: "attachment://att-1" }],
+          context: [],
+          agentMention: { agentId: "reviewer" },
+          options: {
+            providerId: "p",
+            modelId: "m",
+            agentId: "build",
+            variant: null,
+            reasoningEffort: null,
+          },
+        },
       },
     })
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["srv-1"])
@@ -374,7 +396,6 @@ describe("server-owned message queue", () => {
     // A server delivery broadcast removes the projection, never the history.
     applyMessageQueueUpdatedEvent(updated("101", queueState([], "101", historyTarget.sessionId)), historyTarget.runtimeKey);
     expect(entries()).toHaveLength(1);
-    await expect(useMessageQueueStore.getState().takeForSend(historyTarget)).rejects.toThrow('Host owns delivery');
     expect(entries()).toHaveLength(1);
   });
 
@@ -400,7 +421,7 @@ describe("server-owned message queue", () => {
     expect(selectInputHistoryEntries({ ...useInputHistoryStore.getState(), scope: 'session' }, historyTarget)).toEqual([]);
   });
 
-  test("addToQueue hands captured context to the Host without allowing client restoration", async () => {
+  test("addToQueue hands captured context to the Host inside the preserved original draft", async () => {
     const context = [
       { kind: "context" as const, text: "issue body", metadata: issueMetadata },
       { kind: "synthetic" as const, text: "conflict payload" },
@@ -411,14 +432,12 @@ describe("server-owned message queue", () => {
       context,
       sendConfig: { providerID: "p", modelID: "m" },
     })
-    const callBody = calls[0]?.body as { contextPreview?: string; request: { input: { context: unknown[] } } }
+    // SAFETY: the body is the QueueAppendRequest the store just serialized in this test; the assertion reads only the fields the append contract defines.
+    const callBody = calls[0]?.body as { contextPreview?: string; request: { input: { context: unknown[] } }; draft?: { context: unknown[] } }
     expect(callBody?.request?.input?.context).toEqual(context)
     expect(callBody?.contextPreview).toBe("Bug")
+    expect(callBody?.draft?.context).toEqual(context)
     expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.context).toBe(undefined)
-
-    await expect(useMessageQueueStore.getState().takeForSend(target, "srv-1")).rejects.toThrow('Host owns delivery')
-    expect(calls).toHaveLength(1)
-    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.id).toBe('srv-1')
   })
 
   test("captured reasoning effort survives queue acceptance and reload under Host ownership", async () => {
@@ -436,9 +455,6 @@ describe("server-owned message queue", () => {
     await useMessageQueueStore.getState().resync()
     expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
 
-    respond = () => json(queueState([], "8"))
-    await expect(useMessageQueueStore.getState().takeForSend(target, item.queueItemId)).rejects.toThrow('Host owns delivery')
-    expect(calls).toHaveLength(2)
     expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
   })
 
@@ -467,41 +483,171 @@ describe("server-owned message queue", () => {
     expect(calls).toHaveLength(0)
   })
 
-  test("manual editing is unsupported and preserves the Host-owned message", async () => {
-    useMessageQueueStore.setState({
-      queuedMessages: {
-        [key]: [{ id: "q1", content: "with file", text: "with file", createdAt: 1, attachments: [attachment] }],
-      },
-    })
-    respond = () => json(queueState([]))
-    await expect(useMessageQueueStore.getState().popToInput(target, "q1")).rejects.toThrow('Host owns delivery')
-    expect(calls).toHaveLength(0)
-    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.content).toBe('with file')
-    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.attachments?.[0]?.serverPath).toBe('attachment://att-1')
-  })
+  test("a taken message leaves the queue and hands its full original draft back", async () => {
+    const draft = {
+      content: "with file [note.txt]",
+      text: "with file",
+      attachments: [{
+        attachmentId: "att-1", name: "note.txt", mediaType: "text/plain", size: 2, uri: "attachment://att-1",
+        agentPath: "/repo/note.txt",
+        original: { mimeType: "text/plain", dataUrl: "data:text/plain;base64,aGk=", saveOnSend: true },
+      }],
+      context: [{ kind: "context", text: "issue body", metadata: issueMetadata }],
+      agentMention: { agentId: "reviewer" },
+      options: { providerId: "p", modelId: "m", agentId: "build", variant: "high", reasoningEffort: "medium" },
+      goal: { objective: "ship it", tokenBudget: 4000 },
+    }
+    respond = () => json(snapshot([queueState([serverItem("q1", "with file [note.txt]")], "3")]))
+    await useMessageQueueStore.getState().resync()
+    respond = (call) => call.path.endsWith("/take")
+      ? json({ queue: queueState([], "4"), draft, text: draft.text, content: draft.content, createdAt: 1 })
+      : json(snapshot([]))
 
-  test("manual send-now is unsupported for queued and leased entries", async () => {
-    useMessageQueueStore.setState({
-      queuedMessages: {
-        [key]: [
-          { id: "q1", content: "in flight", text: "in flight", createdAt: 1 },
-          { id: "q2", content: "second", text: "second", createdAt: 2 },
-        ],
-      },
-      sendingIds: { [key]: ["q1"] },
-    })
-    respond = () => json(queueState([]))
-    await expect(useMessageQueueStore.getState().takeForSend(target)).rejects.toThrow('Host owns delivery')
-    await expect(useMessageQueueStore.getState().takeForSend(target, 'q1')).rejects.toThrow('Host owns delivery')
-    expect(calls).toHaveLength(0)
-    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q1", "q2"])
-    expect(useMessageQueueStore.getState().sendingIds[key]).toEqual(['q1'])
-  })
+    const result = await useMessageQueueStore.getState().takeQueuedItem(target, "q1")
 
-  test("an empty queue cannot be claimed by a client either", async () => {
-    await expect(useMessageQueueStore.getState().takeForSend(target)).rejects.toThrow('Host owns delivery')
-    expect(calls).toHaveLength(0)
+    expect(calls[1]).toEqual({
+      method: "POST",
+      path: "/api/message-queue/sessions/session-1/items/q1/take",
+      body: { expectedRevision: "3", queueItemId: "q1" },
+    })
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
+    if (result.status !== 'taken') throw new Error(`expected a full take, got ${result.status}`)
+    expect(result.draft).toEqual(draft)
+    expect(result.message.content).toBe("with file [note.txt]")
+    expect(result.message.text).toBe("with file")
+    expect(result.message.agentMention).toBe("reviewer")
+    expect(result.message.sendConfig).toEqual({ providerID: "p", modelID: "m", agent: "build", variant: "high", reasoningEffort: "medium" })
+    expect(result.message.goal).toEqual({ objective: "ship it", tokenBudget: 4000 })
+    expect(result.message.context).toEqual([{ kind: "context", text: "issue body", metadata: issueMetadata }])
+    expect(result.message.originalAvailable).toBe(true)
+    // The saveOnSend original rides back as the real picked file, re-armed for re-saving at send.
+    const restored = result.message.attachments?.[0]
+    expect(restored?.saveOnSend).toBe(true)
+    expect(restored?.serverPath).toBeUndefined()
+    expect(restored?.agentPath).toBeUndefined()
+    expect(restored?.mimeType).toBe("text/plain")
+    expect(restored?.size).toBe(2)
+    expect(restored?.dataUrl).toBe("data:text/plain;base64,aGk=")
+  })
+
+  test("a reference-only attachment restores its reference identity", async () => {
+    const draft = {
+      content: "see [note.txt]",
+      text: "see",
+      attachments: [{ attachmentId: "att-1", name: "note.txt", mediaType: "text/plain", size: 2, uri: "attachment://att-1" }],
+      context: [],
+      options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: null },
+    }
+    respond = () => json(snapshot([queueState([serverItem("q1", "see [note.txt]")], "3")]))
+    await useMessageQueueStore.getState().resync()
+    respond = () => json({ queue: queueState([], "4"), draft, text: draft.text, content: draft.content, createdAt: 1 })
+
+    const result = await useMessageQueueStore.getState().takeQueuedItem(target, "q1")
+    if (result.status !== 'taken') throw new Error(`expected a full take, got ${result.status}`)
+    const restored = result.message.attachments?.[0]
+    expect(restored?.serverPath).toBe("attachment://att-1")
+    expect(restored?.saveOnSend).toBeUndefined()
+  })
+
+  test("a refused take leaves the queue untouched and refreshes the projection", async () => {
+    respond = () => json(snapshot([queueState([serverItem("q1", "busy")], "3")]))
+    await useMessageQueueStore.getState().resync()
+    respond = (call) => call.path.endsWith("/take")
+      ? new Response("conflict", { status: 409 })
+      : json(snapshot([queueState([serverItem("q1", "busy", { status: "leased", lease: { leaseId: "l1", expiresAt: 1000 } })], "5")]))
+
+    const result = await useMessageQueueStore.getState().takeQueuedItem(target, "q1")
+
+    expect(result.status).toBe("refused")
+    // The refresh re-read the owner snapshot: the item is still queued, now leased.
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q1"])
+    expect(useMessageQueueStore.getState().sendingIds[key]).toEqual(["q1"])
+  })
+
+  test("a missing take reports the item is already gone", async () => {
+    respond = () => json(snapshot([queueState([serverItem("q1", "raced")], "3")]))
+    await useMessageQueueStore.getState().resync()
+    respond = (call) => call.path.endsWith("/take")
+      ? new Response("gone", { status: 404 })
+      : json(snapshot([]))
+
+    const result = await useMessageQueueStore.getState().takeQueuedItem(target, "q1")
+
+    expect(result.status).toBe("missing")
+    expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
+  })
+
+  test("a concurrent take loser is refused while the winner keeps the draft", async () => {
+    const draft = {
+      content: "raced", text: "raced", attachments: [], context: [],
+      options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: null },
+    }
+    respond = () => json(snapshot([queueState([serverItem("q1", "raced")], "3")]))
+    await useMessageQueueStore.getState().resync()
+    // The first take wins; the queue moves to revision 4, so the second take's
+    // expectedRevision is stale and the host answers 409.
+    let taken = false
+    respond = (call) => {
+      if (!call.path.endsWith("/take")) return json(snapshot([queueState([], "4")]))
+      if (taken) return new Response("conflict", { status: 409 })
+      taken = true
+      return json({ queue: queueState([], "4"), draft, text: draft.text, content: draft.content, createdAt: 1 })
+    }
+
+    const first = await useMessageQueueStore.getState().takeQueuedItem(target, "q1")
+    expect(first.status).toBe("taken")
+    // The loser is a second client whose projection never saw the winner's
+    // broadcast: it still holds revision 3 and its take arrives stale. Simulate
+    // that client by re-seeding this projection at the pre-take revision.
+    useMessageQueueStore.getState().forgetQueue(target)
+    applyMessageQueueUpdatedEvent(updated("3", queueState([serverItem("q1", "raced")], "3")), "runtime-a")
+    const second = await useMessageQueueStore.getState().takeQueuedItem(target, "q1")
+    expect(second.status).toBe("refused")
+    expect(calls.filter((call) => call.path.endsWith("/take")).map((call) => call.body)).toEqual([
+      { expectedRevision: "3", queueItemId: "q1" },
+      { expectedRevision: "3", queueItemId: "q1" },
+    ])
+  })
+
+  test("an old record without an original draft restores partially and says so", async () => {
+    const item = serverItem("q1", "older prompt", { originalAvailable: false })
+    respond = () => json(snapshot([queueState([item], "3")]))
+    await useMessageQueueStore.getState().resync()
+    respond = () => json({ queue: queueState([], "4"), draft: null, text: "older prompt", content: "older prompt", createdAt: 1 })
+
+    const result = await useMessageQueueStore.getState().takeQueuedItem(target, "q1")
+
+    expect(result.status).toBe("taken-partial")
+    if (result.status !== 'taken-partial') throw new Error('unreachable')
+    expect(result.message.content).toBe("older prompt")
+    expect(result.message.originalAvailable).toBe(false)
+    // Descriptor-level projection data survives: the captured send config is real.
+    expect(result.message.sendConfig).toEqual({ providerID: "p", modelID: "m" })
+    expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
+  })
+
+  test("a network failure on take throws and keeps the item queued", async () => {
+    respond = () => json(snapshot([queueState([serverItem("q1", "still here")], "3")]))
+    await useMessageQueueStore.getState().resync()
+    respond = (call) => call.path.endsWith("/take")
+      ? new Response("boom", { status: 500 })
+      : json(snapshot([queueState([serverItem("q1", "still here")], "3")]))
+
+    await expect(useMessageQueueStore.getState().takeQueuedItem(target, "q1")).rejects.toThrow()
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q1"])
+  })
+
+  test("popToInput delegates to the take", async () => {
+    const draft = {
+      content: "pop me", text: "pop me", attachments: [], context: [],
+      options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: null },
+    }
+    respond = () => json(snapshot([queueState([serverItem("q1", "pop me")], "3")]))
+    await useMessageQueueStore.getState().resync()
+    respond = () => json({ queue: queueState([], "4"), draft, text: draft.text, content: draft.content, createdAt: 1 })
+
+    const result = await useMessageQueueStore.getState().popToInput(target, "q1")
+    expect(result.status).toBe("taken")
   })
 
   test("broadcasts update the projection but never move it backwards", () => {
@@ -596,7 +742,7 @@ describe("server-owned message queue", () => {
   })
 
   test("removeFromQueue and clearQueue update locally and tell the server", async () => {
-    useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "a", text: "a", createdAt: 1 }, { id: "q2", content: "b", text: "b", createdAt: 2 }] } })
+    useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "a", text: "a", createdAt: 1, originalAvailable: true }, { id: "q2", content: "b", text: "b", createdAt: 2, originalAvailable: true }] } })
     respond = () => json(queueState([serverItem("q2", "b")], "10"))
     useMessageQueueStore.getState().removeFromQueue(target, "q1")
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q2"])
@@ -611,11 +757,67 @@ describe("server-owned message queue", () => {
   })
 
   test("reorderQueue sends the complete new order", async () => {
-    useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "a", text: "a", createdAt: 1 }, { id: "q2", content: "b", text: "b", createdAt: 2 }] } })
+    useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "a", text: "a", createdAt: 1, originalAvailable: true }, { id: "q2", content: "b", text: "b", createdAt: 2, originalAvailable: true }] } })
     respond = () => json(queueState([serverItem("q2", "b"), serverItem("q1", "a")], "12"))
     useMessageQueueStore.getState().reorderQueue(target, "q2", "q1")
     await environment.settle()
     expect(calls[0]).toEqual({ method: "PUT", path: "/api/message-queue/sessions/session-1/order", body: { expectedRevision: "0", queueItemIds: ["q2", "q1"] } })
+  })
+
+  test("a snapshot that lands before session discovery keys its rows once discovery resolves the session", async () => {
+    const lateSession = 'late-session'
+    respond = () => json(snapshot([queueState([serverItem("q1", "queued elsewhere")], "3", lateSession)]))
+    await useMessageQueueStore.getState().hydrate()
+
+    const lateTarget = createMessageQueueTarget(lateSession, "/repo", "runtime-a")
+    if (!lateTarget) throw new Error("missing late target")
+    const lateKey = getMessageQueueKey(lateTarget)
+    // Discovery has not run: the rows exist but cannot key under the composer's directory yet.
+    expect(useMessageQueueStore.getState().queuedMessages[lateKey]).toBeUndefined()
+
+    const workspaceId = `workspace-/repo`
+    useGlobalSessionsStore.getState().upsertSession({
+      ...nativeHostSession(nativeSnapshot(lateSession)), workspaceId, archivedAt: undefined,
+    })
+
+    expect(useMessageQueueStore.getState().queuedMessages[lateKey]?.map((m) => m.id)).toEqual(["q1"])
+    expect(useMessageQueueStore.getState().queuedMessages[`runtime-a\n\n${lateSession}`]).toBeUndefined()
+  })
+
+  test("parked rows rekey when the session's workspace directory registers late", async () => {
+    const lateSession = 'late-workspace-session'
+    const workspaceId = 'workspace-late-arrival'
+    applyMessageQueueUpdatedEvent(updated("4", queueState([serverItem("q1", "parked")], "4", lateSession)), "runtime-a")
+
+    // The session entity arrives while its workspace directory is still unknown:
+    // the entity map update alone cannot place the rows.
+    useGlobalSessionsStore.getState().upsertSession({
+      ...nativeHostSession(nativeSnapshot(lateSession)), workspaceId, archivedAt: undefined,
+    })
+    const lateTarget = createMessageQueueTarget(lateSession, "/late-arrival", "runtime-a")
+    if (!lateTarget) throw new Error("missing late target")
+    const lateKey = getMessageQueueKey(lateTarget)
+    expect(useMessageQueueStore.getState().queuedMessages[lateKey]).toBeUndefined()
+    expect(useMessageQueueStore.getState().queuedMessages[`runtime-a\n\n${lateSession}`]?.map((m) => m.id)).toEqual(["q1"])
+
+    // The workspace resolution landing afterwards must still rekey the rows.
+    registerWorkspaceDirectory(workspaceId, "/late-arrival")
+    expect(useMessageQueueStore.getState().queuedMessages[lateKey]?.map((m) => m.id)).toEqual(["q1"])
+    expect(useMessageQueueStore.getState().queuedMessages[`runtime-a\n\n${lateSession}`]).toBeUndefined()
+  })
+
+  test("a queue event that lands before session discovery survives it instead of vanishing", async () => {
+    const lateSession = 'late-event-session'
+    applyMessageQueueUpdatedEvent(updated("4", queueState([serverItem("q1", "early")], "4", lateSession)), "runtime-a")
+
+    const workspaceId = `workspace-/repo`
+    useGlobalSessionsStore.getState().upsertSession({
+      ...nativeHostSession(nativeSnapshot(lateSession)), workspaceId, archivedAt: undefined,
+    })
+
+    const lateTarget = createMessageQueueTarget(lateSession, "/repo", "runtime-a")
+    if (!lateTarget) throw new Error("missing late target")
+    expect(useMessageQueueStore.getState().queuedMessages[getMessageQueueKey(lateTarget)]?.map((m) => m.content)).toEqual(["early"])
   })
 })
 
@@ -645,15 +847,15 @@ describe("a session in an isolated space", () => {
   test("the host's snapshot leaves a space's queue alone, and the space's snapshot leaves the host's", async () => {
     useMessageQueueStore.setState({
       queuedMessages: {
-        [key]: [{ id: "h0", content: "host", text: "host", createdAt: 1 }],
-        [spaceKey]: [{ id: "s0", content: "space", text: "space", createdAt: 1 }],
+        [key]: [{ id: "h0", content: "host", text: "host", createdAt: 1, originalAvailable: true }],
+        [spaceKey]: [{ id: "s0", content: "space", text: "space", createdAt: 1, originalAvailable: true }],
       },
     })
     respond = () => json(snapshot([queueState([], "9")]))
     await useMessageQueueStore.getState().hydrate()
     expect(Object.keys(useMessageQueueStore.getState().queuedMessages)).toEqual([spaceKey])
 
-    useMessageQueueStore.setState({ queuedMessages: { ...useMessageQueueStore.getState().queuedMessages, [key]: [{ id: "h1", content: "host", text: "host", createdAt: 1 }] } })
+    useMessageQueueStore.setState({ queuedMessages: { ...useMessageQueueStore.getState().queuedMessages, [key]: [{ id: "h1", content: "host", text: "host", createdAt: 1, originalAvailable: true }] } })
     respond = () => json(snapshot([spaceQueue([], "2")]))
     await useMessageQueueStore.getState().refreshSpaceQueue(SPACE)
     expect(calls.at(-1)).toMatchObject({ method: "GET", path: "/api/message-queue", directory: `/spaces/${SPACE}` })
@@ -661,7 +863,7 @@ describe("a session in an isolated space", () => {
   })
 
   test("a space that cannot be read keeps what was last known of its queue", async () => {
-    useMessageQueueStore.setState({ queuedMessages: { [spaceKey]: [{ id: "s0", content: "space", text: "space", createdAt: 1 }] } })
+    useMessageQueueStore.setState({ queuedMessages: { [spaceKey]: [{ id: "s0", content: "space", text: "space", createdAt: 1, originalAvailable: true }] } })
     respond = () => new Response("{}", { status: 503 })
     await useMessageQueueStore.getState().refreshSpaceQueue(SPACE)
     expect(useMessageQueueStore.getState().queuedMessages[spaceKey]?.map((m) => m.id)).toEqual(["s0"])

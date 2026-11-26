@@ -312,6 +312,29 @@ describe('worker-owned slash expansion', () => {
     }]);
   });
 
+  test('an expanded queued slash skill does not re-expand its skill mention', async () => {
+    seedCanonicalSession();
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-next', name: 'next', description: '', content: 'New instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
+    fakeFileResources({ expand: () => { throw new Error('Queued text must not be expanded twice'); } });
+    const skillSpy = spyOn(canonicalClient, 'expandSkill').mockImplementation(() => { throw new Error('Queued skill must not be re-expanded'); });
+    restorers.push(() => skillSpy.mockRestore());
+    // Queue-time capture already expanded `/next` and kept the verbatim text;
+    // its instruction rides in the captured context. Re-expansion would double it.
+    const result = await route({
+      content: '/next do the thing', fileResourcesExpanded: true,
+      additionalParts: [{ text: 'New instructions', synthetic: false }],
+    });
+    expect(result).toBe('prompt');
+    expect(skillSpy).not.toHaveBeenCalled();
+    expect(runCalls).toEqual([{
+      sessionId: 'session-a', commandId: undefined,
+      request: {
+        input: { text: '/next do the thing', attachments: [], context: [{ kind: 'instruction', text: 'New instructions' }] },
+        options: { providerId: 'provider-a', modelId: 'model-a', agentId: null, variant: null, reasoningEffort: null },
+      },
+    }]);
+  });
+
   test('awaits command expansion while preserving the submitted session and execution options', async () => {
     const pending = deferred();
     const started = deferred();
@@ -534,7 +557,7 @@ describe('openNewSessionDraft project binding', () => {
   test('paints the Chats default on a chat draft before discovery, and the project default on a project draft', () => {
     const original = useConfigStore.getState();
     useConfigStore.setState({
-      activateDirectory: () => new Promise(() => {}),
+      activateDirectory: () => new Promise(() => { }),
       providers: [], agents: [], settingsDefaultsLoaded: false, isConnected: false,
       settingsDefaultModel: 'global/model', settingsDefaultAgent: 'build',
       chatsDefaultModel: 'chat/model', chatsDefaultVariant: 'high', chatsDefaultAgent: 'plan',
@@ -1349,6 +1372,17 @@ describe('native UI submit lifecycle', () => {
       'session-a', ROOT_SELECTION_AGENT, 'provider-a', 'model-a',
     )).toBe('off');
   });
+  test('a verbatim null agent reaches the wire as agentId null even when a current agent is configured', async () => {
+    useSelectionStore.getState().saveSessionAgentSelection('session-a', 'scout');
+    await send('send-now root', {}, undefined, null);
+    expect(runCalls[0].request.options.agentId).toBeNull();
+    expect('agentId' in runCalls[0].request.options).toBe(true);
+  });
+  test('an undefined agent still inherits the session agent selection', async () => {
+    useSelectionStore.getState().saveSessionAgentSelection('session-a', 'scout');
+    await useSessionUIStore.getState().sendMessage('inherited', 'provider-a', 'model-a', undefined);
+    expect(runCalls[0].request.options.agentId).toBe('scout');
+  });
   test('a failed draft admission preserves the draft and never dispatches a prompt', async () => {
     const draft = { draftId: 42, open: true, target: 'project', directoryOverride: '/alpha', preserveDirectoryOverride: true };
     useSessionUIStore.setState({ currentSessionId: null, newSessionDraft: draft });
@@ -1516,6 +1550,20 @@ describe('armed canonical goal submission', () => {
       useSessionGoalArmStore.getState().setArmed(true, 'Finish the work');
       await send('Finish the work');
       expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Finish the work', tokenBudget: 12000 });
+    } finally {
+      useUIStore.setState({ sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled, sessionGoalDefaultBudget: state.sessionGoalDefaultBudget });
+    }
+  });
+
+  test('a captured arm token budget overrides the configured default', async () => {
+    seedCanonicalSession();
+    const state = useUIStore.getState();
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: input.tokenBudget, tokensUsed: 0 } }));
+    useUIStore.setState({ sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 12000 });
+    try {
+      useSessionGoalArmStore.getState().setArmed(true, 'Finish the work', false, 4000);
+      await send('Finish the work');
+      expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Finish the work', tokenBudget: 4000 });
     } finally {
       useUIStore.setState({ sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled, sessionGoalDefaultBudget: state.sessionGoalDefaultBudget });
     }

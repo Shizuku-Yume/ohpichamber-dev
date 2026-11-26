@@ -50,7 +50,7 @@ type Dependencies = {
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'newSessionDraftOpen' | 'isBtwActive' | 'isBtwPanelVisible' | 'hasPendingForm' | 'currentSessionId' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'setReviewDialogOpen' | 'sessionFolder' | 'btwComposerSessionId'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'queuedMessages' | 'parentMessageQueueTarget'>;
     draftTarget: Pick<ReturnType<typeof useComposerDraftTarget>, 'showDraftTargetSelectors' | 'messageWaitsForSpace'>;
-    queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEdit' | 'handleQueuedMessageSend'>;
+    queueActions: Pick<ReturnType<typeof useComposerQueueActions>, 'handleQueuedMessageEditById' | 'handleQueuedMessageSend'>;
     sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase' | 'handleOpenMobilePanel'>;
     editorActions: Pick<ReturnType<typeof useComposerEditorActions>, 'handleCycleThinking' | 'handleOpenThinkingPanel'>;
     footerModes: Pick<ReturnType<typeof useComposerFooterModes>, 'runOrigin' | 'mode' | 'draftMode' | 'draftGoalObjective' | 'runActive' | 'planRoleAvailable' | 'goalModeEnabled' | 'handleDraftModeChange'>;
@@ -75,7 +75,7 @@ export function useComposerRows({
     } = sessionScope;
     const { queuedMessages, parentMessageQueueTarget } = queueState;
     const { showDraftTargetSelectors, messageWaitsForSpace } = draftTarget;
-    const { handleQueuedMessageEdit, handleQueuedMessageSend } = queueActions;
+    const { handleQueuedMessageEditById, handleQueuedMessageSend } = queueActions;
     const { sessionPhase, handleOpenMobilePanel } = sessionLifecycle;
     const { handleCycleThinking, handleOpenThinkingPanel } = editorActions;
 
@@ -167,7 +167,7 @@ export function useComposerRows({
     const queueRow = !isBtwActive && !newSessionDraftOpen ? (
         <QueuedMessagesStrip
             target={parentMessageQueueTarget}
-            onEditMessage={handleQueuedMessageEdit}
+            onEditMessage={handleQueuedMessageEditById}
             onSendMessage={handleQueuedMessageSend}
         />
     ) : null;

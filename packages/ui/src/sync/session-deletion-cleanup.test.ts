@@ -28,8 +28,8 @@ describe('cleanupPersistedSessionState', () => {
     // way a server snapshot would, and expect only the projection to go.
     useMessageQueueStore.setState({
       queuedMessages: {
-        [getMessageQueueKey(deleted)]: [{ id: 'q-delete', content: 'delete', text: 'delete', createdAt: 1 }],
-        [getMessageQueueKey(retained)]: [{ id: 'q-retain', content: 'retain', text: 'retain', createdAt: 1 }],
+        [getMessageQueueKey(deleted)]: [{ id: 'q-delete', content: 'delete', text: 'delete', createdAt: 1, originalAvailable: true }],
+        [getMessageQueueKey(retained)]: [{ id: 'q-retain', content: 'retain', text: 'retain', createdAt: 1, originalAvailable: true }],
       },
     });
     const deletedDraft = createChatDraftIdentity(runtimeKey, '/repo-a', 'session-1')!;

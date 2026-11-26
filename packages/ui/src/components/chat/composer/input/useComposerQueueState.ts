@@ -9,12 +9,12 @@ type Dependencies = {
 };
 
 type ComposerQueueState = Pick<ReturnType<typeof useMessageQueueStore.getState>,
-    'addToQueue' | 'takeForSend' | 'followUpBehavior'> & {
-    popQueuedToInput: ReturnType<typeof useMessageQueueStore.getState>['popToInput'];
-    queuedMessages: QueuedMessage[];
-    messageQueueTarget: ReturnType<typeof createMessageQueueTarget> | null;
-    parentMessageQueueTarget: ReturnType<typeof createMessageQueueTarget> | null;
-};
+    'addToQueue' | 'takeQueuedItem' | 'followUpBehavior'> & {
+        popQueuedToInput: ReturnType<typeof useMessageQueueStore.getState>['popToInput'];
+        queuedMessages: QueuedMessage[];
+        messageQueueTarget: ReturnType<typeof createMessageQueueTarget> | null;
+        parentMessageQueueTarget: ReturnType<typeof createMessageQueueTarget> | null;
+    };
 
 export function useComposerQueueState({
     sessionScope,
@@ -50,12 +50,12 @@ export function useComposerQueueState({
 
     const addToQueue = useMessageQueueStore((state) => state.addToQueue);
 
-    const takeForSend = useMessageQueueStore((state) => state.takeForSend);
+    const takeQueuedItem = useMessageQueueStore((state) => state.takeQueuedItem);
 
     const popQueuedToInput = useMessageQueueStore((state) => state.popToInput);
 
     return {
-        queuedMessages, messageQueueTarget, addToQueue, popQueuedToInput, takeForSend, followUpBehavior,
+        queuedMessages, messageQueueTarget, addToQueue, popQueuedToInput, takeQueuedItem, followUpBehavior,
         parentMessageQueueTarget,
     };
 }

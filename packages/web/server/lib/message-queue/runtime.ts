@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ProblemCodeSchema, ProblemDetailsSchema, QueueAppendRequestSchema,
-  QueueDeleteRequestSchema, QueueReorderRequestSchema, QueueStateSchema,
+  QueueDeleteRequestSchema, QueueReorderRequestSchema, QueueStateSchema, QueueTakeRequestSchema, QueueTakeResultSchema,
 } from '@openchamber/agent-contract';
 import { createCanonicalQueueRuntime } from './canonical-runtime.js';
 import { createPromptQueueStore, PromptQueueError } from './sqlite-store.js';
@@ -41,6 +41,25 @@ const deleteInput = (body, queueItemId) => {
     throw new PromptQueueError('INVALID_REQUEST', 400, 'Queue item identity must match its route');
   }
   return request;
+};
+
+const takeInput = (body, queueItemId) => {
+  const request = QueueTakeRequestSchema.parse({ ...(body || {}), queueItemId });
+  if (body?.queueItemId !== undefined && body.queueItemId !== queueItemId) {
+    throw new PromptQueueError('INVALID_REQUEST', 400, 'Queue item identity must match its route');
+  }
+  return request;
+};
+
+const takeResult = async (runtime, scope, body, queueItemId) => {
+  const taken = await runtime.take(scope, takeInput(body, queueItemId));
+  return QueueTakeResultSchema.parse({
+    queue: taken.queue,
+    draft: taken.stored.draft ?? null,
+    text: taken.stored.request.input.text,
+    content: taken.stored.content,
+    createdAt: taken.stored.createdAt,
+  });
 };
 
 /**
@@ -94,6 +113,12 @@ export function registerMessageQueueRoutes(app, runtime, { resolveSessionScope, 
       res.json(QueueStateSchema.parse(await runtime.remove(scope, deleteInput(req.body, req.params.itemId))));
     } catch (error) { respondError(res, error, 'Failed to remove queued message'); }
   });
+  app.post('/api/message-queue/sessions/:sessionId/items/:itemId/take', async (req, res) => {
+    try {
+      const scope = await scopeFor(resolveSessionScope, req.params.sessionId);
+      res.json(await takeResult(runtime, scope, req.body, req.params.itemId));
+    } catch (error) { respondError(res, error, 'Failed to take queued message'); }
+  });
   app.put('/api/message-queue/sessions/:sessionId/hold', async (req, res) => {
     try {
       const scope = await scopeFor(resolveSessionScope, req.params.sessionId);
@@ -108,4 +133,5 @@ export function registerCanonicalQueueRoutes(router, runtime, { resolveSessionSc
   router.post('/sessions/:sessionId/queue', async (req, res) => { try { const { commandId: bodyCommandId, request } = appendInput(req.body); const commandId = bodyCommandId ?? req.get('Idempotency-Key') ?? randomUUID(); res.json(QueueStateSchema.parse(await runtime.append(await scope(req.params.sessionId), commandId, request))); } catch (error) { respondError(res, error, 'Failed to append prompt queue'); } });
   router.put('/sessions/:sessionId/queue/order', async (req, res) => { try { res.json(QueueStateSchema.parse(await runtime.reorder(await scope(req.params.sessionId), QueueReorderRequestSchema.parse(req.body)))); } catch (error) { respondError(res, error, 'Failed to reorder prompt queue'); } });
   router.delete('/sessions/:sessionId/queue/:queueItemId', async (req, res) => { try { res.json(QueueStateSchema.parse(await runtime.remove(await scope(req.params.sessionId), deleteInput(req.body, req.params.queueItemId)))); } catch (error) { respondError(res, error, 'Failed to remove prompt queue item'); } });
+  router.post('/sessions/:sessionId/queue/:queueItemId/take', async (req, res) => { try { res.json(await takeResult(runtime, await scope(req.params.sessionId), req.body, req.params.queueItemId)); } catch (error) { respondError(res, error, 'Failed to take prompt queue item'); } });
 }

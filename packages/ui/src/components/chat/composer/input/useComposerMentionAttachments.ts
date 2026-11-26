@@ -17,6 +17,13 @@ import { toServerFileUrl } from '../../composer/attachments/filePaths';
 import { INLINE_SERVER_ATTACHMENT_ID_PREFIX, findMissingPaths, isMentionAlreadyAttached } from '../../composer/attachments/inlineMentionAttachments';
 import { useFileMentionCheck } from '../../composer/state/useFileMentionCheck';
 
+export const sanitizeAttachmentsForSend = (files: readonly AttachedFile[] | undefined): AttachedFile[] => [...(files ?? [])]
+    .map((file) => ({
+        ...file,
+        dataUrl: file.source === 'server' && file.serverPath && !file.serverPath.startsWith('attachment://')
+            ? toServerFileUrl(file.serverPath)
+            : file.dataUrl,
+    }));
 type DocumentMentionPreparation =
         | { status: 'ready'; prepared: Map<string, AttachedFile[]> }
         | { status: 'failed'; filename: string }
@@ -44,16 +51,6 @@ export function useComposerMentionAttachments({
     const { inputMode, isBtwActive, currentDirectory } = sessionScope;
     const { agents } = selection;
 
-    const sanitizeAttachmentsForSend = React.useCallback(
-        (files: readonly AttachedFile[] | undefined): AttachedFile[] => [...(files ?? [])]
-            .map((file) => ({
-                ...file,
-                dataUrl: file.source === 'server' && file.serverPath
-                    ? toServerFileUrl(file.serverPath)
-                    : file.dataUrl,
-            })),
-        [],
-    );
 
     const resolveInlineFileMention = React.useCallback((mentionPath: string): { serverPath: string; filename: string } | null => {
         const kind = classifyMention(mentionPath, {

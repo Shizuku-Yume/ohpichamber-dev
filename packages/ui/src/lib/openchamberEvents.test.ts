@@ -371,7 +371,7 @@ describe('openchamber events', () => {
         sessionId: target.sessionId,
         revision: '2',
         items: [{
-          queueItemId: 'q1', status: 'leased', content: 'queued', text: 'queued', createdAt: 1,
+          queueItemId: 'q1', status: 'leased', content: 'queued', text: 'queued', createdAt: 1, originalAvailable: true,
           attachments: [], context: [], lease: { leaseId: 'lease-1', expiresAt: 2 },
           options: { providerId: 'p', modelId: 'm', agentId: null, variant: null, reasoningEffort: null },
         }],

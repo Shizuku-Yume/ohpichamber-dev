@@ -256,7 +256,7 @@ export function registerCanonicalHostRoutes(app, {
   }
  });
  // Queue routes address /sessions/:sessionId/queue and run delivery before any SDK proxy.
- router.use(/^\/sessions\/[^/]+\/queue(?:\/|$)/, express.json({ limit: '1mb', strict: true }));
+ router.use('/sessions/:sessionId/queue', express.json({ limit: '1mb', strict: true }));
  queueRoutes(router);
  const sessionRouter = express.Router();
  sessionRoutes(sessionRouter);

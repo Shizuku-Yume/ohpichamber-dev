@@ -1840,10 +1840,11 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     const submittedAttachments = attachments ? [...attachments] : undefined
     const submittedParts = additionalParts?.map((part) => ({ ...part, attachments: part.attachments ? [...part.attachments] : undefined }))
     const uiState = useUIStore.getState()
-    const tokenBudget = uiState.sessionGoalDefaultBudgetEnabled ? uiState.sessionGoalDefaultBudget : null
+    const defaultTokenBudget = uiState.sessionGoalDefaultBudgetEnabled ? uiState.sessionGoalDefaultBudget : null
     const goalArm = inputMode !== "shell" && content.trim().length > 0
       ? useSessionGoalArmStore.getState().consume()
-      : { armed: false, objectiveOverride: null, composerGoal: false }
+      : { armed: false, objectiveOverride: null, tokenBudgetOverride: null, composerGoal: false }
+    const tokenBudget = goalArm.armed && goalArm.tokenBudgetOverride !== null ? goalArm.tokenBudgetOverride : defaultTokenBudget
     let goalApplied = false
     let temporaryDraftSessionId: string | undefined
     let temporaryCorrelationId: string | undefined
@@ -2048,7 +2049,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         }
       }
       if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
-        useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal)
+        useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal, goalArm.tokenBudgetOverride)
       }
       throw error
     })

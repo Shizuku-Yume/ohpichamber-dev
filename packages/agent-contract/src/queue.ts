@@ -3,6 +3,7 @@ import { CounterSchema, EntityIdSchema, TimestampSchema } from './primitives.ts'
 import {
   CapturedSendOptionsSchema,
   PromptAttachmentSchema,
+  PromptContextSchema,
   PromptRequestSchema,
 } from './prompt.ts';
 
@@ -35,6 +36,7 @@ const QueueItemContentFields = {
   agentMention: z.strictObject({ agentId: EntityIdSchema }).optional(),
   options: CapturedSendOptionsSchema,
   createdAt: TimestampSchema,
+  originalAvailable: z.boolean(),
 };
 
 export const QueueItemContentSchema = z.strictObject(QueueItemContentFields);
@@ -60,13 +62,59 @@ export const QueueStateSchema = z.strictObject({
 });
 export type QueueState = z.infer<typeof QueueStateSchema>;
 
+export const QueueDraftAttachmentSchema = z.strictObject({
+  attachmentId: EntityIdSchema,
+  name: z.string().min(1),
+  mediaType: z.string().min(1),
+  size: z.number().int().nonnegative(),
+  uri: z.string(),
+  agentPath: z.string().optional(),
+  original: z.strictObject({
+    mimeType: z.string().min(1),
+    dataUrl: z.string().min(1),
+    saveOnSend: z.boolean().optional(),
+  }).optional(),
+});
+export type QueueDraftAttachment = z.infer<typeof QueueDraftAttachmentSchema>;
+
+export const QueueOriginalDraftSchema = z.strictObject({
+  content: z.string(),
+  text: z.string(),
+  attachments: z.array(QueueDraftAttachmentSchema),
+  context: z.array(PromptContextSchema),
+  agentMention: z.strictObject({ agentId: EntityIdSchema }).optional(),
+  options: CapturedSendOptionsSchema,
+  goal: z.strictObject({
+    objective: z.string().optional(),
+    tokenBudget: z.number().nullable(),
+  }).optional(),
+  contextPreview: ContextPreviewSchema.optional(),
+});
+export type QueueOriginalDraft = z.infer<typeof QueueOriginalDraftSchema>;
+
 export const QueueAppendRequestSchema = z.strictObject({
   expectedRevision: CounterSchema,
   content: z.string(),
   contextPreview: ContextPreviewSchema.optional(),
   request: PromptRequestSchema,
+  draft: QueueOriginalDraftSchema.optional(),
 });
 export type QueueAppendRequest = z.infer<typeof QueueAppendRequestSchema>;
+
+export const QueueTakeRequestSchema = z.strictObject({
+  expectedRevision: CounterSchema,
+  queueItemId: EntityIdSchema,
+});
+export type QueueTakeRequest = z.infer<typeof QueueTakeRequestSchema>;
+
+export const QueueTakeResultSchema = z.strictObject({
+  queue: QueueStateSchema,
+  draft: QueueOriginalDraftSchema.nullable(),
+  text: z.string(),
+  content: z.string(),
+  createdAt: TimestampSchema,
+});
+export type QueueTakeResult = z.infer<typeof QueueTakeResultSchema>;
 
 export const QueueReorderRequestSchema = z.strictObject({
   expectedRevision: CounterSchema,

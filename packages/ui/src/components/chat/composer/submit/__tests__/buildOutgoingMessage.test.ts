@@ -82,11 +82,11 @@ describe('the composer text alone', () => {
 
 describe('manual queue projection', () => {
     const ordinary: QueuedMessage = {
-        id: 'ordinary', content: 'User follow up', text: 'User follow up', createdAt: 1,
+        id: 'ordinary', content: 'User follow up', text: 'User follow up', createdAt: 1, originalAvailable: true,
         sendConfig: { providerID: 'openai', modelID: 'chosen', agent: 'plan' },
     };
     const scheduled: QueuedMessage = {
-        id: 'scheduled', content: 'Scheduled follow up', text: 'Scheduled follow up', createdAt: 1,
+        id: 'scheduled', content: 'Scheduled follow up', text: 'Scheduled follow up', createdAt: 1, originalAvailable: true,
         scheduledTask: { projectId: 'project-1', taskId: 'task-1' },
     };
 
