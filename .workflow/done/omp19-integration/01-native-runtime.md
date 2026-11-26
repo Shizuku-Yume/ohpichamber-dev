@@ -4,7 +4,7 @@
 **Blocked by:** None
 **Covers:** W1, W4
 **Check:** `bun test src/worker/projection.test.ts src/worker/mode.test.ts src/worker/session-native.test.ts src/supervisor/service-worktree-lease.test.ts --timeout 15000` in packages/agent-service → passes
-**Base commit:** f18466d07413d7bad8f1910e8114e1924be6a117
+**Base commit:** a416b13b28
 
 - [x] Use OMP 19 lifecycle authority, including async pause and wake.
 - [x] Replace removed SDK imports and seance handling; classify commit.

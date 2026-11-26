@@ -4,7 +4,7 @@
 **Blocked by:** 05
 **Covers:** W9
 **Check:** root `bun run type-check`, Agent Service `bun test src --timeout 15000`, contract tests and affected UI suites pass
-**Base commit:** 593f4de1f66a4d5b37733d3d3dc427d604f7a0e8
+**Base commit:** 57479dba7a
 
 - [x] Run full required checks and affected lint.
 - [x] Record upstream decisions and verification limits in development.md.

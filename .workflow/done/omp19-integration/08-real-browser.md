@@ -4,7 +4,7 @@
 **Blocked by:** 07
 **Covers:** W7, W8, W9
 **Check:** `bun run dev` with isolated HOME/data/userData under `/tmp/ohpi-dev`; browser at localhost:5180 shows streaming then idle, todos, ask form answer round-trip, Bash result, task HUD progress, handoff compaction and Stop cancellation
-**Base commit:** 14bc8ce25
+**Base commit:** cdbeff359b
 
 - [x] Configure an OpenAI-compatible provider through the browser using bound test secrets, a /v1 endpoint, and only devin-swe-2 or gemini-3.5-flash-lite.
 - [x] Exercise each requested behavior and capture screenshots under `/home/ubuntu/omp19-artifacts/screens/`.

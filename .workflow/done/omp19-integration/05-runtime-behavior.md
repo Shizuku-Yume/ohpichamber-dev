@@ -4,7 +4,7 @@
 **Blocked by:** 04
 **Covers:** W8
 **Check:** native session/projection/warming suites and relevant ToolPart/subagent UI suites pass
-**Base commit:** 593f4de1f66a4d5b37733d3d3dc427d604f7a0e8
+**Base commit:** 57479dba7a
 
 - [x] Audit handoff/background compaction and cancellation against upstream.
 - [x] Audit warming cap, browser policy/rendering and enable GUI intent tracing.

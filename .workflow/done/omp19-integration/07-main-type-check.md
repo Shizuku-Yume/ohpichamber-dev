@@ -4,7 +4,7 @@
 **Blocked by:** None
 **Covers:** W5
 **Check:** `git fetch origin && git merge origin/main --no-edit` and `bun run type-check` complete successfully through mobile
-**Base commit:** 14bc8ce25
+**Base commit:** cdbeff359b
 
 - [x] Merge latest origin/main using a real merge; preserve both workflow conflict sides if needed.
 - [x] Run root type-check through mobile with isolated application data.

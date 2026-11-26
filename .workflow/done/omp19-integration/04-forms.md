@@ -4,7 +4,7 @@
 **Blocked by:** None
 **Covers:** W7
 **Check:** `bun test src/worker/interaction.test.ts src/interaction/manager.test.ts` in packages/agent-service; contract requests and UI question/FormDock suites pass
-**Base commit:** 9b638f657572f2fb1ba698149657002dbe3b95a1
+**Base commit:** 79d474a8da
 
 - [x] Parse native HTML forms into canonical questions and safe existing UI presentation.
 - [x] Preserve native values, defaults, optional/disabled fields, Other answers and selector hints.

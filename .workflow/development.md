@@ -4,6 +4,23 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The OMP 19 and OMP 19.1 integration efforts closed on 2026-11-26 after their
+first independent review. That review found Host authorization gaps on paths
+where the SDK builds its own sessions or mints credentials: `/cleanse`,
+`/tan`, Vibe, persisted revival, advisors, compaction and other auxiliary
+model calls, and mnemopi embeddings and remote LLM use. `b3c03cafa8` closes
+them in the SDK patch. Bash fails closed without the Host authorizer. The
+session model registry authorizes `provider.use` before every credential mint.
+Remote mnemopi embeddings are a `provider.use` with `purpose: 'embedding'`,
+admitted for an enabled workspace provider at the same endpoint. Both mnemopi
+gates admit only the endpoint the Host admitted. `task.workerThreads` is pinned
+to 0. On that commit the Agent Service suite passed 819 of 845 tests (26
+skipped, none failed) and root type-check passed all five steps. The Host
+authorizer passed 44/44, and packaged runtime verification reached readiness
+with Bun 1.4.5. Receipts are under
+`ohpichamber-omp-artifacts/omp19-close-2026-11-26/`. Not verified: Electron
+GUI, non-Linux platforms, live OAuth rotation.
+
 A 2026-11-26 performance pass, measured on isolated servers with synthetic
 fixtures (evidence under `ohpichamber-omp-artifacts/perf-2026-11-26/`), changed
 these paths. Agent Service idle memory fell from 1.77 GB to 535 MB once idle
@@ -1146,7 +1163,7 @@ The live task run exposed a sequencing defect: subagent/BTW observations consume
 
 Native `/handoff` succeeds: the UI reports `Compaction complete. Tokens: 18461 -> 9961 (saved 8500).` and the canonical snapshot reports idle with no compaction. Screenshots: `06-handoff-start.png` and `06-handoff-done.png`. The isolated profile alone sets `compaction.keepRecentTokens: 1000` to make the short verification transcript eligible; production defaults are unchanged. All seven requested browser behaviors pass. Stop was verified against an active run, not a separate compaction-cancellation run.
 
-Linux x64 Electron Agent runtime preparation and verification pass with Bun 1.4.4, 123 packages and OMP readiness true (`stage3-prepare-runtime.log`, `stage3-verify-runtime.log`). This certifies the packaged Agent runtime only, not Electron GUI or non-Linux execution. Independent review remains skipped because no reviewer-subagent tool is available. No dependencies, changelog edits, push or main integration are included.
+Linux x64 Electron Agent runtime preparation and verification pass with Bun 1.4.4, 123 packages and OMP readiness true (`stage3-prepare-runtime.log`, `stage3-verify-runtime.log`). This certifies the packaged Agent runtime only, not Electron GUI or non-Linux execution. Independent review ran at effort close on 2026-11-26 (`done/omp19-integration/closeout.md`). No dependencies or changelog edits are included.
 
 **2026-11-19 OMP 19 integration stage 2b:** Native HTML forms now use the existing canonical question/FormDock surface. The worker reuses OMP's HTML parser and value/validation helpers; hidden fields and native values stay private. Shared controls preserve defaults, optional/disabled choices, numeric/text values, Other answers and safe Markdown image/SVG context without mounting model HTML. Nonterminal draft replies reset inactivity and retain current values for timeout and abandonment. Selector cursor/marker/action metadata remains distinct from multiselect answers. The eight upstream-source decisions are recorded in `specs/omp19-integration.md`.
 
@@ -1154,7 +1171,7 @@ Native `/handoff` dispatch remains authoritative; canonical `compact.abort` reac
 
 Verification: root `bun run type-check` passes through mobile (3,888 files across five projects; five repository guards). Full Agent Service `bun test src --timeout 15000`: **677 pass, 12 skip, 0 fail**, 6668 assertions, 689 tests across 80 files in 406.42 seconds. Agent Contract: **273 pass, 0 fail**, 1692 assertions across 27 files. Affected UI suites individually pass **231 tests across 12 files**, covering controls, safe SVG/Markdown, browser rendering, subagents, activity/Stop, transport and session actions. There is no dedicated FormDock test file; existing shared-control, helper and action suites were used. Focused native/projection/form/HTTP checks pass 126 tests; the real service HTTP control route returns the canonical compaction-cancellation acknowledgement. Changed-file lint and `git diff --check` pass. Receipts are `/home/ubuntu/omp19-artifacts/logs/stage2b-*`; the earlier exploratory UI command included a nonexistent FormDock filter, while every existing suite passed. All runs used isolated HOME/data/userData.
 
-Review: skipped — no fresh reviewer-subagent tool is available; workflow/security review remains required at effort close. UI behavior is visually unverified. Real external-provider/browser execution, packaged and non-Linux behavior remain unverified. No dependencies, vendor inputs, changelog entries, push or main integration are part of Stage 2b. Next step: independently review the local Stage 2b commits before integration; this does not advance platform certification.
+UI behavior is visually unverified at this stage. Real external-provider/browser execution, packaged and non-Linux behavior remain unverified. No dependencies, vendor inputs or changelog entries are part of Stage 2b. Independent review ran at effort close on 2026-11-26 (`done/omp19-integration/closeout.md`).
 
 **2026-11-19 OMP 19 integration stage 2a:** The Agent Service now consumes the 19.0.0 SDK at `57771ae562b9345e0579bceb2d68d585e3e6927e`. Native `agent_pause` keeps the canonical run open; `agent_end` closes it once. Admission and mode transitions use `isRunActive`; prompt settlement waits for `waitForRunEnd()`. Projection and native-session tests cover pause/resume/end, queued prompts, todo synchronization, `wakeSources` and asynchronous job wake with an armed Plan transition. Persisted history is not a live-run authority.
 
@@ -1164,7 +1181,7 @@ Startup diagnosis: the Stage 1 worker entrypoint exits before initialization bec
 
 Verification evidence is under `/home/ubuntu/omp19-artifacts/logs/`, with isolated HOME/data/userData under `/home/ubuntu/omp19-artifacts/home`. Full root type-check passes, including mobile (`stage2-type-check-final2.log`: 3,888 files across five projects; five guards passed). Full Agent Service tests pass: **661 pass, 12 skip, 0 fail**, 6586 assertions, 673 tests across 79 files in 351.68 seconds (`stage2-agent-tests-final.log`). No remaining failure is classified as pre-existing. Focused service checks pass 206 tests; agent-contract passes 271 tests. Historical todo/parser/card/tray and non-clickable local-log UI tests pass. Service/contract lint and dead-code checks completed without diagnostics; UI lint reports only two exhaustive-deps warnings in unchanged MobileApp.tsx. The old Stage 1 failure inventory is superseded by these results and this diagnosis.
 
-Review: skipped — no reviewer-subagent tool is available in this environment; fresh workflow/security review remains required at effort close. UI visuals, packaged Electron readiness, real external providers, native source equivalence and non-Linux runtime execution remain unverified. The 12 core and six native vendor archives, their 20 manifest inputs and both application SDK patch features remain unchanged from Stage 1; no dependencies or changelog entries were added. Next step: review the local Stage 2a commits before integration; this work does not advance M7 certification.
+UI visuals, packaged Electron readiness, real external providers, native source equivalence and non-Linux runtime execution remain unverified at this stage. The 12 core and six native vendor archives, their 20 manifest inputs and both application SDK patch features remain unchanged from Stage 1; no dependencies or changelog entries were added. Independent review ran at effort close on 2026-11-26 (`done/omp19-integration/closeout.md`).
 
 **2026-11-19 Inactive Mini Chat history:** Main at `881705d19` already targeted the popup's originating webContents. The renderer still rejected its active CodeMirror because `EditorView.hasFocus` requires `document.hasFocus()` on Chromium; the fallback beforeinput handler reached the same refusal. History now checks active-element ownership without requiring the document's window to be focused. The regression covers inactive-document Undo/Redo through both menu and beforeinput routes, empty history, untouched file edits and native-input fallback. All 12 editor tests pass; all 75 Electron test files pass with canonical TMPDIR (the default macOS `/var` alias triggers an unrelated Windows-link fixture path assertion). Changed-file oxlint exits 0; full type-check reports no errors in 3,887 files across five projects, drift passes and all five root checks pass. Logs: `/Users/devin/ohpi-test/history-target-{ui-test,ui-oxlint,final-type-check,electron-canonical-test}.log`. Chromium's native editFlags do not describe CodeMirror history and remain unsuitable for gating those commands. Web/PWA, hosted mobile, Capacitor and Guest SDK behavior is unchanged. Packaged inactive-window interaction remains visually unverified.
 

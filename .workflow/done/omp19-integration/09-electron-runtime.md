@@ -4,7 +4,7 @@
 **Blocked by:** None
 **Covers:** W9
 **Check:** in packages/electron, `bun run prepare:agent-runtime && bun run verify:agent-runtime` succeeds for Linux x64 and reports OMP readiness
-**Base commit:** 14bc8ce25
+**Base commit:** cdbeff359b
 
 - [x] Stage the installed runtime closure using pinned Bun 1.4.4.
 - [x] Verify native imports, manifest target and packaged supervisor readiness.

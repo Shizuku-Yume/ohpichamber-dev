@@ -306,6 +306,7 @@ path	state	class	decision	reason
 .workflow/done/omp-through-m3/retrospective.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-1-integration/01-runtime-pin.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-1-integration/02-worker-cutover.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+.workflow/done/omp19-1-integration/closeout.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/01-native-runtime.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/02-contract-and-mirror.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/03-verification.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
@@ -315,6 +316,7 @@ path	state	class	decision	reason
 .workflow/done/omp19-integration/07-main-type-check.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/08-real-browser.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/09-electron-runtime.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+.workflow/done/omp19-integration/closeout.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/p1-debts/01-workspace-listing-isolation.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/p1-debts/02-relocation-archive-fence.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/p1-debts/03-parent-session-link.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
