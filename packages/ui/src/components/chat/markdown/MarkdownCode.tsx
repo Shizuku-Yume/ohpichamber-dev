@@ -18,6 +18,8 @@ import { activateMarkdownFile, useOpenMarkdownFile } from './markdownFileReferen
 import type { MarkdownCodePlugin } from './streamdownCode';
 import { useOnDemandComponent } from '@/hooks/useOnDemandComponent';
 import { useChatSurfaceMode } from '../useChatSurfaceMode';
+import { KatexMath } from './katexRender';
+
 import { MarkdownDiff } from './MarkdownDiff';
 import { MarkdownSuggestionContext, isSuggestionLanguage, suggestionPatch } from './markdownSuggestion';
 
@@ -131,6 +133,13 @@ export function MarkdownCode(props: CodeProps) {
   const { settledReply } = useMarkdownPresentation();
   const surface = useChatSurfaceMode();
   const language = /language-([^\s]+)/.exec(props.className ?? '')?.[1] ?? '';
+  // remark-math emits block math as `pre > code.language-math.math-display`
+  // (and ```math fences as `language-math`); the passthrough rehype plugin
+  // leaves them here so the KaTeX engine can load lazily instead of entering
+  // the markdown module graph.
+  if (language === 'math') {
+    return <KatexMath displayMode>{props.children}</KatexMath>;
+  }
   const runnable = settledReply !== null && surface !== 'peek' && surface !== 'mini-chat' && runnableLanguages.has(language.toLowerCase());
   return runnable ? <RunnableCode {...props} /> : <MarkdownCodeBlock {...props} command={null} />;
 }

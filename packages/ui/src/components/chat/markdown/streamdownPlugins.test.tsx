@@ -1,12 +1,43 @@
 import { describe, expect, test } from 'bun:test';
+import React from 'react';
+import katex from 'katex';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Window } from 'happy-dom';
-import { Streamdown } from 'streamdown';
+import { Streamdown, type Components, type ExtraProps } from 'streamdown';
 import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath, remarkLiteralText } from './streamdownPlugins';
 import { parseMarkdownBlocksWithMath } from './mathBlocks';
 import { prepareUserMarkdownContent } from '../message/parts/userTextPartContent';
 
 const dom = new Window();
+
+// The production renderer typesets math through the lazy KaTeX boundary
+// (`markdown/katexRender.tsx`); the test harness renders it synchronously with
+// the same engine so the parse contract (annotation content, display vs
+// inline, formula-vs-prose separation) stays asserted here.
+const mathTestComponents: Components = {
+  a: ({ node: _node, ...props }) => <a {...props} />,
+  img: ({ node: _node, ...props }) => <img {...props} />,
+  code: ({ node: _node, children, className, ...props }) => {
+    const classes = typeof className === 'string' ? className.split(/\s+/) : [];
+    if (classes.includes('language-math')) {
+      const tex = (typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : '').replace(/\r\n?/g, '\n');
+      const html = katex.renderToString(tex, { displayMode: true, throwOnError: false });
+      return <span className="katex-display" dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    return <code className={className} {...props}>{children}</code>;
+  },
+  inlineCode: ({ node: _node, children, className, ...props }) => {
+    const classes = typeof className === 'string' ? className.split(/\s+/) : [];
+    if (classes.includes('language-math')) {
+      const tex = (typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : '').replace(/\r\n?/g, '\n');
+      const html = katex.renderToString(tex, { displayMode: classes.includes('math-display'), throwOnError: false });
+      return <span dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    return <code className={className} {...props}>{children}</code>;
+  },
+  pre: ({ node: _node, ...props }) => <pre {...props} />,
+  strong: ({ node: _node, ...props }) => <strong {...props} />,
+};
 function render(source: string, raw = false, singleTilde = false, streaming = false) {
   const html = renderToStaticMarkup(<Streamdown
     mode={streaming ? 'streaming' : 'static'} parseIncompleteMarkdown={false} controls={false}
@@ -14,14 +45,8 @@ function render(source: string, raw = false, singleTilde = false, streaming = fa
     plugins={{ math: markdownMath, cjk: getMarkdownCjk(singleTilde) }}
     {...getMarkdownProcessingOptions(raw, singleTilde)}
     urlTransform={(value) => value}
-    components={{
-      a: ({ node: _node, ...props }) => <a {...props} />,
-      img: ({ node: _node, ...props }) => <img {...props} />,
-      code: ({ node: _node, ...props }) => <code {...props} />,
-      inlineCode: ({ node: _node, ...props }) => <code {...props} />,
-      pre: ({ node: _node, ...props }) => <pre {...props} />,
-      strong: ({ node: _node, ...props }) => <strong {...props} />,
-    }}
+    components={mathTestComponents}
+
   >{source}</Streamdown>);
   const body = dom.document.createElement('div');
   body.innerHTML = html;
@@ -249,7 +274,7 @@ describe('Streamdown math and CJK compatibility', () => {
     expect(result.textContent).toBe('$5 https://example.test/$x$ $10');
   });
   test('math plugin registers its own parser without processing options', () => {
-    const html = renderToStaticMarkup(<Streamdown mode="static" plugins={{ math: markdownMath }}>
+    const html = renderToStaticMarkup(<Streamdown mode="static" plugins={{ math: markdownMath }} components={mathTestComponents}>
       {'$x$ and \\(y\\) and $100$'}
     </Streamdown>);
     const body = dom.document.createElement('div');
@@ -345,6 +370,7 @@ describe('literal text a person typed', () => {
       mode="static" parseIncompleteMarkdown={false} controls={false}
       plugins={{ math: markdownMath, cjk: getMarkdownCjk(false) }}
       remarkPlugins={[...(base.remarkPlugins ?? []), remarkLiteralText]} rehypePlugins={base.rehypePlugins}
+      components={mathTestComponents}
     >{source}</Streamdown>);
     const body = dom.document.createElement('div');
     body.innerHTML = html;

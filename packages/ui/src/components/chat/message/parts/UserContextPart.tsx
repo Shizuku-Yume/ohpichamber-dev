@@ -8,7 +8,7 @@ import { useChangeRequestTerm } from '@/lib/source-control/providers/registry';
 import type { ContextPartPayload } from '@/lib/messages/contextParts';
 import { cn } from '@/lib/utils';
 import { withAttachmentChips } from './attachmentCitationChips';
-import { legacyChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
+import { legacyChatQuoteAnchor } from '@/lib/legacyChatQuoteAnchor';
 import { useChatQuoteHighlightApi } from '../../hooks/chatQuoteHighlightStore';
 import { fileWithDiffCommentOrigin } from '@/lib/diffCommentOrigin';
 import { isWholeFileComment } from '@/components/comments/wholeFileComment';

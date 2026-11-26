@@ -30,7 +30,7 @@ import { markSessionViewed } from '@/sync/notification-store';
 import { setExternallyViewedSession } from '@/sync/sync-context';
 import { ContextPanelHeaderSlotProvider } from './contextPanelHeaderSlot';
 import { getSessionIDFromDedupeKey } from './contextPanelSessionTitles';
-import { ReceivedPagePanel } from '@/components/chat/sharePages/received/ReceivedPagePanel';
+
 import { MovablePane } from './MovablePane';
 import { SidebarFilesTree } from './SidebarFilesTree';
 import { startZoneDragGesture } from './zoneDrag';
@@ -48,6 +48,7 @@ const WalkthroughView = lazyWithChunkRecovery(() => import('@/components/views/w
 const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then((m) => ({ default: m.DiffView })));
 const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then((m) => ({ default: m.FilesView })));
 const GuestPanelContent = React.lazy(() => import('./GuestPanelContent').then((module) => ({ default: module.GuestPanelContent })));
+const ReceivedPagePanel = lazyWithChunkRecovery(() => import('@/components/chat/sharePages/received/ReceivedPagePanel').then((module) => ({ default: module.ReceivedPagePanel })));
 
 type PanelBrowserTab = {
   directory: string;
@@ -646,7 +647,9 @@ export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<
             hidden={contentHidden(pageZone.zone)}
             className={cn('absolute inset-0', pageZone.activeTab?.id === tab.id ? 'block' : 'hidden')}
           >
-            <ReceivedPagePanel receivedId={tab.targetPath} />
+            <React.Suspense fallback={null}>
+              <ReceivedPagePanel receivedId={tab.targetPath} />
+            </React.Suspense>
           </ZonePane>
         );
       })}

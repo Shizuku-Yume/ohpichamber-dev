@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync, realpathSync } from 'node:fs';
 import { VitePWA } from 'vite-plugin-pwa';
 import { cacheReactBabel } from './vite-react-babel-cache';
+import { localeSlicesPlugins } from './vite-locale-slices';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
@@ -70,6 +71,11 @@ export default defineConfig({
         ];
       },
     },
+    // Locale dictionaries keep only their own locale's slices of the shared
+    // i18n aggregates, so the eager bootstrap stops carrying all fifteen
+    // locales. Build-time only transform: the sources stay untouched for the
+    // upstream merge and the key-parity tests.
+    ...localeSlicesPlugins(),
     themeJsonHmrPlugin(),
     VitePWA({
       strategies: 'injectManifest',
@@ -134,6 +140,17 @@ export default defineConfig({
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,
     chunkSizeWarningLimit: 500,
+    modulePreload: {
+      // Vite resolves preload dependencies transitively, including nested
+      // dynamic-import targets. That puts the KaTeX engine chunk into the
+      // preload list of the markdown renderer, which the shell preloads at
+      // startup — defeating the lazy import in markdown/katexRender.tsx.
+      // Drop it from preload hints only; the dynamic import itself still
+      // fetches the chunk normally when math first renders. The chunk name is
+      // rollup-assigned, so match the engine by its single-module filename.
+      resolveDependencies: (_filename, deps) =>
+        deps.filter((dep) => !dep.includes('katex')),
+    },
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
@@ -152,9 +169,9 @@ export default defineConfig({
             return 'vendor-vite-runtime';
           }
           if (!id.includes('node_modules')) return undefined;
-          // A stylesheet stays with the chunk that imports it. Grouping KaTeX's
-          // eager stylesheet into `vendor-katex` made that chunk eager, and with
-          // it the 260KB KaTeX engine only the lazy markdown renderer uses.
+          // A stylesheet stays with the chunk that imports it. KaTeX's
+          // stylesheet is imported lazily together with the engine
+          // (`markdown/katexRender.tsx`), so neither enters the eager graph.
           if (id.endsWith('.css')) return undefined;
 
           // Resolve the real package from the LAST `node_modules/` segment.
@@ -191,6 +208,7 @@ export default defineConfig({
           if (packageName === '@pierre/diffs' || packageName === '@pierre/highlights') {
             return undefined;
           }
+
 
           if (packageName === 'react' || packageName === 'react-dom') return 'vendor-react';
           if (packageName === 'zustand' || packageName === 'zustand/middleware') return 'vendor-zustand';

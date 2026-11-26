@@ -88,6 +88,8 @@ Disabling HTML and character references in the parser preserves typed characters
 
 Mermaid brings ELK and about 1.6 MB of script, so the first diagram loads it while the source remains visible; a later diagram retries a failed load. UI blocks load on first use with a code fallback, and command blocks load their session-sync dependency only when needed.
 
+KaTeX is typeset in the render layer for the same reason: `@streamdown/math`'s plugin factory statically imports `rehype-katex`, so any parse-pipeline typesetting dragged the 260 KB engine into the eager module graph. The remark plugin (assembled from `remark-math` directly) leaves math as `language-math` code elements, and `katexRender.tsx` loads engine plus stylesheet together the first time a math node renders, showing the raw TeX source in a fixed-width font while it is on the wire. Vite's transitive preload resolution would still hoist the engine chunk into the markdown preload, so the web build drops it from preload hints (`modulePreload.resolveDependencies`); the dynamic import itself is unaffected.
+
 ### Why synchronous highlighting and not a later paint
 
 Highlights runs on the main thread so synchronous consumers can paint highlighted code in the first frame. The recorded cost is about 1 ms per 100 KB, and content-addressed caches prevent repeated tokenization of unchanged sources.

@@ -26,6 +26,8 @@ import { guestPanelOpensHere } from '@/lib/guests/phone';
 import { useGuestsStore } from '@/lib/guests/store';
 import { useOpenChatLink } from '../useOpenChatLink';
 import { isBuiltInLink, runGuestLink } from './guestLinkClick';
+import { KatexMath } from './katexRender';
+
 
 // A path in code text and a path in a link's href parse differently: an href
 // may percent-encode spaces and non-ASCII names, which are decoded first.
@@ -44,7 +46,23 @@ function useConfirmedInlineFile(raw: string, inputKind: FileReferenceSource = 'p
   return fileReferences && confirmed?.raw === raw && confirmed.inputKind === inputKind && confirmed.directory === directory && confirmed.runtimeKey === runtimeKey ? confirmed.path : null;
 }
 
-export function MarkdownInlineCode({ children, node: _node, ...props }: React.ComponentProps<'code'> & ExtraProps) {
+// remark-math emits inline math as `code.language-math.math-inline` (and
+// inline `$$…$$` as `math-display`); with the passthrough rehype plugin the
+// typesetting happens here, where the engine can load lazily.
+function MarkdownInlineMath({ children, className }: React.ComponentProps<'code'>) {
+  const mathClasses = typeof className === 'string' ? className.split(/\s+/) : [];
+  return <KatexMath displayMode={mathClasses.includes('math-display')}>{children}</KatexMath>;
+}
+
+export function MarkdownInlineCode(props: React.ComponentProps<'code'> & ExtraProps) {
+  const isMath = typeof props.className === 'string' && props.className.split(/\s+/).includes('language-math');
+  if (isMath) {
+    return <MarkdownInlineMath className={props.className}>{props.children}</MarkdownInlineMath>;
+  }
+  return <MarkdownInlineFileCode {...props} />;
+}
+
+function MarkdownInlineFileCode({ children, node: _node, className, ...props }: React.ComponentProps<'code'> & ExtraProps) {
   const raw = _node?.children.map((child) => child.type === 'text' ? child.value : '').join('') ?? '';
   const { directory, fileReferences, fileNavigation } = useMarkdownPresentation();
   const path = useConfirmedInlineFile(raw);
@@ -64,6 +82,7 @@ export function MarkdownInlineCode({ children, node: _node, ...props }: React.Co
   return (
     <code
       {...props}
+      className={className}
       dir="ltr"
       data-streamdown="inline-code"
       data-openchamber-file-link={path ? 'true' : undefined}

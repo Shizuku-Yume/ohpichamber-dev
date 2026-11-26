@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@/styles/fonts';
-import '@/styles/katex-css';
 import '@/index.css';
 import '@/lib/debug';
 import { SessionAuthGate } from '@/components/auth/SessionAuthGate';
