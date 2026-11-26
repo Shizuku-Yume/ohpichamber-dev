@@ -4,6 +4,22 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+A 2026-11-26 performance pass, measured on isolated servers with synthetic
+fixtures (evidence under `ohpichamber-omp-artifacts/perf-2026-11-26/`), changed
+these paths. Agent Service idle memory fell from 1.77 GB to 535 MB once idle
+catalog/usage workers and the single activity-gated spare are released.
+Deleting a cold session no longer boots a worker (0.58 s to 0.02 s), bulk
+archive delete runs four lanes (50 sessions: 788 ms to ~30 ms), and bulk restore
+uses one batch request (483 ms to ~150–220 ms). Host stream CPU fell from 11.5%
+to 7.9% after caching the `SSH_AUTH_SOCK` lookup and validating each canonical
+event once; models-metadata revalidates by entity tag. The session list reads
+Host metadata in bulk, creates arrive by event, and rediscovery runs every
+120 s. Reducer equality no longer serializes, and session switches render each
+message once. Not measured end to end: the bulk list read and the subagent
+fan-out reduction (the fixture failed to load for that run). The source-level
+i18n split was rejected in favor of a build-time transform (decisions.md,
+2026-11-26).
+
 The Docker runtime image uses the built Web CLI and server, including the
 loader they import, and ships Agent Service workspace dependencies. The previous
 source-only copy built successfully but failed before the CLI could start.

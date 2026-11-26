@@ -2211,3 +2211,21 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** upstream v2.8.0's side-by-side Work Status + SubagentsPanel + Activity Rail layout is the target UX, vibe workers are first-class OMP 19.1 subagents, and every OMP tool call in the timeline must render cleanly in OpenChamber's visual idiom.
 - **Decided by:** user.
 - **Revisit when:** OMP changes `vibe_*` or built-in tool details schemas.
+
+## 2026-11-26 - Slice translation aggregates per locale at build time, not in source
+
+- **Effort:** performance pass 2026-11-26
+- **Decided:** keep every `packages/ui/src/lib/i18n/messages/*.i18n.ts` aggregate byte-identical to its source layout and reduce the startup bundle to the active locale with a build-time Vite transform; declare `remark-math` (already installed through `@streamdown/math`, same version) as a direct `packages/ui` dependency so KaTeX loads only when math renders.
+- **Instead of:** physically splitting the 95 aggregates into per-locale modules, or keeping KaTeX in the eager bundle.
+- **Because:** 80 of those aggregates come from upstream OpenChamber and upstream is merged with real git merges, so a source split would conflict on almost every translation change; the startup gain (18 MB to 11 MB decoded before usable) is reachable without it.
+- **Decided by:** user.
+- **Revisit when:** upstream restructures its i18n catalogs, or the build transform's pattern stops matching.
+
+## 2026-11-26 - Release idle workspace workers and keep one activity-gated spare
+
+- **Effort:** performance pass 2026-11-26
+- **Decided:** the Agent Service keeps at most one spare session worker, refilled only for a workspace with a launch or ask inside the spare lifetime, and stops idle stateless catalog and usage workers after the production session idle bound. Session rediscovery in the UI runs every 120 s as a recovery backstop; in-Host creates arrive by event.
+- **Instead of:** two spares replaced forever and one resident catalog worker per workspace (1.77 GB at idle on the measurement stand), and a 15 s full re-list of every pinned directory.
+- **Because:** measured idle memory fell from 1.77 GB to 535 MB after the idle bound with no workers left; the cost is one worker startup on the first catalog read after a long idle, and out-of-Host (OMP CLI) session changes appear within two minutes.
+- **Decided by:** user (requested the memory and performance pass); cadence and bounds chosen by the agent.
+- **Revisit when:** the Agent Service pushes events for out-of-Host session changes, or first catalog reads after idle are reported slow.
