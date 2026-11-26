@@ -17,6 +17,18 @@ import type { InstalledGuest } from './types.ts';
 
 export type GuestMarkEntry = { guestId: string; target: ServiceMarkTarget; mark: ServiceMark };
 
+const guestMarkTargetSchema = z.union([
+  z.object({ sessionId: z.string().min(1) }).strict(),
+  z.object({ directory: z.string().min(1), branch: z.string().min(1).optional() }).strict(),
+]);
+
+export const guestMarksChangedPropertiesSchema = z.object({
+  guestId: z.string().min(1),
+  target: guestMarkTargetSchema,
+}).strict();
+
+export type GuestMarksChangedProperties = z.infer<typeof guestMarksChangedPropertiesSchema>;
+
 const entrySchema = z.object({
   guestId: z.string().min(1),
   target: z.union([

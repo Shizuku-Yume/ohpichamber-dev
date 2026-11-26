@@ -26,6 +26,14 @@ const extensionQuotaProviderSchema = z.object({
 });
 const providersAnswerSchema = z.object({ extensions: z.array(extensionQuotaProviderSchema).max(64) });
 
+const QUOTA_PROVIDER_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+export const quotaProvidersChangedPropertiesSchema = z.object({
+  providerId: z.string().max(64).regex(QUOTA_PROVIDER_ID),
+}).strict();
+
+export type QuotaProvidersChangedProperties = z.infer<typeof quotaProvidersChangedPropertiesSchema>;
+
 export const fetchExtensionQuotaProviders = async ({ signal }: { signal?: AbortSignal } = {}): Promise<ExtensionQuotaProvider[]> => {
   const response = await runtimeFetch('/api/quota/extensions', { signal });
   if (!response.ok) throw new Error(`Failed to list usage providers (${response.status})`);

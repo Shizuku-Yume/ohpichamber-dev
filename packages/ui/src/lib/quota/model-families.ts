@@ -48,8 +48,7 @@ const ANTIGRAVITY_MODEL_FAMILIES: ModelFamily[] = [
 ];
 
 const PROVIDER_MODEL_FAMILIES: Partial<Record<QuotaProviderId, ModelFamily[]>> = {
-  google: GOOGLE_MODEL_FAMILIES,
-  antigravity: ANTIGRAVITY_MODEL_FAMILIES,
+  google: [...GOOGLE_MODEL_FAMILIES, ...ANTIGRAVITY_MODEL_FAMILIES],
 };
 
 function getModelFamily(modelName: string, providerId: QuotaProviderId): ModelFamily | null {

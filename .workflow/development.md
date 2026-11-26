@@ -71,9 +71,25 @@ Usage renders native OMP account quotas and reset-credit counts from the
 existing canonical report, without changing its schema or adding a redemption
 route. The Usage page edits six reset-policy numbers; the switches that enable
 automatic redemption remain outside the GUI write allowlist. Matching
-provider-wide windows are shown once; Guest SDK quotas, uncovered windows and
-Work Status remain on the Host quota path. Removing built-in Host scrapers still
-requires replacing those consumers and preserving their provider coverage.
+provider-wide windows are shown once. Ten providers
+(claude, codex, github-copilot and its add-on, cursor, xai, cline-pass, hyper,
+zai-coding-plan, minimax-coding-plan) are native-backed everywhere: the Host
+quota registry entries read the canonical report through the Agent Service, so
+the Usage page cards, Work Status, the tray, widgets and the
+`openchamber_usage` tool share the native authority, and their Host scrapers
+are removed. z.ai gift-reset discovery and activation stay Host-only. Providers without a native probe
+(zhipuai-coding-plan, nano-gpt, deepinfra, deepseek, openrouter, wafer,
+neuralwatt, kilo, zenmux, mistral, minimax-cn-coding-plan and the no-op
+exe-dev) keep their Host scraper, as do Guest SDK quota extensions. Three
+providers a probe exists for stay non-native deliberately (verified against
+vendored OMP 19.1.0): kimi-for-coding's probe is OAuth-only while the scraper
+also covers API-key accounts; google's `google-antigravity` probe covers only
+one of the card's two account kinds (`google-gemini-cli` has no probe); and
+ollama-cloud's probe always reports empty limits because Ollama exposes no
+quota API, so the honest no-op stays. The deferral is recorded in the
+native-quota decision. The dead `antigravity` logical id is
+removed; the registered provider list visible to clients is otherwise
+unchanged.
 
 Sessions → Retry & Fallback shows native retry chains by role, model or
 provider wildcard. The web chain links to its editor in Web Search. Edits

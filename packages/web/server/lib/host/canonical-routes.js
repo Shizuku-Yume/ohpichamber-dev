@@ -40,8 +40,8 @@ const AGENT_ROUTES = [
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/enrich$/, request: C.ProviderModelEnrichRequestSchema, response: C.ProviderModelEnrichResultSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, response: C.ProviderAccountsSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/account-selection$/, response: C.ProviderAccountSelectionSchema },
- { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, request: C.ProviderAccountMutationRequestSchema, response: C.ProviderAccountsSchema },
- { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/oauth$/, request: C.ProviderOAuthRequestSchema, response: C.ProviderOAuthResultSchema, providerOAuth: true },
+ { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, request: C.ProviderAccountMutationRequestSchema, response: C.ProviderAccountsSchema, quotaMutation: true },
+ { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/oauth$/, request: C.ProviderOAuthRequestSchema, response: C.ProviderOAuthResultSchema, providerOAuth: true, quotaMutation: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/config$/, response: C.ProviderConfigurationReadSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents$/, response: C.AgentCatalogSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/cache-warming$/, response: C.CacheWarmingStateSchema },
@@ -56,12 +56,12 @@ const AGENT_ROUTES = [
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents$/, request: C.AgentCreateRequestSchema, response: C.AgentMutationResultSchema },
  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents\/[^/]+$/, request: C.AgentUpdateRequestSchema, response: C.AgentMutationResultSchema },
  { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents\/[^/]+$/, request: C.AgentDeleteRequestSchema, response: C.AgentMutationResultSchema },
- { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/config$/, request: C.ProviderConfigureRequestSchema, response: C.ProviderMutationResultSchema, providerEntry: true },
- { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+$/, request: C.ProviderDeleteRequestSchema, response: C.ProviderMutationResultSchema },
+ { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/config$/, request: C.ProviderConfigureRequestSchema, response: C.ProviderMutationResultSchema, providerEntry: true, quotaMutation: true },
+ { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+$/, request: C.ProviderDeleteRequestSchema, response: C.ProviderMutationResultSchema, quotaMutation: true },
  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/models\/[^/]+$/, request: C.ModelConfigureRequestSchema, response: C.ModelMutationResultSchema, providerEntry: true },
  { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/models\/[^/]+$/, request: C.ModelDeleteRequestSchema, response: C.ModelMutationResultSchema },
- { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/credential$/, request: C.ProviderCredentialWriteRequestSchema, response: C.ProviderCredentialMutationResultSchema, providerEntry: true },
- { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/credential\/[^/]+$/, request: C.ProviderCredentialDeleteRequestSchema, response: C.ProviderCredentialMutationResultSchema },
+ { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/credential$/, request: C.ProviderCredentialWriteRequestSchema, response: C.ProviderCredentialMutationResultSchema, providerEntry: true, quotaMutation: true },
+ { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/credential\/[^/]+$/, request: C.ProviderCredentialDeleteRequestSchema, response: C.ProviderCredentialMutationResultSchema, quotaMutation: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/extensions$/, response: C.ExtensionInventoryStateSchema },
  { method: 'PATCH', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/extensions$/, request: C.ExtensionToggleRequestSchema, response: C.ExtensionInventoryStateSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins$/, response: C.PluginCatalogStateSchema },
@@ -155,7 +155,7 @@ export function registerCanonicalHostRoutes(app, {
  express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions,
  resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope, listProjects, listWorkspaces,
  resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes,
- skillFileOwner, getSkillRepositoryDependencies, globalEventHub, resolveHostTools,
+ skillFileOwner, getSkillRepositoryDependencies, globalEventHub, resolveHostTools, onProviderConfigurationMutation,
 }) {
  const validService = service && z.function().safeParse(service.request).success && z.function().safeParse(service.getState).success;
  if (!validService) throw new TypeError('Canonical gateway requires the real Agent Service request/getState');
@@ -490,6 +490,16 @@ export function registerCanonicalHostRoutes(app, {
      const jobScope = capturedScope(await resolveRouteSessionScope(job.sessionId));
      if (!jobScope || jobScope.projectId !== job.projectId || jobScope.workspaceId !== job.workspaceId)
       return problem(res, 403, 'UNAUTHORIZED', 'The shell observation includes an unauthorized session.');
+    }
+   }
+   if (route.quotaMutation && z.function().safeParse(onProviderConfigurationMutation).success) {
+    try {
+     const credentialMaterialized = route.providerOAuth !== true || result.status === 'authenticated';
+     const providerMatch = /^\/workspaces\/[^/]+\/providers\/([^/]+)(?:\/|$)/.exec(req.path);
+     const mutationProviderId = providerMatch ? decodeURIComponent(providerMatch[1]) : null;
+     if (credentialMaterialized && mutationProviderId !== null) onProviderConfigurationMutation({ providerId: mutationProviderId });
+    } catch (error) {
+     console.warn('Failed to announce a provider configuration change:', error instanceof Error ? error.message : error);
     }
    }
    return res.status(response.status).json(result);

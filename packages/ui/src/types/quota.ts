@@ -7,7 +7,6 @@ type BuiltInQuotaProviderId =
   | 'github-copilot'
   | 'github-copilot-addon'
   | 'google'
-  | 'antigravity'
   | 'kimi-for-coding'
   | 'nano-gpt'
   | 'openrouter'

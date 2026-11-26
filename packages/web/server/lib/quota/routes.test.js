@@ -66,4 +66,12 @@ describe('selected quota routes', () => {
   it('requires selected scope callbacks at construction', () => {
     expect(() => registerQuotaRoutes(express(), {})).toThrow('selected workspace');
   });
+  it('rejects fractional and non-positive gift reset record ids before resolving credentials', async () => {
+    const app = createApp({ resolveCredential: async () => ({ type: 'api_key', key: 'key' }) });
+    for (const recordId of [1.5, 0, -5]) {
+      const response = await request(app).post('/api/quota/zai-coding-plan/gift-reset/use').send({ recordId, resetType: 'FIVE_HOUR' });
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('INVALID_REQUEST');
+    }
+  });
 });

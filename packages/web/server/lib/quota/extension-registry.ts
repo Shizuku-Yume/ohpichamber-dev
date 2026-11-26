@@ -1,4 +1,6 @@
-import { isExtensionProviderId } from '../source-control/provider-id.js';
+import { z } from 'zod';
+
+import { extensionProviderId, isExtensionProviderId } from '../source-control/provider-id.js';
 
 /**
  * Usage providers installed extensions serve, listed beside the built-ins.
@@ -34,4 +36,24 @@ export const extensionQuotaGuest = (guests = [], providerId) => {
  if (!isExtensionProviderId(providerId)) return null;
  const guestId = providerId.slice('ext-'.length);
  return guests.find((guest) => guest.id === guestId && isExtensionQuotaGuest(guest)) ?? null;
+};
+
+const QUOTA_PROVIDER_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+export const quotaProvidersChangedPropertiesSchema = z.object({
+ providerId: z.string().max(64).regex(QUOTA_PROVIDER_ID),
+}).strict();
+
+export const buildQuotaProvidersChangedEventForProvider = (providerId) => {
+ const parsed = quotaProvidersChangedPropertiesSchema.safeParse({ providerId });
+ if (!parsed.success) return null;
+ return { type: 'openchamber:quota-providers-changed', properties: parsed.data };
+};
+
+export const buildQuotaProvidersChangedEvent = (guestId) => {
+ const providerId = extensionProviderId(guestId);
+ if (!providerId) return null;
+ const parsed = quotaProvidersChangedPropertiesSchema.safeParse({ providerId });
+ if (!parsed.success) return null;
+ return { type: 'openchamber:quota-providers-changed', properties: parsed.data };
 };

@@ -2,7 +2,7 @@ import { SERVICE_MARKS_MAX, isGuestApproved, requestedGuestCapabilities } from '
 
 import { guestIdOfServiceToken } from './service.js';
 import type { serviceHostCallSchema } from 'ohpichamber-sdk/schemas';
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { GuestRecord } from './contracts.js';
 import { isString } from './input-guards.js';
 
@@ -63,3 +63,19 @@ export const createGuestMarks = ({ guestIdOfToken = guestIdOfServiceToken }: { g
 };
 
 export const guestMarks = createGuestMarks();
+
+export const guestMarksChangedPropertiesSchema = z.object({
+  guestId: z.string().min(1),
+  target: z.union([
+    z.object({ sessionId: z.string().min(1) }).strict(),
+    z.object({ directory: z.string().min(1), branch: z.string().min(1).optional() }).strict(),
+  ]),
+}).strict();
+
+export type GuestMarksChangedProperties = z.infer<typeof guestMarksChangedPropertiesSchema>;
+
+export const buildGuestMarksChangedEvent = (guestId: string, target: MarkInput['target']): { type: string; properties: GuestMarksChangedProperties } | null => {
+  const parsed = guestMarksChangedPropertiesSchema.safeParse({ guestId, target });
+  if (!parsed.success) return null;
+  return { type: 'openchamber:guest-marks-changed', properties: parsed.data };
+};

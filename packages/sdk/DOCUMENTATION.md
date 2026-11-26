@@ -401,7 +401,7 @@ Sidebar rows are on screen all the time and for every project, so a host that as
 
 ### Why marks travel apart from the catalog
 
-The catalog changes when the user installs, pauses or approves something, and every client reloads it whole. A CI extension changes a mark on every run. A change is announced as `openchamber:guest-marks-changed` with no payload and each client reads `GET /api/guests/marks`, which answers from memory and the cached catalog and asks OMP nothing. A burst of changes shares one read, and a failed read keeps what was shown.
+The catalog changes when the user installs, pauses or approves something, and every client reloads it whole. A CI extension changes a mark on every run. A change is announced as `openchamber:guest-marks-changed` scoped to `{ guestId, target }` — the service and the session or directory/branch whose mark changed, never the mark itself — and each client reads `GET /api/guests/marks`, which answers from memory and the cached catalog and asks OMP nothing. A burst of changes shares one read, and a failed read keeps what was shown.
 
 ### Why a mark lives as long as the service process
 

@@ -14,8 +14,11 @@ class EventSourceFixture {
   onerror: (() => void) | null = null;
   constructor(readonly url: string) { EventSourceFixture.instances.push(this); }
   close() { this.readyState = EventSourceFixture.CLOSED; }
-  emit(type: string) {
-    this.onmessage?.({ data: JSON.stringify({ type, properties: {} }) });
+  emit(type: string, properties: { guestId?: string; target?: { sessionId: string } } = {}) {
+    const scoped = type === 'openchamber:guest-marks-changed' && Object.keys(properties).length === 0
+      ? { guestId: 'ci', target: { sessionId: 'ses_1' } }
+      : properties;
+    this.onmessage?.({ data: JSON.stringify({ type, properties: scoped }) });
   }
 }
 
@@ -90,25 +93,25 @@ test('reads marks for eligible guests and reconnects without relying on an unpro
     await catalog([guest('ci', { name: 'CI Watch' })]);
     expect(reads).toBe(1);
 
-    // Dedicated marks announcements have no Host producer yet.
+    // Dedicated marks announcements refresh only the marks list, not the catalog.
     served = [mark('Checks failed')];
     await act(async () => source.emit('openchamber:guest-marks-changed'));
-    expect(reads).toBe(1);
-    expect(shown()).toEqual(['Checks passed']);
-
-    // Catalog changes and reconnects refresh marks through existing Host events.
-    await act(async () => source.emit('openchamber:guests-changed'));
     expect(reads).toBe(2);
+    expect(shown()).toEqual(['Checks failed']);
+
+    // Catalog changes and reconnects refresh marks through the other Host events.
+    await act(async () => source.emit('openchamber:guests-changed'));
+    expect(reads).toBe(3);
     served = [mark('Checks passed')];
     await act(async () => source.emit('openchamber:event-stream-ready'));
-    expect(reads).toBe(3);
+    expect(reads).toBe(4);
     expect(shown()).toEqual(['Checks passed']);
 
     // Paused: its mark is gone with the catalog change, and the server is left alone again.
     await catalog([guest('ci', { enabled: false })]);
     expect(shown()).toEqual([]);
     await act(async () => source.emit('openchamber:guest-marks-changed'));
-    expect(reads).toBe(3);
+    expect(reads).toBe(4);
   } finally {
     await act(async () => root.unmount());
     fetch.mockRestore();

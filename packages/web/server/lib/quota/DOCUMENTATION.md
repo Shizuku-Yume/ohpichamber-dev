@@ -5,14 +5,32 @@ This module fetches quota, credit, and usage signals for supported model provide
 
 In the Settings Usage page, quota information is consumed as provider-specific quota cards only for configured providers that have active quota metrics. The overarching token analytics, costs, TTFT, tok/s, and error rates are provided by the Agent Service OMP statistics endpoint (`GET /api/agent/v1/usage`), while this module supplies the remaining provider quota windows and balances.
 
+## Native-backed providers
+
+Providers OMP's own usage probes cover — `claude`, `codex`, `github-copilot` (and its add-on card), `cursor`, `xai`, `cline-pass`, `hyper`, `zai-coding-plan` and `minimax-coding-plan` — have no Host scraper. Their registry entry is a native-backed reader: `fetchQuota` reads the canonical usage report through `createNativeUsageReader` (`POST /internal/usage` with the smallest window and the probe's provider filter) and `nativeReportsToProviderResult` projects the report into this module's response contract. The credential selection still gates configuration through the workspace catalog, but the selected secret is never resolved in the Host for these providers: OMP's probe reads the credential store it owns. When several accounts of one provider report, the first report wins duplicate limit ids. Provider-wide windows stay on the card; model- or tier-scoped limits become per-model entries. Reset-credit counts render on the Usage page's native account section, not in the window list. Providers OMP does not probe keep their Host scraper, and the z.ai gift-reset activation (`zai-gift-reset.ts`) stays Host-only because OMP exposes no redemption endpoint.
+
+Window keys, ordering and failure semantics of the native conversion:
+
+- Provider-wide windows key on the duration-derived label (`5h`, `weekly`, `30d`). One provider can report several provider-wide windows of the same duration with different units — z.ai reports token, request and credit windows over the same five hours — so a label already taken in the same bucket is disambiguated with the amount's unit (`5h-requests`, `5h-credits`), falling back to the limit id. No window ever overwrites another.
+- Several accounts of one provider report the same limit ids. Reports of the selected native provider come first; the rest order by `fetchedAt` descending, so the freshest report wins duplicate limit ids deterministically and the surviving window never flips between accounts across refetches.
+- The reader fails the whole read when any requested provider read fails, even if a sibling read returned reports: a partial answer presented as complete would mask one provider's outage behind another's empty success.
+- z.ai gift resets are not part of OMP's report, so the native-backed zai provider enriches a successful answer afterwards: it resolves the selected credential, reads `customer-package-reset/list` through `providers/zai-gift-reset.ts` and merges the discovered gift onto one window per reset type — the token-metered window preferred deterministically, since one consumable gift must not render duplicate buttons. A list failure or empty list leaves the quota answer intact — the reset button simply does not render. This is the one Host-side vendor read a native-backed provider keeps, recorded in `.workflow/decisions.md`.
+
+Deliberate non-native providers a probe exists for (verified against vendored OMP probe sources):
+
+- `kimi-for-coding` keeps its scraper: the `kimi-code` probe is OAuth-only, while the scraper also covers API-key accounts through the coding usages endpoint and the Moonshot pay-as-you-go balance fallback. Native backing would strip every API-key user's quota.
+- `google` keeps its scraper: the `google-antigravity` probe covers only antigravity accounts; the card also serves `google-gemini-cli` accounts, for which no probe exists.
+- `ollama-cloud` stays an explicit no-op: the `ollama-cloud` probe always reports empty limits because Ollama exposes no standalone quota API, so native backing would replace the honest "unsupported" signal with a misleading configured failure.
+
 Node server entrypoints apply `../network-defaults.js` before serving requests, including the daemon launched through `server/index.js`. Connection attempts receive 5 seconds without changing address-family selection.
 ## Entrypoints and structure
 - `packages/web/server/lib/quota/index.js`: public entrypoint re-exporting the dispatcher and provider fetchers.
 - `packages/web/server/lib/quota/routes.js`: Express route registration for quota endpoints (`registerQuotaRoutes`).
 - `packages/web/server/lib/quota/providers/index.js`: provider registry, configured-provider filter, and coalescing dispatcher.
+- `packages/web/server/lib/quota/native.ts`: native OMP usage report reader (`createNativeUsageReader`), the report-to-quota conversion (`nativeReportsToProviderResult`), the native-backed registry entry factory (`createNativeQuotaProvider`), and the logical-to-native provider coverage map (`NATIVE_QUOTA_PROVIDERS`).
 - `packages/web/server/lib/quota/providers/selected-credential.js`: credential extraction (`credentialAccessToken`, `credentialRefreshToken`, `credentialExpiresAt`) and required context validation (`requireSelectedCredential`).
 - `packages/web/server/lib/quota/providers/google/`: Google-specific auth, API, and transform modules.
-- `packages/web/server/lib/quota/providers/claude/`: Claude usage transforms and rate-limit handling.
+- `packages/web/server/lib/quota/providers/zai-gift-reset.ts`: the z.ai gift-reset activation flow and the gift-reset list read, neither of which OMP implements.
 - `packages/web/server/lib/quota/utils/`: shared formatting and transform helpers.
 
 ## Credential architecture and resolution flow
@@ -54,36 +72,40 @@ Live quota fetches resolve provider credentials dynamically from the selected wo
 5. **Secret boundary:**
    Resolved credential material remains private to server memory and is never returned in HTTP responses to the browser.
 
+## Change events
+
+The extension usage provider list is a pure function of the extension catalog, so this module owns no write route of its own. Instead, every committed lifecycle write to an extension whose manifest declares `contributes.quota` (install, update, approval or withdrawal, pause or resume, removal) is announced by the guests module on the shared control stream as `openchamber:quota-providers-changed`, scoped to `{ providerId: 'ext-<guestId>' }` and validated against `quotaProvidersChangedPropertiesSchema` in `extension-registry.ts` before broadcast. The same event names a built-in logical provider id (`{ providerId: 'claude' }` and the other registry ids) when a committed canonical provider write changes what feeds its card: account add, remove or selection, an OAuth flow that reaches `authenticated`, provider configuration, provider deletion and credential writes or deletes (`packages/web/server/lib/host/canonical-routes.js` tags those routes `quotaMutation`; the Host maps the mutated native provider id to the logical ids it feeds through the same relations the credential selection uses and broadcasts one event per id). Refused or failed writes announce nothing, and an OAuth flow that stays pending, cancelled or failed announces nothing either. The UI consumer's copy of the schema lives in `packages/ui/src/lib/quota/extensionProviders.ts`; `extension-registry-events.test.js` keeps the two in step and covers emission.
+
 ## Supported provider IDs (dispatcher)
 
 These provider IDs are registered in `packages/web/server/lib/quota/providers/index.js` and dispatchable via `fetchQuotaForProvider(providerId)`:
 
 | Provider ID | Display name | Module | Credential source & authority |
 | --- | --- | --- | --- |
-| `claude` | Claude | `providers/claude/` | Native provider `anthropic`, OAuth method in Agent Service `AuthStorage`. Checks `credential.expires`. |
-| `cline-pass` | ClinePass | `providers/cline-pass.js` | Selected API key via Agent Service `AuthStorage`. |
-| `codex` | Codex | `providers/codex.js` | Native provider `openai-codex`, OAuth method in Agent Service `AuthStorage`. Optional `accountId` from credential. |
-| `cursor` | Cursor | `providers/cursor.js` | Selected API key or OAuth via Agent Service `AuthStorage`. Checks JWT / stored expiration. |
+| `claude` | Claude | native (`anthropic` probe) | Native-backed: canonical usage report for native provider `anthropic`, read by OMP's probe in Agent Service `AuthStorage`. |
+| `cline-pass` | ClinePass | native (`cline-pass` probe) | Native-backed: canonical usage report for native provider `cline-pass`. |
+| `codex` | Codex | native (`openai-codex` probe) | Native-backed: canonical usage report for native provider `openai-codex`. |
+| `cursor` | Cursor | native (`cursor` probe) | Native-backed: canonical usage report for native provider `cursor`. |
 | `deepinfra` | DeepInfra | `providers/deepinfra.js` | Selected API key via Agent Service `AuthStorage`. |
 | `deepseek` | DeepSeek | `providers/deepseek.js` | Selected API key via Agent Service `AuthStorage`. |
 | `exe-dev` | exe.dev | `providers/exe-dev.js` | Unsupported for selected credential quota (`isConfigured: () => false`). |
 | `google` | Google | `providers/google/index.js` | Native provider `google-gemini-cli` or `google-antigravity`, OAuth method in Agent Service `AuthStorage`. Requires `projectId`. |
-| `hyper` | Charm Hyper | `providers/hyper.js` | Native provider `charm-hyper`, API key via Agent Service `AuthStorage`. |
-| `zai-coding-plan` | z.ai | `providers/zai.js` | Native provider `zai`, API key via Agent Service `AuthStorage`. Supports gift reset activation. |
+| `hyper` | Charm Hyper | native (`charm-hyper` probe) | Native-backed: canonical usage report for native provider `charm-hyper`. |
+| `zai-coding-plan` | z.ai | native (`zai` probe) + `providers/zai-gift-reset.ts` | Native-backed: canonical usage report for native provider `zai`. Gift reset activation stays Host-only. |
 | `zhipuai-coding-plan` | Zhipu AI Coding Plan | `providers/zhipuai-coding-plan.js` | Native provider `zhipu-coding-plan`, API key via Agent Service `AuthStorage`. |
 | `kimi-for-coding` | Kimi for Coding | `providers/kimi.js` | Native provider `kimi-code`, API key via Agent Service `AuthStorage`. Falls back to Moonshot balance on 401/403. |
 | `openrouter` | OpenRouter | `providers/openrouter.js` | Selected API key via Agent Service `AuthStorage`. Fixed endpoint `https://openrouter.ai/api/v1/key`. |
 | `nano-gpt` | NanoGPT | `providers/nanogpt.js` | Native provider `nanogpt`, API key via Agent Service `AuthStorage`. |
-| `github-copilot` | GitHub Copilot | `providers/copilot.js` | Native provider `github-copilot`, API key or OAuth via Agent Service `AuthStorage`. |
-| `github-copilot-addon` | GitHub Copilot Add-on | `providers/copilot.js` | Native provider `github-copilot`, API key or OAuth via Agent Service `AuthStorage`. |
-| `minimax-coding-plan` | MiniMax Coding Plan (minimax.io) | `providers/minimax-coding-plan.js` / `providers/minimax-shared.js` | Native provider `minimax-code`, API key via Agent Service `AuthStorage`. |
+| `github-copilot` | GitHub Copilot | native (`github-copilot` probe) | Native-backed: canonical usage report for native provider `github-copilot`. |
+| `github-copilot-addon` | GitHub Copilot Add-on | native (`github-copilot` probe) | Native-backed: canonical usage report for native provider `github-copilot`. |
+| `minimax-coding-plan` | MiniMax Coding Plan (minimax.io) | native (`minimax-code` probe) | Native-backed: canonical usage report for native provider `minimax-code`. |
 | `minimax-cn-coding-plan` | MiniMax Coding Plan (minimaxi.com) | `providers/minimax-cn-coding-plan.js` / `providers/minimax-shared.js` | Native provider `minimax-code-cn`, API key via Agent Service `AuthStorage`. |
 | `ollama-cloud` | Ollama Cloud | `providers/ollama-cloud.js` | Unsupported for selected credential quota (`isConfigured: () => false`). |
 | `wafer` | Wafer.ai | `providers/wafer.js` | Native provider `wafer-serverless`, API key via Agent Service `AuthStorage`. |
 | `neuralwatt` | NeuralWatt | `providers/neuralwatt.js` | Selected API key via Agent Service `AuthStorage`. |
 | `kilo` | Kilo Code | `providers/kilo.js` | Selected API key via Agent Service `AuthStorage`. |
 | `zenmux` | ZenMux | `providers/zenmux.js` | Selected API key via Agent Service `AuthStorage`. |
-| `xai` | xAI | `providers/xai.js` | Native provider `xai-oauth`, OAuth method in Agent Service `AuthStorage`. Checks stored and JWT expiry. |
+| `xai` | xAI | native (`xai-oauth` probe) | Native-backed: canonical usage report for native provider `xai-oauth`. |
 
 ## Internal-only provider module
 - `providers/openai.js`: logic parity and shared parsing helper module; intentionally not registered for dispatcher ID routing.
@@ -111,21 +133,10 @@ Provider modules return standardized results via shared helpers:
 
 ## Provider-specific semantics
 
-### Claude
-Reports subscription limits from Anthropic's OAuth usage API:
-- **Endpoint:** `GET https://api.anthropic.com/api/oauth/usage` with header `anthropic-beta: oauth-2025-04-20`.
-- **Authentication:** Selected native `anthropic` OAuth credential from Agent Service `AuthStorage`. Checks `selectedCredential.expires` before sending requests.
-- **Rate limiting:** Anthropic rate limits aggressively. Successful usage payloads are cached in memory and served during 429 cooldowns (`Retry-After` header or 5 minutes up to 1 hour). The cache is keyed by sha256 fingerprint of access and refresh tokens.
-- **Refresh ownership:** OpenChamber does not initiate OAuth refresh or rotate tokens directly; token refresh is owned by Agent Service `AuthStorage`.
 
-### xAI
-Reports SuperGrok billing configuration:
-- **Endpoint:** `POST https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig` (gRPC-web).
-- **Authentication:** Selected native `xai-oauth` OAuth credential from Agent Service `AuthStorage`. Checks `accessTokenExpired` (stored expiry or JWT `exp` with 120-second skew).
-- **Refresh ownership:** Native `AuthStorage` owns OAuth token rotation; the quota module consumes the current access token and returns an expired credential error when stale.
 
 ### MiniMax M3 Token Plan & Coding Plan
-Supports both the M3 Token Plan and legacy Coding Plan endpoints:
+The international plan (`minimax-coding-plan`) is native-backed; the China endpoint (`minimax-cn-coding-plan`) keeps the Host scraper. The scraper supports both the M3 Token Plan and legacy Coding Plan endpoints:
 - **Endpoints:** Tries `https://api.minimax.io/v1/token_plan/remains` (international) or `https://api.minimaxi.com/v1/token_plan/remains` (China), falling back to `/v1/api/openplatform/coding_plan/remains`.
 - **Field semantics:** On the Token Plan endpoint, `current_interval_usage_count` represents remaining quota, so `used = total - remaining`. On the legacy Coding Plan endpoint, `usage_count` represents consumed quota.
 - **Model selection:** Selects chat model candidate from `model_remains` matching `MiniMax-M*`, then `general`/`chat`/`text`, then percentage candidates.
@@ -136,17 +147,7 @@ Evaluates Google Cloud quota buckets and models:
 - **Modules:** Split across `providers/google/index.js`, `auth.js`, `api.js`, and `transforms.js`.
 - **Authentication:** Requires an OAuth credential with `projectId` for native `google-gemini-cli` or `google-antigravity`. Checks token expiration before calling Google Cloud APIs.
 
-### Codex
-Reports ChatGPT / Codex subscription windows:
-- **Endpoint:** `GET https://chatgpt.com/backend-api/wham/usage`.
-- **Authentication:** Selected native `openai-codex` OAuth credential. Attaches `ChatGPT-Account-Id` when `credential.accountId` is present.
-- **Windows:** Extracts primary and secondary rate limit windows, numeric credits balance (`credits_balance`), and business spend limits (`spend_control.individual_limit`).
 
-### Cursor
-Reports Cursor subscription and usage data:
-- **Endpoints:** `https://api2.cursor.sh/aiserver.v1.DashboardService/*` and `/auth/*`.
-- **Authentication:** Selected API key or OAuth credential. Verifies JWT expiration and stored expiry with a 5-minute buffer.
-- **Windows:** Extracts `billing_cycle`, `auto`, `api`, `plan_limit`, and on-demand spend. Falls back to enterprise team profile and spend endpoints when `planUsage` is absent.
 
 ### ZenMux
 Reports Pay As You Go credit balance:
@@ -169,32 +170,11 @@ Report coding plan limits from monitor APIs:
 - **Endpoints:** `https://open.bigmodel.cn/api/monitor/usage/quota/limit` (Zhipu AI) and `https://api.z.ai/api/monitor/usage/quota/limit` (z.ai).
 - **Envelope validation:** Validates business failures inside HTTP 200 responses (`{ code, msg, success: false }`).
 - **Limit types:** Maps `TOKENS_LIMIT` and `CREDIT_LIMIT` to hourly and weekly windows, and `TIME_LIMIT` to MCP Tools monthly window.
-- **z.ai gift resets:** Discovers claimable package resets via `GET https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL` and activates them via `POST /api/quota/:providerId/gift-reset/use`.
+- **z.ai gift resets:** z.ai windows are read by the native probe; discovery and activation of a banked package reset stay Host-only: the native-backed provider merges `customer-package-reset/list` records onto matching windows, and `POST /api/quota/:providerId/gift-reset/use` activates one (`providers/zai-gift-reset.ts`).
 
 ### Ollama Cloud and exe.dev
 Both provider modules export `isConfigured: () => false` and return explicit errors indicating that selected credential quota is unsupported.
 
-#### Cursor individual dollar allowance fallback
-
-When the legacy Enterprise readers produce no billing-cycle meter, the server
-and VS Code both call `providers/cursor-summary.js`. It reads the fixed
-`https://cursor.com/api/usage-summary` endpoint using the existing access token
-in the dashboard's `WorkosCursorSessionToken` cookie. Redirects are refused and
-the request has a 15-second deadline. There is at most one additional request
-per refresh; Pro and usable request-based Enterprise meters do not call it.
-
-`individualUsage.overall` supplies the individual's used and limit amounts in
-cents. Only an explicitly enabled bucket with nonnegative usage and a positive
-limit becomes a billing-cycle window, with the summary's billing-cycle end. A
-blank or whitespace-only `used` or `limit` is missing data, never zero.
-Team pools and team on-demand spending are never substituted for this personal
-allowance. An absent bucket or a failed request leaves the legacy result intact.
-
-#### Why the dashboard fallback is shared
-
-Both runtimes need the same cookie construction, cents conversion and personal
-scope. Sharing this reader keeps those rules equal without changing the older
-provider-specific request and on-demand meters.
 
 ## Notes for contributors
 - Provider modules must export `providerId`, `providerName`, `isConfigured(credential)`, and `fetchQuota(options)`.

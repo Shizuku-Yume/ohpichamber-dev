@@ -19,6 +19,12 @@ export interface UsageWindowInput<Percent = number | null | undefined, Seconds =
   creditsUsed?: number | undefined;
 }
 
+export interface UsageWindowGiftReset {
+  recordId: number;
+  expireAt: number;
+  grantType?: string;
+}
+
 export interface UsageWindow<Percent = number | null | undefined, Seconds = number | null> {
   usedPercent: Percent;
   remainingPercent: number | null;
@@ -30,6 +36,7 @@ export interface UsageWindow<Percent = number | null | undefined, Seconds = numb
   valueLabel?: string;
   value?: UsageWindowValue;
   creditsUsed?: number;
+  giftReset?: UsageWindowGiftReset | null;
 }
 
 export interface ProviderUsage {

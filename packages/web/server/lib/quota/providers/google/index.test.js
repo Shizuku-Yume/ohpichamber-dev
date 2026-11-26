@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchGoogleQuota as rawFetchGoogleQuota } from './index.js';
-import { refreshAntigravityToken } from '../antigravity/api.js';
 
 const GEMINI_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const ANTIGRAVITY_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
@@ -259,17 +258,5 @@ describe('Google quota OAuth client compatibility', () => {
     expect(result.configured).toBe(false);
     expect(result.error).toBe('Not configured');
     expect(request).not.toHaveBeenCalled();
-  });
-
-  it('preserves direct Antigravity refresh without probing Gemini', async () => {
-    const clients = stubGoogle(() => Response.json({ access_token: 'new-access' }));
-    expect(await refreshAntigravityToken('test-refresh')).toBe('new-access');
-    expect(clients).toEqual([ANTIGRAVITY_CLIENT_ID]);
-  });
-
-  it('preserves direct Antigravity refresh failure as null', async () => {
-    const clients = stubGoogle(() => Response.json({ error: 'unauthorized_client' }, { status: 401 }));
-    expect(await refreshAntigravityToken('test-refresh')).toBeNull();
-    expect(clients).toEqual([ANTIGRAVITY_CLIENT_ID]);
   });
 });

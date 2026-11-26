@@ -83,7 +83,7 @@ import { createSourceControlAuditStore } from '../source-control/audit-storage.j
 export const createFeatureRoutesRuntime = () => {
   let skillRepositoryDependencies = null;
   let themeFolderWatch = null;
-  let stopTrackerSessionStatus = () => {};
+  let stopTrackerSessionStatus = () => { };
   const gitRuntimeIdentity = Object.freeze({
     id: `server_${crypto.randomUUID()}`,
     platform: process.env.OPENCHAMBER_RUNTIME === 'desktop' ? 'desktop' : 'web',
@@ -214,6 +214,7 @@ export const createFeatureRoutesRuntime = () => {
       resolveQuotaSelection,
       listQuotaSelections,
       resolveCredential,
+      readNativeReports,
       resolvePrimaryWorktreeRoot,
       resolveWorktreeTopLevel,
       sessionWorktreeMoveBridge,
@@ -317,7 +318,7 @@ export const createFeatureRoutesRuntime = () => {
     // provider without a second registry to keep in step.
     const extensionQuotaGuests = () => listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) });
     registerQuotaRoutes(app, {
-      getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential,
+      getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential, readNativeReports,
       listExtensionQuotaGuests: extensionQuotaGuests,
       // The extension's approved provider list, never the whole credential store.
       readExtensionCredential: async (req, guest, nativeProviderId) => {
@@ -719,6 +720,16 @@ export const createFeatureRoutesRuntime = () => {
           }
         }
       },
+      onQuotaProviderChanged: ({ providerId }) => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, { type: 'openchamber:quota-providers-changed', properties: { providerId } });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
       surfaceViewerHeaders,
       trackers,
     });
@@ -874,7 +885,7 @@ export const createFeatureRoutesRuntime = () => {
       managedChatsRoot,
       environmentRuntime,
     });
-    registerEnvironmentRoutes(app, { store: environmentStore, runtime: environmentRuntime, listProjects: listConfiguredProjects, readClaudeConfigDir: () => environmentRuntime.forClaudeQuota().CLAUDE_CONFIG_DIR, onClaudeConfigChanged: () => announceChange('openchamber:quota-credentials-changed') });
+    registerEnvironmentRoutes(app, { store: environmentStore, runtime: environmentRuntime, listProjects: listConfiguredProjects });
   };
 
   return {

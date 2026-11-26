@@ -4,7 +4,7 @@ import type { AskAnswer, QuestionRequest, RequestCAS, SessionSnapshot } from '@o
 import { guestAuthPersistPath, getGuestAuth } from './auth-store.js';
 import { setGuestConfigurationNote } from './catalog.js';
 import { createGuestInstructions } from './instructions.js';
-import { guestMarks } from './marks.js';
+import { buildGuestMarksChangedEvent, guestMarks } from './marks.js';
 import { createServiceHostApi } from './service-host-api.js';
 import type { ServiceHostApiOptions, ServiceHostControl } from './service-host-api.js';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
@@ -97,7 +97,11 @@ export const registerGuestServiceHost = ({ dataDir, listGuests, control, session
     marks: {
       set: (...args) => {
         const outcome = guestMarks.set(...args);
-        if (outcome === 'changed') broadcast({ type: 'openchamber:guests-changed', properties: {} });
+        if (outcome !== 'changed') return outcome;
+        const [guestId, , target] = args;
+        const event = buildGuestMarksChangedEvent(guestId, target);
+        if (event) broadcast(event);
+        else console.warn('Failed to validate a guest marks change announcement for', guestId);
         return outcome;
       },
     },

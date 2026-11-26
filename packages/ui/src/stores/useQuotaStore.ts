@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import type { QuotaProviderMeta } from '@/lib/quota';
-import { fetchExtensionQuotaProviders, quotaProviderIds, quotaProviderList, sameExtensionQuotaProviders, type ExtensionQuotaProvider } from '@/lib/quota/extensionProviders';
+import { fetchExtensionQuotaProviders, isExtensionQuotaProviderId, quotaProviderIds, quotaProviderList, sameExtensionQuotaProviders, type ExtensionQuotaProvider } from '@/lib/quota/extensionProviders';
 import { getDesktopWindowVisibility, isDesktopShell, type DesktopSettings } from '@/lib/desktop';
 import { isCapacitorApp } from '@/lib/platform';
 import { getDefaultModels } from '@/lib/quota/model-families';
@@ -73,6 +73,7 @@ interface QuotaStore extends QuotaSettingsState {
   ensureLoadedForRuntime: (options?: { refresh?: boolean; allProviders?: boolean; visibleOnly?: boolean }) => Promise<void>;
   resetForRuntimeSwitch: () => void;
   refreshAfterCredentialChange: () => Promise<void>;
+  refreshProviderAfterChange: (providerId: string) => Promise<void>;
 }
 
 const resolveDropdownProviderIds = (saved: readonly string[] | null, known: readonly QuotaProviderId[]): QuotaProviderId[] => (
@@ -411,6 +412,22 @@ export const useQuotaStore = create<QuotaStore>()(
         set({ results: [], phase: 'unknown', loadedRuntimeKey: null, loadedWorkspaceId: null, nativeToLogical: {}, isLoading: false, isFetchingProvider: {}, lastUpdated: null, refreshErrors: {}, error: null });
         if (!hasVisibleQuotaReadout()) return;
         await get().ensureLoadedForRuntime({ refresh: true, allProviders: [...quotaAutoRefreshConsumers.values()].some(Boolean), visibleOnly: true });
+      },
+
+      refreshProviderAfterChange: async (providerId) => {
+        configuredProvidersRequest = null;
+        configuredProvidersWorkspaceId = null;
+        if (!hasVisibleQuotaReadout()) return;
+        const { dropdownProviderIds, results, extensionProviders } = get();
+        const known = quotaProviderIds(extensionProviders).find((id) => id === providerId);
+        if (!known) return;
+        if (!isExtensionQuotaProviderId(known)) {
+          await get().fetchProviderQuota(known, true);
+          return;
+        }
+        const shown = dropdownProviderIds.includes(known) || results.some((entry) => entry.providerId === known);
+        if (!shown) return;
+        await get().fetchProviderQuota(known, true);
       },
 
       setDisplayMode: (mode) => set({ displayMode: mode }),

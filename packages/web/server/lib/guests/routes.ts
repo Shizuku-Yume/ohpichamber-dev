@@ -83,6 +83,7 @@ import {
   setServiceSocketOverride,
   stopGuestService,
 } from './service.js';
+import { buildQuotaProvidersChangedEvent } from '../quota/extension-registry.js';
 
 
 
@@ -228,7 +229,7 @@ const declaredSettings = (guest: GuestRecord) => {
   return new Map(fields.map((field) => [field.id, field]));
 };
 
-export type GuestDeactivation = { guestId: string; guestName: string; removed?: boolean };
+export type GuestDeactivation = { guestId: string; guestName: string; removed?: boolean; quotaDeclared?: boolean };
 export const settleGuestDeactivationListeners = (listeners: { name: string; listener: (event: GuestDeactivation) => void }[]) => async (event: GuestDeactivation) => {
   const results = await Promise.allSettled(listeners.map(async ({ listener }) => listener(event)));
   results.forEach((result, index) => {
@@ -255,7 +256,7 @@ export type GuestRoutesOptions = {
   onGuestDeactivated?: (event: GuestDeactivation) => void;
   onGuestActivated?: (event: { guestId: string }) => void;
   onGuestsChanged?: () => void;
-  watchFolderInstalls?: boolean;
+  onQuotaProviderChanged?: (event: { providerId: string }) => void;
   surfaceViewerHeaders?: (guestId: string, viewerId: string) => Record<string, string> | null;
   trackers?: TrackerRegistry | null;
 
@@ -273,6 +274,7 @@ export const registerGuestRoutes = (app: Application, {
   onGuestActivated = async () => undefined,
   onGuestsChanged = () => undefined,
   watchFolderInstalls = false,
+  onQuotaProviderChanged,
   surfaceViewerHeaders = () => null,
   trackers = null,
   marks = guestMarks,
@@ -292,13 +294,39 @@ export const registerGuestRoutes = (app: Application, {
     }
     void packageWatch?.sync();
   };
-  const activated = async (guestId: string) => {
+  const announceQuotaProvider = (guestId: string) => {
+    if (!onQuotaProviderChanged) return;
+    const event = buildQuotaProvidersChangedEvent(guestId);
+    if (!event) return;
+    try {
+      onQuotaProviderChanged(event.properties);
+    } catch (error) {
+      console.warn('Failed to announce a usage provider change:', (hasErrorMessage(error) ? error.message : undefined) ?? error);
+    }
+  };
+  const announceQuotaProviderIfDeclared = async (guestId: string, declaredBeforeRemoval?: boolean) => {
+    if (!onQuotaProviderChanged) return;
+    if (declaredBeforeRemoval === true) {
+      announceQuotaProvider(guestId);
+      return;
+    }
+    let guest = null;
+    try {
+      guest = await findInstalledGuest(guestId, persistPath);
+    } catch {
+      announceQuotaProvider(guestId);
+      return;
+    }
+    if (guest?.quota) announceQuotaProvider(guestId);
+  };
+  const activated = async (guestId: string, quotaDeclaredBefore?: boolean) => {
     try {
       await onGuestActivated({ guestId });
     } catch (error) {
       console.warn('Failed to apply an extension activation:', (hasErrorMessage(error) ? error.message : undefined) ?? error);
     }
     announce();
+    await announceQuotaProviderIfDeclared(guestId, quotaDeclaredBefore);
   };
   const deactivated = async (event: GuestDeactivation) => {
     try {
@@ -307,11 +335,19 @@ export const registerGuestRoutes = (app: Application, {
       console.warn('Failed to apply an extension deactivation:', (hasErrorMessage(error) ? error.message : undefined) ?? error);
     }
     announce();
+    await announceQuotaProviderIfDeclared(event.guestId, event.quotaDeclared);
   };
-  const packageChanged = async (guestId: string) => {
+  const packageChanged = async (guestId: string, quotaDeclaredBefore?: boolean) => {
     noteGuestPackageChanged(persistPath, guestId);
     await stopGuestService(guestId);
-    await activated(guestId);
+    await activated(guestId, quotaDeclaredBefore);
+  };
+  const quotaDeclarationSnapshot = async () => {
+    try {
+      return new Set((await listInstalledGuests({ persistPath })).filter((guest) => Boolean(guest.quota)).map((guest) => guest.id));
+    } catch {
+      return null;
+    }
   };
   const folderChanged = async (storedPath: string) => {
     const root = await fs.realpath(storedPath).catch(() => storedPath);
@@ -321,12 +357,12 @@ export const registerGuestRoutes = (app: Application, {
     const { id } = inspected.guest;
     if (previous && previous.id !== id) {
       await stopGuestService(previous.id);
-      await deactivated({ guestId: previous.id, guestName: previous.name });
+      await deactivated({ guestId: previous.id, guestName: previous.name, quotaDeclared: Boolean(previous.quota) });
     }
     invalidateGuestCatalog(persistPath);
     const listed = (await listInstalledGuests({ persistPath })).find((guest) => guest.id === id);
     if (listed?.packageRoot !== root) return;
-    await packageChanged(id);
+    await packageChanged(id, previous?.id === id ? Boolean(previous.quota) : undefined);
   };
   const packageWatch = watchFolderInstalls
     ? createGuestPackageWatch({
@@ -431,8 +467,9 @@ export const registerGuestRoutes = (app: Application, {
       }
       const folders = readInstallFolders(isRecord(req.body) ? req.body.folders : undefined);
       if (folders === null) return res.status(400).json({ error: 'invalid-folders' });
+      const declaredBefore = await quotaDeclarationSnapshot();
       const result = await installGuest(request, persistPath, { ...installOptions(), folders });
-      if (result.ok) await packageChanged(result.guest.id);
+      if (result.ok) await packageChanged(result.guest.id, declaredBefore === null ? undefined : declaredBefore.has(result.guest.id));
       sendInstallResult(res, result);
     } catch (error) {
       console.error('Failed to install guest:', error);
@@ -449,8 +486,9 @@ export const registerGuestRoutes = (app: Application, {
         return res.status(body.status).json({ error: body.error });
       }
       const replace = req.query?.replace === 'true';
+      const declaredBefore = await quotaDeclarationSnapshot();
       const result = await installGuestFromZipBuffer(body.buffer, persistPath, { openchamberVersion, replace, folders });
-      if (result.ok) await packageChanged(result.guest.id);
+      if (result.ok) await packageChanged(result.guest.id, declaredBefore === null ? undefined : declaredBefore.has(result.guest.id));
       sendInstallResult(res, result);
     } catch (error) {
       console.error('Failed to install uploaded guest:', error);
@@ -495,7 +533,7 @@ export const registerGuestRoutes = (app: Application, {
         }
         return res.status(400).json(body);
       }
-      await packageChanged(guest.id);
+      await packageChanged(guest.id, Boolean(guest.quota));
       const next = await loadGuest(guest.id);
       if (!next) {
         return res.status(404).json({ error: 'not-found' });
@@ -520,7 +558,7 @@ export const registerGuestRoutes = (app: Application, {
         return res.status(status).json({ error: result.code });
       }
       await forgetGuestAuth(id, authPath);
-      await deactivated({ guestId: id, guestName: removed?.name ?? id, removed: true });
+      await deactivated({ guestId: id, guestName: removed?.name ?? id, removed: true, quotaDeclared: Boolean(removed?.quota) });
       res.status(204).end();
     } catch (error) {
       console.error('Failed to uninstall guest:', error);

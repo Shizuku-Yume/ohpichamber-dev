@@ -4,59 +4,66 @@ import {
   requireSelectedCredential,
   SELECTED_CREDENTIAL_UNAVAILABLE,
 } from './selected-credential.js';
+import { createNativeQuotaProvider, NATIVE_QUOTA_PROVIDERS } from '../native.js';
+import { attachZaiGiftResets, listZaiGiftResets } from './zai-gift-reset.js';
 
-import * as claude from './claude/index.js';
-import * as clinePass from './cline-pass.js';
-import * as codex from './codex.js';
-import * as copilot from './copilot.js';
-import * as cursor from './cursor.js';
 import * as deepinfra from './deepinfra.js';
 import * as deepseek from './deepseek.js';
 import * as exeDev from './exe-dev.js';
-import * as antigravity from './antigravity/index.js';
 import * as google from './google/index.js';
-import * as hyper from './hyper.js';
 import * as kimi from './kimi.js';
 import * as mistral from './mistral.js';
 import * as nanogpt from './nanogpt.js';
 import * as openai from './openai.js';
 import * as openrouter from './openrouter.js';
-import * as zai from './zai.js';
 import * as zhipuaiCodingPlan from './zhipuai-coding-plan.js';
-import * as minimaxCodingPlan from './minimax-coding-plan.js';
 import * as minimaxCnCodingPlan from './minimax-cn-coding-plan.js';
 import * as neuralwatt from './neuralwatt.js';
 import * as kilo from './kilo.js';
 import * as zenmux from './zenmux.js';
 import * as ollamaCloud from './ollama-cloud.js';
 import * as wafer from './wafer.js';
-import * as xai from './xai.js';
+
+const enrichZaiGiftResets = async (result, options) => {
+  const { resolveCredential, workspaceId, agentDirectoryId, providerId, credentialRef } = options;
+  if (typeof resolveCredential !== 'function') return;
+  if (![workspaceId, agentDirectoryId, providerId, credentialRef].every((value) => typeof value === 'string' && value)) return;
+  const credential = await resolveCredential({ workspaceId, agentDirectoryId, providerId, credentialRef, purpose: 'quota' });
+  const list = await listZaiGiftResets({ credential });
+  if (list === null) return;
+  attachZaiGiftResets(result.usage.windows, list);
+};
+
+const nativeQuotaProvider = (logicalId) => {
+  const spec = NATIVE_QUOTA_PROVIDERS[logicalId];
+  return createNativeQuotaProvider({
+    providerId: logicalId,
+    providerName: NATIVE_PROVIDER_NAMES[logicalId],
+    nativeProviders: spec.providers,
+    enrich: logicalId === 'zai-coding-plan' ? enrichZaiGiftResets : undefined,
+  });
+};
+
+const NATIVE_PROVIDER_NAMES = {
+  claude: 'Claude',
+  codex: 'Codex',
+  'github-copilot': 'GitHub Copilot',
+  'github-copilot-addon': 'GitHub Copilot Add-on',
+  cursor: 'Cursor',
+  xai: 'xAI',
+  'cline-pass': 'ClinePass',
+  hyper: 'Charm Hyper',
+  'zai-coding-plan': 'z.ai',
+  'minimax-coding-plan': 'MiniMax Coding Plan (minimax.io)',
+};
+
+const copilotAddon = nativeQuotaProvider('github-copilot-addon');
 
 const registry: QuotaProviderRegistry = {
-  claude: {
-    providerId: claude.providerId,
-    providerName: claude.providerName,
-    isConfigured: claude.isConfigured,
-    fetchQuota: claude.fetchQuota
-  },
-  'cline-pass': {
-    providerId: clinePass.providerId,
-    providerName: clinePass.providerName,
-    isConfigured: clinePass.isConfigured,
-    fetchQuota: clinePass.fetchQuota
-  },
-  codex: {
-    providerId: codex.providerId,
-    providerName: codex.providerName,
-    isConfigured: codex.isConfigured,
-    fetchQuota: codex.fetchQuota
-  },
-  cursor: {
-    providerId: cursor.providerId,
-    providerName: cursor.providerName,
-    isConfigured: cursor.isConfigured,
-    fetchQuota: cursor.fetchQuota
-  },
+  claude: nativeQuotaProvider('claude'),
+  'cline-pass': nativeQuotaProvider('cline-pass'),
+  codex: nativeQuotaProvider('codex'),
+  cursor: nativeQuotaProvider('cursor'),
   deepinfra: {
     providerId: deepinfra.providerId,
     providerName: deepinfra.providerName,
@@ -81,24 +88,8 @@ const registry: QuotaProviderRegistry = {
     isConfigured: google.isConfigured,
     fetchQuota: google.fetchGoogleQuota
   },
-  antigravity: {
-    providerId: antigravity.providerId,
-    providerName: antigravity.providerName,
-    isConfigured: antigravity.isConfigured,
-    fetchQuota: antigravity.fetchQuota
-  },
-  hyper: {
-    providerId: hyper.providerId,
-    providerName: hyper.providerName,
-    isConfigured: hyper.isConfigured,
-    fetchQuota: hyper.fetchQuota
-  },
-  'zai-coding-plan': {
-    providerId: zai.providerId,
-    providerName: zai.providerName,
-    isConfigured: zai.isConfigured,
-    fetchQuota: zai.fetchQuota
-  },
+  hyper: nativeQuotaProvider('hyper'),
+  'zai-coding-plan': nativeQuotaProvider('zai-coding-plan'),
   'zhipuai-coding-plan': {
     providerId: zhipuaiCodingPlan.providerId,
     providerName: zhipuaiCodingPlan.providerName,
@@ -123,24 +114,9 @@ const registry: QuotaProviderRegistry = {
     isConfigured: nanogpt.isConfigured,
     fetchQuota: nanogpt.fetchQuota
   },
-  'github-copilot': {
-    providerId: copilot.providerId,
-    providerName: copilot.providerName,
-    isConfigured: copilot.isConfigured,
-    fetchQuota: copilot.fetchQuota
-  },
-  'github-copilot-addon': {
-    providerId: copilot.providerIdAddon,
-    providerName: copilot.providerNameAddon,
-    isConfigured: copilot.isConfigured,
-    fetchQuota: copilot.fetchQuotaAddon
-  },
-  'minimax-coding-plan': {
-    providerId: minimaxCodingPlan.providerId,
-    providerName: minimaxCodingPlan.providerName,
-    isConfigured: minimaxCodingPlan.isConfigured,
-    fetchQuota: minimaxCodingPlan.fetchQuota
-  },
+  'github-copilot': nativeQuotaProvider('github-copilot'),
+  'github-copilot-addon': copilotAddon,
+  'minimax-coding-plan': nativeQuotaProvider('minimax-coding-plan'),
   'minimax-cn-coding-plan': {
     providerId: minimaxCnCodingPlan.providerId,
     providerName: minimaxCnCodingPlan.providerName,
@@ -177,12 +153,7 @@ const registry: QuotaProviderRegistry = {
     isConfigured: zenmux.isConfigured,
     fetchQuota: zenmux.fetchQuota
   },
-  xai: {
-    providerId: xai.providerId,
-    providerName: xai.providerName,
-    isConfigured: xai.isConfigured,
-    fetchQuota: xai.fetchQuota
-  },
+  xai: nativeQuotaProvider('xai'),
   mistral: {
     providerId: mistral.providerId,
     providerName: mistral.providerName,
@@ -194,7 +165,7 @@ const registry: QuotaProviderRegistry = {
 const pendingFetches = new Map();
 
 export const listUsagePageProviders = () => Object.entries(registry)
-  .filter(([id]) => id !== copilot.providerIdAddon)
+  .filter(([id]) => id !== 'github-copilot-addon')
   .map(([providerId, provider]) => ({ providerId, providerName: provider.providerName }));
 
 
@@ -228,6 +199,13 @@ export const buildUnconfiguredQuotaResult = (providerId) => {
 const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   const provider = registry[providerId];
   if (!provider) return buildResult({ providerId, providerName: providerId, ok: false, configured: false, error: 'Unsupported provider' });
+  if (Array.isArray(provider.nativeProviders)) {
+    try {
+      return await provider.fetchQuota(options);
+    } catch {
+      return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: true, error: 'Request failed' });
+    }
+  }
   let credential;
   try {
     credential = await requireSelectedCredential({ ...options, purpose: 'quota' });
@@ -258,23 +236,14 @@ export const fetchQuotaForProvider = (providerId, options = {}) => {
   return pending;
 };
 
-export const fetchClaudeQuota = claude.fetchQuota;
 export const fetchOpenaiQuota = openai.fetchQuota;
 export const fetchGoogleQuota = google.fetchGoogleQuota;
-export const fetchCodexQuota = codex.fetchQuota;
-export const fetchCursorQuota = cursor.fetchQuota;
 export const fetchDeepinfraQuota = deepinfra.fetchQuota;
 export const fetchDeepseekQuota = deepseek.fetchQuota;
-export const fetchHyperQuota = hyper.fetchQuota;
-export const fetchCopilotQuota = copilot.fetchQuota;
-export const fetchCopilotAddonQuota = copilot.fetchQuotaAddon;
 export const fetchKimiQuota = kimi.fetchQuota;
 export const fetchOpenRouterQuota = openrouter.fetchQuota;
-export const fetchZaiQuota = zai.fetchQuota;
 export const fetchNanoGptQuota = nanogpt.fetchQuota;
-export const fetchMinimaxCodingPlanQuota = minimaxCodingPlan.fetchQuota;
 export const fetchMinimaxCnCodingPlanQuota = minimaxCnCodingPlan.fetchQuota;
 export const fetchOllamaCloudQuota = ollamaCloud.fetchQuota;
 export const fetchWaferQuota = wafer.fetchQuota;
 export const fetchZhipuaiQuota = zhipuaiCodingPlan.fetchQuota;
-export const fetchAntigravityQuota = antigravity.fetchQuota;

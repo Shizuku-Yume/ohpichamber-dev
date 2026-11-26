@@ -17,6 +17,8 @@ import { workflowRunSchema, type WorkflowRun } from './workflows/model';
 import { SessionMetadataStateSchema, type SessionMetadataState } from '@openchamber/agent-contract';
 import { permissionPolicyWireSchema } from '@/stores/utils/permissionAutoAccept';
 import type { JsonValue } from 'ohpichamber-sdk';
+import { guestMarksChangedPropertiesSchema, type GuestMarksChangedProperties } from './guests/marks';
+import { quotaProvidersChangedPropertiesSchema, type QuotaProvidersChangedProperties } from './quota/extensionProviders';
 
 type ScheduledTaskRanEvent = {
  type: 'scheduled-task-ran';
@@ -116,11 +118,11 @@ const limitFailoverSchema = z.discriminatedUnion('kind', [
 type LimitFailoverEvent = { type: 'limit-failover'; failover: z.infer<typeof limitFailoverSchema> };
 
 const routingUpdatedSchema = z.object({
-  available: z.boolean(),
-  autoReady: z.boolean(),
-  jevAvailable: z.boolean().default(true),
-  tokenPresent: z.boolean(),
-  jevSource: z.enum(['typesafe', 'zen-free']),
+ available: z.boolean(),
+ autoReady: z.boolean(),
+ jevAvailable: z.boolean().default(true),
+ tokenPresent: z.boolean(),
+ jevSource: z.enum(['typesafe', 'zen-free']),
 });
 
 const routingDecisionSchema = z.object({
@@ -137,11 +139,11 @@ const routingDecisionSchema = z.object({
 });
 
 const routingPermissionHeldSchema = z.object({
-  permissionId: z.string().min(1),
-  sessionId: z.string().min(1),
-  directory: z.string().nullable().default(null),
-  score: z.number(),
-  kind: z.string().nullable(),
+ permissionId: z.string().min(1),
+ sessionId: z.string().min(1),
+ directory: z.string().nullable().default(null),
+ score: z.number(),
+ kind: z.string().nullable(),
 });
 
 const routingSafetySkippedSchema = z.object({
@@ -181,17 +183,17 @@ const sourceControlActivitySchema = z.object({ directory: z.string().min(1) });
 const spaceStreamConnectedSchema = z.object({ spaceId: z.string().regex(/^[0-9a-f]{12}$/), status: z.literal('connected') });
 
 const notificationPropertiesSchema = z.object({
-  title: z.string().optional(),
-  body: z.string().optional(),
-  tag: z.string().optional(),
-  kind: z.string().optional(),
-  sessionId: z.string().optional(),
-  directory: z.string().optional(),
-  requireHidden: z.boolean().optional(),
-  showWhenFocused: z.boolean().optional(),
-  toastOnly: z.boolean().optional(),
-  desktopNotificationDelivered: z.boolean().optional(),
-  desktopStdoutActive: z.boolean().optional(),
+ title: z.string().optional(),
+ body: z.string().optional(),
+ tag: z.string().optional(),
+ kind: z.string().optional(),
+ sessionId: z.string().optional(),
+ directory: z.string().optional(),
+ requireHidden: z.boolean().optional(),
+ showWhenFocused: z.boolean().optional(),
+ toastOnly: z.boolean().optional(),
+ desktopNotificationDelivered: z.boolean().optional(),
+ desktopStdoutActive: z.boolean().optional(),
 });
 
 export type HostNotification = z.infer<typeof notificationPropertiesSchema>;
@@ -199,9 +201,8 @@ export type HostNotification = z.infer<typeof notificationPropertiesSchema>;
 type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
 type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
- /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
- | { type: 'quota-credentials-changed' }
- | { type: 'quota-providers-changed' }
+ | { type: 'quota-providers-changed'; providerId: QuotaProvidersChangedProperties['providerId'] }
+ | { type: 'guest-marks-changed'; guestId: GuestMarksChangedProperties['guestId']; target: GuestMarksChangedProperties['target'] }
  | { type: 'guests-changed' }
  | { type: 'guest-service-event'; guestId: string; topic: string; data: JsonValue }
  /** A terminal session was created, exited, restarted or removed. */
@@ -653,12 +654,14 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   return;
  }
 
- if (envelope.type === 'openchamber:quota-credentials-changed') {
-  for (const listener of listeners) listener({ type: 'quota-credentials-changed' });
+ if (envelope.type === 'openchamber:quota-providers-changed') {
+  const parsed = quotaProvidersChangedPropertiesSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'quota-providers-changed', providerId: parsed.data.providerId });
   return;
  }
- if (envelope.type === 'openchamber:quota-providers-changed') {
-  for (const listener of listeners) listener({ type: 'quota-providers-changed' });
+ if (envelope.type === 'openchamber:guest-marks-changed') {
+  const parsed = guestMarksChangedPropertiesSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'guest-marks-changed', guestId: parsed.data.guestId, target: parsed.data.target });
   return;
  }
  if (envelope.type === 'openchamber:session-folders-changed') {

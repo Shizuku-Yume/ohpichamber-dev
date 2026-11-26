@@ -131,8 +131,8 @@ describe('getDefaultModels for the claude provider', () => {
   });
 });
 
-describe('getDefaultModels and families for the antigravity provider', () => {
-  test('selects Gemini 3.x and Claude models for antigravity', () => {
+describe('getDefaultModels and families for google antigravity models', () => {
+  test('selects Gemini 3.x and Claude models for google', () => {
     const models = [
       'gemini-3.8-flash',
       'gemini-3.1-pro-high',
@@ -141,7 +141,7 @@ describe('getDefaultModels and families for the antigravity provider', () => {
       'gemini-2.0-flash',
     ];
 
-    expect(getDefaultModels('antigravity', models)).toEqual([
+    expect(getDefaultModels('google', models)).toEqual([
       'gemini-3.8-flash',
       'gemini-3.1-pro-high',
       'claude-sonnet-5-5-low',

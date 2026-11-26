@@ -70,16 +70,6 @@ claim that the carried-over bodies have been type-verified.
 - **Solution:** persist Canonical interrupted-send receipts keyed by caller correlation/idempotency ID and expose authoritative reconciliation. Keep unconfirmed sends pending without auto-restore until then.
 - **Cost:** Agent Contract, service persistence, retry semantics and UI reconciliation tests.
 
-## Guest marks and quota providers lack Host change producers
-
-- **Where:** Host guest marks/quota providers and the shared UI control stream.
-- **Added:** 2026-11-20
-- **Priority:** worth-doing
-- **Problem:** Host producers for `guest-marks-changed` and `quota-providers-changed` are not implemented.
-- **Impact:** connected clients cannot receive targeted invalidation; the UI reloads on `event-stream-ready` meanwhile.
-- **Solution:** emit validated, scoped change events from successful Host writes and consume them through the shared control stream.
-- **Cost:** producer wiring, event contracts and cross-client tests.
-
 ## Last-turn diff lacks a Canonical per-turn diff contract
 
 - **Where:** Canonical turn/message DTOs and Last-turn diff presentation.

@@ -5,45 +5,22 @@
 This folder owns the built-in quota readers and registry. Nested provider folders
 own their authentication and transforms. `../utils` owns shared formatting and
 result construction; `../credentials` owns managed credential storage.
+`../native.ts` owns the native-backed entries: providers OMP's usage probes
+cover (`claude`, `codex`, `github-copilot` and its add-on, `cursor`, `xai`,
+`cline-pass`, `hyper`, `zai-coding-plan`, `minimax-coding-plan`) answer from the
+canonical OMP usage report instead of a Host scraper, so the scraper modules
+that used to live here are removed. `zai-gift-reset.ts` keeps only the z.ai
+gift-reset activation OMP does not implement.
 
 ## Invariants
 
-- Codex CLI credentials are read fresh from `$CODEX_HOME/auth.json`, falling back
-  to `~/.codex/auth.json`. Missing or unusable access tokens return `null`.
-  The account ID stays nullable. Decoded profile claims only label an account.
 - File JSON and decoded JWT claims are untrusted. Object checks accept arrays,
   matching the shared `asObject` helper; string checks trim and reject blanks.
 - MiniMax status fields remain unchecked values until their existing `Number`
   and `String` conversions. Status `0` is success; `1004` reports that MiniMax
   does not share limits for this key; other failures keep the supplied message.
-- Cursor reads environment tokens before token files and managed credentials.
-  Refreshing persists an access token only for managed credentials; importing
-  credentials is a separate explicit write.
-- Cursor JSON is checked as JSON data without promising a provider-specific
-  shape. Numeric and timestamp coercion still happen at each meter.
-- xAI accepts flat protobuf usage fields and nested response envelopes. The
-  current-period percentage paths are `[1]` and `[1, 1]`, following the
-  billing responses documented by https://github.com/steipete/CodexBar.
-- Copilot reads only the premium-interaction snapshot. Fractional
-  `quota_remaining` takes precedence over `remaining` when deriving spent credits,
-  matching `CopilotUserQuotaInfo` in `microsoft/vscode-copilot-chat`.
 
 ## Decisions
-
-### Why Codex reads the CLI token fields separately
-
-The CLI's ChatGPT sign-in is usable when `auth.json` contains a nonblank
-`tokens.access_token`. A missing account ID stays null. A signed-out CLI or
-an API-key sign-in without `tokens` provides no fallback login. JWT claims
-provide an optional display email only; decoding them does not verify the token.
-
-### Why Copilot fields remain unknown
-
-Copilot's HTTP payload and normalized credentials do not validate their fields.
-The local field parsers preserve null, undefined, arrays, primitives and inherited
-properties without copying or filtering them. Each numeric or string conversion
-retains its existing acceptance rules. In particular, string `credits_used`
-values are trimmed before numeric conversion so blank strings remain unavailable.
 
 ### Why MiniMax model names keep their native failure
 
@@ -60,13 +37,6 @@ The provider response does not validate their types. Declaring numeric codes or
 string messages would promise more than the boundary checks. Both web and VS Code
 use this same status mapping.
 
-### Why Cursor JSON accepts non-finite numbers
-
-`JSON.parse` accepts overflowing exponents such as `1e999` as infinity. The
-JSON guard retains that acceptance; expiry checks and `toNumber` keep their
-existing treatment of those numbers. A finite-number schema would change both
-token refresh and meter fallback behavior.
-
 ### Why registry IDs retain null
 
 The extension registry exposes nullable IDs in its entries and provider objects.
@@ -77,16 +47,13 @@ and retains the own-property check, so inherited names remain unsupported.
 
 Configuration failures skip only the failing provider. Pending requests remain
 keyed by the original ID and are removed only when that same promise settles.
-Claude owns its pending requests so the registry cannot join requests for
-different homes; its reads still pass the registry's error normalization.
 
 `getAuthEntry` and `normalizeAuthEntry` do not validate credential fields.
 Credential readers narrow the fields they use.
 
 ### Why shared readers retain precise window fields
 
-VS Code imports the Console, Mistral and Cursor summary readers directly. The
-transformer's string-parser re-export resolves to its TypeScript owner, and the
+The transformer's string-parser re-export resolves to its TypeScript owner, and the
 formatter preserves its supplied percentage type. A shared reader's window
 contract retains the numeric fields established by its own parsing, without
 promising the same validation for other providers' windows.
@@ -112,8 +79,6 @@ funds and a positive balance as money owed, as documented by its account API.
 
 The expiry pattern still tests the string form of the supplied value. A date
 inside an array can match the pattern, but it cannot supply a text expiry.
-This aborts the entire optional gift-reset read, keeping the quota windows
-without attaching partial gift-reset metadata.
 
 Kimi's legacy durations retain the original truthiness check and numeric
 coercion. A numeric string can supply the duration; a nonnumeric truthy value

@@ -105,12 +105,12 @@ describe('Usage page quota cards', () => {
 
   test('a model-only quota plan shows its model windows instead of being hidden', () => {
     Object.assign(quotaServer, {
-      results: [configuredResult('antigravity', 'Antigravity', {
+      results: [configuredResult('google', 'Google', {
         usage: { windows: {}, models: { 'gemini-3': { windows: { weekly: usageWindow } } } },
       })],
     });
     const html = render();
-    expect(html).toContain('Antigravity');
+    expect(html).toContain('Google');
     expect(html).toContain('Weekly');
     expect(html).not.toContain('No quota windows reported');
   });

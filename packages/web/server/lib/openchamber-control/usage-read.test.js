@@ -174,6 +174,11 @@ describe('the providers the Usage page reads', () => {
     const pageIds = QUOTA_PROVIDERS.map(({ id }) => id);
 
     expect(pageIds.length).toBeGreaterThan(10);
-    expect(listUsagePageProviders().map(({ providerId }) => providerId).sort()).toEqual([...pageIds].sort());
+    const page = listUsagePageProviders();
+    expect(page.map(({ providerId }) => providerId).sort()).toEqual([...pageIds].sort());
+    const uiNames = new Map(QUOTA_PROVIDERS.map(({ id, name }) => [id, name]));
+    for (const { providerId, providerName } of page) {
+      expect(providerName).toBe(uiNames.get(providerId));
+    }
   });
 });

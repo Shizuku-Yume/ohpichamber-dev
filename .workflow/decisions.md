@@ -39,12 +39,13 @@
 
 ## 2026-11-26 - Native OMP quotas replace the Host scrapers they cover
 
-- **Decided:** Guest SDK quotas and Work Status read native OMP account quotas for every provider OMP covers, and the Host scrapers for those providers are removed. Providers OMP does not cover keep their Host scraper.
-- **Instead of:** keeping both paths side by side.
-- **Because:** one authority per quota number, with no provider losing coverage.
+- **Decided:** Guest SDK quotas and Work Status read native OMP account quotas for every provider OMP covers, and the Host scrapers for those providers are removed. Providers OMP does not cover keep their Host scraper. The z.ai gift-reset feature is kept end-to-end: OMP's zai probe exposes no gift record ids, so the Host keeps one small read of `customer-package-reset/list` in `providers/zai-gift-reset.ts` beside the activation write, and the native-backed zai provider merges discovered gifts onto matching windows after conversion.
+- **Instead of:** keeping both paths side by side, or dropping the gift-reset feature because OMP's report carries no record ids.
+- **Because:** one authority per quota number, with no provider losing coverage; and the gift-reset button is a user-facing feature whose discovery half must exist wherever the activation half does.
 - **Decided by:** maintainer
 - **Mine:** no
-- **Revisit when:** OMP adds quota coverage for a provider that still has a Host scraper.
+- **Revisit when:** OMP adds quota coverage for a provider that still has a Host scraper, or OMP's zai probe exposes gift reset records natively (then the Host list read can go).
+- **Deliberate partial coverage (verified against vendored OMP 19.1.0 probe sources):** three providers OMP probes exist for stay scraper-backed or no-op because the probe does not cover what the Host surface covers. `kimi-for-coding` keeps its scraper: the `kimi-code` probe is OAuth-only (`supports: credential.type === "oauth"`), while the scraper also covers API-key accounts through the coding usages endpoint and the Moonshot pay-as-you-go balance fallback — native backing would strip every API-key user's quota. `google` keeps its scraper: the `google-antigravity` probe covers only antigravity accounts, while the card also serves `google-gemini-cli` accounts, for which no probe exists — native backing would strip gemini-cli users. `ollama-cloud` stays an explicit no-op (`isConfigured: false`): the `ollama-cloud` probe exists but always reports `limits: []` because Ollama exposes no standalone quota API — a native-backed entry would convert the honest "unsupported" signal into a misleading configured failure or an empty card. When OMP adds a `google-gemini-cli` probe or an OAuth+credential-complete kimi probe, or Ollama ships a quota endpoint, these three move to native backing like the rest.
 - **Effort:** release-hardening
 
 ## 2026-11-26 - Every SDK-built session in the worker inherits Host authorization and fails closed without it
@@ -2314,3 +2315,4 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** each was a measured cost on a hot path (Host stream CPU, status publication fan-out, startup bytes) in the 2026-11-26 audit.
 - **Decided by:** user (requested the performance pass).
 - **Revisit when:** upstream changes these modules; re-apply the change on top of upstream's version.
+

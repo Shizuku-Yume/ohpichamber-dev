@@ -4,22 +4,22 @@ export {
   listConfiguredQuotaProviders,
   buildUnconfiguredQuotaResult,
   fetchQuotaForProvider,
-  fetchClaudeQuota,
   fetchOpenaiQuota,
   fetchGoogleQuota,
-  fetchCodexQuota,
-  fetchCursorQuota,
+  fetchDeepinfraQuota,
   fetchDeepseekQuota,
-  fetchHyperQuota,
-  fetchCopilotQuota,
-  fetchCopilotAddonQuota,
   fetchKimiQuota,
   fetchOpenRouterQuota,
-  fetchZaiQuota,
   fetchNanoGptQuota,
-  fetchMinimaxCodingPlanQuota,
   fetchMinimaxCnCodingPlanQuota,
   fetchOllamaCloudQuota,
   fetchZhipuaiQuota,
   fetchWaferQuota
 } from './providers/index.js';
+
+export {
+  createNativeUsageReader,
+  nativeReportsToProviderResult,
+  NATIVE_QUOTA_PROVIDERS,
+  NATIVE_QUOTA_PROVIDER_IDS,
+} from './native.js';

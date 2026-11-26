@@ -1,11 +1,11 @@
 import express from 'express';
-import { giftResetTypes, useZaiGiftReset } from './providers/zai.js';
+import { giftResetTypes, useZaiGiftReset } from './providers/zai-gift-reset.js';
 import { requireSelectedCredential, SELECTED_CREDENTIAL_UNAVAILABLE } from './providers/selected-credential.js';
 import { extensionQuotaGuest, listExtensionQuotaProviders } from './extension-registry.js';
 import { readExtensionQuotaProvider } from './extension-service.js';
 import { isExtensionQuotaProviderId } from './extension-registry.js';
 
-export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential, listExtensionQuotaGuests, readExtensionCredential, requestExtensionService }) {
+export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential, readNativeReports, listExtensionQuotaGuests, readExtensionCredential, requestExtensionService }) {
   if (typeof getQuotaProviders !== 'function' || typeof resolveQuotaSelection !== 'function' || typeof listQuotaSelections !== 'function' || typeof resolveCredential !== 'function') throw new TypeError('Quota routes require selected workspace catalogs and credential resolver');
   // The extension catalog is the authority; a read that fails is a failed
   // list, never a short one built from a stale registry.
@@ -70,13 +70,13 @@ export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelect
         if (unconfigured) return res.json(unconfigured);
         throw error;
       }
-      return res.json(await providers.fetchQuotaForProvider(req.params.providerId, { ...selection, resolveCredential }));
+      return res.json(await providers.fetchQuotaForProvider(req.params.providerId, { ...selection, resolveCredential, readNativeReports }));
     } catch { return res.status(503).json({ error: 'Selected quota credential unavailable' }); }
   });
   app.post('/api/quota/:providerId/gift-reset/use', express.json({ limit: '16kb' }), async (req, res) => {
     if (req.params.providerId !== 'zai-coding-plan') return res.status(404).json({ code: 'UNSUPPORTED_PROVIDER', error: 'Unsupported quota provider' });
     const { recordId, resetType } = req.body ?? {};
-    if (!Number.isFinite(recordId) || !giftResetTypes.includes(resetType)) return res.status(400).json({ code: 'INVALID_REQUEST', error: 'Invalid gift reset request' });
+    if (!Number.isInteger(recordId) || recordId <= 0 || !giftResetTypes.includes(resetType)) return res.status(400).json({ code: 'INVALID_REQUEST', error: 'Invalid gift reset request' });
     try {
       const selection = await resolveQuotaSelection(req, req.params.providerId);
       const credential = await requireSelectedCredential({ ...selection, purpose: 'quota', resolveCredential });

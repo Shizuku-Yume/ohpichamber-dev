@@ -1,14 +1,16 @@
 import type { createCatalogCredentialSelections, createSelectedCredentialResolver } from '../host/private-credential.js';
 import { z } from 'zod';
 import { SELECTED_CREDENTIAL_UNAVAILABLE } from './providers/selected-credential.js';
+import type { ReadNativeReports } from './native.js';
 
 type Quota = typeof import('./index.js');
 type Selections = ReturnType<typeof createCatalogCredentialSelections>;
 type Scope = { workspaceId: string; agentDirectoryId: string };
 
-export const createSelectedUsageQuota = ({ loadQuota, listQuotaSelections, resolveQuotaSelection, resolveCredential }: Pick<Selections, 'listQuotaSelections' | 'resolveQuotaSelection'> & {
+export const createSelectedUsageQuota = ({ loadQuota, listQuotaSelections, resolveQuotaSelection, resolveCredential, readNativeReports }: Pick<Selections, 'listQuotaSelections' | 'resolveQuotaSelection'> & {
   loadQuota: () => Promise<Quota>;
   resolveCredential: ReturnType<typeof createSelectedCredentialResolver>;
+  readNativeReports?: ReadNativeReports;
 }) => async (scope: Scope) => {
   const quota = await loadQuota();
   const request = { query: { workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId } };
@@ -25,7 +27,7 @@ export const createSelectedUsageQuota = ({ loadQuota, listQuotaSelections, resol
         }
         throw error;
       }
-      return quota.fetchQuotaForProvider(providerId, { ...selection, resolveCredential });
+      return quota.fetchQuotaForProvider(providerId, { ...selection, resolveCredential, readNativeReports });
     },
   };
 };

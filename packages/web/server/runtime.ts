@@ -150,7 +150,9 @@ import { createLegacyAttachmentImporter } from './lib/host/legacy-attachment-imp
 import { createHostPromptDeliveryRuntime } from './lib/host/prompt-delivery-runtime.js';
 import { createBehaviorPromptSource } from './lib/host/behavior-prompt.js';
 import { readMergedSettingsSync } from './lib/host/settings-files.js';
-import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections } from './lib/host/private-credential.js';
+import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections, quotaProviderIdsForNativeProvider } from './lib/host/private-credential.js';
+import { createNativeUsageReader } from './lib/quota/native.js';
+import { buildQuotaProvidersChangedEventForProvider } from './lib/quota/extension-registry.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
 import { createLaterPages } from './lib/openchamber-control/later-pages.js';
@@ -698,6 +700,10 @@ const { resolveQuotaSelection, listQuotaSelections, resolveTtsSelection } = crea
  service: hostAgentRuntime.service,
  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
  getQuotaProviders: () => import('./lib/quota/index.js'),
+});
+const readNativeReports = createNativeUsageReader({
+ service: hostAgentRuntime.service,
+ resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
 });
 const ttsService = createTTSService({ resolveCredential });
 const resolveAttachments = (scope, attachments) => attachmentStore.resolveAttachments(scope, attachments);
@@ -1522,7 +1528,7 @@ const openChamberControlService = createOpenChamberControlService({
  updateSessionMetadata: updateSessionMetadataWith,
  isWorktreePinned: isWorktreeDirectoryPinned,
  chatRoots: [path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR],
- loadQuota: createSelectedUsageQuota({ loadQuota: () => import('./lib/quota/index.js'), listQuotaSelections, resolveQuotaSelection, resolveCredential }),
+ loadQuota: createSelectedUsageQuota({ loadQuota: () => import('./lib/quota/index.js'), listQuotaSelections, resolveQuotaSelection, resolveCredential, readNativeReports }),
  readSettingsFromDiskMigrated,
  service: hostAgentRuntime.service,
  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
@@ -2061,6 +2067,28 @@ async function main(options = {}) {
    })),
    globalEventHub: globalMessageStreamHub,
    resolveHostTools,
+   onProviderConfigurationMutation: ({ providerId }) => {
+    void (async () => {
+     try {
+      const quota = await import('./lib/quota/index.js');
+      const usagePageIds = new Set(quota.listUsagePageProviders().map((provider) => provider.providerId));
+      for (const logicalId of quotaProviderIdsForNativeProvider(providerId)) {
+       if (!usagePageIds.has(logicalId)) continue;
+       const event = buildQuotaProvidersChangedEventForProvider(logicalId);
+       if (!event) continue;
+       for (const client of uiOpenChamberEventClients) {
+        try {
+         writeSseEvent(client, event);
+        } catch {
+         uiOpenChamberEventClients.delete(client);
+        }
+       }
+      }
+     } catch (error) {
+      console.warn('Failed to announce a usage provider change:', error instanceof Error ? error.message : error);
+     }
+    })();
+   },
   },
   ensurePushInitialized,
   ensureGlobalWatcherStarted,
@@ -2264,6 +2292,7 @@ async function main(options = {}) {
   resolveQuotaSelection,
   listQuotaSelections,
   resolveCredential,
+  readNativeReports,
   crypto,
   os,
   path,

@@ -39,10 +39,10 @@ describe('buildUsageProviderRows', () => {
     const rows = buildUsageProviderRows({
       configProviders: [],
       statsProviders: [],
-      results: [quotaResult('antigravity', 'Antigravity')],
+      results: [quotaResult('google', 'Google')],
       nativeToLogical,
     });
-    expect(rows).toEqual([{ quotaProviderId: 'antigravity', statsProviderId: 'antigravity', name: 'Antigravity' }]);
+    expect(rows).toEqual([{ quotaProviderId: 'google', statsProviderId: 'google', name: 'Google' }]);
   });
 
   test('an unconfigured quota result adds no row', () => {
@@ -89,14 +89,14 @@ describe('hasQuotaData', () => {
 });
 
 describe('quotaCardProviderIds', () => {
-  const providers = [{ id: 'claude' as const }, { id: 'antigravity' as const }, { id: 'codex' as const }];
+  const providers = [{ id: 'claude' as const }, { id: 'google' as const }, { id: 'codex' as const }];
 
   test('a model-only quota plan keeps its card', () => {
-    const antigravity: ProviderResult = {
-      ...quotaResult('antigravity', 'Antigravity'),
+    const googleResult: ProviderResult = {
+      ...quotaResult('google', 'Google'),
       usage: { windows: {}, models: { 'gemini-3': { windows: { daily: usageWindow } } } },
     };
-    expect(quotaCardProviderIds(providers, [antigravity], {})).toEqual(['antigravity']);
+    expect(quotaCardProviderIds(providers, [googleResult], {})).toEqual(['google']);
   });
 
   test('a configured provider whose fetch failed keeps its card with the error', () => {

@@ -149,6 +149,12 @@ for (const [logicalId, relation] of Object.entries(QUOTA_PROVIDER_RELATIONS)) {
   }
 }
 
+export function quotaProviderIdsForNativeProvider(nativeId) {
+  const logicalIds = [...(QUOTA_IDS_BY_NATIVE_PROVIDER.get(nativeId) ?? [])];
+  if (!Object.hasOwn(QUOTA_PROVIDER_RELATIONS, nativeId) && !logicalIds.includes(nativeId)) logicalIds.push(nativeId);
+  return logicalIds;
+}
+
 function catalogSelectionRequest(req, requireProvider = false) {
   const selection = {};
   for (const field of ['workspaceId', 'agentDirectoryId', 'providerId', 'credentialRef']) {

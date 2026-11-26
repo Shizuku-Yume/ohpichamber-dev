@@ -400,34 +400,6 @@
       "forkPath": "server/lib/quota/index.js"
     },
     {
-      "path": "server/lib/quota/providers/antigravity/auth.ts",
-      "forkPath": "server/lib/quota/providers/antigravity/auth.js"
-    },
-    {
-      "path": "server/lib/quota/providers/antigravity/index.ts",
-      "forkPath": "server/lib/quota/providers/antigravity/index.js"
-    },
-    {
-      "path": "server/lib/quota/providers/claude/index.ts",
-      "forkPath": "server/lib/quota/providers/claude/index.js"
-    },
-    {
-      "path": "server/lib/quota/providers/cline-pass.ts",
-      "forkPath": "server/lib/quota/providers/cline-pass.js"
-    },
-    {
-      "path": "server/lib/quota/providers/codex.ts",
-      "forkPath": "server/lib/quota/providers/codex.js"
-    },
-    {
-      "path": "server/lib/quota/providers/copilot.ts",
-      "forkPath": "server/lib/quota/providers/copilot.js"
-    },
-    {
-      "path": "server/lib/quota/providers/cursor.ts",
-      "forkPath": "server/lib/quota/providers/cursor.js"
-    },
-    {
       "path": "server/lib/quota/providers/deepinfra.ts",
       "forkPath": "server/lib/quota/providers/deepinfra.js"
     },
@@ -448,10 +420,6 @@
       "forkPath": "server/lib/quota/providers/google/index.js"
     },
     {
-      "path": "server/lib/quota/providers/hyper.ts",
-      "forkPath": "server/lib/quota/providers/hyper.js"
-    },
-    {
       "path": "server/lib/quota/providers/index.ts",
       "forkPath": "server/lib/quota/providers/index.js"
     },
@@ -466,10 +434,6 @@
     {
       "path": "server/lib/quota/providers/minimax-cn-coding-plan.ts",
       "forkPath": "server/lib/quota/providers/minimax-cn-coding-plan.js"
-    },
-    {
-      "path": "server/lib/quota/providers/minimax-coding-plan.ts",
-      "forkPath": "server/lib/quota/providers/minimax-coding-plan.js"
     },
     {
       "path": "server/lib/quota/providers/minimax-shared.ts",
@@ -498,14 +462,6 @@
     {
       "path": "server/lib/quota/providers/wafer.ts",
       "forkPath": "server/lib/quota/providers/wafer.js"
-    },
-    {
-      "path": "server/lib/quota/providers/xai.ts",
-      "forkPath": "server/lib/quota/providers/xai.js"
-    },
-    {
-      "path": "server/lib/quota/providers/zai.ts",
-      "forkPath": "server/lib/quota/providers/zai.js"
     },
     {
       "path": "server/lib/quota/providers/zenmux.ts",
