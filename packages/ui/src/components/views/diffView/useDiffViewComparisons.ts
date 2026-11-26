@@ -19,8 +19,12 @@ import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionSt
 import { hasSameSourceControlReadContext } from '@/lib/source-control/identity';
 import { parseDiffFromFile } from '@pierre/diffs';
 import { diffCommentOriginFromSource } from '@/lib/diffCommentOrigin';
-import type { FileEntry, DiffData, DiffScope, ComparisonDiffResult, DiffViewProps } from './types';
+import type { FileEntry, DiffScope, ComparisonDiffResult, DiffViewProps } from './types';
 import { EMPTY_COMPARISON_DIFF, isNewStatusFile, isStagedStatusFile, isWorkingStatusFile, createTextDiffDataFromPatch } from './diffData';
+import { useCanonicalTurnDiff } from '@/hooks/useCanonicalTurnDiff';
+import { adaptTurnDiff } from '../turnDiffAdapter';
+import { statusToGitCode } from '../turnSnapshotDiff';
+import { useSessionMessagesSelector, useSessionMessagesResolved, useSessionStatus } from '@/sync/sync-context';
 import { FULL_CONTEXT_DIFF_LINES, DEFAULT_CONTEXT_DIFF_LINES } from './diffContextLines';
 import type { GitAPI, GitStatus } from '@/lib/api/types';
 import type { useRepositoryBinding } from '@/lib/source-control/repository-binding';
@@ -43,13 +47,46 @@ interface DiffViewComparisonsOptions {
     onDiffScopeChange: DiffViewProps['onDiffScopeChange'];
     diffScope: DiffScope | null;
     turnId?: string;
+    turnSessionId?: string | null;
+    currentSessionId: string | null;
+    rootDirectory: string | undefined;
 }
 
 export function useDiffViewComparisons({
     visible, activeDiffScope, status, effectiveDirectory, binding, setActiveDiffScope,
-    onDiffScopeChange, fetchBranches, git, isGitRepo, diffScope, expandedFiles, t,
+    onDiffScopeChange, fetchBranches, git, isGitRepo, diffScope, turnId, turnSessionId, expandedFiles, t,
+    currentSessionId, rootDirectory,
 }: DiffViewComparisonsOptions) {
-    const lastTurnDiffData = React.useMemo(() => new Map<string, DiffData>(), []);
+    const pinnedTurn = turnId ? { sessionId: turnSessionId ?? null } : null;
+    const diffSessionId = pinnedTurn ? pinnedTurn.sessionId : currentSessionId;
+    const selectLastTurnId = React.useCallback((messages: readonly { turnId: string }[]): string | undefined => messages.at(-1)?.turnId, []);
+    const transcriptLastTurnId = useSessionMessagesSelector(
+        diffSessionId ?? '',
+        rootDirectory,
+        selectLastTurnId,
+    );
+    const targetTurnId = turnId ?? transcriptLastTurnId;
+    const transcriptResolved = useSessionMessagesResolved(diffSessionId ?? '', rootDirectory);
+    const sessionStatus = useSessionStatus(diffSessionId ?? '', rootDirectory);
+    const turnDiffFinished = sessionStatus === 'idle' || (transcriptResolved && targetTurnId !== undefined && targetTurnId !== transcriptLastTurnId);
+    const turnDiffMutable = !turnDiffFinished;
+    const isTurnScope = activeDiffScope === 'turn';
+    const turnDiffRead = useCanonicalTurnDiff(diffSessionId, targetTurnId, {
+        enabled: visible && isTurnScope && Boolean(diffSessionId),
+        refetchSignal: sessionStatus ?? 'unknown',
+        mutable: turnDiffMutable,
+    });
+    const turnTargetMissing = !targetTurnId && (!diffSessionId || transcriptResolved || sessionStatus === 'idle' || sessionStatus === 'unavailable');
+    const adaptedTurnDiff = React.useMemo(() => adaptTurnDiff(turnDiffRead.diff), [turnDiffRead.diff]);
+    const lastTurnDiffs = adaptedTurnDiff.snapshots;
+    const lastTurnDiffData = adaptedTurnDiff.diffDataByPath;
+    const turnFileCount = turnTargetMissing ? 0 : turnDiffRead.diff?.state === 'ready' ? turnDiffRead.diff.files.length : turnDiffRead.diff?.state === 'empty' ? 0 : null;
+    const turnDiffSettled = turnTargetMissing || turnDiffRead.state !== 'loading';
+    const turnDiffError = turnDiffRead.error ?? (turnDiffRead.diff?.state === 'failed' ? turnDiffRead.diff.error ?? null : null);
+    const retryTurnDiff = turnDiffRead.retry;
+    const turnDiffUnsupported = !turnTargetMissing && turnDiffRead.state === 'unsupported';
+    const turnDiffHasIncompleteRows = adaptedTurnDiff.hasIncompleteRows;
+
 
     const workingFileCount = React.useMemo(() => {
         if (!status?.files) return 0;
@@ -212,8 +249,8 @@ export function useDiffViewComparisons({
         () => activeDiffScope === 'branch' || activeDiffScope === 'commit'
             ? (filePath: string) => fetchComparisonDiffEntry(filePath, true)
             : activeDiffScope === 'pr'
-            ? fetchComparisonFullFileEntry
-            : undefined,
+                ? fetchComparisonFullFileEntry
+                : undefined,
         [activeDiffScope, fetchComparisonDiffEntry, fetchComparisonFullFileEntry]
     );
 
@@ -254,7 +291,18 @@ export function useDiffViewComparisons({
         }
 
         if (activeDiffScope === 'turn') {
-            return [];
+            return lastTurnDiffs
+                .map((diff) => ({
+                    path: diff.file ?? '',
+                    index: '',
+                    working_dir: statusToGitCode(diff.status),
+                    previousPath: diff.previousPath,
+                    insertions: diff.additions ?? 0,
+                    deletions: diff.deletions ?? 0,
+                    isNew: diff.status === 'added',
+                }))
+                .filter((file) => file.path)
+                .sort((a, b) => a.path.localeCompare(b.path));
         }
 
         if (!status?.files) return [];
@@ -292,7 +340,7 @@ export function useDiffViewComparisons({
                 };
             })
             .sort((a, b) => a.path.localeCompare(b.path));
-    }, [activeDiffScope, branchFiles, comparison.files, status]);
+    }, [activeDiffScope, branchFiles, comparison.files, status, lastTurnDiffs]);
 
     const changedFilePathsKey = React.useMemo(
         () => changedFiles.map((file) => file.path).join('\0'),
@@ -300,7 +348,7 @@ export function useDiffViewComparisons({
     );
 
     return {
-        lastTurnDiffs: null, turnFileCount: null, turnDiffSettled: true, lastTurnDiffData,
+        lastTurnDiffs, turnFileCount, turnDiffSettled, turnDiffError, retryTurnDiff, turnDiffUnsupported, turnDiffHasIncompleteRows, lastTurnDiffData,
         workingFileCount, stagedFileCount, currentBranch, prComparison, pullRequestContext, selectedPr,
         prChangeRequestTerm, commitComparison, selectedCommitHash, branches, setBaseOverride, clearBaseOverride,
         qualifiedBranchBase, branchBaseSource, isBranchBaseResolved, showBranchOption, setComparisonRetryRevision,

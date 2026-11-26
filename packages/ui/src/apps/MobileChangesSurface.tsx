@@ -1,4 +1,4 @@
-import { LIST_ROUTE } from '@/hooks/useMobileChangesNavigation';
+import { LIST_ROUTE, type MobileChangesInitialDiff } from '@/hooks/useMobileChangesNavigation';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { commitRequestRepository, commitRequestShown, type MobileChangesCommitRequest } from './mobileChangesCommitRequest';
 import { isCompleteIdentity } from '@/lib/api/git-identity';
@@ -49,8 +49,10 @@ import { commitAndSwitchDirtyBranch } from '@/lib/source-control/dirty-branch-sw
 import { hasConfigChangedGrant } from '@/lib/source-control/types';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionMessages } from '@/sync/sync-context';
-import { projectLastTurnDiffs } from '@/components/views/turnDiffProjection';
+import { useSessionMessagesSelector, useSessionMessagesResolved, useSessionStatus } from '@/sync/sync-context';
+import { useCanonicalTurnDiff } from '@/hooks/useCanonicalTurnDiff';
+import { useTurnFileRequestRouting, type TurnFileRequestState, type TurnFileRouteTarget } from '@/hooks/useTurnFileRequestRouting';
+import { adaptTurnDiff } from '@/components/views/turnDiffAdapter';
 import { statusToGitCode } from '@/components/views/turnSnapshotDiff';
 import { useNestedGitDirectory } from '@/hooks/useNestedGitDirectory';
 import { useBranchComparisonBase } from '@/hooks/useBranchComparisonBase';
@@ -107,6 +109,9 @@ interface ChangesNavigation {
  ownerKey: string;
  mode: ChangesMode;
  route: ChangesRoute;
+ turnId?: string;
+ turnSessionId?: string | null;
+ turnDirectory?: string | null;
 }
 interface MobileDiffData {
  original: string;
@@ -139,14 +144,16 @@ const diffCacheKey = (path: string, staged: boolean): string => staged ? `${path
 
 const handledCommitRequests = new WeakSet<MobileChangesCommitRequest>();
 
+const takenTurnRequests = new WeakSet<object>();
+
 type MobileChangesSurfaceProps = {
  /** When provided, the list header gets a close X that calls this. */
  onClose?: () => void;
  /**
-  * A new request object opens its working-tree diff, including repeated requests
+  * A new request object opens its target diff, including repeated requests
   * for the same path. Reopening the drawer keeps the same object and navigation.
   */
- initialDiff?: { path: string; staged: boolean; scope?: 'turn' } | null;
+ initialDiff?: MobileChangesInitialDiff | null;
  initialCommit?: MobileChangesCommitRequest | null;
  /** The workspace drawer keeps visited panes mounted while hidden. */
  visible?: boolean;
@@ -235,51 +242,69 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  const ownerKey = JSON.stringify([runtimeKey, currentDirectory]);
  const ownerKeyRef = React.useRef(ownerKey);
  ownerKeyRef.current = ownerKey;
- const [navigation, setNavigation] = React.useState<ChangesNavigation>(() => ({
-  ownerKey,
-  mode: 'working',
-  route: initialDiff?.path ? { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } : LIST_ROUTE,
- }));
+ const [navigation, setNavigation] = React.useState<ChangesNavigation>(() => {
+  if (initialDiff?.scope === 'turn') {
+   return takenTurnRequests.has(initialDiff)
+    ? { ownerKey, mode: 'working', route: LIST_ROUTE }
+    : { ownerKey, mode: 'turn', route: LIST_ROUTE, turnId: initialDiff.turnId, turnSessionId: initialDiff.sessionId, turnDirectory: initialDiff.directory };
+  }
+  return {
+   ownerKey,
+   mode: 'working',
+   route: initialDiff?.path ? { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } : LIST_ROUTE,
+  };
+ });
  const mode = navigation.ownerKey === ownerKey ? navigation.mode : 'working';
  const route = navigation.ownerKey === ownerKey ? navigation.route : LIST_ROUTE;
+ const [turnFileRequest, setTurnFileRequest] = React.useState<TurnFileRequestState | null>(null);
  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
- const sessionMessages = useSessionMessages(mode === 'turn' ? currentSessionId ?? '' : '', rootDirectory || undefined);
- // Last turn mirrors the desktop Diff view: projected from the transcript's
- // own edit evidence, because the Host keeps no per-turn snapshot.
- const turnDiffs = React.useMemo(
-  () => (mode === 'turn' ? projectLastTurnDiffs(sessionMessages, rootDirectory || null) : []),
-  [mode, rootDirectory, sessionMessages],
- );
- const turnFiles = React.useMemo<GitComparisonFile[]>(() => turnDiffs.flatMap((diff) => {
-  if (!diff.file) return [];
-  return [{
-   path: diff.file,
-   status: statusToGitCode(diff.status),
-   insertions: diff.additions ?? 0,
-   deletions: diff.deletions ?? 0,
-   patch: diff.patch,
-  }];
- }), [turnDiffs]);
+ const selectedTurn = mode === 'turn' && navigation.ownerKey === ownerKey ? navigation : null;
+ const turnSessionId = selectedTurn?.turnSessionId ?? currentSessionId;
+ const turnDirectory = normalizePath(selectedTurn?.turnDirectory ?? null) ?? rootDirectory;
+ const selectLastTurnId = React.useCallback((messages: readonly { turnId: string }[]): string | undefined => messages.at(-1)?.turnId, []);
+ const transcriptLastTurnId = useSessionMessagesSelector(turnSessionId ?? '', turnDirectory || undefined, selectLastTurnId);
+ const transcriptResolved = useSessionMessagesResolved(turnSessionId ?? '', turnDirectory || undefined);
+ const turnSessionStatus = useSessionStatus(turnSessionId ?? '', turnDirectory || undefined);
+ const pinnedTurnId = selectedTurn?.turnId;
+ const targetTurnId = pinnedTurnId ?? transcriptLastTurnId;
+ const turnDiffFinished = turnSessionStatus === 'idle' || (transcriptResolved && targetTurnId !== undefined && targetTurnId !== transcriptLastTurnId);
+ const turnDiffMutable = !turnDiffFinished;
+ const turnDiffRead = useCanonicalTurnDiff(turnSessionId, targetTurnId, {
+  enabled: visible && mode === 'turn' && Boolean(turnSessionId),
+  refetchSignal: turnSessionStatus ?? 'unknown',
+  mutable: turnDiffMutable,
+ });
+ const adaptedTurnDiff = React.useMemo(() => adaptTurnDiff(turnDiffRead.diff), [turnDiffRead.diff]);
+ const turnDiffState = turnDiffRead.state;
+ const turnDiffError = turnDiffRead.error ?? (turnDiffRead.diff?.state === 'failed' ? turnDiffRead.diff.error ?? null : null);
+ const retryTurnDiff = turnDiffRead.retry;
+ const turnTargetMissing = !targetTurnId && (!turnSessionId || transcriptResolved || turnSessionStatus === 'idle' || turnSessionStatus === 'unavailable');
+ const turnDiffSettled = turnTargetMissing || turnDiffState !== 'loading';
+ const turnFiles = React.useMemo<GitComparisonFile[]>(() => adaptedTurnDiff.snapshots.map((snapshot) => ({
+  path: snapshot.file ?? '',
+  status: statusToGitCode(snapshot.status),
+  insertions: snapshot.additions ?? 0,
+  deletions: snapshot.deletions ?? 0,
+  previousPath: snapshot.previousPath,
+  patch: snapshot.patch,
+ })), [adaptedTurnDiff]);
  const turnDiffData = React.useMemo(() => {
   const map = new Map<string, MobileDiffData>();
-  for (const diff of turnDiffs) {
-   if (!diff.file) continue;
-   if (typeof diff.patch === 'string') {
-    const isBinary = isBinaryPatch(diff.patch);
-    map.set(diff.file, { original: '', modified: '', isBinary, fileDiff: isBinary ? undefined : fileDiffFromPatch(diff.file, diff.patch) });
-    continue;
-   }
-   map.set(diff.file, { original: diff.before ?? '', modified: diff.after ?? '' });
+  for (const [path, data] of adaptedTurnDiff.diffDataByPath) {
+   map.set(path, { original: data.original, modified: data.modified, isBinary: data.isBinary, fileDiff: data.fileDiff });
   }
   return map;
- }, [turnDiffs]);
+ }, [adaptedTurnDiff]);
  const [modeMenuOpen, setModeMenuOpen] = React.useState(false);
  const changeMode = React.useCallback((nextMode: ChangesMode) => {
+  setTurnFileRequest(null);
   setNavigation({ ownerKey, mode: nextMode, route: LIST_ROUTE });
   setModeMenuOpen(false);
  }, [ownerKey]);
  const setRoute = React.useCallback((nextRoute: ChangesRoute) => {
-  setNavigation((current) => ({ ownerKey, mode: current.ownerKey === ownerKey ? current.mode : 'working', route: nextRoute }));
+  setNavigation((current) => current.ownerKey === ownerKey
+   ? { ...current, route: nextRoute }
+   : { ownerKey, mode: 'working', route: nextRoute });
  }, [ownerKey]);
  const returnToList = React.useCallback(() => {
   if (route.type === 'list') return false;
@@ -296,7 +321,11 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  }, [route.type, returnToList]);
 
  React.useEffect(() => {
-  setNavigation((current) => current.ownerKey === ownerKey ? current : { ownerKey, mode: 'working', route: LIST_ROUTE });
+  setNavigation((current) => {
+   if (current.ownerKey === ownerKey) return current;
+   if (current.mode !== 'turn') setTurnFileRequest(null);
+   return { ownerKey, mode: 'working', route: LIST_ROUTE };
+  });
   setModeMenuOpen(false);
  }, [ownerKey]);
  React.useEffect(() => { if (!visible) setModeMenuOpen(false); }, [visible]);
@@ -318,9 +347,22 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  // a different file mid-session.
  React.useEffect(() => {
   if (!initialDiff?.path) return;
+  if (initialDiff.scope === 'turn') {
+   if (takenTurnRequests.has(initialDiff)) return;
+   takenTurnRequests.add(initialDiff);
+   const pin = { turnId: initialDiff.turnId, turnSessionId: initialDiff.sessionId, turnDirectory: initialDiff.directory };
+   setTurnFileRequest({
+    file: initialDiff.path, sessionId: initialDiff.sessionId ?? useSessionUIStore.getState().currentSessionId,
+    directory: initialDiff.directory ?? null, panelSessionId: useSessionUIStore.getState().currentSessionId,
+    turnId: initialDiff.turnId,
+   });
+   setNavigation({ ownerKey: ownerKeyRef.current, mode: 'turn', route: LIST_ROUTE, ...pin });
+   return;
+  }
   // A new external target is a working-tree diff, regardless of the last
   // comparison mode. Changing directories alone must not replay this target.
-  setNavigation({ ownerKey: ownerKeyRef.current, mode: initialDiff.scope === 'turn' ? 'turn' : 'working', route: { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } });
+  setTurnFileRequest(null);
+  setNavigation({ ownerKey: ownerKeyRef.current, mode: 'working', route: { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } });
  }, [initialDiff]);
  const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
  const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
@@ -494,6 +536,31 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   }
   return Array.from(unique.values()).sort((a, b) => a.path.localeCompare(b.path));
  }, [status?.files]);
+
+ const clearTurnFileRequest = React.useCallback(() => setTurnFileRequest(null), []);
+ const openTurnFileRoute = React.useCallback((target: TurnFileRouteTarget) => {
+  setNavigation({
+   ownerKey, mode: 'turn', route: { type: 'turn', path: target.path },
+   turnId: target.turnId, turnSessionId: target.turnSessionId, turnDirectory: target.turnDirectory,
+  });
+ }, [ownerKey]);
+ useTurnFileRequestRouting({
+  turnFileRequest,
+  visible,
+  mode,
+  routeType: route.type,
+  navigationOwnerKey: navigation.ownerKey,
+  ownerKey,
+  pinnedTurnId,
+  turnSessionId: selectedTurn?.turnSessionId,
+  turnDiffSettled,
+  turnDiff: turnDiffRead.diff,
+  turnFiles,
+  rootDirectory,
+  turnDirectory,
+  clearRequest: clearTurnFileRequest,
+  openTurnFile: openTurnFileRoute,
+ });
 
  const stagedChangeEntries = React.useMemo(
   () => changeEntries.filter(isStagedStatusFile),
@@ -1096,12 +1163,14 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   return (
    <MobileDiffDetail
     path={route.path}
-    subtitle={t('diffView.scope.lastTurn')}
+    previousPath={turnFiles.find((file) => file.path === route.path)?.previousPath}
+    subtitle={navigation.turnId ? t('chat.changedFiles.title') : t('diffView.scope.lastTurn')}
     diff={turnDiffData.get(route.path) ?? null}
     fileExists={turnFiles.some((file) => file.path === route.path)}
-    error={null}
+    notice={adaptedTurnDiff.hasIncompleteRows ? t('diffView.state.turnDiffIncomplete') : null}
+    error={turnDiffError}
     onBack={returnToList}
-    onRetry={() => setRoute({ type: 'list' })}
+    onRetry={retryTurnDiff}
    />
   );
  }
@@ -1122,7 +1191,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   );
  }
 
- const modeLabel = mode === 'pr' ? t(changeRequestCopy('session.githubIntegration.tabs.pullRequests', prComparison.provider)) : mode === 'branch' ? t('diffView.scope.branch') : mode === 'commit' ? t('commitComparison.mode') : mode === 'turn' ? t('diffView.scope.lastTurn') : t('mobile.nav.changes');
+ const modeLabel = mode === 'pr' ? t(changeRequestCopy('session.githubIntegration.tabs.pullRequests', prComparison.provider)) : mode === 'branch' ? t('diffView.scope.branch') : mode === 'commit' ? t('commitComparison.mode') : mode === 'turn' ? (navigation.turnId ? t('chat.changedFiles.title') : t('diffView.scope.lastTurn')) : t('mobile.nav.changes');
  const sourceLabel = mode === 'branch' && branchComparison.base
   ? branchRefLabel(branchComparison.base)
   : mode === 'commit' ? selectedCommitHash?.slice(0, 8) : mode === 'pr' && selectedPr ? `#${selectedPr.number}` : null;
@@ -1224,10 +1293,13 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
       </Button>
      </DropdownMenuTrigger>
      <DropdownMenuContent align="start">
-      <DropdownMenuRadioGroup value={mode} onValueChange={(value) => {
+      <DropdownMenuRadioGroup value={mode === 'turn' && navigation.turnId ? 'historical-turn' : mode} onValueChange={(value) => {
        if (value === 'working' || value === 'turn' || value === 'branch' || value === 'commit' || value === 'pr') changeMode(value);
       }}>
        <DropdownMenuRadioItem value="working" className="min-h-8 items-center">{t('mobile.nav.changes')}</DropdownMenuRadioItem>
+       {mode === 'turn' && navigation.turnId && (
+        <DropdownMenuRadioItem value="historical-turn" className="min-h-8 items-center">{t('chat.changedFiles.title')}</DropdownMenuRadioItem>
+       )}
        <DropdownMenuRadioItem value="turn" className="min-h-8 items-center">{t('diffView.scope.lastTurn')}</DropdownMenuRadioItem>
        {showBranchOption && <DropdownMenuRadioItem value="branch" className="min-h-8 items-center">{t('diffView.scope.branch')}</DropdownMenuRadioItem>}
        <DropdownMenuRadioItem value="commit" className="min-h-8 items-center">{t('commitComparison.mode')}</DropdownMenuRadioItem>
@@ -1340,9 +1412,30 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
    )}
    {mode === 'turn' ? (
     <div className="min-h-0 flex-1">
-     {turnFiles.length === 0
-      ? <MobileChangesState message={t('diffView.state.noLastTurnChanges')} />
-      : <MobileComparisonFileList files={turnFiles} onSelect={(path) => setRoute({ type: 'turn', path })} />}
+     {turnDiffError ? (
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+       <p className="typography-ui-label font-semibold">{t('diffView.state.turnDiffFailed')}</p>
+       <p className="typography-meta text-muted-foreground">{turnDiffError}</p>
+       <Button variant="outline" size="lg" onClick={retryTurnDiff}>{t('diffView.actions.retry')}</Button>
+      </div>
+     ) : turnDiffState === 'unsupported' ? (
+      <MobileChangesState icon message={t('diffView.state.turnDiffUnsupported')} />
+     ) : !turnDiffSettled ? (
+      <MobileChangesState loading message={t('diffView.state.loadingChanges')} />
+     ) : turnFiles.length === 0 ? (
+      <MobileChangesState message={t('diffView.state.noLastTurnChanges')} />
+     ) : (
+      <div className="flex h-full flex-col">
+       {adaptedTurnDiff.hasIncompleteRows ? (
+        <div role="status" className="mx-3 mt-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 typography-micro text-muted-foreground">
+         {t('diffView.state.turnDiffIncomplete')}
+        </div>
+       ) : null}
+       <div className="min-h-0 flex-1">
+        <MobileComparisonFileList files={turnFiles} onSelect={(path) => setRoute({ type: 'turn', path })} />
+       </div>
+      </div>
+     )}
     </div>
    ) : mode !== 'working' ? (
     <div className="min-h-0 flex-1">{renderComparison()}</div>
@@ -1461,13 +1554,14 @@ const MobileDiffDetail: React.FC<{
  staged?: boolean;
  fileExists: boolean;
  unavailableReason?: 'nested_repository' | 'untracked_directory' | null;
+ notice?: string | null;
  error: string | null;
  onBack: () => void;
  onRetry: () => void;
  onExpandContextRequest?: (request: ContextExpansionRequest) => void;
  pendingContextExpansion?: ContextExpansionRequest | null;
  contextLoading?: boolean;
-}> = ({ path, previousPath, subtitle, diff, staged = false, fileExists, unavailableReason = null, error, onBack, onRetry, onExpandContextRequest, pendingContextExpansion, contextLoading }) => {
+}> = ({ path, previousPath, subtitle, diff, staged = false, fileExists, unavailableReason = null, notice = null, error, onBack, onRetry, onExpandContextRequest, pendingContextExpansion, contextLoading }) => {
  const { t } = useI18n();
  const separator = path.lastIndexOf('/');
  const filename = path.slice(separator + 1) || path;
@@ -1510,55 +1604,62 @@ const MobileDiffDetail: React.FC<{
      <WhitespaceToggleIcon hidden={hideWhitespace} className="size-5" />
     </button>
    </header>
-   <div className="min-h-0 flex-1 overflow-hidden">
-    {!fileExists ? (
-     <MobileChangesState icon message={t('mobile.changes.diffDetail.missingTitle')} description={t('mobile.changes.diffDetail.missingDescription')} />
-    ) : unavailableReason === 'nested_repository' ? (
-     <MobileChangesState icon message={t('diffView.unavailable.nestedRepositoryTitle')} description={t('diffView.unavailable.nestedRepositoryDescription')} />
-    ) : unavailableReason === 'untracked_directory' ? (
-     <MobileChangesState icon message={t('diffView.unavailable.untrackedDirectoryTitle')} description={t('diffView.unavailable.untrackedDirectoryDescription')} />
-    ) : error ? (
-     <div className="flex h-full items-center justify-center px-6 text-center">
-      <div className="flex max-w-sm flex-col items-center gap-3">
-       <p className="typography-ui-label font-semibold text-foreground">{t('mobile.changes.diffDetail.loadFailed')}</p>
-       <p className="typography-meta text-muted-foreground">{error}</p>
-       <Button type="button" size="sm" variant="outline" onClick={onRetry}>{t('diffView.actions.retry')}</Button>
+   <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    {notice ? (
+     <div role="status" className="mx-3 mt-2 shrink-0 rounded-md border border-border/60 bg-muted/30 px-3 py-2 typography-micro text-muted-foreground">
+      {notice}
+     </div>
+    ) : null}
+    <div className="min-h-0 flex-1 overflow-hidden">
+     {!fileExists ? (
+      <MobileChangesState icon message={t('mobile.changes.diffDetail.missingTitle')} description={t('mobile.changes.diffDetail.missingDescription')} />
+     ) : unavailableReason === 'nested_repository' ? (
+      <MobileChangesState icon message={t('diffView.unavailable.nestedRepositoryTitle')} description={t('diffView.unavailable.nestedRepositoryDescription')} />
+     ) : unavailableReason === 'untracked_directory' ? (
+      <MobileChangesState icon message={t('diffView.unavailable.untrackedDirectoryTitle')} description={t('diffView.unavailable.untrackedDirectoryDescription')} />
+     ) : error ? (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+       <div className="flex max-w-sm flex-col items-center gap-3">
+        <p className="typography-ui-label font-semibold text-foreground">{t('mobile.changes.diffDetail.loadFailed')}</p>
+        <p className="typography-meta text-muted-foreground">{error}</p>
+        <Button type="button" size="sm" variant="outline" onClick={onRetry}>{t('diffView.actions.retry')}</Button>
+       </div>
       </div>
-     </div>
-    ) : !diff ? (
-     <MobileChangesState loading message={t('diffView.state.loadingDiff')} />
-    ) : diff.submodule ? (
-     <div className="p-3"><SubmoduleDiffSummary state={diff.submodule} staged={staged} /></div>
-    ) : diff.isBinary ? (
-     <MobileChangesState icon message={t('diffView.binary.unavailable')} />
-    ) : renameOnly ? (
-     <div className="px-4 py-3 typography-meta text-muted-foreground">
-      {t('diffView.change.renamedFrom', { from: previousPath ?? '' })}
-     </div>
-    ) : isImageFile(path) && !diff.fileDiff ? (
-     <MobileChangesState icon message={t('mobile.changes.diffDetail.imageUnavailable')} />
-    ) : (
-     <ScrollShadow
-      className="h-full overflow-y-auto overflow-x-hidden p-3"
-      data-diff-virtual-root
-      data-diff-virtual-content
-     >
-      <PierreDiffViewer
-       original={diff.original}
-       modified={diff.modified}
-       fileDiff={diff.fileDiff}
-       language={language}
-       fileName={path}
-       renderSideBySide={false}
-       wrapLines={true}
-       hideWhitespace={hideWhitespace}
-       layout="inline"
-       onExpandContextRequest={onExpandContextRequest}
-       pendingContextExpansion={pendingContextExpansion}
-       contextLoading={contextLoading}
-      />
-     </ScrollShadow>
-    )}
+     ) : !diff ? (
+      <MobileChangesState loading message={t('diffView.state.loadingDiff')} />
+     ) : diff.submodule ? (
+      <div className="p-3"><SubmoduleDiffSummary state={diff.submodule} staged={staged} /></div>
+     ) : diff.isBinary ? (
+      <MobileChangesState icon message={t('diffView.binary.unavailable')} />
+     ) : renameOnly ? (
+      <div className="px-4 py-3 typography-meta text-muted-foreground">
+       {t('diffView.change.renamedFrom', { from: previousPath ?? '' })}
+      </div>
+     ) : isImageFile(path) && !diff.fileDiff ? (
+      <MobileChangesState icon message={t('mobile.changes.diffDetail.imageUnavailable')} />
+     ) : (
+      <ScrollShadow
+       className="h-full overflow-y-auto overflow-x-hidden p-3"
+       data-diff-virtual-root
+       data-diff-virtual-content
+      >
+       <PierreDiffViewer
+        original={diff.original}
+        modified={diff.modified}
+        fileDiff={diff.fileDiff}
+        language={language}
+        fileName={path}
+        renderSideBySide={false}
+        wrapLines={true}
+        hideWhitespace={hideWhitespace}
+        layout="inline"
+        onExpandContextRequest={onExpandContextRequest}
+        pendingContextExpansion={pendingContextExpansion}
+        contextLoading={contextLoading}
+       />
+      </ScrollShadow>
+     )}
+    </div>
    </div>
   </div>
  );

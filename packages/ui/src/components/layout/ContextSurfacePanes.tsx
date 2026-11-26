@@ -557,7 +557,7 @@ export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<
           >
             <div className="h-full" aria-hidden={!shown || undefined}>
               <PauseClock paused={!shown}>
-              <BrowserPane
+                <BrowserPane
                   key={tab.ownerSessionId !== null && !agentBrowserSharesLogins ? `${siteDirectory}\u0000agent` : siteDirectory}
                   initialUrl={tab.targetPath ?? ''}
                   directory={tab.directory}
@@ -585,7 +585,7 @@ export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<
             <React.Suspense fallback={null}>
               <ContextPanelHeaderSlotProvider value={headerSlotFor(diffZone.zone, active)}>
                 <DiffView
-                  directory={tab.targetDirectory ?? contentDirectory}
+                  directory={tab.targetDirectory && normalizeContextPanelDirectoryKey(tab.targetDirectory) !== directoryKey ? tab.targetDirectory : null}
                   visible={diffZone.isOpen && active}
                   hideStackedFileSidebar
                   stackedDefaultCollapsedAll

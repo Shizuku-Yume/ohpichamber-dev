@@ -124,7 +124,7 @@ for (const outcome of ['failed', 'cancelled'] as const) {
       journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash', result: { content: result.content, details: result.details }, isError: result.isError }));
       deliver(result);
       journal.append(projection.consume({ type: 'turn_end', message: call, toolResults: [result] }));
-      const terminal = assistant([{ type: 'text', text: 'Partial continuation' }], outcome === 'failed' ? 'error' : 'aborted', timestamp++);
+      const terminal = assistant([{ type: 'text', text: 'Partial continuation' }], outcome === 'failed' ? 'error' : 'aborted', Date.now());
       deliver(terminal);
       journal.append(outcome === 'failed' ? projection.failRun('Provider failed', Date.now()) : projection.cancelRun(Date.now()));
       projection.bindPending();
@@ -561,7 +561,7 @@ test('an abort latch settles turn_end and agent_end cancelled without an aborted
     deliver(reply);
     const nextTurnEnd = projection.consume({ type: 'turn_end', message: reply, toolResults: [] });
     journal.append(nextTurnEnd);
-    expect(nextTurnEnd.map(({ event }) => event.type)).toContain('turn.completed');
+    expect(nextTurnEnd.map(({ event }) => event.type)).not.toContain('turn.completed');
     const nextEnd = projection.consume({ type: 'agent_end', messages: [] });
     journal.append(nextEnd);
     expect(nextEnd.map(({ event }) => event.type)).toContain('run.completed');
@@ -1450,6 +1450,169 @@ test('vibe_spawn correlates toolCallId, task, and concise description across too
     expect(liveSubagents.get('failed-worker')?.toolCallId).toBeUndefined();
     expect(liveSubagents.get('failed-worker')?.description).toBe('vibe fast session');
   } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('one user prompt with several model steps is one canonical turn, live and cold', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-run-turn-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    const start = Date.now() - 100;
+    const user = { role: 'user' as const, content: 'Edit the file, then tell me.', timestamp: start };
+    deliver(user);
+    const step = assistant([{ type: 'toolCall', id: 'call', name: 'edit', arguments: { path: 'a.txt' } }], 'toolUse', start + 1);
+    deliver(step);
+    journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'edit', result: { content: [{ type: 'text', text: 'edited' }], details: {} }, isError: false }));
+    const result = { role: 'toolResult' as const, toolCallId: 'call', toolName: 'edit', content: [{ type: 'text' as const, text: 'edited' }], isError: false, timestamp: start + 2 };
+    deliver(result);
+    // OMP ends a native turn after every model step of the loop: none of them
+    // closes the canonical turn, and none emits turn.completed.
+    const firstStepEnd = projection.consume({ type: 'turn_end', message: step, toolResults: [result] });
+    expect(firstStepEnd).toEqual([]);
+    journal.append(firstStepEnd);
+    const answer = assistant([{ type: 'text', text: 'Done editing.' }], 'stop', start + 3);
+    deliver(answer);
+    const finalStepEnd = projection.consume({ type: 'turn_end', message: answer, toolResults: [] });
+    expect(finalStepEnd).toEqual([]);
+    journal.append(finalStepEnd);
+    expect(projection.currentTurn()).toBeDefined();
+    const end = projection.consume({ type: 'agent_end', messages: [step, answer] });
+    journal.append(end);
+    expect(end.map(({ event }) => event.type)).toEqual(['turn.completed', 'run.completed']);
+    await manager.flush();
+
+    const liveTurns = projection.history({ sessionId: 'session' }).turns;
+    expect(liveTurns).toHaveLength(1);
+    expect(liveTurns[0]).toMatchObject({ status: 'completed', runId: 'run', userMessageId: expect.any(String) });
+    expect(liveTurns[0]!.assistantMessageIds).toHaveLength(2);
+    const turnId = liveTurns[0]!.turnId;
+    expect(projection.history({ sessionId: 'session' }).messages.every(message => message.turnId === turnId)).toBe(true);
+    expect(journal.snapshot().turns).toHaveLength(1);
+    // The window spans the user prompt through the final answer, so journal
+    // records of every step of the run fall inside it.
+    expect(liveTurns[0]!.startedAt).toBeLessThanOrEqual(start);
+    expect(liveTurns[0]!.finishedAt).toBeDefined();
+
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session').seed();
+    expect(restored.turns).toEqual(liveTurns);
+    expect(restored.turns).toHaveLength(1);
+    expect(restored.turns[0]!.turnId).toBe(turnId);
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a mid-run user message joins the same canonical turn instead of opening a fragment', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-steer-turn-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    deliver({ role: 'user', content: 'Start the work.', timestamp: 2 });
+    const first = assistant([{ type: 'text', text: 'Working.' }], 'toolUse', 3);
+    deliver(first);
+    const steered = { role: 'user' as const, content: 'Also check the tests.', timestamp: 4 };
+    projection.admitQueuedPrompt(steered, []);
+    const before = projection.history({ sessionId: 'session' }).turns;
+    expect(before).toHaveLength(1);
+    deliver(steered);
+    // A steered user message reuses the open turn: no second turn.started,
+    // and the steered message carries the run's user message identity.
+    const midTurns = projection.history({ sessionId: 'session' }).turns;
+    expect(midTurns).toHaveLength(1);
+    expect(midTurns[0]!.turnId).toBe(before[0]!.turnId);
+    const answer = assistant([{ type: 'text', text: 'Both done.' }], 'stop', 5);
+    deliver(answer);
+    journal.append(projection.consume({ type: 'agent_end', messages: [first, steered, answer] }));
+    await manager.flush();
+    const turns = projection.history({ sessionId: 'session' }).turns;
+    expect(turns).toHaveLength(1);
+    expect(turns[0]).toMatchObject({ status: 'completed' });
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session').seed();
+    expect(restored.turns).toHaveLength(1);
+    expect(restored.turns).toEqual(turns);
+    expect(restored.messages.filter(message => message.role === 'user')).toHaveLength(2);
+    expect(restored.messages.every(message => message.turnId === turns[0]!.turnId)).toBe(true);
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('two sequential user prompts open exactly two canonical turns, live and cold', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-two-turns-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    journal.append(projection.beginRun('run-one', 1));
+    deliver({ role: 'user', content: 'First prompt.', timestamp: 2 });
+    const firstAnswer = assistant([{ type: 'text', text: 'First answer.' }], 'stop', 3);
+    deliver(firstAnswer);
+    journal.append(projection.consume({ type: 'agent_end', messages: [firstAnswer] }));
+    journal.append(projection.beginRun('run-two', 10));
+    deliver({ role: 'user', content: 'Second prompt.', timestamp: 11 });
+    const secondAnswer = assistant([{ type: 'text', text: 'Second answer.' }], 'stop', 12);
+    deliver(secondAnswer);
+    journal.append(projection.consume({ type: 'agent_end', messages: [secondAnswer] }));
+    await manager.flush();
+    const turns = projection.history({ sessionId: 'session' }).turns;
+    expect(turns).toHaveLength(2);
+    expect(turns[0]).toMatchObject({ runId: 'run-one', status: 'completed' });
+    expect(turns[1]).toMatchObject({ runId: 'run-two', status: 'completed' });
+    expect(turns[0]!.turnId).not.toBe(turns[1]!.turnId);
+    const messages = projection.history({ sessionId: 'session' }).messages;
+    expect(messages.filter(message => message.turnId === turns[0]!.turnId).map(message => message.role)).toEqual(['user', 'assistant']);
+    expect(messages.filter(message => message.turnId === turns[1]!.turnId).map(message => message.role)).toEqual(['user', 'assistant']);
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session').seed();
+    expect(restored.turns).toEqual(turns);
+  } finally {
+    await reopened?.close();
     await manager.close();
     await rm(root, { recursive: true, force: true });
   }

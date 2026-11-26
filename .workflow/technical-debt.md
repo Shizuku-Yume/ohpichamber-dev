@@ -80,17 +80,6 @@ claim that the carried-over bodies have been type-verified.
 - **Solution:** emit validated, scoped change events from successful Host writes and consume them through the shared control stream.
 - **Cost:** producer wiring, event contracts and cross-client tests.
 
-## Last-turn diff lacks a Canonical per-turn diff contract
-
-- **Where:** Canonical turn/message DTOs and Last-turn diff presentation.
-- **Added:** 2026-11-20
-- **Priority:** worth-doing
-- **Problem:** workspace diffs are not authoritative per-turn edits; Canonical has no per-turn diff contract.
-- **Impact:** Last-turn diff shows unsupported rather than substituting a workspace diff or guessing from tool history.
-- **Solution:** define and implement a Canonical per-turn diff contract before restoring the surface.
-- **Cost:** contract/service provenance and UI normal, empty, unsupported and failure tests.
-
-
 ## Chat transcript still renders through ChatContainer instead of upstream ChatViewport
 
 - **Where:** `packages/ui/src/components/chat/ChatContainer.tsx`, `MessageList.tsx`, `ChatMessage.tsx`, `message/MessageBody.tsx`, `message/parts/ToolPart.tsx`; upstream `column/ChatViewport.tsx`, `timeline/*`, `message/body/*`, `message/parts/toolRow/*`

@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-11-27 - One canonical turn is one outer run, not one model step
+
+- **Decided:** The worker projection keeps the canonical turn open across every native `turn_end` of the agent loop and settles it only at the run's own terminal settlement (`agent_end` or its fail/cancel path). A mid-run user message (steering, follow-up) joins the open turn instead of opening another. Cold reads group the transcript by the same rule, and the turn window is derived as the union of its run's message times on both paths.
+- **Instead of:** closing a canonical turn at each native `turn_end` (one per model step) or aggregating run fragments in the per-turn diff and UI.
+- **Because:** OMP emits `turn_end` after every reasoning cycle, so one user prompt fragmented into several canonical turns: the edit landed in a middle fragment and the trailing text-only fragment — always the transcript's last turn — read empty, which left the Last-turn diff surface and the changed-file pills permanently empty on the real path. The contract's conversation shape ("one canonical turn per user prompt") and the decision of 2026-11-12 both anticipated this recording; the fix is at the projection root, so history pagination, leaf selection, reconnect and the diff windows share one correct grouping instead of each consumer reconstructing it.
+- **Mine:** yes
+- **Revisit when:** OMP exposes a native run-scoped turn identity the projection can adopt verbatim, or a consumer genuinely needs per-step granularity (then a step record separate from the canonical turn is the answer, not a fragmented turn).
+- **Effort:** release-hardening
+
 ## 2026-11-26 - Clear every solvable technical debt before the 1.0 release
 
 - **Decided:** The `release-hardening` effort fixes every open `technical-debt.md` entry except the cold-start one below. That includes porting the upstream ChatViewport transcript and converting the 95 fork-owned server JavaScript modules to strict TypeScript. Its gate reruns final-main-audit task 06's zero-warning, zero-dead-code `Check` on the final tree and closes `final-main-audit`. The audit PR gets no separate review.

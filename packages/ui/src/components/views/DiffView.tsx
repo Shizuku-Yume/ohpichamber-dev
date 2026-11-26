@@ -71,7 +71,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const rootDirectory = targetDirectory ?? panelDirectory;
     const runtimeKey = useGitStore((state) => state.runtimeKey);
     const {
-        gitDirectory: nestedGitDirectory, rootIsGitRepo, nestedRepos, repositoryOptions, repositoriesKnown,
+        gitDirectory: nestedGitDirectory, repositoryOptions,
         unreadable,
     } = useNestedGitDirectory(rootDirectory ?? null, { enabled: visible, recheckOnOpen: true });
     const effectiveDirectory = nestedGitDirectory ?? rootDirectory;
@@ -122,7 +122,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const openContextFileAtLine = useUIStore((state) => state.openContextFileAtLine);
     const panelSessionId = useSessionUIStore((state) => state.currentSessionId);
     const currentSessionId = foreign ? null : panelSessionId;
-    const { turnId, reset: resetSelectedTurn } = useSelectedTurnDiff({
+    const { turnId, turnSessionId, reset: resetSelectedTurn } = useSelectedTurnDiff({
         visible, isTurnScope: activeDiffScope === 'turn', currentSessionId, request: pendingTurnDiffFile,
     });
     const diffWrapLines = diffWrapLinesStore;
@@ -170,35 +170,36 @@ export const DiffView: React.FC<DiffViewProps> = ({
         });
     }, []);
     const {
-        lastTurnDiffs, turnFileCount, turnDiffSettled, lastTurnDiffData,
+        lastTurnDiffs, turnFileCount, turnDiffSettled, turnDiffError, retryTurnDiff, turnDiffUnsupported, turnDiffHasIncompleteRows, lastTurnDiffData,
         workingFileCount, stagedFileCount, currentBranch, prComparison, pullRequestContext, selectedPr,
         prChangeRequestTerm, commitComparison, selectedCommitHash, branches, setBaseOverride, clearBaseOverride,
         qualifiedBranchBase, branchBaseSource, isBranchBaseResolved, showBranchOption, setComparisonRetryRevision,
         commentOrigin, changeRequestReview, reviewProvider, comparison, commitFiles, commitFilesError, branchFiles,
         branchFilesError, fetchComparisonDiffEntry, loadFullComparisonDiff, comparisonDiffData, branchFileCount,
-        changedFiles, changedFilePathsKey } = useDiffViewComparisons({ visible,
-        activeDiffScope, status, effectiveDirectory, binding, setActiveDiffScope, onDiffScopeChange, fetchBranches, git,
-        isGitRepo, diffScope, turnId, expandedFiles, t,
-    });
+        changedFiles, changedFilePathsKey } = useDiffViewComparisons({
+            visible,
+            activeDiffScope, status, effectiveDirectory, binding, setActiveDiffScope, onDiffScopeChange, fetchBranches, git,
+            isGitRepo, diffScope, turnId, turnSessionId, expandedFiles, t, currentSessionId, rootDirectory: rootDirectory ?? undefined,
+        });
     const {
         registerSectionRef, handleStackedEntryExpandedChange, handleExpandOrCollapseAll, getLayoutForFile,
-        currentLayoutForAllFiles } = useDiffViewStackedViewport({ changedFilePathsKey, effectiveDirectory,
-        activeDiffScope, stackedDefaultCollapsedAll, setExpandedFiles, setMountedStackedFiles,
-        visible, diffScrollRef, fileSectionRefs, expandedFiles, lastScrollAnchorRef, changedFiles,
-        diffFileLayout, diffLayoutPreference, screenWidth, cancelPendingScrollAlignment,
-    });
+        currentLayoutForAllFiles } = useDiffViewStackedViewport({
+            changedFilePathsKey, effectiveDirectory,
+            activeDiffScope, stackedDefaultCollapsedAll, setExpandedFiles, setMountedStackedFiles,
+            visible, diffScrollRef, fileSectionRefs, expandedFiles, lastScrollAnchorRef, changedFiles,
+            diffFileLayout, diffLayoutPreference, screenWidth, cancelPendingScrollAlignment,
+        });
     useDiffViewRefresh({ visible, effectiveDirectory, setActiveDirectory, ensureStatus, git, runtimeKey, pendingScrollAnchorRestoreRef, captureScrollAnchor, lastScrollAnchorRef, clearDiffCache, setFileDiffRefreshNonce, setWorkingTreeRevision, fetchStatus, diffScrollRef, fileSectionRefs, fileDiffRefreshNonce });
-    useDiffViewNavigation({ visible, activeDiffScope, pendingDiffScope,
+    useDiffViewNavigation({
+        visible, activeDiffScope, pendingDiffScope,
         pendingDiffFile, setActiveDiffScope, setDisplayFile, setDisplayFileStaged, pendingDiffStaged, setPendingDiffFile,
         shouldPinAfterAlignRef, pendingScrollTargetRef, expandStackedFile, setScrollRequestNonce, targetFilePath,
     });
     useDiffViewTurnNavigation({
-        visible, activeDiffScope, setActiveDiffScope, setDisplayFile, setDisplayFileStaged,
+        visible, activeDiffScope, setDisplayFile, setDisplayFileStaged,
         shouldPinAfterAlignRef, pendingScrollTargetRef, expandStackedFile, setScrollRequestNonce,
         pendingTurnDiffFile, diffScope, panelSessionId: currentSessionId, setPendingTurnDiffFile, turnDiffSettled, rootDirectory,
-        lastTurnDiffs, onDiffScopeChange,
-        effectiveDirectory, repositoriesKnown, rootIsGitRepo, nestedRepos, repositoryOptions, selectNestedRepo, fetchStatus, git,
-        changedFiles, files,
+        lastTurnDiffs,
     });
     React.useEffect(() => {
         if (!displayFile) {
@@ -212,7 +213,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }, [changedFiles, displayFile]);
     const closeReviewDialog = React.useCallback(() => setReviewDialogOpen(false), []);
     const { submitting: reviewFlowSubmitting, start: handleStartReviewFlow } = useReviewFlowStart(currentSessionId, rootDirectory, closeReviewDialog);
-    const { scrollToFile } = useDiffViewScrollAlignment({ fileSectionRefs, diffScrollRef,
+    const { scrollToFile } = useDiffViewScrollAlignment({
+        fileSectionRefs, diffScrollRef,
         pendingScrollTargetRef, visible, shouldPinAfterAlignRef,
         setPinnedStackedTarget, pendingScrollFrameRef, pinSelectedFileHeaderToTopOnNavigate, scrollRequestNonce,
     });
@@ -225,22 +227,25 @@ export const DiffView: React.FC<DiffViewProps> = ({
         handleFileTreeResizeStart, handleFileTreeResizeKey } = useDiffViewTreeLayout();
     const {
         treeSelectedFile, handleSelectFileAndScroll, getFileStaged, handleSelectFile,
-    } = useDiffViewFileSelection({ isTreeMode, changedFiles, displayFile, expandedFiles, expandStackedFile,
+    } = useDiffViewFileSelection({
+        isTreeMode, changedFiles, displayFile, expandedFiles, expandStackedFile,
         cancelPendingScrollAlignment, setDisplayFile, setDisplayFileStaged, diffScrollRef, shouldPinAfterAlignRef,
         pendingScrollTargetRef, setScrollRequestNonce, scrollToFile, visible, forcedStaged, displayFileStaged,
     });
     const {
         handleFullContextChange, diffFind, findReveal, registerViewerRef, handleFindWordRequest,
-        findFocusNonce } = useDiffViewFind({ effectiveDirectory, git, diffHideWhitespace, getFileStaged, activeDiffScope,
-        lastTurnDiffData, comparisonDiffData, loadFullComparisonDiff, fetchComparisonDiffEntry, getLayoutForFile,
-        changedFiles, workingTreeRevision, fileDiffRefreshNonce, isTreeMode, displayFile, setDisplayFile,
-        setDisplayFileStaged, expandStackedFile, scrollToFile, visible, diffRootRef,
-    });
+        findFocusNonce } = useDiffViewFind({
+            effectiveDirectory, git, diffHideWhitespace, getFileStaged, activeDiffScope,
+            lastTurnDiffData, comparisonDiffData, loadFullComparisonDiff, fetchComparisonDiffEntry, getLayoutForFile,
+            changedFiles, workingTreeRevision, fileDiffRefreshNonce, isTreeMode, displayFile, setDisplayFile,
+            setDisplayFileStaged, expandStackedFile, scrollToFile, visible, diffRootRef,
+        });
     const {
         handleHeaderLayoutChange, openingEditorFilePath, handleOpenInEditor,
-        handleRetryComparisonDiff } = useDiffViewEditor({ setDiffLayoutForAllFiles, rootDirectory, effectiveDirectory,
-        git, activeDiffStaged, setDiff, files, openContextFileAtLine, setComparisonRetryRevision,
-    });
+        handleRetryComparisonDiff } = useDiffViewEditor({
+            setDiffLayoutForAllFiles, rootDirectory, effectiveDirectory,
+            git, activeDiffStaged, setDiff, files, openContextFileAtLine, setComparisonRetryRevision,
+        });
     const renderStackedDiffView = () => {
         if (!effectiveDirectory) return null;
         const renderEntry = (file: FileEntry, isSingleFile = false) => {
@@ -349,11 +354,38 @@ export const DiffView: React.FC<DiffViewProps> = ({
     };
     const renderContent = () => {
         if (activeDiffScope === 'turn') {
-            return <div role="status" data-diff-unsupported="turn" className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-                <Icon name="information" className="size-6 text-muted-foreground" />
-                <div className="typography-ui-label font-semibold text-foreground">{t('diffView.scope.lastTurn')}</div>
-                <div className="max-w-sm typography-micro text-muted-foreground">{t('references.picker.empty.unsupported')}</div>
-            </div>;
+            if (turnDiffError) {
+                return <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-sm text-muted-foreground">
+                    <div className="typography-ui-label font-semibold text-foreground">{t('diffView.state.turnDiffFailed')}</div>
+                    <div className="typography-meta max-w-[32rem] text-center">{turnDiffError}</div>
+                    <Button variant="outline" size="sm" onClick={retryTurnDiff}>{t('diffView.actions.retry')}</Button>
+                </div>;
+            }
+            if (turnDiffUnsupported) {
+                return <div role="status" data-diff-unsupported="turn" className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                    <Icon name="information" className="size-6 text-muted-foreground" />
+                    <div className="typography-ui-label font-semibold text-foreground">{t('diffView.scope.lastTurn')}</div>
+                    <div className="max-w-sm typography-micro text-muted-foreground">{t('diffView.state.turnDiffUnsupported')}</div>
+                </div>;
+            }
+            if (!turnDiffSettled) {
+                return <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Icon name="loader-4" className="size-4 animate-spin" />{t('diffView.state.loadingChanges')}
+                </div>;
+            }
+            if (changedFiles.length === 0) {
+                return <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                    {t('diffView.state.noLastTurnChanges')}
+                </div>;
+            }
+            return <>
+                {turnDiffHasIncompleteRows ? (
+                    <div role="status" className="mx-3 mt-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 typography-micro text-muted-foreground">
+                        {t('diffView.state.turnDiffIncomplete')}
+                    </div>
+                ) : null}
+                {renderStackedDiffView()}
+            </>;
         }
         if (!effectiveDirectory) {
             return <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{t('diffView.state.selectSessionDirectory')}</div>;
@@ -437,8 +469,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
             return <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                 {activeDiffScope === 'pr' ? t('walkthrough.blocked.emptyDiff.description')
                     : activeDiffScope === 'commit' ? t('commitComparison.emptyDiff')
-                    : activeDiffScope === 'branch' && qualifiedBranchBase ? t('diffView.branch.empty', { base: branchRefLabel(qualifiedBranchBase) })
-                    : t('diffView.state.cleanWorkingTree')}
+                        : activeDiffScope === 'branch' && qualifiedBranchBase ? t('diffView.branch.empty', { base: branchRefLabel(qualifiedBranchBase) })
+                            : t('diffView.state.cleanWorkingTree')}
             </div>;
         }
         return renderStackedDiffView();

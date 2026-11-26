@@ -257,6 +257,9 @@ export class CanonicalClient {
   getHistory(sessionId: string, options: Omit<HistoryPageRequest, 'sessionId'> = {}): Promise<HistoryPage> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/history${query(options)}`, scoped(C.HistoryPageSchema, result => result.sessionId === sessionId));
   }
+  getTurnDiff(sessionId: string, turnId: string): Promise<C.TurnDiff> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/turns/${id(turnId)}/diff`, scoped(C.TurnDiffSchema, result => result.sessionId === sessionId && result.turnId === turnId));
+  }
   getSessionMetadata(sessionId: string): Promise<SessionMetadataState> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/metadata`, scoped(C.SessionMetadataStateSchema, result => result.sessionId === sessionId));
   }

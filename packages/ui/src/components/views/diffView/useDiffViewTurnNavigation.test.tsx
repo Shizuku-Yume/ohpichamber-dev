@@ -3,10 +3,9 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 
-import type { FilesAPI, GitAPI } from '@/lib/api/types';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDiffViewTurnNavigation } from './useDiffViewTurnNavigation';
-import type { DiffScope, FileEntry } from './types';
+import type { DiffScope } from './types';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -18,26 +17,22 @@ Object.assign(globalThis, {
 const ROOT = '/repo';
 const PANEL_SESSION = 'panel-session';
 const PINNED_SESSION = 'pinned-session';
-const changed: FileEntry = { path: 'src/a.ts', index: ' ', working_dir: 'M', insertions: 1, deletions: 0, isNew: false };
 
-type Deferred = { promise: Promise<void>; resolve: () => void };
-const deferred = (): Deferred => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
-  return { promise, resolve };
-};
+type Request = { file: string; sessionId: string | null; turnId?: string; panelSessionId: string | null };
 
 let reactRoot: Root | null = null;
 let shown: string[] = [];
-let statusRead: Deferred;
 
-type Request = { file: string; sessionId: string | null; turnId?: string; panelSessionId: string | null };
-type ProbeProps = { request: Request | null; initialScope?: DiffScope; panelSessionId?: string; turnDiffSettled?: boolean };
+type ProbeProps = {
+  request: Request | null;
+  initialScope?: DiffScope;
+  panelSessionId?: string;
+  turnDiffSettled?: boolean;
+  turnRows?: { file?: string }[];
+};
 
-const Probe: React.FC<ProbeProps> = ({ request, initialScope = 'turn', panelSessionId = PANEL_SESSION, turnDiffSettled = true }) => {
-  const [activeDiffScope, setActiveDiffScope] = React.useState<DiffScope>(initialScope);
-  // DiffView follows its diffScope prop one render late, in an effect that runs before the hook's.
-  React.useEffect(() => { setActiveDiffScope('turn'); }, []);
+const Probe: React.FC<ProbeProps> = ({ request, initialScope = 'turn', panelSessionId = PANEL_SESSION, turnDiffSettled = true, turnRows = [] }) => {
+  const [activeDiffScope] = React.useState<DiffScope>(initialScope);
   const [pending, setPending] = React.useState(request);
   const [, setDisplayFile] = React.useState<string | null>(null);
   const [, setDisplayFileStaged] = React.useState(false);
@@ -45,20 +40,11 @@ const Probe: React.FC<ProbeProps> = ({ request, initialScope = 'turn', panelSess
   const shouldPinAfterAlignRef = React.useRef(false);
   const pendingScrollTargetRef = React.useRef<string | null>(null);
   useDiffViewTurnNavigation({
-    visible: true, activeDiffScope, setActiveDiffScope, setDisplayFile, setDisplayFileStaged,
+    visible: true, activeDiffScope, setDisplayFile, setDisplayFileStaged,
     shouldPinAfterAlignRef, pendingScrollTargetRef, expandStackedFile: (path) => { shown.push(path); },
     setScrollRequestNonce, pendingTurnDiffFile: pending, setPendingTurnDiffFile: setPending, diffScope: 'turn',
     panelSessionId, turnDiffSettled, rootDirectory: ROOT,
-    // Snapshots off: the turn diff lists nothing.
-    lastTurnDiffs: [], onDiffScopeChange: undefined, effectiveDirectory: ROOT,
-    repositoriesKnown: true, rootIsGitRepo: true, nestedRepos: [], repositoryOptions: [],
-    selectNestedRepo: async () => {},
-    fetchStatus: async () => { await statusRead.promise; return true; },
-    // SAFETY: the fallback hands git only to the fetchStatus stub above.
-    git: {} as GitAPI,
-    changedFiles: [changed],
-    // SAFETY: a file inside a repository never reaches the Files API.
-    files: {} as FilesAPI,
+    lastTurnDiffs: turnRows,
   });
   return null;
 };
@@ -72,7 +58,6 @@ const render = async (props: ProbeProps) => {
 
 beforeEach(() => {
   shown = [];
-  statusRead = deferred();
   useSessionUIStore.setState({ currentSessionId: PANEL_SESSION });
 });
 
@@ -82,31 +67,37 @@ afterEach(async () => {
 });
 
 describe('useDiffViewTurnNavigation', () => {
-  test('a pinned chat chip whose file misses the turn list reveals it in Changed', async () => {
-    await render({ request: pinnedChip });
-    await act(async () => statusRead.resolve());
+  test('a pinned chip whose file is in the turn rows reveals it inside the turn scope', async () => {
+    await render({ request: pinnedChip, turnRows: [{ file: 'src/a.ts' }] });
     expect(shown).toEqual(['src/a.ts']);
   });
 
-  test('a pinned chat chip survives the panel catching up from Working to turn scope', async () => {
-    await render({ request: pinnedChip, initialScope: 'working' });
-    await act(async () => statusRead.resolve());
+  test('a pinned chip whose file is absent from the turn rows stays on the turn scope and reveals nothing', async () => {
+    await render({ request: pinnedChip, turnRows: [] });
+    expect(shown).toEqual([]);
+  });
+
+  test('a ready turn that lists other files still does not substitute the workspace diff', async () => {
+    await render({ request: pinnedChip, turnRows: [{ file: 'src/other.ts' }] });
+    expect(shown).toEqual([]);
+  });
+
+  test('an unsettled read keeps the request pending instead of concluding absence', async () => {
+    await render({ request: pinnedChip, turnDiffSettled: false, turnRows: [] });
+    expect(shown).toEqual([]);
+    await render({ request: pinnedChip, turnDiffSettled: true, turnRows: [{ file: 'src/a.ts' }] });
     expect(shown).toEqual(['src/a.ts']);
   });
 
-  test('a panel that moves to another session before the snapshot settles drops the request', async () => {
-    await render({ request: pinnedChip, turnDiffSettled: false });
-    await act(async () => useSessionUIStore.setState({ currentSessionId: 'another-session' }));
-    await render({ request: pinnedChip, turnDiffSettled: false, panelSessionId: 'another-session' });
-    await render({ request: pinnedChip, panelSessionId: 'another-session' });
-    await act(async () => statusRead.resolve());
+  test('a chip for another panel session is dropped without revealing', async () => {
+    await render({ request: pinnedChip, panelSessionId: 'another-session', turnRows: [{ file: 'src/a.ts' }] });
     expect(shown).toEqual([]);
   });
 
-  test('leaving the panel session drops the pending reveal', async () => {
-    await render({ request: pinnedChip });
-    await act(async () => useSessionUIStore.setState({ currentSessionId: 'another-session' }));
-    await act(async () => statusRead.resolve());
-    expect(shown).toEqual([]);
+  test('a consumed request does not reveal again on the next render', async () => {
+    await render({ request: pinnedChip, turnRows: [{ file: 'src/a.ts' }] });
+    expect(shown).toEqual(['src/a.ts']);
+    await render({ request: null, turnRows: [{ file: 'src/a.ts' }] });
+    expect(shown).toEqual(['src/a.ts']);
   });
 });
