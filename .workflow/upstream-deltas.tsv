@@ -304,6 +304,8 @@ path	state	class	decision	reason
 .workflow/done/omp-through-m3/77-agent-catalog-startup-retry.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp-through-m3/closeout.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp-through-m3/retrospective.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+.workflow/done/omp19-1-integration/01-runtime-pin.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+.workflow/done/omp19-1-integration/02-worker-cutover.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/01-native-runtime.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/02-contract-and-mirror.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/omp19-integration/03-verification.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
@@ -687,8 +689,6 @@ path	state	class	decision	reason
 .workflow/standards.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/tasks/.gitkeep	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-.workflow/tasks/omp19-1-integration/01-runtime-pin.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-.workflow/tasks/omp19-1-integration/02-worker-cutover.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/technical-debt.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/upstream-baseline.json	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/upstream-deltas.tsv	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
