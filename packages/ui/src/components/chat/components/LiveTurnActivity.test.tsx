@@ -332,7 +332,7 @@ describe('live Activity with the real message body', () => {
     test('mobile changed files open Changes in the pinned turn scope', async () => {
         const record = turn([assistant('final', [text('answer', 'Done')])]);
         let filesOpened = 0;
-        const changesRequests: Array<{ diffPath?: string; scope?: string; turnId?: string }> = [];
+        const changesRequests: Array<NonNullable<Parameters<MobileAppActions['openChanges']>[0]>> = [];
         const mobileActions: MobileAppActions = {
             openFiles: () => { filesOpened += 1; },
             openChanges: (request) => { changesRequests.push(request ?? {}); },
