@@ -1,5 +1,52 @@
 # Decisions
 
+## 2026-11-26 - Clear every solvable technical debt before the 1.0 release
+
+- **Decided:** The `release-hardening` effort fixes every open `technical-debt.md` entry except the cold-start one below. That includes porting the upstream ChatViewport transcript and converting the 95 fork-owned server JavaScript modules to strict TypeScript. Its gate reruns final-main-audit task 06's zero-warning, zero-dead-code `Check` on the final tree and closes `final-main-audit`. The audit PR gets no separate review.
+- **Instead of:** closing final-main-audit on its 2026-11-19 candidate result and carrying the backlog past release.
+- **Because:** at release, deferred debt becomes the maintenance cost of every later upstream sync and every user-visible rough edge.
+- **Decided by:** maintainer
+- **Mine:** no
+- **Effort:** release-hardening
+
+## 2026-11-26 - Declined: two-phase OMP session construction for cold new chats
+
+- **Decided:** not fixing the ~200 ms extra first-token latency of new chats created without a draft (`technical-debt.md` entry "Cold new-chat first token waits on OMP session construction", removed).
+- **Instead of:** splitting `createAgentSession` into graph preparation and session binding in the SDK patch.
+- **Because:** only API callers and some automation skip `prepare`; the change reaches deep into SDK session construction right before release.
+- **Decided by:** maintainer
+- **Mine:** no
+- **Revisit when:** upstream OMP ships a two-phase session-graph API, or an interactive path starts skipping `prepare`.
+- **Effort:** release-hardening
+
+## 2026-11-26 - User-file MCP credential references are workspace-independent
+
+- **Decided:** A credential reference stored in the user MCP file resolves from every workspace; project-file references stay bound to their workspace. Existing user-file references written with a workspace-hashed provider name are migrated. Once this lands, catalog installs that collect environment values may use user scope again.
+- **Instead of:** forcing project scope for every credential-carrying install.
+- **Because:** user-scope installs for token servers keep working, and the fix removes the cross-workspace save failure at its cause.
+- **Decided by:** maintainer
+- **Mine:** no
+- **Effort:** release-hardening
+
+## 2026-11-26 - Image generation is a provider.use with purpose image
+
+- **Decided:** `catalog.image.generate` requests `provider.use` with `purpose: 'image'` before minting a credential. The Host admits it when an enabled workspace provider has the same provider id and endpoint, with any model, the same rule as `purpose: 'embedding'`.
+- **Instead of:** an exact provider/model/endpoint match with image models enabled one by one.
+- **Because:** one rule for every non-chat purpose, and no per-model enablement the user never sees for embeddings.
+- **Decided by:** maintainer
+- **Mine:** no
+- **Effort:** release-hardening
+
+## 2026-11-26 - Native OMP quotas replace the Host scrapers they cover
+
+- **Decided:** Guest SDK quotas and Work Status read native OMP account quotas for every provider OMP covers, and the Host scrapers for those providers are removed. Providers OMP does not cover keep their Host scraper.
+- **Instead of:** keeping both paths side by side.
+- **Because:** one authority per quota number, with no provider losing coverage.
+- **Decided by:** maintainer
+- **Mine:** no
+- **Revisit when:** OMP adds quota coverage for a provider that still has a Host scraper.
+- **Effort:** release-hardening
+
 ## 2026-11-26 - Every SDK-built session in the worker inherits Host authorization and fails closed without it
 
 - **Decided:** The worker arms `requireBashExecutionAuthorization()` at startup, so a Bash tool whose session lacks the Host authorizer throws instead of running. Each session an allowed builtin can build (`/cleanse` workers and checker commands, `/tan` clones, Vibe workers, persisted revival, advisors, Task children) carries the Host Bash authorizer, the worker `tool_call` observer and `authorizeModelUse`. When `authorizeModelUse` is set, the session model registry is wrapped so every credential mint (agent loop, compaction, context promotion, turn recovery, job widgets, branch summaries, side turns, advisors, and every rotation) authorizes `provider.use` first. A refused candidate is skipped; when none remains, the Host refusal reaches the user. Existence-only probes use the unwrapped registry. Remote mnemopi embeddings are a `provider.use` with `purpose: 'embedding'`. The Host admits one when an enabled workspace provider has the same provider id and endpoint, with any model. Remote mnemopi LLM use needs the exact chat tuple. Both mnemopi gates admit only the endpoint the Host admitted, and keys are pinned so core never falls back to environment credentials. `task.workerThreads` is pinned to 0 because worker threads drop the inline observer.
@@ -1567,6 +1614,7 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent
 - **Mine:** yes
 - **Revisit when:** credential references become workspace-independent, or the user MCP file can carry per-workspace server entries.
+- **Superseded by:** 2026-11-26 - User-file MCP credential references are workspace-independent
 ## 2026-11-16 - MCP OAuth callback state is bound to the flow, not the initiating browser session
 
 - **Decided:** the public `GET /api/agent/v1/mcp/oauth/callback` route accepts a `state` that the Host recorded from the proxied `start` response's authorization URL. It does not bind that state to the browser session, cookie or IP that started the flow, matching the existing guest and extension-tracker public callbacks (`guests/routes.js`, `trackers/routes.js`).
