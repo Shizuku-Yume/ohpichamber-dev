@@ -16,6 +16,7 @@ import { cfgModelRoles } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
 import { cfgRecapEnabled, cfgRecapIdleSeconds } from '@oh-my-pi/pi-coding-agent/modes/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
+import type { AssistantMessage } from '@oh-my-pi/pi-ai';
 import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
@@ -3200,6 +3201,146 @@ test('an advisor reaches the provider when the Host authorizes its use', async (
  } finally { await harness.close(); }
 }, 30000);
 
+test('advisor overflow compaction with provider.use denied sends nothing and the refusal reaches the user', async () => {
+ // The advisor overflow-compaction candidate loop must skip Host-refused
+ // candidates and surface the refusal when none remains. Both chain candidates
+ // are denied here: the advisor model itself and the largest-context fallback.
+ // The trigger turn runs on a third model so neither candidate tuple is
+ // cache-admitted before the overflow fires — denials are never cached, so
+ // every candidate resolution performs its own Host round-trip inside the loop.
+ const harness = await fixture({
+  respond: () => completion(),
+  planModel: true,
+  denyProviderUse: (_attempt, input) =>
+   input?.modelId === 'native-plan-model' || input?.modelId === 'native-model'
+    ? new Error('Host policy refused the compaction candidate')
+    : undefined,
+ });
+ try {
+  await writeFile(join(harness.root, 'WATCHDOG.yml'), [
+   'advisors:',
+   '  - name: watchdog-probe',
+   '    model: native-fixture/native-plan-model',
+   '    instructions: "ADVISOR-MARKER-7x2 review instructions"',
+   '    tools: []',
+   '    syncBacklog: strict',
+   '',
+  ].join('\n'));
+  await harness.reopen();
+  // The trigger turn must not mint either compaction candidate: the primary
+  // resolution would otherwise cache-admit the fallback tuple before the
+  // overflow loop runs, and the refusal could never surface. native-model keeps
+  // the largest window so it is the one fallback the chain scans in.
+  await harness.worker.operation({
+   type: 'catalog', revision: '4', operation: {
+    type: 'catalog.model.configure', request: {
+     expectedRevision: '3', model: {
+      modelId: 'native-trigger-model', provider: 'native-fixture', name: 'Native trigger model', modalities: ['text'], contextWindow: 32768, maxOutputTokens: 128,
+      reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
+     }
+    }
+   }
+  });
+  const enabled = await harness.worker.operation({ type: 'command', text: '/advisor on' });
+  expect(enabled.type).toBe('command');
+  const { cfgCompactionModelThresholds, cfgCompactionModelThresholdsEnabled, cfgCompactionMethodOrder } = await import('@oh-my-pi/pi-coding-agent/session/context-settings');
+  // Scope the one-token trigger to the advisor model: the primary session keeps
+  // its own compaction policy, and the first terminal boundary's maintenance
+  // pass must see an overflowed advisor context whatever the transcript holds.
+  harness.worker.session.settings.writeValue(cfgCompactionModelThresholdsEnabled, true, 'override');
+  harness.worker.session.settings.writeValue(cfgCompactionModelThresholds, { 'native-fixture/native-plan-model': 'f1' }, 'override');
+  harness.worker.session.settings.writeValue(cfgCompactionMethodOrder, ['soft'], 'override');
+  const notices: string[] = [];
+  const unsubscribe = harness.worker.session.subscribe(event => {
+   if (event.type === 'notice' && 'message' in event) notices.push(String(event.message));
+  });
+  // Stuff the advisor transcript before the first turn: anchored usage-bearing
+  // exchanges the maintenance pass must compact rather than re-prime past.
+  const agent = harness.worker.session.getAdvisorAgent();
+  if (!agent) throw new Error('Advisor agent is required');
+  const big = 'padding '.repeat(3000);
+  for (let i = 0; i < 4; i++) {
+   const stuffedTurn: AssistantMessage = {
+    role: 'assistant', content: [{ type: 'text', text: `stuffed overflow answer ${i} ${big}` }],
+    api: 'openai-completions', provider: 'native-fixture', model: 'native-plan-model', stopReason: 'stop', timestamp: Date.now(),
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+   };
+   agent.state.messages.push(
+    { role: 'user', content: `stuffed overflow question ${i} ${big}`, timestamp: Date.now() },
+    stuffedTurn,
+   );
+  }
+  await harness.worker.operation({ type: 'prompt', runId: 'advisor-overflow-deny-run', request: prompt('Reply with marker.', { modelId: 'native-trigger-model' }) });
+  await waitForGoal(harness.worker, () => harness.events.some(({ event }) => event.type === 'run.completed' || event.type === 'run.failed'), 15000);
+  const deadline = Date.now() + 15000;
+  while (!notices.some(message => message.includes('Host policy refused')) && Date.now() < deadline) await Bun.sleep(100);
+  unsubscribe();
+  // The Host refusal is visible to the user as the advisor's failure notice,
+  // carrying the refusal rather than a generic credential error.
+  expect(notices.some(message => message.includes('Host policy refused the compaction candidate'))).toBe(true);
+  // No compaction or advisor review request may reach the provider: every
+  // captured request is the trigger turn's own primary traffic.
+  expect(harness.requests.some(r => JSON.stringify(r.messages).includes('stuffed overflow'))).toBe(false);
+  expect(harness.requests.some(r => JSON.stringify(r.messages).includes('ADVISOR-MARKER-7x2'))).toBe(false);
+  // The skip contract itself: the refused first candidate cannot abort the
+  // loop — the largest-context fallback is still mediated afterwards. Without
+  // the SDK's skip the first refusal escapes the loop and this second
+  // consultation never happens.
+  const consultations = harness.hostRequests.filter(r => r.type === 'tool' && r.toolName === 'provider.use').map(r => r.input.modelId);
+  expect(consultations).toContain('native-plan-model');
+  expect(consultations).toContain('native-model');
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 45000);
+
+test('advisor overflow compaction authorized summarizes through the provider', async () => {
+ const harness = await fixture({ respond: () => completion(), planModel: true });
+ try {
+  await writeFile(join(harness.root, 'WATCHDOG.yml'), [
+   'advisors:',
+   '  - name: watchdog-probe',
+   '    model: native-fixture/native-plan-model',
+   '    instructions: "ADVISOR-MARKER-7x2 review instructions"',
+   '    tools: []',
+   '    syncBacklog: strict',
+   '',
+  ].join('\n'));
+  await harness.reopen();
+  const enabled = await harness.worker.operation({ type: 'command', text: '/advisor on' });
+  expect(enabled.type).toBe('command');
+  const { cfgCompactionModelThresholds, cfgCompactionModelThresholdsEnabled, cfgCompactionMethodOrder } = await import('@oh-my-pi/pi-coding-agent/session/context-settings');
+  harness.worker.session.settings.writeValue(cfgCompactionModelThresholdsEnabled, true, 'override');
+  harness.worker.session.settings.writeValue(cfgCompactionModelThresholds, { 'native-fixture/native-plan-model': 'f1' }, 'override');
+  harness.worker.session.settings.writeValue(cfgCompactionMethodOrder, ['soft'], 'override');
+  const agent = harness.worker.session.getAdvisorAgent();
+  if (!agent) throw new Error('Advisor agent is required');
+  const big = 'padding '.repeat(3000);
+  for (let i = 0; i < 4; i++) {
+   const stuffedTurn: AssistantMessage = {
+    role: 'assistant', content: [{ type: 'text', text: `stuffed overflow answer ${i} ${big}` }],
+    api: 'openai-completions', provider: 'native-fixture', model: 'native-plan-model', stopReason: 'stop', timestamp: Date.now(),
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+   };
+   agent.state.messages.push(
+    { role: 'user', content: `stuffed overflow question ${i} ${big}`, timestamp: Date.now() },
+    stuffedTurn,
+   );
+  }
+  await harness.worker.operation({ type: 'prompt', runId: 'advisor-overflow-allow-run', request: prompt('Reply with marker.') });
+  // The compaction pass runs inside the advisor's boundary catch-up: once the
+  // stuffed transcript reaches the capture server the overflow genuinely
+  // compacted through the provider, and the advisor transcript was rewritten
+  // onto the summary rather than re-primed empty.
+  const deadline = Date.now() + 15000;
+  const compacted = () => harness.requests.some(r => JSON.stringify(r.messages).includes('stuffed overflow question'))
+   && harness.worker.session.getAdvisorAgent()?.state.messages.some(message => message.role === 'compactionSummary') === true;
+  while (!compacted() && Date.now() < deadline) await Bun.sleep(50);
+  expect(compacted()).toBe(true);
+  expect(harness.hostRequests.some(r => r.type === 'tool' && r.toolName === 'provider.use' && r.input.modelId === 'native-plan-model')).toBe(true);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 45000);
+
 
 
 const EmbeddingUseInputSchema = z.looseObject({
@@ -3378,10 +3519,12 @@ test('memory clear rehydrate without prior state stays mediated under refusal', 
   denyProviderUse: (attempt, input) => (input?.purpose === 'embedding' ? new Error('Host policy refused the embedding endpoint') : undefined),
  });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3411,10 +3554,12 @@ test('memory clear rehydrate without prior state stays mediated under refusal', 
 test('memory embeddings authorized reach the endpoint through the pinned capture server', async () => {
  const harness = await fixture({ respond: () => completion() });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3442,10 +3587,12 @@ test('memory embeddings authorized reach the endpoint through the pinned capture
 test('memory embeddings authorize the env-resolved endpoint and post only there', async () => {
  const harness = await fixture({ respond: () => completion() });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3504,10 +3651,12 @@ test('memory embeddings via the api flag authorize even for a local-shaped model
 test('memory embeddings with a local-shaped model and custom endpoint authorize or stay closed', async () => {
  const harness = await fixture({ respond: () => completion() });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3541,10 +3690,12 @@ test('memory embeddings with a local-shaped model and custom endpoint denied sen
   denyProviderUse: (attempt, input) => (input?.purpose === 'embedding' ? new Error('Host policy refused the embedding endpoint') : undefined),
  });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3568,10 +3719,12 @@ test('memory embeddings with a local-shaped model and custom endpoint denied sen
 test('memory remote LLM with env-only endpoint authorizes it and admitted requests reach it', async () => {
  const harness = await fixture({ respond: () => completion() });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ choices: [{ message: { content: 'extracted memory' } }] }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ choices: [{ message: { content: 'extracted memory' } }] }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3610,10 +3763,12 @@ test('memory remote LLM with env-only endpoint denied sends nothing', async () =
   denyProviderUse: (attempt, input) => (input?.modelId === 'openai/gpt-5.5' ? new Error('Host policy refused the provider') : undefined),
  });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ choices: [{ message: { content: 'extracted memory' } }] }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ choices: [{ message: { content: 'extracted memory' } }] }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3651,10 +3806,12 @@ test('memory embeddings without any admission never post even when core would go
   denyProviderUse: () => new Error('Host policy refused everything'),
  });
  const captured: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  captured.push(new URL(request.url).pathname);
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   captured.push(new URL(request.url).pathname);
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
@@ -3749,12 +3906,14 @@ test('memory embedding rotation at a loopback openrouter-marker endpoint rotates
  // whichever key arrives first and accepts any different key: rotation is
  // proven by exactly two distinct keys in order, the second accepted.
  const keysSeen: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  const key = (request.headers.get('authorization') ?? '').replace(/^Bearer /, '');
-  if (!keysSeen.includes(key)) keysSeen.push(key);
-  if (keysSeen.length === 1 && key === keysSeen[0]) return new Response('unauthorized', { status: 401 });
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   const key = (request.headers.get('authorization') ?? '').replace(/^Bearer /, '');
+   if (!keysSeen.includes(key)) keysSeen.push(key);
+   if (keysSeen.length === 1 && key === keysSeen[0]) return new Response('unauthorized', { status: 401 });
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const storage = session.modelRegistry.authStorage;
@@ -3797,11 +3956,13 @@ test('memory embedding rotation refusal at re-authorization stops the retry', as
   denyProviderUse: (attempt, input) => (input?.modelId === 'openai/text-embedding-3-small' ? new Error('Host policy refused the embedding endpoint') : undefined),
  });
  const keysSeen: string[] = [];
- const capture = Bun.serve({ port: 0, fetch: async request => {
-  const key = (request.headers.get('authorization') ?? '').replace(/^Bearer /, '');
-  if (!keysSeen.includes(key)) keysSeen.push(key);
-  return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { headers: { 'content-type': 'application/json' } });
- } });
+ const capture = Bun.serve({
+  port: 0, fetch: async request => {
+   const key = (request.headers.get('authorization') ?? '').replace(/^Bearer /, '');
+   if (!keysSeen.includes(key)) keysSeen.push(key);
+   return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { headers: { 'content-type': 'application/json' } });
+  }
+ });
  try {
   const session = harness.worker.session;
   const storage = session.modelRegistry.authStorage;

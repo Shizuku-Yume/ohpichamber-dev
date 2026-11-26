@@ -173,18 +173,19 @@ export const createWorkerOperationAuthorizer = ({
    if (request.agentId !== undefined && !policy.agentIds.includes(request.agentId)) return denied(`The agent profile is not in the workspace catalog for the ${request.toolName} tool`);
    if (request.toolName === 'provider.use') {
     const normalizeEndpoint = endpoint => endpoint === undefined ? endpoint : endpoint.replace(/\/+$/, '');
-    const embeddingUse = descriptor?.purpose === 'embedding';
+    const purposeUse = descriptor?.purpose === 'embedding' || descriptor?.purpose === 'image' ? descriptor.purpose : null;
+    const purposeRows = purposeUse === 'image' ? policy.imageProviders : policy.providers;
     const permitted = request.proposed === true
      ? proposedProviderPermitted(descriptor)
-     : descriptor !== null && (embeddingUse
-      ? policy.providers.some(provider => provider.providerId === descriptor.providerId
+     : descriptor !== null && (purposeUse !== null
+      ? purposeRows.some(provider => provider.providerId === descriptor.providerId
        && normalizeEndpoint(provider.endpoint) === normalizeEndpoint(descriptor.endpoint))
       : policy.providers.some(provider => provider.providerId === descriptor.providerId
        && provider.modelId === descriptor.modelId && provider.endpoint === descriptor.endpoint));
     return permitted ? allowed : denied(request.proposed === true
      ? 'The provider.use tool does not name a complete provider and model selection'
-     : embeddingUse
-      ? `The workspace has no enabled ${descriptor?.providerId ?? 'embedding'} provider at the embedding endpoint ${redactEndpointForNotice(descriptor?.endpoint) ?? '(default)'}`
+     : purposeUse !== null
+      ? `The workspace has no enabled ${descriptor?.providerId ?? purposeUse} provider at the ${purposeUse} endpoint ${redactEndpointForNotice(descriptor?.endpoint) ?? '(default)'}`
       : 'The provider.use tool does not name a provider and model enabled in this workspace');
    }
    // Native ask only opens a scoped, CAS-protected interaction; it grants no machine capability.

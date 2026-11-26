@@ -10,7 +10,7 @@ import {
 import { ProjectionError } from '../projection/journal.ts';
 import { NativeAgents, type NativeAgentsContext } from './catalog-agents.ts';
 import { NativeCredentials } from './catalog-credentials.ts';
-import type { NativeModels, NativeModelsContext, ResolvedModelSelection } from './catalog-models.ts';
+import type { AuthorizeImageUse, NativeModels, NativeModelsContext, ResolvedModelSelection } from './catalog-models.ts';
 import { WorkerSkills, type WorkerSkillsContext } from './catalog-skills.ts';
 import { NativePlugins } from './catalog-plugins.ts';
 import { NativeExtensions } from './catalog-extensions.ts';
@@ -22,6 +22,7 @@ export type CatalogNativeContext = NativeModelsContext & NativeAgentsContext & W
   readonly warming: NativeCacheWarming;
   // Authoritative policy is resolved at each provider-entry mutation, not cached at worker startup.
   readonly assertProviderEntryAllowed: () => void | Promise<void>;
+  readonly authorizeImageUse: AuthorizeImageUse;
   readonly session?: { refreshIdleMaintenance?: () => void };
 };
 
@@ -71,7 +72,7 @@ export class WorkerCatalogs {
       case 'catalog.models.read':
         return { type: 'catalog.models', catalog: await this.models.readModels(workspaceId, revision) };
       case 'catalog.image.generate':
-        return { type: 'catalog.image.generated', result: await this.models.generate(operation.request) };
+        return { type: 'catalog.image.generated', result: await this.models.generate(operation.request, this.context.authorizeImageUse) };
       case 'catalog.image.configure':
         return { type: 'catalog.image.mutated', result: await this.models.configureImageModel(operation.request, revision) };
       case 'catalog.providers.read':

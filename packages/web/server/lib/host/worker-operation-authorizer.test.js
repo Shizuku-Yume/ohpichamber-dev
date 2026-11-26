@@ -18,7 +18,7 @@ beforeAll(async () => {
   scope = { rootSessionId: 'root', workerGeneration: 'generation', projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent-directory', cwd, agentDirectory };
   const policy = {
     projectId: scope.projectId, workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId, cwd, agentDirectory,
-    providers: [], mcpServers: [server], fileTools: [], shellCommands: [], agentIds: [], providerEntry: true
+    providers: [], imageProviders: [], mcpServers: [server], fileTools: [], shellCommands: [], agentIds: [], providerEntry: true
   };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   authorize = createWorkerOperationAuthorizer({
@@ -69,7 +69,9 @@ async function nativeHarness(rows = [], enterprisePolicyOptions) {
   const nativeScope = { rootSessionId: 'native-root', workerGeneration: 'native-generation', projectId: 'native-project', workspaceId: 'native-workspace', agentDirectoryId: 'native-source', cwd, agentDirectory };
   const policy = {
     projectId: nativeScope.projectId, workspaceId: nativeScope.workspaceId, agentDirectoryId: nativeScope.agentDirectoryId, cwd, agentDirectory,
-    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], agentIds: [], providerEntry: true
+    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }],
+    imageProviders: [{ providerId: 'fixture', modelId: 'fixture-image', endpoint: 'https://fixture.example/v1' }],
+    mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], agentIds: [], providerEntry: true
   };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   const nativeAuthorize = createWorkerOperationAuthorizer({ resolvePolicy: async () => policy, validateDirectoryPath: directoryOwner.validateDirectoryPath, approvalPolicyStore: { list: () => rows }, enterprisePolicyOptions });
@@ -215,6 +217,77 @@ describe('Host-owned native descriptor authority', () => {
       const chat = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' };
       expect(await harness.authorize(harness.scope, request, chat)).toEqual({ allowed: true });
       expect(await harness.authorize(harness.scope, request, { ...chat, endpoint: 'https://fixture.example/v1/' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+
+  it('admits an image provider use through the image rows with any model and refuses chat-only providers', async () => {
+    const harness = await nativeHarness();
+    try {
+      const request = { type: 'tool', toolName: 'provider.use', input: {} };
+      const image = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], purpose: 'image', providerId: 'fixture', modelId: 'fixture-image', endpoint: 'https://fixture.example/v1' };
+      // The workspace enables fixture's image generator at that endpoint; any
+      // model on the tuple is admitted, because the generation path re-validates
+      // the exact model against the live catalog before it asks.
+      expect(await harness.authorize(harness.scope, request, image)).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, request, { ...image, modelId: 'another-image' })).toEqual({ allowed: true });
+      // Trailing-slash differences normalize away on both sides.
+      expect(await harness.authorize(harness.scope, request, { ...image, endpoint: 'https://fixture.example/v1/' })).toEqual({ allowed: true });
+      // Another endpoint and another provider are refused.
+      expect(await harness.authorize(harness.scope, request, { ...image, endpoint: 'https://foreign.example/v1' }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The workspace has no enabled fixture provider at the image endpoint https://foreign.example/v1' });
+      expect(await harness.authorize(harness.scope, request, { ...image, providerId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      // Endpoint text in the refusal is redacted: userinfo and query never surface.
+      const secretEndpoint = 'https://user:secret@foreign.example/v1?key=sk-secret';
+      const refusal = await harness.authorize(harness.scope, request, { ...image, endpoint: secretEndpoint });
+      expect(refusal.allowed).toBe(false);
+      expect(refusal.detail).not.toContain('sk-secret');
+      expect(refusal.detail).not.toContain('user:secret@');
+      // The admission is the image row's, not the chat row's: once the enabled
+      // image generator leaves the workspace the same tuple is refused even
+      // though the chat row still names the provider at that endpoint.
+      const imageRows = harness.policy.imageProviders;
+      harness.policy.imageProviders = [];
+      expect(await harness.authorize(harness.scope, request, image)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      harness.policy.imageProviders = imageRows;
+      expect(await harness.authorize(harness.scope, request, image)).toEqual({ allowed: true });
+      // An image row with a different model at the same provider endpoint still
+      // admits the use: the Host binds provider and endpoint, never the tuple.
+      harness.policy.imageProviders = [{ providerId: 'fixture', modelId: 'unrelated-image', endpoint: 'https://fixture.example/v1' }];
+      expect(await harness.authorize(harness.scope, request, image)).toEqual({ allowed: true });
+      harness.policy.imageProviders = imageRows;
+      // The chat exact-match rule is unchanged: without the image purpose the
+      // image model is not enabled as a chat model and stays refused, the
+      // enabled chat tuple passes.
+      expect(await harness.authorize(harness.scope, request, { ...image, purpose: undefined })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      const chat = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' };
+      expect(await harness.authorize(harness.scope, request, chat)).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, request, { ...chat, endpoint: 'https://fixture.example/v1/' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+
+  it('refuses an image provider use at a provider that only has enabled chat rows', async () => {
+    const harness = await nativeHarness();
+    try {
+      const request = { type: 'tool', toolName: 'provider.use', input: {} };
+      // The fixture workspace enables a chat model at fixture but no image
+      // generator: unlike embedding reuse, chat traffic never authorizes a
+      // generation endpoint, so the image use is refused on the same tuple.
+      harness.policy.imageProviders = [];
+      const image = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], purpose: 'image', providerId: 'fixture', modelId: 'fixture-image', endpoint: 'https://fixture.example/v1' };
+      expect(await harness.authorize(harness.scope, request, image)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+
+  it('admits an image-only provider use that has no enabled chat row at all', async () => {
+    const harness = await nativeHarness();
+    try {
+      const request = { type: 'tool', toolName: 'provider.use', input: {} };
+      // A workspace whose provider serves only image generation has no chat row
+      // for it; the image row alone carries the admission.
+      harness.policy.imageProviders = [{ providerId: 'image-only', modelId: 'image-only-model', endpoint: 'https://image-only.example/v1' }];
+      const image = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], purpose: 'image', providerId: 'image-only', modelId: 'image-only-model', endpoint: 'https://image-only.example/v1' };
+      expect(await harness.authorize(harness.scope, request, image)).toEqual({ allowed: true });
+      expect(harness.policy.providers.some(provider => provider.providerId === 'image-only')).toBe(false);
     } finally { await harness.close(); }
   });
 

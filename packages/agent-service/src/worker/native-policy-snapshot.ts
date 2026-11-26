@@ -11,18 +11,23 @@ export async function captureNativePolicy(input: { projectId: string; workspaceI
     agents.read(input.workspaceId, '0'),
   ]);
   const models = runtime.modelRegistry.getAll('all');
-  const providers: HostNativePolicySnapshot['providers'] = [];
-  for (const model of catalog.models) {
-    if (!model.enabled) continue;
-    const native = models.find(candidate => candidate.id === model.modelId && candidate.provider === model.provider);
-    if (!native) continue;
-    const provider = providersCatalog.providers.find(candidate => candidate.providerId === native.provider);
-    const nativeProvider: HostNativePolicySnapshot['providers'][number] = { providerId: native.provider, modelId: native.id };
-    const endpoint = 'baseUrl' in native && typeof native.baseUrl === 'string' && native.baseUrl
-      ? native.baseUrl
-      : provider?.endpoint;
-    if (endpoint !== null && endpoint !== undefined) nativeProvider.endpoint = endpoint;
-    providers.push(nativeProvider);
-  }
-  return HostNativePolicySnapshotSchema.parse({ ...input, providers, mcpServers, agentIds: profiles.agents.map(agent => agent.agentId) });
+  const rows = (entries: readonly { enabled?: boolean; modelId: string; provider: string }[]): HostNativePolicySnapshot['providers'] => {
+    const captured: HostNativePolicySnapshot['providers'] = [];
+    for (const model of entries) {
+      if (!model.enabled) continue;
+      const native = models.find(candidate => candidate.id === model.modelId && candidate.provider === model.provider);
+      if (!native) continue;
+      const provider = providersCatalog.providers.find(candidate => candidate.providerId === native.provider);
+      const row: HostNativePolicySnapshot['providers'][number] = { providerId: native.provider, modelId: native.id };
+      const endpoint = 'baseUrl' in native && typeof native.baseUrl === 'string' && native.baseUrl
+        ? native.baseUrl
+        : provider?.endpoint;
+      if (endpoint !== null && endpoint !== undefined) row.endpoint = endpoint;
+      captured.push(row);
+    }
+    return captured;
+  };
+  const providers = rows(catalog.models);
+  const imageProviders = rows(catalog.imageModels);
+  return HostNativePolicySnapshotSchema.parse({ ...input, providers, imageProviders, mcpServers, agentIds: profiles.agents.map(agent => agent.agentId) });
 }

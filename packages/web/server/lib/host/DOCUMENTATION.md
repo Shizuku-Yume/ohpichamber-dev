@@ -142,14 +142,22 @@ Existing account mutations (`select`, `automatic`, `remove`, `label`) share the
 authenticated workspace gateway and remain available in enterprise mode; they
 do not enter new credentials. Runtime provider-use admission authorizes the
 provider/model/endpoint independently of native account selection. A use whose
-descriptor carries `purpose: 'embedding'` is admitted instead on provider id
-and endpoint alone (any model, trailing slashes normalized on both sides): the
-workspace already sends transcript traffic to that endpoint, and memory
-embeddings carry text derived from it; a mismatch is refused with a reason
-naming the provider and endpoint, with endpoint text redacted — userinfo,
-query and fragment stripped, and credential-shaped path segments (long
-token-like runs or `sk-` prefixes) collapsed to `/(redacted)` — before it can
-surface in a notice or log. Private
+descriptor carries a non-chat `purpose` is admitted instead on provider id and
+endpoint alone (any model, trailing slashes normalized on both sides), because
+per-model enablement for these uses would be invisible to the user — but the
+rows it matches depend on the purpose. `'embedding'` matches the enabled chat
+rows: the workspace already sends transcript traffic to that endpoint.
+`'image'` matches only the enabled image-generator rows the worker's policy
+snapshot carries beside the chat rows, so a provider whose workspace enablement
+is chat-only never admits a generation, and an image-only provider (no enabled
+chat model) is admitted exactly because its image rows reach the snapshot. The
+generation path re-validates the exact model against the live catalog before it
+authorizes, so the tuple-level binding is not lost. `catalog.image.generate`
+authorizes as `purpose: 'image'` under this rule. A mismatch is refused with a
+reason naming the provider and endpoint, with endpoint text redacted —
+userinfo, query and fragment stripped, and credential-shaped path segments
+(long token-like runs or `sk-` prefixes) collapsed to `/(redacted)` — before
+it can surface in a notice or log. Private
 quota/TTS/routing credential resolution remains reference-specific.
 
 Accounts GET and mutation responses retain the strict legacy roster shape and
