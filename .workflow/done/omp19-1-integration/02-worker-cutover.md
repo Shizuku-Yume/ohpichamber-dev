@@ -24,4 +24,8 @@ authorizer. The SDK now passes it into fresh and restored child sessions. A real
 checks that Host denial stops a shell command and that a Bash-mounted LSP
 command receives separate Host checks for Bash and the validated LSP input.
 
+Check after: On `66c8cba74c`, the Agent Service suite passed 788 tests with
+26 skips and no failures across 82 files. Root type-check passed, including
+all five check steps and the source-derived OMP declarations.
+
 Review: skipped — this session cannot spawn fresh workflow or security reviewers.
