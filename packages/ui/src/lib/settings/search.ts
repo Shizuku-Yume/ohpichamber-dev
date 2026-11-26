@@ -87,7 +87,7 @@ const OMP_PAGE_SETTINGS: ReadonlyArray<readonly [page: SettingsPageSlug, setting
     'advisor.enabled', 'advisor.syncBacklog', 'advisor.immuneTurns', 'advisor.continueSeverity',
     'advisor.reviewMode', 'advisor.reviewInterval', 'advisor.maxNotesPerUpdate', 'advisor.evictStaleResults',
     'task.eager', 'task.batch', 'task.structured', 'task.speculativeLaunch', 'task.enableEffort',
-    'task.perCallModel', 'task.workerThreads', 'task.enableLsp', 'task.maxRuntimeMs',
+    'task.perCallModel', 'task.enableLsp', 'task.maxRuntimeMs',
     'task.completionProbe', 'task.agentIdleTtlMs', 'task.softRequestBudget',
     'task.softRequestBudgetNotice', 'task.maxEffort', 'task.prewalk',
   ]],

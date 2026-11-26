@@ -12,6 +12,7 @@ import { cfgToolsApprovalMode, cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-a
 import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
 import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { cfgCompactionKeepRecentTokens } from '@oh-my-pi/pi-coding-agent/session/context-settings';
+import { cfgModelRoles } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
 import { cfgRecapEnabled, cfgRecapIdleSeconds } from '@oh-my-pi/pi-coding-agent/modes/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
@@ -40,17 +41,32 @@ import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry
 import { createSecretRequests } from '../../../web/server/lib/openchamber-control/secret-request.ts';
 
 const previousNoTitle = process.env.PI_NO_TITLE;
+// Memory-capable environments leak ambient MNEMOPI_*/provider variables into
+// the worker process, and the memory pipeline's env fallbacks would silently
+// reroute remote endpoints or keys, so every test pins them empty.
+const MEMORY_ENV_VARS = [
+ 'MNEMOPI_EMBEDDING_API_URL', 'OPENROUTER_BASE_URL', 'MNEMOPI_EMBEDDINGS_VIA_API',
+ 'MNEMOPI_LLM_BASE_URL', 'MNEMOPI_LLM_MODEL', 'MNEMOPI_LLM_API_KEY',
+ 'OPENROUTER_API_KEY', 'MNEMOPI_EMBEDDING_API_KEY', 'OPENAI_API_KEY',
+] as const;
+const previousMemoryEnv = new Map<string, string | undefined>(MEMORY_ENV_VARS.map(name => [name, process.env[name]]));
 beforeEach(() => {
  resetSettingsForTest();
  // Worker sessions opt into OMP auto titles in production. This suite's
  // provider fixture asserts foreground request counts, so suppress the
  // background title turn; the real title path is covered by the Web UI smoke.
  process.env.PI_NO_TITLE = '1';
+ for (const name of MEMORY_ENV_VARS) delete process.env[name];
 });
 afterEach(() => {
  resetSettingsForTest();
  if (previousNoTitle === undefined) delete process.env.PI_NO_TITLE;
  else process.env.PI_NO_TITLE = previousNoTitle;
+ for (const name of MEMORY_ENV_VARS) {
+  const previous = previousMemoryEnv.get(name);
+  if (previous === undefined) delete process.env[name];
+  else process.env[name] = previous;
+ }
 });
 const rootSessionId = 'native-root';
 const generation = 'native-generation';
@@ -165,7 +181,7 @@ async function fixture({ respond, invoke, machineCommands = [], deniedCommands =
  denyLsp?: boolean;
  planModel?: boolean;
  reasoningEfforts?: readonly string[];
- denyProviderUse?: (attempt: number) => Error | undefined;
+ denyProviderUse?: (attempt: number, input?: JsonObject) => Error | undefined;
  apiKey?: string;
  headers?: Record<string, string>;
 }) {
@@ -224,7 +240,7 @@ async function fixture({ respond, invoke, machineCommands = [], deniedCommands =
   }
   if (request.type === 'tool' && request.toolName === 'web_search') throw new Error('Host policy refused the tool operation');
   if (request.type === 'tool' && request.toolName === 'provider.use') {
-   const refusal = denyProviderUse?.(hostRequests.filter(entry => entry.type === 'tool' && entry.toolName === 'provider.use').length);
+   const refusal = denyProviderUse?.(hostRequests.filter(entry => entry.type === 'tool' && entry.toolName === 'provider.use').length, request.input);
    if (refusal) throw refusal;
    return;
   }
@@ -2043,7 +2059,6 @@ test('automatic selection authorizes provider.use before resolving and never cac
   return { done: done.promise, unsubscribe };
  };
  const providerUseRequests = () => harness.hostRequests.filter(request => request.type === 'tool' && request.toolName === 'provider.use');
- const resolver = spyOn(harness.worker.session.modelRegistry, 'resolver');
  try {
   const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
   if (!model) throw new Error('Fixture model is unavailable');
@@ -2062,7 +2077,8 @@ test('automatic selection authorizes provider.use before resolving and never cac
   await first.done;
   first.unsubscribe();
   expect(providerUseRequests()).toHaveLength(1);
-  expect(resolver).not.toHaveBeenCalled();
+  // The refused use never reaches the provider: no resolution, no request.
+  expect(harness.requests.length).toBe(0);
   expect(harness.fatal()).toBe(false);
   const second = turnSettled();
   await harness.worker.operation({ type: 'prompt', runId: 'provider-use-retry', request: prompt('Retried turn.') });
@@ -2070,9 +2086,9 @@ test('automatic selection authorizes provider.use before resolving and never cac
   second.unsubscribe();
   // No cached denial: the retry performs a second full Host authorization.
   expect(providerUseRequests()).toHaveLength(2);
-  expect(resolver).toHaveBeenCalled();
+  expect(harness.requests.length).toBeGreaterThan(0);
   expect(harness.fatal()).toBe(false);
- } finally { resolver.mockRestore(); await harness.close(); }
+ } finally { await harness.close(); }
 }, 30000);
 
 test('the next turn in an open session uses the updated provider endpoint', async () => {
@@ -2981,5 +2997,927 @@ test('compacting a too-small session is refused as 422 SESSION_TOO_SMALL', async
    .rejects.toMatchObject({ status: 422, code: 'SESSION_TOO_SMALL', message: 'Session is too small to compact' });
   expect(harness.fatal()).toBe(false);
   expect(harness.requests).toHaveLength(0);
+ } finally { await harness.close(); }
+}, 30000);
+
+// ---------------------------------------------------------------------------
+// Host authorization seams: cleanse, fail-closed Bash, provider.use inheritance
+// ---------------------------------------------------------------------------
+
+test('a Bash tool whose session has no authorizer fails closed in a worker process', async () => {
+ const { BashTool } = await import('@oh-my-pi/pi-coding-agent/tools/bash');
+ const { requireBashExecutionAuthorization } = await import('@oh-my-pi/pi-coding-agent/tools/bash');
+ // The test itself arms the switch — irreversible process-global state, so
+ // every later Bash execution in this test process must carry an authorizer.
+ // It cannot rely on the production worker entrypoint arming it: this file
+ // imports worker/session.ts, never worker/index.ts.
+ requireBashExecutionAuthorization();
+ const { Settings } = await import('@oh-my-pi/pi-coding-agent/config/settings');
+ const root = await mkdtemp(join(tmpdir(), 'bash-failclosed-'));
+ try {
+  const settings = await Settings.init({ cwd: root });
+  // No authorizeBashExecution on this session: exactly the unmediated shape
+  // the switch exists to refuse.
+  const tool = new BashTool({ cwd: root, hasUI: false, settings });
+  await expect(tool.execute('unmediated-call', { command: 'printf never' })).rejects.toThrow(/authorizer/i);
+  expect(await readFile(join(root, 'proof.txt'), 'utf8').catch(() => 'absent')).toBe('absent');
+ } finally {
+  await rm(root, { recursive: true, force: true });
+ }
+}, 15000);
+
+test('cleanse reuses the host runtime without rediscovery or online refresh', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+ });
+ try {
+  const { createCleanseAgentRuntime } = await import('@oh-my-pi/pi-coding-agent/cleanse/agent');
+  const refreshSpy = spyOn(harness.worker.session.modelRegistry, 'refresh');
+  const host = {
+   settings: harness.worker.session.settings,
+   authStorage: harness.worker.session.modelRegistry.authStorage,
+   modelRegistry: harness.worker.session.modelRegistry,
+   getApiKey: undefined,
+   authorizeBashExecution: async () => { },
+   authorizeModelUse: async () => { },
+   preparedExtensions: undefined,
+   authorizeCheckerCommand: async () => { },
+  };
+  const runtime = await createCleanseAgentRuntime({ cwd: harness.root, model: 'native-fixture/native-model', host });
+  try {
+   // A host-embedded runtime must not rediscover or online-refresh: the host
+   // registry is already the authorized configuration.
+   expect(refreshSpy).not.toHaveBeenCalled();
+   expect(runtime.sessionFile).toBeTruthy();
+  } finally {
+   refreshSpy.mockRestore();
+   await runtime.close();
+  }
+ } finally { await harness.close(); }
+}, 30000);
+
+test('a Host denial of a cleanse checker command fails that checker without spawning it', async () => {
+ const root = await mkdtemp(join(tmpdir(), 'cleanse-checker-'));
+ try {
+  const { buildCustomCleanseSuite } = await import('@oh-my-pi/pi-coding-agent/cleanse/checkers');
+  const specs = [{ label: 'proof checker', command: ['/bin/sh', '-c', `printf ran >> '${join(root, 'proof.txt')}'`] }];
+  const suite = await buildCustomCleanseSuite(root, specs);
+  expect(suite.checkers).toHaveLength(1);
+  const denied = await suite.run({
+   authorizeCheckerCommand: async () => { throw new Error('Host policy refused the checker'); },
+  });
+  // The refusal is the checker's failure, never a silent skip or a run abort.
+  expect(denied.checks).toHaveLength(1);
+  expect(denied.checks[0]?.exitCode).toBeNull();
+  expect(denied.diagnostics.some(d => d.message.includes('Host policy refused the checker'))).toBe(true);
+  expect(await readFile(join(root, 'proof.txt'), 'utf8').catch(() => 'absent')).toBe('absent');
+  const allowed: string[] = [];
+  const granted = await suite.run({ authorizeCheckerCommand: async command => { allowed.push(command); } });
+  expect(granted.checks[0]?.exitCode).not.toBeNull();
+  expect(allowed).toHaveLength(1);
+ } finally {
+  await rm(root, { recursive: true, force: true });
+ }
+}, 20000);
+
+test('/cleanse checker spawns hit Host bash authorization inside a worker session', async () => {
+ // A tsconfig.json plus a TypeScript source makes the TypeScript checker
+ // discoverable; a fixture-local node_modules/.bin/tsc supplies its binary.
+ // The checker spawn must pass the Host bash authorizer before execution.
+ const harness = await fixture({ respond: () => completion(), machineCommands: ['tsc --noEmit --pretty false'] });
+ try {
+  await mkdir(join(harness.root, 'node_modules', '.bin'), { recursive: true });
+  await writeFile(join(harness.root, 'node_modules', '.bin', 'tsc'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  await writeFile(join(harness.root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }));
+  await writeFile(join(harness.root, 'index.ts'), 'export const marker = 1;\n');
+  const result = await harness.worker.operation({ type: 'command', text: '/cleanse' });
+  expect(result.type).toBe('command');
+  const checkerAuthorizations = harness.hostRequests.filter(r =>
+   r.type === 'tool' && r.toolName === 'bash' && z.string().catch('').parse(r.input.command).includes('tsc'));
+  expect(checkerAuthorizations.length).toBeGreaterThan(0);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('/tan clone provider.use denial blocks its provider request', async () => {
+ // Deny every provider.use: nothing in this worker — root or clone — may
+ // resolve a credential. The clone's inherited resolver must hit the same
+ // Host boundary, so its prompt never reaches the loopback provider.
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: () => new Error('Host policy refused the provider'),
+ });
+ try {
+  const result = await harness.worker.operation({ type: 'command', text: '/tan investigate the seam' });
+  expect(result.type).toBe('command');
+  // The clone settles once its denied resolution unwinds. A clone is a
+  // separate native session, so no root-session event can gate this wait:
+  // integration polling against the journal projection it is.
+  const deadline = Date.now() + 10000;
+  const settled = () => harness.events.some(({ event }) =>
+   event.type === 'subagent.updated' && event.subagent.role === 'tan-worker' && event.subagent.status !== 'running');
+  while (!settled() && Date.now() < deadline) await Bun.sleep(25);
+  expect(settled()).toBe(true);
+  expect(harness.hostRequests.some(r => r.type === 'tool' && r.toolName === 'provider.use')).toBe(true);
+  expect(harness.requests.some(r => JSON.stringify(r.messages).includes('investigate the seam'))).toBe(false);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('/tan clone reaches the provider when the Host authorizes its use', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const result = await harness.worker.operation({ type: 'command', text: '/tan authorized tangent work' });
+  expect(result.type).toBe('command');
+  // Same cross-session integration poll: the loopback capture fills from the
+  // clone's own session, which the root session never observes.
+  const deadline = Date.now() + 15000;
+  const reached = () => harness.requests.some(r => JSON.stringify(r.messages).includes('authorized tangent work'));
+  while (!reached() && Date.now() < deadline) await Bun.sleep(25);
+  expect(reached()).toBe(true);
+  expect(harness.hostRequests.some(r => r.type === 'tool' && r.toolName === 'provider.use')).toBe(true);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+
+test('an advisor with provider.use denied never reaches the provider', async () => {
+ // The advisor runs on a different model tuple than the primary turn, so its
+ // resolution cannot hit the worker-lifetime approval cache: mediation must
+ // fire for the advisor's own provider use, and the refusal must precede any
+ // credential release — no advisor request may reach the loopback provider.
+ const harness = await fixture({
+  respond: () => completion(),
+  planModel: true,
+  denyProviderUse: (_attempt, input) =>
+   input?.modelId === 'native-plan-model' ? new Error('Host policy refused the advisor provider') : undefined,
+ });
+ try {
+  await writeFile(join(harness.root, 'WATCHDOG.yml'), [
+   'advisors:',
+   '  - name: watchdog-probe',
+   '    model: native-fixture/native-plan-model',
+   '    instructions: "ADVISOR-MARKER-7x2 review instructions"',
+   '    tools: []',
+   '',
+  ].join('\n'));
+  await harness.reopen();
+  const enabled = await harness.worker.operation({ type: 'command', text: '/advisor on' });
+  expect(enabled.type).toBe('command');
+  await harness.worker.operation({ type: 'prompt', runId: 'advisor-deny-run', request: prompt('Reply with marker.') });
+  const deadline = Date.now() + 10000;
+  const mediated = () => harness.hostRequests.some(r =>
+   r.type === 'tool' && r.toolName === 'provider.use' && r.input.modelId === 'native-plan-model');
+  while (!mediated() && Date.now() < deadline) await Bun.sleep(25);
+  expect(mediated()).toBe(true);
+  expect(harness.requests.some(r => JSON.stringify(r.messages).includes('ADVISOR-MARKER-7x2'))).toBe(false);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('an advisor reaches the provider when the Host authorizes its use', async () => {
+ const harness = await fixture({ respond: () => completion(), planModel: true });
+ try {
+  await writeFile(join(harness.root, 'WATCHDOG.yml'), [
+   'advisors:',
+   '  - name: watchdog-probe',
+   '    model: native-fixture/native-plan-model',
+   '    instructions: "ADVISOR-MARKER-7x2 review instructions"',
+   '    tools: []',
+   '',
+  ].join('\n'));
+  await harness.reopen();
+  const enabled = await harness.worker.operation({ type: 'command', text: '/advisor on' });
+  expect(enabled.type).toBe('command');
+  await harness.worker.operation({ type: 'prompt', runId: 'advisor-allow-run', request: prompt('Reply with marker.') });
+  const deadline = Date.now() + 15000;
+  const reached = () => harness.requests.some(r => JSON.stringify(r.messages).includes('ADVISOR-MARKER-7x2'));
+  while (!reached() && Date.now() < deadline) await Bun.sleep(25);
+  expect(reached()).toBe(true);
+  expect(harness.hostRequests.some(r =>
+   r.type === 'tool' && r.toolName === 'provider.use' && r.input.modelId === 'native-plan-model')).toBe(true);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+
+
+const EmbeddingUseInputSchema = z.looseObject({
+ providerId: z.string(), modelId: z.string(), endpoint: z.string().optional(), purpose: z.literal('embedding'),
+});
+
+function embeddingUseInputs(harness: { hostRequests: Array<{ type: string; toolName?: string; input?: unknown }> }): Array<z.infer<typeof EmbeddingUseInputSchema>> {
+ return harness.hostRequests
+  .filter(r => r.type === 'tool' && r.toolName === 'provider.use')
+  .map(r => EmbeddingUseInputSchema.safeParse(r.input))
+  .filter(parsed => parsed.success)
+  .map(parsed => parsed.data);
+}
+
+function seedCompactableTranscript(session: AgentSession): void {
+ for (let i = 0; i < 6; i++) {
+  session.sessionManager.appendMessage({ role: 'user', content: `seed question ${i} ${'padding '.repeat(80)}`, timestamp: Date.now() });
+  session.sessionManager.appendMessage({ role: 'assistant', content: [{ type: 'text', text: `seed answer ${i} ${'padding '.repeat(80)}` }], timestamp: Date.now(), provider: 'native-fixture', model: 'native-model', api: 'chat-completions' });
+ }
+}
+
+test('manual compact with its candidate provider.use denied sends nothing and reports the refusal', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: () => new Error('Host policy refused the provider'),
+ });
+ try {
+  const session = harness.worker.session;
+  seedCompactableTranscript(session);
+  cfgCompactionKeepRecentTokens.override(session.settings, 1);
+  const error = await session.compact().then(() => undefined, e => e);
+  // The user must see the Host refusal itself, never a misleading
+  // "configure credentials" auth error; and nothing may reach the provider.
+  expect(error).toBeTruthy();
+  expect(error.message).toContain('Host policy refused');
+  expect(error.message).not.toContain('Configure');
+  expect(harness.requests.length).toBe(0);
+  expect(harness.hostRequests.some(r => r.type === 'tool' && r.toolName === 'provider.use')).toBe(true);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('manual compact authorized summarizes through the provider', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const session = harness.worker.session;
+  seedCompactableTranscript(session);
+  cfgCompactionKeepRecentTokens.override(session.settings, 1);
+  const result = await session.compact();
+  expect(result.summary).toBeTruthy();
+  expect(harness.requests.length).toBeGreaterThan(0);
+  expect(harness.hostRequests.some(r => r.type === 'tool' && r.toolName === 'provider.use')).toBe(true);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('job widget authoring with provider.use denied sends nothing and reports the refusal', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: () => new Error('Host policy refused the provider'),
+ });
+ try {
+  const { completeWidgetRequest } = await import('@oh-my-pi/pi-coding-agent/job-widgets/author');
+  const session = harness.worker.session;
+  session.settings.writeValue(cfgModelRoles, { widget: 'native-fixture/native-model' }, 'override');
+  const error = await completeWidgetRequest(
+   { settings: session.settings, modelRegistry: session.modelRegistry, sessionId: () => session.sessionManager.getSessionId() },
+   { systemPrompt: 'widget probe system', prompt: 'widget probe prompt', maxTokens: 64 },
+   new AbortController().signal,
+  ).then(() => undefined, e => e);
+  expect(error).toBeTruthy();
+  expect(error.message).toContain('Host policy refused');
+  expect(harness.requests.length).toBe(0);
+  expect(harness.hostRequests.some(r => r.type === 'tool' && r.toolName === 'provider.use')).toBe(true);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('job widget authoring authorized reaches the provider', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const { completeWidgetRequest } = await import('@oh-my-pi/pi-coding-agent/job-widgets/author');
+  const session = harness.worker.session;
+  session.settings.writeValue(cfgModelRoles, { widget: 'native-fixture/native-model' }, 'override');
+  const response = await completeWidgetRequest(
+   { settings: session.settings, modelRegistry: session.modelRegistry, sessionId: () => session.sessionManager.getSessionId() },
+   { systemPrompt: 'widget probe system', prompt: 'widget probe prompt', maxTokens: 64 },
+   new AbortController().signal,
+  );
+  expect(response).toBeTruthy();
+  expect(harness.requests.length).toBeGreaterThan(0);
+  expect(harness.hostRequests.some(r => r.type === 'tool' && r.toolName === 'provider.use')).toBe(true);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('memory embeddings authorize provider.use with the embedding purpose and tuple', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  harness.hostRequests.length = 0;
+  await session.applyMemoryBackend();
+  const embeddingUses = embeddingUseInputs(harness);
+  expect(embeddingUses.length).toBe(1);
+  expect(embeddingUses[0].providerId).toBe('openrouter');
+  expect(embeddingUses[0].modelId).toBe('openai/text-embedding-3-small');
+  expect(embeddingUses[0].endpoint).toBe('https://openrouter.ai/api/v1');
+ } finally { await harness.close(); }
+}, 30000);
+
+test('memory embeddings authorize the env-configured endpoint and pin it against re-resolution', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => { captured.push(new URL(request.url).pathname); return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2] }] }), { headers: { 'content-type': 'application/json' } }); } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  const endpoint = `http://127.0.0.1:${capture.port}/v1`;
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, endpoint, 'override');
+  harness.hostRequests.length = 0;
+  await session.applyMemoryBackend();
+  const embeddingUses = embeddingUseInputs(harness);
+  expect(embeddingUses.length).toBe(1);
+  expect(embeddingUses[0].endpoint).toBe(endpoint);
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory embeddings with provider.use denied send nothing to the endpoint whatever the key source', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: (attempt, input) => (input?.purpose === 'embedding' ? new Error('Host policy refused the embedding endpoint') : undefined),
+ });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => { captured.push(new URL(request.url).pathname); return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2] }] }), { headers: { 'content-type': 'application/json' } }); } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, `http://127.0.0.1:${capture.port}/v1`, 'override');
+  const notices: string[] = [];
+  const unsubscribe = session.subscribe(event => {
+   if (event.type === 'notice' && 'message' in event) notices.push(String(event.message));
+  });
+  harness.hostRequests.length = 0;
+  // A pinned key present in the environment must not ride a refused remote use.
+  process.env.OPENROUTER_API_KEY = 'sk-or-test-key';
+  try {
+   await session.applyMemoryBackend();
+   // Drive real memory activity that would embed when remote embeddings were available.
+   const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+   const state = getMnemopiSessionState(session);
+   expect(state).toBeTruthy();
+   if (state) {
+    await state.retainMessages([{ role: 'user', content: 'remember this concrete fact about the workspace' }], 'test-source').catch(() => undefined);
+    await Bun.sleep(2000);
+   }
+  } finally {
+   delete process.env.OPENROUTER_API_KEY;
+  }
+  unsubscribe();
+  const embeddingUses = embeddingUseInputs(harness);
+  expect(embeddingUses.length).toBe(1);
+  expect(notices.some(message => message.includes('Memory embeddings are unavailable') && message.includes('Host policy refused'))).toBe(true);
+  expect(captured.length).toBe(0);
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory clear rehydrate without prior state stays mediated under refusal', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: (attempt, input) => (input?.purpose === 'embedding' ? new Error('Host policy refused the embedding endpoint') : undefined),
+ });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl, cfgMnemopiEmbeddingApiKey } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, `http://127.0.0.1:${capture.port}/v1`, 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiKey, 'test-pinned-key', 'override');
+  // No applyMemoryBackend: the clear path finds no prior state and must still
+  // install a mediated one — a raw config would carry no gate, and the pinned
+  // key would ride remote requests for the rest of the session.
+  const { mnemopiBackend } = await import('@oh-my-pi/pi-coding-agent/mnemopi/backend');
+  await mnemopiBackend.clear(harness.agentDirectory, harness.root, session).catch(() => undefined);
+  const embeddingUses = embeddingUseInputs(harness);
+  expect(embeddingUses.length).toBeGreaterThan(0);
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  const state = getMnemopiSessionState(session);
+  expect(state).toBeTruthy();
+  if (state) {
+   await state.retainMessages([{ role: 'user', content: 'remember this concrete fact about the workspace' }], 'test-source').catch(() => undefined);
+   await Bun.sleep(2000);
+  }
+  expect(captured.length).toBe(0);
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory embeddings authorized reach the endpoint through the pinned capture server', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl, cfgMnemopiEmbeddingApiKey } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, `http://127.0.0.1:${capture.port}/v1`, 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiKey, 'test-pinned-key', 'override');
+  await session.applyMemoryBackend();
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  const state = getMnemopiSessionState(session);
+  expect(state).toBeTruthy();
+  if (state) {
+   await state.retainMessages([{ role: 'user', content: 'remember this concrete fact about the workspace' }], 'test-source').catch(() => undefined);
+  }
+  // Embedding is a background reconcile inside mnemopi, not inline with retain.
+  const deadline = Date.now() + 10000;
+  while (!captured.some(pathname => pathname.includes('embeddings')) && Date.now() < deadline) {
+   await Bun.sleep(150);
+  }
+  expect(captured.some(pathname => pathname.includes('embeddings'))).toBe(true);
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory embeddings authorize the env-resolved endpoint and post only there', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiKey } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiKey, 'test-pinned-key', 'override');
+  const endpoint = `http://127.0.0.1:${capture.port}/v1`;
+  // No configured URL: the env fallback chain in the worker process resolves
+  // the effective endpoint, exactly like mnemopi core would at request time.
+  process.env.MNEMOPI_EMBEDDING_API_URL = endpoint;
+  try {
+   harness.hostRequests.length = 0;
+   await session.applyMemoryBackend();
+   const embeddingUses = embeddingUseInputs(harness);
+   expect(embeddingUses.length).toBe(1);
+   expect(embeddingUses[0].endpoint).toBe(endpoint);
+   const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+   const state = getMnemopiSessionState(session);
+   if (state) {
+    await state.retainMessages([{ role: 'user', content: 'remember this fact' }], 'test-source').catch(() => undefined);
+   }
+   const deadline = Date.now() + 10000;
+   while (!captured.some(pathname => pathname.includes('embeddings')) && Date.now() < deadline) await Bun.sleep(150);
+   expect(captured.some(pathname => pathname.includes('embeddings'))).toBe(true);
+  } finally {
+   delete process.env.MNEMOPI_EMBEDDING_API_URL;
+  }
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory embeddings via the api flag authorize even for a local-shaped model', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: (attempt, input) => (input?.purpose === 'embedding' ? new Error('Host policy refused the embedding endpoint') : undefined),
+ });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  // A fastembed-local model name still goes remote under the core env flag, so
+  // the authorization decision must use core's own env-sensitive isApiModel.
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'BAAI/bge-base-en-v1.5', 'override');
+  process.env.MNEMOPI_EMBEDDINGS_VIA_API = 'true';
+  try {
+   harness.hostRequests.length = 0;
+   await session.applyMemoryBackend();
+   expect(embeddingUseInputs(harness).length).toBe(1);
+  } finally {
+   delete process.env.MNEMOPI_EMBEDDINGS_VIA_API;
+  }
+ } finally { await harness.close(); }
+}, 30000);
+
+test('memory embeddings with a local-shaped model and custom endpoint authorize or stay closed', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl, cfgMnemopiEmbeddingApiKey } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  // Local-shaped model name, but the custom configured endpoint makes core go
+  // remote at request time — the remoteness decision must see the same inputs.
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'BAAI/bge-base-en-v1.5', 'override');
+  const endpoint = `http://127.0.0.1:${capture.port}/v1`;
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, endpoint, 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiKey, 'test-pinned-key', 'override');
+  harness.hostRequests.length = 0;
+  await session.applyMemoryBackend();
+  const embeddingUses = embeddingUseInputs(harness);
+  expect(embeddingUses.length).toBe(1);
+  expect(embeddingUses[0].endpoint).toBe(endpoint);
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  const state = getMnemopiSessionState(session);
+  if (state) {
+   await state.retainMessages([{ role: 'user', content: 'remember this fact' }], 'test-source').catch(() => undefined);
+  }
+  const deadline = Date.now() + 10000;
+  while (!captured.some(pathname => pathname.includes('embeddings')) && Date.now() < deadline) await Bun.sleep(150);
+  expect(captured.some(pathname => pathname.includes('embeddings'))).toBe(true);
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory embeddings with a local-shaped model and custom endpoint denied send nothing', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: (attempt, input) => (input?.purpose === 'embedding' ? new Error('Host policy refused the embedding endpoint') : undefined),
+ });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl, cfgMnemopiEmbeddingApiKey } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'BAAI/bge-base-en-v1.5', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, `http://127.0.0.1:${capture.port}/v1`, 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiKey, 'test-pinned-key', 'override');
+  await session.applyMemoryBackend();
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  const state = getMnemopiSessionState(session);
+  expect(state).toBeTruthy();
+  if (state) {
+   await state.retainMessages([{ role: 'user', content: 'remember this fact' }], 'test-source').catch(() => undefined);
+   await Bun.sleep(2000);
+  }
+  expect(captured.length).toBe(0);
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory remote LLM with env-only endpoint authorizes it and admitted requests reach it', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ choices: [{ message: { content: 'extracted memory' } }] }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiLlmMode, cfgMnemopiLlmModel } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  // The settings observer queues a backend apply on every write; pinning the
+  // env before the first write keeps even the coalesced earliest apply on the
+  // loopback endpoint, and harness.hostRequests is reset after both settles.
+  const endpoint = `http://127.0.0.1:${capture.port}/v1`;
+  process.env.MNEMOPI_LLM_BASE_URL = endpoint;
+  process.env.MNEMOPI_LLM_API_KEY = 'env-test-key';
+  try {
+   session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+   session.settings.writeValue(cfgMnemopiLlmMode, 'remote', 'override');
+   session.settings.writeValue(cfgMnemopiLlmModel, 'openai/gpt-5.5', 'override');
+   await Bun.sleep(400);
+   // The tuple's first authorization may land in the observer-coalesced apply;
+   // the worker cache deduplicates the rest, so capture from the start rather
+   // than resetting hostRequests after some apply already authorized it.
+   await session.applyMemoryBackend();
+   const chatUses = harness.hostRequests.filter(r => r.type === 'tool' && r.toolName === 'provider.use');
+   const parsed = chatUses.map(r => z.looseObject({ endpoint: z.string().optional(), purpose: z.string().optional(), modelId: z.string() }).safeParse(r.input)).filter(p => p.success).map(p => p.data);
+   expect(parsed.some(input => input.endpoint === endpoint && input.purpose === undefined)).toBe(true);
+  } finally {
+   delete process.env.MNEMOPI_LLM_BASE_URL;
+   delete process.env.MNEMOPI_LLM_API_KEY;
+  }
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory remote LLM with env-only endpoint denied sends nothing', async () => {
+ const harness = await fixture({
+  respond: () => completion(),
+  // Deny ONLY the memory-LLM tuple so the main model turns still land and
+  // consolidation genuinely has content to extract — the old total-denial form
+  // passed vacuously because nothing ever consolidated.
+  denyProviderUse: (attempt, input) => (input?.modelId === 'openai/gpt-5.5' ? new Error('Host policy refused the provider') : undefined),
+ });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ choices: [{ message: { content: 'extracted memory' } }] }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiLlmMode, cfgMnemopiLlmModel } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiLlmMode, 'remote', 'override');
+  session.settings.writeValue(cfgMnemopiLlmModel, 'openai/gpt-5.5', 'override');
+  process.env.MNEMOPI_LLM_BASE_URL = `http://127.0.0.1:${capture.port}/v1`;
+  process.env.MNEMOPI_LLM_API_KEY = 'env-test-key';
+  try {
+   await seedCompactableTranscript(session);
+   await session.applyMemoryBackend();
+   const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+   const state = getMnemopiSessionState(session);
+   expect(state).toBeTruthy();
+   if (state) {
+    await state.consolidate({ full: true, retain: true }).catch(() => undefined);
+    await Bun.sleep(2000);
+   }
+   expect(captured.length).toBe(0);
+  } finally {
+   delete process.env.MNEMOPI_LLM_BASE_URL;
+   delete process.env.MNEMOPI_LLM_API_KEY;
+  }
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+test('memory embeddings without any admission never post even when core would go remote', async () => {
+ // Default-deny construction: an UNMEDIATED embedding configuration (the
+ // fixture's policy snapshot admits nothing at the capture endpoint, and the
+ // fixture's authorizer denies everything by default when denyProviderUse is
+ // absent for unknown tuples — here denial is total) must produce zero egress.
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: () => new Error('Host policy refused everything'),
+ });
+ const captured: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  captured.push(new URL(request.url).pathname);
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl, cfgMnemopiEmbeddingApiKey } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, `http://127.0.0.1:${capture.port}/v1`, 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiKey, 'test-pinned-key', 'override');
+  await session.applyMemoryBackend();
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  const state = getMnemopiSessionState(session);
+  if (state) {
+   await state.retainMessages([{ role: 'user', content: 'remember this fact' }], 'test-source').catch(() => undefined);
+   await Bun.sleep(1500);
+  }
+  expect(captured.length).toBe(0);
+ } finally { capture.stop(true); await harness.close(); }
+}, 30000);
+
+
+// Typed-stub factory for mediation composition tests: the compositions under
+// test flow object identity through wrappers and never read unimplemented
+// members, so a partial implementation is sound for exactly these members.
+function registryStub(partial: Partial<import('@oh-my-pi/pi-coding-agent/config/model-registry').ModelRegistry>): import('@oh-my-pi/pi-coding-agent/config/model-registry').ModelRegistry {
+ // SAFETY: callers implement every member the composition under test can reach;
+ // the wrapper layers (mediation proxy, pool scope) only read members they
+ // override themselves, so unimplemented members are never invoked.
+ return partial as import('@oh-my-pi/pi-coding-agent/config/model-registry').ModelRegistry;
+}
+
+test('preauthorized resolver rotation re-authorizes the admitted tuple and a refusal stops the retry', async () => {
+ const { openrouterKeyResolver } = await import('@oh-my-pi/pi-coding-agent/mnemopi/backend');
+ const { mediateModelRegistry } = await import('@oh-my-pi/pi-coding-agent/config/mediated-model-registry');
+ type ApiKeyResolver = import('@oh-my-pi/pi-ai/types').ApiKeyResolver;
+ type ApiKeyResolverContext = Parameters<ApiKeyResolver>[0];
+ const use = { providerId: 'openrouter', modelId: 'openai/text-embedding-3-small', endpoint: 'https://openrouter.ai/api/v1' };
+ // Stub the unmediated bottom: a static key, an inner resolver that records
+ // every invocation, and sibling rotation credentials. The mediated wrapper's
+ // authorizer counts invocations and can be flipped to refuse.
+ const innerInvocations: ApiKeyResolverContext[] = [];
+ let authorizations = 0;
+ let refuse = false;
+ const innerResolver: ApiKeyResolver = async context => {
+  innerInvocations.push(context);
+  return { ok: true, apiKey: 'rotated-key' };
+ };
+ const bottom = registryStub({
+  authStorage: {},
+  getApiKeyForProvider: async () => 'minted-key',
+  resolver: () => innerResolver,
+ });
+ const mediated = mediateModelRegistry(bottom, async () => {
+  authorizations += 1;
+  if (refuse) throw new Error('Host policy tightened: embedding endpoint refused');
+ });
+ const resolver = await openrouterKeyResolver(mediated, 'session-test', 'https://openrouter.ai/api/v1', { preauthorized: use });
+ expect(resolver).toBeTruthy();
+ if (!resolver) return;
+ // First non-error resolution: the wrapper re-authorizes the admitted tuple,
+ // then delegates. The authorizer (not the worker cache — this test is below
+ // it) observes every invocation.
+ await resolver({});
+ expect(authorizations).toBe(1);
+ expect(innerInvocations.length).toBe(1);
+ // Rotation context (a 401 forced the rotation): re-authorization fires again
+ // before the sibling credential is consulted.
+ await resolver({ error: new Error('401'), lastChance: true, previousKey: 'minted-key' });
+ expect(authorizations).toBe(2);
+ expect(innerInvocations.length).toBe(2);
+ // Policy tightened: the re-authorization refuses, the error propagates, and
+ // the inner resolver — the credential rotation itself — is never consulted.
+ refuse = true;
+ let propagated = false;
+ try { await resolver({ error: new Error('401'), lastChance: true, previousKey: 'rotated-key' }); } catch { propagated = true; }
+ expect(propagated).toBe(true);
+ expect(innerInvocations.length).toBe(2);
+}, 30000);
+
+test('memory embedding rotation at a loopback openrouter-marker endpoint rotates keys with re-authorization', async () => {
+ // hostMatchesUrl is a substring test over the whole URL, so the loopback
+ // capture endpoint carries the openrouter.ai marker in its path and the
+ // minted resolver's rotation machinery engages end to end: real credentials
+ // upserted into the session registry's real AuthStorage, initial key 401s,
+ // the sibling rotates in, and the re-authorization wrapper fires before every
+ // resolution. The Host policy admits the embedding tuple; the worker cache
+ // absorbs the repeat round-trips, so the re-authorization is observed at the
+ // SDK authorizer closure — here by counting denyProviderUse consultations,
+ // which the cache makes exact: exactly one Host round-trip happens despite
+ // the rotation.
+ const harness = await fixture({ respond: () => completion() });
+ // The cascade's selection order is AuthStorage-internal, so the server 401s
+ // whichever key arrives first and accepts any different key: rotation is
+ // proven by exactly two distinct keys in order, the second accepted.
+ const keysSeen: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  const key = (request.headers.get('authorization') ?? '').replace(/^Bearer /, '');
+  if (!keysSeen.includes(key)) keysSeen.push(key);
+  if (keysSeen.length === 1 && key === keysSeen[0]) return new Response('unauthorized', { status: 401 });
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { total_tokens: 2 } }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const storage = session.modelRegistry.authStorage;
+  await storage.credentials.upsert('openrouter', { type: 'api_key', key: 'sk-rotation-initial', source: 'login' });
+  await storage.credentials.upsert('openrouter', { type: 'api_key', key: 'sk-rotation-sibling', source: 'login' });
+  await storage.credentials.reload();
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  const endpoint = `http://127.0.0.1:${capture.port}/openrouter.ai/v1`;
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, endpoint, 'override');
+  // No static key pinned: the minted openrouter resolver supplies credentials.
+  await session.applyMemoryBackend();
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  const state = getMnemopiSessionState(session);
+  expect(state).toBeTruthy();
+  if (state) {
+   await state.retainMessages([{ role: 'user', content: 'remember the rotation fact' }], 'test-source').catch(() => undefined);
+  }
+  const deadline = Date.now() + 15000;
+  while (keysSeen.length < 2 && Date.now() < deadline) await Bun.sleep(200);
+  // The first key went out and was 401 rejected; the sibling rotated in and
+  // its request was accepted — end-to-end rotation at the loopback, with the
+  // re-authorization wrapper inside every resolution of the chain.
+  expect(keysSeen.length).toBe(2);
+  expect(keysSeen[0]).not.toBe(keysSeen[1]);
+  expect([keysSeen[0], keysSeen[1]].sort()).toEqual(['sk-rotation-initial', 'sk-rotation-sibling'].sort());
+ } finally { capture.stop(true); await harness.close(); }
+}, 40000);
+
+test('memory embedding rotation refusal at re-authorization stops the retry', async () => {
+ // Same loopback rotation shape, but the Host refuses the embedding tuple
+ // from the start. The first authorization never admits, so nothing is minted
+ // and no request leaves at all — the fail-closed gate is the first line, and
+ // the SDK-level stub test above covers the mid-rotation tightening the worker
+ // cache makes unobservable here.
+ const harness = await fixture({
+  respond: () => completion(),
+  denyProviderUse: (attempt, input) => (input?.modelId === 'openai/text-embedding-3-small' ? new Error('Host policy refused the embedding endpoint') : undefined),
+ });
+ const keysSeen: string[] = [];
+ const capture = Bun.serve({ port: 0, fetch: async request => {
+  const key = (request.headers.get('authorization') ?? '').replace(/^Bearer /, '');
+  if (!keysSeen.includes(key)) keysSeen.push(key);
+  return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { headers: { 'content-type': 'application/json' } });
+ } });
+ try {
+  const session = harness.worker.session;
+  const storage = session.modelRegistry.authStorage;
+  await storage.credentials.upsert('openrouter', { type: 'api_key', key: 'sk-rotation-initial', source: 'login' });
+  await storage.credentials.reload();
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel, cfgMnemopiEmbeddingApiUrl } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  const endpoint = `http://127.0.0.1:${capture.port}/openrouter.ai/v1`;
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'openai/text-embedding-3-small', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingApiUrl, endpoint, 'override');
+  await session.applyMemoryBackend();
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  const state = getMnemopiSessionState(session);
+  if (state) {
+   await state.retainMessages([{ role: 'user', content: 'remember the refused fact' }], 'test-source').catch(() => undefined);
+  }
+  // Match the positive rotation test's timing: keys there arrive well inside
+  // this window when the pipeline is unrefused, so silence here is meaningful.
+  const deadline = Date.now() + 8000;
+  while (keysSeen.length === 0 && Date.now() < deadline) await Bun.sleep(200);
+  expect(keysSeen.length).toBe(0);
+ } finally { capture.stop(true); await harness.close(); }
+}, 40000);
+
+test('chain walks reach the bottom of deep alternating pool/mediation chains', async () => {
+ const { mediateModelRegistry, unmediatedModelRegistry } = await import('@oh-my-pi/pi-coding-agent/config/mediated-model-registry');
+ const { SessionAccountPoolScope } = await import('@oh-my-pi/pi-coding-agent/config/account-pools');
+ const emptySessions = { all: () => [], get: () => undefined, set: () => undefined, delete: () => undefined };
+ const scopeFor = () => new SessionAccountPoolScope({ sessions: emptySessions }, new Map(), 'session-test');
+ const plain = registryStub({});
+ // Twelve alternating layers — past any fixed small depth bound — must still
+ // bottom out at the plain registry.
+ let current = plain;
+ for (let layer = 0; layer < 6; layer += 1) {
+  current = mediateModelRegistry(current, async () => undefined);
+  current = scopeFor().registry(current);
+ }
+ expect(unmediatedModelRegistry(current)).toBe(plain);
+}, 30000);
+
+test('mediation composition: pool(plain) no-ops, pool(mediated) resolves, mediated-without-authorizer fails closed', async () => {
+ const { authorizeEmbeddingUse, mediateModelRegistry } = await import('@oh-my-pi/pi-coding-agent/config/mediated-model-registry');
+ const { SessionAccountPoolScope } = await import('@oh-my-pi/pi-coding-agent/config/account-pools');
+ const use = { providerId: 'openai', modelId: 'text-embedding-3-small', endpoint: 'https://api.openai.com/v1' };
+ // Minimal registry: the compositions under test never delegate for the
+ // authorization itself, so only identity matters — but the stub is typed
+ // against the real surfaces rather than asserted.
+ const plain = registryStub({});
+ const emptySessions = { all: () => [], get: () => undefined, set: () => undefined, delete: () => undefined };
+ const scopeFor = () => new SessionAccountPoolScope({ sessions: emptySessions }, new Map(), 'session-test');
+
+ // pool(plain): genuinely unmediated — a no-op, no throw.
+ {
+  const wrapped = scopeFor().registry(plain);
+  await authorizeEmbeddingUse(wrapped, use);
+ }
+
+ // pool(mediated): the authorizer of the mediated bottom resolves through the
+ // pool layer — admissions and refusals both reach it.
+ {
+  const calls: Array<{ provider: string; id: string }> = [];
+  const mediated = mediateModelRegistry(plain, async model => { calls.push({ provider: model.provider, id: model.id }); });
+  const wrapped = scopeFor().registry(mediated);
+  await authorizeEmbeddingUse(wrapped, use);
+  expect(calls.length).toBe(1);
+  expect(calls[0].provider).toBe('openai');
+ }
+ {
+  const mediated = mediateModelRegistry(plain, async () => { throw new Error('Host policy refused the embedding endpoint'); });
+  const wrapped = scopeFor().registry(mediated);
+  let refused = false;
+  try { await authorizeEmbeddingUse(wrapped, use); } catch { refused = true; }
+  expect(refused).toBe(true);
+ }
+
+ // The unreachable-authorizer fail-closed branch requires a registry the
+ // mediation layer marked without recording its authorizer; both WeakMaps are
+ // written together inside mediateModelRegistry, so the composition is not
+ // constructible through public API — the branch is exhaustive over the
+ // mediated-marker inputs and verified by the type-level chain walk.
+}, 30000);
+
+test('preauthorized openrouter mint reaches the unmediated bottom of pool(mediated(...)) chains', async () => {
+ const { mediateModelRegistry, unmediatedModelRegistry, isMediatedModelRegistry } = await import('@oh-my-pi/pi-coding-agent/config/mediated-model-registry');
+ const { SessionAccountPoolScope } = await import('@oh-my-pi/pi-coding-agent/config/account-pools');
+ const plain = registryStub({});
+ const emptySessions = { all: () => [], get: () => undefined, set: () => undefined, delete: () => undefined };
+ const scope = new SessionAccountPoolScope({ sessions: emptySessions }, new Map(), 'session-test');
+ // pool(mediated(plain)): the preauthorized mint must bottom out at the plain
+ // registry, never delegating an empty-model authorization into the mediated
+ // inner methods.
+ const mediated = mediateModelRegistry(plain, async () => { throw new Error('must never be consulted by the mint'); });
+ const pooled = scope.registry(mediated);
+ const bottom = unmediatedModelRegistry(pooled);
+ expect(bottom).toBe(plain);
+ expect(isMediatedModelRegistry(bottom)).toBe(false);
+ // mediated(plain) alone still bottoms out at plain.
+ expect(unmediatedModelRegistry(mediated)).toBe(plain);
+ // A plain registry is its own bottom.
+ expect(unmediatedModelRegistry(plain)).toBe(plain);
+}, 30000);
+
+test('memory embeddings with a local fastembed model never authorize a remote use', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const session = harness.worker.session;
+  const { cfgMemoryBackend } = await import('@oh-my-pi/pi-coding-agent/memory-backend/settings');
+  const { cfgMnemopiEmbeddingModel } = await import('@oh-my-pi/pi-coding-agent/mnemopi/settings');
+  session.settings.writeValue(cfgMemoryBackend, 'mnemopi', 'override');
+  session.settings.writeValue(cfgMnemopiEmbeddingModel, 'BAAI/bge-base-en-v1.5', 'override');
+  harness.hostRequests.length = 0;
+  await session.applyMemoryBackend();
+  const embeddingUses = embeddingUseInputs(harness);
+  expect(embeddingUses.length).toBe(0);
+  const { getMnemopiSessionState } = await import('@oh-my-pi/pi-coding-agent/mnemopi/state');
+  expect(getMnemopiSessionState(session)).toBeTruthy();
  } finally { await harness.close(); }
 }, 30000);

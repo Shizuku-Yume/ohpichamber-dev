@@ -1,5 +1,5 @@
 diff --git a/src/async/job-manager.ts b/src/async/job-manager.ts
-index 56f1858e2b..7477e96b81 100644
+index 56f1858e2bd6df883565b5be5b3eb2faeaf13ebd..7477e96b81f05b57b0c4faf3590bbf375224f248 100644
 --- a/src/async/job-manager.ts
 +++ b/src/async/job-manager.ts
 @@ -51,6 +51,12 @@ export const ASYNC_JOB_MANAGER_SHUTDOWN_REASON = Symbol("AsyncJobManager shutdow
@@ -64,8 +64,478 @@ index 56f1858e2b..7477e96b81 100644
  		this.widgets?.dispose();
  		this.widgets = undefined;
  		return jobsSettled && drained;
+diff --git a/src/cleanse/agent.ts b/src/cleanse/agent.ts
+index fa3cb93d37ec09029c2c21f89763b99efafa0d1b..1e59774e967bdbfc0fbfe309939f83bb0de4e443 100644
+--- a/src/cleanse/agent.ts
++++ b/src/cleanse/agent.ts
+@@ -18,7 +18,7 @@ import { CLEANSE_PARSER_KINDS } from "./parsers";
+ import assignmentPrompt from "./prompts/assignment.md" with { type: "text" };
+ import discoveryPrompt from "./prompts/discovery.md" with { type: "text" };
+ import followUpPrompt from "./prompts/follow-up.md" with { type: "text" };
+-import type { CleanseAgentOutcome, CleanseAssignment, CleanseDiagnostic, CleanseLoopResult } from "./types";
++import type { CleanseAgentOutcome, CleanseAssignment, CleanseDiagnostic, CleanseHostContext, CleanseLoopResult } from "./types";
+ 
+ const MAX_DIAGNOSTIC_MESSAGE = 4_000;
+ 
+@@ -68,12 +68,25 @@ export async function createCleanseAgentRuntime(options: {
+ 	cwd?: string;
+ 	model: string;
+ 	hooks?: CleanseAgentHooks;
++	/**
++	 * Host-owned runtime for an embedded run. When present, the cleanse session
++	 * reuses the host's settings, credential store and model registry — no fresh
++	 * discovery and no online refresh — and every repair subagent inherits the
++	 * host's credential resolver, bash authorization, provider-use mediation and
++	 * prepared extensions, so their tool calls reach the host's observer and
++	 * authorization path like the host session's own.
++	 */
++	host?: CleanseHostContext;
+ }): Promise<CleanseAgentRuntime> {
+ 	const cwd = options.cwd ?? getProjectDir();
+-	const settings = await Settings.init({ cwd });
+-	const authStorage = await discoverAuthStorage(undefined, { settings });
+-	const modelRegistry = new ModelRegistry(authStorage);
+-	await modelRegistry.refresh();
++	const host = options.host;
++	const settings = host?.settings ?? (await Settings.init({ cwd }));
++	const authStorage = host?.authStorage ?? (await discoverAuthStorage(undefined, { settings }));
++	const modelRegistry = host?.modelRegistry ?? new ModelRegistry(authStorage);
++	// A host registry already reflects its authorized configuration; only a
++	// standalone registry needs the network discovery this run would otherwise
++	// perform unmediated.
++	if (!host) await modelRegistry.refresh();
+ 	const resolved = resolveCliModel({ cliModel: options.model, modelRegistry, settings });
+ 	if (resolved.error || !resolved.model) {
+ 		throw new Error(resolved.error ?? `Model "${options.model}" not found`);
+@@ -112,6 +125,10 @@ export async function createCleanseAgentRuntime(options: {
+ 		settings,
+ 		authStorage,
+ 		modelRegistry,
++		getApiKey: host?.getApiKey,
++		authorizeBashExecution: host?.authorizeBashExecution,
++		authorizeModelUse: host?.authorizeModelUse,
++		preparedExtensions: host?.preparedExtensions?.slice(),
+ 	};
+ 	let closed = false;
+ 	/** Live worker number → reserved registry agent id, for follow-up steering. */
+diff --git a/src/cleanse/checkers.ts b/src/cleanse/checkers.ts
+index 4aa697ba0ec7007f800e16a9bb17e80a9f438833..a7d560bf61744babc5dc1c0bce085025f46c6973 100644
+--- a/src/cleanse/checkers.ts
++++ b/src/cleanse/checkers.ts
+@@ -88,6 +88,12 @@ export interface CleanseSuiteRunOptions {
+ 	events?: CleanseCheckerRunEvents;
+ 	/** Interval between partial-output parses for streaming checkers; default 5s. */
+ 	flushMs?: number;
++	/**
++	 * Host mediation of each checker command line before its spawn. A rejection
++	 * is that checker's failure for this pass — surfaced as a checker diagnostic
++	 * like any other checker failure — never a silently skipped gate.
++	 */
++	authorizeCheckerCommand?(command: string, signal?: AbortSignal): Promise<void>;
+ }
+ 
+ /** Re-runnable checker set discovered from one project snapshot. */
+@@ -163,14 +169,14 @@ function createSuite(
+ 			active = plans.filter(plan => wanted.has(plan.id));
+ 		},
+ 		async run(options?: CleanseSuiteRunOptions): Promise<CleanseDiagnosticReport> {
+-			const { signal, events, flushMs = DEFAULT_FLUSH_MS } = options ?? {};
++			const { signal, events, flushMs = DEFAULT_FLUSH_MS, authorizeCheckerCommand } = options ?? {};
+ 			const execute = async (
+ 				plan: CheckerPlan,
+ 				onDiagnostics?: (diagnostics: readonly CleanseDiagnostic[]) => void,
+ 			): Promise<CleanseCheckResult> => {
+ 				events?.onCheckerStart?.(toDescriptor(plan));
+ 				const startedAt = Date.now();
+-				const check = await runChecker(plan, projectCwd, allowedFiles, { signal, flushMs, onDiagnostics });
++				const check = await runChecker(plan, projectCwd, allowedFiles, { signal, flushMs, onDiagnostics, authorizeCheckerCommand });
+ 				events?.onCheckerEnd?.(check, Date.now() - startedAt);
+ 				return check;
+ 			};
+@@ -1208,6 +1214,8 @@ interface RunCheckerOptions {
+ 	onDiagnostics?: (diagnostics: readonly CleanseDiagnostic[]) => void;
+ 	/** Interval between partial-output parses; only used with `onDiagnostics`. */
+ 	flushMs?: number;
++	/** Host mediation of the checker command line before its spawn; a rejection is this checker's failure. */
++	authorizeCheckerCommand?(command: string, signal?: AbortSignal): Promise<void>;
+ }
+ 
+ async function runChecker(
+@@ -1241,6 +1249,7 @@ async function runChecker(
+ 		diagnostics,
+ 	});
+ 	try {
++		await options.authorizeCheckerCommand?.(plan.command, signal);
+ 		using child = ptree.spawn([plan.executable, ...plan.args], { cwd: plan.cwd, signal, stderr: "full" });
+ 		const stdout: OutputAccumulator = { chunks: [], read: 0 };
+ 		const stderr: OutputAccumulator = { chunks: [], read: 0 };
+diff --git a/src/cleanse/index.ts b/src/cleanse/index.ts
+index 19200edfc809a5ad64431f51ca1a0baf55c57e13..46b622ada6541de2b21acad945363b54c273a2a3 100644
+--- a/src/cleanse/index.ts
++++ b/src/cleanse/index.ts
+@@ -16,7 +16,7 @@ import {
+ 	discoverCleanseDiagnosticSuite,
+ } from "./checkers";
+ import { runCleanseLoop } from "./loop";
+-import type { CleanseCommandResult, CleanseDiagnosticReport, CleanseLoopResult } from "./types";
++import type { CleanseCommandResult, CleanseDiagnosticReport, CleanseHostContext, CleanseLoopResult } from "./types";
+ 
+ const DEFAULT_MODEL = "@smol";
+ const DISPLAY_FILE_LIMIT = 50;
+@@ -30,6 +30,18 @@ export interface CleanseCommandOptions {
+ 	request?: string;
+ 	/** Run every discovered checker without the interactive picker. */
+ 	all?: boolean;
++	/**
++	 * Project directory the run scans and repairs. Default: the process project
++	 * directory — the standalone CLI behavior. A host-embedded run passes the
++	 * session workspace, whose project root can differ from the host process.
++	 */
++	cwd?: string;
++	/**
++	 * Host-owned runtime for a host-embedded run. Absent keeps the standalone
++	 * CLI behavior: fresh settings/auth/model discovery and unmediated checker
++	 * spawns.
++	 */
++	host?: CleanseHostContext;
+ }
+ 
+ /** Rendering and prompting seam for one cleanse run; satisfied by the CLI streams and the TUI overlay. */
+@@ -59,7 +71,7 @@ export async function runCleanse(
+ 	const maxAgents = options.maxAgents ?? 32;
+ 	if (!Number.isInteger(maxAgents) || maxAgents <= 0) throw new Error("--agents must be a positive integer");
+ 	const model = options.model?.trim() || DEFAULT_MODEL;
+-	const cwd = getProjectDir();
++	const cwd = options.cwd ?? getProjectDir();
+ 	let runtime: CleanseAgentRuntime | undefined;
+ 	let runtimePromise: Promise<CleanseAgentRuntime> | undefined;
+ 	let loopResult: CleanseLoopResult | undefined;
+@@ -77,7 +89,7 @@ export async function runCleanse(
+ 		runtimePromise ??= (async () => {
+ 			board.phase(`Resolving model ${model}...`);
+ 			try {
+-				runtime = await createCleanseAgentRuntime({ cwd, model, hooks });
++				runtime = await createCleanseAgentRuntime({ cwd, model, hooks, host: options.host });
+ 			} finally {
+ 				board.phase(undefined);
+ 			}
+@@ -159,12 +171,18 @@ export async function runCleanse(
+ 				collect: (onDiagnostics, loopSignal) =>
+ 					activeSuite.run({
+ 						signal: loopSignal,
++						authorizeCheckerCommand: options.host?.authorizeCheckerCommand,
+ 						events: {
+ 							...checkerEvents,
+ 							onDiagnostics: (_checker, diagnostics) => onDiagnostics(diagnostics),
+ 						},
+ 					}),
+-				verify: loopSignal => activeSuite.run({ signal: loopSignal, events: checkerEvents }),
++				verify: loopSignal =>
++					activeSuite.run({
++						signal: loopSignal,
++						events: checkerEvents,
++						authorizeCheckerCommand: options.host?.authorizeCheckerCommand,
++					}),
+ 				dispatch: async (assignment, worker, peers, loopSignal) => {
+ 					const activeRuntime = await ensureRuntime();
+ 					return activeRuntime.dispatchWorker(
+diff --git a/src/cleanse/types.ts b/src/cleanse/types.ts
+index e3d78f3130639b97ff45dba914de81898df0c083..4f8301f2f54c87397f6e1efdc31ecabe9e3fdc77 100644
+--- a/src/cleanse/types.ts
++++ b/src/cleanse/types.ts
+@@ -1,3 +1,30 @@
++import type { Settings } from "../config/settings";
++import type { ModelRegistry } from "../config/model-registry";
++import type { PreparedExtension } from "../extensibility/extensions/types";
++import type { AuthStorage } from "../session/auth-storage";
++import type { ToolSession } from "../tools";
++
++/**
++ * Host-owned runtime objects a host-embedded cleanse run reuses instead of
++ * rediscovering its own. Every field is the host session's exact object: the
++ * repair subagents inherit the host's tool-call observer, bash authorization
++ * and provider-use mediation unchanged. `authorizeCheckerCommand` mediates
++ * every checker executable spawn; a rejection is that checker's failure, never
++ * a silently skipped gate.
++ */
++export interface CleanseHostContext {
++	readonly settings: Settings;
++	readonly authStorage: AuthStorage;
++	readonly modelRegistry: ModelRegistry;
++	readonly getApiKey?: ToolSession["getApiKey"];
++	readonly authorizeBashExecution?: ToolSession["authorizeBashExecution"];
++	readonly authorizeModelUse?: ToolSession["authorizeModelUse"];
++	readonly preparedExtensions?: readonly PreparedExtension[];
++	/** Host mediation of one checker command line (the display command of the checker plan) before its spawn. */
++	authorizeCheckerCommand(command: string, signal?: AbortSignal): Promise<void>;
++}
++
++
+ /** Severity normalized across checker-specific output formats. */
+ export type CleanseSeverity = "error" | "warning" | "info";
+ 
+diff --git a/src/config/account-pools.ts b/src/config/account-pools.ts
+index ed6d34b4627bcf6b2a2dfa86752881629a7d759b..ec301526376a0d78d6065dd5714e96c58efc4629 100644
+--- a/src/config/account-pools.ts
++++ b/src/config/account-pools.ts
+@@ -54,6 +54,15 @@ export function validateAgentAccountPools(value: unknown): Record<string, OAuthA
+ /** Unscoped registry behind each registry {@link SessionAccountPoolScope.registry} returned. */
+ const scopedRegistryTargets = new WeakMap<ModelRegistry, ModelRegistry>();
+ 
++/**
++ * The registry a pool-scoped wrapper delegates into, or undefined when the
++ * registry is not a pool wrapper. Host-authorization mediation resolves the
++ * authorizer of the underlying mediated registry through this link.
++ */
++export function scopedRegistryTarget(registry: ModelRegistry): ModelRegistry | undefined {
++	return scopedRegistryTargets.get(registry);
++}
++
+ /**
+  * One agent session's OAuth account pools, enforced at its key lookups.
+  *
+diff --git a/src/config/mediated-model-registry.ts b/src/config/mediated-model-registry.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..29a3cc761b472219815b31d4aab29c27e78c8bb1
+--- /dev/null
++++ b/src/config/mediated-model-registry.ts
+@@ -0,0 +1,234 @@
++import type { AuthApiKeyOptions } from "@oh-my-pi/pi-ai/auth-storage";
++import type { Api, Model } from "@oh-my-pi/pi-ai/types";
++import { type ApiKeyResolverModel, type ApiKeyResolverOptions, createApiKeyResolver } from "./api-key-resolver";
++import { scopedRegistryTarget } from "./account-pools";
++import type { ModelRegistry } from "./model-registry";
++
++/**
++ * Host mediation hook for provider use. Runs before any credential release:
++ * a rejection refuses the use and no credential is minted. The model shape is
++ * the resolution slice every mint site can supply — a full `Model` satisfies
++ * it structurally, and provider-scoped resolutions synthesize the id/baseUrl
++ * they carry.
++ */
++export type AuthorizeModelUse = (model: {
++	provider: string;
++	id: string;
++	baseUrl?: string;
++	/**
++	 * `"embedding"` for a remote embedding request: memory content derived from
++	 * the workspace transcript leaves for the embedding endpoint, which is a
++	 * provider use distinct from chat resolution and admitted by its own Host
++	 * rule. Absent for chat and every other resolution.
++	 */
++	purpose?: "embedding";
++}) => Promise<void>;
++/**
++ * Host refusal of one provider use. Distinct from credential-absence errors
++ * (`MissingApiKeyError`): the credential may exist, but policy forbids this
++ * use, so candidate loops should treat it as "this candidate is unusable"
++ * while the terminal error must name the refusal rather than telling the user
++ * to configure credentials. Carries the original refusal as `cause`.
++ */
++export class HostModelUseRefusedError extends Error {
++	readonly provider: string;
++	readonly modelId: string;
++	constructor(model: { provider: string; id: string }, cause: unknown) {
++		super(`Host policy refused provider use for ${model.provider}${model.id ? `/${model.id}` : ""}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
++		this.name = "HostModelUseRefusedError";
++		this.provider = model.provider;
++		this.modelId = model.id;
++	}
++}
++
++async function authorizeOrThrow(
++	authorize: AuthorizeModelUse,
++	model: { provider: string; id: string; baseUrl?: string; purpose?: "embedding" },
++): Promise<void> {
++	try {
++		await authorize(model);
++	} catch (error) {
++		if (error instanceof HostModelUseRefusedError) throw error;
++		throw new HostModelUseRefusedError(model, error);
++	}
++}
++
++/** Registries already mediated by {@link mediateModelRegistry}; re-wrapping one is a no-op. */
++const mediatedRegistries = new WeakSet<ModelRegistry>();
++const mediationTargets = new WeakMap<ModelRegistry, ModelRegistry>();
++const mediationAuthorizers = new WeakMap<ModelRegistry, AuthorizeModelUse>();
++
++/**
++ * Authorize one remote embedding use against the Host policy of a mediated
++ * registry. Memory embeddings send text derived from the workspace transcript
++ * to the embedding endpoint, so in a mediated session no remote embedding
++ * request may leave without this authorization — regardless of whether the
++ * key comes from the registry, a pinned configuration or the environment.
++ * Throws {@link HostModelUseRefusedError} on refusal; a no-op for an
++ * unmediated registry, where nothing policy-mediated the session to begin
++ * with.
++ */
++export async function authorizeEmbeddingUse(
++	registry: ModelRegistry,
++	use: { providerId: string; modelId: string; endpoint: string; chat?: boolean },
++): Promise<void> {
++	// A pool wrapper delegates into the mediated registry it wraps: walk the
++	// target chain so the authorizer is found through one wrapping layer. A
++	// registry that is mediated-derived but whose authorizer cannot be resolved
++	// fails closed — never silent egress — while a genuinely unmediated CLI
++	// registry stays a no-op.
++	// Classification follows what the chain bottoms out in, not the wrapper
++	// alone: a pool wrapper around a PLAIN registry is genuinely unmediated and
++	// stays a no-op; a pool wrapper around a mediated registry resolves the
++	// mediated target's authorizer; a mediated registry whose authorizer cannot
++	// be resolved fails closed — never silent egress.
++	const poolTarget = scopedRegistryTarget(registry);
++	const bottom = poolTarget ?? registry;
++	let authorize = mediationAuthorizers.get(registry) ?? (poolTarget !== undefined ? mediationAuthorizers.get(poolTarget) : undefined);
++	if (!authorize) {
++		const mediatedInChain = mediatedRegistries.has(registry) || mediationTargets.has(registry) || mediatedRegistries.has(bottom) || mediationTargets.has(bottom);
++		if (mediatedInChain) {
++			throw new HostModelUseRefusedError(
++				{ provider: use.providerId, id: use.modelId },
++				new Error("the mediated registry's authorizer is unreachable"),
++			);
++		}
++		return;
++	}
++	// `chat` marks the memory pipeline's remote extraction LLM: a completion use
++	// admitted by the exact chat tuple rule, not the embedding endpoint rule.
++	await authorizeOrThrow(authorize, {
++		provider: use.providerId,
++		id: use.modelId,
++		baseUrl: use.endpoint,
++		purpose: use.chat === true ? undefined : "embedding",
++	});
++}
++
++/**
++ * Re-authorize an admitted use inside a credential resolver's rotation path:
++ * policy tightening and credential substitution are seen by the Host on every
++ * rotation, exactly like the chat path, while the worker-lifetime cache absorbs
++ * the repeat round-trip when nothing changed. No-op for unmediated registries.
++ */
++export async function reauthorizeAdmittedUse(
++	registry: ModelRegistry,
++	use: { providerId: string; modelId: string; endpoint: string; chat?: boolean },
++): Promise<void> {
++	await authorizeEmbeddingUse(registry, use);
++}
++
++/** Whether `registry` already mediates its credential boundary. */
++export function isMediatedModelRegistry(registry: ModelRegistry): boolean {
++	return mediatedRegistries.has(registry);
++}
++
++/**
++ * The registry a mediated proxy wraps, for existence-only probes that must not
++ * consume a Host authorization: prompt preflight needs to know whether a
++ * credential EXISTS so it can walk the missing-credential fallback chain, while
++ * the authorization itself belongs to the turn's resolution. Returns the input
++ * unchanged when it is not a mediated proxy.
++ */
++export function unmediatedModelRegistry(registry: ModelRegistry): ModelRegistry {
++	// Walk every wrapping layer to the bottom: pool wrappers around mediated
++	// registries (a pooled parent session's memory mint) and the mediation proxy
++	// itself, so a preauthorized resolver mint never authorizes an empty-model
++	// chat use through the inner mediated methods it delegates into. The walk is
++	// unbounded — chains alternate pool/mediation layers one per agent nesting
++	// generation — with a visited set as the cycle guard.
++	let current = registry;
++	const visited = new Set<ModelRegistry>([current]);
++	for (;;) {
++		const poolTarget = scopedRegistryTarget(current);
++		const mediatedTarget = mediationTargets.get(current);
++		const next = poolTarget ?? mediatedTarget;
++		if (next === undefined || visited.has(next)) return current;
++		visited.add(next);
++		current = next;
++	}
++}
++
++/**
++ * `registry` with its entire credential boundary mediated: every method that
++ * returns or mints a credential — `getApiKey`, `getApiKeyForProvider`,
++ * `getApiKeyWithCredentialForProvider`, `getApiKeyAndHeaders`, and `resolver`
++ * — authorizes the exact provider/model/endpoint use before delegating, so a
++ * Host refusal always precedes the credential release, on the initial mint
++ * and inside auth-retry rotation alike.
++ *
++ * The wrapper is a binding proxy, not an `Object.create` shell: registry
++ * methods touch `#private` fields with `this` as the instance, so every
++ * non-credential member is re-bound to the real registry and keeps working
++ * unchanged. Credential methods are overridden rather than delegated, because
++ * a delegated `getApiKeyAndHeaders` would reach the target's unmediated
++ * `getApiKey` internally. `resolver` is rebuilt against the wrapper itself:
++ * the inherited implementation (or a pool proxy's closure) would otherwise
++ * resolve through the unmediated target, and the rebuild preserves the
++ * central a/b/c auth-retry rotation semantics exactly.
++ *
++ * Discovery-time credential use inside `refresh*` methods is intentionally
++ * not mediated: those are catalog infrastructure the registry serves to every
++ * consumer, not session provider use, and they never release a credential to
++ * their caller.
++ */
++export function mediateModelRegistry(registry: ModelRegistry, authorize: AuthorizeModelUse): ModelRegistry {
++	if (mediatedRegistries.has(registry)) return registry;
++	const getApiKey = async (model: Model<Api>, sessionId?: string, options?: { signal?: AbortSignal }) => {
++		await authorizeOrThrow(authorize, { provider: model.provider, id: model.id, baseUrl: model.baseUrl });
++		return registry.getApiKey(model, sessionId, options);
++	};
++	const getApiKeyForProvider = async (provider: string, sessionId?: string, options?: AuthApiKeyOptions) => {
++		await authorizeOrThrow(authorize, { provider, id: options?.modelId ?? "", baseUrl: options?.baseUrl ?? "" });
++		return registry.getApiKeyForProvider(provider, sessionId, options);
++	};
++	const getApiKeyWithCredentialForProvider = async (
++		provider: string,
++		sessionId?: string,
++		options?: AuthApiKeyOptions,
++	) => {
++		await authorizeOrThrow(authorize, { provider, id: options?.modelId ?? "", baseUrl: options?.baseUrl ?? "" });
++		return registry.getApiKeyWithCredentialForProvider(provider, sessionId, options);
++	};
++	const getApiKeyAndHeaders = async (model: Model<Api>) => {
++		await authorizeOrThrow(authorize, { provider: model.provider, id: model.id, baseUrl: model.baseUrl });
++		return registry.getApiKeyAndHeaders(model);
++	};
++	const resolver = ((target: string | ApiKeyResolverModel, optionsOrSessionId?: ApiKeyResolverOptions | string) => {
++		const options = typeof optionsOrSessionId === "string" ? { sessionId: optionsOrSessionId } : optionsOrSessionId;
++		const resolution = { getApiKeyWithCredentialForProvider, authStorage: registry.authStorage };
++		if (typeof target === "string") {
++			return createApiKeyResolver(resolution, target, options);
++		}
++		return createApiKeyResolver(resolution, target.provider, {
++			...options,
++			baseUrl: target.baseUrl,
++			modelId: target.id,
++		});
++	}) as ModelRegistry["resolver"];
++	const overrides: Partial<ModelRegistry> = {
++		getApiKey,
++		getApiKeyForProvider,
++		getApiKeyWithCredentialForProvider,
++		getApiKeyAndHeaders,
++		resolver,
++	};
++	const bound = new Map<PropertyKey, unknown>();
++	const proxy = new Proxy(registry, {
++		get(object, property) {
++			if (Object.hasOwn(overrides, property)) return overrides[property as keyof ModelRegistry];
++			const value: unknown = Reflect.get(object, property, object);
++			if (typeof value !== "function") return value;
++			let method = bound.get(property);
++			if (method === undefined) {
++				method = value.bind(object);
++				bound.set(property, method);
++			}
++			return method;
++		},
++	});
++	mediatedRegistries.add(proxy);
++	mediationTargets.set(proxy, registry);
++	mediationAuthorizers.set(proxy, authorize);
++	return proxy;
++}
 diff --git a/src/config/settings.ts b/src/config/settings.ts
-index ce1ac7ca7a..5c3908dfbd 100644
+index ce1ac7ca7aa0478f8855d4beaa0e4c79a262d3cd..5c3908dfbd79f94a8aeb7a81dcfb94f5ed0dc77e 100644
 --- a/src/config/settings.ts
 +++ b/src/config/settings.ts
 @@ -3700,6 +3700,27 @@ export class Settings {
@@ -97,7 +567,7 @@ index ce1ac7ca7a..5c3908dfbd 100644
  		// mcp.discoveryMode / mcp.discoveryDefaultServers are gone with no
  		// replacement (`tools.commands` stays at its own default). Dead keys are
 diff --git a/src/exec/tool-command-host.ts b/src/exec/tool-command-host.ts
-index 7c471f0f19..b869d9a318 100644
+index 7c471f0f191fedd528998fac60bf379a890327da..b869d9a318c6b33d98cd57d002f15f2011fc680f 100644
 --- a/src/exec/tool-command-host.ts
 +++ b/src/exec/tool-command-host.ts
 @@ -89,8 +89,8 @@ export function createToolCommandHandler(options: {
@@ -111,8 +581,49 @@ index 7c471f0f19..b869d9a318 100644
  			: undefined;
  		const tool = special ?? (state ? resolveMountedToolCommand(state, name) : undefined);
  		if (!state || !tool) {
+diff --git a/src/job-widgets/author.ts b/src/job-widgets/author.ts
+index f74069f5b984207f7166393bea83e415b30cb1b9..9d5dd497957c0e381ab386f3f497dce18649d031 100644
+--- a/src/job-widgets/author.ts
++++ b/src/job-widgets/author.ts
+@@ -7,6 +7,7 @@ import { type AgentTelemetryConfig, instrumentedCompleteSimple, resolveTelemetry
+ import type { AssistantMessage, Tool, ToolChoice, UserMessage } from "@oh-my-pi/pi-ai";
+ import { markPerCallContextMessage } from "@oh-my-pi/pi-ai/utils/block-symbols";
+ import { formatBytes, prompt, truncate } from "@oh-my-pi/pi-utils";
++import { HostModelUseRefusedError } from "../config/mediated-model-registry";
+ import type { ModelRegistry } from "../config/model-registry";
+ import { resolveRoleChain } from "../config/model-resolver";
+ import { roleCandidatePool } from "../config/model-roles";
+@@ -213,8 +214,19 @@ export async function completeWidgetRequest(
+ 	// never repeats, so a cache breakpoint on it would only bill a cache write.
+ 	markPerCallContextMessage(message);
+ 	const context = { systemPrompt: [request.systemPrompt], messages: [message], tools: request.tools };
++	let hostRefusal: HostModelUseRefusedError | undefined;
+ 	for (const { model } of resolveRoleChain("widget", settings, roleCandidatePool("widget", settings, modelRegistry))) {
+-		if (!(await modelRegistry.getApiKey(model, sessionId, { signal }))) continue;
++		try {
++			if (!(await modelRegistry.getApiKey(model, sessionId, { signal }))) continue;
++		} catch (error) {
++			// A Host refusal makes this candidate unusable; try the rest and
++			// surface the refusal when no authorized candidate remains.
++			if (error instanceof HostModelUseRefusedError) {
++				hostRefusal ??= error;
++				continue;
++			}
++			throw error;
++		}
+ 		costGate?.admit();
+ 		const response = await instrumentedCompleteSimple(
+ 			model,
+@@ -238,6 +250,7 @@ export async function completeWidgetRequest(
+ 		failure = response;
+ 	}
+ 	if (failure) throw new Error(failure.errorMessage ?? `${request.oneshotKind} request failed`);
++	if (hostRefusal) throw hostRefusal;
+ 	return undefined;
+ }
+ 
 diff --git a/src/mcp/host/endpoint.ts b/src/mcp/host/endpoint.ts
-index b19dda5aa1..a5b4439b03 100644
+index b19dda5aa10bedb45cb6605e91ae1f3bf6c32c9e..a5b4439b03126940620d9001c6d6b864ece58363 100644
 --- a/src/mcp/host/endpoint.ts
 +++ b/src/mcp/host/endpoint.ts
 @@ -806,6 +806,13 @@ export class McpEndpoint implements ModuleUnit {
@@ -130,7 +641,7 @@ index b19dda5aa1..a5b4439b03 100644
  		if (!record.exit && Object.hasOwn(LOST_UPSTREAM, failure.failure) && record.peer.pid !== undefined) {
  			// The pipe closes before the exit is reaped; `#closed` records it first when it arrives in time.
 diff --git a/src/mcp/host/peers.ts b/src/mcp/host/peers.ts
-index 0065308cf0..af583128aa 100644
+index 0065308cf096112aa8175740335b5183d4b25a2f..af583128aafa41350e75c3f98a486adacce4cfdf 100644
 --- a/src/mcp/host/peers.ts
 +++ b/src/mcp/host/peers.ts
 @@ -9,6 +9,7 @@ import type { ManagedChild, ManagedChildState } from "../../daemon/module";
@@ -205,7 +716,7 @@ index 0065308cf0..af583128aa 100644
  		await modern.close();
  	}
 diff --git a/src/mcp/host/store.ts b/src/mcp/host/store.ts
-index 7d1e615348..2d51d2bd59 100644
+index 7d1e61534860d7ff60beec469e879606fb270bb1..2d51d2bd59f0eb8c5237daa6a2495c8db8fcd238 100644
 --- a/src/mcp/host/store.ts
 +++ b/src/mcp/host/store.ts
 @@ -15,7 +15,7 @@ import * as path from "node:path";
@@ -265,7 +776,7 @@ index 7d1e615348..2d51d2bd59 100644
  
  	/** The stored result of `method` with `params` (a {@link cacheParamsKey}), fresh or not. */
 diff --git a/src/mcp/link.ts b/src/mcp/link.ts
-index 2592e84157..e0aaac733b 100644
+index 2592e84157520395899a8c5608a77cfbe8c95fde..e0aaac733ba3c78fc10719add488d6fda49bc947 100644
 --- a/src/mcp/link.ts
 +++ b/src/mcp/link.ts
 @@ -85,6 +85,7 @@ interface PendingRequest {
@@ -458,7 +969,7 @@ index 2592e84157..e0aaac733b 100644
  	}
  }
 diff --git a/src/mcp/protocol.ts b/src/mcp/protocol.ts
-index a4b0afa8a4..5a4e75d3fc 100644
+index a4b0afa8a4baba7ea30743b9a31e935b61a5289f..5a4e75d3fc6e61d24975e9c6665f5c71bc8450ab 100644
 --- a/src/mcp/protocol.ts
 +++ b/src/mcp/protocol.ts
 @@ -40,9 +40,8 @@ export const MCPErrorCode = {
@@ -473,8 +984,299 @@ index a4b0afa8a4..5a4e75d3fc 100644
   */
  export function isModernErrorCode(code: unknown): boolean {
  	return (
+diff --git a/src/mnemopi/backend.ts b/src/mnemopi/backend.ts
+index 6e2aedff74f3ce697d9f7a640ea93761bb814b19..e5fac725c2954861998ed93b1203948b13af30fb 100644
+--- a/src/mnemopi/backend.ts
++++ b/src/mnemopi/backend.ts
+@@ -4,11 +4,14 @@ import { type ApiKeyResolver, completeSimple, retryTransientCompletion } from "@
+ import { hostMatchesUrl } from "@oh-my-pi/pi-catalog/hosts";
+ import { clampThinkingLevelForModel } from "@oh-my-pi/pi-catalog/model-thinking";
+ import type { Mnemopi } from "@oh-my-pi/pi-mnemopi";
++import { isApiModel } from "@oh-my-pi/pi-mnemopi/core/embeddings";
++import { withMnemopiRuntimeOptions } from "@oh-my-pi/pi-mnemopi/core/runtime-options";
+ import type { MnemopiLlmCompleteOptions } from "@oh-my-pi/pi-mnemopi/core/runtime-options";
+ import type * as MnemopiDiagnoseNs from "@oh-my-pi/pi-mnemopi/diagnose";
+ import type { DiagnosticSummary } from "@oh-my-pi/pi-mnemopi/diagnose";
+ import { logger, prompt, withLoopPhase } from "@oh-my-pi/pi-utils";
+ import { cfgOffline } from "../config/auxiliary-model-policy";
++import { authorizeEmbeddingUse, HostModelUseRefusedError, reauthorizeAdmittedUse, unmediatedModelRegistry } from "../config/mediated-model-registry";
+ import type { ModelRegistry } from "../config/model-registry";
+ import { roleCandidatePool } from "../config/model-roles";
+ import { resolveRoleChain } from "../config/model-resolver";
+@@ -35,7 +38,10 @@ import {
+ 	type MnemopiProviderOptions,
+ 	truncateApproxTokens,
+ } from "./config";
+-import { embeddingFailureNotifier } from "./embedding-notice";
++import { memoryNoticeErrorText } from "../memory-backend/messages";
++import { redactMemorySecrets } from "../memory-backend/redact";
++import { redactUrlForLog } from "../utils/redact-url";
++import { embeddingFailureNotifier, MNEMOPI_NOTICE_SOURCE } from "./embedding-notice";
+ import {
+ 	getMnemopiScopedBanks,
+ 	getMnemopiScopedDbPaths,
+@@ -185,7 +191,22 @@ export const mnemopiBackend: MemoryBackend = {
+ 	async clear(agentDir, _cwd, session): Promise<void> {
+ 		const previous = session ? setMnemopiSessionState(session, undefined) : undefined;
+ 		await previous?.dispose({ consolidate: false });
+-		const config = previous?.config ?? (session ? loadMnemopiConfig(session.settings, agentDir) : undefined);
++		// The rehydrate must resolve through the same mediated path as start/enqueue:
++		// a raw config would carry no embedding authorization and no allowRemote
++		// gate, so a clear racing startup (or following a startup failure) would
++		// bypass Host mediation for the rest of the session.
++		const config =
++			previous?.config ??
++			(session?.sessionId
++				? await loadMnemopiConfigWithProviders(
++						session.settings,
++						agentDir,
++						session.modelRegistry,
++						session.sessionId,
++						session.sessionManager,
++						session,
++					)
++				: undefined);
+ 		if (!config) return;
+ 		await loadMnemopiCore();
+ 		// Close the cached default Mnemopi instance so its SQLite handle doesn't
+@@ -504,6 +525,27 @@ async function loadMnemopiConfigWithProviders(
+ 	return config;
+ }
+ 
++/** mnemopi core's own fallback when no embedding base URL is configured. */
++const MNEMOPI_DEFAULT_EMBEDDING_BASE_URL = "https://openrouter.ai/api/v1";
++
++/**
++ * The provider identity an embedding endpoint belongs to, for the Host
++ * provider-use rule. The workspace admits an embedding use when one of its
++ * enabled providers already sends transcript traffic to the same endpoint, so
++ * the id is resolved by scanning the catalog for a model hosted there; the
++ * OpenRouter default and any unrecognized endpoint keep `"openrouter"`, which
++ * is the only provider mnemopi's resolver mints keys for.
++ */
++function resolveEmbeddingProviderId(modelRegistry: ModelRegistry, endpoint: string): string {
++	if (hostMatchesUrl(endpoint, "openrouter")) return "openrouter";
++	const normalizedEndpoint = endpoint.replace(/\/+$/, "");
++	for (const model of modelRegistry.getAll("all")) {
++		const baseUrl = "baseUrl" in model && typeof model.baseUrl === "string" ? model.baseUrl : "";
++		if (baseUrl !== "" && baseUrl.replace(/\/+$/, "") === normalizedEndpoint) return model.provider;
++	}
++	return "openrouter";
++}
++
+ /**
+  * When mnemopi targets OpenRouter (its default embedding host) without a
+  * user-pinned key, hand it the central {@link ApiKeyResolver} so requests pick
+@@ -512,15 +554,38 @@ async function loadMnemopiConfigWithProviders(
+  * credential exists, preserving mnemopi's env-key fallback and its
+  * "no key -> API embeddings unavailable" gating.
+  */
+-async function openrouterKeyResolver(
++/**
++ * Exported for the host-authorization seam tests: the preauthorized mint's
++ * rotation re-authorization is the behavior under test, and constructing it
++ * through the full backend start would require a live memory database.
++ */
++export async function openrouterKeyResolver(
+ 	modelRegistry: ModelRegistry,
+ 	sessionId: string,
+ 	baseUrl: string | undefined,
++	options?: { readonly preauthorized?: { providerId: string; modelId: string; endpoint: string; chat?: boolean } },
+ ): Promise<ApiKeyResolver | undefined> {
+ 	if (baseUrl !== undefined && !hostMatchesUrl(baseUrl, "openrouter")) return undefined;
+-	const key = await modelRegistry.getApiKeyForProvider("openrouter", sessionId);
++	// A preauthorized caller has already authorized its exact use tuple before
++	// this mint; a provider-scoped resolution through the mediated registry
++	// would authorize an empty model id as a chat use and always be refused. The
++	// resolver never leaves the memory requests that authorization and the
++	// remote-use gate confine — and every rotation inside it re-authorizes the
++	// admitted tuple, so policy tightening and credential substitution are seen
++	// by the Host exactly like the chat path (the worker-lifetime cache absorbs
++	// the repeat round-trip when nothing changed). Other callers keep the
++	// mediated mint.
++	const preauthorized = options?.preauthorized;
++	const minting = preauthorized !== undefined ? unmediatedModelRegistry(modelRegistry) : modelRegistry;
++	const key = await minting.getApiKeyForProvider("openrouter", sessionId);
+ 	if (key === undefined || key === "") return undefined;
+-	return modelRegistry.resolver("openrouter", { sessionId });
++	const resolver = minting.resolver("openrouter", { sessionId });
++	if (preauthorized === undefined) return resolver;
++	const use = preauthorized;
++	return async rotationContext => {
++		await reauthorizeAdmittedUse(modelRegistry, use);
++		return resolver(rotationContext);
++	};
+ }
+ 
+ async function resolveMnemopiProviderOptions(
+@@ -531,6 +596,58 @@ async function resolveMnemopiProviderOptions(
+ 	usageLedger: Partial<ModelUsageLedger>,
+ 	session: AgentSession,
+ ): Promise<MnemopiProviderOptions> {
++	// A remote embedding is a provider use of its own purpose, and the gate is
++	// fail-closed: `allowRemote` admits a request only when the Host admitted a
++	// use in this resolution AND the request's normalized endpoint IS the
++	// admitted one. Never-authorized and refused are the same closed state, so
++	// a remoteness misprediction can only cost availability, never egress. The
++	// decision itself cannot mispredict: it is core's own `isApiModel` evaluated
++	// inside a runtime scope that already carries the pinned endpoint, and the
++	// endpoint — resolved exactly as core resolves it, env fallback included —
++	// is pinned into the runtime options, so the request path sees identical
++	// inputs. The key is minted only after admission and pinned explicitly, so
++	// core's env fallback can never supply a key to a non-admitted use.
++	const embeddingEndpoint =
++		config.providerOptions.embeddingApiUrl ??
++		process.env.MNEMOPI_EMBEDDING_API_URL ??
++		process.env.OPENROUTER_BASE_URL ??
++		MNEMOPI_DEFAULT_EMBEDDING_BASE_URL;
++	const embeddingModel = config.providerOptions.embeddingModel ?? "";
++	const embeddingScope = {
++		embeddings: {
++			apiUrl: embeddingEndpoint,
++			model: config.providerOptions.embeddingModel,
++		},
++	};
++	const remoteEmbeddingConfigured =
++		config.providerOptions.noEmbeddings !== true &&
++		withMnemopiRuntimeOptions(embeddingScope, () => isApiModel(embeddingModel));
++	const embeddingProvider = resolveEmbeddingProviderId(modelRegistry, embeddingEndpoint);
++	let embeddingAdmitted = false;
++	let embeddingRefusal: HostModelUseRefusedError | undefined;
++	if (remoteEmbeddingConfigured) {
++		try {
++			await authorizeEmbeddingUse(modelRegistry, {
++				providerId: embeddingProvider,
++				modelId: embeddingModel,
++				endpoint: embeddingEndpoint,
++			});
++			embeddingAdmitted = true;
++		} catch (error) {
++			if (!(error instanceof HostModelUseRefusedError)) throw error;
++			embeddingRefusal = error;
++		}
++	}
++	if (embeddingRefusal) {
++		const refusalText = memoryNoticeErrorText(redactMemorySecrets(redactUrlForLog(embeddingRefusal.message))) || "refused by Host policy";
++		queueMicrotask(() => {
++			session.emitNotice(
++				"warning",
++				`Memory embeddings are unavailable: ${refusalText}; recall falls back to local or keyword search`,
++				MNEMOPI_NOTICE_SOURCE,
++			);
++		});
++	}
+ 	const base: MnemopiProviderOptions = {
+ 		noEmbeddings: config.providerOptions.noEmbeddings,
+ 		embeddings: {
+@@ -541,6 +658,11 @@ async function resolveMnemopiProviderOptions(
+ 			// the cache initially appears complete. Reuse only an already loaded model.
+ 			allowLocalLoad: () => !cfgOffline.get(settings),
+ 			allowRemote: baseUrl => {
++				// Fail-closed: only an admitted use may pass, and only at the
++				// admitted endpoint. "Never authorized" is the same closed state
++				// as "refused".
++				if (!embeddingAdmitted) return false;
++				if (baseUrl === "" || baseUrl.replace(/\/+$/, "") !== embeddingEndpoint.replace(/\/+$/, "")) return false;
+ 				if (!cfgOffline.get(settings)) return true;
+ 				const model = session.model;
+ 				if (!model?.provider || !model.baseUrl) return false;
+@@ -557,10 +679,17 @@ async function resolveMnemopiProviderOptions(
+ 			},
+ 		},
+ 		embeddingModel: config.providerOptions.embeddingModel,
+-		embeddingApiUrl: config.providerOptions.embeddingApiUrl,
+-		embeddingApiKey:
+-			config.providerOptions.embeddingApiKey ??
+-			(await openrouterKeyResolver(modelRegistry, sessionId, config.providerOptions.embeddingApiUrl)),
++		embeddingApiUrl: embeddingEndpoint,
++		embeddingApiKey: embeddingAdmitted
++			? // The pinned key is the configured or minted one, else an inert empty
++			  // string: admitted or not, core never falls through to an
++			  // environment credential.
++				(config.providerOptions.embeddingApiKey ??
++				(await openrouterKeyResolver(modelRegistry, sessionId, embeddingEndpoint, {
++					preauthorized: { providerId: embeddingProvider, modelId: embeddingModel, endpoint: embeddingEndpoint },
++				})) ??
++				"")
++			: "",
+ 		llm: false,
+ 	};
+ 
+@@ -569,17 +698,65 @@ async function resolveMnemopiProviderOptions(
+ 	// An explicitly configured external Mnemopi endpoint remains authoritative;
+ 	// role selection only supplies the normal managed-model path.
+ 	if (config.llmMode === "remote") {
++		// A remote memory LLM is a chat provider use, gated fail-closed like the
++		// embeddings: `allowRemote` passes only for an admitted use at the
++		// admitted endpoint. The effective endpoint resolves exactly as core
++		// resolves it — the setting, then the env fallback in the same process —
++		// and both endpoint and key are pinned into the runtime options, so
++		// core's own env fallbacks can never supply either to a use the Host
++		// did not admit. With no resolved endpoint the pinned empty baseUrl
++		// disables the remote path outright.
++		const llmEndpoint = config.llmBaseUrl ?? (process.env.MNEMOPI_LLM_BASE_URL?.trim() || undefined);
++		let llmAdmitted = false;
++		let llmRefusal: HostModelUseRefusedError | undefined;
++		if (llmEndpoint !== undefined) {
++			try {
++				await authorizeEmbeddingUse(modelRegistry, {
++					providerId: resolveEmbeddingProviderId(modelRegistry, llmEndpoint),
++					modelId: config.llmModel ?? process.env.MNEMOPI_LLM_MODEL ?? "",
++					endpoint: llmEndpoint,
++					chat: true,
++				});
++				llmAdmitted = true;
++			} catch (error) {
++				if (!(error instanceof HostModelUseRefusedError)) throw error;
++				llmRefusal = error;
++			}
++		}
++		if (llmRefusal) {
++			const refusalText = memoryNoticeErrorText(redactMemorySecrets(redactUrlForLog(llmRefusal.message))) || "refused by Host policy";
++			queueMicrotask(() => {
++				session.emitNotice(
++					"warning",
++					`Memory extraction LLM is unavailable: ${refusalText}; memory extraction falls back to local processing`,
++					MNEMOPI_NOTICE_SOURCE,
++				);
++			});
++		}
++		// Admission implies a resolved endpoint; the alias re-narrows it for the
++		// closure the compiler cannot see through `llmAdmitted`.
++		const admittedLlmEndpoint = llmAdmitted && llmEndpoint !== undefined ? llmEndpoint : undefined;
+ 		return {
+ 			...base,
+ 			llm: {
+ 				// A custom endpoint has no trusted provider identity.
+-				allowRemote: () => !cfgOffline.get(settings),
+-				baseUrl: config.llmBaseUrl,
+-				apiKey:
+-					config.llmApiKey ??
+-					(config.llmBaseUrl === undefined
+-						? undefined
+-						: await openrouterKeyResolver(modelRegistry, sessionId, config.llmBaseUrl)),
++				allowRemote: () => llmAdmitted && !cfgOffline.get(settings),
++				baseUrl: (llmEndpoint ?? "").replace(/\/+$/, ""),
++				apiKey: admittedLlmEndpoint !== undefined
++					? // An admitted use still never falls through to env: the pinned
++					  // key is the configured or minted one, else an inert empty
++					  // string (the request carries no Authorization header).
++						(config.llmApiKey ??
++						(await openrouterKeyResolver(modelRegistry, sessionId, admittedLlmEndpoint, {
++							preauthorized: {
++								providerId: resolveEmbeddingProviderId(modelRegistry, admittedLlmEndpoint),
++								modelId: config.llmModel ?? process.env.MNEMOPI_LLM_MODEL ?? "",
++								endpoint: admittedLlmEndpoint,
++								chat: true,
++							},
++						})) ??
++						"")
++					: "",
+ 				model: config.llmModel,
+ 			},
+ 		};
 diff --git a/src/sdk.ts b/src/sdk.ts
-index d631d4ec0c..bc8227705e 100644
+index d631d4ec0c778bc914174859ae1064a4acf3e597..2a6e650b2eb758d0e173756760d3f2fb28762d5d 100644
 --- a/src/sdk.ts
 +++ b/src/sdk.ts
 @@ -39,6 +39,7 @@ import { withCredentialRedaction } from "@oh-my-pi/pi-ai/providers/transform-mes
@@ -485,7 +1287,15 @@ index d631d4ec0c..bc8227705e 100644
  import type { Component } from "@oh-my-pi/pi-tui";
  import { $env, isInteractiveHost } from "@oh-my-pi/pi-utils/env";
  import { getAgentDir, getModelDbPath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
-@@ -644,6 +645,12 @@ export interface CreateAgentSessionOptions {
+@@ -71,6 +72,7 @@ import type { EffectiveExtensionRoots } from "./capability/types";
+ import { type OAuthAccountPools, SessionAccountPoolScope } from "./config/account-pools";
+ import { shouldEnableAppendOnlyContext } from "./config/append-only-context-mode";
+ import { shouldInlineToolDescriptors } from "./config/inline-tool-descriptors-mode";
++import { isMediatedModelRegistry, mediateModelRegistry } from "./config/mediated-model-registry";
+ import { isAuthenticated, kNoAuth, ModelRegistry } from "./config/model-registry";
+ import {
+ 	disabledProviderIds,
+@@ -644,6 +646,20 @@ export interface CreateAgentSessionOptions {
  	authStorage?: AuthStorage;
  	/** Model registry. Default: discoverModels(authStorage, agentDir) */
  	modelRegistry?: ModelRegistry;
@@ -495,18 +1305,72 @@ index d631d4ec0c..bc8227705e 100644
 +	 */
 +	initialModelRefreshStrategy?: ModelRefreshStrategy;
 +	authorizeBashExecution?: ToolSession["authorizeBashExecution"];
++	/**
++	 * Host mediation hook for provider use. Runs before the session's own
++	 * credential resolution and is inherited by subagents, vibe workers,
++	 * persisted revivals and advisors spawned from this session; a rejection
++	 * refuses the use before any credential is released. Sessions without it
++	 * keep the SDK default.
++	 */
++	authorizeModelUse?: ToolSession["authorizeModelUse"];
  	/**
  	 * Request credential resolver. Defaults to the model registry's normal
  	 * session-affine resolver. Security scans use this narrow seam to keep one
-@@ -2696,6 +2703,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+@@ -2256,6 +2272,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 	}
+ 	// From here on the session resolves every key through its pools; see
+ 	// SessionAccountPoolScope. A startup failure leaves no session to lift them.
++	// An already-mediated input registry (a `/tan` clone or revive receiving its
++	// parent's) keeps its one mediation layer through the pool wrap: the pool
++	// closures delegate into its mediated methods, so wrapping the pool proxy
++	// again would double every authorization.
++	const inputMediated = isMediatedModelRegistry(modelRegistry);
+ 	const accountPoolScope = options.oauthAccountPools
+ 		? new SessionAccountPoolScope(modelRegistry.authStorage, options.oauthAccountPools, providerSessionId)
+ 		: undefined;
+@@ -2263,6 +2284,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 		modelRegistry = accountPoolScope.registry(modelRegistry);
+ 		startupCleanup.defer(() => accountPoolScope.release());
+ 	}
++	// One mediated registry for everything the session and its hosts hold:
++	// auxiliary candidates (compaction, promotion, recovery), side turns,
++	// branch summaries, job widgets and advisor resolution all mint through it,
++	// so a Host refusal precedes any credential release there too. Applied
++	// after the pool wrap so resolution stays authorize-then-scope.
++	if (options.authorizeModelUse && !inputMediated) {
++		modelRegistry = mediateModelRegistry(modelRegistry, options.authorizeModelUse);
++	}
+ 	const forkCacheShapeChanged =
+ 		options.model !== undefined ||
+ 		options.modelPattern !== undefined ||
+@@ -2575,8 +2604,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 	let contextFiles = initialContextFiles;
+ 
+ 	let agent: Agent;
++	// An explicit resolver owns its own mediation. The default session-affine
++	// resolver is the credential boundary of every primary-loop and side-channel
++	// request, so the mediation hook runs inside each resolution — initial mint
++	// and auth-retry alike — through a registry shell that preserves the
++	// resolver's rotation semantics.
++	// The session registry is already the mediated boundary when a Host
++	// mediation hook is set, so the default resolver needs no further shell.
+ 	const effectiveGetApiKey =
+-		options.getApiKey ?? (requestModel => modelRegistry.resolver(requestModel, agent.sessionId));
++		options.getApiKey ??
++		(requestModel => modelRegistry.resolver(requestModel, agent.sessionId));
+ 	let session!: AgentSession;
+ 	let hasSession = false;
+ 	let hasRegistered = false;
+@@ -2696,6 +2733,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
  			isToolActive: name => activeToolNames.has(name),
  			setActiveToolNames,
  			toolRegistry,
 +			authorizeBashExecution: options.authorizeBashExecution,
++			authorizeModelUse: options.authorizeModelUse,
  			hasUI: options.hasUI ?? false,
  			canPromptUser: options.interactivePrompts ?? options.hasUI ?? false,
  			advertiseHeadlessAsk: options.advertiseHeadlessAsk,
-@@ -3852,7 +3860,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+@@ -3852,7 +3891,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
  					(defaultRoleConfigured || !pick) &&
  					modelRegistry.getDiscoverableProviders().length > 0
  				) {
@@ -517,11 +1381,462 @@ index d631d4ec0c..bc8227705e 100644
  					if (!(await tryResolveDefaultRole()) && !model) {
  						fallbackCandidates = await resolveAllowedModels(modelRegistry, settings, modelMatchPreferences);
  						pick = pickDefaultAvailableModel(fallbackCandidates.filter(hasModelAuth), provider =>
+@@ -4904,10 +4945,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 		// instead of inline base64. Decoration runs LAST among image transforms so
+ 		// the served bytes are exactly the bytes that would have shipped inline.
+ 		// Live-bound: `images.urls.*` changes rebuild the service between requests.
++		// Broker credential resolution mints provider-serving URLs; it is provider
++		// use like any request, mediated inside the session registry's credential
++		// boundary when a Host mediation hook is set.
++		const brokerKeyResolver = (model: Model) => modelRegistry.getApiKey(model, providerSessionId);
+ 		const blobBroker = new LiveImageUrlService(
+ 			settings,
+ 			() => sessionManager.getCwd(),
+-			model => modelRegistry.getApiKey(model, providerSessionId),
++			brokerKeyResolver,
+ 		);
+ 		disposeCallbacks.add(() => blobBroker.dispose());
+ 		// Always installed; the getter-backed options are snapshotted per request,
+diff --git a/src/session/agent-session.ts b/src/session/agent-session.ts
+index cb3ce80cef5ee74b500529482cd50d069e11b295..bf2f91a11b0a18cf50a62405bf31472d521e6a6b 100644
+--- a/src/session/agent-session.ts
++++ b/src/session/agent-session.ts
+@@ -136,6 +136,7 @@ import type { EffectiveExtensionRoots } from "../capability/types";
+ import type { SessionAccountPoolScope } from "../config/account-pools";
+ import { shouldEnableAppendOnlyContext } from "../config/append-only-context-mode";
+ import { cfgOffline } from "../config/auxiliary-model-policy";
++import { unmediatedModelRegistry } from "../config/mediated-model-registry";
+ import type { ModelRegistry } from "../config/model-registry";
+ import {
+ 	disabledProviderIds,
+@@ -9991,7 +9992,14 @@ export class AgentSession implements SettingsScope, AgentViewSession {
+ 			}
+ 
+ 			// Validate API key; a provider without one walks the retry fallback chain first.
+-			const apiKey = await logger.time("prompt:apiKey", () => this.#modelRegistry.getApiKey(model, this.sessionId));
++			// The probe is existence-only and deliberately unmediated: the Host
++			// authorization belongs to the turn's resolution inside the agent loop,
++			// where a refusal fails the turn through the ordinary error path, while
++			// a credential that EXISTS must never trigger the missing-credential
++			// fallback chain regardless of policy.
++			const apiKey = await logger.time("prompt:apiKey", () =>
++				unmediatedModelRegistry(this.#modelRegistry).getApiKey(model, this.sessionId),
++			);
+ 			if (!apiKey && !(await this.#recovery.applyMissingCredentialFallback(setupAbort.signal))) {
+ 				if (setupAbort.signal.aborted) return false;
+ 				throw new PromptPreflightError(
+diff --git a/src/session/model-controls.ts b/src/session/model-controls.ts
+index 1f5ac5828ec6b33ddc32f75736237b8a589c639d..1cf8bf063fcbd87b00e57a9143b55024fc13a6cb 100644
+--- a/src/session/model-controls.ts
++++ b/src/session/model-controls.ts
+@@ -17,6 +17,7 @@ import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
+ import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
+ import { logger } from "@oh-my-pi/pi-utils";
+ import { classifyDifficulty } from "../auto-thinking/classifier";
++import { unmediatedModelRegistry } from "../config/mediated-model-registry";
+ import type { ModelRegistry } from "../config/model-registry";
+ import {
+ 	filterAvailableModelsByEnabledPatterns,
+@@ -455,7 +456,10 @@ export class ModelControls {
+ 			if (apiKeysByProvider.has(provider)) {
+ 				apiKey = apiKeysByProvider.get(provider);
+ 			} else {
+-				apiKey = await this.#host.modelRegistry.getApiKeyForProvider(provider, this.#host.sessionId());
++				// Existence-only probe for the cycling list: it must not consume a
++				// Host authorization, which belongs to the request that follows —
++				// exactly like prompt preflight.
++				apiKey = await unmediatedModelRegistry(this.#host.modelRegistry).getApiKeyForProvider(provider, this.#host.sessionId());
+ 				apiKeysByProvider.set(provider, apiKey);
+ 			}
+ 
+diff --git a/src/session/session-advisors.ts b/src/session/session-advisors.ts
+index b3485a87a4af0d8b6c402fc74667ba04932abe5e..07fac3922ce96d1d54151f497dc455ee921d559d 100644
+--- a/src/session/session-advisors.ts
++++ b/src/session/session-advisors.ts
+@@ -28,6 +28,7 @@ import {
+ 	shouldUseProviderNativeCompaction,
+ } from "@oh-my-pi/pi-agent-core/compaction";
+ import type {
++	ApiKey,
+ 	AssistantMessage,
+ 	CodexCompactionContext,
+ 	Context,
+@@ -76,6 +77,7 @@ import {
+ } from "../advisor";
+ import { evictStaleToolResults } from "../advisor/tool-result-eviction";
+ import { cfgOffline } from "../config/auxiliary-model-policy";
++import { HostModelUseRefusedError } from "../config/mediated-model-registry";
+ import type { ModelRegistry } from "../config/model-registry";
+ import {
+ 	formatModelString,
+@@ -1056,6 +1058,16 @@ export class SessionAdvisors {
+ 		return providerSessionId;
+ 	}
+ 
++	/**
++	 * The credential resolver an advisor agent carries: the ordinary
++	 * session-affine resolution of the advisor's own provider identity, through
++	 * the mediated registry so a refusal precedes any credential release,
++	 * including mid-stream auth retries.
++	 */
++	#advisorKeyResolver(providerSessionId: string | undefined): (requestModel: Model) => ApiKey | undefined {
++		return requestModel => this.#host.modelRegistry.resolver(requestModel, providerSessionId);
++	}
++
+ 	/** Rebind one advisor to the active primary conversation's provider identity. */
+ 	#refreshAdvisorProviderIdentity(advisor: ActiveAdvisor): void {
+ 		const primaryProviderSessionId = this.#host.sessionId();
+@@ -1063,7 +1075,7 @@ export class SessionAdvisors {
+ 		advisor.providerSessionId = providerSessionId;
+ 		advisor.agent.sessionId = providerSessionId;
+ 		advisor.agent.promptCacheKey = this.#host.agent.promptCacheKey ?? providerSessionId;
+-		advisor.agent.getApiKey = requestModel => this.#host.modelRegistry.resolver(requestModel, providerSessionId);
++		advisor.agent.getApiKey = this.#advisorKeyResolver(providerSessionId);
+ 		advisor.agent.setMetadataResolver(
+ 			providerSessionId
+ 				? provider => buildSessionMetadata(providerSessionId, provider, this.#host.modelRegistry.authStorage)
+@@ -1524,7 +1536,7 @@ export class SessionAdvisors {
+ 						toolNames: advisorAgent.state.tools.map(tool => tool.name),
+ 					};
+ 				},
+-				getApiKey: requestModel => this.#host.modelRegistry.resolver(requestModel, advisorProviderSessionId),
++				getApiKey: this.#advisorKeyResolver(advisorProviderSessionId),
+ 				streamFn: advisorStreamFn,
+ 				// Maintenance installs compactionSummary messages; the core Agent's
+ 				// default converter drops custom roles and would discard their replay.
+@@ -2127,7 +2139,13 @@ export class SessionAdvisors {
+ 		const primaryModel =
+ 			resolvedPrimary.model ?? this.#host.modelRegistry.find(originalSelector.provider, originalSelector.id);
+ 		if (!primaryModel || !this.#canReplayAdvisorHistory(advisor, primaryModel)) return;
+-		const apiKey = await this.#host.modelRegistry.getApiKey(primaryModel, advisor.providerSessionId, { signal });
++		let apiKey: string | undefined;
++		try {
++			apiKey = await this.#host.modelRegistry.getApiKey(primaryModel, advisor.providerSessionId, { signal });
++		} catch (error) {
++			if (error instanceof HostModelUseRefusedError) return;
++			throw error;
++		}
+ 		if (!apiKey) return;
+ 		signal.throwIfAborted();
+ 
+@@ -2287,7 +2305,15 @@ export class SessionAdvisors {
+ 				if (cfgOffline.get(this.#host.settings) && candidate.provider !== this.#host.agent.state.model?.provider)
+ 					continue;
+ 				if (!this.#canReplayAdvisorHistory(advisor, candidate)) continue;
+-				const apiKey = await this.#host.modelRegistry.getApiKey(candidate, advisor.providerSessionId, { signal });
++				let apiKey: string | undefined;
++				try {
++					apiKey = await this.#host.modelRegistry.getApiKey(candidate, advisor.providerSessionId, { signal });
++				} catch (error) {
++					// A Host refusal makes this fallback candidate unusable, exactly
++					// like one without a credential.
++					if (!(error instanceof HostModelUseRefusedError)) throw error;
++					continue;
++				}
+ 				if (!apiKey) continue;
+ 				signal.throwIfAborted();
+ 
+@@ -2626,8 +2652,18 @@ export class SessionAdvisors {
+ 			phase: "pre_turn",
+ 		});
+ 
++		let hostRefusal: HostModelUseRefusedError | undefined;
+ 		for (const candidate of candidates) {
+-			const apiKey = await this.#host.modelRegistry.getApiKey(candidate, advisorProviderSessionId, { signal });
++			let apiKey: string | undefined;
++			try {
++				apiKey = await this.#host.modelRegistry.getApiKey(candidate, advisorProviderSessionId, { signal });
++			} catch (error) {
++				// A Host refusal makes this candidate unusable; try the rest, and
++				// surface the refusal when no authorized candidate remains.
++				if (!(error instanceof HostModelUseRefusedError)) throw error;
++				hostRefusal ??= error;
++				continue;
++			}
+ 			if (!apiKey) continue;
+ 			if (
+ 				nativeCompactionFailure &&
+@@ -2698,6 +2734,7 @@ export class SessionAdvisors {
+ 		}
+ 
+ 		if (!compactResult && nativeCompactionFailure) throw nativeCompactionFailure.error;
++		if (!compactResult && hostRefusal) throw hostRefusal;
+ 
+ 		if (!compactResult) {
+ 			if (hasNativeHistory) {
+diff --git a/src/session/session-maintenance.ts b/src/session/session-maintenance.ts
+index d08488c4794885f90ef8991194f512c246afc64b..316b9155afb57598b4809a6cd5920ec9c80e8a47 100644
+--- a/src/session/session-maintenance.ts
++++ b/src/session/session-maintenance.ts
+@@ -77,6 +77,7 @@ import * as snapcompact from "@oh-my-pi/snapcompact";
+ import * as fs from "node:fs/promises";
+ import { writeArtifact } from "./artifacts";
+ import { cfgOffline } from "../config/auxiliary-model-policy";
++import { HostModelUseRefusedError } from "../config/mediated-model-registry";
+ import type { ModelRegistry } from "../config/model-registry";
+ import { CHAT_MODEL_ROLE_IDS } from "../config/model-roles";
+ import type { Settings } from "../config/settings";
+@@ -3942,7 +3943,15 @@ export class SessionMaintenance {
+ 		) {
+ 			return undefined;
+ 		}
+-		const apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId(), { signal });
++		let apiKey: string | undefined;
++		try {
++			apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId(), { signal });
++		} catch (error) {
++			// A Host refusal makes this candidate unusable; promotion is optional,
++			// so fall through to compaction instead of aborting the user's prompt.
++			if (error instanceof HostModelUseRefusedError) return undefined;
++			throw error;
++		}
+ 		if (!apiKey) return undefined;
+ 		return candidate;
+ 	}
+@@ -4049,8 +4058,20 @@ export class SessionMaintenance {
+ 						onAttempt(message);
+ 					};
+ 
++		let hostRefusal: HostModelUseRefusedError | undefined;
+ 		for (const candidate of candidates) {
+-			const apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
++			let apiKey: string | undefined;
++			try {
++				apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
++			} catch (error) {
++				// A Host refusal makes this candidate unusable; try the rest and
++				// report the refusal if none remain, never a generic "no model".
++				if (error instanceof HostModelUseRefusedError) {
++					hostRefusal ??= error;
++					continue;
++				}
++				throw error;
++			}
+ 			if (!apiKey) continue;
+ 			if (
+ 				nativeCompactionFailure &&
+@@ -4125,6 +4146,7 @@ export class SessionMaintenance {
+ 		}
+ 
+ 		if (nativeCompactionFailure) throw nativeCompactionFailure.error;
++		if (hostRefusal) throw hostRefusal;
+ 		throw this.#buildCompactionAuthError();
+ 	}
+ 
+@@ -6228,7 +6250,18 @@ export class SessionMaintenance {
+ 				for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
+ 					const candidate = candidates[candidateIndex];
+ 					const hasMoreCandidates = candidateIndex < candidates.length - 1;
+-					const apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
++					let apiKey: string | undefined;
++					try {
++						apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
++					} catch (error) {
++						// A Host refusal makes this candidate unusable; try the rest and
++						// surface the refusal itself when no authorized candidate remains.
++						if (error instanceof HostModelUseRefusedError) {
++							lastError ??= error;
++							continue;
++						}
++						throw error;
++					}
+ 					if (!apiKey) continue;
+ 					if (
+ 						nativeCompactionFailure &&
+diff --git a/src/session/turn-recovery.ts b/src/session/turn-recovery.ts
+index 62cdcbaeca2ec2f05ef901a1462a1a69b8364606..92903e3ec05582d5ff51099649cf045032a56414 100644
+--- a/src/session/turn-recovery.ts
++++ b/src/session/turn-recovery.ts
+@@ -30,6 +30,7 @@ import { isFireworksFastModelId, toFireworksBaseModelId } from "@oh-my-pi/pi-cat
+ import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
+ import { isUnexpectedSocketCloseMessage, logger, prompt, sleepLong, sleepUntil } from "@oh-my-pi/pi-utils";
+ import { cfgOffline } from "../config/auxiliary-model-policy";
++import { HostModelUseRefusedError } from "../config/mediated-model-registry";
+ import type { ModelRegistry } from "../config/model-registry";
+ import { formatModelStringWithRouting, resolveModelOverride } from "../config/model-resolver";
+ 
+@@ -2304,9 +2305,18 @@ export class TurnRecovery {
+ 			throw new Error(`Retry fallback model not found: ${selector.raw}`);
+ 		}
+ 		if (cfgOffline.get(this.#host.settings) && candidate.provider !== this.#host.model()?.provider) return false;
+-		const apiKey =
+-			options?.apiKey ??
+-			(await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId(), { signal: options?.signal }));
++		let apiKey: string | undefined;
++		try {
++			apiKey =
++				options?.apiKey ??
++				(await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId(), { signal: options?.signal }));
++		} catch (error) {
++			// A Host refusal makes this fallback candidate unusable, exactly like
++			// one without a credential: report no application rather than aborting
++			// the chain walk or the turn's error handling.
++			if (error instanceof HostModelUseRefusedError) return false;
++			throw error;
++		}
+ 		if (!apiKey) {
+ 			throw new Error(`No API key for retry fallback ${selector.raw}`);
+ 		}
+@@ -2508,7 +2518,7 @@ export class TurnRecovery {
+ 				try {
+ 					apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
+ 				} catch (error) {
+-					if (!(error instanceof AIError.MissingApiKeyError)) throw error;
++					if (!(error instanceof AIError.MissingApiKeyError) && !(error instanceof HostModelUseRefusedError)) throw error;
+ 				}
+ 				if (!apiKey) continue;
+ 				const previousEditMode = this.#host.resolveActiveEditMode();
+@@ -2659,7 +2669,13 @@ export class TurnRecovery {
+ 		if (!model) return false;
+ 		const baseModel = this.#host.modelRegistry.find("fireworks", toFireworksBaseModelId(model.id));
+ 		if (!baseModel) return false;
+-		const apiKey = await this.#host.modelRegistry.getApiKey(baseModel, this.#host.sessionId());
++		let apiKey: string | undefined;
++		try {
++			apiKey = await this.#host.modelRegistry.getApiKey(baseModel, this.#host.sessionId());
++		} catch (error) {
++			if (error instanceof HostModelUseRefusedError) return false;
++			throw error;
++		}
+ 		if (!apiKey) return false;
+ 		const baseSelector = formatModelStringWithRouting(baseModel);
+ 		const previousEditMode = this.#host.resolveActiveEditMode();
+@@ -2721,7 +2737,15 @@ export class TurnRecovery {
+ 			resolvedPrimary.model ?? this.#host.modelRegistry.find(originalSelector.provider, originalSelector.id);
+ 		if (!primaryModel) return false;
+ 		if (cfgOffline.get(this.#host.settings) && primaryModel.provider !== currentModel.provider) return false;
+-		const apiKey = await this.#host.modelRegistry.getApiKey(primaryModel, this.#host.sessionId());
++		let apiKey: string | undefined;
++		try {
++			apiKey = await this.#host.modelRegistry.getApiKey(primaryModel, this.#host.sessionId());
++		} catch (error) {
++			// A Host refusal of the original primary must not block prompting on
++			// the working fallback: report "cannot restore" instead.
++			if (error instanceof HostModelUseRefusedError) return false;
++			throw error;
++		}
+ 		if (!apiKey) return false;
+ 
+ 		const currentThinkingLevel = this.#host.configuredThinkingLevel();
+diff --git a/src/task/executor.ts b/src/task/executor.ts
+index a72081a0e0bf816063991abcd99e7f0a1fc184ed..894ea7049e80622a93b9bebec777e62a7971ecec 100644
+--- a/src/task/executor.ts
++++ b/src/task/executor.ts
+@@ -458,6 +458,9 @@ export interface ExecutorOptions {
+ 	additionalDirectories?: string[];
+ 	/** Exact provider credential resolver inherited from the parent session. */
+ 	getApiKey?: CreateAgentSessionOptions["getApiKey"];
++	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
++	/** Host provider-use mediation inherited from the parent session. */
++	authorizeModelUse?: CreateAgentSessionOptions["authorizeModelUse"];
+ 	/** Parent session's manager; the child and its revived turns use this exact delivery scope. */
+ 	asyncJobManager?: AsyncJobManagerApi;
+ 	/** Parent session whose stored credential affinities seed the child session. */
+@@ -5234,6 +5237,8 @@ async function runSubprocessOnThisThread(options: ExecutorOptions): Promise<Sing
+ 					authStorage,
+ 					modelRegistry,
+ 					getApiKey: options.getApiKey,
++					authorizeBashExecution: options.authorizeBashExecution,
++					authorizeModelUse: options.authorizeModelUse,
+ 					credentialSourceSessionId: options.credentialSourceSessionId,
+ 					oauthAccountPools: options.oauthAccountPools,
+ 					inheritedSessionAgents: options.inheritedSessionAgents,
+diff --git a/src/task/persisted-revive.ts b/src/task/persisted-revive.ts
+index 961dff07e207c9d885b7e9a69590d05b740291f4..8fbe4f3139c3e257f2d7376fab665ceae11d7346 100644
+--- a/src/task/persisted-revive.ts
++++ b/src/task/persisted-revive.ts
+@@ -20,7 +20,7 @@ import type { AsyncJobManagerApi } from "../async";
+ import type { PreparedExtension } from "../extensibility/extensions/types";
+ import type { PersistedSubagentReviverFactory } from "../registry/agent-lifecycle";
+ import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+-import { createAgentSession } from "../sdk";
++import { type CreateAgentSessionOptions, createAgentSession } from "../sdk";
+ import type { AgentSession } from "../session/agent-session";
+ import type { AgentSessionHandle } from "../session/agent-session-handle";
+ import type { ArtifactManagerApi } from "../session/artifacts";
+@@ -67,6 +67,11 @@ import type { AgentDefinition } from "./types";
+  */
+ export interface PersistedSubagentReviveContext {
+ 	session: AgentSession;
++	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
++	/** Host provider-use mediation inherited from the root session; revived agents re-authorize through it. */
++	authorizeModelUse?: CreateAgentSessionOptions["authorizeModelUse"];
++	/** Exact provider credential resolver of the root session, inherited by revived agents. */
++	getApiKey?: CreateAgentSessionOptions["getApiKey"];
+ 	authStorage: AuthStorage;
+ 	modelRegistry: ModelRegistry;
+ 	settings: Settings;
+@@ -103,6 +108,9 @@ export interface PersistedReviveSpec {
+ 	/** The root's artifact manager at revive time; a revived agent adopts it. */
+ 	readonly artifactManager: ArtifactManagerApi | undefined;
+ 	readonly preparedExtensions: readonly PreparedExtension[] | undefined;
++	readonly authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
++	readonly authorizeModelUse?: CreateAgentSessionOptions["authorizeModelUse"];
++	readonly getApiKey?: CreateAgentSessionOptions["getApiKey"];
+ 	readonly authStorage: AuthStorage;
+ 	readonly modelRegistry: ModelRegistry;
+ 	readonly settings: Settings;
+@@ -208,6 +216,9 @@ export function createPersistedSubagentReviverFactory(
+ 				asyncJobManager: ctx.session.asyncJobManager,
+ 				artifactManager: ctx.session.sessionManager.getArtifactManager() ?? undefined,
+ 				preparedExtensions: ctx.session.preparedExtensions,
++				authorizeBashExecution: ctx.authorizeBashExecution,
++				authorizeModelUse: ctx.authorizeModelUse,
++				getApiKey: ctx.getApiKey,
+ 				authStorage: ctx.authStorage,
+ 				modelRegistry: ctx.modelRegistry,
+ 				settings: ctx.settings,
+@@ -404,6 +415,9 @@ export async function revivePersistedSubagent(spec: PersistedReviveSpec, expecte
+ 		({ session } = await createAgentSession({
+ 			cwd: spec.root.sessionManager.getCwd(),
+ 			costGate: spec.costGate,
++			authorizeBashExecution: spec.authorizeBashExecution,
++			authorizeModelUse: spec.authorizeModelUse,
++			getApiKey: spec.getApiKey,
+ 			authStorage: spec.authStorage,
+ 			// Revived agents join the root session tree, so their observability
+ 			// frames ride the same bus the RPC/collab surfaces subscribed to.
+diff --git a/src/task/structured-subagent.ts b/src/task/structured-subagent.ts
+index 938d10a3e49c43fb24788f6ca6282fe5cf82db5f..1122cb3f3ea080aa20e57a0aacb47b7b237d1275 100644
+--- a/src/task/structured-subagent.ts
++++ b/src/task/structured-subagent.ts
+@@ -755,6 +755,8 @@ function buildExecutorOptions(
+ 		costGate: session.costGate,
+ 		additionalDirectories: session.additionalDirectories,
+ 		getApiKey: session.getApiKey,
++		authorizeBashExecution: session.authorizeBashExecution,
++		authorizeModelUse: session.authorizeModelUse,
+ 		credentialSourceSessionId: session.getCredentialSourceSessionId?.(),
+ 		agent: policy.effectiveAgent,
+ 		// A stepped spawn starts on its first step prompt; the executor sends the rest.
 diff --git a/src/tools/bash.ts b/src/tools/bash.ts
-index 198b49a661..2fbd6f092d 100644
+index 198b49a6611f61f67d04ce0fb20dda082712d3f1..446b5f718fa8d8ad308b4ca4edfc3a31637dedf6 100644
 --- a/src/tools/bash.ts
 +++ b/src/tools/bash.ts
-@@ -1643,6 +1643,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+@@ -166,6 +166,22 @@ function hasBashApprovalShellControl(command: string): boolean {
+ 
+ const BASH_PATTERN_APPROVAL_VALUES = new Set(["allow", "deny", "prompt"]);
+ 
++/**
++ * Process-wide fail-closed switch for hosts that mediate command execution
++ * outside the SDK (an embedding service whose Host owns execution policy).
++ * `authorizeBashExecution` is optional so the interactive CLI keeps working;
++ * once a host calls this, a BashTool whose session carries no authorizer would
++ * execute unmediated — a configuration error, not a supported mode — so it
++ * throws instead of running. The switch is process-global by design: sessions
++ * in one process share the host boundary.
++ */
++let bashExecutionAuthorizationRequired = false;
++
++/** Require every BashTool execution in this process to carry a session authorizer. Not reversible. */
++export function requireBashExecutionAuthorization(): void {
++	bashExecutionAuthorizationRequired = true;
++}
++
+ /**
+  * Shape a shell command line for an ACP-conformant `terminal/create` request.
+  *
+@@ -1643,6 +1659,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
  						onChunk: chunk => {
  							outputModified = Date.now();
  							outputTap.append(chunk);
@@ -529,7 +1844,7 @@ index 198b49a661..2fbd6f092d 100644
  							notifier?.poll();
  						},
  						onPreview: text => {
-@@ -1669,6 +1670,15 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+@@ -1669,6 +1686,15 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
  						// The result that follows carries the job's last output, matches included.
  						notifier?.stop();
  					});
@@ -545,7 +1860,7 @@ index 198b49a661..2fbd6f092d 100644
  					if (result.artifactError) latestProgressDetails = { meta: { artifactError: result.artifactError } };
  					const wallTimeMs = performance.now() - wallTimeStart;
  					const finalResult = await this.#buildCompletedResult(result, options.timeoutSec, {
-@@ -1738,6 +1748,11 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+@@ -1738,6 +1764,11 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
  			},
  		);
  
@@ -557,16 +1872,21 @@ index 198b49a661..2fbd6f092d 100644
  		return {
  			jobId,
  			completion: completion.promise,
-@@ -1759,6 +1774,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+@@ -1759,6 +1790,12 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
  		onUpdate?: AgentToolUpdateCallback<BashToolDetails>,
  		ctx?: AgentToolContext,
  	): Promise<AgentToolResult<BashToolDetails>> {
-+		await this.session.authorizeBashExecution?.(toolCallId, input, signal);
++		const authorizeExecution = this.session.authorizeBashExecution;
++		if (authorizeExecution) {
++			await authorizeExecution(toolCallId, input, signal);
++		} else if (bashExecutionAuthorizationRequired) {
++			throw new ToolError("Bash execution requires a session execution authorizer in this process");
++		}
  		// The directory the command actually ran in, set once resolved. A hoisted
  		// `cd <dir>; …` runs only the remainder, so renderers drawing the executed
  		// script read the directory from here instead of re-parsing the command.
 diff --git a/src/tools/browser/relay/native-host-manifest.ts b/src/tools/browser/relay/native-host-manifest.ts
-index 7b527d3773..ef8acd2fa2 100644
+index 7b527d3773f3e2df528fed6e8295f533cb2b448e..ef8acd2fa2090b08728dc5e9a0c62ba6f0e337b0 100644
 --- a/src/tools/browser/relay/native-host-manifest.ts
 +++ b/src/tools/browser/relay/native-host-manifest.ts
 @@ -2,12 +2,12 @@ import * as fs from "node:fs/promises";
@@ -584,103 +1904,60 @@ index 7b527d3773..ef8acd2fa2 100644
  
  /** Locations and executable used to install the host for this user. */
 diff --git a/src/tools/index.ts b/src/tools/index.ts
-index 37885f63e3..c6c6c282ec 100644
+index 37885f63e33409904397897573a9c97144b24a44..18a40eb619b472050072d7853976862d3e189bf7 100644
 --- a/src/tools/index.ts
 +++ b/src/tools/index.ts
-@@ -420,6 +420,7 @@ export interface ToolSession {
+@@ -4,6 +4,7 @@ import type { FetchImpl, ImageContent, Message, Model, ServiceTierByFamily, Tool
+ import { logger } from "@oh-my-pi/pi-utils";
+ import type { RawSseDebugBuffer } from "@oh-my-pi/pi-tui/apps/debug/raw-sse-buffer";
+ import type { AsyncJobManagerApi } from "../async/job-manager";
++import type { AuthorizeModelUse } from "../config/mediated-model-registry";
+ import type { NotifyBatch } from "../async/notify";
+ import type { Rule } from "../capability/rule";
+ import type { EffectiveExtensionRoots } from "../capability/types";
+@@ -420,6 +421,15 @@ export interface ToolSession {
  	toolRegistry?: Map<string, Tool>;
  	/** Tool command presentation state backed by {@link toolRegistry}: which tools run as bash commands. */
  	toolCommands?: ToolCommandState;
 +	authorizeBashExecution?: (toolCallId: string, input: unknown, signal?: AbortSignal) => Promise<void>;
++	/**
++	 * Host mediation hook for provider use by sessions spawned from this one
++	 * (subagents, vibe workers, persisted revivals, advisors). Invoked with the
++	 * model about to be used before its credential is resolved; a rejection
++	 * refuses the use. Enforced at the provider-credential boundary; a session
++	 * without it keeps the SDK default.
++	 */
++	authorizeModelUse?: AuthorizeModelUse;
  	/** Agent registry for IRC routing across live sessions. */
  	agentRegistry?: AgentRegistryApi;
  	/** Idle→parked→revive lifecycle owner; lets explicit cancellation stop a non-job-backed agent registration. Default: AgentLifecycleManager.global(). */
-diff --git a/src/task/executor.ts b/src/task/executor.ts
-index a72081a0e..e7aede81b 100644
---- a/src/task/executor.ts
-+++ b/src/task/executor.ts
-@@ -458,6 +458,7 @@ export interface ExecutorOptions {
- 	additionalDirectories?: string[];
- 	/** Exact provider credential resolver inherited from the parent session. */
- 	getApiKey?: CreateAgentSessionOptions["getApiKey"];
-+	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
- 	/** Parent session's manager; the child and its revived turns use this exact delivery scope. */
- 	asyncJobManager?: AsyncJobManagerApi;
- 	/** Parent session whose stored credential affinities seed the child session. */
-@@ -5234,6 +5235,7 @@ async function runSubprocessOnThisThread(options: ExecutorOptions): Promise<Sing
- 					authStorage,
- 					modelRegistry,
- 					getApiKey: options.getApiKey,
-+					authorizeBashExecution: options.authorizeBashExecution,
- 					credentialSourceSessionId: options.credentialSourceSessionId,
- 					oauthAccountPools: options.oauthAccountPools,
- 					inheritedSessionAgents: options.inheritedSessionAgents,
-diff --git a/src/task/structured-subagent.ts b/src/task/structured-subagent.ts
-index 938d10a3e..302800e79 100644
---- a/src/task/structured-subagent.ts
-+++ b/src/task/structured-subagent.ts
-@@ -755,6 +755,7 @@ function buildExecutorOptions(
- 		costGate: session.costGate,
- 		additionalDirectories: session.additionalDirectories,
- 		getApiKey: session.getApiKey,
-+		authorizeBashExecution: session.authorizeBashExecution,
- 		credentialSourceSessionId: session.getCredentialSourceSessionId?.(),
- 		agent: policy.effectiveAgent,
- 		// A stepped spawn starts on its first step prompt; the executor sends the rest.
+diff --git a/src/utils/redact-url.ts b/src/utils/redact-url.ts
+index 1704f1620ea36eab0c9d525f754ece71fdb222c9..251e931e666e576066980731ebe09e3a1aee0d07 100644
+--- a/src/utils/redact-url.ts
++++ b/src/utils/redact-url.ts
+@@ -20,6 +20,11 @@ export function redactUrlForLog(url: string, query: "redact-sensitive" | "omit"
+ 				if (SENSITIVE_QUERY_PARAM.test(name)) parsed.searchParams.set(name, "[redacted]");
+ 			}
+ 		}
++		// Credential-shaped path segments (long token-like runs) never surface.
++		const segments = parsed.pathname.split("/");
++		if (segments.some(segment => /^(sk-|pk-|key-|token-)?[A-Za-z0-9_\-]{24,}$/.test(segment) || segment.startsWith("sk-"))) {
++			parsed.pathname = "/(redacted)";
++		}
+ 		return parsed.toString();
+ 	} catch {
+ 		// An unparseable URL can still carry credentials.
 diff --git a/src/vibe/runtime.ts b/src/vibe/runtime.ts
-index 95854df39..53a227016 100644
+index 95854df391367b2f6067b95b24c77dbe1a5a54f9..b1cbe52dd4dd1fcd4bd08b14c992fd53f9550257 100644
 --- a/src/vibe/runtime.ts
 +++ b/src/vibe/runtime.ts
-@@ -1288,6 +1288,7 @@ export class VibeSessionRegistry {
+@@ -1288,6 +1288,9 @@ export class VibeSessionRegistry {
  		return {
  			cwd: session.cwd,
  			costGate: session.costGate,
 +			authorizeBashExecution: session.authorizeBashExecution,
++			authorizeModelUse: session.authorizeModelUse,
++			getApiKey: session.getApiKey,
  			agent: record.agent,
  			task: message,
  			assignment: message,
-diff --git a/src/task/persisted-revive.ts b/src/task/persisted-revive.ts
-index 961dff07e..d34ffa43a 100644
---- a/src/task/persisted-revive.ts
-+++ b/src/task/persisted-revive.ts
-@@ -20,7 +20,7 @@ import type { AsyncJobManagerApi } from "../async";
- import type { PreparedExtension } from "../extensibility/extensions/types";
- import type { PersistedSubagentReviverFactory } from "../registry/agent-lifecycle";
- import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
--import { createAgentSession } from "../sdk";
-+import { type CreateAgentSessionOptions, createAgentSession } from "../sdk";
- import type { AgentSession } from "../session/agent-session";
- import type { AgentSessionHandle } from "../session/agent-session-handle";
- import type { ArtifactManagerApi } from "../session/artifacts";
-@@ -67,6 +67,7 @@ import type { AgentDefinition } from "./types";
-  */
- export interface PersistedSubagentReviveContext {
- 	session: AgentSession;
-+	authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
- 	authStorage: AuthStorage;
- 	modelRegistry: ModelRegistry;
- 	settings: Settings;
-@@ -103,6 +104,7 @@ export interface PersistedReviveSpec {
- 	/** The root's artifact manager at revive time; a revived agent adopts it. */
- 	readonly artifactManager: ArtifactManagerApi | undefined;
- 	readonly preparedExtensions: readonly PreparedExtension[] | undefined;
-+	readonly authorizeBashExecution?: CreateAgentSessionOptions["authorizeBashExecution"];
- 	readonly authStorage: AuthStorage;
- 	readonly modelRegistry: ModelRegistry;
- 	readonly settings: Settings;
-@@ -208,6 +210,7 @@ export function createPersistedSubagentReviverFactory(
- 				asyncJobManager: ctx.session.asyncJobManager,
- 				artifactManager: ctx.session.sessionManager.getArtifactManager() ?? undefined,
- 				preparedExtensions: ctx.session.preparedExtensions,
-+				authorizeBashExecution: ctx.authorizeBashExecution,
- 				authStorage: ctx.authStorage,
- 				modelRegistry: ctx.modelRegistry,
- 				settings: ctx.settings,
-@@ -404,6 +407,7 @@ export async function revivePersistedSubagent(spec: PersistedReviveSpec, expecte
- 		({ session } = await createAgentSession({
- 			cwd: spec.root.sessionManager.getCwd(),
- 			costGate: spec.costGate,
-+			authorizeBashExecution: spec.authorizeBashExecution,
- 			authStorage: spec.authStorage,
- 			// Revived agents join the root session tree, so their observability
- 			// frames ride the same bus the RPC/collab surfaces subscribed to.

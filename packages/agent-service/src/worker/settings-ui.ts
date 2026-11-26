@@ -410,7 +410,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'task.perCallModel': 'agents:subagents',
   'task.perCallModelAllow': 'config-only',
   'task.maxConcurrency': 'engine',
-  'task.workerThreads': 'agents:subagents',
+  'task.workerThreads': 'tui-only',
   'task.enableLsp': 'agents:subagents',
   'task.maxRecursionDepth': 'engine',
   'task.maxRuntimeMs': 'agents:subagents',

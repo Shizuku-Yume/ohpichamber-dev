@@ -36,6 +36,22 @@ const resolveMcpServerForTool = (toolName, servers) => {
 
 // A refusal names the check that refused, so the person reading it can act on it.
 const denied = (reason, code = 'UNAUTHORIZED', status = 403) => ({ allowed: false, code, status, detail: reason });
+const redactEndpointForNotice = endpoint => {
+ if (endpoint === undefined) return endpoint;
+ try {
+  const url = new URL(endpoint);
+  url.username = '';
+  url.password = '';
+  url.search = '';
+  url.hash = '';
+  const segments = url.pathname.split('/');
+  const credentialLike = segments.some(segment => /^(sk-|pk-|key-|token-)?[A-Za-z0-9_\-]{24,}$/.test(segment) || segment.startsWith('sk-'));
+  if (credentialLike) url.pathname = '/(redacted)';
+  return url.toString().replace(/\/+$/, '') || endpoint.split('?')[0].split('#')[0];
+ } catch {
+  return endpoint.split('?')[0].split('#')[0].replace(/\/\/[^@/]*@/, '//');
+ }
+};
 const approvalRequired = reason => ({ ...denied(reason), approvalRequired: true });
 const allowed = { allowed: true };
 // A proposed value is one the authorized operation itself introduces into the
@@ -156,13 +172,20 @@ export const createWorkerOperationAuthorizer = ({
    if (request.type !== 'tool') return denied('The request type is not authorized for this workspace');
    if (request.agentId !== undefined && !policy.agentIds.includes(request.agentId)) return denied(`The agent profile is not in the workspace catalog for the ${request.toolName} tool`);
    if (request.toolName === 'provider.use') {
+    const normalizeEndpoint = endpoint => endpoint === undefined ? endpoint : endpoint.replace(/\/+$/, '');
+    const embeddingUse = descriptor?.purpose === 'embedding';
     const permitted = request.proposed === true
      ? proposedProviderPermitted(descriptor)
-     : descriptor !== null && policy.providers.some(provider => provider.providerId === descriptor.providerId
-      && provider.modelId === descriptor.modelId && provider.endpoint === descriptor.endpoint);
+     : descriptor !== null && (embeddingUse
+      ? policy.providers.some(provider => provider.providerId === descriptor.providerId
+       && normalizeEndpoint(provider.endpoint) === normalizeEndpoint(descriptor.endpoint))
+      : policy.providers.some(provider => provider.providerId === descriptor.providerId
+       && provider.modelId === descriptor.modelId && provider.endpoint === descriptor.endpoint));
     return permitted ? allowed : denied(request.proposed === true
      ? 'The provider.use tool does not name a complete provider and model selection'
-     : 'The provider.use tool does not name a provider and model enabled in this workspace');
+     : embeddingUse
+      ? `The workspace has no enabled ${descriptor?.providerId ?? 'embedding'} provider at the embedding endpoint ${redactEndpointForNotice(descriptor?.endpoint) ?? '(default)'}`
+      : 'The provider.use tool does not name a provider and model enabled in this workspace');
    }
    // Native ask only opens a scoped, CAS-protected interaction; it grants no machine capability.
    if (request.toolName === 'ask') return allowed;

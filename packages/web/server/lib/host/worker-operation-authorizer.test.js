@@ -189,6 +189,35 @@ describe('Host-owned native descriptor authority', () => {
     } finally { await harness.close(); }
   });
 
+  it('admits an embedding provider use at an enabled provider endpoint with any model and refuses others', async () => {
+    const harness = await nativeHarness();
+    try {
+      const request = { type: 'tool', toolName: 'provider.use', input: {} };
+      const embedding = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], purpose: 'embedding', providerId: 'fixture', modelId: 'fixture-embedding', endpoint: 'https://fixture.example/v1' };
+      // The workspace sends transcript traffic to fixture at that endpoint with
+      // model `small`; the embedding model differs and is admitted on provider+endpoint.
+      expect(await harness.authorize(harness.scope, request, embedding)).toEqual({ allowed: true });
+      // Trailing-slash differences normalize away on both sides.
+      expect(await harness.authorize(harness.scope, request, { ...embedding, endpoint: 'https://fixture.example/v1/' })).toEqual({ allowed: true });
+      // Another endpoint, another provider, and a chat-shaped exact miss are refused.
+      expect(await harness.authorize(harness.scope, request, { ...embedding, endpoint: 'https://foreign.example/v1' }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The workspace has no enabled fixture provider at the embedding endpoint https://foreign.example/v1' });
+      expect(await harness.authorize(harness.scope, request, { ...embedding, providerId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      // Endpoint text in the refusal is redacted: userinfo and query never surface.
+      const secretEndpoint = 'https://user:secret@foreign.example/v1?key=sk-secret';
+      const refusal = await harness.authorize(harness.scope, request, { ...embedding, endpoint: secretEndpoint });
+      expect(refusal.allowed).toBe(false);
+      expect(refusal.detail).not.toContain('sk-secret');
+      expect(refusal.detail).not.toContain('user:secret@');
+      // Without the embedding purpose the chat exact-match rule is unchanged: the
+      // embedding model is not enabled and stays refused, the enabled chat tuple passes.
+      expect(await harness.authorize(harness.scope, request, { ...embedding, purpose: undefined })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      const chat = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' };
+      expect(await harness.authorize(harness.scope, request, chat)).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, request, { ...chat, endpoint: 'https://fixture.example/v1/' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+
   it('requires exact consent for the native workspace-root command descriptor unless machine policy grants it', async () => {
     const harness = await nativeHarness();
     try {

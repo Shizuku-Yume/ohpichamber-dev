@@ -168,7 +168,7 @@ export async function describeNativeOperation(cwd: string, request: WorkerPolicy
   return NativeOperationDescriptorSchema.parse({ ...effective, command: command.data.command, sourcePaths: [command.data.cwd === undefined ? cwd : localPath(command.data.cwd, cwd)] });
  }
  if (toolName === 'provider.use') {
-  return NativeOperationDescriptorSchema.parse({ ...effective, providerId: input.providerId, modelId: input.modelId, endpoint: input.endpoint });
+  return NativeOperationDescriptorSchema.parse({ ...effective, providerId: input.providerId, modelId: input.modelId, endpoint: input.endpoint, purpose: input.purpose });
  }
  if (toolName === 'lsp') {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) throw new Error('Native LSP input is invalid');

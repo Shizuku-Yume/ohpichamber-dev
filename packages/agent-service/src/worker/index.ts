@@ -9,6 +9,9 @@ import { NativeMcpError } from './mcp.ts';
 import { WorkerHostActions } from './host-actions.ts';
 import { getUsageAccounts, getUsageStats, getUsageTools } from './usage.ts';
 import { closePrewarmedNativeRuntime, prewarmNativeRuntime } from './native-runtime.ts';
+import { requireBashExecutionAuthorization } from '@oh-my-pi/pi-coding-agent/tools/bash';
+
+requireBashExecutionAuthorization();
 
 /** The cause a thrown value carries, whatever its shape. A thrown string is a
  * cause the worker chose, not a missing one; only a value with nothing readable

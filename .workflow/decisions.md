@@ -1,5 +1,23 @@
 # Decisions
 
+## 2026-11-26 - Every SDK-built session in the worker inherits Host authorization and fails closed without it
+
+- **Decided:** The worker arms `requireBashExecutionAuthorization()` at startup, so a Bash tool whose session lacks the Host authorizer throws instead of running. Each session an allowed builtin can build (`/cleanse` workers and checker commands, `/tan` clones, Vibe workers, persisted revival, advisors, Task children) carries the Host Bash authorizer, the worker `tool_call` observer and `authorizeModelUse`. When `authorizeModelUse` is set, the session model registry is wrapped so every credential mint (agent loop, compaction, context promotion, turn recovery, job widgets, branch summaries, side turns, advisors, and every rotation) authorizes `provider.use` first. A refused candidate is skipped; when none remains, the Host refusal reaches the user. Existence-only probes use the unwrapped registry. Remote mnemopi embeddings are a `provider.use` with `purpose: 'embedding'`. The Host admits one when an enabled workspace provider has the same provider id and endpoint, with any model. Remote mnemopi LLM use needs the exact chat tuple. Both mnemopi gates admit only the endpoint the Host admitted, and keys are pinned so core never falls back to environment credentials. `task.workerThreads` is pinned to 0 because worker threads drop the inline observer.
+- **Instead of:** Disabling `/cleanse` and the affected children, or enforcing `provider.use` inside the shared `NativeModelRegistry`, which also serves image generation and catalog work outside the provider policy.
+- **Because:** The SDK builds sessions internally, and optional authorization hooks failed open. Default deny at the credential and egress boundary holds even when a future SDK path forgets a hook or mispredicts where a request goes.
+- **Mine:** yes (maintainer chose the SDK-seam fix, full coverage and a complete mnemopi fix at effort close).
+- **Revisit when:** OMP adds a session construction path or a credential consumer outside the wrapped registry, a refused use needs its own GUI capability, or `task.workerThreads` becomes supportable with a module-backed observer.
+- **Effort:** omp19-1-integration
+
+## 2026-11-26 - Internal URL read allowlist follows the OMP 19.1 scheme set
+
+- **Decided:** A native `read` descriptor carries `internalReadUrls` only for `agent`, `history`, `local`, `proc`, `skill`, `help`, `mcp`, `omp`, `issue` and `pr`. OMP 19.1 removed `artifact` and `xd` and added `help`, which is admitted. The other schemes 19.1 added (`rule`, `memory`, `out`, `cfg`, `ssh`, `security`, `vault`, `mr`, `attachment`, `conflict`) stay refused: the descriptor's `://` check rejects them before any workspace grant applies. Only `local` declares a single-slash alias, so `memory:/x` style input is a literal workspace filename to both the descriptor and the SDK. The rest of the 2026-10-27 rule (read-only admission, mixed-list path checks, `local://` writes only) is unchanged.
+- **Instead of:** Admitting every 19.1 scheme under the workspace `read` grant.
+- **Because:** Some new schemes resolve outside the workspace (`vault`, `memory`) or leave the host (`ssh` declares an `exec` read tier). Each needs its own capability review before the Host grants it; refusal fails closed.
+- **Mine:** no (records the omp19-1-integration upgrade, confirmed at effort close).
+- **Revisit when:** a GUI user needs one of the refused schemes, or OMP adds or removes a scheme.
+- **Effort:** omp19-1-integration
+
 ## 2026-11-26 - About offers update status and a check-for-updates action
 
 - **Decided:** Settings > About carries an Updates section on every retained surface that has an updater — today the Electron desktop shell, the only runtime that updates itself in place. The section shows the current status (checking, up to date, offered version with the update action, or the check failure with its cause), a check-for-updates action, and the last-checked time. Web, hosted and mobile runtimes install updates outside the app, so they render no section rather than a dead control. A release feed without published releases reads as up to date, never as an error. This supersedes the rebrand rule that the About page offers no update control (`.workflow/specs/rebrand.md`); the CLI update check and the `ohpichamber update` command stay removed.
@@ -489,6 +507,7 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OMP adds or removes a native internal scheme, or a read-only internal URL starts granting a capability the Host must authorize separately.
 - **Effort:** omp-native-parity
+- **Superseded by:** 2026-11-26 - Internal URL read allowlist follows the OMP 19.1 scheme set
 ## 2026-10-27 - Publish plan-role availability in the workspace model catalog
 
 - **Decided:** `ModelCatalog` carries `planRoleAvailable`, resolved by the Agent Service with OMP's `resolveRoleModelFull(settings, 'plan', modelRegistry.getAvailable(), undefined)` — the same resolver the worker's plan enter uses. The composer reads it from the per-directory catalog cache to disable Plan and show the reason before a session exists.

@@ -1,8 +1,9 @@
 import { copyFile, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { z } from 'zod';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatBytes, isProbablyBinary } from '@oh-my-pi/pi-utils';
-import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
+import { createAgentSession, type CreateAgentSessionOptions, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import type { CompletedRewindState } from '@oh-my-pi/pi-coding-agent/tools/checkpoint';
@@ -74,7 +75,7 @@ import { createNativeBashAuthorizer } from './native-bash-policy.ts';
 import { resolveDeclaredTier } from './tool-tier.ts';
 import { NativePermissionBridge } from './native-permission-bridge.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
-import { cfgTaskPerCallModel } from '@oh-my-pi/pi-coding-agent/task/settings';
+import { cfgTaskPerCallModel, cfgTaskWorkerThreads } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
 import { SuggestionDriver } from './suggestion.ts';
@@ -205,7 +206,13 @@ export class WorkerSession {
     /** The shared catalog identity; a `/btw` branch rekeys its root in place. */
     private readonly workerIdentity: { rootSessionId: string },
     private readonly sanitizeProviderError: (text: string) => string,
-    private readonly toolPolicy: { observer: ExtensionFactory; authorizeBashExecution: ReturnType<typeof createNativeBashAuthorizer> },
+    private readonly toolPolicy: {
+      observer: ExtensionFactory;
+      authorizeBashExecution: NonNullable<CreateAgentSessionOptions['authorizeBashExecution']>;
+      authorizeModelUse: NonNullable<CreateAgentSessionOptions['authorizeModelUse']>;
+      getApiKey: NonNullable<CreateAgentSessionOptions['getApiKey']>;
+      scopedGetApiKey: (owner: () => string | undefined) => NonNullable<CreateAgentSessionOptions['getApiKey']>;
+    },
     private readonly hostToolsController?: HostToolController,
   ) {
     this.modeController = new WorkerModeController(
@@ -461,11 +468,10 @@ export class WorkerSession {
     // cached, so a policy change still refuses the next attempt; the first use of
     // each key always performs the full Host `/authorization-policy` round-trip.
     const authorizedProviderUses = new Set<string>();
-    const providerUseKey = (input: JsonObject): string | null => (
-      typeof input.providerId === 'string' && typeof input.modelId === 'string'
-        ? JSON.stringify([input.providerId, input.modelId, typeof input.endpoint === 'string' ? input.endpoint : null])
-        : null
-    );
+    const providerUseKey = (input: JsonObject): string | null => {
+      const parsed = z.looseObject({ providerId: z.string(), modelId: z.string(), endpoint: z.string().nullish(), purpose: z.string().nullish() }).safeParse(input);
+      return parsed.success ? JSON.stringify([parsed.data.providerId, parsed.data.modelId, parsed.data.endpoint ?? null, parsed.data.purpose ?? null]) : null;
+    };
     const authorizeTool = async (toolName: string, toolInput: JsonObject, approval?: { approvalId?: string; toolCallId: string }): Promise<void> => {
       if (toolName === 'provider.use' && approval === undefined) {
         const key = providerUseKey(toolInput);
@@ -639,6 +645,7 @@ export class WorkerSession {
       // no such seam.
       cfgTitleRefreshOnReplan.override(settings, false);
       cfgTaskPerCallModel.override(settings, 'on');
+      cfgTaskWorkerThreads.override(settings, 0);
       if (!cfgToolsIntentTracing.isConfigured(settings)) cfgToolsIntentTracing.override(settings, true);
       const initialHostTools = normalizeHostToolEnablement(input.hostTools);
       const hostToolsController = createHostToolController({
@@ -663,6 +670,22 @@ export class WorkerSession {
         authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
         nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
       });
+      const authorizeModelUse: NonNullable<CreateAgentSessionOptions['authorizeModelUse']> = async model => {
+        const input: JsonObject = { providerId: model.provider, modelId: model.id };
+        if (model.baseUrl) input.endpoint = model.baseUrl;
+        if (model.purpose) input.purpose = model.purpose;
+        await authorizeTool('provider.use', input);
+      };
+      const rootGetApiKey: NonNullable<CreateAgentSessionOptions['getApiKey']> = async model => {
+        await authorizeModelUse(model);
+        const registry = session?.modelRegistry ?? modelRegistry;
+        return registry.resolver(model, session?.agent.sessionId ?? input.workerGeneration);
+      };
+      const scopedGetApiKey = (owner: () => string | undefined): NonNullable<CreateAgentSessionOptions['getApiKey']> => async model => {
+        await authorizeModelUse(model);
+        const registry = session?.modelRegistry ?? modelRegistry;
+        return registry.resolver(model, owner() ?? session?.agent.sessionId ?? input.workerGeneration);
+      };
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -672,11 +695,9 @@ export class WorkerSession {
         tuiTranscript: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, hostToolsController.extension],
         authorizeBashExecution,
+        authorizeModelUse,
         extensionRoots: () => nativeExtensionRoots(settings, pluginExtensionPaths),
-        getApiKey: async model => {
-          await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
-          return modelRegistry.resolver(model, session?.agent.sessionId ?? input.workerGeneration);
-        },
+        getApiKey: rootGetApiKey,
       });
       session = result.session;
       if (result.extensionsResult.errors.length > 0) {
@@ -716,7 +737,7 @@ export class WorkerSession {
       const captioner = createModelJobCaptionWriter({
         sessionId: () => input.rootSessionId,
         settings: nativeSession.settings,
-        modelRegistry,
+        modelRegistry: nativeSession.modelRegistry,
       });
       const widgets = new JobWidgets({
         captioner,
@@ -766,10 +787,7 @@ export class WorkerSession {
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       await rememberPrivateRoots(manager, input);
-      const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
-        await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
-      };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, runtime.sanitizeProviderError, { observer, authorizeBashExecution }, hostToolsController);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeModelUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, runtime.sanitizeProviderError, { observer, authorizeBashExecution, authorizeModelUse, getApiKey: rootGetApiKey, scopedGetApiKey }, hostToolsController);
       // Persisted subagents must be revivable after a worker restart: the factory
       // rebuilds one from its transcript, and the TTL mirrors the native task-agent
       // idle setting so a parked agent is collected exactly when OMP would.
@@ -777,6 +795,8 @@ export class WorkerSession {
         createPersistedSubagentReviverFactory({
           session: nativeSession, authStorage, modelRegistry, settings: nativeSession.settings,
           authorizeBashExecution,
+          authorizeModelUse,
+          getApiKey: rootGetApiKey,
           enableLsp: true, eventBus: subagentEventBus, subagentEventBus,
         }),
         () => Math.trunc(Number(cfgTaskAgentIdleTtlMs.get(nativeSession.settings)) || 0),
@@ -1915,7 +1935,21 @@ export class WorkerSession {
           const abortController = new AbortController();
           const modelSelector = this.session.model ? formatModelString(this.session.model) : undefined;
           try {
-            const result = await runCleanse({ all: true, maxAgents: 4, model: modelSelector }, ui, abortController.signal);
+            const result = await runCleanse({
+              all: true, maxAgents: 4, model: modelSelector, cwd: this.cwd,
+              host: {
+                settings: this.session.settings,
+                authStorage: this.authStorage,
+                modelRegistry: this.session.modelRegistry,
+                getApiKey: this.toolPolicy.getApiKey,
+                authorizeBashExecution: this.toolPolicy.authorizeBashExecution,
+                authorizeModelUse: this.toolPolicy.authorizeModelUse,
+                preparedExtensions: this.session.preparedExtensions,
+                authorizeCheckerCommand: async (command, signal) => {
+                  await this.toolPolicy.authorizeBashExecution(`cleanse-checker-${randomUUID()}`, { command }, signal);
+                },
+              },
+            }, ui, abortController.signal);
             const finalStatus = result.status === 'cancelled' ? 'cancelled' : 'completed';
             emitCleanse(finalStatus);
             return {
@@ -1957,6 +1991,8 @@ export class WorkerSession {
               disableExtensionDiscovery: true,
               extensions: [this.toolPolicy.observer],
               authorizeBashExecution: this.toolPolicy.authorizeBashExecution,
+              authorizeModelUse: this.toolPolicy.authorizeModelUse,
+              getApiKey: this.toolPolicy.scopedGetApiKey(() => cloneSessionId),
               cacheWarming: 'off',
               agentId: cloneId,
               agentDisplayName: 'tan',

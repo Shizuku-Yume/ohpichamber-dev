@@ -67,7 +67,7 @@ export const NativeOperationDescriptorSchema = z.strictObject({
   /** `local://` write targets OMP resolves itself, e.g. a Plan-mode plan file. */
   internalWriteUrls: z.array(OmpWritableInternalUrlSchema).optional(),
   fileOps: z.array(z.strictObject({ kind: z.string().min(1), path: PrivatePathSchema, to: PrivatePathSchema.optional() })),
-  command: z.string().optional(), declaredTier: NativeToolTierSchema.optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
+  command: z.string().optional(), declaredTier: NativeToolTierSchema.optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(), purpose: z.enum(['embedding']).optional(),
   approvalGrant: NativeApprovalGrantSchema.optional(),
   lspAction: z.string().min(1).optional(),
   lspMethod: z.string().min(1).optional(),

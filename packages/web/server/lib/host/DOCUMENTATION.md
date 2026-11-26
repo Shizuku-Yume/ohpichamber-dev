@@ -141,7 +141,15 @@ Authentication requires a validated UI cookie (`ui-session` or signed `ui-passwo
 Existing account mutations (`select`, `automatic`, `remove`, `label`) share the
 authenticated workspace gateway and remain available in enterprise mode; they
 do not enter new credentials. Runtime provider-use admission authorizes the
-provider/model/endpoint independently of native account selection. Private
+provider/model/endpoint independently of native account selection. A use whose
+descriptor carries `purpose: 'embedding'` is admitted instead on provider id
+and endpoint alone (any model, trailing slashes normalized on both sides): the
+workspace already sends transcript traffic to that endpoint, and memory
+embeddings carry text derived from it; a mismatch is refused with a reason
+naming the provider and endpoint, with endpoint text redacted — userinfo,
+query and fragment stripped, and credential-shaped path segments (long
+token-like runs or `sk-` prefixes) collapsed to `/(redacted)` — before it can
+surface in a notice or log. Private
 quota/TTS/routing credential resolution remains reference-specific.
 
 Accounts GET and mutation responses retain the strict legacy roster shape and

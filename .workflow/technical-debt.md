@@ -142,3 +142,33 @@ claim that the carried-over bodies have been type-verified.
 - **Impact:** display-only; the run uses devin-swe-2. No routing or response-loss regression is established by this report.
 - **Solution:** identify the stale presentation owner and derive the streaming label from the authoritative session/run selection, preserving ordinary draft selection outside a run. Cover promotion, streaming, completion and interruption ordering.
 - **Cost:** focused composer state investigation and regression coverage; the source cause is not yet verified.
+
+## Advisor overflow compaction refusal has no behavioral test
+
+- **Where:** SDK patch `session/session-advisors.ts` overflow compaction candidate loop; `packages/agent-service/src/worker/session-native.test.ts`
+- **Added:** 2026-11-26
+- **Priority:** worth-doing
+- **Problem:** The advisor overflow compaction loop skips Host-refused candidates and surfaces the refusal when none remains, but no test drives advisor overflow compaction with `provider.use` denied. The identical pattern is covered for manual compaction and job widgets.
+- **Impact:** A regression in that one loop would go unnoticed. The registry wrapper still blocks the credential, so a regression costs diagnosability, not egress.
+- **Solution:** Drive an advisor overflow through the existing WATCHDOG.yml fixture with the compaction candidate denied; assert no provider request and a visible refusal.
+- **Cost:** Involved harness setup: an asynchronous maintenance trigger and a forced context overflow.
+
+## Image generation authorizes provider entry instead of provider use
+
+- **Where:** `packages/agent-service/src/worker/stateless.ts` (~330), `packages/agent-service/src/worker/catalog-models.ts` (~1274)
+- **Added:** 2026-11-26
+- **Priority:** worth-doing
+- **Problem:** `catalog.image.generate` asks only for the `provider-entry` grant before resolving a credential through the unwrapped runtime registry. It never requests a `provider.use` admission for the image model's provider, model and endpoint.
+- **Impact:** Image generation is checked by a weaker rule than every agent-driven provider request: its provider, model and endpoint never pass the `provider.use` policy.
+- **Solution:** Request `provider.use` for the image tuple. Decide whether image models join the workspace provider policy or get their own purpose, as embeddings did.
+- **Cost:** Host policy shape for image models and its Settings presentation; focused stateless worker and authorizer tests.
+
+## Exact slash-command matches need a second Enter
+
+- **Where:** shared composer slash-command autocomplete
+- **Added:** 2026-11-26
+- **Priority:** worth-doing
+- **Problem:** When typed text exactly matches a command, the autocomplete stays open. The first Enter only selects the item and appends a space; a second Enter submits. After a control command fails, the typed text is not visibly restored. Observed in the isolated browser run (`ohpichamber-omp-artifacts/omp19-close-2026-11-26/realpath/REPORT.md`); the cause has not been traced in source.
+- **Impact:** Every exact slash command costs an extra keypress, and a failed command loses the typed text.
+- **Solution:** Submit on Enter when the input already equals the highlighted command. Restore the draft when a control command is rejected. Cover keyboard and touch submission.
+- **Cost:** Composer input state changes and regression tests across desktop and mobile layouts.
