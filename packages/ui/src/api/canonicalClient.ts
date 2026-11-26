@@ -11,7 +11,7 @@ import type {
   ShellOutput, ShellSnapshot, ShellStartRequest, ShellStdinRequest, ShellStdinResult, ShellStopRequest, ShellStreamResponse, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
-  WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, Subagent,
+  WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, QueueTakeRequest, QueueTakeResult, Subagent,
   OmpSettingsState, OmpSettingsUpdateRequest,
   ImageModel, ImageGenerateRequest, ImageGenerateResult,
 } from '@openchamber/agent-contract';
@@ -454,6 +454,7 @@ export class CanonicalClient {
   appendQueue(sessionId: string, input: QueueAppendRequest, commandId?: string): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.QueueAppendRequestSchema, input) }); }
   reorderQueue(sessionId: string, input: QueueReorderRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/order`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueReorderRequestSchema, input) }); }
   deleteQueueItem(sessionId: string, queueItemId: string, input: QueueDeleteRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueDeleteRequestSchema, input, body => body.queueItemId === queueItemId) }); }
+  takeQueueItem(sessionId: string, queueItemId: string, input: QueueTakeRequest): Promise<QueueTakeResult> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}/take`, scoped(C.QueueTakeResultSchema, result => result.queue.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueTakeRequestSchema, input, body => body.queueItemId === queueItemId) }); }
 
   getModels(workspaceId: string): Promise<ModelCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/models`, scoped(C.ModelCatalogSchema, result => result.workspaceId === workspaceId)); }
   async listImageModels(workspaceId: string): Promise<ImageModel[]> {

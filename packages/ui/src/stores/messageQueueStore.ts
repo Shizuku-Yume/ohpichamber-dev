@@ -7,6 +7,8 @@ import {
     type QueueItem,
     QueueReorderRequestSchema, type QueueReorderRequest,
     QueueDeleteRequestSchema, type QueueDeleteRequest,
+    QueueTakeResultSchema, type QueueTakeRequest,
+    type QueueOriginalDraft,
     type PromptAttachment,
     type PromptContext,
 } from '@openchamber/agent-contract';
@@ -23,8 +25,9 @@ import { getQueuedMessagePreview } from '@/lib/messages/queuedMessagePreview';
 import { compareCounters } from '@/sync/event-reducer';
 import { canonicalClient } from '@/api/canonicalClient';
 import { prepareAttachmentsHeldForSend } from '@/sync/held-attachments';
+import { withOriginalAttachment } from './messageQueueAttachments';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from './useGlobalSessionsStore';
-
+import { subscribeWorkspaceDirectories } from './globalSessions';
 const encodeAttachmentFile = async (file: Blob): Promise<string> => {
     const bytes = new Uint8Array(await file.arrayBuffer());
     let binary = '';
@@ -38,8 +41,8 @@ const encodeAttachmentFile = async (file: Blob): Promise<string> => {
 const admitAttachmentsForQueue = async (
     attachments: readonly AttachedFile[] | undefined,
     target: MessageQueueTarget,
-): Promise<PromptAttachment[]> => {
-    if (!attachments?.length) return [];
+): Promise<{ references: PromptAttachment[]; prepared: readonly AttachedFile[] }> => {
+    if (!attachments?.length) return { references: [], prepared: [] };
     let workspaceId: string | undefined;
     const admitted: PromptAttachment[] = [];
     const prepared = attachments.some((file) => file.saveOnSend || file.saveCopyOnSend)
@@ -78,7 +81,36 @@ const admitAttachmentsForQueue = async (
             uri: uploaded.uri,
         });
     }
-    return admitted;
+    return { references: admitted, prepared };
+};
+
+const draftAttachmentsForQueue = (
+    references: readonly PromptAttachment[],
+    prepared: readonly AttachedFile[],
+): QueueOriginalDraft['attachments'] => {
+    if (references.length !== prepared.length) {
+        throw new Error('Queued attachment references no longer align with their files');
+    }
+    return references.map((reference, index) => {
+        const file = prepared[index];
+        const entry: QueueOriginalDraft['attachments'][number] = {
+            attachmentId: reference.attachmentId,
+            name: reference.name,
+            mediaType: reference.mediaType,
+            size: reference.size,
+            uri: reference.uri,
+        };
+        if (file?.agentPath) entry.agentPath = file.agentPath;
+        if (file?.original) {
+            const original: NonNullable<typeof entry.original> = {
+                mimeType: file.original.mimeType,
+                dataUrl: file.original.dataUrl,
+            };
+            if (file.original.saveOnSend !== undefined) original.saveOnSend = file.original.saveOnSend;
+            entry.original = original;
+        }
+        return entry;
+    });
 };
 export type FollowUpBehavior = 'steer' | 'queue';
 
@@ -152,7 +184,14 @@ export interface QueuedMessage {
     sendConfig?: QueuedMessageSendConfig;
     goal?: QueuedMessageGoal;
     scheduledTask?: { projectId: string; taskId: string };
+    originalAvailable: boolean;
 }
+
+export type TakeQueuedItemResult =
+    | { status: 'taken'; message: QueuedMessage; draft: QueueOriginalDraft }
+    | { status: 'taken-partial'; message: QueuedMessage }
+    | { status: 'refused' }
+    | { status: 'missing' };
 
 interface QueuedMessageInput {
     content: string;
@@ -175,6 +214,14 @@ const MAX_MESSAGES_PER_QUEUE = 20;
 
 const sessionDirectoryMap = new Map<string, string>();
 
+let rekeyingProjections = false;
+const noteSessionDirectoryBinding = (runtimeKey: string, sessionId: string, directory: string): void => {
+    const bindingKey = JSON.stringify([runtimeKey, sessionId]);
+    if (sessionDirectoryMap.get(bindingKey) === directory) return;
+    sessionDirectoryMap.set(bindingKey, directory);
+    queueMicrotask(() => rekeyProjectionsForResolvedSessions());
+};
+
 export const createMessageQueueTarget = (
     sessionId: string,
     directory: string | null | undefined,
@@ -182,7 +229,7 @@ export const createMessageQueueTarget = (
 ): MessageQueueTarget | null => {
     const normalizedDirectory = normalizePath(directory);
     if (!runtimeKey || !normalizedDirectory || !sessionId) return null;
-    sessionDirectoryMap.set(JSON.stringify([runtimeKey, sessionId]), normalizedDirectory);
+    noteSessionDirectoryBinding(runtimeKey, sessionId, normalizedDirectory);
     return { runtimeKey, directory: normalizedDirectory, sessionId };
 };
 
@@ -191,7 +238,15 @@ export const getMessageQueueKey = (target: MessageQueueTarget): string =>
 
 export const parseMessageQueueKey = (key: string): MessageQueueTarget | null => {
     const [runtimeKey, directory, ...sessionParts] = key.split('\n');
-    return createMessageQueueTarget(sessionParts.join('\n'), directory, runtimeKey);
+    if (!runtimeKey || directory === undefined || sessionParts.length === 0) return null;
+    const sessionId = sessionParts.join('\n');
+    if (!sessionId) return null;
+    const normalizedDirectory = normalizePath(directory);
+    if (!normalizedDirectory) {
+        if (directory === '') return { runtimeKey, directory: '', sessionId };
+        return null;
+    }
+    return createMessageQueueTarget(sessionId, directory, runtimeKey);
 };
 
 
@@ -208,6 +263,7 @@ const toQueuedMessage = (item: QueueItem): QueuedMessage => {
         content: item.content,
         text: item.text,
         createdAt: item.createdAt,
+        originalAvailable: item.originalAvailable,
     };
     if (item.options?.providerId && item.options?.modelId) {
         message.sendConfig = {
@@ -241,17 +297,115 @@ const toQueuedMessage = (item: QueueItem): QueuedMessage => {
     return message;
 };
 
+const attachmentsFromDraft = (draft: QueueOriginalDraft): AttachedFile[] => (
+    draft.attachments.map((attachment) => {
+        const file: AttachedFile = {
+            id: attachment.attachmentId,
+            filename: attachment.name,
+            mimeType: attachment.mediaType,
+            size: attachment.size,
+            source: 'server',
+            serverPath: attachment.uri,
+            dataUrl: attachment.uri,
+            file: new File([], attachment.name, { type: attachment.mediaType }),
+        };
+        if (attachment.agentPath) file.agentPath = attachment.agentPath;
+        if (attachment.original) file.original = { ...attachment.original };
+        return withOriginalAttachment(file);
+    })
+);
+
+const contextFromDraft = (draft: QueueOriginalDraft): QueuedContextPart[] => (
+    draft.context.map((entry) => {
+        if (entry.kind === 'context') {
+            const metadata = contextPartMetadataSchema.safeParse(entry.metadata);
+            if (!metadata.success) return { kind: 'synthetic', text: entry.text };
+            const part: QueuedContextPart = {
+                kind: 'context',
+                text: entry.text,
+                metadata: metadata.data,
+            };
+            if (entry.instructions) part.instructions = entry.instructions;
+            return part;
+        }
+        return entry.kind === 'synthetic'
+            ? { kind: 'synthetic', text: entry.text }
+            : { kind: 'instruction', text: entry.text };
+    })
+);
+
+const queuedMessageFromDraft = (
+    draft: QueueOriginalDraft,
+    identity: { queueItemId: string; createdAt: number },
+    projected: QueuedMessage | undefined,
+): QueuedMessage => {
+    const message: QueuedMessage = {
+        id: identity.queueItemId,
+        content: draft.content,
+        text: draft.text,
+        createdAt: identity.createdAt,
+        originalAvailable: true,
+    };
+    if (draft.agentMention?.agentId) message.agentMention = draft.agentMention.agentId;
+    const attachments = attachmentsFromDraft(draft);
+    if (attachments.length > 0) message.attachments = attachments;
+    const context = contextFromDraft(draft);
+    if (context.length > 0) message.context = context;
+    if (draft.options.providerId && draft.options.modelId) {
+        message.sendConfig = {
+            providerID: draft.options.providerId,
+            modelID: draft.options.modelId,
+            agent: draft.options.agentId ?? undefined,
+            variant: draft.options.variant ?? undefined,
+            reasoningEffort: draft.options.reasoningEffort ?? undefined,
+        };
+    }
+    if (draft.goal) {
+        const goal: QueuedMessageGoal = { tokenBudget: draft.goal.tokenBudget };
+        if (draft.goal.objective !== undefined) goal.objective = draft.goal.objective;
+        message.goal = goal;
+    }
+    if (draft.contextPreview) message.contextPreview = draft.contextPreview;
+    if (projected?.scheduledTask) message.scheduledTask = projected.scheduledTask;
+    return message;
+};
+
+const partialMessageFromTake = (
+    result: { content: string; text: string; createdAt: number },
+    queueItemId: string,
+    projected: QueuedMessage | undefined,
+): QueuedMessage => ({
+    ...(projected ?? {
+        id: queueItemId,
+        content: result.content,
+        text: result.text,
+        createdAt: result.createdAt,
+        originalAvailable: false,
+    }),
+    content: result.content,
+    text: result.text,
+    originalAvailable: false,
+});
+
 type QueueRequestBody =
     | QueueAppendRequest
     | QueueReorderRequest
     | QueueDeleteRequest
+    | QueueTakeRequest
     | { held: boolean; ttlMs?: number };
+class MessageQueueRequestError extends Error {
+    readonly status: number;
+    constructor(status: number) {
+        super(`Message queue request failed (${status})`);
+        this.name = 'MessageQueueRequestError';
+        this.status = status;
+    }
+}
+
 const requestJson = async <T,>(schema: z.ZodType<T>, path: string, init?: RuntimeFetchOptions): Promise<T> => {
     const response = await runtimeFetch(path, init);
     if (!response.ok) {
-        const error: Error & { status?: number } = new Error(`Message queue request failed (${response.status})`);
-        error.status = response.status;
-        throw error;
+        throw new MessageQueueRequestError(response.status);
     }
     const parsed = schema.safeParse(await response.json());
     if (!parsed.success) throw new Error('Invalid message queue response');
@@ -297,8 +451,8 @@ interface MessageQueueActions {
     addToQueue: (target: MessageQueueTarget, message: QueuedMessageInput) => Promise<void>;
     removeFromQueue: (target: MessageQueueTarget, messageId: string) => void;
     reorderQueue: (target: MessageQueueTarget, fromId: string, toId: string) => void;
-    popToInput: (target: MessageQueueTarget, messageId: string) => Promise<QueuedMessage | null>;
-    takeForSend: (target: MessageQueueTarget, messageId?: string) => Promise<QueuedMessage[]>;
+    popToInput: (target: MessageQueueTarget, messageId: string) => Promise<TakeQueuedItemResult>;
+    takeQueuedItem: (target: MessageQueueTarget, messageId: string) => Promise<TakeQueuedItemResult>;
     clearQueue: (target: MessageQueueTarget) => void;
     forgetQueue: (target: MessageQueueTarget) => void;
     clearAllQueues: () => void;
@@ -323,7 +477,7 @@ interface MessageQueueActions {
 
 type MessageQueueStore = MessageQueueState & MessageQueueActions;
 
-type PersistedQueuedMessage = Omit<QueuedMessage, 'text'> & { text?: string };
+type PersistedQueuedMessage = Omit<QueuedMessage, 'text' | 'originalAvailable'> & { text?: string; originalAvailable?: boolean };
 
 type PersistedMessageQueueState = {
     queuedMessages?: Record<string, PersistedQueuedMessage[]>;
@@ -335,7 +489,7 @@ type PersistedMessageQueueState = {
 const withDeliveryText = (queues: Record<string, PersistedQueuedMessage[]>): Record<string, QueuedMessage[]> => (
     Object.fromEntries(Object.entries(queues).map(([key, queue]) => [
         key,
-        queue.map((message) => ({ ...message, text: message.text ?? message.content })),
+        queue.map((message) => ({ ...message, text: message.text ?? message.content, originalAvailable: message.originalAvailable ?? false })),
     ]))
 );
 
@@ -425,9 +579,9 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     if (queueOwnerOf(directory) !== owner) return;
 
                     const revision = queueState.revision;
-                    const target = createMessageQueueTarget(queueState.sessionId, directory, expectedRuntimeKey);
+                    const target = createMessageQueueTarget(queueState.sessionId, directory, expectedRuntimeKey)
+                        ?? (queueState.items.length > 0 ? { runtimeKey: expectedRuntimeKey, directory: '', sessionId: queueState.sessionId } : null);
                     if (!target) {
-                        if (queueState.items.length > 0) return;
                         set((state) => clearSessionProjection(state, expectedRuntimeKey, queueState.sessionId, revision));
                         return;
                     }
@@ -489,8 +643,8 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         const keep = (key: string) => !isOwned(key)
                             || Boolean(snapshot.errors?.length)
                             || appliedRevisions.get(key) !== snapshot.readRevisions.get(key);
-                        const queuedMessages: Record<string, QueuedMessage[]> = {};
-                        const sendingIds: Record<string, string[]> = {};
+                        let queuedMessages: Record<string, QueuedMessage[]> = {};
+                        let sendingIds: Record<string, string[]> = {};
                         for (const [key, queue] of Object.entries(state.queuedMessages)) {
                             if (keep(key)) queuedMessages[key] = queue;
                         }
@@ -500,7 +654,8 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         for (const queue of items) {
                             const directory = findDirectoryForSession(queue.sessionId, state, runtimeKey);
                             if (queueOwnerOf(directory) !== owner) continue;
-                            const target = createMessageQueueTarget(queue.sessionId, directory, runtimeKey);
+                            const target = createMessageQueueTarget(queue.sessionId, directory, runtimeKey)
+                                ?? (queue.items.length > 0 ? { runtimeKey, directory: '', sessionId: queue.sessionId } : null);
                             if (!target) continue;
                             const key = getMessageQueueKey(target);
                             const currentRevision = appliedRevisions.get(key);
@@ -509,12 +664,13 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                                 if (state.sendingIds[key]) sendingIds[key] = state.sendingIds[key];
                                 continue;
                             }
+                            const prior = clearSessionProjection({ queuedMessages, sendingIds }, runtimeKey, queue.sessionId, queue.revision);
                             appliedRevisions.set(key, queue.revision);
-                            if (queue.items.length > 0) queuedMessages[key] = queue.items.map(toQueuedMessage);
-                            else delete queuedMessages[key];
+                            if (queue.items.length > 0) prior.queuedMessages[key] = queue.items.map(toQueuedMessage);
                             const leased = queue.items.filter((item) => item.status === 'leased');
-                            if (leased.length > 0) sendingIds[key] = leased.map((item) => item.queueItemId);
-                            else delete sendingIds[key];
+                            if (leased.length > 0) prior.sendingIds[key] = leased.map((item) => item.queueItemId);
+                            queuedMessages = prior.queuedMessages;
+                            sendingIds = prior.sendingIds;
                         }
                         return { queuedMessages, sendingIds };
                     });
@@ -538,6 +694,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                             text: message.text ?? message.content,
                             createdAt: Date.now(),
                             sendConfig: message.sendConfig,
+                            originalAvailable: true,
                         };
                         if (message.agentMention) queuedMessage.agentMention = message.agentMention;
                         if (message.attachments && message.attachments.length > 0) queuedMessage.attachments = message.attachments;
@@ -559,15 +716,16 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                             }
                             return { queuedMessages };
                         });
-                        let promptAttachments: PromptAttachment[] = [];
+                        let admission: Awaited<ReturnType<typeof admitAttachmentsForQueue>> = { references: [], prepared: [] };
                         try {
                             if (message.attachments && message.attachments.length > 0) {
-                                promptAttachments = await admitAttachmentsForQueue(message.attachments, target);
+                                admission = await admitAttachmentsForQueue(message.attachments, target);
                             }
                         } catch (error) {
                             set((state) => removeMessageLocally(state, key, id));
                             throw error;
                         }
+                        const promptAttachments = admission.references;
 
                         const historyIdentity = createInputHistoryIdentity(target.runtimeKey, target.directory, target.sessionId);
                         const historySubmission = createInputHistorySubmission(message.content, message.attachments ?? []);
@@ -585,6 +743,26 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
 
                         const contextPreview = getQueuedMessagePreview({ content: '', context: message.context });
                         const currentRevision = appliedRevisions.get(key) ?? '0';
+
+                        const draft: QueueOriginalDraft = {
+                            content: message.content,
+                            text: message.text ?? message.content,
+                            attachments: draftAttachmentsForQueue(admission.references, admission.prepared),
+                            context: promptContext,
+                            options: {
+                                providerId: message.sendConfig.providerID,
+                                modelId: message.sendConfig.modelID,
+                                agentId: message.sendConfig.agent ?? null,
+                                variant: message.sendConfig.variant ?? null,
+                                reasoningEffort: message.sendConfig.reasoningEffort ?? null,
+                            },
+                        };
+                        if (message.agentMention) draft.agentMention = { agentId: message.agentMention };
+                        if (message.goal) {
+                            draft.goal = { tokenBudget: message.goal.tokenBudget };
+                            if (message.goal.objective !== undefined) draft.goal.objective = message.goal.objective;
+                        }
+                        if (contextPreview) draft.contextPreview = contextPreview;
 
                         const appendRequest: QueueAppendRequest = QueueAppendRequestSchema.parse({
                             expectedRevision: currentRevision,
@@ -605,6 +783,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                                     reasoningEffort: message.sendConfig.reasoningEffort ?? null,
                                 },
                             },
+                            draft,
                         });
 
                         try {
@@ -664,15 +843,49 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         void serverMutation(target, `${sessionPath(target.sessionId)}/order`, jsonInit('PUT', reorderRequest));
                     },
 
-                    popToInput: async (target, messageId) => {
-                        const [message] = await get().takeForSend(target, messageId);
-                        return message ?? null;
-                    },
+                    popToInput: async (target, messageId) => get().takeQueuedItem(target, messageId),
 
-                    takeForSend: async () => {
-                        throw new Error('Queued message restoration is unavailable; the Host owns delivery.');
+                    takeQueuedItem: async (target, messageId) => {
+                        const key = getMessageQueueKey(target);
+                        const owner = queueOwnerOf(target.directory);
+                        const expectedRevision = appliedRevisions.get(key) ?? '0';
+                        const path = `${sessionPath(target.sessionId)}/items/${encodeURIComponent(messageId)}/take`;
+                        let result;
+                        try {
+                            result = await requestJson(
+                                QueueTakeResultSchema,
+                                path,
+                                toOwner(target, jsonInit('POST', { expectedRevision, queueItemId: messageId })),
+                            );
+                        } catch (error) {
+                            const status = error instanceof MessageQueueRequestError ? error.status : undefined;
+                            if (status === 409) {
+                                await refreshSession(target);
+                                return { status: 'refused' } satisfies TakeQueuedItemResult;
+                            }
+                            if (status === 404) {
+                                await refreshSession(target);
+                                return { status: 'missing' } satisfies TakeQueuedItemResult;
+                            }
+                            console.warn('[queue] take failed:', error);
+                            await refreshSession(target);
+                            throw error;
+                        }
+                        const projected = get().queuedMessages[key]?.find((entry) => entry.id === messageId)
+                            ?? undefined;
+                        applyServerSession(result.queue, result.queue.revision, target.runtimeKey, owner);
+                        if (result.draft === null) {
+                            return {
+                                status: 'taken-partial',
+                                message: partialMessageFromTake(result, messageId, projected),
+                            } satisfies TakeQueuedItemResult;
+                        }
+                        return {
+                            status: 'taken',
+                            message: queuedMessageFromDraft(result.draft, { queueItemId: messageId, createdAt: result.createdAt }, projected),
+                            draft: result.draft,
+                        } satisfies TakeQueuedItemResult;
                     },
-
                     clearQueue: (target) => {
                         const key = getMessageQueueKey(target);
                         const currentQueue = get().queuedMessages[key] ?? [];
@@ -874,6 +1087,55 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
         }
     )
 );
+
+const rekeyProjectionsForResolvedSessions = (): void => {
+    if (rekeyingProjections) return;
+    rekeyingProjections = true;
+    try {
+        const runtimeKey = getRuntimeKey();
+        useMessageQueueStore.setState((state) => {
+            let queuedMessages = state.queuedMessages;
+            let sendingIds = state.sendingIds;
+            let changed = false;
+            for (const key of new Set([...Object.keys(state.queuedMessages), ...Object.keys(state.sendingIds)])) {
+                const parsed = parseMessageQueueKey(key);
+                if (!parsed || parsed.runtimeKey !== runtimeKey) continue;
+                const session = useGlobalSessionsStore.getState().entityById.get(parsed.sessionId);
+                const authoritative = session ? resolveGlobalSessionDirectory(session) : null;
+                const resolved = authoritative
+                    ?? (parsed.directory === '' ? sessionDirectoryMap.get(JSON.stringify([runtimeKey, parsed.sessionId])) ?? null : null);
+                const normalized = normalizePath(resolved);
+                if (!normalized || normalized === parsed.directory) continue;
+                const nextKey = `${runtimeKey}\n${normalized}\n${parsed.sessionId}`;
+                if (queuedMessages[nextKey] || sendingIds[nextKey]) continue;
+                const revision = appliedRevisions.get(key);
+                if (revision) {
+                    appliedRevisions.delete(key);
+                    appliedRevisions.set(nextKey, revision);
+                }
+                if (queuedMessages[key]) {
+                    queuedMessages = { ...queuedMessages, [nextKey]: queuedMessages[key]! };
+                    delete queuedMessages[key];
+                }
+                if (sendingIds[key]) {
+                    sendingIds = { ...sendingIds, [nextKey]: sendingIds[key]! };
+                    delete sendingIds[key];
+                }
+                changed = true;
+            }
+            return changed ? { queuedMessages, sendingIds } : state;
+        });
+    } finally {
+        rekeyingProjections = false;
+    }
+};
+
+useGlobalSessionsStore.subscribe((state, previous) => {
+    if (state.entityById !== previous.entityById) rekeyProjectionsForResolvedSessions();
+});
+subscribeWorkspaceDirectories(() => {
+    rekeyProjectionsForResolvedSessions();
+});
 
 export const messageQueueUpdatedEventSchema = z.object({
     type: z.literal('openchamber:message-queue.updated'),

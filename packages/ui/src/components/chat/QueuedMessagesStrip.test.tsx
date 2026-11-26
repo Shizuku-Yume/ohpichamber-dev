@@ -10,7 +10,7 @@ import { QueuedMessagesStrip } from './QueuedMessagesStrip';
 
 const target: MessageQueueTarget = { runtimeKey: 'local', directory: '/repo', sessionId: 'ses_root' };
 
-const queued = (id: string, content: string): QueuedMessage => ({ id, content, text: content, createdAt: 1 });
+const queued = (id: string, content: string): QueuedMessage => ({ id, content, text: content, createdAt: 1, originalAvailable: true });
 
 const setQueue = (...messages: QueuedMessage[]) => act(async () => {
   useMessageQueueStore.setState({ queuedMessages: messages.length ? { [getMessageQueueKey(target)]: messages } : {} });
@@ -21,6 +21,7 @@ describe('QueuedMessagesStrip', () => {
   let host: HTMLDivElement;
   let root: Root;
   let sent: string[];
+  let edited: string[];
 
   beforeEach(async () => {
     windowInstance = new Window({ url: 'http://localhost' });
@@ -37,6 +38,7 @@ describe('QueuedMessagesStrip', () => {
       IS_REACT_ACT_ENVIRONMENT: true,
     });
     sent = [];
+    edited = [];
     useMessageQueueStore.setState({ queuedMessages: {} });
     useUIStore.setState({ messageQueueExpanded: false });
     host = document.createElement('div');
@@ -45,7 +47,7 @@ describe('QueuedMessagesStrip', () => {
     await act(async () => {
       root.render(
         <I18nProvider>
-          <QueuedMessagesStrip target={target} onEditMessage={() => {}} onSendMessage={(id) => { sent.push(id); }} />
+          <QueuedMessagesStrip target={target} onEditMessage={(id) => { edited.push(id); }} onSendMessage={(id) => { sent.push(id); }} />
         </I18nProvider>,
       );
     });
@@ -69,11 +71,13 @@ describe('QueuedMessagesStrip', () => {
     expect(host.textContent).toContain('Also pull main');
     expect(host.querySelector('[aria-expanded]')).toBeNull();
     expect(button('Drag to reorder')).toBeUndefined();
+    expect(button('send')?.disabled).toBe(false);
+    expect(button('edit')?.disabled).toBe(false);
     await act(async () => button('send')?.click());
-    expect(sent).toEqual([]);
-    expect(button('send')?.disabled).toBe(true);
-    expect(button('edit')?.disabled).toBe(true);
-    expect(button('send')?.getAttribute('title')).toBe('Unavailable');
+    expect(sent).toEqual(['q1']);
+    expect(edited).toEqual([]);
+    await act(async () => button('edit')?.click());
+    expect(edited).toEqual(['q1']);
     expect(button('Remove from queue')).toBeDefined();
   });
 
@@ -89,7 +93,7 @@ describe('QueuedMessagesStrip', () => {
     expect(useUIStore.getState().messageQueueExpanded).toBe(true);
     expect(host.textContent).toContain('First');
     expect(host.textContent).toContain('Second');
-    expect(buttons().filter((item) => item.textContent === 'send' || item.textContent === 'edit').every((item) => item.disabled)).toBe(true);
+    expect(buttons().filter((item) => item.textContent === 'send' || item.textContent === 'edit').every((item) => !item.disabled)).toBe(true);
     expect(buttons().filter((item) => item.getAttribute('aria-label') === 'Drag to reorder')).toHaveLength(2);
   });
 });

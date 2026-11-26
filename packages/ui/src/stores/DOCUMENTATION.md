@@ -341,8 +341,10 @@ the store projects authoritative snapshots and revisioned session updates.
 Scheduled queue items also retain their `scheduledTask` provenance. An inherited
 scheduled item has no pinned send config; ordinary items keep their captured
 provider and model. Both appear in the same queue. Scheduled items allow reorder
-and removal. Editing and manual send are unavailable for every queued item;
-the Host is the sole delivery authority.
+and removal. The Host stays the sole delivery authority: nothing in the UI
+delivers a queued row directly, but the user can take a row back out of the
+queue — edit restores the preserved original draft into the composer, send-now
+sends it immediately (steering into the active turn when the session is busy).
 `sync/message-queue-sync.ts` receives queue events through the shared control SSE
 stream at `/api/openchamber/events`.
 It adds no poller or per-session connection. Either stream reconnecting requests
@@ -356,13 +358,44 @@ switches reject stale completions. Full-snapshot revisions also cover omitted
 sessions, so a delayed mutation response cannot resurrect a cleared queue;
 session events newer than that snapshot survive reconciliation.
 
+Projections key under `runtime/directory/session`, but a first snapshot or queue
+event can apply before session discovery has keyed the session — the ordering
+is not guaranteed, because the queue stream and session discovery boot
+independently. Rows for an unresolved session park under the empty-directory
+key rather than being dropped: the snapshot is authoritative that they exist,
+they are simply not yet attributable to a directory the composer looks up. Three
+edges place them: the global sessions store gaining the session record, the
+workspace-directory registry resolving the session's workspace late (the two
+registries update independently, so the re-key pass subscribes to both), and a
+composer/apply path capturing the session's directory binding
+(`sessionDirectoryMap`). The re-key pass moves parked rows into place with
+their revision guard, so a stale snapshot cannot re-park them afterwards; the
+authoritative session record can also re-key a misplaced projection, while the
+weaker captured binding never overrides a real directory key — the same
+resolution order `findDirectoryForSession` applies.
+
 Mutations are optimistic and then settled on the server's copy; failed
 round-trips re-read instead of guessing. Empty legacy events without a directory
 clear all projections of their session in that runtime. Projection items carry
-attachment metadata only. `popToInput()` and `takeForSend()` reject without
-mutating the queue or issuing a request. There is no atomic Host take/restore
-operation or separately preserved original draft; manual restoration must not
-be implemented by deleting a descriptor and sending its preview.
+attachment metadata only.
+
+Every append carries the original public draft beside the Host's capture:
+the typed content, the delivery text, the composer's pre-routing send options,
+full context entries, and per-attachment provenance (`agentPath`, the picked
+file behind a path note). `originalAvailable` on the projection says whether a
+row has one; records written before the draft existed do not, and hydration of
+client blobs persisted before the field existed treats them the same way.
+`takeQueuedItem()`
+transfers ownership through the Host's atomic take with the session's last
+applied revision: a taken row leaves the queue in the same transaction that
+returns its draft, a leased or stale row is refused (the projection refreshes
+and the row stays), and an already-gone row reports missing. `popToInput()`
+delegates to the take. A taken old record restores partially — typed text,
+descriptor-level attachment references and send options survive; context chips
+do not — and the composer surfaces the localized "original draft unavailable"
+notice instead of failing silently. Attachment bytes are re-readable through
+the canonical client because the draft references the Host attachment store;
+a deleted upload drops only its own attachment, never the text.
 
 `lib/messages/queuedMessagePreview.ts` derives the queue row from typed text,
 then attached comments/context, then the first filename. The store sends a

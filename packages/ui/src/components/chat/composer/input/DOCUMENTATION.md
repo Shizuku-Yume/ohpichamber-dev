@@ -43,9 +43,10 @@ preferences are inputs to these owners.
   keyCode 229 fallback.
 - Shell-mode entry consumes its trigger in the same transaction, including
   mobile keyboard and paste paths, so a later caret write cannot use stale text.
-- Empty-composer recall cannot edit a queued message; the Host retains delivery
-  authority. Local and extension action commands execute before attached context
-  is consumed.
+- Empty-composer recall edits the last queued message through the same atomic
+  take the strip's edit control uses; the Host retains delivery authority until
+  the take transfers ownership back to the composer. Local and extension action
+  commands execute before attached context is consumed.
 - A new worktree stays pinned while its list refreshes so target validation
   cannot reset the draft to the project root. Target dialogs retain the project
   they opened for even if the draft changes.
@@ -73,11 +74,32 @@ preferences are inputs to these owners.
 - Every failed send restores consumed text and context under its captured owner
   while preserving newly typed content and new attachments. A failed queue
   write restores its captured items by the same rule.
-- Queued edit and send-now controls are disabled. Queued-only submissions are
-  rejected before consumption; ordinary sends never drain the Host queue or use
-  queued items' captured model choices.
-- A queued goal travels with its captured message. A queued-only send leaves
-  the normal composer's armed goal and remembered effort unchanged.
+- Queued edit restores the original draft through the Host's atomic take:
+  typed text, attachments re-read from the Host attachment store, context chips
+  and the armed goal return to the composer, which then edits under its current
+  model selection. Because the take already left the queue, the restored text
+  lands in durable draft storage before the first asynchronous attachment read,
+  so a refresh in between cannot lose the message; the citation pass then
+  mirrors the surviving attachments once the re-read decides them. A re-read
+  attachment is indistinguishable from a freshly picked one for the submit
+  pipeline: its bytes rebuild the data URL the model conversion consumes,
+  while the `attachment://` reference stays in `serverPath` so admission reuses
+  the Host's upload instead of re-uploading, and a serverPath in the
+  attachment store is never rewritten as a filesystem URL. Restored
+  attachments file under the draft identity being edited rather than whichever
+  input slot is active when the reads resolve, so navigating mid-restore cannot
+  mix sessions. Empty-composer recall skips scheduled rows, whose task owns
+  them, exactly as the strip offers no edit for them. Send-now takes the same
+  way and sends immediately with the captured selection verbatim — a capture
+  without an agent passes `null` (the root selection the Host admits), never
+  `undefined`, which would re-resolve whatever agent is currently selected —
+  steering into the active turn when the session is busy; attached context
+  delivers exactly as the composer's own send would, instructions ahead of the
+  item they belong to. A failed send restores the draft into the composer
+  rather than losing it. Rows recorded before originals were preserved restore
+  partially and say so.
+- A queued goal travels with its captured message — objective and token budget
+  alike — and re-arms when the message is edited or sent now.
 - A question that still holds a turn requires inbox delivery because waiting
   for idle would deadlock the queued reply. Deferral follows successful message
   admission, while shell and local action commands cannot defer that question.

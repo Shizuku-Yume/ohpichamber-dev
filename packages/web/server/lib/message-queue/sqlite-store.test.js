@@ -14,6 +14,15 @@ const open = (options) => { const store = createPromptQueueStore(options); store
 const scope = { sessionId: 'session-one', projectId: 'project-one', workspaceId: 'workspace-one' };
 const options = { providerId: 'provider', modelId: 'model', agentId: null, variant: 'variant', reasoningEffort: 'high' };
 const request = (text) => ({ input: { text, attachments: [{ attachmentId: 'upload-one', name: 'file.txt', mediaType: 'text/plain', size: 3, uri: 'attachment://upload-one' }], context: [{ kind: 'context', text: 'captured diff', metadata: { issue: 5 }, instructions: 'review first', deliveryReceiptId: 'knowledge-one' }, { kind: 'synthetic', text: 'second context' }] }, options });
+const draft = (text) => ({
+  content: text, text,
+  attachments: [{ attachmentId: 'upload-one', name: 'file.txt', mediaType: 'text/plain', size: 3, uri: 'attachment://upload-one', agentPath: '/private/worktree/file.txt', original: { mimeType: 'text/plain', dataUrl: 'data:text/plain;base64,YWJj', saveOnSend: true } }],
+  context: [{ kind: 'context', text: 'the chip the user attached', metadata: { issue: 5 }, instructions: 'review first' }],
+  agentMention: { agentId: 'agent-one' },
+  options,
+  goal: { objective: 'finish it', tokenBudget: 4000 },
+  contextPreview: 'preview',
+});
 const append = (store, revision, text, command = randomUUID()) => store.append(scope, command, { expectedRevision: revision, content: text, request: request(text) });
 afterEach(async () => { for (const store of stores.splice(0)) await store.close(); for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
@@ -77,10 +86,12 @@ test('malformed owner and failed disk writes cannot erase valid sibling queues',
 
 test('one-time JSON conversion preserves attachments, revision and good siblings without resurrection', async () => {
   const dataDir = directory(); const sourcePath = path.join(dataDir, 'message-queue.json');
-  const legacy = { version: 1, revision: 91, sessions: {
-    old: { directory: '/authorized/project', items: [{ id: 'old-item', createdAt: 50, content: 'original', text: 'resolved text', attachments: [{ id: 'old-upload', filename: 'file.txt', mimeType: 'text/plain', size: 3, source: 'local', dataUrl: 'data:text/plain;base64,YWJj' }], context: request('x').input.context, sendConfig: { providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'variant' } }] },
-    broken: { directory: '/authorized/other', items: ['malformed'] },
-  } };
+  const legacy = {
+    version: 1, revision: 91, sessions: {
+      old: { directory: '/authorized/project', items: [{ id: 'old-item', createdAt: 50, content: 'original', text: 'resolved text', attachments: [{ id: 'old-upload', filename: 'file.txt', mimeType: 'text/plain', size: 3, source: 'local', dataUrl: 'data:text/plain;base64,YWJj' }], context: request('x').input.context, sendConfig: { providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'variant' } }] },
+      broken: { directory: '/authorized/other', items: ['malformed'] },
+    }
+  };
   const source = JSON.stringify(legacy); fs.writeFileSync(sourcePath, source);
   let store = open({ dataDir }); let imports = 0;
   const conversion = { resolveScope: async (sourceId) => sourceId === 'old' ? scope : { ...scope, sessionId: 'broken' }, importAttachment: async (_scope, attachment) => { imports++; assert.equal(attachment.dataUrl, 'data:text/plain;base64,YWJj'); return request('x').input.attachments[0]; }, resolveScheduledTask: async () => { throw new Error('unexpected scheduled task'); } };
@@ -97,4 +108,115 @@ test('one-time JSON conversion preserves attachments, revision and good siblings
   assert.equal((await store.convertLegacy(conversion)).status, 'failed');
   await assert.rejects(store.getState({ ...scope, sessionId: 'unknown' }), { code: 'INTERNAL_ERROR', details: { storage: 'conversion_failed' } });
   assert.deepEqual((await store.getState(scope)).items, []);
+});
+
+test('take returns the preserved draft, removes the item and bumps the revision atomically', async () => {
+  let clock = 1000; const store = open({ dataDir: directory(), now: () => clock });
+  const first = await store.append(scope, randomUUID(), { expectedRevision: '0', content: 'first', request: request('first'), draft: draft('first') });
+  assert.equal(first.items[0].originalAvailable, true);
+  await store.append(scope, randomUUID(), { expectedRevision: '1', content: 'second', request: request('second'), draft: draft('second') });
+  const taken = await store.take(scope, { expectedRevision: '2', queueItemId: first.items[0].queueItemId });
+  assert.deepEqual(taken.stored.draft, draft('first'));
+  assert.equal(taken.stored.createdAt, 1000);
+  assert.equal(taken.stored.request.input.text, 'first');
+  assert.equal(taken.stored.content, 'first');
+  assert.equal(taken.queue.revision, '3');
+  assert.deepEqual(taken.queue.items.map((item) => item.text), ['second']);
+  assert.equal((await store.getState(scope)).items.length, 1);
+  await assert.rejects(store.take(scope, { expectedRevision: '3', queueItemId: first.items[0].queueItemId }), { code: 'SESSION_NOT_FOUND', status: 404 });
+});
+
+test('take refusals leave the item queued: stale revision, lease, and a poisoned write', async () => {
+  let clock = 100; const dataDir = directory();
+  const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+  const store = open({ dataDir, database: db, closeDatabase: true, now: () => clock });
+  const first = await store.append(scope, randomUUID(), { expectedRevision: '0', content: 'first', request: request('first'), draft: draft('first') });
+  await store.append(scope, randomUUID(), { expectedRevision: '1', content: 'second', request: request('second') });
+  const queueItemId = first.items[0].queueItemId;
+  await assert.rejects(store.take(scope, { expectedRevision: '1', queueItemId }), { code: 'QUEUE_CONFLICT', status: 409 });
+  assert.equal((await store.getState(scope)).items.length, 2);
+  const claim = await store.claimHead(scope, '2', { epoch: 'epoch-one', expiresAt: 200 });
+  assert.equal(claim.capture.queueItemId, queueItemId);
+  await assert.rejects(store.take(scope, { expectedRevision: '3', queueItemId }), { code: 'QUEUE_CONFLICT', status: 409 });
+  const leased = await store.getState(scope);
+  assert.equal(leased.items[0].status, 'leased');
+  assert.equal(leased.items.length, 2);
+  await store.markSubmitting(scope, claim.capture.leaseId);
+  await store.acknowledge(scope, claim.capture.leaseId);
+  clock = 400;
+  // Poison the owner row so the post-delete revision bump cannot commit: the
+  // take must roll its delete back and the item stays queued.
+  db.exec("CREATE TRIGGER poison_queue_bump BEFORE UPDATE ON prompt_queue_owner BEGIN SELECT RAISE(ABORT, 'poisoned'); END");
+  const before = await store.getState(scope);
+  const target = before.items[0].queueItemId;
+  await assert.rejects(store.take(scope, { expectedRevision: before.revision, queueItemId: target }), { code: 'INTERNAL_ERROR' });
+  db.exec('DROP TRIGGER poison_queue_bump');
+  const after = await store.getState(scope);
+  assert.equal(after.revision, before.revision);
+  assert.deepEqual(after.items.map((item) => item.queueItemId), before.items.map((item) => item.queueItemId));
+  const taken = await store.take(scope, { expectedRevision: after.revision, queueItemId: target });
+  assert.equal(taken.stored.draft, undefined);
+  assert.equal(taken.queue.items.length, 0);
+});
+
+test('concurrent delivery claim and take have exactly one winner with no lost or duplicated message', async () => {
+  let clock = 100; const store = open({ dataDir: directory(), now: () => clock });
+  const first = await store.append(scope, randomUUID(), { expectedRevision: '0', content: 'first', request: request('first'), draft: draft('first') });
+  await store.append(scope, randomUUID(), { expectedRevision: '1', content: 'second', request: request('second'), draft: draft('second') });
+  const headId = first.items[0].queueItemId;
+  // Winner: the take commits first; the claim then sees a stale revision and never delivers.
+  const taken = await store.take(scope, { expectedRevision: '2', queueItemId: headId });
+  assert.deepEqual(taken.stored.draft, draft('first'));
+  await assert.rejects(store.claimHead(scope, '2', { epoch: 'epoch-one', expiresAt: 200 }), { code: 'QUEUE_CONFLICT' });
+  const afterTake = await store.getState(scope);
+  assert.deepEqual(afterTake.items.map((item) => item.text), ['second']);
+  const claim = await store.claimHead(scope, '3', { epoch: 'epoch-one', expiresAt: 200 });
+  assert.equal(claim.capture.request.input.text, 'second');
+  // Winner: the claim commits first; the take then hits the lease refusal and the message still delivers.
+  await assert.rejects(store.take(scope, { expectedRevision: '4', queueItemId: claim.capture.queueItemId }), { code: 'QUEUE_CONFLICT', status: 409 });
+  await store.markSubmitting(scope, claim.capture.leaseId);
+  const acknowledged = await store.acknowledge(scope, claim.capture.leaseId);
+  assert.deepEqual(acknowledged.items, []);
+  assert.equal((await store.getState(scope)).items.length, 0);
+});
+
+test('converted legacy rows carry no draft and project originalAvailable false; migration preserves drafts', async () => {
+  const dataDir = directory(); const sourcePath = path.join(dataDir, 'message-queue.json');
+  const legacy = {
+    version: 1, revision: 3, sessions: {
+      old: { directory: '/authorized/project', items: [{ id: 'old-item', createdAt: 50, content: 'original', text: 'resolved text', attachments: [], context: [], sendConfig: { providerID: 'provider', modelID: 'model' } }] },
+    }
+  };
+  fs.writeFileSync(sourcePath, JSON.stringify(legacy));
+  const store = open({ dataDir });
+  await store.convertLegacy({
+    resolveScope: async () => scope,
+    importAttachment: async () => { throw new Error('no attachments'); },
+    resolveScheduledTask: async () => { throw new Error('unexpected scheduled task'); },
+  });
+  const projected = await store.getState(scope);
+  assert.equal(projected.items[0].originalAvailable, false);
+  const taken = await store.take(scope, { expectedRevision: projected.revision, queueItemId: 'old-item' });
+  assert.equal(taken.stored.draft, undefined);
+  assert.equal(taken.stored.content, 'original');
+  assert.equal(taken.stored.createdAt, 50);
+  assert.equal(taken.queue.items.length, 0);
+  // The root-agent migration spreads the stored payload; a draft survives it verbatim.
+  const migrated = { input: { text: 'kept', attachments: [], context: [] }, options: { ...options, agentId: 'agent-legacy' } };
+  const withDraft = await store.append(scope, randomUUID(), { expectedRevision: taken.queue.revision, content: 'kept', request: migrated, draft: draft('kept') });
+  await store.close();
+  const migratedStore = open({ dataDir });
+  const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+  try {
+    const row = db.prepare('SELECT payload FROM prompt_queue_item WHERE session_id = ?').get(scope.sessionId);
+    const stored = JSON.parse(row.payload);
+    assert.equal(stored.request.options.agentId, null);
+    assert.deepEqual(stored.draft, draft('kept'));
+  } finally { db.close(); }
+  const reparsed = await migratedStore.getState(scope);
+  assert.equal(reparsed.items.length, 1);
+  assert.equal(reparsed.items[0].originalAvailable, true);
+  assert.equal(reparsed.items[0].queueItemId, withDraft.items[0].queueItemId);
+  const retaken = await migratedStore.take(scope, { expectedRevision: reparsed.revision, queueItemId: withDraft.items[0].queueItemId });
+  assert.deepEqual(retaken.stored.draft, draft('kept'));
 });

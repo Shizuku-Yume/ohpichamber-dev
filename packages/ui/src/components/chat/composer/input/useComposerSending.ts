@@ -33,7 +33,7 @@ type Dependencies = {
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'getCurrentInputSnapshot' | 'pendingFirstSend' | 'composerQueuedMessages' | 'hasQueuedMessages'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity' | 'isBtwActive' | 'btwPanel' | 'newSessionDraftOpen' | 'newSessionDraft' | 'btwDirectory' | 'currentSessionDirectoryForSync' | 'currentDirectory' | 'attachedFiles' | 'btwSessionId' | 'activeRuntimeKey' | 'immediateBtwSubmitRef' | 'sendHeldByMissingFolder' | 'setReviewDialogOpen' | 'btwComposerSessionId' | 'sessionFolder'>;
-    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput' | 'takeForSend'>;
+    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput' | 'takeQueuedItem'>;
     language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions' | 'loadCommands'>;
     selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
     mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'sanitizeAttachmentsForSend' | 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions' | 'prepareDocumentMentions'>;
@@ -50,8 +50,8 @@ type Dependencies = {
 };
 
 export function useComposerSending(dependencies: Dependencies) {
-    const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
-    const handleQueueMessageRef = React.useRef<() => Promise<void>>(async () => {});
+    const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => { });
+    const handleQueueMessageRef = React.useRef<() => Promise<void>>(async () => { });
     const sendHandlers = { handleSubmitRef, handleQueueMessageRef };
     const sendMessage = React.useRef<ReturnType<typeof useSessionUIStore.getState>['sendMessage']>((...args) =>
         Promise.resolve(useSessionUIStore.getState().sendMessage(...args)),

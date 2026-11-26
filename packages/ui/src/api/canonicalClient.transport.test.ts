@@ -155,8 +155,44 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     await expect(client.appendQueue(sessionId, { expectedRevision: '0', content: 'hello', request: prompt })).rejects.toThrow();
     await expect(client.reorderQueue(sessionId, { expectedRevision: '0', queueItemIds: [] })).rejects.toThrow();
     await expect(client.deleteQueueItem(sessionId, 'item_expected', { expectedRevision: '0', queueItemId: 'item_expected' })).rejects.toThrow();
+    respondWith({ queue: { sessionId: 'session_other', revision: '1', items: [] }, draft: null, text: 'taken', content: 'taken', createdAt: 1 });
+    await expect(client.takeQueueItem(sessionId, 'item_expected', { expectedRevision: '0', queueItemId: 'item_expected' })).rejects.toThrow();
     respondWith({ sessionId: 'session_other', deletedSessionIds: ['session_other'] });
     await expect(client.deleteSession(sessionId)).rejects.toThrow();
+  });
+
+  test('takeQueueItem round-trips the preserved draft and validates request identity before transport', async () => {
+    const draft: C.QueueOriginalDraft = {
+      content: 'edit me', text: 'edit me',
+      attachments: [{
+        attachmentId: 'attachment/1', name: 'note.txt', mediaType: 'text/plain', size: 4,
+        uri: 'attachment://attachment/1', agentPath: '/workspace/note.txt',
+        original: { mimeType: 'text/plain', dataUrl: 'data:text/plain;base64,bm90ZQ==', saveOnSend: true },
+      }],
+      context: [{ kind: 'context', text: 'chip text', metadata: { openchamberContext: { kind: 'repository-issue' } } }],
+      agentMention: { agentId: 'agent/1' },
+      options: { providerId: 'provider/1', modelId: 'model/1', agentId: null, variant: null, reasoningEffort: null },
+      goal: { objective: 'finish', tokenBudget: 4000 },
+    };
+    const result: C.QueueTakeResult = {
+      queue: { sessionId, revision: '2', items: [] },
+      draft,
+      text: 'edit me',
+      content: 'edit me',
+      createdAt: 1000,
+    };
+    respondWith(result);
+    const taken = await client.takeQueueItem(sessionId, 'item/1', { expectedRevision: '1', queueItemId: 'item/1' });
+    expect(taken).toEqual(result);
+    expect(calls).toEqual([`POST /api/agent/v1/sessions/${sessionId}/queue/${encodeURIComponent('item/1')}/take`]);
+    const count = calls.length;
+    expect(() => client.takeQueueItem(sessionId, 'item/1', { expectedRevision: '1', queueItemId: 'item/other' })).toThrow('does not match the route');
+    expect(calls).toHaveLength(count);
+    respondWith({ queue: { sessionId, revision: '2', items: [] }, draft: null, text: 'legacy', content: 'legacy', createdAt: 1000 });
+    const partial = await client.takeQueueItem(sessionId, 'item/legacy', { expectedRevision: '1', queueItemId: 'item/legacy' });
+    expect(partial.draft).toBeNull();
+    respondWith({ queue: { sessionId, revision: '2', items: [] }, draft: { ...draft, attachments: [{ attachmentId: 'attachment/1' }] }, text: 'x', content: 'x', createdAt: 1 });
+    await expect(client.takeQueueItem(sessionId, 'item/1', { expectedRevision: '1', queueItemId: 'item/1' })).rejects.toThrow();
   });
 
   test('rejects session creation, fork and archive receipts outside the requested ownership', async () => {

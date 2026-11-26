@@ -7,8 +7,6 @@ export interface ChatInputProps {
 }
 
 export type SubmitOptions = {
-    queuedOnly?: boolean;
-    queuedMessageId?: string;
     delivery?: 'steer';
     presetText?: string;
 };

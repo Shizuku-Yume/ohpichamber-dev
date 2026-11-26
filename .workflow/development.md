@@ -67,6 +67,29 @@ Saving or enabling token-based rules requires acknowledging potential
 extended-context pricing.
 The remaining model-role hub, ordered fallback, and preset work is separate.
 
+Queued messages can be edited or sent right away through the Host's atomic
+take: every append carries the original public draft (typed text, delivery text,
+pre-routing model selection, full context entries, per-attachment provenance)
+beside the captured request, and an authenticated revision-checked take removes
+the item and returns that draft only after ownership transfers — leased rows,
+stale revisions and cross-client races are refused, a failed take leaves the
+item queued, and the Host stays the only delivery authority. Rows recorded
+before originals were preserved (including converted legacy items) restore
+partially with a localized notice in all 15 locales. Edit restores text,
+re-read attachment bytes, context chips and the armed goal (objective and token
+budget) into the composer; send-now steers into the active turn with the
+captured selection verbatim — a capture without an agent passes null, never the
+inherited current selection. Empty-composer ArrowUp recall uses the same take
+and skips scheduled rows. Projections for sessions whose directory is not yet
+resolved park rather than drop, re-keying when session discovery or the
+workspace registry catches up. Verified in three real-path rounds on the
+isolated product with a real provider (en/zh-CN 1600px, mobile 390x844):
+edited attachment items drain with bytes intact and the model reads the image;
+two-client simultaneous takes produce exactly one winner. Evidence:
+`/home/shizuku/Project/ohpichamber-omp-artifacts/release-hardening-2026-11-26/task04/`.
+Pre-existing unrelated defect still open: `subagents?sessionId=draft_1` 403 on
+fresh drafts (StrictMode double-mount before the session exists server-side).
+
 Usage renders native OMP account quotas and reset-credit counts from the
 existing canonical report, without changing its schema or adding a redemption
 route. The Usage page edits six reset-policy numbers; the switches that enable
@@ -1054,11 +1077,10 @@ Slot and drift unit tests pass (19); the verify-runner suite cannot collect
 because its stand still imports the retired `bundled-opencode-server.mjs`.
 That stand needs native adaptation, not restoration of an OpenCode launcher.
 Overall integration acceptance remains pending. The maintainer
-selected Host-only queue delivery: edit/send-now are disabled for every entry,
-store take/restore calls reject without mutation, and ordinary sends never drain
-the queue or inherit queued model choices. Queue tests pass 39/39 and disabled
-controls 3/3. A preserved-original-draft plus atomic Host CAS take design remains
-technical debt; no API was added. The server TS-only guard now exempts exactly
+selected Host-only queue delivery; that interim state is superseded —
+release-hardening task 04 has since landed the preserved-original-draft plus
+atomic Host CAS take it deferred (see the queue paragraph in Current state).
+The server TS-only guard now exempts exactly
 95 retained fork JavaScript paths, with 6/6 guard tests; no new neighboring JS
 module is exempt. Zod's stale override and lock are aligned to the adopted
 4.6.7 manifest/patch version; install exits 0 without a patch warning. Root

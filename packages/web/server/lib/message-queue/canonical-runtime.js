@@ -223,6 +223,12 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       schedule(scope);
       return queue;
     },
+    take: async (scope, request) => {
+      const taken = await store.take(queueScope(scope), request);
+      changed(scope, taken.queue);
+      schedule(scope);
+      return taken;
+    },
     dispatch: (scope) => dispatch(scope),
     hasScheduledTask: (projectId, taskId) => store.hasScheduledTask({ projectId, taskId }),
     cancelScheduledTask: async (projectId, taskId) => {

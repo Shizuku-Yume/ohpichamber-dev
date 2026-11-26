@@ -3,6 +3,7 @@ import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import type { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
+import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
 import type { useComposerSelection } from './useComposerSelection';
 import type { useComposerReferenceDrafts } from './useComposerReferenceDrafts';
 import type { useComposerQueueState } from './useComposerQueueState';
@@ -20,13 +21,14 @@ import type { SyntheticContextPart } from '@/sync/input-store';
 import type { ComposerReference } from '../../composer/composerReferences';
 import type { SessionReference } from '../../composer/sessionReferences';
 import type { ChatInputProps } from './chatInputProps';
+import { problemMessage } from '@/lib/problemMessage';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { createComposerSubmitErrorMessage } from './createComposerSubmitErrorMessage';
 import { selectBuiltinCommandsForDirectory } from '@/stores/useCommandsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { selectAvailableSkillsForDirectory } from '@/stores/useSkillsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
-import { expandCanonicalSkills } from '@/sync/session-ui-store';
+import { expandCanonicalSkills, useSessionUIStore } from '@/sync/session-ui-store';
 import { expandWorkspaceSkillNames } from '@/api/fileResourceExpansion';
 import { expandNativeFileResource } from '@/api/fileResourceExpansion';
 import { ROOT_SELECTION_AGENT } from '@/sync/selection-store';
@@ -50,6 +52,17 @@ import { planLocalSlashCommand } from '../../composer/submit/slashCommands';
 import { collectInlineSkillMentions } from './composerMentionTokens';
 import { recordLinkedReferences } from './recordLinkedReferences';
 import { saveAttachmentsHeldForSend } from './saveAttachmentsHeldForSend';
+import { canonicalClient } from '@/api/canonicalClient';
+import type { AttachedFile } from '@/stores/types/sessionTypes';
+const base64OfBlob = async (blob: Blob): Promise<string> => {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
+};
 
 type Dependencies = {
     inlineContext: Pick<ReturnType<typeof useComposerInlineContext>, 'isMobileCommentOpen' | 'hasDrafts' | 'attachmentsToSend' | 'inlineDraftTarget' | 'consumeDrafts'>;
@@ -61,19 +74,20 @@ type Dependencies = {
     sendHandlers: Pick<ComposerSendHandlers, 'handleQueueMessageRef' | 'handleSubmitRef'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'getCurrentInputSnapshot'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity' | 'currentDirectory' | 'attachedFiles'>;
-    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput'>;
+    queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput' | 'takeQueuedItem'>;
     language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions' | 'loadCommands'>;
     selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
     mentionAttachments: Pick<ReturnType<typeof useComposerMentionAttachments>, 'sanitizeAttachmentsForSend' | 'prepareReadOnSendMentions' | 'mentionableAgents' | 'extractInlineFileMentions' | 'prepareDocumentMentions'>;
     props: Pick<ChatInputProps, 'scrollToLatest'>;
     referenceDrafts: Pick<ReturnType<typeof useComposerReferenceDrafts>, 'setLinkedReferencesFor' | 'updateLinkedReferencesFor' | 'updateLinkedReferences'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
+    sessionLifecycle: Pick<ReturnType<typeof useComposerSessionLifecycle>, 'sessionPhase'>;
 };
 
 export function useComposerQueueActions({
     inlineContext, attachmentWork, largePasteState, i18n, draftText, editorState, sendHandlers, sendAvailability,
     sessionScope, queueState, language, selection, mentionAttachments, props, referenceDrafts,
-    preferences,
+    preferences, sessionLifecycle,
 }: Dependencies) {
     const { isMobileCommentOpen, hasDrafts, inlineDraftTarget, consumeDrafts } = inlineContext;
     const { waitForPendingAttachments } = attachmentWork;
@@ -87,15 +101,16 @@ export function useComposerQueueActions({
     const { getCurrentInputSnapshot } = sendAvailability;
     const {
         currentSessionId, inputMode, consumePendingSyntheticParts,
-        clearAttachedFiles, chatDraftIdentity, currentDirectory, attachedFiles} = sessionScope;
-    const { messageQueueTarget, addToQueue, popQueuedToInput } = queueState;
+        clearAttachedFiles, chatDraftIdentity, currentDirectory, attachedFiles } = sessionScope;
+    const { messageQueueTarget, addToQueue, popQueuedToInput, takeQueuedItem } = queueState;
     const {
         guestCommands, readSessionMentionsBeforeSend, linkedReferences,
-        sessionMentionsIn, rememberSessionMentions, loadCommands} = language;
-    const { currentProviderId, currentModelId, currentAgentName, mailboxTarget, currentVariant , configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
+        sessionMentionsIn, rememberSessionMentions, loadCommands } = language;
+    const { currentProviderId, currentModelId, currentAgentName, mailboxTarget, currentVariant, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel } = selection;
     const {
         sanitizeAttachmentsForSend,
-        extractInlineFileMentions, prepareDocumentMentions} = mentionAttachments;
+        extractInlineFileMentions, prepareDocumentMentions } = mentionAttachments;
+    const { sessionPhase } = sessionLifecycle;
     const { scrollToLatest } = props;
     const { setLinkedReferencesFor, updateLinkedReferencesFor, updateLinkedReferences } = referenceDrafts;
     const { isMobile } = preferences;
@@ -400,34 +415,118 @@ export function useComposerQueueActions({
         }
     }, [inlineDraftTarget, mailboxTarget, rememberSessionMentions, updateLinkedReferences]);
 
-    const handleQueuedMessageEdit = React.useCallback((queued: QueuedMessage) => {
-        if (queued.attachments && queued.attachments.length > 0) {
-            const currentAttachments = useInputStore.getState().attachedFiles;
-            useInputStore.getState().setAttachedFiles([...currentAttachments, ...queued.attachments]);
+    const restoreQueuedDraftToComposer = React.useCallback(async (queued: QueuedMessage) => {
+        writeChatDraft(chatDraftIdentity, withMissingCitations(queued.content, queued.attachments ?? []), []);
+        setMessage(queued.content);
+        let attachments = queued.attachments ?? [];
+        if (attachments.length > 0 && messageQueueTarget) {
+            try {
+                const workspace = await canonicalClient.resolveWorkspace(messageQueueTarget.directory);
+                attachments = await Promise.all(attachments.map(async (file) => {
+                    const reference = /^attachment:\/\/([^/?#]+)$/.exec(file.serverPath ?? '')?.[1];
+                    if (!reference) return file;
+                    try {
+                        const blob = await canonicalClient.readAttachment(workspace.workspaceId, reference);
+                        const restored = new File([blob], file.filename, { type: file.mimeType });
+                        const dataUrl = `data:${file.mimeType};base64,${await base64OfBlob(restored)}`;
+                        return { ...file, file: restored, dataUrl };
+                    } catch (error) {
+                        console.warn(`[queue] attachment ${file.filename} could not be re-read; restoring without it:`, error);
+                        return null;
+                    }
+                })).then((entries) => entries.filter((entry): entry is AttachedFile => entry !== null));
+            } catch (error) {
+                console.warn('[queue] workspace resolution failed while restoring attachments:', error);
+            }
         }
-        setMessage(withMissingCitations(queued.content, queued.attachments ?? []));
-        if (queued.goal) useSessionGoalArmStore.getState().setArmed(true, queued.goal.objective ?? null);
+        const restoredText = withMissingCitations(queued.content, attachments);
+        writeChatDraft(chatDraftIdentity, restoredText, []);
+        setMessage(restoredText);
+        if (attachments.length > 0) {
+            useInputStore.getState().restoreAttachedFiles(attachments, chatDraftIdentity);
+        }
+        if (queued.goal) useSessionGoalArmStore.getState().setArmed(true, queued.goal.objective ?? null, false, queued.goal.tokenBudget);
         restoreQueuedContext(queued.context ?? []);
         setTimeout(() => {
             composerRef.current?.focus();
         }, 0);
-    }, [restoreQueuedContext, setMessage, composerRef]);
+    }, [restoreQueuedContext, setMessage, composerRef, messageQueueTarget, chatDraftIdentity]);
 
     const handleQueuedMessageEditById = React.useCallback((messageId: string) => {
         if (!messageQueueTarget) return;
-        void popQueuedToInput(messageQueueTarget, messageId).then((queued) => {
-            if (queued) handleQueuedMessageEdit(queued);
+        void popQueuedToInput(messageQueueTarget, messageId).then((result) => {
+            if (result.status === 'taken' || result.status === 'taken-partial') {
+                if (result.status === 'taken-partial') toast.info(t('chat.queuedMessage.originalUnavailable'));
+                void restoreQueuedDraftToComposer(result.message);
+                return;
+            }
+            toast.info(t(result.status === 'refused' ? 'chat.queuedMessage.toast.takeRefused' : 'chat.queuedMessage.toast.takeMissing'));
         }).catch((error) => {
             console.warn('[queue] failed to take queued message for editing:', error);
-            toast.info(t('common.unavailable'));
+            toast.error(problemMessage(error, t('chat.queuedMessage.toast.takeFailed')));
         });
-    }, [messageQueueTarget, popQueuedToInput, handleQueuedMessageEdit, t]);
+    }, [messageQueueTarget, popQueuedToInput, restoreQueuedDraftToComposer, t]);
 
     const handleQueuedMessageSend = React.useCallback((messageId: string) => {
-        void handleSubmitRef.current({ queuedOnly: true, queuedMessageId: messageId, delivery: 'steer' });
-    }, [handleSubmitRef]);
+        if (!messageQueueTarget) return;
+        const target = messageQueueTarget;
+        void (async () => {
+            let result;
+            try {
+                result = await takeQueuedItem(target, messageId);
+            } catch (error) {
+                console.warn('[queue] failed to take queued message for send-now:', error);
+                toast.error(problemMessage(error, t('chat.queuedMessage.toast.takeFailed')));
+                return;
+            }
+            if (result.status === 'refused' || result.status === 'missing') {
+                toast.info(t(result.status === 'refused' ? 'chat.queuedMessage.toast.takeRefused' : 'chat.queuedMessage.toast.takeMissing'));
+                return;
+            }
+            const { message } = result;
+            const sendConfig = message.sendConfig;
+            if (!sendConfig?.providerID || !sendConfig?.modelID) {
+                toast.error(t('chat.queuedMessage.toast.sendNowFailed'));
+                void restoreQueuedDraftToComposer(message);
+                return;
+            }
+            if (message.goal) useSessionGoalArmStore.getState().setArmed(true, message.goal.objective ?? null, false, message.goal.tokenBudget);
+            const additionalParts: SyntheticContextPart[] = (message.context ?? []).flatMap((entry): SyntheticContextPart[] => {
+                if (entry.kind !== 'context') return [{ text: entry.text, synthetic: true }];
+                const parts: SyntheticContextPart[] = [];
+                if (entry.instructions) parts.push({ text: entry.instructions, synthetic: true });
+                parts.push({ text: entry.text, synthetic: true, metadata: entry.metadata });
+                return parts;
+            });
+            const delivery = sessionPhase !== 'idle' ? 'steer' as const : undefined;
+            try {
+                await useSessionUIStore.getState().sendMessage(
+                    message.text,
+                    sendConfig.providerID,
+                    sendConfig.modelID,
+                    sendConfig.agent ?? null,
+                    message.attachments,
+                    message.agentMention,
+                    additionalParts.length > 0 ? additionalParts : undefined,
+                    sendConfig.variant,
+                    'normal',
+                    {
+                        sessionId: target.sessionId,
+                        directory: target.directory,
+                        reasoningEffort: sendConfig.reasoningEffort,
+                        delivery,
+                        fileResourcesExpanded: true,
+                    },
+                );
+            } catch (error) {
+                console.warn('[queue] send-now failed; restoring the draft into the composer:', error);
+                toast.error(problemMessage(error, t('chat.queuedMessage.toast.sendNowFailed')));
+                void restoreQueuedDraftToComposer(message);
+            }
+        })();
+    }, [messageQueueTarget, takeQueuedItem, restoreQueuedDraftToComposer, sessionPhase, t]);
 
     return {
-        handleQueueMessage, handleQueuedMessageEdit, handleQueuedMessageEditById, handleQueuedMessageSend,
+        handleQueueMessage, handleQueuedMessageEditById, handleQueuedMessageSend,
     };
 }

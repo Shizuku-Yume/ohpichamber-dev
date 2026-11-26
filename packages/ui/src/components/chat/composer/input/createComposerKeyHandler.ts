@@ -179,7 +179,7 @@ export function createComposerKeyHandler({
 
         if (e.key === 'ArrowUp' && canNavigateHistoryUp) {
             e.preventDefault();
-            const lastQueued = queuedMessages[queuedMessages.length - 1];
+            const lastQueued = [...queuedMessages].reverse().find((queued) => !queued.scheduledTask);
             if (lastQueued && message.length === 0 && attachedFiles.length === 0) {
                 handleQueuedMessageEditById(lastQueued.id);
                 return;

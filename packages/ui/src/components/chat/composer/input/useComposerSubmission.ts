@@ -127,19 +127,19 @@ export function useComposerSubmission({
     const { messageQueueTarget } = queueState;
     const {
         currentProviderId, currentModelId, currentVariant,
-        mailboxTarget, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel} = selection;
+        mailboxTarget, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel } = selection;
     const {
         readSessionMentionsBeforeSend, guestCommands, linkedReferences, referenceLinksIn,
-        sessionMentionsIn, loadCommands} = language;
+        sessionMentionsIn, loadCommands } = language;
     const { isMobile } = preferences;
     const { setExpandedInput } = expansion;
-    const { runtimeTrackers , runtimeFiles} = runtime;
+    const { runtimeTrackers, runtimeFiles } = runtime;
     const { handoffDraft, restoreDraft, persistDraftImmediately, messageHistory } = draftHistory;
     const { handleQueueMessage } = queueActions;
     const { scrollToBottom } = props;
     const {
         extractInlineFileMentions,
-        sanitizeAttachmentsForSend, prepareDocumentMentions} = mentionAttachments;
+        sanitizeAttachmentsForSend, prepareDocumentMentions } = mentionAttachments;
     const { updateLinkedReferencesFor } = referenceDrafts;
 
     const getSubmitErrorMessage = createComposerSubmitErrorMessage(t);
@@ -149,24 +149,17 @@ export function useComposerSubmission({
         // Comment mode's only submit is attach; every other send path must be
         // inert while it is open.
         if (isMobileCommentOpen()) return;
-        if (!options?.queuedOnly) {
-            if (largeTextPasteOffer) return;
-            const held = await saveAttachmentsHeldForSend(chatDraftIdentity, currentDirectory ?? undefined, attachmentsToSend(options?.presetText ?? getCurrentInputSnapshot().message), t, waitForPendingAttachments);
-            if (held === 'stopped') return;
-            if (held === 'saved') { void handleSubmitRef.current(options); return; }
-        }
+        if (largeTextPasteOffer) return;
+        const held = await saveAttachmentsHeldForSend(chatDraftIdentity, currentDirectory ?? undefined, attachmentsToSend(options?.presetText ?? getCurrentInputSnapshot().message), t, waitForPendingAttachments);
+        if (held === 'stopped') return;
+        if (held === 'saved') { void handleSubmitRef.current(options); return; }
         // "Run in parallel" launches the run instead of sending a message.
-        if (parallel.isActive && !options?.queuedOnly) {
+        if (parallel.isActive) {
             if (parallel.runCount >= 2) void parallel.launch();
             return;
         }
         const submitRuntimeKey = getRuntimeKey();
         const submitRuntimeRevision = getRuntimeSwitchRevision();
-        const queuedOnly = options?.queuedOnly ?? false;
-        if (queuedOnly) {
-            toast.info(t('common.unavailable'));
-            return;
-        }
         const delivery = options?.delivery === 'steer' && sessionPhase !== 'idle' ? 'steer' : undefined;
         const capturedTarget = messageQueueTarget;
         // Snapshot the draft and current-session identity before the first
@@ -185,7 +178,7 @@ export function useComposerSubmission({
             return;
         }
 
-        if (!queuedOnly && inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
+        if (inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
             && !planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), [])) {
             if (!await loadCommands(currentDirectory)) {
                 toast.error(t('chat.chatInput.toast.messageSendFailed'));
@@ -199,7 +192,7 @@ export function useComposerSubmission({
         // context where they are; a prompt command must send that context with
         // the prompt it produces. A command the composer cannot run here is not
         // a local command at all and goes out as typed.
-        let commandPlan = !queuedOnly && inputSnapshot.hasContent
+        let commandPlan = inputSnapshot.hasContent
             ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), selectBuiltinCommandsForDirectory(useCommandsStore.getState(), currentDirectory))
             : null;
         if (commandPlan?.kind === 'prompt') {
@@ -243,7 +236,7 @@ export function useComposerSubmission({
         let admittedTarget: { sessionId: string; directory: string | null } | null = null;
         const confirmedMentionsSnapshot = new Set(confirmedMentionsRef.current);
         const restoreComposerText = () => {
-            if (queuedOnly || !inputSnapshot.message) return;
+            if (!inputSnapshot.message) return;
             const owner = admittedTarget ? createChatDraftIdentity(submitRuntimeKey, admittedTarget.directory ?? currentDirectory ?? '', admittedTarget.sessionId) : chatDraftIdentity;
             restoreDraft(owner, inputSnapshot.message, confirmedMentionsSnapshot);
         };
@@ -251,7 +244,7 @@ export function useComposerSubmission({
         // An extension command never reaches the model: the extension turns
         // `/name args` into a chip, which lands through the same pending slot
         // a guest panel's `attach` uses. Nothing else in the composer moves.
-        const guestRoute = !queuedOnly && !isBtwActive && inputSnapshot.hasContent
+        const guestRoute = !isBtwActive && inputSnapshot.hasContent
             ? routeGuestSlashCommand(inputSnapshot.message, inputMode, guestCommands)
             : null;
         if (guestRoute) {
@@ -291,10 +284,10 @@ export function useComposerSubmission({
             )
             : undefined;
         const reasoningEffortToSend = reasoningEffortForModel(providerIdToSend, modelIdToSend, {
-                session: sessionReasoningEffort,
-                native: currentSessionId ? persistedThinkingLevel : undefined,
-                draft: configuredReasoningEffort,
-            });
+            session: sessionReasoningEffort,
+            native: currentSessionId ? persistedThinkingLevel : undefined,
+            draft: configuredReasoningEffort,
+        });
 
         // The isolated space the message targets, if any: a session by its directory, a draft by
         // the creation request it still waits on or by its directory.
@@ -342,13 +335,13 @@ export function useComposerSubmission({
         }
 
         // Auto-review owns the active workflow; follow-ups wait in its queue.
-        if (currentSessionId && !queuedOnly && autoReviewRunning && !isBtwActive && !commandPlan) {
+        if (currentSessionId && autoReviewRunning && !isBtwActive && !commandPlan) {
             void handleQueueMessage();
             return;
         }
 
         // Side questions never send or queue messages into the active session transcript.
-        if (currentSessionId && !queuedOnly && !isBtwActive && !commandPlan) {
+        if (currentSessionId && !isBtwActive && !commandPlan) {
             // Sending is authoritative for blocking prompts: deny pending
             // permissions and dismiss open forms for the session subtree. The
             // deny/clear vanishes the card instantly (optimistic); rejecting
@@ -464,12 +457,12 @@ export function useComposerSubmission({
         if (delivery && sendMessageOptions) sendMessageOptions.delivery = delivery;
         if (reasoningEffortToSend) sendMessageOptions = { ...(sendMessageOptions ?? {}), reasoningEffort: reasoningEffortToSend };
 
-        if (!queuedOnly && inputSnapshot.hasContent && !(await readSessionMentionsBeforeSend(inputSnapshot.message))) return;
+        if (inputSnapshot.hasContent && !(await readSessionMentionsBeforeSend(inputSnapshot.message))) return;
         const reservedFilenames = new Set([
             ...attachedFiles.map((attachment) => attachment.filename),
         ]);
         const documentMentions = await prepareDocumentMentions(
-            !isBtwActive && !queuedOnly && inputSnapshot.hasContent ? [inputSnapshot.message] : [],
+            !isBtwActive && inputSnapshot.hasContent ? [inputSnapshot.message] : [],
             reservedFilenames,
             submitRuntimeKey,
         );
@@ -486,7 +479,7 @@ export function useComposerSubmission({
             queuedMessages: [],
             composerText: inputSnapshot.message,
             composerAttachments: attachedFiles,
-            includeComposer: !queuedOnly && inputSnapshot.hasContent,
+            includeComposer: inputSnapshot.hasContent,
         });
         if (historySubmissions?.length) {
             sendMessageOptions = { ...sendMessageOptions, historySubmissions };
@@ -514,7 +507,7 @@ export function useComposerSubmission({
                 inputState.setPendingSyntheticParts([...syntheticParts, ...(inputState.getPendingSyntheticParts(mailboxTarget) ?? [])], mailboxTarget);
             }
             restoreComposerText();
-            if (!queuedOnly && attachedFiles.length > 0) {
+            if (attachedFiles.length > 0) {
                 useInputStore.getState().restoreAttachedFiles(attachedFiles, chatDraftIdentity);
             }
         };
@@ -534,17 +527,17 @@ export function useComposerSubmission({
             return;
         }
 
-        const referencesToSend = withComposerReferences(linkedReferences, !queuedOnly && inputSnapshot.hasContent ? referenceLinksIn(inputSnapshot.message) : []);
+        const referencesToSend = withComposerReferences(linkedReferences, inputSnapshot.hasContent ? referenceLinksIn(inputSnapshot.message) : []);
         const outgoing = buildOutgoingMessage({
             queued: [],
-            composerText: !queuedOnly && inputSnapshot.hasContent ? inputSnapshot.message : null,
+            composerText: inputSnapshot.hasContent ? inputSnapshot.message : null,
             composerAttachments: attachedFiles,
             inlineComments: expandedDrafts,
             syntheticTexts: [
                 ...(syntheticParts?.map((part) => part.text) ?? []),
             ],
             references: isBtwActive ? [] : referencesToSend.map(toContextReference).concat(
-                !queuedOnly && inputSnapshot.hasContent ? sessionMentionsIn(inputSnapshot.message) : [],
+                inputSnapshot.hasContent ? sessionMentionsIn(inputSnapshot.message) : [],
             ),
         }, {
             extractFileMentions: (text) => {
@@ -595,19 +588,14 @@ export function useComposerSubmission({
             { listLocalDirectory: async (directory) => (await runtimeFiles.listDirectory(directory)).entries },
         );
 
-        // Clear input (the queue was taken above)
-        if (!queuedOnly) {
-            setMessage('');
-            confirmedMentionsRef.current.clear();
-            // Clear per-session draft on submit
-            persistDraftImmediately(chatDraftIdentity, '');
-            messageHistory.reset();
-            if (attachedFiles.length > 0) {
-                clearAttachedFiles(chatDraftIdentity);
-            }
-            // Close expanded input overlay when submitting
-            if (!isBtwActive) setExpandedInput(false);
+        setMessage('');
+        confirmedMentionsRef.current.clear();
+        persistDraftImmediately(chatDraftIdentity, '');
+        messageHistory.reset();
+        if (attachedFiles.length > 0) {
+            clearAttachedFiles(chatDraftIdentity);
         }
+        if (!isBtwActive) setExpandedInput(false);
 
         if (isMobile) {
             composerRef.current?.blur();
@@ -747,10 +735,12 @@ export function useComposerSubmission({
             additionalParts.length > 0 ? additionalParts : undefined,
             variantToSend,
             inputMode,
-            { ...sendMessageOptions, onSessionCreated: (target) => {
-                admittedTarget = target;
-                transferDraftReferences();
-            } },
+            {
+                ...sendMessageOptions, onSessionCreated: (target) => {
+                    admittedTarget = target;
+                    transferDraftReferences();
+                }
+            },
         );
         void sendPromise.then(() => {
             if (!isAttachmentOwnerCurrent()) return;

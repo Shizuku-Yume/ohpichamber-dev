@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, PromptContextSchema, PromptRequestSchema,
-  QueueAppendRequestSchema, QueueDeleteRequestSchema, QueueReorderRequestSchema, QueueStateSchema,
+  QueueAppendRequestSchema, QueueDeleteRequestSchema, QueueOriginalDraftSchema, QueueReorderRequestSchema, QueueStateSchema, QueueTakeRequestSchema,
 } from '@openchamber/agent-contract';
 import { createMetadataLifecycle, ensureHostMetadataSchema, openHostMetadataDatabase, withTransaction } from '../host/metadata-sqlite.js';
 
@@ -15,7 +15,7 @@ const PendingDeliverySchema = z.strictObject({ leaseId: EntityIdSchema, queueIte
 const ScheduledTaskModeSchema = z.enum(['existing', 'new']);
 const ScheduledTaskMetadataSchema = z.strictObject({ mode: ScheduledTaskModeSchema.default('existing'), projectId: EntityIdSchema, taskId: EntityIdSchema });
 const ScheduledTaskQuerySchema = z.strictObject({ projectId: EntityIdSchema, taskId: EntityIdSchema });
-const StoredItemSchema = z.strictObject({ content: z.string(), contextPreview: z.string().optional(), request: PromptRequestSchema });
+const StoredItemSchema = z.strictObject({ content: z.string(), contextPreview: z.string().optional(), request: PromptRequestSchema, draft: QueueOriginalDraftSchema.optional() });
 const ScheduledTaskProvenanceSchema = z.strictObject({ mode: z.literal('existing'), projectId: EntityIdSchema, taskId: EntityIdSchema, sessionId: EntityIdSchema, workspaceId: EntityIdSchema, triggeredAt: z.number().int().nonnegative() });
 const LegacyAttachmentSchema = z.object({ id: z.string().min(1), filename: z.string().min(1), mimeType: z.string().min(1), size: z.number().int().nonnegative(), source: z.enum(['local', 'server']), serverPath: z.string().optional(), dataUrl: z.string().min(1) });
 const LegacyItemSchema = z.object({
@@ -141,6 +141,7 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
       };
       if (stored.contextPreview !== undefined) item.contextPreview = stored.contextPreview;
       if (input.agentMention !== undefined) item.agentMention = input.agentMention;
+      item.originalAvailable = stored.draft !== undefined;
       return row.lease_id === null ? { ...item, status: 'queued' } : { ...item, status: 'leased', lease: { leaseId: row.lease_id, expiresAt: row.lease_expires_at } };
     });
     try { return QueueStateSchema.parse({ sessionId: scope.sessionId, revision: record.revision, items }); } catch { throw corrupt(); }
@@ -250,7 +251,7 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
       if (current.length === 0 && db.prepare('SELECT COUNT(DISTINCT session_id) AS count FROM prompt_queue_item').get().count >= 50) {
         throw new PromptQueueError('PAYLOAD_TOO_LARGE', 413, 'Host prompt queue is full');
       }
-      insert(scope, randomUUID(), timestamp, { content: request.content, contextPreview: request.contextPreview, request: request.request });
+      insert(scope, randomUUID(), timestamp, { content: request.content, contextPreview: request.contextPreview, request: request.request, draft: request.draft });
       bump(scope);
       const result = state(scope);
       db.prepare('DELETE FROM prompt_queue_command WHERE expires_at <= ?').run(timestamp);
@@ -266,6 +267,17 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
       if (current.items.every((item, index) => ids[index] === item.queueItemId)) return current;
       for (const [index, id] of ids.entries()) db.prepare('UPDATE prompt_queue_item SET position = ? WHERE session_id = ? AND item_id = ?').run(index, scope.sessionId, id);
       bump(scope); return state(scope);
+    }),
+    take: (scope, input) => write(() => {
+      scope = ScopeSchema.parse(scope); const request = QueueTakeRequestSchema.parse(input);
+      checkRevision(scope, request.expectedRevision);
+      const row = db.prepare('SELECT * FROM prompt_queue_item WHERE session_id = ? AND item_id = ?').get(scope.sessionId, request.queueItemId);
+      if (!row) throw new PromptQueueError('SESSION_NOT_FOUND', 404, 'Queued message is no longer in the queue', { queue: state(scope) });
+      if (row.lease_id !== null) conflict(scope);
+      const stored = decode(row);
+      db.prepare('DELETE FROM prompt_queue_item WHERE session_id = ? AND item_id = ?').run(scope.sessionId, request.queueItemId);
+      bump(scope);
+      return { queue: state(scope), stored: { ...stored, createdAt: row.created_at } };
     }),
     remove: (scope, input) => write(() => {
       scope = ScopeSchema.parse(scope); const request = QueueDeleteRequestSchema.parse(input);
