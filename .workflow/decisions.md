@@ -2229,3 +2229,21 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** measured idle memory fell from 1.77 GB to 535 MB after the idle bound with no workers left; the cost is one worker startup on the first catalog read after a long idle, and out-of-Host (OMP CLI) session changes appear within two minutes.
 - **Decided by:** user (requested the memory and performance pass); cadence and bounds chosen by the agent.
 - **Revisit when:** the Agent Service pushes events for out-of-Host session changes, or first catalog reads after idle are reported slow.
+
+## 2026-11-25 - Restore OpenChamber Tools on General and give every list one selection and motion idiom
+
+- **Effort:** ux-audit follow-up 2026-11-25
+- **Decided:** restore upstream's OpenChamber Tools section (`OpenChamberToolsSettings`) on the General page with its rows wired to the OMP runtime, and apply one selection token (`oc-selected`), one hover treatment and one 150 ms background/color transition (off under reduced motion) to settings sidebars, workbench lists, file tree rows, dialogs and info hints.
+- **Instead of:** a flattened host-tools block on the Tools page, and per-list hover, selection and `transition-all` variants.
+- **Because:** the maintainer asked for the OpenChamber tools to return to General and for motion to be applied everywhere or nowhere.
+- **Decided by:** user.
+- **Revisit when:** upstream changes its list selection tokens or the OpenChamber Tools section.
+
+## 2026-11-26 - Keep upstream-shared hot paths lean in the performance pass
+
+- **Effort:** performance pass 2026-11-26
+- **Decided:** memoize `SSH_AUTH_SOCK` resolution in `ssh-auth-sock.ts`, read the precomputed active-ancestor set in `useKeepScreenAwake`, and move the legacy quote parser out of `chatQuoteAnchor.ts` into `legacyChatQuoteAnchor.ts` so the eager bootstrap does not load the markdown parser.
+- **Instead of:** spawning `gpgconf` on every Git command, scanning every active session's ancestry per subscriber, and instantiating the unified/remark parser at module scope of the startup graph.
+- **Because:** each was a measured cost on a hot path (Host stream CPU, status publication fan-out, startup bytes) in the 2026-11-26 audit.
+- **Decided by:** user (requested the performance pass).
+- **Revisit when:** upstream changes these modules; re-apply the change on top of upstream's version.

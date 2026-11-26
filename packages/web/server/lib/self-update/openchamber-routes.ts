@@ -44,8 +44,6 @@ export const registerOpenChamberRoutes = (app: Application, dependencies: OpenCh
         url: modelsDevApiUrl,
         ttlMs: modelsMetadataCacheTtl,
       });
-      // The projection is serialized once per upstream catalog revision; an
-      // unchanged catalog answers 304 instead of re-sending megabytes.
       const { body, etag } = toSerializedClientModelsMetadata(metadata);
       res.setHeader('Cache-Control', fromCache && !stale ? 'public, max-age=60' : 'public, max-age=300');
       res.setHeader('ETag', etag);

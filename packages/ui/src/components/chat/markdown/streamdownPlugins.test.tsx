@@ -3,7 +3,7 @@ import React from 'react';
 import katex from 'katex';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Window } from 'happy-dom';
-import { Streamdown, type Components, type ExtraProps } from 'streamdown';
+import { Streamdown, type Components } from 'streamdown';
 import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath, remarkLiteralText } from './streamdownPlugins';
 import { parseMarkdownBlocksWithMath } from './mathBlocks';
 import { prepareUserMarkdownContent } from '../message/parts/userTextPartContent';

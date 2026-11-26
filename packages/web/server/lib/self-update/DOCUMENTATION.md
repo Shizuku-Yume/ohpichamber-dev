@@ -17,7 +17,10 @@ and credentials are not owned here.
 - `POST /api/openchamber/openrouter/model-info` is registered by the existing
   Host model-info owner, which enforces enterprise policy before networking.
 - `GET /api/openchamber/models-metadata` reads the Host metadata cache and sets
-  cache headers according to freshness. Timeouts are 504; other failures are 502.
+  cache headers according to freshness. The client projection is serialized
+  once per upstream catalog revision and carries an `ETag`; a matching
+  `If-None-Match` answers 304 instead of re-sending the multi-megabyte body.
+  Timeouts are 504; other failures are 502.
 
 ## Boundary
 

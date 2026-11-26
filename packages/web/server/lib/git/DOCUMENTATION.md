@@ -930,6 +930,8 @@ The store persists path fingerprints, so it cannot scan old records for missing 
 
 `buildGitEnv` runs for every Git command. Without `SSH_AUTH_SOCK`, on a machine with GnuPG whose agent does not serve SSH, `gpgconf --launch gpg-agent` took about a second and never produced the socket, so every status, stage and unstage paid it again. The server tries the launch once per socket path; the cheap `--list-dirs` check still runs each time, so an agent the user starts later is found.
 
+The whole resolution is memoized for the same reason: with no `SSH_AUTH_SOCK`, every Git command used to spawn `gpgconf` one to three times, which dominated Host CPU during a streamed turn. An explicit `SSH_AUTH_SOCK` is read on every call. A found socket is reused while it still stats as a socket, so an agent that dies is noticed on the next command; a missing socket is re-resolved after 30 s, so an agent the user starts later is found without a restart. Concurrent callers share one resolution.
+
 ### Working directory (simple-git)
 - Repository operations always pass an explicit `baseDir` (the opened project/directory path) into simple-git. Omitting `baseDir` would default to `process.cwd()`, which breaks when the server was launched from a neutral directory (e.g. `$HOME`) while the opened project lives elsewhere.
 - Global identity reads use the user home directory as `baseDir` (they do not need a repository).
