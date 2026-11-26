@@ -67,13 +67,20 @@ describe('locale slices', () => {
   const featureId = '/repo/packages/ui/src/lib/i18n/messages/routing.i18n.ts';
 
   test('a locale dictionary gets only its own locale', () => {
-    expect(sliceLocale(feature, `${featureId}?i18n-locale=uk`)).toContain("export const routingI18n = {uk: { 'a': 'Авто' }}");
+    expect(sliceLocale(feature, `${featureId}?i18n-locale=uk`)?.code).toContain("export const routingI18n = {uk: { 'a': 'Авто' }}");
   });
 
   test('a quoted locale key is matched', () => {
     const sliced = sliceLocale(feature, `${featureId}?i18n-locale=zh-CN`);
-    expect(sliced).toContain('自动');
-    expect(sliced).not.toContain('Авто');
+    expect(sliced?.code).toContain('自动');
+    expect(sliced?.code).not.toContain('Авто');
+    expect(sliced?.missingLocale).toBe(false);
+  });
+
+  test('a locale the aggregate does not carry slices to an empty object', () => {
+    const sliced = sliceLocale(feature, `${featureId}?i18n-locale=he`);
+    expect(sliced?.missingLocale).toBe(true);
+    expect(sliced?.code).toContain('export const routingI18n = {}');
   });
 
   test('a module of another shape and one without the query are left whole', () => {

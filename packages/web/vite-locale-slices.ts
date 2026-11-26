@@ -36,23 +36,31 @@ export const localeSliceId = (featureId: string, locale: string): string | null 
   FEATURE_FILE.test(featureId) ? `${featureId}${QUERY}${locale}` : null
 );
 
-export const sliceLocale = (code: string, id: string): string | null => {
+export const sliceLocale = (
+  code: string,
+  id: string,
+): { code: string; missingLocale: boolean } | null => {
   const queryAt = id.indexOf(QUERY);
   if (queryAt < 0) return null;
   const locale = id.slice(queryAt + QUERY.length);
   const object = exportedObject(parseAst(code));
   if (!object) return null;
   const kept: string[] = [];
+  let missingLocale = true;
   for (const member of object.properties) {
     const name = memberName(member);
     if (name === null) return null;
     if (name === locale) {
+      missingLocale = false;
       const { start, end } = spanOf(member);
       kept.push(code.slice(start, end));
     }
   }
   const { start, end } = spanOf(object);
-  return `${code.slice(0, start)}{${kept.join(',')}}${code.slice(end)}`;
+  return {
+    code: `${code.slice(0, start)}{${kept.join(',')}}${code.slice(end)}`,
+    missingLocale,
+  };
 };
 
 export const localeSlicesPlugins = (): Plugin[] => [
@@ -61,19 +69,37 @@ export const localeSlicesPlugins = (): Plugin[] => [
     enforce: 'pre',
     async resolveId(source, importer, options) {
       if (!importer || !source.includes('.i18n')) return null;
-      const locale = dictionaryLocale(importer);
+      // Locale dictionaries (<locale>.ts / <locale>.settings.ts) slice every
+      // aggregate they import down to their own locale. Aggregates that pull
+      // other aggregates (providers → native-providers/omp-provider-config)
+      // propagate the slice through the importer's query, so nested spread
+      // keys resolve against equally sliced objects.
+      const queryAt = importer.indexOf(QUERY);
+      const locale = queryAt >= 0 ? importer.slice(queryAt + QUERY.length) : dictionaryLocale(importer);
       if (!locale) return null;
       const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
-      const id = resolved ? localeSliceId(resolved.id, locale) : null;
-      return resolved && id ? { ...resolved, id } : null;
+      if (!resolved) return null;
+      const id = localeSliceId(resolved.id.split('?')[0], locale);
+      return id ? { ...resolved, id } : null;
     },
   },
   {
     name: 'openchamber-i18n-locale-slices:slice',
     enforce: 'post',
     transform(code, id) {
+      if (!id.includes(QUERY)) return null;
       const sliced = sliceLocale(code, id);
-      return sliced === null ? null : { code: sliced, map: null };
+      if (sliced === null) {
+        // A sliced import that does not match the single-exported-object
+        // shape means upstream added an aggregate form this transform does
+        // not understand. Shipping it whole would silently bundle every
+        // locale back into the eager graph, so the build must stop here.
+        this.error(`i18n locale slicing could not parse ${id.split('?')[0]}: expected exactly one exported object literal with locale keys`);
+      }
+      // A locale the aggregate does not carry (m4-lane-d has no `en`) slices
+      // to an empty object, which is exactly what spreading the original
+      // undefined key produced.
+      return { code: sliced.code, map: null };
     },
   },
 ];

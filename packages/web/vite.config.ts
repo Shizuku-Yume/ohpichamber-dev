@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync, realpathSync } from 'node:fs';
 import { VitePWA } from 'vite-plugin-pwa';
 import { cacheReactBabel } from './vite-react-babel-cache';
+import { localeSlicesPlugins } from './vite-locale-slices';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
@@ -70,6 +71,11 @@ export default defineConfig({
         ];
       },
     },
+    // Locale dictionaries keep only their own locale's slices of the shared
+    // i18n aggregates, so the eager bootstrap stops carrying all fifteen
+    // locales. Build-time only transform: the sources stay untouched for the
+    // upstream merge and the key-parity tests.
+    ...localeSlicesPlugins(),
     themeJsonHmrPlugin(),
     VitePWA({
       strategies: 'injectManifest',
