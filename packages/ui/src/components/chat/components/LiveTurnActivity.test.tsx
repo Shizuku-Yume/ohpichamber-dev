@@ -309,7 +309,7 @@ describe('live Activity with the real message body', () => {
         expect(container.querySelectorAll('button[aria-label^="Відкрити src/file-"]')).toHaveLength(4);
     });
 
-    test('changed files open current file contents without substituting a working-tree diff', async () => {
+    test('changed files open the pinned turn diff, never a working-tree diff', async () => {
         const record = turn([assistant('final', [text('answer', 'Done')])]);
         await act(async () => root.render(<Harness record={record} changedFiles={[
             { file: 'src/a.ts' },
@@ -322,20 +322,20 @@ describe('live Activity with the real message body', () => {
         expect(fileButton?.textContent).toBe('c.ts+1 −0');
         await act(async () => fileButton?.click());
         const state = useUIStore.getState();
-        expect(state.pendingFileFocusPath).toBe('/project/src/c.ts');
-        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'file' && tab.targetPath === '/project/src/c.ts')).toBe(true);
-        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'diff')).toBe(false);
+        expect(state.pendingTurnDiffFile).toMatchObject({ file: 'src/c.ts', turnId: 'user' });
+        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'diff' && tab.targetPath === 'src/c.ts')).toBe(true);
+        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'file' && tab.targetPath === '/project/src/c.ts')).toBe(false);
         expect(state.pendingDiffScope).toBe('working');
         expect(state.pendingDiffFile).toBe('existing.ts');
     });
 
-    test('mobile changed files open the existing Files surface without opening Changes', async () => {
+    test('mobile changed files open Changes in the pinned turn scope', async () => {
         const record = turn([assistant('final', [text('answer', 'Done')])]);
         let filesOpened = 0;
-        let changesOpened = 0;
+        const changesRequests: Array<{ diffPath?: string; scope?: string; turnId?: string }> = [];
         const mobileActions: MobileAppActions = {
             openFiles: () => { filesOpened += 1; },
-            openChanges: () => { changesOpened += 1; },
+            openChanges: (request) => { changesRequests.push(request ?? {}); },
             openPlan: () => undefined,
             openSourceBoard: () => undefined,
             openReceivedPage: () => undefined,
@@ -343,27 +343,25 @@ describe('live Activity with the real message body', () => {
         useUIStore.setState({ isMobile: true });
         await act(async () => root.render(<Harness record={record} changedFiles={[{ file: '/project/src/mobile.ts' }]} mobileActions={mobileActions} />));
         await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Open /project/src/mobile.ts"]')?.click());
-        expect(filesOpened).toBe(1);
-        expect(changesOpened).toBe(0);
-        expect(useUIStore.getState().pendingFileFocusPath).toBe('/project/src/mobile.ts');
+        expect(filesOpened).toBe(0);
+        expect(changesRequests).toEqual([{ diffPath: '/project/src/mobile.ts', scope: 'turn', turnId: 'user', sessionId: null, directory: '/project' }]);
         expect(useUIStore.getState().pendingDiffScope).toBe('working');
         expect(useUIStore.getState().pendingDiffFile).toBe('existing.ts');
     });
 
-    test('historical files open the column file viewer without inventing a snapshot diff', async () => {
+    test('historical files pin their own turn diff through the column session', async () => {
         const record = turn([assistant('final', [text('answer', 'Done')])]);
-        const pending = useUIStore.getState().pendingTurnDiffFile;
         await act(async () => root.render(<ChatColumnSessionContext.Provider value={{ sessionId: 'pinned-session', directory: '/column' }}>
             <Harness record={record} changedFiles={[{ file: 'src/older.ts', additions: 1, deletions: 1 }]} isLatestTurn={false} retired />
         </ChatColumnSessionContext.Provider>));
         const button = container.querySelector<HTMLButtonElement>('button[aria-label="Open src/older.ts"]');
         expect(button).not.toBeNull();
         await act(async () => button?.click());
-        expect(useUIStore.getState().pendingFileFocusPath).toBe('/column/src/older.ts');
-        expect(useUIStore.getState().pendingTurnDiffFile).toEqual(pending);
+        expect(useUIStore.getState().pendingTurnDiffFile).toMatchObject({ file: 'src/older.ts', turnId: 'user', sessionId: 'pinned-session' });
+        expect(useUIStore.getState().contextPanelByDirectory['/column']?.tabs.some((tab) => tab.mode === 'diff' && tab.targetPath === 'src/older.ts')).toBe(true);
     });
 
-    test('historical files stay hidden until completion and expand into the file viewer', async () => {
+    test('historical files stay hidden until completion and expand into the pinned turn diff', async () => {
         const files = Array.from({ length: 5 }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
         const final = assistant('final', [text('answer', 'Done')]);
         await act(async () => root.render(<Harness record={turn([final])} changedFiles={files} isLatestTurn={false} />));
@@ -372,10 +370,9 @@ describe('live Activity with the real message body', () => {
         expect(container.textContent).toContain('file-0.ts');
         await act(async () => changedFilesToggle()?.click());
         expect(container.querySelectorAll('button[aria-label^="Open src/file-"]')).toHaveLength(5);
-        const pending = useUIStore.getState().pendingTurnDiffFile;
         await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Open src/file-4.ts"]')?.click());
-        expect(useUIStore.getState().pendingFileFocusPath).toBe('/project/src/file-4.ts');
-        expect(useUIStore.getState().pendingTurnDiffFile).toEqual(pending);
+        expect(useUIStore.getState().pendingTurnDiffFile).toMatchObject({ file: 'src/file-4.ts', turnId: 'user' });
+        expect(useUIStore.getState().contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'diff' && tab.targetPath === 'src/file-4.ts')).toBe(true);
     });
 
     test('renders one operation card for matched, running and failed tool parts', async () => {
