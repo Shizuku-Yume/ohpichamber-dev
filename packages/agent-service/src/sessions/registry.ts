@@ -1503,13 +1503,17 @@ export class SessionRegistry {
       return this.coldTurnDiff(reference.sessionFile, reference.sessionsDirectory, reference.cwd, sessionId, turnId, reference.sessionFile, record => record.parent === undefined, reference.deletedSpace?.privateRoots);
     }
     const rootEntry = this.entries.get(child.rootSessionId);
+    const rootReference = this.references.get(child.rootSessionId);
     const rootSessionFile = rootEntry?.state === 'live'
       ? rootEntry.opened.sessionFile
-      : (this.references.get(child.rootSessionId)?.sessionFile ?? child.sessionFile);
+      : rootReference?.sessionFile;
+    if (rootSessionFile === undefined) {
+      return failedTurnDiff(sessionId, turnId, new Error(`The root session reference for ${child.rootSessionId} is not registered`));
+    }
     const rootCwd = rootEntry && rootEntry.state !== 'unloaded'
       ? rootEntry.input.cwd
-      : this.references.get(child.rootSessionId)?.cwd ?? '';
-    const directory = this.references.get(child.rootSessionId)?.sessionsDirectory;
+      : rootReference?.cwd ?? '';
+    const directory = rootReference?.sessionsDirectory;
     return this.coldTurnDiff(child.sessionFile, directory, rootCwd, sessionId, turnId, rootSessionFile, record => record.agent === child.subagentId, undefined);
   }
 
