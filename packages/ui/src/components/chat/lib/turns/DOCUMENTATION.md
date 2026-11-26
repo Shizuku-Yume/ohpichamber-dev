@@ -123,8 +123,9 @@ waits for a finished answer because changed-file details appear only there.
 ### Why file pills open the turn diff and not a tool-only diff
 
 The file list and available line counts come from the turn's own edit, write
-and patch calls. Pills open the snapshot-based session turn diff, which can
-also describe write results and delegated edits absent from those call patches.
+and patch calls. Pills open the Canonical per-turn diff
+(`useCanonicalTurnDiff`), which replays OMP's journaled writes and can also
+describe write results and delegated edits absent from those call patches.
 
 ### Why retry suppression checks the current assistant and idle time
 

@@ -8,7 +8,7 @@ import { McpOperationSchema, McpResultSchema } from './worker/mcp/protocol.ts';
 import { ShellOperationSchema, ShellResultSchema } from './shell/protocol.ts';
 import { CompletionOperationSchema, CompletionResultSchema } from './completion/protocol.ts';
 import { UsageAccountsSchema, UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema } from '@openchamber/agent-contract';
-import { SubagentSchema, SubagentTranscriptResponseSchema, SubagentTreeCostResponseSchema } from '@openchamber/agent-contract';
+import { SubagentSchema, SubagentTranscriptResponseSchema, SubagentTreeCostResponseSchema, TurnDiffSchema } from '@openchamber/agent-contract';
 import { NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from './native-policy-protocol.ts';
 import { WebSearchOperationSchema, WebSearchResultSchema } from './worker/websearch/protocol.ts';
 
@@ -107,6 +107,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'approve-always', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
   z.strictObject({ type: z.literal('question.resolve'), questionId: EntityIdSchema, action: z.enum(['answer', 'cancel', 'update', 'timeout']), response: JsonValueSchema.optional() }),
   z.strictObject({ type: z.literal('history'), request: HistoryPageRequestSchema }),
+  z.strictObject({ type: z.literal('turn.diff'), turnId: EntityIdSchema }),
   z.strictObject({ type: z.literal('branch'), request: SessionBranchRequestSchema }),
   z.strictObject({ type: z.literal('delete.prepare') }),
   z.strictObject({ type: z.literal('catalog'), operation: CatalogOperationSchema, revision: CounterSchema }),
@@ -170,6 +171,7 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('question.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('history'), history: HistoryPageSchema }),
+  z.strictObject({ type: z.literal('turn.diff'), diff: TurnDiffSchema }),
   z.strictObject({ type: z.literal('branch'), result: SessionBranchResultSchema, seed: ProjectionSeedSchema }),
   z.strictObject({ type: z.literal('delete.prepare'), sessionFile: PrivatePathSchema }),
   z.strictObject({ type: z.literal('catalog'), result: CatalogResultSchema }),

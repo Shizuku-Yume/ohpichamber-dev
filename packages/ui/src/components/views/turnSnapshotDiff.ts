@@ -6,10 +6,12 @@ export type TurnSnapshotDiff = {
     patch?: string;
     additions?: number;
     deletions?: number;
+    previousPath?: string;
 };
 
 export const statusToGitCode = (status?: string): string => {
     if (status === 'added') return 'A';
     if (status === 'deleted') return 'D';
+    if (status === 'renamed') return 'R';
     return 'M';
 };

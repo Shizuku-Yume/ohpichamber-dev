@@ -13,6 +13,7 @@ import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { UsageSessionReference, WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
 import { nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, WorkerProjection } from '../worker/projection.ts';
+import { failedTurnDiff, mutationEvidenceInMessages, readTurnDiffArtifacts, TurnDiffNotFoundError } from './turn-diff.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
 import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad, type ApprovalPolicyLoadRequest, type ApprovalPolicyRecord, type PermissionAuthority } from '../interaction/manager.ts';
@@ -1485,6 +1486,64 @@ export class SessionRegistry {
     const result = await this.workers.request(request.sessionId, { type: 'history', request });
     if (result.type !== 'history') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested history operation.');
     return result.history;
+  }
+
+  async turnDiff(sessionId: string, turnId: string) {
+    this.ensureOpen();
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    if (!child) {
+      const entry = this.entries.get(sessionId);
+      if (entry && entry.state !== 'unloaded') {
+        this.get(sessionId);
+        const result = await this.workers.request(sessionId, { type: 'turn.diff', turnId });
+        if (result.type !== 'turn.diff') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested turn.diff operation.');
+        return result.diff;
+      }
+      const { reference } = this.coldRoot(sessionId);
+      return this.coldTurnDiff(reference.sessionFile, reference.sessionsDirectory, reference.cwd, sessionId, turnId, reference.sessionFile, record => record.parent === undefined, reference.deletedSpace?.privateRoots);
+    }
+    const rootEntry = this.entries.get(child.rootSessionId);
+    const rootSessionFile = rootEntry?.state === 'live'
+      ? rootEntry.opened.sessionFile
+      : (this.references.get(child.rootSessionId)?.sessionFile ?? child.sessionFile);
+    const rootCwd = rootEntry && rootEntry.state !== 'unloaded'
+      ? rootEntry.input.cwd
+      : this.references.get(child.rootSessionId)?.cwd ?? '';
+    const directory = this.references.get(child.rootSessionId)?.sessionsDirectory;
+    return this.coldTurnDiff(child.sessionFile, directory, rootCwd, sessionId, turnId, rootSessionFile, record => record.agent === child.subagentId, undefined);
+  }
+
+  private async coldTurnDiff(
+    sessionFile: string,
+    sessionsDirectory: string | undefined,
+    workspaceCwd: string,
+    sessionId: string,
+    turnId: string,
+    rootSessionFile: string,
+    ownsRecord: (record: { agent: string; parent?: string }) => boolean,
+    privateRoots: ConstructorParameters<typeof WorkerProjection>[2],
+  ) {
+    let manager: SessionManager;
+    try {
+      manager = await SessionManager.open(sessionFile, sessionsDirectory, undefined, { initialCwd: workspaceCwd, throwIfMissing: true, suppressBreadcrumb: true });
+    } catch (error) {
+      return failedTurnDiff(sessionId, turnId, error);
+    }
+    try {
+      const projection = new WorkerProjection(manager, sessionId, privateRoots);
+      const artifactsDir = rootSessionFile.endsWith('.jsonl') ? rootSessionFile.slice(0, -'.jsonl'.length) : null;
+      try {
+        const seed = projection.seed();
+        return await readTurnDiffArtifacts({
+          sessionId, turnId, turns: seed.turns, artifactsDir,
+          ownsRecord, workspaceCwd,
+          turnHasMutationEvidence: mutationEvidenceInMessages(seed.messages, turnId),
+        });
+      } catch (error) {
+        if (error instanceof TurnDiffNotFoundError) throw new ProjectionError(410, 'RESYNC_REQUIRED', 'The turn is not part of the session branch');
+        return failedTurnDiff(sessionId, turnId, error);
+      }
+    } finally { await manager.close(); }
   }
   /**
    * True when stopping this root's worker loses no turn, pending request,

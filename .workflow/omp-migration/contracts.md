@@ -141,6 +141,7 @@ omitting the precondition preserves unconditional merge-patch semantics.
 | `GET` | `/api/agent/v1/sessions/:sessionId/metadata` | Host-owned metadata and its independent revision | Required | Yes | JSON |
 | `DELETE` | `/api/agent/v1/sessions/:sessionId` | Delete session and child sessions | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/history` | Paginated message and turn history | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/sessions/:sessionId/turns/:turnId/diff` | Per-turn file diff with explicit ready/empty/unsupported/failed state | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/snapshot` | Atomic runtime state snapshot and matching event cursor | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/runs` | Start a new agent execution run | Required | Yes (Key) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/runs/:runId/abort` | Abort an active run | Required | Yes | JSON |
@@ -284,10 +285,11 @@ Standard error codes:
 | Errors | `errors.ts` | Top-level RFC 7807 Problem Details and deliberate failure codes |
 | Projects, agent profiles and sessions | `session.ts` | Opaque project/workspace mappings; model binding, tool whitelist, optional prompt override; live runtime status and active outer-run identity |
 | Host metadata | `metadata.ts` | Nullable metadata paired with its exact revision; typed `openchamber` operational fields and null-deletion patches |
-| Runs, turns, messages and parts | `session.ts`, `messages.ts` | One outer run may contain several turns; `Turn.runId` identifies that run; tool termination does not terminate it |
+| Runs, turns, messages and parts | `session.ts`, `messages.ts` | One canonical turn spans exactly one outer run and every model step inside it; `Turn.runId` identifies that run; tool termination does not terminate it |
 | Captured prompts and attachments | `prompt.ts` | Independently nullable captured selection; ordered context; Host-owned `attachment://` references |
 | Approvals and questions | `requests.ts` | Positive CAS versions, epoch and worker generation; explicit terminal resolution or cancellation |
 | Atomic recovery and pages | `snapshot.ts`, `pagination.ts` | Runtime snapshot/cursor/active-run identity; complete pending replacement; branch-aware history and model/session pages |
+| Per-turn diffs | `turn-diff.ts` | Explicit ready/empty/unsupported/failed states; OMP change-journal provenance; workspace-relative paths; truncation flags, never a workspace-diff fallback |
 | Durable delivery | `queue.ts` | Host revision and ordered queued/leased items; immutable captured delivery configuration |
 | Provider, model, MCP and skill catalogs | `catalogs.ts` | Configuration/source revisions separate from per-root applied revisions; explicit mutation and partial-failure results |
 | Provider accounts, OAuth and custom discovery | `provider-management.ts` | Non-secret account roster and labels; native login-method identity; private OAuth flow/generation; custom header names and model discovery |
@@ -392,7 +394,7 @@ SSE names and WebSocket `type` values use the same vocabulary. SDK events and in
 |---|---|
 | `session.updated`, `session.deleted`, `session.status` | Authoritative session projection or runtime state change |
 | `run.started`, `run.completed`, `run.failed`, `run.cancelled` | Outer user-request lifecycle |
-| `turn.started`, `turn.completed` | One model cycle inside a run, never outer-request completion |
+| `turn.started`, `turn.completed` | The canonical turn of one outer run, opened with the run's first message and completed only at the run's own settlement, never at a native per-step `turn_end` |
 | `message.created`, `message.updated` | Stable message identity, role, and the metadata a step acquires (provider/model/usage and its own `timing`) |
 | `part.started`, `part.delta`, `part.updated`, `part.completed` | Stable part identity, append delta, live replacement of a part still being produced, and its settled value |
 | `tool.started`, `tool.completed` | Tool execution and its terminal result, including failure/denial/cancellation and the structured `errorKind` beside the human detail |
@@ -558,7 +560,7 @@ The Run reaches `failed` only if the model execution itself crashes unrecoverabl
 
 ### OMP turn_end semantics
 
-OMP emits `turn_end` internally at the end of each reasoning cycle. In an agentic loop, one user request may generate multiple internal reasoning cycles, multiple tool calls, and multiple OMP turns.
+OMP emits `turn_end` internally at the end of each reasoning cycle. In an agentic loop, one user request may generate multiple internal reasoning cycles, multiple tool calls, and multiple OMP turns. The canonical projection deliberately does not mirror that granularity: one canonical `Turn` is one outer run — the whole user prompt from its first message to the run's terminal `agent_end` — so every model step, tool call and mid-run steered or follow-up user message of the run belongs to the same turn, and the turn's `[startedAt, finishedAt]` window covers all of them. A native `turn_end` therefore never closes, completes or records a canonical turn; only the run's own settlement does, and a mid-run user message never opens a second canonical turn inside the same run. Cold reads group the transcript identically, so a finished turn's window is the union of its run's step times on both the live and the cold path.
 
 **Observed fixture distinction:** OMP emits `turn_end` internally at the end of each reasoning cycle, and terminal `agent_end` is a distinct event. The canonical `run.completed` event remains proposed until an Agent Service projection exists. Clients and gateway adapters must never treat OMP's internal `turn_end` as completion of the outer user request. [M0 lifecycle artifact](m0/lifecycle.json)
 
@@ -652,6 +654,27 @@ Query parameters:
 - `cursor` (optional): Opaque pagination cursor.
 
 The response returns messages ordered chronologically along the selected branch path, ensuring sibling branch messages are never interleaved.
+
+### Per-turn diffs
+
+`GET /api/agent/v1/sessions/:sessionId/turns/:turnId/diff` returns `TurnDiff`: the files one turn changed, with before/after content provenance from OMP's own per-write records, never reconstructed from rendered tool history or a workspace diff.
+
+**Provenance authority.** OMP journals every agent file write (`edit`, `write`, `ast_edit`, `bash`/`eval` embedded-shell writes, isolated `task` merge-backs) in the root session artifacts' append-only change journal, with full before/after snapshots and the writing agent's identity. The journal is durable native session storage: it survives worker and service restarts exactly like the transcript, and OpenChamber keeps no duplicate store. What a subprocess the model spawns writes outside the embedded shell is not recorded by OMP; the contract states what OMP proves and never covers the gap with a filesystem fallback.
+
+**Attribution.** A turn is the time window `[startedAt, finishedAt]` of one canonical `Turn` in one session. A journal record belongs to the turn when the record's writing agent is that session's journal identity and its timestamp falls inside the window. The root session's records are exactly those written without a parent agent; a child session's records are exactly its canonical subagent id's rows in the shared root journal. Edits a subagent makes never appear in the parent turn's diff — they belong to the child session's own turns.
+
+**States.** `state` is authoritative and every state returns HTTP 200; the states are explicit data, not transport errors:
+
+- `ready`: `files` is non-empty. Each row carries the workspace-relative POSIX `path`, `status` (`added`/`modified`/`deleted`/`renamed` with `previousPath`), full `before`/`after` content when replayed within budget, the service-computed unified `patch`, exact `additions`/`deletions` counts, per-write `provenance` (tool, session-or-subagent agent identity, epoch-ms `at`), and the `truncated`/`incomplete` flags.
+- `empty`: the turn wrote nothing — no journal records in its window and no mutation evidence in its canonical messages. A valid empty diff, including when no journal exists at all.
+- `unsupported`: the turn's transcript proves mutation evidence (a successful edit/write result) but no journal records exist — the turn predates journal coverage or its artifacts were pruned. The UI must say so; it never substitutes a workspace diff or guesses from tool history.
+- `failed`: the read itself failed transiently (corrupt or unreadable journal); `error` carries sanitized detail, never a host path. Retry may succeed.
+
+Files outside the session workspace are excluded entirely, so no host absolute path crosses the wire (invariant 8). A rename is reported as `renamed` only when replayed content proves the delete-create pair equal; unprovable pairs stay separate `deleted`/`added` rows.
+
+**Truncation.** No `before`/`after` payload exceeds 256 KiB per file; oversized content is dropped with `truncated: true` while counts stay accurate and `patch` survives when it fits the same budget. A 2 MiB whole-response cap drops content and patches of first-touch-order tail files, never the file rows. A file whose journal chain cannot replay (oversized or binary snapshot, torn blob) is still listed with `incomplete: true`, no content fields and zero counts, because the write itself is proven; one incomplete file never erases the turn's complete rows.
+
+**Errors.** Unknown sessions return 404 `SESSION_NOT_FOUND`. A `turnId` outside the session's current branch leaf path returns 410 `RESYNC_REQUIRED`: branch lineage is turn-scoped and an off-branch turn is not diffable through this route. The read is immutable for a finished turn (the journal is append-only), so clients re-fetch only on `turn.completed` transitions or when opening the surface; there is no stream event and no polling of a running turn.
 
 ### Session Deletion Hierarchy
 

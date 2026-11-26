@@ -13,6 +13,15 @@ Extension quota cards reload their provider catalog on the Host's
 coalesces repeated reads, rejects stale runtime completions and retains the
 last catalog on failed reads; unrelated control events do not trigger reads.
 
+### Per-turn diff reads
+
+- `useCanonicalTurnDiff` reads the Canonical per-turn diff contract and nothing else: no workspace diff, no transcript tool-history parsing. `ready`, `empty` and `unsupported` are terminal because a finished turn and the append-only journal behind it never change, so they are cached per runtime and turn for the module's life. `failed` contract reads and transport failures are never cached, so opening the surface again, the session settling or pressing retry reads them again.
+- A read is mutable until the target turn provably finished: the runtime status is authoritatively `idle` (every turn of the session is closed), or the transcript resolved with a newer turn than the target. Nothing is cached while mutable and every idle transition refetches, because the turn may still be writing. An unknown or unavailable status never earns a terminal cache entry, so a read that lands mid-turn cannot pin a partial diff — including a pinned read of the session's live turn through the transcript pills, which mutates exactly like the unpinned last-turn read. Pinned reads of historical turns are immutable.
+- A transport failure is not a contract state: it surfaces through `error` with `diff` null, never as an empty file list. The contract's own `failed` state carries its detail in `diff.error`; both render the same retry affordance.
+- When no turn can be addressed at all — no session, or the transcript is resolved (or the runtime status has answered) without any turn — the surfaces settle as the empty state without issuing a read, exactly as the design's "no turns yet" rule requires; the spinner never persists for a target that cannot exist.
+
+- `useTurnFileRequestRouting` completes a pending pill-driven file request once the pinned turn diff has settled: the request resolves to the file inside the turn's own list through `openTurnFile`, or it clears when the turn cannot offer it. The request is intra-React navigation state, but the resolution waits on an external read, so the coordination lives in a named hook rather than the surface.
+
 ### Session activity and queued sends
 
 - A pending permission or a form that still holds the turn makes a session idle, so the send button stays a send and the user can supersede the prompt. A form whose tool call has ended holds nothing, and the turn keeps Stop and Queue.

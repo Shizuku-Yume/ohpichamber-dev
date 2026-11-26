@@ -826,5 +826,5 @@ export function isRecentBoot() {
   return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
 }
 
-export { useSessionMessages, useSessionMessagesSelector, useSessionRenderable, useUserMessageHistory, useSessionPartsForMessages } from './session-message-hooks'
+export { useSessionMessages, useSessionMessagesSelector, useSessionMessagesResolved, useSessionRenderable, useUserMessageHistory, useSessionPartsForMessages } from './session-message-hooks'
 export { buildSessionMessageRecordsSnapshot, useSessionMessageRecords, type SessionMessageRecordsSnapshot } from './session-message-records'

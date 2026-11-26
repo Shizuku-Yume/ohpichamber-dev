@@ -40,9 +40,9 @@ const STATUS: GitStatus = { current: 'feature-17', tracking: null, ahead: 0, beh
 // state (Git's own probe is the only git call it makes).
 for (const scenario of [
   { name: 'a non-repository directory asks no repository binding', scope: 'working', sessionId: null, intent: false, failedStatus: false },
-  { name: 'Last turn without a session is unsupported, not an empty diff', scope: 'turn', sessionId: null, intent: false, failedStatus: false },
+  { name: 'Last turn without a session settles empty without a contract read', scope: 'turn', sessionId: null, intent: false, failedStatus: false },
   { name: 'Last turn consumes a file intent without falling back to Changed', scope: 'turn', sessionId: 'ses_unsupported', intent: true, failedStatus: false },
-  { name: 'Last turn remains unsupported when Git status fails', scope: 'turn', sessionId: 'ses_unsupported', intent: false, failedStatus: true },
+  { name: 'Last turn settles empty when Git status fails', scope: 'turn', sessionId: 'ses_unsupported', intent: false, failedStatus: true },
 ] as const) test(scenario.name, async () => {
   const dom = new Window({ url: 'http://localhost' });
   const originals = new Map<string, PropertyDescriptor | undefined>();
@@ -101,12 +101,11 @@ for (const scenario of [
     expect(paths).not.toContain('/api/source-control/binding');
     if (scenario.scope === 'turn') {
       const unsupported = container.querySelector('[data-diff-unsupported="turn"]');
-      expect(unsupported?.textContent).toContain('Last turn');
-      expect(unsupported?.textContent).toContain('Not available in this app.');
-      expect(unsupported?.querySelector('button')).toBeNull();
-      expect(container.textContent).not.toContain('No changes in the last turn');
-      expect(container.querySelector('.animate-spin')).toBeNull();
+
       expect(paths.filter((path) => /\/(?:session|sessions)\/.*\/diff$/.test(path))).toEqual([]);
+      expect(unsupported).toBeNull();
+      expect(container.textContent).toContain('No last turn changes to display');
+      expect(container.querySelector('.animate-spin')).toBeNull();
       expect(scopeChanges).not.toContain('working');
       expect(useUIStore.getState().pendingTurnDiffFile).toBeNull();
     }

@@ -6,6 +6,7 @@ import { formatBytes, isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type CreateAgentSessionOptions, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
+import { ChangeJournal } from '@oh-my-pi/pi-coding-agent/commit/selective/journal';
 import type { CompletedRewindState } from '@oh-my-pi/pi-coding-agent/tools/checkpoint';
 import { autosaveApprovedPlan, isPlanAutosaveEnabled } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-autosave';
 import type { AssistantMessage, Model } from '@oh-my-pi/pi-ai';
@@ -47,7 +48,7 @@ import { registerPersistedSubagents, sessionFileBelongsToRoot } from '@oh-my-pi/
 import { agentTranscriptSource } from '@oh-my-pi/pi-coding-agent/modes/agent-hub-runtime';
 import { MAIN_AGENT_ID, type AgentRef } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { SessionObserverRegistry } from '@oh-my-pi/pi-tui/overlays/session-observer-registry';
-import type { SubagentTranscriptEntry, SubagentTranscriptResponse } from '@openchamber/agent-contract';
+import type { SubagentTranscriptEntry, SubagentTranscriptResponse, TurnDiff } from '@openchamber/agent-contract';
 import { settleUsageSession } from './usage.ts';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
@@ -62,6 +63,7 @@ import { NativeMcpCredentials } from './mcp-credentials.ts';
 import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
 import { consumePrewarmedNativeRuntime, nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
+import { failedTurnDiff, mutationEvidenceInMessages, readTurnDiffArtifacts, TurnDiffNotFoundError } from '../sessions/turn-diff.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import { NativeApprovalRequired, type WorkerAuthorize } from './policy.ts';
 import { createHostToolController, normalizeHostToolEnablement, HOST_TOOL_DESCRIPTIONS, type HostToolController, type HostToolName } from './host-tool.ts';
@@ -2241,6 +2243,30 @@ export class WorkerSession {
       case 'history':
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
+      case 'turn.diff': {
+        await this.binding;
+        const artifactsDir = this.session.sessionManager.getArtifactsDir();
+        if (artifactsDir !== null) {
+          await ChangeJournal.at(artifactsDir).flush().catch(() => { });
+        }
+        let diff: TurnDiff;
+        try {
+          const seed = this.projection.seed();
+          diff = await readTurnDiffArtifacts({
+            sessionId: this._sessionId,
+            turnId: operation.turnId,
+            turns: seed.turns,
+            artifactsDir,
+            ownsRecord: record => record.parent === undefined,
+            workspaceCwd: this.cwd,
+            turnHasMutationEvidence: mutationEvidenceInMessages(seed.messages, operation.turnId),
+          });
+        } catch (error) {
+          if (error instanceof TurnDiffNotFoundError) throw new ProjectionError(410, 'RESYNC_REQUIRED', 'The turn is not part of the session branch');
+          diff = failedTurnDiff(this._sessionId, operation.turnId, error);
+        }
+        return { type: 'turn.diff', diff };
+      }
       case 'compact.abort': {
         const aborted = this.compacting || this.session.isCompacting;
         if (aborted && this.reviewingPlan) this.planRevision++;

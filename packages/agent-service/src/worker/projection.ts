@@ -1030,7 +1030,7 @@ export class WorkerProjection {
           this.publishToolResult(resultPayload(native), true, emit);
           break;
         }
-        if (native.role === 'user' || !this.turn?.open) {
+        if (!this.turn?.open) {
           const turnId = randomUUID();
           const userMessageId = queued?.messageId ?? randomUUID();
           this.turn = { turnId, userMessageId, open: true, startedAt: timestamp };
@@ -1038,7 +1038,7 @@ export class WorkerProjection {
         }
         const turn = this.turn;
         if (!turn) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native message has no turn');
-        const messageId = native.role === 'user' ? turn.userMessageId : randomUUID();
+        const messageId = native.role === 'user' ? queued?.messageId ?? randomUUID() : randomUUID();
         const nativeMetadata = metadata(native);
         const current: LiveMessage = {
           messageId, turnId: turn.turnId, runId: run.runId,
@@ -1336,12 +1336,6 @@ export class WorkerProjection {
         break;
       }
       case 'turn_end':
-        if (!this.turn?.open) break;
-        if (this.cancelRequestedRunId === run.runId) { this.recordTurn('cancelled', timestamp); break; }
-        if (this.stopReason === undefined) {
-          emit({ type: 'turn.completed', turnId: this.turn.turnId, runId: run.runId });
-          this.recordTurn('completed', timestamp);
-        }
         break;
       case 'agent_end':
         // An abort latched before the native await owns the outcome, including an end that loses its aborted message.
@@ -1615,7 +1609,9 @@ export class WorkerProjection {
       const native = entry.message;
       const reference = references.get(entry.id);
       const messageId = reference?.messageId ?? opaqueNativeId('message', this.sessionId, entry.id);
-      const turnId = reference?.turnId ?? (native.role === 'user' ? opaqueNativeId('turn', this.sessionId, entry.id) : current?.turnId);
+      const turnId = reference?.turnId ?? (native.role === 'user' && current
+        ? opaqueNativeId('turn', this.sessionId, entry.id)
+        : current?.turnId ?? opaqueNativeId('turn', this.sessionId, entry.id));
       if (!turnId) continue;
       const timestamp = native.timestamp;
       let turn = turnById.get(turnId);
@@ -1651,10 +1647,19 @@ export class WorkerProjection {
         } else {
           const recovered = native.role === 'assistant'
             && (native.retryRecovery?.status === 'recovered' || native.retryRecovery?.status === 'superseded');
-          if (native.role === 'assistant' && native.stopReason === 'error' && !recovered) turn.status = 'failed';
-          else if (native.role === 'assistant' && native.stopReason === 'aborted') turn.status = 'cancelled';
-          else if (native.role === 'assistant' && native.stopReason !== 'toolUse') turn.status = 'completed';
-          turn.finishedAt = timestamp;
+          const derived = native.role === 'assistant' && native.stopReason === 'error' && !recovered ? 'failed'
+            : native.role === 'assistant' && native.stopReason === 'aborted' ? 'cancelled'
+              : native.role === 'assistant' && native.stopReason !== 'toolUse' ? 'completed'
+                : undefined;
+          if (derived !== undefined) {
+            const locked = turn.finishedAt !== undefined && turn.status !== 'completed';
+            if (!locked && (derived !== 'completed' || turn.finishedAt === undefined)) {
+              turn.status = derived;
+              turn.finishedAt = timestamp;
+            }
+          } else if (turn.finishedAt === undefined) {
+            turn.finishedAt = timestamp;
+          }
         }
       }
       leafMessageId = messageId;
@@ -1682,6 +1687,25 @@ export class WorkerProjection {
       turn.finishedAt = terminal.finishedAt;
       if (terminal.error !== undefined) turn.error = terminal.error;
     }
+    const messagesByTurnId = new Map<string, Message[]>();
+    for (const message of messages) {
+      const list = messagesByTurnId.get(message.turnId);
+      if (list) list.push(message); else messagesByTurnId.set(message.turnId, [message]);
+    }
+    for (const turn of turns) {
+      const own = messagesByTurnId.get(turn.turnId);
+      if (!own || own.length === 0) continue;
+      let first = own[0]!.createdAt;
+      let last = own[0]!.createdAt;
+      for (const message of own) {
+        if (message.createdAt < first) first = message.createdAt;
+        if (message.createdAt > last) last = message.createdAt;
+      }
+      if (first < turn.startedAt) turn.startedAt = first;
+      const isLive = turn.status === 'running' || turn.status === 'pending' || turn.status === 'awaiting_approval' || turn.status === 'awaiting_input';
+      if (!isLive && (turn.finishedAt === undefined || turn.finishedAt < last)) turn.finishedAt = last;
+    }
+
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
     const selection = selectedBranchRevert(entries);

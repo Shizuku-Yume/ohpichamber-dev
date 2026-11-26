@@ -12,6 +12,9 @@ const actualSyncContext = await import('@/sync/sync-context');
 mock.module('@/sync/sync-context', () => ({
   ...actualSyncContext,
   useSessionMessages: () => [],
+  useSessionMessagesSelector: () => undefined,
+  useSessionMessagesResolved: () => false,
+  useSessionStatus: () => undefined,
   useSessionDirectory: () => undefined,
 }));
 
@@ -104,10 +107,12 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
       case '/api/walkthrough': return Response.json({
         source: { kind: 'working-tree', scope: 'all' }, generatedAt: '2026-11-19T12:00:00Z',
         hunks: [], hunkCount: 0,
-        walkthrough: { title: 'Working changes tour', focus: 'Review this change', chapters: [{
-          id: 'chapter', title: 'Implementation', icon: 'wrench', blurb: '',
-          stops: [{ id: 'step', title: 'Inspect the change', hunkIds: [], importance: 'normal', prose: 'Step explanation' }],
-        }] },
+        walkthrough: {
+          title: 'Working changes tour', focus: 'Review this change', chapters: [{
+            id: 'chapter', title: 'Implementation', icon: 'wrench', blurb: '',
+            stops: [{ id: 'step', title: 'Inspect the change', hunkIds: [], importance: 'normal', prose: 'Step explanation' }],
+          }]
+        },
       });
       // The identity strip beside the branch reads these on mount.
       case '/api/git/identities': return Response.json([]);
@@ -130,21 +135,27 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
         });
       }
       case '/api/git/branch-base': return Response.json({ base: null });
-      case '/api/git/range-files': return Response.json({ files: url.searchParams.get('base') === 'refs/heads/parent'
-        ? [{ path: 'parent.png', status: 'M' }, { path: 'docs/moved.md', previousPath: 'docs/orig.md', status: 'R' }]
-        : [{ path: 'branch.png', status: 'M' }] });
+      case '/api/git/range-files': return Response.json({
+        files: url.searchParams.get('base') === 'refs/heads/parent'
+          ? [{ path: 'parent.png', status: 'M' }, { path: 'docs/moved.md', previousPath: 'docs/orig.md', status: 'R' }]
+          : [{ path: 'branch.png', status: 'M' }]
+      });
       case '/api/git/range-diff':
         if (url.searchParams.get('path') === 'docs/moved.md') return Response.json({ diff: pureRenamePatch('docs/orig.md', 'docs/moved.md') });
         return failBranchDiff
           ? Response.json({ error: 'Branch diff failed' }, { status: 500 })
           : Response.json({ diff: 'Binary files a/branch.png and b/branch.png differ' });
       case '/api/git/log': return Response.json({ all: commits, latest: commits[0], total: commits.length });
-      case '/api/git/commit-files': return Response.json({ files: url.searchParams.get('hash')?.[0] === 'a'
-        ? [{ path: 'commit-a.png', previousPath: 'old.png', changeType: 'R', insertions: 0, deletions: 0, isBinary: true }]
-        : [{ path: 'commit-b.md', previousPath: 'old.md', changeType: 'R', insertions: 0, deletions: 0, isBinary: false }] });
-      case '/api/git/commit-diff': return Response.json({ diff: url.searchParams.get('path') === 'commit-b.md'
-        ? pureRenamePatch('old.md', 'commit-b.md')
-        : 'Binary files a/old.png and b/commit.png differ' });
+      case '/api/git/commit-files': return Response.json({
+        files: url.searchParams.get('hash')?.[0] === 'a'
+          ? [{ path: 'commit-a.png', previousPath: 'old.png', changeType: 'R', insertions: 0, deletions: 0, isBinary: true }]
+          : [{ path: 'commit-b.md', previousPath: 'old.md', changeType: 'R', insertions: 0, deletions: 0, isBinary: false }]
+      });
+      case '/api/git/commit-diff': return Response.json({
+        diff: url.searchParams.get('path') === 'commit-b.md'
+          ? pureRenamePatch('old.md', 'commit-b.md')
+          : 'Binary files a/old.png and b/commit.png differ'
+      });
       case '/api/git/file-diff':
         if (url.searchParams.get('path') === 'nested/' && nestedIsRepository) {
           return Response.json({ error: 'Path is a separate Git repository: nested/', code: 'nested_repository' }, { status: 422 });

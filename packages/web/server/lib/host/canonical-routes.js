@@ -97,6 +97,7 @@ const AGENT_ROUTES = [
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/cache-warming$/, response: C.SessionCacheWarmingStateSchema },
  { method: 'PUT', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/cache-warming$/, request: C.SessionCacheWarmingUpdateRequestSchema, response: C.SessionCacheWarmingApplyResultSchema, coldSessionMutation: true },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/history$/, response: C.HistoryPageSchema, query: ['cursor', 'leafTurnId', 'limit'] },
+ { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/turns\/[^/]+\/diff$/, response: C.TurnDiffSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/events$/, stream: true, query: ['cursor'] },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/runs\/[^/]+\/abort$/, response: RunResponseSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/approvals$/, response: z.array(C.ApprovalRequestSchema) },
