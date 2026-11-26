@@ -280,7 +280,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
     const Probe = () => { manager = useChildStoreManager(); return null }
     try {
       await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
-      const poll = interval.mock.calls.find((call) => call[1] === 15_000)?.[0]
+      const poll = interval.mock.calls.find((call) => call[1] === 120_000)?.[0]
       if (!manager || !poll) throw new Error("Discovery poll was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
       manager.pin(directory)
@@ -331,7 +331,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
     const Probe = () => { manager = useChildStoreManager(); return null }
     try {
       await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
-      const pollCall = interval.mock.calls.find((call) => call[1] === 15_000)
+      const pollCall = interval.mock.calls.find((call) => call[1] === 120_000)
       if (pollCall) poll = pollCall[0]
       if (!manager || !poll) throw new Error("Discovery poll was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
