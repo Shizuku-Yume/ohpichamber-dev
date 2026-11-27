@@ -133,9 +133,9 @@ export function useFileEditorExtensions({ editor, fileComments, fileLanguage, mo
   }, [gitDirectory, selectedRelativePath]);
   React.useEffect(() => {
     applyGitBaseline(editorViewRef.current);
-  }, [applyGitBaseline, gitBaseline]);
+  }, [applyGitBaseline, editorViewRef, gitBaseline]);
 
-  const pinPreviewOnEditRef = React.useRef<() => void>(() => {});
+  const pinPreviewOnEditRef = React.useRef<() => void>(() => { });
   pinPreviewOnEditRef.current = () => {
     if (!selectedFile?.path || !panelRoot) return;
     const directoryKey = normalizeContextPanelDirectoryKey(panelRoot);
@@ -153,7 +153,7 @@ export function useFileEditorExtensions({ editor, fileComments, fileLanguage, mo
     if (edited) pinPreviewOnEditRef.current();
   }), []);
 
-  const openRelativeImportRef = React.useRef<(specifier: string) => void>(() => {});
+  const openRelativeImportRef = React.useRef<(specifier: string) => void>(() => { });
   openRelativeImportRef.current = (specifier) => {
     const fromFile = selectedFile?.path;
     if (!fromFile || !panelRoot) return;
@@ -245,7 +245,7 @@ export function useFileEditorExtensions({ editor, fileComments, fileLanguage, mo
     [lightTheme, darkTheme],
   );
   return {
-  previewFontStyle, editorCode, applyGitBaseline, editorExtensions, pierreTheme,
+    previewFontStyle, editorCode, applyGitBaseline, editorExtensions, pierreTheme,
   };
 }
 
@@ -262,13 +262,13 @@ export function useFileEditorPanels({ editor, fileKinds, isMobile }: {
     const query = getSearchQuery(view.state);
     if (!query.caseSensitive && !query.regexp && !query.wholeWord) return;
     view.dispatch({ effects: setEditorSearchQuery.of(new SearchQuery({ search: query.search, replace: query.replace })) });
-  }, [isMobile, isSearchOpen]);
+  }, [editorViewRef, isMobile, isSearchOpen]);
 
   React.useEffect(() => {
     if (sourceEditorShown) return;
     setIsGoToLineOpen(false);
     setIsSymbolsOpen(false);
-  }, [sourceEditorShown]);
+  }, [setIsGoToLineOpen, setIsSymbolsOpen, sourceEditorShown]);
 
-  return {  };
+  return {};
 }

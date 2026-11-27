@@ -615,7 +615,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: Rea
     const available = isVertical
       ? panelRef.current?.parentElement?.clientHeight
       : (panelRef.current?.closest<HTMLElement>('[data-workspace-row]')?.clientWidth ?? 0) - otherSideRef.current
-        - (cardBesidePanel ? WORK_STATUS_COLUMN_WIDTH : 0);
+      - (cardBesidePanel ? WORK_STATUS_COLUMN_WIDTH : 0);
     resizeAvailableSizeRef.current = available && available > 0 ? available : null;
     dragShieldRef.current?.remove();
     const shield = document.createElement('div');
@@ -757,30 +757,30 @@ export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: Rea
   }, [activeModeTabs, activeTabId, effectiveDirectory, faviconByOrigin, isOpen, sessionTitleById, t, tabT, trackerBranch]);
 
   const activeNonChatContent = activeTab?.mode === 'context'
-        ? <ContextPanelHeaderSlotProvider value={headerSlotEl}><ContextPanelContent /></ContextPanelHeaderSlotProvider>
-        : activeTab?.mode === 'git'
-            ? <React.Suspense fallback={null}><ContextPanelHeaderSlotProvider value={headerSlotEl}><GitView isActive={isOpen} /></ContextPanelHeaderSlotProvider></React.Suspense>
-            : activeTab?.mode === 'pr'
-                ? (activeTab.targetPath
-                    ? (
-                      <TrackerItemView
-                        key={activeTab.id}
-                        url={activeTab.targetPath}
-                        directory={activeTab.targetDirectory ?? effectiveDirectory}
-                        panelDirectory={effectiveDirectory}
-                        tabId={activeTab.id}
-                        foreign={Boolean(activeTab.targetDirectory)}
-                        visible={isOpen}
-                      />
-                    )
-                    : <PullRequestView />)
-            : activeTab?.mode === 'notes'
-                ? <ContextPanelHeaderSlotProvider value={headerSlotEl}><ProjectContextPanel visible={isOpen} /></ContextPanelHeaderSlotProvider>
-            : activeTab?.mode === 'workflows'
-                ? <ContextPanelHeaderSlotProvider value={headerSlotEl}><WorkflowsPanel directory={effectiveDirectory || null} /></ContextPanelHeaderSlotProvider>
+    ? <ContextPanelHeaderSlotProvider value={headerSlotEl}><ContextPanelContent /></ContextPanelHeaderSlotProvider>
+    : activeTab?.mode === 'git'
+      ? <React.Suspense fallback={null}><ContextPanelHeaderSlotProvider value={headerSlotEl}><GitView isActive={isOpen} /></ContextPanelHeaderSlotProvider></React.Suspense>
+      : activeTab?.mode === 'pr'
+        ? (activeTab.targetPath
+          ? (
+            <TrackerItemView
+              key={activeTab.id}
+              url={activeTab.targetPath}
+              directory={activeTab.targetDirectory ?? effectiveDirectory}
+              panelDirectory={effectiveDirectory}
+              tabId={activeTab.id}
+              foreign={Boolean(activeTab.targetDirectory)}
+              visible={isOpen}
+            />
+          )
+          : <PullRequestView />)
+        : activeTab?.mode === 'notes'
+          ? <ContextPanelHeaderSlotProvider value={headerSlotEl}><ProjectContextPanel visible={isOpen} /></ContextPanelHeaderSlotProvider>
+          : activeTab?.mode === 'workflows'
+            ? <ContextPanelHeaderSlotProvider value={headerSlotEl}><WorkflowsPanel directory={effectiveDirectory || null} /></ContextPanelHeaderSlotProvider>
             : activeTab?.mode === 'pages' && !activeTab.targetPath
-                ? <ReceivedPagesTab />
-        : null;
+              ? <ReceivedPagesTab />
+              : null;
 
   const isFileTabActive = activeTab?.mode === 'file';
   const requestCloseTabs = React.useCallback((tabIds: string[]) => {
@@ -883,7 +883,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: Rea
         </>
       );
     },
-    [activeTab, directoryKey, effectiveDirectory, files, isRtl, runtime.platform, t, tabs],
+    [activeTab, directoryKey, effectiveDirectory, files, isRtl, requestCloseTabs, runtime.platform, t, tabs],
   );
 
   const handleTabDragOut = React.useCallback((tabId: string, isOutside: (point: { x: number; y: number }) => boolean) => {
@@ -975,34 +975,34 @@ export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: Rea
         />
       ) : (
         <>
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3 group-has-[[data-context-panel-toolbar]]/panel-header:hidden">
-          {activeTab ? getTabIcon(activeTab, faviconByOrigin) : null}
-          <span className="truncate typography-ui-label text-foreground">
-            {activeTab ? getModeLabel(activeTab.mode, tabT) : null}
-          </span>
-        </div>
-        <div ref={registerHeaderSlot} className="flex min-w-0 flex-1 items-stretch ps-1.5 empty:hidden" />
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3 group-has-[[data-context-panel-toolbar]]/panel-header:hidden">
+            {activeTab ? getTabIcon(activeTab, faviconByOrigin) : null}
+            <span className="truncate typography-ui-label text-foreground">
+              {activeTab ? getModeLabel(activeTab.mode, tabT) : null}
+            </span>
+          </div>
+          <div ref={registerHeaderSlot} className="flex min-w-0 flex-1 items-stretch ps-1.5 empty:hidden" />
         </>
       )}
       <div className="flex h-10 shrink-0 items-center gap-1 self-start px-1.5">
         {activeTab?.mode === 'browser' ? (
           <Tooltip>
-          <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (!directoryKey) return;
-              openNewContextBrowserTab(directoryKey);
-            }}
-            className="h-7 w-7 p-0"
-            aria-label={t('contextPanel.browser.newTab')}
-          >
-            <Icon name="add" className="h-3.5 w-3.5" />
-          </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>{t('contextPanel.browser.newTab')}</TooltipContent>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (!directoryKey) return;
+                  openNewContextBrowserTab(directoryKey);
+                }}
+                className="h-7 w-7 p-0"
+                aria-label={t('contextPanel.browser.newTab')}
+              >
+                <Icon name="add" className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>{t('contextPanel.browser.newTab')}</TooltipContent>
           </Tooltip>
         ) : null}
         {isFileTabActive ? (['left', 'right'] as const).map((side) => {
@@ -1015,54 +1015,54 @@ export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: Rea
             : t(shown ? 'contextTooltips.panel.hideFileEditor' : 'contextTooltips.panel.showFileEditor');
           return (
             <Tooltip key={side}>
-            <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={isTree ? toggleContextEditorTree : toggleContextEditor}
-              className="h-7 w-7 p-0"
-              aria-label={label}
-              aria-pressed={shown}
-            >
-              <Icon name={side === 'left' ? 'layout-left' : 'layout-right'} className="h-3.5 w-3.5" />
-            </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>{tooltip}</TooltipContent>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={isTree ? toggleContextEditorTree : toggleContextEditor}
+                  className="h-7 w-7 p-0"
+                  aria-label={label}
+                  aria-pressed={shown}
+                >
+                  <Icon name={side === 'left' ? 'layout-left' : 'layout-right'} className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>{tooltip}</TooltipContent>
             </Tooltip>
           );
         }) : null}
         {!isTreeOnly ? (
           <Tooltip>
-          <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleToggleExpanded}
-            className="h-7 w-7 p-0"
-            aria-label={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
-          >
-            {isExpanded ? <Icon name="fullscreen-exit" className="h-3.5 w-3.5" /> : <Icon name="fullscreen" className="h-3.5 w-3.5" />}
-          </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}><TooltipLabelWithShortcut label={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_context_panel_expanded', shortcutOverrides), '')} /></TooltipContent>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleExpanded}
+                className="h-7 w-7 p-0"
+                aria-label={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
+              >
+                {isExpanded ? <Icon name="fullscreen-exit" className="h-3.5 w-3.5" /> : <Icon name="fullscreen" className="h-3.5 w-3.5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}><TooltipLabelWithShortcut label={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_context_panel_expanded', shortcutOverrides), '')} /></TooltipContent>
           </Tooltip>
         ) : null}
         <Tooltip>
-        <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleClose}
-          className="h-7 w-7 p-0"
-          aria-label={closeButtonLabel}
-        >
-          <Icon name="close" className="h-3.5 w-3.5" />
-        </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>{closeButtonLabel}</TooltipContent>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleClose}
+              className="h-7 w-7 p-0"
+              aria-label={closeButtonLabel}
+            >
+              <Icon name="close" className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>{closeButtonLabel}</TooltipContent>
         </Tooltip>
       </div>
     </header>
@@ -1170,13 +1170,13 @@ export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: Rea
         }}
         inert={contentHidden || undefined}
       >
-      <DockedPanelSurfaceContext.Provider value>
-      {header}
-      <div ref={registerBody} className="relative min-h-0 flex-1 overflow-hidden">
-        {activeTab?.mode === 'subagents' ? (contentShown ? <SubagentsPanel directory={effectiveDirectory || null} /> : null)
-          : activeTab && (isRemountedSurface(activeTab.mode) || (activeTab.mode === 'pages' && !activeTab.targetPath)) ? activeNonChatContent : null}
-      </div>
-      </DockedPanelSurfaceContext.Provider>
+        <DockedPanelSurfaceContext.Provider value>
+          {header}
+          <div ref={registerBody} className="relative min-h-0 flex-1 overflow-hidden">
+            {activeTab?.mode === 'subagents' ? (contentShown ? <SubagentsPanel directory={effectiveDirectory || null} /> : null)
+              : activeTab && (isRemountedSurface(activeTab.mode) || (activeTab.mode === 'pages' && !activeTab.targetPath)) ? activeNonChatContent : null}
+          </div>
+        </DockedPanelSurfaceContext.Provider>
       </div>
     </aside>
   );

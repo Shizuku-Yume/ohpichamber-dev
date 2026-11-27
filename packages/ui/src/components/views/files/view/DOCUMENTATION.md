@@ -55,6 +55,21 @@ functions.
 - A file's freshness baseline advances only after an observed read. Unsaved
   text or draw.io edits and failed reads leave it pending. Text that becomes
   binary takes the full reload path so binary guards run before rendering.
+- A rename or move of the open file commits synchronously: the move listener
+  records the pending document move and the tab store rebases the selection in
+  the same task, so one render carries both. In it freshness polling already
+  stops, because the loaded document still sits at the pre-move path while the
+  tab shows the destination, and it resumes on the destination once the
+  document path follows. A stat error resolving in the commit-to-flush window
+  reads the pending move ref at error time, so a rename never surfaces as a
+  missing file; the same ref guards the in-flight window before the commit.
+- The pending move is a ref for synchronous reads within one commit plus a
+  mirrored React state (`pendingPathMoveTo`) written by the same setter;
+  effects that decide from the move depend on the state, since a ref member
+  expression in a dependency array would only re-evaluate on an unrelated
+  render. The comment reset treats a selection the move lands on as the same
+  file and never resets it; extra runs from the move state alone settle
+  without resetting because the path itself did not change.
 - Known binaries never load as UTF-8 because a later autosave could corrupt
   them. Enterprise mode shows draw.io XML because its external frame would
   receive document contents.

@@ -126,7 +126,7 @@ export const renderTemplate = (template: string, context: TemplateContext): stri
 const TEMPLATE_NEEDS_OUTPUT = /\{output(?:\.|\})/;
 
 /** Whether the rule's header reads the call's output, which a collapsed row then needs. */
-export const guestToolHeaderReadsOutput = (rule: GuestToolRule): boolean => Boolean(
+const guestToolHeaderReadsOutput = (rule: GuestToolRule): boolean => Boolean(
   (rule.title && TEMPLATE_NEEDS_OUTPUT.test(rule.title))
   || (rule.subtitle && TEMPLATE_NEEDS_OUTPUT.test(rule.subtitle)),
 );

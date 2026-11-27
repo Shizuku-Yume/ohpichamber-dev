@@ -166,6 +166,8 @@ export function useComposerSessionScope({
 
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
 
+    const pendingDraftSubmit = useInputStore((s) => s.pendingDraftSubmit);
+
     const setPendingInputText = useInputStore((s) => s.setPendingInputText);
 
     const pendingGuestIssue = useInputStore((s) => s.pendingGuestIssue);
@@ -211,7 +213,7 @@ export function useComposerSessionScope({
         btwSessionId, isBtwPanelVisible, draftCaretModeRef, immediateBtwSubmitRef, pendingBtwComposerRequest,
         consumePendingBtwComposerRequest, btwDirectory, btwPanel, sendHeldByMissingFolderRef,
         consumePendingSyntheticParts, projectActionsRef, clearAttachedFiles, sendHeldByMissingFolder,
-        setReviewDialogOpen, sessionFolder, pendingPresetSubmit,
+        setReviewDialogOpen, sessionFolder, pendingPresetSubmit, pendingDraftSubmit,
         clearAbortPrompt, abortCurrentOperation, addAttachedFile, setPendingInputText,
         pendingGuestIssue, consumePendingGuestIssue, pendingComposerReferenceCount, setNewSessionDraftTarget,
         hasPendingForm, currentManagementSessionId, draftPermissionMode,

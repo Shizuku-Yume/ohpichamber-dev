@@ -86,7 +86,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
     if (!canEdit && textViewMode === 'edit') {
       setTextViewMode('view');
     }
-  }, [canEdit, textViewMode]);
+  }, [canEdit, setTextViewMode, textViewMode]);
 
   const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
   const HTML_VIEWER_MODE_KEY = 'openchamber:files:html-viewer-mode';
@@ -137,7 +137,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
       // Ignore localStorage errors
     }
     setJsonViewMode(jsonDefault);
-  }, [selectedFile?.path, settingsDefaultFileViewerPreview]);
+  }, [canvasViewModeByPathRef, drawioViewModeByPathRef, htmlViewModeByPathRef, mdViewModeByPathRef, mermaidViewModeByPathRef, selectedFile?.path, setCanvasViewMode, setDrawioViewMode, setHtmlViewMode, setJsonViewMode, setMdViewMode, setMermaidViewMode, setSvgViewMode, setTableViewMode, setTextViewMode, settingsDefaultFileViewerPreview, svgViewModeByPathRef, tableViewModeByPathRef, textViewModeByPathRef]);
 
   const saveTextViewMode = React.useCallback((mode: TextViewMode) => {
     const selectedPath = selectedFile?.path;
@@ -145,7 +145,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
       textViewModeByPathRef.current[selectedPath] = mode;
     }
     setTextViewMode(mode);
-  }, [selectedFile?.path]);
+  }, [selectedFile?.path, setTextViewMode, textViewModeByPathRef]);
 
   const saveMdViewMode = React.useCallback((mode: PreviewViewMode) => {
     const selectedPath = selectedFile?.path;
@@ -158,7 +158,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
     } catch {
       // Ignore localStorage errors
     }
-  }, [selectedFile?.path]);
+  }, [mdViewModeByPathRef, selectedFile?.path, setMdViewMode]);
 
   const getMdViewMode = React.useCallback((): PreviewViewMode => {
     return mdViewMode;
@@ -168,19 +168,19 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
     const selectedPath = selectedFile?.path;
     if (selectedPath) svgViewModeByPathRef.current[selectedPath] = mode;
     setSvgViewMode(mode);
-  }, [selectedFile?.path]);
+  }, [selectedFile?.path, setSvgViewMode, svgViewModeByPathRef]);
 
   const saveMermaidViewMode = React.useCallback((mode: PreviewViewMode) => {
     const selectedPath = selectedFile?.path;
     if (selectedPath) mermaidViewModeByPathRef.current[selectedPath] = mode;
     setMermaidViewMode(mode);
-  }, [selectedFile?.path]);
+  }, [mermaidViewModeByPathRef, selectedFile?.path, setMermaidViewMode]);
 
   const saveTableViewMode = React.useCallback((mode: 'table' | 'text') => {
     const selectedPath = selectedFile?.path;
     if (selectedPath) tableViewModeByPathRef.current[selectedPath] = mode;
     setTableViewMode(mode);
-  }, [selectedFile?.path]);
+  }, [selectedFile?.path, setTableViewMode, tableViewModeByPathRef]);
 
   React.useEffect(() => {
     const selectedPath = selectedFile?.path;
@@ -191,11 +191,11 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
       .then((stat) => {
         if (!cancelled && stat) setArtifactSize(stat.size);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       cancelled = true;
     };
-  }, [fileContentRevision, loadedFilePath, readFileStat, selectedFile?.path]);
+  }, [fileContentRevision, loadedFilePath, readFileStat, selectedFile?.path, setArtifactSize]);
 
   const mdPreviewFocusTargetPath = selectedFile && isMarkdown && getMdViewMode() === 'preview' && !fileLoading
     ? selectedFile.path
@@ -212,7 +212,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
     } catch {
       // Ignore localStorage errors
     }
-  }, []);
+  }, [setJsonViewMode]);
 
   const saveHtmlViewMode = React.useCallback((mode: PreviewViewMode) => {
     const selectedPath = selectedFile?.path;
@@ -225,7 +225,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
     } catch {
       // Ignore localStorage errors
     }
-  }, [selectedFile?.path]);
+  }, [htmlViewModeByPathRef, selectedFile?.path, setHtmlViewMode]);
 
   const saveDrawioViewMode = React.useCallback((mode: PreviewViewMode) => {
     const selectedPath = selectedFile?.path;
@@ -259,7 +259,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
       });
       return;
     }
-  }, [draftContent, fileContent, root, selectedFile?.path]);
+  }, [diagramAutoSaveTimerRef, diagramXmlRef, draftContent, drawioViewModeByPathRef, fileContent, pendingDrawioPreviewFrameRef, root, selectedFile?.path, setDraftContent, setDrawioRemountNonce, setDrawioViewMode]);
 
   const saveCanvasViewMode = React.useCallback((mode: PreviewViewMode) => {
     const selectedPath = selectedFile?.path;
@@ -304,7 +304,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
       setCanvasRemountNonce((value) => value + 1);
       setCanvasViewMode('preview');
     });
-  }, [canMountCanvas, fileContent, guestFileEditor, root, selectedFile?.path, t]);
+  }, [canvasDirtyRef, canvasEditorRef, canvasViewModeByPathRef, canMountCanvas, fileContent, guestFileEditor, pendingCanvasPreviewFrameRef, root, selectedFile?.path, selectedFilePathRef, setCanvasDirty, setCanvasRemountNonce, setCanvasViewMode, setDraftContent, t]);
 
   const saveDiagramXml = React.useCallback(async (path: string, xml: string) => {
     if (!files.writeFile || xml === diagramSavedXmlRef.current) {
@@ -326,7 +326,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
       lastLoadedFileStatRef.current = stat;
     }
     return true;
-  }, [applyLoadedTextContent, files, readFileStat, t]);
+  }, [applyLoadedTextContent, diagramSavedXmlRef, files, lastLoadedFileStatRef, pendingPathMoveRef, readFileStat, t]);
 
   React.useEffect(() => {
     return () => {
@@ -339,7 +339,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
         pendingDrawioPreviewFrameRef.current = null;
       }
     };
-  }, [drawioViewMode, selectedFile?.path]);
+  }, [diagramAutoSaveTimerRef, drawioViewMode, pendingDrawioPreviewFrameRef, selectedFile?.path]);
 
   const handleDiagramChange = React.useCallback((xml: string) => {
     diagramXmlRef.current = xml;
@@ -362,14 +362,14 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
         toast.error(error instanceof Error ? error.message : t('filesView.toast.saveFailed'));
       });
     }, AUTO_SAVE_DELAY);
-  }, [autoSaveEnabled, drawioViewMode, files.writeFile, saveDiagramXml, selectedFile?.path, t]);
+  }, [autoSaveEnabled, AUTO_SAVE_DELAY, diagramAutoSaveTimerRef, diagramXmlRef, drawioViewMode, files.writeFile, saveDiagramXml, selectedFile?.path, setDiagramSaved, t]);
 
   const diagramEditorXml = React.useMemo(() => {
     if (!isDrawio) {
       return fileContent;
     }
     return diagramXmlRef.current || draftContent || fileContent;
-  }, [draftContent, fileContent, isDrawio]);
+  }, [diagramXmlRef, draftContent, fileContent, isDrawio]);
 
   const handleCanvasUnsupported = React.useCallback(() => {
     const path = selectedFilePathRef.current;
@@ -379,7 +379,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
     setCanvasDirty(false);
     setCanvasViewMode('edit');
     if (guestFileEditor) toast.error(t('filesView.fileEditor.unsupported', { editor: guestFileEditor.editor.title }));
-  }, [guestFileEditor, t]);
+  }, [canvasViewModeByPathRef, guestFileEditor, selectedFilePathRef, setCanvasDirty, setCanvasViewMode, t]);
 
   React.useEffect(() => {
     return () => {
@@ -388,7 +388,7 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
         pendingCanvasPreviewFrameRef.current = null;
       }
     };
-  }, [canvasViewMode, selectedFile?.path]);
+  }, [canvasViewMode, pendingCanvasPreviewFrameRef, selectedFile?.path]);
 
   const getHtmlViewMode = React.useCallback((): PreviewViewMode => {
     return htmlViewMode;
@@ -440,10 +440,10 @@ export function useFilePreviewModes({ canvasState, diagram, draft, fileDocument,
     return () => {
       window.removeEventListener('openchamber:file-viewer-preview-mode-changed', handleFileViewerModeChanged);
     };
-  }, [openPaths]);
+  }, [canvasViewModeByPathRef, drawioViewModeByPathRef, htmlViewModeByPathRef, mdViewModeByPathRef, openPaths, setCanvasViewMode, setDrawioViewMode, setHtmlViewMode, setJsonViewMode, setMdViewMode, setTextViewMode, textViewModeByPathRef]);
   return {
-  saveTextViewMode, saveMdViewMode, getMdViewMode, saveSvgViewMode, saveMermaidViewMode, saveTableViewMode,
-  saveJsonViewMode, saveHtmlViewMode, saveDrawioViewMode, saveCanvasViewMode, saveDiagramXml, handleDiagramChange,
-  diagramEditorXml, handleCanvasUnsupported, getHtmlViewMode,
+    saveTextViewMode, saveMdViewMode, getMdViewMode, saveSvgViewMode, saveMermaidViewMode, saveTableViewMode,
+    saveJsonViewMode, saveHtmlViewMode, saveDrawioViewMode, saveCanvasViewMode, saveDiagramXml, handleDiagramChange,
+    diagramEditorXml, handleCanvasUnsupported, getHtmlViewMode,
   };
 }

@@ -3,7 +3,7 @@ import type { ExtensionInventory, ExtensionKind } from '@openchamber/agent-contr
 const BUNDLED_PROVIDER_ID = 'builtin-defaults';
 const OPENSSH_PROVIDER_ID = 'openssh-config';
 
-export const PLUGIN_CAPABILITY_KINDS: ReadonlySet<ExtensionKind> = new Set([
+const PLUGIN_CAPABILITY_KINDS: ReadonlySet<ExtensionKind> = new Set([
   'extension-module',
   'hook',
   'tool',

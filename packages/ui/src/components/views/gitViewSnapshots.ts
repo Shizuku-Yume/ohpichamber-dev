@@ -1,4 +1,4 @@
-export type GitViewSnapshot = {
+type GitViewSnapshot = {
   directory?: string;
   commitMessage: string;
   generatedHighlights: string[];

@@ -14,7 +14,7 @@ import { captureRuntimeInstance, getRuntimeKey, getRuntimeSwitchRevision } from 
 import { prepareAttachmentsHeldForSend } from "./held-attachments"
 import type { RejectedSharedFile } from '@/lib/nativeSharedFiles'
 
-export type PendingDraftContent = {
+type PendingDraftContent = {
  draftId: number
  files: File[]
  text: string | null
@@ -165,11 +165,11 @@ type PendingBtwComposerRequest = {
 }
 
 export type ComposerAddress = {
-  inline: InlineCommentDraftTarget | null
-  attachments: ChatDraftIdentity | null
+ inline: InlineCommentDraftTarget | null
+ attachments: ChatDraftIdentity | null
 }
 
-export type InputState = {
+type InputState = {
  pendingComposerRestore: {
   target: ChatDraftIdentity
   text: string
@@ -199,6 +199,7 @@ export type InputState = {
   * narrow layouts); consumed by ChatInput, which owns the command-aware submit.
   */
  pendingPresetSubmit: { text: string; type: "command" | "skill" } | null
+ pendingDraftSubmit: { draftId: number; text: string } | null
  /** Guest rail/dialog attach. ChatInput consumes this into the composer chip. */
  pendingGuestIssue: AttachIssueRequest | null
  pendingDraftContents: Map<number, { content: PendingDraftContent; isCurrent: () => boolean }>
@@ -218,6 +219,8 @@ export type InputState = {
  consumePendingInputText: (target?: string | null) => { text: string; mode: "replace" | "append" | "append-inline" } | null
  requestPresetSubmit: (text: string, type: "command" | "skill") => void
  consumePendingPresetSubmit: () => { text: string; type: "command" | "skill" } | null
+ requestDraftSubmit: (draftId: number, text: string) => void
+ consumePendingDraftSubmit: (draftId: number | null) => string | null
  setPendingGuestIssue: (issue: AttachIssueRequest | null) => void
  consumePendingGuestIssue: () => AttachIssueRequest | null
  requestBtwComposer: (request: PendingBtwComposerRequest) => void
@@ -279,6 +282,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
  pendingSyntheticParts: null,
  pinnedSyntheticParts: new Map(),
  pendingPresetSubmit: null,
+ pendingDraftSubmit: null,
  pendingGuestIssue: null,
  pendingDraftContents: new Map(),
  requestDraftContent: (draftId, content) => {
@@ -364,6 +368,15 @@ export const useInputStore = create<InputState>()((set, get) => ({
   if (pendingPresetSubmit === null) return null
   set({ pendingPresetSubmit: null })
   return pendingPresetSubmit
+ },
+
+ requestDraftSubmit: (draftId, text) => set({ pendingDraftSubmit: { draftId, text } }),
+
+ consumePendingDraftSubmit: (draftId) => {
+  const { pendingDraftSubmit } = get()
+  if (pendingDraftSubmit === null) return null
+  set({ pendingDraftSubmit: null })
+  return pendingDraftSubmit.draftId === draftId ? pendingDraftSubmit.text : null
  },
 
  setPendingGuestIssue: (issue) => set({ pendingGuestIssue: issue }),
@@ -528,11 +541,11 @@ export const useInputStore = create<InputState>()((set, get) => ({
 const NO_ATTACHMENTS: AttachedFile[] = []
 
 export const useDraftAttachedFiles = (target: ChatDraftIdentity | null | undefined): AttachedFile[] => {
-  const key = target === undefined ? undefined : target ? getChatDraftIdentityKey(target) : null
-  return useInputStore((state) => {
-    if (key === undefined || key === state.attachmentDraftKey) return state.attachedFiles
-    return key ? state.attachmentDrafts.get(key) ?? NO_ATTACHMENTS : NO_ATTACHMENTS
-  })
+ const key = target === undefined ? undefined : target ? getChatDraftIdentityKey(target) : null
+ return useInputStore((state) => {
+  if (key === undefined || key === state.attachmentDraftKey) return state.attachedFiles
+  return key ? state.attachmentDrafts.get(key) ?? NO_ATTACHMENTS : NO_ATTACHMENTS
+ })
 }
 
 subscribeChatDraftDeletion((identity) => {

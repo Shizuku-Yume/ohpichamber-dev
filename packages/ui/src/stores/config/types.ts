@@ -301,6 +301,6 @@ export type InitFailure = {
     step: 'serverUnreachable' | 'agentServiceUnavailable' | 'loadAgents' | 'unexpected';
     message: string | null;
 };
-export type ConfigSet = import('zustand').StoreApi<ConfigStore>['setState'];
-export type ConfigGet = () => ConfigStore;
+type ConfigSet = StoreApi<ConfigStore>['setState'];
+type ConfigGet = () => ConfigStore;
 export type ConfigSlice<K extends keyof ConfigStore> = (set: ConfigSet, get: ConfigGet) => Pick<ConfigStore, K>;

@@ -1,7 +1,3 @@
-import { AUTO_DISCOVER_ACTION_ID } from '@/lib/projectActions';
-import type { ProjectActionsRunner } from '@/components/layout/useProjectActionsRunner';
-import { useTerminalStore } from '@/stores/useTerminalStore';
-
 export type RunningAction = {
   executionId: string;
   name: string;
@@ -49,21 +45,3 @@ export const planRunningActionsNote = (sessionId: string | null, running: readon
   };
 };
 
-export const collectRunningActions = (runner: ProjectActionsRunner | null): RunningAction[] => {
-  if (!runner?.available) return [];
-  const running: RunningAction[] = [];
-  for (const action of runner.actions) {
-    if (action.autoOpenUrl !== true && action.id !== AUTO_DISCOVER_ACTION_ID) continue;
-    const run = runner.runOf(action);
-    if (!run || run.status === 'stopping') continue;
-    const tab = useTerminalStore.getState().getDirectoryState(run.directory)?.tabs.find((candidate) => candidate.id === run.tabId);
-    running.push({
-      executionId: run.executionId,
-      name: action.name,
-      command: action.command,
-      directory: run.directory,
-      url: tab?.previewUrl ?? null,
-    });
-  }
-  return running;
-};

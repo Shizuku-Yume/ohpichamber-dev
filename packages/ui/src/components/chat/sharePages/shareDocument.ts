@@ -1,9 +1,7 @@
 import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID, getThemeById } from '@/lib/theme/themes';
-import { buildShareUiDocument } from '@/share-document/page';
 import { SHARE_DOCUMENT_SOURCE, SHARE_VIEWER_SOURCE } from '@/share-document/protocol';
 import { htmlRenderSchemeCss, htmlRenderTheme, insertHeadMarkup, type HtmlRenderMetrics } from '../message/parts/htmlRender';
 import { SHARE_ANSWER_ELEMENT_ID } from './received/receivedPageDocument';
-import { fetchBypassingRuntimeBridge } from '@/lib/runtime-fetch';
 
 const SHARE_METRICS: HtmlRenderMetrics = {
     rem: 16,
@@ -40,24 +38,3 @@ export function buildShareHtmlDocument(html: string): string {
     return insertHeadMarkup(html, `<style>${css}</style><script>${SHARE_ANSWER_SCRIPT}</script>`);
 }
 
-const SHARE_DOCUMENT_BUNDLE = 'share-document.js';
-
-let bundleRequest: Promise<string> | null = null;
-
-function loadShareDocumentBundle(): Promise<string> {
-    bundleRequest ??= fetchBypassingRuntimeBridge(new URL(`${import.meta.env.BASE_URL}${SHARE_DOCUMENT_BUNDLE}`, window.location.href), { cache: 'no-cache' })
-        .then(async (response) => {
-            if (!response.ok) throw new Error(`The page renderer could not be loaded (${response.status})`);
-            return response.text();
-        })
-        .catch((error) => {
-            bundleRequest = null;
-            throw error;
-        });
-    return bundleRequest;
-}
-
-export async function buildSharePageDocument(page: { ui?: string; html: string; title: string; expectAnswer: boolean }): Promise<string> {
-    if (page.ui) return buildShareUiDocument({ ui: page.ui, title: page.title, expectAnswer: page.expectAnswer, bundle: await loadShareDocumentBundle() });
-    return buildShareHtmlDocument(page.html);
-}

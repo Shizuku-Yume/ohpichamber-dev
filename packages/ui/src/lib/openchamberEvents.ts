@@ -58,7 +58,7 @@ const browserControlRequestContextSchema = z.object({
  directory: z.string().min(1).nullable().catch(null),
  sessionId: z.string().min(1).nullable().catch(null),
 });
-export type BrowserControlRequestContext = z.infer<typeof browserControlRequestContextSchema>;
+type BrowserControlRequestContext = z.infer<typeof browserControlRequestContextSchema>;
 const UNKNOWN_BROWSER_CONTROL_CONTEXT: BrowserControlRequestContext = { directory: null, sessionId: null };
 
 const fileOpenRequestSchema = z.object({

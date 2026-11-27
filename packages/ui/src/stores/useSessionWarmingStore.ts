@@ -406,9 +406,6 @@ export const useSessionWarmingState = (sessionId: string | null | undefined): Se
   useSessionWarmingStore((state) => (sessionId ? state.entries[sessionId]?.state ?? null : null))
 );
 
-export const useSessionWarmingSaving = (sessionId: string | null | undefined): boolean => (
-  useSessionWarmingStore((state) => (sessionId ? state.savingBySession[sessionId] === true : false))
-);
 export const isSessionKeptWarm = (state: SessionCacheWarmingState | null | undefined): boolean => (
   state !== null && state !== undefined && state.effectiveMode !== 'off'
 );

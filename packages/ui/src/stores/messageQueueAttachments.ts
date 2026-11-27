@@ -16,7 +16,6 @@ export const serverAttachmentSchema = z.object({
 
 type ServerQueueAttachment = z.infer<typeof serverAttachmentSchema>;
 
-export type ServerQueueAttachmentInput = Omit<ServerQueueAttachment, 'dataUrl'> & { dataUrl: string };
 
 const decodeDataUrl = (dataUrl: string): ArrayBuffer | null => {
     const commaIndex = dataUrl.indexOf(',');
@@ -89,17 +88,3 @@ export const withOriginalAttachment = (attachment: AttachedFile): AttachedFile =
     return { ...held, saveOnSend: true };
 };
 
-export const toServerAttachment = (attachment: AttachedFile): ServerQueueAttachmentInput => {
-    const input: ServerQueueAttachmentInput = {
-        id: attachment.id,
-        filename: attachment.filename,
-        mimeType: attachment.mimeType,
-        size: attachment.size,
-        source: attachment.source,
-        dataUrl: attachment.dataUrl,
-    };
-    if (attachment.serverPath) input.serverPath = attachment.serverPath;
-    if (attachment.agentPath) input.agentPath = attachment.agentPath;
-    if (attachment.original) input.original = attachment.original;
-    return input;
-};

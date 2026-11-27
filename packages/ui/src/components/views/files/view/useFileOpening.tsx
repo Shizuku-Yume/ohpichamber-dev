@@ -30,7 +30,7 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
   diagram: Pick<ReturnType<typeof useFileDiagram>, 'diagramSavedXmlRef' | 'diagramXmlRef'>;
   draft: Pick<ReturnType<typeof useFileDraft>, 'setDraftContent'>;
   fileDirectory: Pick<ReturnType<typeof useFileDirectory>, 'loadDirectory' | 'loadedDirsRef'>;
-  fileDocument: Pick<ReturnType<typeof useFileDocument>, 'activeFileLoadIdRef' | 'editorDocumentPath' | 'fileContentRevision' | 'lastLoadedFileStatRef' | 'loadedFilePath' | 'loadedFilePathRef' | 'loadingFilePathRef' | 'missingSeenPathRef' | 'pendingPathMoveRef' | 'setContentDetectedBinary' | 'setDesktopImageSrc' | 'setDocumentPathAlias' | 'setFailedFilePath' | 'setFileContent' | 'setFileError' | 'setFileLoading' | 'setLoadedFilePath'>;
+  fileDocument: Pick<ReturnType<typeof useFileDocument>, 'activeFileLoadIdRef' | 'editorDocumentPath' | 'fileContentRevision' | 'lastLoadedFileStatRef' | 'loadedFilePath' | 'loadedFilePathRef' | 'loadingFilePathRef' | 'missingSeenPathRef' | 'pendingPathMoveRef' | 'setPendingPathMove' | 'setContentDetectedBinary' | 'setDesktopImageSrc' | 'setDocumentPathAlias' | 'setFailedFilePath' | 'setFileContent' | 'setFileError' | 'setFileLoading' | 'setLoadedFilePath'>;
   fileSaving: Pick<ReturnType<typeof useFileSaving>, 'applyLoadedTextContent' | 'isDirty' | 'readFile' | 'readFileStat'>;
   layout: Pick<ReturnType<typeof useFileLayout>, 'setShowMobilePageContent'>;
   scope: Pick<ReturnType<typeof useFileScope>, 'fileScopeRef' | 'root' | 'treeActive'>;
@@ -47,7 +47,7 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
   const { diagramSavedXmlRef, diagramXmlRef } = diagram;
   const { setDraftContent } = draft;
   const { loadDirectory, loadedDirsRef } = fileDirectory;
-  const { activeFileLoadIdRef, editorDocumentPath, fileContentRevision, lastLoadedFileStatRef, loadedFilePath, loadedFilePathRef, loadingFilePathRef, missingSeenPathRef, pendingPathMoveRef, setContentDetectedBinary, setDesktopImageSrc, setDocumentPathAlias, setFailedFilePath, setFileContent, setFileError, setFileLoading, setLoadedFilePath } = fileDocument;
+  const { activeFileLoadIdRef, editorDocumentPath, fileContentRevision, lastLoadedFileStatRef, loadedFilePath, loadedFilePathRef, loadingFilePathRef, missingSeenPathRef, pendingPathMoveRef, setPendingPathMove, setContentDetectedBinary, setDesktopImageSrc, setDocumentPathAlias, setFailedFilePath, setFileContent, setFileError, setFileLoading, setLoadedFilePath } = fileDocument;
   const { applyLoadedTextContent, isDirty, readFile, readFileStat } = fileSaving;
   const { setShowMobilePageContent } = layout;
   const { fileScopeRef, root, treeActive } = scope;
@@ -67,7 +67,7 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
       return activeFileLoadIdRef.current === loadId && currentPath === node.path;
     };
 
-    pendingPathMoveRef.current = null;
+    setPendingPathMove(null);
     setDocumentPathAlias(null);
     setFileError(null);
     setFailedFilePath(null);
@@ -164,7 +164,7 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
               lastLoadedFileStatRef.current = stat;
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       })
       .catch((error) => {
         if (!isCurrentLoad()) {
@@ -211,7 +211,7 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
           setFileLoading(false);
         }
       });
-  }, [applyLoadedTextContent, expandPaths, isMobile, loadDirectory, readFile, readFileStat, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
+  }, [activeFileLoadIdRef, applyLoadedTextContent, expandPaths, fileScopeRef, isMobile, lastLoadedFileStatRef, loadDirectory, loadedDirsRef, missingSeenPathRef, setPendingPathMove, readFile, readFileStat, root, runtime.isDesktop, searchQuery, setContentDetectedBinary, setDesktopImageSrc, setDocumentPathAlias, setDraftContent, setFailedFilePath, setFileContent, setFileError, setFileLoading, setLoadedFilePath, setSearchQuery, setSelectedPath, setShowMobilePageContent, setTextViewMode, t, textViewModeByPathRef]);
 
   const ensurePathVisible = React.useCallback(async (targetPath: string, includeTarget: boolean) => {
     if (!visible || !root) {
@@ -233,7 +233,7 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
       return undefined;
     }).filter(Boolean);
     await Promise.all(loadPromises);
-  }, [expandPaths, loadDirectory, root, treeActive, visible]);
+  }, [expandPaths, loadDirectory, loadedDirsRef, root, treeActive, visible]);
 
   const getNextOpenFile = React.useCallback((path: string, filesList: FileNode[]) => {
     const index = filesList.findIndex((file) => file.path === path);
@@ -268,7 +268,7 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
     if (isMobile) {
       setShowMobilePageContent(true);
     }
-  }, [ensurePathVisible, isDirty, isMobile, root, setSelectedPath]);
+  }, [diagramSavedXmlRef, diagramXmlRef, ensurePathVisible, isDirty, isMobile, pendingSelectFileRef, root, setCanvasDirty, setConfirmDiscardOpen, setDesktopImageSrc, setDraftContent, setFileContent, setFileError, setLoadedFilePath, setSelectedPath, setShowMobilePageContent, skipDirtyOnceRef]);
 
   React.useEffect(() => {
     if (!selectedFile?.path) {
@@ -292,21 +292,21 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
     const heldPath = pending?.to ?? loadedFilePathRef.current;
     const movedPath = heldPath ? rebaseMovedPath(heldPath, from, to) : null;
     if (heldPath && movedPath) {
-      pendingPathMoveRef.current = { from: pending?.from ?? heldPath, to: movedPath };
+      setPendingPathMove({ from: pending?.from ?? heldPath, to: movedPath });
     }
-  }), []);
+  }), [canvasViewModeByPathRef, drawioViewModeByPathRef, htmlViewModeByPathRef, loadedFilePathRef, mdViewModeByPathRef, mermaidViewModeByPathRef, pendingPathMoveRef, setPendingPathMove, svgViewModeByPathRef, tableViewModeByPathRef, textViewModeByPathRef]);
 
   React.useEffect(() => {
     const pendingMove = pendingPathMoveRef.current;
     if (pendingMove && selectedFile?.path === pendingMove.to) {
-      pendingPathMoveRef.current = null;
+      setPendingPathMove(null);
       if (loadedFilePath === pendingMove.from) {
         setDocumentPathAlias({ path: pendingMove.to, documentPath: editorDocumentPath ?? pendingMove.from });
         setLoadedFilePath(pendingMove.to);
         return;
       }
     } else if (pendingMove && loadedFilePath !== pendingMove.from) {
-      pendingPathMoveRef.current = null;
+      setPendingPathMove(null);
     }
 
     if (!visible) return;
@@ -328,8 +328,8 @@ export function useFileOpening({ canvasState, closeState, diagram, draft, fileDi
         loadingFilePathRef.current = null;
       }
     });
-  }, [editorDocumentPath, fileContentRevision, loadSelectedFile, loadedFilePath, selectedFile, visible]);
+  }, [activeFileLoadIdRef, editorDocumentPath, fileContentRevision, loadSelectedFile, loadedFilePath, loadingFilePathRef, pendingPathMoveRef, setPendingPathMove, selectedFile, setDocumentPathAlias, setFileLoading, setLoadedFilePath, visible]);
   return {
-  getNextOpenFile, handleSelectFile,
+    getNextOpenFile, handleSelectFile,
   };
 }

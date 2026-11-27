@@ -1,4 +1,4 @@
-export type MobileFilesRoute =
+type MobileFilesRoute =
   | { type: 'browser'; directory: string }
   | { type: 'file'; path: string; returnDirectory: string };
 

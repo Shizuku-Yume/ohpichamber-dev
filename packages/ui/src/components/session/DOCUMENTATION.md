@@ -77,7 +77,7 @@ own their contracts in `project-context/DOCUMENTATION.md` and
   answered, the picker reads as loading, even when live sessions are already
   checked, so a partial list never looks complete. Candidates that no read has
   started for yet also read as loading; only an empty candidate set is an empty
-  project. A later refresh keeps the shown list (`useScheduledTaskTargets`).
+  project. A later refresh keeps the shown list.
 - The target picker lists root sessions while its search is empty and subagents
   only through a search, each named as its parent's subagent. Review sessions
   count as roots and `ownWork` workers never appear. A query equal to a whole

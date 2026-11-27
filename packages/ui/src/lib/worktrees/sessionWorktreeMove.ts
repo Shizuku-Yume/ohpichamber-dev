@@ -35,7 +35,7 @@ export const buildSessionTreeMoveMessages = (
   outcomeUnknown: t('sessions.sidebar.session.moveToWorktree.outcomeUnknown'),
 });
 
-export class SessionMoveOutcomeUnknownError extends Error {
+class SessionMoveOutcomeUnknownError extends Error {
   constructor(cause: Error) {
     super(cause.message, { cause });
     this.name = 'SessionMoveOutcomeUnknownError';
@@ -44,28 +44,28 @@ export class SessionMoveOutcomeUnknownError extends Error {
 
 export type SessionTreeMoveIntent =
   | {
-      kind: 'existing';
-      root: Session;
-      descendants: Session[];
-      sourceDirectory: string;
-      destination: WorktreeMetadata;
-      messages: SessionTreeMoveMessages;
-    }
+    kind: 'existing';
+    root: Session;
+    descendants: Session[];
+    sourceDirectory: string;
+    destination: WorktreeMetadata;
+    messages: SessionTreeMoveMessages;
+  }
   | {
-      kind: 'quick';
-      root: Session;
-      descendants: Session[];
-      sourceDirectory: string;
-      messages: SessionTreeMoveMessages;
-    }
+    kind: 'quick';
+    root: Session;
+    descendants: Session[];
+    sourceDirectory: string;
+    messages: SessionTreeMoveMessages;
+  }
   | {
-      kind: 'project';
-      root: Session;
-      descendants: Session[];
-      sourceDirectory: string;
-      projectDirectory: string;
-      messages: SessionTreeMoveMessages;
-    };
+    kind: 'project';
+    root: Session;
+    descendants: Session[];
+    sourceDirectory: string;
+    projectDirectory: string;
+    messages: SessionTreeMoveMessages;
+  };
 
 type SessionMoveState = {
   pendingSessionIds: Set<string>;
@@ -278,20 +278,20 @@ const moveSessionTreeToNewWorktree = async (input: {
 const executeSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
   const movePromise = intent.kind === 'existing'
     ? moveSessionTreeToExistingWorktree({
-        root: intent.root,
-        descendants: intent.descendants,
-        sourceDirectory: intent.sourceDirectory,
-        destination: intent.destination,
-      })
+      root: intent.root,
+      descendants: intent.descendants,
+      sourceDirectory: intent.sourceDirectory,
+      destination: intent.destination,
+    })
     : intent.kind === 'project'
-    ? moveSessionTreeToProject({
+      ? moveSessionTreeToProject({
         root: intent.root,
         descendants: intent.descendants,
         sourceDirectory: intent.sourceDirectory,
         projectDirectory: intent.projectDirectory,
       })
-    // The Host moves the session family itself, so this asks for the root only.
-    : moveSessionTreeToNewWorktree({
+      // The Host moves the session family itself, so this asks for the root only.
+      : moveSessionTreeToNewWorktree({
         root: intent.root,
         sourceDirectory: intent.sourceDirectory,
         carry: [],

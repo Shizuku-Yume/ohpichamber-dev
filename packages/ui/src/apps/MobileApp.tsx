@@ -34,6 +34,7 @@ import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
+import { useSourceControlProviderSync } from '@/hooks/useSourceControlProviderSync';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import type { ProjectRef } from '@/lib/projectContextApi';
@@ -96,7 +97,7 @@ import { useFontsReady } from './useFontsReady';
 import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
 import { useMobilePairingConfirmation } from './useMobilePairingConfirmation';
 import { useEdgeSwipe } from './useEdgeSwipe';
-import { useNativePushRegistration } from './useNativePushRegistration';
+import { useNativeShellIntegration } from './useNativeShellIntegration';
 import { IpadSidebarResizeHandle } from './IpadSidebarResizeHandle';
 import {
   IPAD_LEFT_SIDEBAR_WIDTH,
@@ -635,18 +636,18 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
           >
             <ErrorBoundary>
               <React.Suspense fallback={null}>
-              <ReceivedPagePanel
-                receivedId={openReceivedPage.receivedId}
-                onAddedToChat={() => {
-                  flushSync(() => {
-                    setOpenReceivedPage(null);
-                    closeWorkspace();
-                  });
-                  const pill = document.querySelector<HTMLElement>('[data-composer-morph-prompt="true"]');
-                  if (pill) pill.click();
-                  else focusChatInput();
-                }}
-              />
+                <ReceivedPagePanel
+                  receivedId={openReceivedPage.receivedId}
+                  onAddedToChat={() => {
+                    flushSync(() => {
+                      setOpenReceivedPage(null);
+                      closeWorkspace();
+                    });
+                    const pill = document.querySelector<HTMLElement>('[data-composer-morph-prompt="true"]');
+                    if (pill) pill.click();
+                    else focusChatInput();
+                  }}
+                />
               </React.Suspense>
             </ErrorBoundary>
           </MobileFullscreenSurface>
@@ -1212,12 +1213,8 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   }, [isInitialized]);
   React.useEffect(() => installServerStateBootEvents(), []);
   useRouter();
-  useNativePushRegistration({ enabled: isNativeMobileApp && isConnected });
-  // Single native deep-link entry point: notification taps AND the ohpichamber:// URL
-  // scheme (widgets, Live Activities, external links). Registered unconditionally so a
-  // cold-launch tap/open isn't lost on the connect/splash screen; intents stash until
-  // the app is ready (connected + initialized) and shell handlers are registered.
-  useDeepLinkSource({ ready: isNativeMobileApp && isConnected && isInitialized, onPairing });
+  useSourceControlProviderSync(apis.sourceControl);
+  useNativeShellIntegration({ native: isNativeMobileApp, connected: isConnected, initialized: isInitialized, onPairing });
   const fontsReady = useFontsReady();
 
   const isReconnecting = !isConnected && connectionPhase === 'reconnecting';

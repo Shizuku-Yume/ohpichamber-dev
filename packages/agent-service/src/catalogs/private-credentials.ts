@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema } from '@openchamber/agent-contract';
 
-export const PrivateCredentialPurposeSchema = z.enum(['quota', 'tts', 'routing']);
+const PrivateCredentialPurposeSchema = z.enum(['quota', 'tts', 'routing']);
 export const PrivateCredentialResolveRequestSchema = z.strictObject({
   workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema,
   providerId: EntityIdSchema, credentialRef: EntityIdSchema,
   purpose: PrivateCredentialPurposeSchema,
 });
 // These are the installed SDK's stored credential fields, not a legacy auth projection.
-export const PrivateCredentialSchema = z.discriminatedUnion('type', [
+const PrivateCredentialSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('api_key'), key: z.string().min(1) }),
   z.strictObject({
     type: z.literal('oauth'), access: z.string().min(1), refresh: z.string().min(1), expires: z.number().finite(),
@@ -27,7 +27,7 @@ const DescriptorSchema = z.strictObject({
   providerId: ProviderIdSchema, source: z.enum(['stored-credential', 'managed-environment', 'external-environment']),
   credentialType: z.enum(['key', 'oauth']),
 });
-export const SelectedCredentialSelectionSchema = z.union([
+const SelectedCredentialSelectionSchema = z.union([
   DescriptorSchema,
   z.strictObject({
     providerId: ProviderIdSchema, source: z.literal('selected-file'), credentialType: z.literal('key'),
@@ -39,7 +39,7 @@ export const SelectedCredentialHandoffRequestSchema = z.strictObject({
   selections: z.array(SelectedCredentialSelectionSchema).min(1).max(16),
 }).refine(request => new Set(request.selections.map(selection => selection.providerId)).size === request.selections.length,
   'Each selected provider occurs once');
-export const SelectedCredentialHandoffOutcomeSchema = z.strictObject({
+const SelectedCredentialHandoffOutcomeSchema = z.strictObject({
   providerId: ProviderIdSchema,
   source: z.enum(['stored-credential', 'managed-environment', 'external-environment', 'selected-file']),
   credentialType: z.enum(['key', 'oauth']),

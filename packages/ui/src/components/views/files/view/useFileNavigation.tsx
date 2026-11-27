@@ -180,6 +180,7 @@ export function useFileNavigation({ closeState, draft, editor, fileDocument, fil
     confirmDiscardOpen,
     draftContent,
     editorViewReadyNonce,
+    editorViewRef,
     failedFilePath,
     fileError,
     fileLoading,
@@ -191,7 +192,11 @@ export function useFileNavigation({ closeState, draft, editor, fileDocument, fil
     pendingFileNavigation,
     root,
     selectedFile?.path,
+    pendingNavigationCycleRef,
+    pendingNavigationRafRef,
+    setEditorViewReadyNonce,
     setPendingFileNavigation,
+    setTextViewMode,
     textViewMode,
     toFileNode,
     zoneInteractive,
@@ -230,6 +235,7 @@ export function useFileNavigation({ closeState, draft, editor, fileDocument, fil
     isSelectedPdf,
     isUnsupportedBinary,
     loadedFilePath,
+    editorViewRef,
     pendingFileFocusPath,
     root,
     selectedFile?.path,
@@ -258,12 +264,12 @@ export function useFileNavigationMask({ fileDocument, fileKinds, navigationReque
   );
   const shouldMaskEditorForPendingNavigation = Boolean(
     pendingFileNavigation
-      && pendingNavigationTargetPath
-      && selectedFilePath
-      && selectedFilePath === pendingNavigationTargetPath
-      && !fileLoading
-      && !fileError
-      && !isSelectedNonText,
+    && pendingNavigationTargetPath
+    && selectedFilePath
+    && selectedFilePath === pendingNavigationTargetPath
+    && !fileLoading
+    && !fileError
+    && !isSelectedNonText,
   );
 
   return { shouldMaskEditorForPendingNavigation };

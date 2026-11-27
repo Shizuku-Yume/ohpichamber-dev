@@ -12,7 +12,7 @@ import { changedPathName } from './changesTree';
 import { ChangedPathLabel } from './ChangedPathLabel';
 
 /** Line counts of a changed file; the side with nothing to say stays out on a narrow row. */
-export const ChangeStats: React.FC<{ insertions: number; deletions: number; hideZero?: boolean }> = ({ insertions, deletions, hideZero = false }) => (
+const ChangeStats: React.FC<{ insertions: number; deletions: number; hideZero?: boolean }> = ({ insertions, deletions, hideZero = false }) => (
   <span className="shrink-0 typography-micro tabular-nums">
     {hideZero && insertions === 0 ? null : <span style={{ color: 'var(--status-success)' }}>+{insertions}</span>}
     {hideZero ? (insertions > 0 && deletions > 0 ? ' ' : null) : <span className="text-muted-foreground mx-0.5">/</span>}

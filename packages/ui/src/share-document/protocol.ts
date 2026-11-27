@@ -26,8 +26,6 @@ type ViewerInit = Extract<ViewerMessage, { type: 'init' }>;
 
 export type ShareSubmitMessage = { source: typeof SHARE_DOCUMENT_SOURCE; type: 'submit'; data: JsonValue; summary: string };
 
-export const shareSubmitMessageSchema = z.object({ source: z.literal(SHARE_DOCUMENT_SOURCE), type: z.literal('submit') });
-
 export function createShareSubmitter({ post, listen, onInit }: {
   post: (message: ShareSubmitMessage) => void;
   listen: (handler: (message: ViewerMessage) => void) => void;

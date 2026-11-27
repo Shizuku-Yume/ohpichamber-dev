@@ -102,7 +102,7 @@ export function useFileDirectory({ fileDocument, layout, scope, tabs, files }: {
         }));
       }
     }, force);
-  }, [directoryRequests, files, mapDirectoryEntries, removeExpandedPathsByPrefix, root, showGitignored, treeActive]);
+  }, [directoryRequests, files, mapDirectoryEntries, removeExpandedPathsByPrefix, root, showGitignored, treeActive, treeScopeRef]);
 
   const refreshRoot = React.useCallback(async () => {
     if (!root) {
@@ -163,7 +163,7 @@ export function useFileDirectory({ fileDocument, layout, scope, tabs, files }: {
       setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       void loadDirectory(root);
     }
-  }, [directoryRequests, fileScope, loadDirectory, root, treeScope]);
+  }, [activeFileLoadIdRef, directoryRequests, fileScope, loadDirectory, loadingFilePathRef, root, setDesktopImageSrc, setFileContent, setFileError, setLoadedFilePath, setShowMobilePageContent, treeScope]);
 
   React.useEffect(() => {
     if (!treeActive || !files.listDirectory) return;
@@ -208,7 +208,7 @@ export function useFileDirectory({ fileDocument, layout, scope, tabs, files }: {
   }, [directoryRequests, expandedPaths, files.listDirectory, refreshDirectory, treeActive]);
 
   return {
-  mapDirectoryEntries, loadDirectory, refreshRoot, refreshDirectory,
-  childrenByDir, loadErrorsByDir, loadedDirsRef,
+    mapDirectoryEntries, loadDirectory, refreshRoot, refreshDirectory,
+    childrenByDir, loadErrorsByDir, loadedDirsRef,
   };
 }

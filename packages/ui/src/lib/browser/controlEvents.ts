@@ -17,7 +17,7 @@ const browserControlRequestSchema = z.object({
 
 const browserControlPreferredSchema = z.object({ connectionId: z.string().min(1) });
 
-export type BrowserControlEvent =
+type BrowserControlEvent =
   | ({ type: 'browser-control-request' } & z.infer<typeof browserControlRequestSchema>)
   | ({ type: 'browser-control-preferred' } & z.infer<typeof browserControlPreferredSchema>);
 

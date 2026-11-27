@@ -41,7 +41,7 @@ export function useDiffViewNavigation({
             expandStackedFile(pendingDiffFile);
             setScrollRequestNonce((value) => value + 1);
         }
-    }, [activeDiffScope, expandStackedFile, pendingDiffFile, pendingDiffScope, pendingDiffStaged, setPendingDiffFile, visible]);
+    }, [activeDiffScope, expandStackedFile, pendingDiffFile, pendingDiffScope, pendingDiffStaged, pendingScrollTargetRef, setActiveDiffScope, setDisplayFile, setDisplayFileStaged, setPendingDiffFile, setScrollRequestNonce, shouldPinAfterAlignRef, visible]);
 
     React.useEffect(() => {
         if (activeDiffScope === 'all') {
@@ -57,5 +57,5 @@ export function useDiffViewNavigation({
         pendingScrollTargetRef.current = normalizedTarget;
         expandStackedFile(normalizedTarget);
         setScrollRequestNonce((value) => value + 1);
-    }, [activeDiffScope, expandStackedFile, targetFilePath]);
+    }, [activeDiffScope, expandStackedFile, pendingScrollTargetRef, setDisplayFile, setDisplayFileStaged, setScrollRequestNonce, shouldPinAfterAlignRef, targetFilePath]);
 }

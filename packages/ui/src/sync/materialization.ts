@@ -116,12 +116,6 @@ export function getSessionMaterializationStatus(state: MaterializedState, sessio
   return { hasMessages: true, renderable: true, missingPartMessageIDs: [] }
 }
 
-export const getSessionMaterializationRequestKey = (
-  runtimeKey: string,
-  directory: string,
-  sessionID: string,
-): string => JSON.stringify([runtimeKey, directory, sessionID])
-
 export function isSessionMaterializationStillNeeded(
   state: MaterializedState,
   sessionID: string,
@@ -148,7 +142,7 @@ export function isSessionMaterializationStillNeeded(
   return true
 }
 
-export type SessionMaterializationReason = 'empty-assistant-message' | 'missing-owning-message' | 'orphan-delta' | 'missing-delta-part' | 'settled-running-tool'
+type SessionMaterializationReason = 'empty-assistant-message' | 'missing-owning-message' | 'orphan-delta' | 'missing-delta-part' | 'settled-running-tool'
 
 export type SessionMaterializationRequest = {
   reason: SessionMaterializationReason

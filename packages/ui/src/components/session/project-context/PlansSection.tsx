@@ -27,7 +27,7 @@ import { useUIStore } from '@/stores/useUIStore';
 
 const PLAN_LIST_REFRESH_MS = 10_000;
 
-export const PlanProgressLabel: React.FC<{ progress: ProjectPlanProgress }> = ({ progress }) => {
+const PlanProgressLabel: React.FC<{ progress: ProjectPlanProgress }> = ({ progress }) => {
   const { t } = useI18n();
   if (progress.done >= progress.total) {
     const done = t('rightSidebar.contextNotesTodo.plans.progress.done');

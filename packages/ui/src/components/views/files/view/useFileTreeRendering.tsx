@@ -70,7 +70,7 @@ export function useFileTreeRendering({ externalActions, fileDirectory, fileOpeni
     if (!loadedDirsRef.current.has(normalized)) {
       await loadDirectory(normalized);
     }
-  }, [loadDirectory, root, toggleExpandedPath, toggleWithMotion]);
+  }, [loadDirectory, loadedDirsRef, root, toggleExpandedPath, toggleWithMotion]);
 
   const fileRowPermissions = React.useMemo(
     () => ({ canRename, canCreateFile, canCreateFolder, canDelete, canReveal }),
@@ -142,6 +142,6 @@ export function useFileTreeRendering({ externalActions, fileDirectory, fileOpeni
     });
   }
   return {
-  treeListRef, renderTree,
+    treeListRef, renderTree,
   };
 }

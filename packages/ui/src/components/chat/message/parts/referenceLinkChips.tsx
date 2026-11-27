@@ -84,12 +84,6 @@ export function useSessionReferenceLinkChips(text: string, links: LinkedItems | 
     return React.useMemo(() => referenceLinkChipsOf([text], referenceContextsOfLinks(links, urls), urls, trackerUrls), [links, text, trackerUrls, urls]);
 }
 
-export function useReferenceLinkChips(texts: readonly string[], parts: readonly PromptContext[]): ReferenceLinkChips {
-    const urls = useRepositoryUrlMatcher();
-    const trackerUrls = useTrackerUrlMatcher();
-    return React.useMemo(() => referenceLinkChipsOf(texts, parts, urls, trackerUrls), [parts, texts, trackerUrls, urls]);
-}
-
 export const ReferenceLinkChipsContext = React.createContext<ReferenceLinkChips>(NO_CHIPS);
 
 export function withReferenceLinkChips(text: string, chips: ReferenceLinkChips, keyPrefix: string): InlineTextNode[] {

@@ -214,7 +214,7 @@ const spaceDiskSchema = z.object({
   freesImage: z.boolean(),
 });
 
-export type SpaceDisk = z.infer<typeof spaceDiskSchema>;
+type SpaceDisk = z.infer<typeof spaceDiskSchema>;
 
 // What a clean-up freed, and what Docker kept because something uses it or the removal failed.
 const spaceCleanUpSchema = z.object({

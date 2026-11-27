@@ -15,6 +15,7 @@ import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
 import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
+import { MobileAppSettings } from './MobileAppSettings';
 import { GeneralFilesAndTerminalSettings, GeneralInterfaceSettings, GeneralPowerSettings } from './GeneralWorkspaceSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -117,6 +118,7 @@ const GeneralSectionContent: React.FC = () => {
     return (
         <>
             {isDesktopShell() && <DesktopAppSettings />}
+            <MobileAppSettings />
             <OpenChamberToolsSettings />
             {isLocalDesktop && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}

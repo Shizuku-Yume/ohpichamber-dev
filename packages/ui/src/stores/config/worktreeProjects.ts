@@ -1,6 +1,6 @@
 import { getRuntimeKey } from "@/lib/runtime-switch";
 import { useProjectsStore } from "@/stores/useProjectsStore";
-import { normalizeConfigPath } from "./directories";
+import { resolveConfigDirectory } from "./directories";
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 
@@ -100,25 +100,25 @@ const rememberWorktreeProject = (worktree: string, project: string): void => {
 };
 const getKnownProjectDirectories = (): string[] => {
     try {
-        return useProjectsStore.getState().projects.map(project => normalizeConfigPath(project.path)).filter((path): path is string => Boolean(path));
+        return useProjectsStore.getState().projects.map(project => resolveConfigDirectory(project.path)).filter((path): path is string => Boolean(path));
     } catch {
         return [];
     }
 };
 export const resolveProjectDirectory = (directory: string | null | undefined): string | null => {
-    const dir = normalizeConfigPath(directory);
+    const dir = resolveConfigDirectory(directory);
     const projects = getKnownProjectDirectories();
     if (!dir) return null;
     if (projects.includes(dir)) return dir;
 
     // 1. Persisted mapping — resolves synchronously when the async worktree
     //    discovery has not populated the runtime map yet.
-    const cached = normalizeConfigPath(getWorktreeProjectMap()[dir]);
+    const cached = resolveConfigDirectory(getWorktreeProjectMap()[dir]);
     if (cached) return cached;
     // 2. Live resolution via projects + discovered worktree map; cache the hit.
     try {
         const project = resolveProjectForSessionDirectory(useProjectsStore.getState().projects, useSessionUIStore.getState().availableWorktreesByProject, dir);
-        const projectPath = normalizeConfigPath(project?.path ?? null);
+        const projectPath = resolveConfigDirectory(project?.path ?? null);
         if (projectPath && projectPath !== dir) {
             rememberWorktreeProject(dir, projectPath);
             return projectPath;

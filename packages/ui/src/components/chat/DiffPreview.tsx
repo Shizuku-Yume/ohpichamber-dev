@@ -1,5 +1,3 @@
-import { parseDiffToUnified } from './message/toolRenderers';
-import { cn } from '@/lib/utils';
 import React from 'react';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -28,69 +26,6 @@ const CodeLineContent: React.FC<CodeLineContentProps> = ({ content, html, status
 const highlightedLineAt = (result: HighlightedLinesResult, index: number): string | undefined => (
     result.status === 'loading' ? result.carriedLines[index] : result.lines?.[index]
 );
-
-interface DiffPreviewProps {
-    diff: string;
-    filePath?: string;
-}
-
-export const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, filePath }) => {
-    const { currentTheme } = useThemeSystem();
-    const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(currentTheme), [currentTheme]);
-    const hunks = React.useMemo(() => parseDiffToUnified(diff), [diff]);
-    const language = getLanguageFromExtension(filePath || hunks[0]?.file) || 'text';
-
-    const flatContent = React.useMemo(
-        () => hunks.flatMap((hunk) => hunk.lines.map((line) => line.content)).join('\n'),
-        [hunks],
-    );
-    const highlighted = useHighlightedLines(flatContent, language);
-
-    let lineCursor = 0;
-    return (
-        <div className="typography-code px-1 pb-1 pt-0 space-y-0" style={syntaxVars as React.CSSProperties}>
-            {hunks.map((hunk, hunkIdx) => (
-                <div key={hunkIdx} className="-mx-1 px-1 border-b border-edge-muted last:border-b-0">
-                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-edge-muted break-words -mx-1">
-                        {`${hunk.file || filePath?.split('/').pop() || 'file'} (line ${hunk.oldStart})`}
-                    </div>
-
-                    <div>
-                        {hunk.lines.map((line, lineIdx) => {
-                            const html = highlightedLineAt(highlighted, lineCursor);
-                            lineCursor += 1;
-                            return (
-                                <div
-                                    key={lineIdx}
-                                    className={cn(
-                                        'typography-code font-mono px-2 py-0.5 flex -mx-2',
-                                        line.type === 'context' && 'bg-transparent',
-                                        line.type === 'removed' && 'bg-transparent',
-                                        line.type === 'added' && 'bg-transparent'
-                                    )}
-                                    style={
-                                        line.type === 'removed'
-                                            ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
-                                            : line.type === 'added'
-                                                ? { backgroundColor: 'var(--tools-edit-added-bg)' }
-                                                : {}
-                                    }
-                                >
-                                    <span className="w-10 flex-shrink-0 text-end pe-3 select-none border-e me-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
-                                        {line.lineNumber || ''}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        <CodeLineContent content={line.content} html={html} status={highlighted.status} />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-};
 
 interface WritePreviewProps {
     content: string;

@@ -148,7 +148,7 @@ export function useFileAssets({ draft, fileDocument, fileKinds, fileSaving, scop
     if (!path) throw new Error('No file is open.');
     const response = await fetchRawFile(path, AbortSignal.timeout(60_000));
     return new Uint8Array(await response.arrayBuffer());
-  }, [fetchRawFile]);
+  }, [fetchRawFile, selectedFilePathRef]);
 
   const maxDataBytes = isMobile ? MAX_OFFICE_PREVIEW_BYTES : MAX_DATA_PREVIEW_BYTES;
   const loadOfficeBytes = React.useCallback(async (path: string, cancel: AbortSignal): Promise<Uint8Array<ArrayBuffer>> => {
@@ -207,7 +207,7 @@ export function useFileAssets({ draft, fileDocument, fileKinds, fileSaving, scop
       if (relativePath) sessionEvents.requestGitRefresh({ directory: root, paths: [relativePath] });
     }
     return true;
-  }, [files, root]);
+  }, [files, lastLoadedFileStatRef, root, selectedFilePathRef]);
 
   const openInDefaultAppButton = selectedFile && isDesktopLocalOriginActive() ? (
     <Tooltip>
@@ -231,8 +231,8 @@ export function useFileAssets({ draft, fileDocument, fileKinds, fileSaving, scop
   ) : null;
   const binaryFileActions = <>{downloadButton}{openInDefaultAppButton}</>;
   return {
-  htmlPreviewUnreachable, assetAuthErrorFallback, htmlPreview, htmlPreviewFrameRef, htmlPreviewAnnotation,
-  canAnnotateHtmlPreview, annotateWhenLoadedRef, rawAsset, isPdfAssetAuthLoading, imageSrc, pdfSrc, downloadButton,
-  loadCanvasBytes, maxDataBytes, loadOfficeBytes, loadDataBytes, exportDocument, saveOfficeBytes, binaryFileActions, tableDelimiter,
+    htmlPreviewUnreachable, assetAuthErrorFallback, htmlPreview, htmlPreviewFrameRef, htmlPreviewAnnotation,
+    canAnnotateHtmlPreview, annotateWhenLoadedRef, rawAsset, isPdfAssetAuthLoading, imageSrc, pdfSrc, downloadButton,
+    loadCanvasBytes, maxDataBytes, loadOfficeBytes, loadDataBytes, exportDocument, saveOfficeBytes, binaryFileActions, tableDelimiter,
   };
 }

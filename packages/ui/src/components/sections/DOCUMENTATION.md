@@ -121,8 +121,8 @@ on disk. Once the entity exists, the page switches to the autosave rules above.
 `skills/` follows the same split for supporting files: editing an existing file
 writes when the dialog closes, while a new file is only created on confirm.
 
-The skill page fills its create form from the draft once per draft and editor
-(`skills/useDraftFill.ts`). Its details effect also runs on every skill list
+The skill page fills its create form from the draft once per draft and editor.
+Its details effect also runs on every skill list
 refresh, so filling on each run reset a typed name, location and pending files
 back to the draft's `new-skill` in User when a list read landed mid-form.
 

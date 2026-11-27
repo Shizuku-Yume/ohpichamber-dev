@@ -205,21 +205,6 @@ const collapseRunEntries = (nodes: readonly SessionNode[], runIndex: MultiRunInd
   return entries;
 };
 
-/**
- * How many sessions of search-filtered trees a group reports as matches: for
- * a `ses_` id query the exact id only, otherwise every session the search
- * kept. Group search data and the row model both count with this, so taking
- * trees out of a group takes exactly their share out of its count.
- */
-export const countSessionSearchMatches = (nodes: readonly SessionNode[], normalizedQuery: string): number => {
-  const idQuery = normalizedQuery.trim().toLowerCase();
-  const isIdQuery = idQuery.startsWith('ses_');
-  const count = (list: readonly SessionNode[]): number => list.reduce((total, node) => (
-    total + (!isIdQuery || node.session.sessionId.toLowerCase() === idQuery ? 1 : 0) + count(listedChildren(node))
-  ), 0);
-  return count(nodes);
-};
-
 const EMPTY_FOLDERS: readonly SessionFolder[] = [];
 const EMPTY_ZONE_SESSION_IDS: ReadonlySet<string> = new Set();
 const EMPTY_DRAFTS: readonly SessionDraft[] = [];
@@ -1036,7 +1021,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
 
   const selectedSection = args.singleProjectMode
     ? args.sections.find((section) => section.project.id === args.singleProjectId)
-      ?? args.authoritativeSections.find((section) => section.project.id === args.singleProjectId)
+    ?? args.authoritativeSections.find((section) => section.project.id === args.singleProjectId)
     : undefined;
   const sections = args.singleProjectMode ? selectedSection ? [selectedSection] : [] : args.sections;
 

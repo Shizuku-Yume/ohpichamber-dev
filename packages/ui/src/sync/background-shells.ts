@@ -1,5 +1,3 @@
-import { useCallback } from 'react';
-
 import { create } from 'zustand';
 import type { CanonicalEvent, ShellJob, ShellJobIdentity, ShellSnapshot } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -148,7 +146,7 @@ export const backgroundShellsOfSessions = (byId: ReadonlyMap<string, TrackedShel
 
 type SettleOutcome = 'background' | 'ended';
 type SettleWaiter = { identity: ShellJobIdentity; resolve: (outcome: SettleOutcome) => void; reject: (error: Error) => void };
-export type ShellSettleWait = { settled: Promise<SettleOutcome>; cancel: () => void };
+type ShellSettleWait = { settled: Promise<SettleOutcome>; cancel: () => void };
 const settleWaiters = new Map<string, SettleWaiter>();
 const settleKey = (identity: ShellJobIdentity): string => `${keyFor(identity)}\n${identity.epoch}`;
 
@@ -166,7 +164,7 @@ function settleKnownWaiters(): void {
 export const waitForShellSettle = (identity: ShellJobIdentity, timeoutMs: number): ShellSettleWait => {
   const key = settleKey(identity);
   settleWaiters.get(key)?.reject(new Error('Replaced by a newer wait for the same command.'));
-  let cancel = (): void => {};
+  let cancel = (): void => { };
   const settled = new Promise<SettleOutcome>((resolve, reject) => {
     const finish = (settle: () => void) => {
       clearTimeout(timer);
@@ -186,11 +184,5 @@ export const waitForShellSettle = (identity: ShellJobIdentity, timeoutMs: number
   return { settled, cancel };
 };
 
-export const useRunningShell = (identity: ShellJobIdentity | undefined): TrackedShell | undefined => (
-  useBackgroundShellsStore(useCallback((state) => {
-    const shell = identity ? state.byId.get(keyFor(identity)) : undefined;
-    return shell && identity && sameIdentity(shell, identity) ? shell : undefined;
-  }, [identity]))
-);
 
 subscribeRuntimeEndpointWillChange(resetBackgroundShells);

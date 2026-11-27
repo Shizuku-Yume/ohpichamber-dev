@@ -11,7 +11,7 @@ const CYRILLIC_TO_LATIN = new Map(Object.entries({
   ч: 'ch', ш: 'sh', щ: 'shch', ь: '', ю: 'iu', я: 'ia', ё: 'e', ъ: '', ы: 'y', э: 'e',
 }));
 
-export const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
+const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
 
 /** The snippet that `#name` already triggers. */
 const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
@@ -54,7 +54,3 @@ export const suggestSnippetName = (text: string, snippets: readonly Snippet[]): 
   return uniqueSnippetName(isValidSnippetName(base) ? base : 'snippet', snippets);
 };
 
-export const normalizeSnippetNameInput = (value: string): string => value
-  .replace(/\s+/g, '-')
-  .replace(/[^a-z0-9_-]/gi, '')
-  .slice(0, 80);

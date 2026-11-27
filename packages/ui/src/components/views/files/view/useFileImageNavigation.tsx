@@ -50,7 +50,7 @@ export function useFileImageNavigation({ fileDirectory, fileKinds, imageFullscre
     return () => {
       cancelled = true;
     };
-  }, [files, imageFolder, imageFolderNeedsRead, mapDirectoryEntries, selectedFilePath, showGitignored, treeScope]);
+  }, [files, imageFolder, imageFolderNeedsRead, mapDirectoryEntries, selectedFilePath, showGitignored, treeScope, treeScopeRef]);
   const imageNeighbors = React.useMemo(() => {
     if (!imageFolderHasSelected || !imageFolderListing || !panelRoot) return null;
     const neighbors = imageNeighborsOf(imageFolderListing.entries, selectedFilePath);

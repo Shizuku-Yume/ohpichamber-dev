@@ -26,7 +26,7 @@ export function useDiffViewScrollAlignment({
         const scrollOffset = node.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top;
         scrollRoot.scrollTo({ top: scrollRoot.scrollTop + scrollOffset, behavior: 'auto' });
         return true;
-    }, []);
+    }, [diffScrollRef, fileSectionRefs]);
 
     React.useEffect(() => {
         const target = pendingScrollTargetRef.current;
@@ -93,7 +93,7 @@ export function useDiffViewScrollAlignment({
                 pendingScrollFrameRef.current = null;
             }
         };
-    }, [pinSelectedFileHeaderToTopOnNavigate, scrollRequestNonce, scrollToFile, visible]);
+    }, [pendingScrollFrameRef, pendingScrollTargetRef, pinSelectedFileHeaderToTopOnNavigate, scrollRequestNonce, scrollToFile, setPinnedStackedTarget, shouldPinAfterAlignRef, visible]);
 
     return { scrollToFile };
 }

@@ -69,7 +69,7 @@ export function useFileMobileKeyboard({ editor, isMobile }: {
       viewport?.removeEventListener('scroll', runNudge);
       document.removeEventListener('selectionchange', runNudge);
     };
-  }, [isMobile, nudgeEditorSelectionAboveKeyboard]);
+  }, [editorViewRef, isMobile, nudgeEditorSelectionAboveKeyboard]);
 
   return { nudgeEditorSelectionAboveKeyboard };
 }

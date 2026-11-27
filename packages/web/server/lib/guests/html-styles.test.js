@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
-import { GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from 'ohpichamber-sdk';
+import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from 'ohpichamber-sdk';
 import { GUEST_UI_LOOK_CSS } from 'ohpichamber-sdk/ui';
 import { injectGuestDocumentStyles } from './html-styles.js';
 import { registerGuestRoutes } from './routes.js';
@@ -34,22 +34,36 @@ describe('approved origins in the frame policy', () => {
 });
 
 describe('guest document styles', () => {
-  test('preserves doctypes, CSP, and tag-like text inside authored scripts', () => {
+  test('places the host bootstrap before authored CSP metadata and scripts', () => {
     const html = '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="style-src \'self\'"><script>const text = "</head><head>";</script></head><body>Guest</body></html>';
     const decorated = injectGuestDocumentStyles(html);
     const meta = '<meta name="color-scheme" content="light dark">';
-    expect(decorated.startsWith(`<!doctype html>${meta}${html.slice('<!doctype html>'.length)}`)).toBe(true);
+    const policy = '<meta http-equiv="Content-Security-Policy" content="style-src \'self\'">';
+    const bootstrap = `<script data-openchamber-guest-bootstrap>${GUEST_BOOTSTRAP_SCRIPT}</script>`;
+    expect(decorated.startsWith(`<!doctype html>${meta}${bootstrap}<html>`)).toBe(true);
+    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf(policy));
+    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf('<script>const text'));
+    expect(decorated.replace(bootstrap, '')).toContain(html.replace('<!doctype html>', `<!doctype html>${meta}`));
     expect(decorated).toContain(GUEST_SCROLLBAR_CSS);
     expect(decorated).toContain('data-openchamber-guest-styles');
     expect(decorated).toContain(`<script data-openchamber-guest-scrollbar>${GUEST_SCROLLBAR_SCRIPT}</script>`);
   });
 
-  test('declares the color scheme before any authored content', () => {
+  test('places bootstrap before encoded CSP metadata and inert data scripts', () => {
+    const html = '<html><head><script type="text/plain">inert</script><meta http-equiv="Content-Security-Policy" content="script-src &#x27;none&#x27;"></head><body></body></html>';
+    const decorated = injectGuestDocumentStyles(html);
+    const bootstrap = '<script data-openchamber-guest-bootstrap>';
+    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf('<script type="text/plain">'));
+    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf('<meta http-equiv="Content-Security-Policy"'));
+  });
+
+  test('declares the color scheme and bootstrap before any authored content', () => {
     const meta = '<meta name="color-scheme" content="light dark">';
-    expect(injectGuestDocumentStyles('<html><body>x</body></html>').startsWith(`${meta}<html>`)).toBe(true);
-    expect(injectGuestDocumentStyles('\n<!DOCTYPE html>\n<html></html>').startsWith(`\n<!DOCTYPE html>${meta}\n<html>`)).toBe(true);
+    const bootstrap = `<script data-openchamber-guest-bootstrap>${GUEST_BOOTSTRAP_SCRIPT}</script>`;
+    expect(injectGuestDocumentStyles('<html><body>x</body></html>').startsWith(`${meta}${bootstrap}<html>`)).toBe(true);
+    expect(injectGuestDocumentStyles('\n<!DOCTYPE html>\n<html></html>').startsWith(`\n<!DOCTYPE html>${meta}${bootstrap}\n<html>`)).toBe(true);
     // A doctype-looking string later in the document is authored text, not the doctype.
-    expect(injectGuestDocumentStyles('<p>"<!doctype html>"</p>').startsWith(`${meta}<p>`)).toBe(true);
+    expect(injectGuestDocumentStyles('<p>"<!doctype html>"</p>').startsWith(`${meta}${bootstrap}<p>`)).toBe(true);
   });
 
   test('serves scrollbar defaults to existing guests with or without an asset token', async () => {
@@ -73,6 +87,9 @@ describe('guest document styles', () => {
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.text).toContain(GUEST_SCROLLBAR_CSS);
       expect(response.text).toContain(GUEST_SCROLLBAR_SCRIPT);
+      // The bootstrap starts the document-local handshake, ahead of every authored script.
+      expect(response.text).toContain(`<script data-openchamber-guest-bootstrap>${GUEST_BOOTSTRAP_SCRIPT}</script>`);
+      expect(response.text.indexOf('data-openchamber-guest-bootstrap')).toBeLessThan(response.text.indexOf('<html>'));
       // The kit's look follows this app, after the authored document so it outranks the bundle's own copy.
       expect(response.text.indexOf(GUEST_UI_LOOK_CSS)).toBeGreaterThan(response.text.indexOf('</html>'));
       expect(response.text.startsWith('<!doctype html>')).toBe(true);

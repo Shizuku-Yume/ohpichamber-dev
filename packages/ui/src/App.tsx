@@ -22,7 +22,7 @@ import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
 import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
 import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
-import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
+import { useProviderSyncs } from '@/hooks/useProviderSyncs';
 import { useGuestMarksSync } from '@/hooks/useGuestMarksSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
@@ -525,10 +525,9 @@ function App({ apis }: AppProps) {
     return () => window.removeEventListener('openchamber:open-mini-chat', onOpenMiniChat);
   }, []);
 
-  // When the window regains focus, mark the currently-selected session as seen.
-  // Turn-completes that arrive while the app is backgrounded are intentionally
-  // left unseen (see isViewedInCurrentSession); coming back to the window is the
-  // signal that the user has now looked at it, so the marker clears.
+  // When the window regains focus, the selected session is marked as seen: a
+  // turn that completed while backgrounded stays unread until then, and coming
+  // back is the signal that the user has now looked at it.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const onFocus = () => {
@@ -593,7 +592,7 @@ function App({ apis }: AppProps) {
   // reached the shell before this page could listen are taken here too.
   useGuestCatalogSync();
   useGuestInstallLinks();
-  useBrowserProviderSync();
+  useProviderSyncs(apis.sourceControl);
   useGuestMarksSync();
   useRoutingSync();
   useEnterprisePolicySync();
@@ -790,23 +789,23 @@ function App({ apis }: AppProps) {
       <SyncProvider key={runtimeEndpointEpoch} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <FireworksProvider>
-              <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-                <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
-                  <SyncAppEffects backgroundWorkEnabled />
-                  <MainLayout />
-                  <LegacyDataNotice />
-                  {/* Unmounted, not faded: the shell under it is ready, and a
+            <TooltipProvider delayDuration={300} skipDelayDuration={150}>
+              <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
+                <SyncAppEffects backgroundWorkEnabled />
+                <MainLayout />
+                <LegacyDataNotice />
+                {/* Unmounted, not faded: the shell under it is ready, and a
                       fade only delays the moment it is seen. */}
-                  {isDesktopRuntime && !(bootOutcomeKnown && bootViewIsMain) ? <AppStartupOverlay ready={false} /> : null}
-                  <Toaster />
-                  <AppLinkConfirmDialog />
-                  <GlobalQuestionDialogs />
-                  <AboutDialogWrapper />
-                  {showMemoryDebug && (
-                    <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
-                  )}
-                </div>
-              </TooltipProvider>
+                {isDesktopRuntime && !(bootOutcomeKnown && bootViewIsMain) ? <AppStartupOverlay ready={false} /> : null}
+                <Toaster />
+                <AppLinkConfirmDialog />
+                <GlobalQuestionDialogs />
+                <AboutDialogWrapper />
+                {showMemoryDebug && (
+                  <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
+                )}
+              </div>
+            </TooltipProvider>
           </FireworksProvider>
         </RuntimeAPIProvider>
       </SyncProvider>

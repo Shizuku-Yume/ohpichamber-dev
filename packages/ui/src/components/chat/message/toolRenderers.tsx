@@ -1,4 +1,3 @@
-import { detectToolOutputLanguage } from '@/lib/toolHelpers';
 import { formatToolInput } from '@/lib/toolHelpers';
 import type { JsonValue, ToolCallPart } from '@openchamber/agent-contract';
 import { coerceToText, nativeToolResultContent, unwrapTextBlocks } from '@/lib/toolResultContent';
@@ -305,8 +304,4 @@ export const formatInputForDisplay = (input: ToolCallPart['input'], toolName?: s
         return String(input);
     }
     return formatToolInput(input, toolName || '');
-};
-
-export const detectLanguageFromOutput = (output: string, toolName: string, input?: ToolCallPart['input']) => {
-    return detectToolOutputLanguage(toolName, output, input);
 };

@@ -1,4 +1,3 @@
-import { reviewDraftCount, useChangeRequestReview } from '@/components/review/useChangeRequestReview';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import * as React from 'react';
 
@@ -452,31 +451,6 @@ export const SourceBoardPullLinks: React.FC<PullLinkProps> = (props) => {
                 </button>
             )}
         </span>
-    );
-};
-
-
-export const SourceBoardReviewDraft: React.FC<PullLinkProps> = (props) => {
-    const { pull, context, project } = props;
-    const { t } = useI18n();
-    const open = useOpenPull(props);
-    const target = React.useMemo(() => (pull.state === 'open' ? {
-        context,
-        provider: context.provider,
-        project: { owner: pull.sourceRepo.owner, name: pull.sourceRepo.repo },
-        number: pull.number,
-        headSha: pull.headSha,
-        directory: context.directory ?? project.path,
-    } : null), [context, project.path, pull.headSha, pull.number, pull.sourceRepo.owner, pull.sourceRepo.repo, pull.state]);
-    const review = useChangeRequestReview(target);
-    const count = reviewDraftCount(review);
-    if (count === 0) return null;
-    const login = review?.state?.draft?.comments[0]?.author?.login;
-    const label = t(count === 1 ? 'review.board.draft.one' : 'review.board.draft.other', { count });
-    return (
-        <button type="button" className={LINK_CLASS} onClick={() => open('diff')}>
-            {login ? `${login} · ${label}` : label}
-        </button>
     );
 };
 

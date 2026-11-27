@@ -25,12 +25,11 @@ export const resolveInitialDirectoryKey = (): string => {
 
 // Persisted worktree→project mapping for project-level defaults. Config catalogs
 // themselves are scoped to the worktree's own directory.
-export const normalizeConfigPath = (value: string | null | undefined): string | null => {
+export const resolveConfigDirectory = (value: string | null | undefined): string | null => {
     const result = normalizePath(value);
     if (result === null) return null;
     return result || '/';
 };
-export const resolveConfigDirectory = normalizeConfigPath;
 export const toConfigDirectoryKey = (directory: string | null | undefined): string => toDirectoryKey(resolveConfigDirectory(directory));
 
 // Runtime freshness tracking (NOT persisted) for the stale-while-revalidate

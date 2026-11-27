@@ -43,6 +43,30 @@ source-only copy built successfully but failed before the CLI could start.
 Linux x64 Docker startup verified the production page, its JS bundle, the
 workspace auth gate, and OMP readiness. This is not full M7 release evidence.
 
+W12 closes the lint-warning and dead-code backlogs on the post-merge tree:
+96 `react-hooks/exhaustive-deps` warnings across 34 files are fixed by
+reasoning about each effect's trigger (corrected dependency arrays, stable
+refs listed by contract, mutable-ref reads converted to real state) with zero
+rule disables, and knip's 184 findings plus 2 configuration hints are down to
+zero — 36 unreachable files deleted after reference confirmation, the rest
+removed as dead exports or recorded as documented single-file `knip.json`
+entries with per-entry reasons. The cleanup exposed and re-wired
+merge-regression casualties whose modules survived but whose call sites were
+lost: source-control provider sync, native widget sync, keep-screen-awake and
+mobile settings, repository reference chips, the mobile terminal tabs bar,
+guest popover sheet and microphone, skills draft fill, host device/typography
+readiness, and iOS Shortcuts pending draft submit. The verification drive also
+exposed that guest HTML was served without the documented
+`GUEST_BOOTSTRAP_SCRIPT` injection (dropped in the TypeScript conversion
+`8a230fa354`), which broke every direct guest panel handshake; the injection
+and its ordering tests are restored in `packages/web/server/lib/guests/html-styles.ts`.
+Final tree: lint 0 warnings, dead-code 0 findings, type-check exit 0,
+`check-changed` ratchet clean, full suite 10040 passed with the sole failure
+the pre-existing `session-ui-store` slash-expansion case documented since
+task-05. Real isolated Web start plus one billed provider chat turn passed
+with zero console errors across desktop and mobile surfaces. Evidence:
+`/home/shizuku/Project/ohpichamber-omp-artifacts/release-hardening-2026-11-26/task12/`.
+
 W11 exposes OMP 19.1 command and skill discovery on their existing pages and
 creates grouped native prompts through the existing catalog. Command and prompt
 edits preserve unowned native metadata without evolving Capacitor response

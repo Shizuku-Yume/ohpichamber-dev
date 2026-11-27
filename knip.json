@@ -22,7 +22,20 @@
       "entry": [
         "src/**/*.bench.{ts,tsx}",
         "src/**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx}",
-        "src/**/__tests__/**/*.{js,cjs,mjs,jsx,ts,tsx}"
+        "src/**/__tests__/**/*.{js,cjs,mjs,jsx,ts,tsx}",
+        // bunfig.toml [test] preload — loaded by bun before every test file, invisible to static analysis.
+        "src/test/preload.ts",
+        // The shared-page bundle entry: vite-share-document.ts builds it as a standalone IIFE (SHARE_DOCUMENT_ENTRY), not through an import.
+        "src/share-document/entry.tsx",
+        // Build-time replacements named by string path in shims.ts (SHARE_DOCUMENT_SHIMS); the vite shim plugin resolves them, never an import.
+        "src/share-document/shims/desktop.ts",
+        "src/share-document/shims/effective-directory.ts",
+        "src/share-document/shims/emoji-picker.ts",
+        "src/share-document/shims/extension-block-frame.tsx",
+        "src/share-document/shims/extension-blocks.ts",
+        "src/share-document/shims/i18n.ts",
+        "src/share-document/shims/markdown.tsx",
+        "src/share-document/shims/ui-store.ts"
       ],
       "project": [
         "src/**/*.{ts,tsx}"
@@ -41,7 +54,6 @@
       "project": [
         "bin/**/*.js",
         "server/**/*.{js,mjs,cjs}",
-        "server/lib/routing/runtime.ts",
         "src/**/*.{ts,tsx}"
       ]
     },
@@ -89,7 +101,9 @@
         "src/worker/index.ts",
         "src/**/*.{test,spec}.ts",
         "scripts/*.mjs",
-        "src/interaction/host-policy.ipc.child.ts"
+        "src/interaction/host-policy.ipc.child.ts",
+        // Published as `@openchamber/agent-service/private-protocol` through a package.json export that points at dist/ build output; the Host in packages/web imports the wire contract through it and static analysis cannot follow the built files back to this source.
+        "src/supervisor/host-authorization-protocol.ts"
       ],
       "project": [
         "src/**/*.ts",

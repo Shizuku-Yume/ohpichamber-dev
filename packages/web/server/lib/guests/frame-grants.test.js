@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
+import { GUEST_BOOTSTRAP_SCRIPT } from 'ohpichamber-sdk';
 import { createGuestFrameGrants } from './frame-grants.js';
 import { registerGuestRoutes } from './routes.js';
 
@@ -66,6 +67,9 @@ describe('extension files by grant', () => {
     // Nothing is appended: relative URLs resolve under the grant on their own.
     expect(html.text).toContain('src="main.js"');
     expect(html.text).not.toContain('oc_url_token');
+    // The host bootstrap precedes the authored script so the document-local handshake can start.
+    expect(html.text).toContain(`<script data-openchamber-guest-bootstrap>${GUEST_BOOTSTRAP_SCRIPT}</script>`);
+    expect(html.text.indexOf('data-openchamber-guest-bootstrap')).toBeLessThan(html.text.indexOf('<script src="main.js">'));
 
     expect((await request(app).get(`/api/guest-files/${grant}/main.js`).expect(200)).text).toBe("fetch('data/items.json');");
     expect((await request(app).get(`/api/guest-files/${grant}/data/items.json`).expect(200)).text).toBe('[]');

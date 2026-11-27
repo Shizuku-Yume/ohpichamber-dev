@@ -195,7 +195,7 @@ export function useDiffViewFind({
         }
         expandStackedFile(rowPath);
         scrollToFile(rowPath);
-    }, [activeDiffScope, displayFile, expandStackedFile, isTreeMode, scrollToFile]);
+    }, [activeDiffScope, displayFile, expandStackedFile, isTreeMode, scrollToFile, setDisplayFile, setDisplayFileStaged]);
 
     const { registerViewer: registerViewerRef, openOnWord: handleFindWordRequest, focusNonce: findFocusNonce } = useDiffFindSurface({
         find: diffFind,

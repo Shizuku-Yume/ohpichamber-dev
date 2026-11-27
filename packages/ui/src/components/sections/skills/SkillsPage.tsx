@@ -11,6 +11,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { DiscoverySourcesDialog } from '@/components/sections/shared/DiscoverySourcesDialog';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
+import { useDraftFill } from './useDraftFill';
 import {
   useAutosave,
   AUTOSAVE_SAVED,
@@ -139,6 +140,7 @@ const SkillsInstalledPage: React.FC = () => {
   const saved = React.useRef({ key: '', content: '' });
   const current = React.useRef({ key: editorKey, content });
   current.current = { key: editorKey, content };
+  const draftNeedsFill = useDraftFill<NonNullable<typeof skillDraft>>();
 
   React.useEffect(() => {
     setFilePath(null);
@@ -150,7 +152,7 @@ const SkillsInstalledPage: React.FC = () => {
   React.useEffect(() => {
     let cancelled = false;
     setLoadFailed(false);
-    if (isNew && skillDraft) {
+    if (draftNeedsFill(editorKey, isNew ? skillDraft : null) && skillDraft) {
       setName(skillDraft.name);
       setScope(skillDraft.scope);
       setContent(skillDraft.content);
@@ -171,7 +173,7 @@ const SkillsInstalledPage: React.FC = () => {
       setFiles(detail.supportingFiles.map(file => ({ path: file.path, content: '' })));
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [directory, editorKey, getSkillDetail, isNew, selected, reference, skillDraft]);
+  }, [directory, editorKey, getSkillDetail, isNew, selected, reference, skillDraft, draftNeedsFill]);
 
   // A committed source revision is written by the store; the page only decides
   // when the editor is dirty and which reference owns the draft.

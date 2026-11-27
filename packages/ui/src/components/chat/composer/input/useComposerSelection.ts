@@ -8,6 +8,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
 import { usePinnedComposerSelection } from '../../pinnedComposerSelection';
+import { buildModelMetadataKey } from '@/stores/config/metadata';
 
 type Dependencies = {
     column: Pick<ReturnType<typeof useComposerColumn>, 'columnPinned'>;
@@ -46,16 +47,30 @@ export function useComposerSelection({
 
     const currentModelId = pinnedComposerSelection?.model?.modelId ?? configModelId;
 
-    const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
-
-    const providerCatalog = useConfigStore((state) => state.providers);
-
-    const currentModelMetadata = React.useMemo(
-        () => currentProviderId && currentModelId
-            ? useConfigStore.getState().getModelMetadata(currentProviderId, currentModelId)
-            : undefined,
-        [currentProviderId, currentModelId, modelsMetadata, providerCatalog],
+    const metadataCacheEntry = useConfigStore(
+        React.useCallback(
+            (state) => (currentProviderId && currentModelId
+                ? state.modelsMetadata.get(buildModelMetadataKey(currentProviderId, currentModelId))
+                : undefined),
+            [currentProviderId, currentModelId],
+        ),
     );
+
+    const liveProviderModel = useConfigStore(
+        React.useCallback(
+            (state) => (currentProviderId && currentModelId
+                ? state.providers.find((provider) => provider.providerId === currentProviderId)?.models.find((model) => model.modelId === currentModelId)
+                : undefined),
+            [currentProviderId, currentModelId],
+        ),
+    );
+
+    const currentModelMetadata = React.useMemo(() => {
+        if (!currentProviderId || !currentModelId) return undefined;
+        void metadataCacheEntry;
+        void liveProviderModel;
+        return useConfigStore.getState().getModelMetadata(currentProviderId, currentModelId);
+    }, [currentProviderId, currentModelId, metadataCacheEntry, liveProviderModel]);
 
     const configVariant = useConfigStore((state) => state.currentVariant);
 
@@ -97,5 +112,6 @@ export function useComposerSelection({
     return {
         currentProviderId, currentModelId, currentModelMetadata, agents, mailboxTarget, shownSessionId,
         currentAgentName, currentVariant, configCatalogLoaded, setAgent,
-        pinnedComposerSelection, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel};
+        pinnedComposerSelection, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel
+    };
 }

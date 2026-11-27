@@ -81,7 +81,7 @@ export function useDiffViewStackedViewport({
             }
             return changed ? next : previous;
         });
-    }, [activeDiffScope, changedFilePathsKey, effectiveDirectory, stackedDefaultCollapsedAll]);
+    }, [activeDiffScope, changedFilePathsKey, effectiveDirectory, setExpandedFiles, setMountedStackedFiles, stackedDefaultCollapsedAll]);
 
     const syncVisibleStackedFiles = React.useCallback(() => {
         visibleSyncFrameRef.current = null;
@@ -115,7 +115,7 @@ export function useDiffViewStackedViewport({
             }
             return changed ? mounted : previous;
         });
-    }, [expandedFiles, visible]);
+    }, [diffScrollRef, expandedFiles, fileSectionRefs, lastScrollAnchorRef, setMountedStackedFiles, visible]);
 
     const queueVisibleStackedFilesSync = React.useCallback(() => {
         if (!visible) return;
@@ -142,7 +142,7 @@ export function useDiffViewStackedViewport({
                 visibleSyncFrameRef.current = null;
             }
         };
-    }, [changedFiles, expandedFiles, queueVisibleStackedFilesSync, visible]);
+    }, [changedFiles, diffScrollRef, expandedFiles, queueVisibleStackedFilesSync, visible]);
 
     const getLayoutForFile = React.useCallback((file: FileEntry): 'inline' | 'side-by-side' => {
         const override = diffFileLayout[file.path];
@@ -179,7 +179,7 @@ export function useDiffViewStackedViewport({
             map.delete(path);
         }
         queueVisibleStackedFilesSyncRef.current();
-    }, []);
+    }, [fileSectionRefs]);
 
     const handleStackedEntryExpandedChange = React.useCallback((path: string, expanded: boolean) => {
         cancelPendingScrollAlignment();
@@ -205,7 +205,7 @@ export function useDiffViewStackedViewport({
             });
         }
         queueVisibleStackedFilesSyncRef.current();
-    }, [cancelPendingScrollAlignment]);
+    }, [cancelPendingScrollAlignment, setExpandedFiles, setMountedStackedFiles]);
 
     const handleExpandOrCollapseAll = React.useCallback(() => {
         cancelPendingScrollAlignment();
@@ -217,7 +217,7 @@ export function useDiffViewStackedViewport({
         });
         setMountedStackedFiles(new Set());
         queueVisibleStackedFilesSync();
-    }, [cancelPendingScrollAlignment, changedFiles, queueVisibleStackedFilesSync]);
+    }, [cancelPendingScrollAlignment, changedFiles, queueVisibleStackedFilesSync, setExpandedFiles, setMountedStackedFiles]);
 
     return { registerSectionRef, handleStackedEntryExpandedChange, handleExpandOrCollapseAll, getLayoutForFile, currentLayoutForAllFiles };
 }

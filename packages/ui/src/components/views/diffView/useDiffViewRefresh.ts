@@ -84,7 +84,7 @@ export function useDiffViewRefresh({
             }
             refresh(paths, unscoped);
         });
-    }, [captureScrollAnchor, clearDiffCache, effectiveDirectory, fetchStatus, git, refreshScope, visible]);
+    }, [captureScrollAnchor, clearDiffCache, effectiveDirectory, fetchStatus, git, lastScrollAnchorRef, pendingScrollAnchorRestoreRef, refreshScope, setFileDiffRefreshNonce, setWorkingTreeRevision, visible]);
 
     React.useLayoutEffect(() => {
         const anchor = pendingScrollAnchorRestoreRef.current;
@@ -104,6 +104,6 @@ export function useDiffViewRefresh({
             scrollRoot.scrollHeight - scrollRoot.clientHeight,
         );
         lastScrollAnchorRef.current = anchor;
-    }, [fileDiffRefreshNonce]);
+    }, [diffScrollRef, fileDiffRefreshNonce, fileSectionRefs, lastScrollAnchorRef, pendingScrollAnchorRestoreRef]);
 
 }

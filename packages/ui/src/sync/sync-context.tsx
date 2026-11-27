@@ -41,7 +41,7 @@ export { prefetchSessionBeforeMount } from './sync-stores'
 import { setSyncRefs, syncSubagentUpdate } from "./sync-refs"
 import { setActionRefs, setOptimisticRefs } from "./session-actions"
 import { aggregateLiveSessions, aggregateLiveSessionStatuses, areSessionListsEquivalent, areStatusMapsEquivalent, findLiveSession } from "./live-aggregate"
-import { applyGlobalSessionStatusEvents, applyGlobalSessionStatusSnapshot, useGlobalSessionStatusStore, setSessionParentResolver } from "./global-session-status"
+import { applyGlobalSessionStatusEvents, applyGlobalSessionStatusSnapshot, setSessionParentResolver } from "./global-session-status"
 import { applyGlobalBlockingRequestEvents, replaceGlobalBlockingRequestSnapshot } from "./global-blocking-requests"
 import { applyBackgroundShellEvents } from "./background-shells"
 import { collectScopedBlockingRequests, areRequestArraysReferentiallyEqual } from "./scoped-blocking-requests"
@@ -51,7 +51,7 @@ import type { State } from "./types"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { fileTreeChanges } from "@/lib/fileTreeChanges"
 import { SyncContext, SyncRuntimeContext, useSyncRuntime, useSyncSystem, type CurrentDirectorySource, type SyncRuntime, type SyncSystem } from './sync-runtime-context'
-export { SyncContext, SyncRuntimeContext, useSyncRuntime, type SyncRuntime } from './sync-runtime-context'
+export { SyncContext, SyncRuntimeContext, useSyncRuntime } from './sync-runtime-context'
 
 const EMPTY_APPROVALS: ApprovalRequest[] = []
 const EMPTY_QUESTIONS: QuestionRequest[] = []
@@ -743,7 +743,6 @@ export function useSessionTodos(sessionId: string | null | undefined, directory?
   return useDirectorySync(useCallback((state) => (sessionId ? state.snapshot[sessionId]?.todos ?? EMPTY_TODOS : EMPTY_TODOS), [sessionId]), directory)
 }
 export function useSessionStatusSnapshotReady(directory?: string, sessionId?: string): boolean { return useDirectorySync(useCallback((state) => sessionId ? Boolean(state.snapshot[sessionId]) && !state.sessionStatusInvalidated?.[sessionId] : Boolean(state.sessionStatusReady), [sessionId]), directory) }
-export function useGlobalSessionStatus(sessionId: string): SessionRuntimeStatus | undefined { return useGlobalSessionStatusStore(useCallback((state) => state.statusById.get(sessionId)?.status, [sessionId])) }
 export function useSessionPermissions(sessionId: string, directory?: string, options?: { bootstrap?: boolean }): ApprovalRequest[] {
   const store = useDirectoryStore(directory, options)
   return useSyncExternalStore(useCallback((notify) => subscribeDirectoryPermission(store, sessionId, notify), [store, sessionId]), useCallback(() => store.getState().permission[sessionId] ?? EMPTY_APPROVALS, [store, sessionId]), () => EMPTY_APPROVALS)
@@ -816,15 +815,6 @@ export function useSessionBlockingRequestCounts(scopes: readonly { directory: st
   return useSyncExternalStore(useCallback((notify) => { const subscriptions = scopes.map((scope) => { const store = childStores.ensureChild(scope.directory, { bootstrap: false }); return store.subscribe((state, prior) => { if (scope.sessionIds.some((id) => state.permission[id] !== prior.permission[id] || state.form[id] !== prior.form[id])) notify() }) }); return () => { for (const unsubscribe of subscriptions) unsubscribe() } }, [childStores, scopes]), get, get)
 }
 
-const bootingRoot = false
-
-const bootedAt = 0
-
-const BOOT_DEBOUNCE_MS = 1500
-
-export function isRecentBoot() {
-  return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
-}
 
 export { useSessionMessages, useSessionMessagesSelector, useSessionMessagesResolved, useSessionRenderable, useUserMessageHistory, useSessionPartsForMessages } from './session-message-hooks'
-export { buildSessionMessageRecordsSnapshot, useSessionMessageRecords, type SessionMessageRecordsSnapshot } from './session-message-records'
+export { buildSessionMessageRecordsSnapshot, useSessionMessageRecords } from './session-message-records'

@@ -34,7 +34,7 @@ type Dependencies = {
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
     expansion: Pick<ReturnType<typeof useComposerExpansion>, 'isMobileExpanded'>;
     permissionSettings: Pick<ReturnType<typeof useComposerPermissionSettings>, 'setSessionMode'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'newSessionDraftOpen' | 'isBtwActive' | 'btwSessionId' | 'currentSessionId' | 'currentManagementSessionId' | 'draftPermissionMode' | 'setDraftPermissionMode' | 'abortPromptSessionId' | 'acknowledgeSessionAbort'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'newSessionDraftOpen' | 'isBtwActive' | 'currentSessionId' | 'currentManagementSessionId' | 'draftPermissionMode' | 'setDraftPermissionMode' | 'abortPromptSessionId' | 'acknowledgeSessionAbort'>;
     mobileShell: Pick<ReturnType<typeof useComposerMobileShell>, 'mobileTextareaFocused' | 'mobileComposerExpanded'>;
     runtime: Pick<ReturnType<typeof useComposerRuntime>, 'isVSCode'>;
     draftHistory: Pick<ReturnType<typeof useComposerDraftHistory>, 'isPromptHistorySearchOpen'>;
@@ -52,7 +52,7 @@ export function useComposerControls({
     const { isMobileExpanded } = expansion;
     const { setSessionMode } = permissionSettings;
     const {
-        newSessionDraftOpen, isBtwActive, btwSessionId, currentSessionId, currentManagementSessionId,
+        newSessionDraftOpen, isBtwActive, currentSessionId, currentManagementSessionId,
         draftPermissionMode, setDraftPermissionMode, abortPromptSessionId, acknowledgeSessionAbort,
     } = sessionScope;
     const { mobileTextareaFocused, mobileComposerExpanded } = mobileShell;
@@ -140,8 +140,6 @@ export function useComposerControls({
         permissionScopeSessionId,
         safetyNetAvailable,
         isBtwActive,
-        btwSessionId,
-        currentSessionId,
         setDraftPermissionMode,
         setSessionMode,
         t,
@@ -173,8 +171,8 @@ export function useComposerControls({
     return {
         pillText, footerIconButtonClass, iconSizeClass, sendIconSizeClass, stopIconSizeClass,
         openMobileAttachSheet, toggleDictation, desktopDictating, iconButtonBaseClass, goalObjectiveLength,
-    footerPaddingClass, footerGapClass, abortShortcutReaches, shownPermissionMode,
-    isPermissionAutoAcceptInteractive,
+        footerPaddingClass, footerGapClass, abortShortcutReaches, shownPermissionMode,
+        isPermissionAutoAcceptInteractive,
         handlePermissionModeCycle, setDesktopDictating, waitingForAgent,
     };
 }

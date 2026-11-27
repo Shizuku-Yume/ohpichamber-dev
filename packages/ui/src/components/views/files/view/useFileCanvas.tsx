@@ -57,7 +57,7 @@ export function useFileCanvas({ canvasState, draft, fileAssets, fileDocument, fi
     if (!loadedFilePath) return;
     if (binaryCanvasRef.current && lastLoadedPathRef.current === loadedFilePath) setCanvasRemountNonce((nonce) => nonce + 1);
     lastLoadedPathRef.current = loadedFilePath;
-  }, [loadedFilePath]);
+  }, [binaryCanvasRef, loadedFilePath, setCanvasRemountNonce]);
 
   const handleCanvasLoadProblem = React.useCallback((message: string) => {
     const path = selectedFilePathRef.current;
@@ -65,7 +65,7 @@ export function useFileCanvas({ canvasState, draft, fileAssets, fileDocument, fi
     setCanvasDirty(false);
     setCanvasViewMode('edit');
     toast.error(message);
-  }, []);
+  }, [canvasViewModeByPathRef, selectedFilePathRef, setCanvasDirty, setCanvasViewMode]);
 
   const canvasKey = selectedFile ? `${editorDocumentPath ?? selectedFile.path}:${canvasRemountNonce}` : '';
   const canvasElement = showCanvas && selectedFile && guestFileEditor ? (
@@ -96,6 +96,6 @@ export function useFileCanvas({ canvasState, draft, fileAssets, fileDocument, fi
   }, []);
 
   return {
-  canvasElement, openExcalidrawExtensionCard,
+    canvasElement, openExcalidrawExtensionCard,
   };
 }

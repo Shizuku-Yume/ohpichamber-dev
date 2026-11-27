@@ -511,12 +511,12 @@ type GitNetworkSyncRemoteRequest = {
 
 export type GitNetworkOperationRequest =
   | (ExistingRepositoryNetworkOperationRequest & {
-      operation: 'push';
-      forceWithLease?: { expectedRemoteSha: string };
-      configureUpstream?: boolean;
-      destinationSelectionId?: string;
-      review?: GitPushReviewIntent;
-    })
+    operation: 'push';
+    forceWithLease?: { expectedRemoteSha: string };
+    configureUpstream?: boolean;
+    destinationSelectionId?: string;
+    review?: GitPushReviewIntent;
+  })
   | (ExistingRepositoryNetworkOperationRequest & { operation: 'fetch'; fetchScope?: 'ref' })
   | (Omit<ExistingRepositoryNetworkOperationRequest, 'sourceRef' | 'destinationRef'> & {
     operation: 'fetch';
@@ -555,15 +555,15 @@ export type GitNetworkOperationRequest =
     };
   }
   | ({
-      operation: 'clone';
-      remoteUrl: string;
-      destinationPath: string;
-      gitIdentityId?: string;
-      providerAccount?: SourceControlIdentity & { accountId: string };
-      auxiliaryGrants?: Array<{
-        kind: 'submodule' | 'lfs';
-        endpoint: GitNetworkRedactedEndpoint;
-      } & (
+    operation: 'clone';
+    remoteUrl: string;
+    destinationPath: string;
+    gitIdentityId?: string;
+    providerAccount?: SourceControlIdentity & { accountId: string };
+    auxiliaryGrants?: Array<{
+      kind: 'submodule' | 'lfs';
+      endpoint: GitNetworkRedactedEndpoint;
+    } & (
         | { transportMode: 'managed'; credentialId: string }
         | { transportMode: 'system'; unverifiedConfirmed: true; credentialId?: never }
         | { transportMode: 'anonymous'; credentialId?: never; unverifiedConfirmed?: never }
@@ -1691,13 +1691,13 @@ export type ChangeRequestListStatusesResult =
 export type RepositoryReferencePage =
   | { connected: false }
   | {
-      connected: true;
-      repo: GitHubRepoRef | null;
-      items: RepositoryReference[];
-      cursor: string | null;
-      hasMore: boolean;
-      total: number;
-    };
+    connected: true;
+    repo: GitHubRepoRef | null;
+    items: RepositoryReference[];
+    cursor: string | null;
+    hasMore: boolean;
+    total: number;
+  };
 
 export type RepositoryReferencesAcrossSkip = 'no-repo' | 'disconnected' | 'invalid-context' | 'error';
 
@@ -1939,8 +1939,6 @@ export interface RuntimeAPIs {
   vscode?: VSCodeAPI;
   worktrees?: WorktreeMetadata[];
 }
-
-export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
 
 export interface GitCommitExtraFailure {
   extra: 'changeId' | 'notes';

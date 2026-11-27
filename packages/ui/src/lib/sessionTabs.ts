@@ -4,8 +4,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
-import { getRuntimeKey } from '@/lib/runtime-switch';
-import { sessionTabScopeFor, sessionTabSeedFor } from '@/lib/sessionTabScope';
 
 export const activateSessionTabByIndex = (index: number): boolean => {
   const { tabIds } = useSessionTabsStore.getState();
@@ -62,16 +60,6 @@ export const closeSessionTabAndActivateNeighbour = (sessionId: string): void => 
   closeTab(sessionId);
 };
 
-export const followSessionTabMove = (sessionId: string, destinationDirectory: string): void => {
-  const runtimeKey = getRuntimeKey();
-  const scope = sessionTabScopeFor(runtimeKey, destinationDirectory);
-  if (!scope) return;
-  useSessionTabsStore.getState().followSessionMove(sessionId, scope, `${runtimeKey}|`, () => {
-    const { hasLoaded, activeSessions } = useGlobalSessionsStore.getState();
-    if (!hasLoaded) return null;
-    return sessionTabSeedFor(destinationDirectory, activeSessions, useProjectsStore.getState().projects.map((project) => project.path));
-  });
-};
 
 export const leaveFinishedSessions = (sessionIds: readonly string[], options?: { projectId?: string | null }): void => {
   if (sessionIds.length === 0) return;

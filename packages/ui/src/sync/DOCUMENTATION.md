@@ -64,7 +64,7 @@ The directory-scoped sync stores do not provide a complete global view:
 - They are optimized for live per-directory domain data and high-frequency event streaming
 - They do not maintain the global active and archived session view needed by the sidebar and retention settings
 
-Use the directory sync stores for live session, message, approval, and question state. Use the global sessions store for cold or global session coverage (archived pages and unopened directories). Use aggregated child-store sessions (`useAllLiveSessions()`) and the global session status index (`useGlobalSessionStatus()`) for live truth across initialized directories.
+Use the directory sync stores for live session, message, approval, and question state. Use the global sessions store for cold or global session coverage (archived pages and unopened directories). Use aggregated child-store sessions (`useAllLiveSessions()`) and the global session status index (`useGlobalSessionStatusStore`) for live truth across initialized directories.
 
 `session-live-work.ts` derives Guest tool intent and context fill only from reducer-admitted canonical events and adopted snapshots. Snapshot tools must belong to the current active run, never historical running parts. Terminal events clear live tools; compaction invalidates an old context reading. The bounded cache resets with the runtime, and a Host read started before that reset cannot repopulate it.
 
@@ -545,7 +545,7 @@ Live activity across directories is coordinated through specialized helpers:
   - Shell identity is `(sessionId, workerGeneration, jobId)`, not `jobId` alone. Terminal jobs cannot be reopened within an epoch; workspace snapshots enforce monotonic revisions, preserve newer mutations, reject stale reads, and invalidate ended records from a previous epoch.
   - Directory bootstrap environment discovery seeds background shells via `refreshBackgroundShells` and `client.getShellSnapshot({ kind: "workspace", workspaceId })`
   - Keeps session turn activity open while a background command executes
-  - `useRunningShell` takes `ShellJobIdentity`; `replaceDirectoryShells` accepts a native `ShellSnapshot` only.
+  - `replaceDirectoryShells` accepts a native `ShellSnapshot` only.
   - Mid-turn foreground-tool detach is not a native capability. Its button, `canBackground` derivation and shortcut are retired rather than advertised as disabled or mapped to a different operation.
   - Native background jobs, including jobs started through canonical `startShell`, retain their store, Guest observation and `BackgroundShellsStrip`. Stop addresses the owning session, epoch, worker generation and job ID through canonical `stopShell`; only the matching canonical terminal event removes the strip row. The unused legacy SDK output-polling hook and shell methods are removed.
 

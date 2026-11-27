@@ -116,7 +116,7 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
     if (isMobile) {
       setShowMobilePageContent(false);
     }
-  }, [handleSelectFile, isMobile, onCloseFile, removeOpenPath, root, selectedFile?.path, setSelectedPath]);
+  }, [handleSelectFile, isMobile, onCloseFile, removeOpenPath, root, selectedFile?.path, setDesktopImageSrc, setFileContent, setFileError, setLoadedFilePath, setSelectedPath, setShowMobilePageContent]);
 
   const discardAndContinue = React.useCallback(() => {
     const nextFile = pendingSelectFileRef.current;
@@ -150,7 +150,7 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
       return;
     }
 
-  }, [closeOpenFile, fileContent, handleSelectFile]);
+  }, [closeOpenFile, fileContent, handleSelectFile, pendingClosePathRef, pendingSelectFileRef, setCanvasDirty, setCanvasRemountNonce, setConfirmDiscardOpen, setDraftContent, skipDirtyOnceRef]);
 
   const saveAndContinue = React.useCallback(async () => {
     const nextFile = pendingSelectFileRef.current;
@@ -186,7 +186,7 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
       return;
     }
 
-  }, [closeOpenFile, handleSelectFile, saveDraft]);
+  }, [closeOpenFile, handleSelectFile, pendingClosePathRef, pendingSelectFileRef, saveDraft, setConfirmDiscardOpen, skipDirtyOnceRef]);
 
   const handleCloseFile = React.useCallback((path: string) => {
     const isActive = selectedFile?.path === path;
@@ -200,7 +200,7 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
     }
 
     closeOpenFile(path, nextFile);
-  }, [closeOpenFile, getNextOpenFile, isDirty, openFiles, selectedFile?.path]);
+  }, [closeOpenFile, getNextOpenFile, isDirty, openFiles, pendingClosePathRef, pendingSelectFileRef, selectedFile?.path, setConfirmDiscardOpen]);
 
   const handleCloseFileRef = React.useRef(handleCloseFile);
   React.useEffect(() => {
@@ -213,6 +213,6 @@ export function useFileClosing({ canvasState, closeState, draft, fileDocument, f
     return registerCloseTabTarget(() => handleCloseFileRef.current(closeTargetPath), rootRef);
   }, [closeTargetPath, visible]);
   return {
-  discardAndContinue, saveAndContinue, rootRef,
+    discardAndContinue, saveAndContinue, rootRef,
   };
 }

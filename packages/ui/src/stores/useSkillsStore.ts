@@ -285,18 +285,3 @@ subscribeToConfigChanges(event => {
   }
 });
 
-const DEFAULT_SKILLS_CACHE_KEY = '__default__';
-
-const getSkillsCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_SKILLS_CACHE_KEY;
-};
-
-const EMPTY_SKILLS: DiscoveredSkill[] = [];
-
-export const selectSkillsForDirectory = (
-  state: Pick<SkillsStore, 'skillsByDirectory'>,
-  directory?: string | null,
-): DiscoveredSkill[] => {
-  const cacheKey = getSkillsCacheKey(resolveDirectory(directory));
-  return state.skillsByDirectory[cacheKey] ?? EMPTY_SKILLS;
-};

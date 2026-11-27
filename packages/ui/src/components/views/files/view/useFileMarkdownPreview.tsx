@@ -36,11 +36,11 @@ export function useFileMarkdownOutline({ fileKinds, markdownPreview, tabs, viewM
   const mdPreviewShown = isMarkdown && mdViewMode === 'preview';
   React.useEffect(() => {
     if (!mdPreviewShown) setMdPreviewOutlineOpen(false);
-  }, [mdPreviewShown]);
+  }, [mdPreviewShown, setMdPreviewOutlineOpen]);
   const outlineFilePath = selectedFile?.path;
   React.useEffect(() => {
     setMdPreviewOutlineOpen(false);
-  }, [outlineFilePath]);
+  }, [outlineFilePath, setMdPreviewOutlineOpen]);
 
-  return {  };
+  return {};
 }

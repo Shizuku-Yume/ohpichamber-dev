@@ -4,6 +4,8 @@ import { type FileLineEnding } from '../../fileEditorContent';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { type useFileScope } from './useFileScope';
 
+export type PendingPathMove = { from: string; to: string };
+
 export function useFileDocument({ scope }: {
   scope: Pick<ReturnType<typeof useFileScope>, 'root'>;
 }) {
@@ -17,7 +19,12 @@ export function useFileDocument({ scope }: {
   const [loadedFilePath, setLoadedFilePath] = React.useState<string | null>(null);
   const loadedFilePathRef = React.useRef(loadedFilePath);
   loadedFilePathRef.current = loadedFilePath;
-  const pendingPathMoveRef = React.useRef<{ from: string; to: string } | null>(null);
+  const pendingPathMoveRef = React.useRef<PendingPathMove | null>(null);
+  const [pendingPathMoveTo, setPendingPathMoveToState] = React.useState<string | null>(null);
+  const setPendingPathMove = React.useCallback((move: PendingPathMove | null) => {
+    pendingPathMoveRef.current = move;
+    setPendingPathMoveToState(move?.to ?? null);
+  }, []);
   const [documentPathAlias, setDocumentPathAlias] = React.useState<{ path: string; documentPath: string } | null>(null);
   const editorDocumentPath = documentPathAlias && documentPathAlias.path === loadedFilePath
     ? documentPathAlias.documentPath
@@ -35,5 +42,5 @@ export function useFileDocument({ scope }: {
   const [fileContentRevision, setFileContentRevision] = React.useState(0);
   const [contentDetectedBinary, setContentDetectedBinary] = React.useState(false);
 
-  return { artifactSize, setArtifactSize, fileContent, setFileContent, fileLoading, setFileLoading, fileError, setFileError, desktopImageSrc, setDesktopImageSrc, loadedFilePath, setLoadedFilePath, loadedFilePathRef, pendingPathMoveRef, setDocumentPathAlias, editorDocumentPath, failedFilePath, setFailedFilePath, missingSeenPathRef, filePositionKey, loadedFileLineEnding, setLoadedFileLineEnding, lastLoadedFileStatRef, lastLoadedFileContentRef, lastLoadedFileRevisionRef, activeFileLoadIdRef, loadingFilePathRef, fileContentRevision, setFileContentRevision, contentDetectedBinary, setContentDetectedBinary };
+  return { artifactSize, setArtifactSize, fileContent, setFileContent, fileLoading, setFileLoading, fileError, setFileError, desktopImageSrc, setDesktopImageSrc, loadedFilePath, setLoadedFilePath, loadedFilePathRef, pendingPathMoveRef, pendingPathMoveTo, setPendingPathMove, setDocumentPathAlias, editorDocumentPath, failedFilePath, setFailedFilePath, missingSeenPathRef, filePositionKey, loadedFileLineEnding, setLoadedFileLineEnding, lastLoadedFileStatRef, lastLoadedFileContentRef, lastLoadedFileRevisionRef, activeFileLoadIdRef, loadingFilePathRef, fileContentRevision, setFileContentRevision, contentDetectedBinary, setContentDetectedBinary };
 }

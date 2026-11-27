@@ -3,7 +3,7 @@ import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
 
-export const isWorktreeTeardownFailure = (error: Error): boolean => (
+const isWorktreeTeardownFailure = (error: Error): boolean => (
   'code' in error && error.code === 'WORKTREE_TEARDOWN_FAILED'
 );
 

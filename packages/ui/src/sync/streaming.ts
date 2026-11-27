@@ -77,16 +77,3 @@ export function updateChangedStreamingSessions(state: State, previous: State, no
   if (didChange) useStreamingStore.setState({ streamingMessageIds: ids, messageStreamStates: states });
 }
 
-export function touchStreamingSession(sessionID: string, now = Date.now()): void {
-  countSyncPerformance("streamingHeartbeatAttempts")
-  const current = useStreamingStore.getState()
-  const messageID = current.streamingMessageIds.get(sessionID)
-  if (!messageID) return
-  const existing = current.messageStreamStates.get(messageID)
-  if (!existing || existing.phase !== "streaming" || now - existing.lastUpdateAt < STREAMING_HEARTBEAT_MS) return
-
-  const messageStreamStates = new Map(current.messageStreamStates)
-  messageStreamStates.set(messageID, { ...existing, lastUpdateAt: now })
-  countSyncPerformance("streamingHeartbeatCommits")
-  useStreamingStore.setState({ messageStreamStates })
-}

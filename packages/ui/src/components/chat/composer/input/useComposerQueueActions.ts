@@ -73,7 +73,7 @@ type Dependencies = {
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
     sendHandlers: Pick<ComposerSendHandlers, 'handleQueueMessageRef' | 'handleSubmitRef'>;
     sendAvailability: Pick<ReturnType<typeof useComposerSendAvailability>, 'getCurrentInputSnapshot'>;
-    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'clearAttachedFiles' | 'chatDraftIdentity' | 'currentDirectory' | 'attachedFiles'>;
+    sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentSessionId' | 'inputMode' | 'sendHeldByMissingFolderRef' | 'consumePendingSyntheticParts' | 'projectActionsRef' | 'chatDraftIdentity' | 'currentDirectory' | 'attachedFiles'>;
     queueState: Pick<ReturnType<typeof useComposerQueueState>, 'messageQueueTarget' | 'addToQueue' | 'popQueuedToInput' | 'takeQueuedItem'>;
     language: Pick<ReturnType<typeof useComposerLanguage>, 'guestCommands' | 'readSessionMentionsBeforeSend' | 'linkedReferences' | 'availableSkills' | 'referenceLinksIn' | 'sessionMentionsIn' | 'rememberSessionMentions' | 'loadCommands'>;
     selection: Pick<ReturnType<typeof useComposerSelection>, 'currentProviderId' | 'currentModelId' | 'mailboxTarget' | 'currentAgentName' | 'currentVariant' | 'configuredReasoningEffort' | 'persistedThinkingLevel' | 'reasoningEffortForModel'>;
@@ -101,7 +101,7 @@ export function useComposerQueueActions({
     const { getCurrentInputSnapshot } = sendAvailability;
     const {
         currentSessionId, inputMode, consumePendingSyntheticParts,
-        clearAttachedFiles, chatDraftIdentity, currentDirectory, attachedFiles } = sessionScope;
+        chatDraftIdentity, currentDirectory, attachedFiles } = sessionScope;
     const { messageQueueTarget, addToQueue, popQueuedToInput, takeQueuedItem } = queueState;
     const {
         guestCommands, readSessionMentionsBeforeSend, linkedReferences,
@@ -317,7 +317,7 @@ export function useComposerQueueActions({
             return;
         }
         if (isQueueRuntime()) recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [largeTextPasteOffer, waitForPendingAttachments, attachmentsToSend, handleQueueMessageRef, getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel, t, readSessionMentionsBeforeSend, sessionMentionsIn]);
+    }, [largeTextPasteOffer, waitForPendingAttachments, attachmentsToSend, handleQueueMessageRef, getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel, t, readSessionMentionsBeforeSend, sessionMentionsIn, currentAgentName, handleSubmitRef, setLinkedReferencesFor, composerText, updateLinkedReferencesFor, setMessage, composerRef, confirmedMentionsRef]);
 
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
         const synthetic: SyntheticContextPart[] = [];

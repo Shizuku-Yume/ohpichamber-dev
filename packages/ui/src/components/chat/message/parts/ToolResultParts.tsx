@@ -20,7 +20,7 @@ export const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 );
 
 
-export const QuietAction: React.FC<
+const QuietAction: React.FC<
     { label: string; icon?: IconName; onClick: () => void }
     & Pick<React.ComponentProps<'button'>, 'onPointerEnter' | 'onPointerLeave' | 'onPointerDown' | 'onFocus' | 'onBlur'>
 > = ({ label, icon, onClick, onPointerDown, ...handlers }) => (

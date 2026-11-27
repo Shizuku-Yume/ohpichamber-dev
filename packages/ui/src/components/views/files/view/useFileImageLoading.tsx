@@ -90,5 +90,5 @@ export function useFileImageLoading({ fileDocument, fileKinds, scope, tabs, file
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [fileContentRevision, files, isSelectedImage, isSelectedSvg, resolveFileReadOptions, root, selectedFile?.path, selectedFileReadOptions, t]);
+  }, [fileContentRevision, files, isSelectedImage, isSelectedSvg, resolveFileReadOptions, root, selectedFile?.path, selectedFileReadOptions, setDesktopImageSrc, setFailedFilePath, setFileError, setFileLoading, setLoadedFilePath, t]);
 }

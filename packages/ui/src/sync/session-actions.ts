@@ -1,5 +1,4 @@
 import { ConnectionLostError } from './connection-lost-error';
-import type { SentMessage } from '@/sync/send-message-options';
 
 // The review-flow callback signature is retained for its Task 16 cutover;
 // session records and action responses use the Canonical contract directly.
@@ -596,8 +595,8 @@ function dir() {
 }
 
 function connectionLostError(): ConnectionLostError {
-  const { hasEverConnected, lastDisconnectReason } = useConfigStore.getState()
-  return new ConnectionLostError({ reason: lastDisconnectReason || null, everConnected: hasEverConnected })
+ const { hasEverConnected, lastDisconnectReason } = useConfigStore.getState()
+ return new ConnectionLostError({ reason: lastDisconnectReason || null, everConnected: hasEverConnected })
 }
 
 const CONNECTION_GRACE_MS = 2000
@@ -607,20 +606,20 @@ const RELAY_CONNECTION_PROBE_MS = 3000
 export async function waitForConnectionOrThrow(options: { intent?: 'prompt' } = {}): Promise<void> {
  const finishWait = options.intent === 'prompt' ? beginAgentStartupWait(getRuntimeSwitchRevision()) : undefined
  try {
- const relayed = isRelayModeActive()
- const deadline = Date.now() + (relayed ? RELAY_CONNECTION_GRACE_MS : CONNECTION_GRACE_MS)
- const probeMs = relayed ? RELAY_CONNECTION_PROBE_MS : CONNECTION_PROBE_MS
- while (Date.now() < deadline) {
-  if (useConfigStore.getState().isConnected) return
-  const remainingMs = deadline - Date.now()
-  if (remainingMs <= 0) break
-  if (await useConfigStore.getState().probeConnection({ timeoutMs: Math.min(probeMs, remainingMs) })) return
-  const sleepMs = Math.min(100, deadline - Date.now())
-  if (sleepMs > 0) {
-   await new Promise((resolve) => setTimeout(resolve, sleepMs))
+  const relayed = isRelayModeActive()
+  const deadline = Date.now() + (relayed ? RELAY_CONNECTION_GRACE_MS : CONNECTION_GRACE_MS)
+  const probeMs = relayed ? RELAY_CONNECTION_PROBE_MS : CONNECTION_PROBE_MS
+  while (Date.now() < deadline) {
+   if (useConfigStore.getState().isConnected) return
+   const remainingMs = deadline - Date.now()
+   if (remainingMs <= 0) break
+   if (await useConfigStore.getState().probeConnection({ timeoutMs: Math.min(probeMs, remainingMs) })) return
+   const sleepMs = Math.min(100, deadline - Date.now())
+   if (sleepMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, sleepMs))
+   }
   }
- }
- throw connectionLostError()
+  throw connectionLostError()
  } finally {
   finishWait?.()
  }
@@ -715,12 +714,12 @@ function withArchivedAt(sessionId: string, archivedAt: number | null): Canonical
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)))
 
 function getSessionDirectory(sessionId: string): string | undefined {
-  const globalSession = getGlobalSessionSnapshot(sessionId)
-  const globalDirectory = globalSession ? resolveGlobalSessionDirectory(globalSession) ?? undefined : undefined
-  return globalDirectory
-    || findSessionDirectoryInChildStores(sessionId)
-    || useSessionUIStore.getState().getDirectoryForSession(sessionId)
-    || dir()
+ const globalSession = getGlobalSessionSnapshot(sessionId)
+ const globalDirectory = globalSession ? resolveGlobalSessionDirectory(globalSession) ?? undefined : undefined
+ return globalDirectory
+  || findSessionDirectoryInChildStores(sessionId)
+  || useSessionUIStore.getState().getDirectoryForSession(sessionId)
+  || dir()
 }
 
 function findSessionDirectoryInChildStores(sessionId: string): string | null {
@@ -1120,12 +1119,12 @@ async function cleanupReviewMetadataBeforeDelete(
  if (known) {
   metadata = known.metadata ?? null
  } else {
- try {
-  metadata = (await canonicalClient.getSessionMetadata(sessionId)).metadata
- } catch {
-  return
- }
- if (isStaleRuntime(expectedRuntimeKey)) return
+  try {
+   metadata = (await canonicalClient.getSessionMetadata(sessionId)).metadata
+  } catch {
+   return
+  }
+  if (isStaleRuntime(expectedRuntimeKey)) return
  }
 
  const unlinkParent = async (originalSessionID: string, unlink: (metadata: SessionMetadataRecord) => SessionMetadataRecord) => {
@@ -1270,9 +1269,9 @@ export function reconcileExternallyDeletedSession(identity: {
 }
 
 type ChatDirectoryCleanupPlan = {
-  directory: string | undefined
-  rootDeleted: boolean
-  cascadeIds: ReadonlySet<string>
+ directory: string | undefined
+ rootDeleted: boolean
+ cascadeIds: ReadonlySet<string>
 }
 
 function planChatDirectoryCleanup(sessionId: string, snapshot: CanonicalSession | null, directory: string | undefined): ChatDirectoryCleanupPlan {
@@ -1312,7 +1311,7 @@ async function cleanupDeletedChatDirectory(plan: ChatDirectoryCleanupPlan, expec
 }
 
 export type DeleteSessionOptions = {
-  expectedRuntimeKey?: string
+ expectedRuntimeKey?: string
 }
 
 export async function deleteSession(sessionId: string, options?: DeleteSessionOptions): Promise<boolean> {
@@ -1349,7 +1348,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
 }
 
 export type DeleteSessionsOptions = {
-  expectedRuntimeKey?: string
+ expectedRuntimeKey?: string
 }
 
 export async function deleteSessions(
@@ -1381,7 +1380,7 @@ export async function deleteSessions(
   const snapshot = getGlobalSessionSnapshot(id)
   if (!snapshot || snapshot.parentSessionId != null || !directory) continue
   cleanupPlanById.set(id, { directory, rootDeleted: true, cascadeIds: new Set() })
-  }
+ }
  let cursor = 0
  const lanes = Array.from({ length: Math.min(DELETE_CONCURRENCY, ids.length) }, async () => {
   while (cursor < ids.length) {
@@ -1454,7 +1453,7 @@ export async function archiveSession(sessionId: string, expectedRuntimeKey = get
 }
 
 export type ArchiveSessionsOptions = {
-  expectedRuntimeKey?: string
+ expectedRuntimeKey?: string
 }
 
 export async function archiveSessions(
@@ -1645,11 +1644,11 @@ async function rereadRestoredSessionStatus(sessionId: string, sessionDirectory: 
  const snapshot = await canonicalClient.getSnapshot(sessionId).catch(() => null)
  if (isStaleRuntime(expectedRuntimeKey) || snapshot === null) return
  store.setState((current) => {
-   if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
-    || current.session_status[sessionId] !== before.session_status[sessionId]) return current
-   const invalidated = { ...(current.sessionStatusInvalidated ?? {}) }
-   delete invalidated[sessionId]
-   return { ...installSessionSnapshot(current, snapshot), sessionStatusInvalidated: invalidated }
+  if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
+   || current.session_status[sessionId] !== before.session_status[sessionId]) return current
+  const invalidated = { ...(current.sessionStatusInvalidated ?? {}) }
+  delete invalidated[sessionId]
+  return { ...installSessionSnapshot(current, snapshot), sessionStatusInvalidated: invalidated }
  })
 }
 
@@ -1661,17 +1660,17 @@ async function rereadRestoredSessionStatus(sessionId: string, sessionDirectory: 
  */
 function relocateRestoredSession(sessionId: string, expectedRuntimeKey: string): void {
  if (isStaleRuntime(expectedRuntimeKey)) return
-   void import("@/lib/worktrees/relocateRestoredSession")
-    .then((module) => {
-     if (!isStaleRuntime(expectedRuntimeKey)) return module.relocateRestoredSessionWithNotice(sessionId)
-    })
-    .catch((error: unknown) => console.warn("[session-actions] restored session relocation failed", error))
-  }
+ void import("@/lib/worktrees/relocateRestoredSession")
+  .then((module) => {
+   if (!isStaleRuntime(expectedRuntimeKey)) return module.relocateRestoredSessionWithNotice(sessionId)
+  })
+  .catch((error: unknown) => console.warn("[session-actions] restored session relocation failed", error))
+}
 
 
 export type UnarchiveSessionsOptions = {
-  expectedRuntimeKey?: string
-  undo?: boolean
+ expectedRuntimeKey?: string
+ undo?: boolean
 }
 
 export async function unarchiveSessions(
@@ -1716,7 +1715,7 @@ export async function unarchiveSessions(
  }
 
  if (flatIds.length === 0) return { restoredIds, failedIds }
-  if (isStaleRuntime(expectedRuntimeKey)) {
+ if (isStaleRuntime(expectedRuntimeKey)) {
   failedIds.push(...flatIds)
   return { restoredIds, failedIds }
  }
@@ -1746,7 +1745,7 @@ export async function unarchiveSessions(
   if (outcome.outcome !== "restored") {
    batchFailure = new Error(`unarchive failed: ${outcome.reason}`)
    break
- }
+  }
   batchCovered = offset + chunk.length
   restored.push(...outcome.restored)
   for (const id of outcome.failedIds) serverFailed.add(id)
@@ -2133,20 +2132,6 @@ export async function dismissOpenFormsForSession(sessionId: string): Promise<boo
  return true
 }
 
-export async function deferQuestionsAfterSend(forms: readonly FormRequest[], sent: SentMessage | undefined): Promise<void> {
-  if (sent?.route !== "prompt") return
-  await Promise.all(forms.filter((form) => form.sessionId === sent.sessionId).map(async (form) => {
-    try {
-      await cancelForm(form.sessionId, form.questionId)
-    } catch (error) {
-      if (isFormRequestNotFoundError(error)) {
-        recoverStaleBlockingRequest(form.sessionId)
-      } else if (!isFormRequestNotFoundError(error)) {
-        console.error("[session-actions] Could not defer an open question after a send:", error)
-      }
-    }
-  }))
-}
 
 export async function revertToMessage(sessionId: string, messageId: string): Promise<void> {
  const runtimeKey = getRuntimeKey()

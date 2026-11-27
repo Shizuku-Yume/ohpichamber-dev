@@ -5,11 +5,10 @@ import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 
 const trimmedOrUndefined = (value: string | undefined): string | undefined => value?.trim() || undefined
 
-export const isUiFocused = (): boolean => (
+const isUiFocused = (): boolean => (
   typeof document !== "undefined" && document.visibilityState === "visible" && document.hasFocus()
 )
 
-export const isUiAway = (): boolean => "document" in globalThis && !isUiFocused()
 
 export const handleUiNotificationEvent = (notification: HostNotification): void => {
   const kind = trimmedOrUndefined(notification.kind)

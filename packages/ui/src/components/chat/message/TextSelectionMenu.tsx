@@ -27,8 +27,8 @@ import { useLiveActivityHold } from '@/hooks/useLiveActivityHold';
 import { useCommentQuoteRects } from '@/hooks/useCommentQuoteRects';
 import { useSelectionCommentHandoff } from '@/hooks/useSelectionCommentHandoff';
 import {
-    useMobileCommentComposerController,
-    useMobileCommentDraft,
+  useMobileCommentComposerController,
+  useMobileCommentDraft,
 } from '../composer/comment/MobileCommentComposerContext';
 import { appendWithLineBreaks } from '../composer/text';
 import { SelectionApprovalButton } from './SelectionApprovalButton';
@@ -179,7 +179,7 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
     commentModeRef.current = false;
     setCommentText('');
     isMenuVisibleRef.current = false;
-  }, []);
+  }, [setCommentRects]);
 
   React.useEffect(() => hideMenu, [currentSessionId, newSessionDraftOpen, hideMenu]);
 
@@ -414,7 +414,7 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
         return;
       }
     }
-    
+
     if (!ownsSelection(container, range)) {
       if (!isDraggingRef.current) {
         hideMenu();
@@ -484,7 +484,7 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
     };
 
     document.addEventListener('selectionchange', handleSelectionChange);
-    
+
     container.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
 
@@ -832,24 +832,24 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
             </button>
 
             <Tooltip>
-            <TooltipTrigger asChild>
-            <button
-              onClick={handleAddToChat}
-              className={cn(
-                'flex flex-[1_0_auto] items-center gap-2 rounded-xl px-3 py-2.5 text-start',
-                'text-sm font-medium leading-tight',
-                'bg-[var(--primary-base)] text-[var(--primary-foreground)]',
-                'active:opacity-80',
-                'transition-opacity duration-150'
-              )}
-              aria-label={t('chat.textSelection.title.addToCurrentChat')}
-              type="button"
-            >
-              <Icon name="add" className="h-5 w-5 flex-shrink-0" />
-              <span className="whitespace-normal hyphens-auto">{t('chat.textSelection.actions.addToInput')}</span>
-            </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6}><TooltipLabelWithShortcut label={t('chat.textSelection.title.addToCurrentChat')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('add_selection_to_chat', shortcutOverrides), '')} /></TooltipContent>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleAddToChat}
+                  className={cn(
+                    'flex flex-[1_0_auto] items-center gap-2 rounded-xl px-3 py-2.5 text-start',
+                    'text-sm font-medium leading-tight',
+                    'bg-[var(--primary-base)] text-[var(--primary-foreground)]',
+                    'active:opacity-80',
+                    'transition-opacity duration-150'
+                  )}
+                  aria-label={t('chat.textSelection.title.addToCurrentChat')}
+                  type="button"
+                >
+                  <Icon name="add" className="h-5 w-5 flex-shrink-0" />
+                  <span className="whitespace-normal hyphens-auto">{t('chat.textSelection.actions.addToInput')}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}><TooltipLabelWithShortcut label={t('chat.textSelection.title.addToCurrentChat')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('add_selection_to_chat', shortcutOverrides), '')} /></TooltipContent>
             </Tooltip>
 
             {canReadAloud ? (

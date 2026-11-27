@@ -1,5 +1,5 @@
 import { useProjectsStore } from "@/stores/useProjectsStore";
-import { normalizeConfigPath, toDirectoryKey } from "./directories";
+import { resolveConfigDirectory, toDirectoryKey } from "./directories";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { useConfigStore } from "../useConfigStore";
 import { resolveProjectDirectory } from "./worktreeProjects";
@@ -12,13 +12,13 @@ export const getFallbackProjectDirectory = (): string | null => {
             activeProjectId
         } = useProjectsStore.getState();
         const active = activeProjectId ? projects.find(project => project.id === activeProjectId) : null;
-        return normalizeConfigPath(active?.path ?? projects[0]?.path ?? null);
+        return resolveConfigDirectory(active?.path ?? projects[0]?.path ?? null);
     } catch {
         return null;
     }
 };
 export const getProjectDefaultsForConfigDirectory = (directory: string | null | undefined) => {
-    const configDirectory = normalizeConfigPath(directory);
+    const configDirectory = resolveConfigDirectory(directory);
     const session = useSessionUIStore.getState();
     if (!session.currentSessionId && session.newSessionDraft?.open && session.newSessionDraft.target === 'chat'
         && (!configDirectory || toDirectoryKey(configDirectory) === useConfigStore.getState().activeDirectoryKey)) {
@@ -29,7 +29,7 @@ export const getProjectDefaultsForConfigDirectory = (directory: string | null | 
         return {};
     }
     const projectDirectory = resolveProjectDirectory(configDirectory);
-    const project = useProjectsStore.getState().projects.find(entry => normalizeConfigPath(entry.path) === projectDirectory);
+    const project = useProjectsStore.getState().projects.find(entry => resolveConfigDirectory(entry.path) === projectDirectory);
     return {
         projectDefaultModel: normalizeOptionalString(project?.defaultModel),
         projectDefaultVariant: normalizeOptionalString(project?.defaultVariant)

@@ -42,24 +42,6 @@ export const NativePolicyContextSchema = z.strictObject({
 export type NativePolicyContext = z.infer<typeof NativePolicyContextSchema>;
 const NativeApprovalGrantSchema = ApprovalGrantSchema;
 export type NativeApprovalGrant = ApprovalGrant;
-export const NativeLspActionSchema = z.enum([
-  'diagnostics',
-  'definition',
-  'type_definition',
-  'implementation',
-  'references',
-  'hover',
-  'symbols',
-  'status',
-  'capabilities',
-  'code_actions',
-  'rename',
-  'rename_file',
-  'reload',
-  'request',
-  'format',
-]);
-export type NativeLspAction = z.infer<typeof NativeLspActionSchema>;
 export const NativeOperationDescriptorSchema = z.strictObject({
   toolName: z.string().min(1), effectiveMode: NativeEditModeSchema.optional(),
   sourcePaths: z.array(PrivatePathSchema), destinationPaths: z.array(PrivatePathSchema),

@@ -16,17 +16,12 @@ export type { PendingDiffScope } from './ui/types';
 export { clampContextEditorTreeWidth } from './ui/preferences';
 export type { SessionRetentionAction } from './ui/types';
 export type { TimeFormatPreference } from './ui/types';
-export type { MobileKeepScreenAwake } from './ui/types';
 export type { FileEditorKeymap } from './ui/types';
 export type { DocumentAttachBehavior, LargeTextPasteBehavior } from './ui/types';
-export type { ChatWidth } from './ui/types';
-export type { SessionGoalChecker } from './ui/types';
 export { normalizeContextPanelDirectoryKey } from './ui/contextTabs';
 export { isTrackerBranchTab } from './ui/contextTabs';
 export { resolveContextZoneReturnTarget } from './ui/contextPanelState';
 export { DEFAULT_SELECTION_APPROVAL_TEXT } from './ui/preferences';
-export { DEFAULT_EDITOR_FONT_SIZE } from './ui/preferences';
-export { DEFAULT_CONTEXT_EDITOR_TREE_WIDTH } from './ui/preferences';
 export type { ContextPanelMode } from '@/lib/surfaces/modes';
 
 export const useUIStore = create<UIStore>()(

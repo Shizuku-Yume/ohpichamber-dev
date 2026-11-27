@@ -217,7 +217,8 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const searchScope = React.useMemo(() => resolveSidebarSearchScope({
     projects: topology.projects, worktrees: topology.availableWorktreesByProject, knownDirectories: searchKnownDirectories, isVSCode: false,
   }), [topology.projects, topology.availableWorktreesByProject, searchKnownDirectories]);
-  const searchMetadata = React.useMemo(() => searchActive ? sidebarSearchMetadata({ sessions: allSearchSessions,
+  const searchMetadata = React.useMemo(() => searchActive ? sidebarSearchMetadata({
+    sessions: allSearchSessions,
     isAdmitted: searchScope.isAdmitted, owners: ownership.bySessionId, projects: topology.projects, worktrees: topology.availableWorktreesByProject,
   }) : [], [searchActive, allSearchSessions, searchScope, ownership.bySessionId, topology.projects, topology.availableWorktreesByProject]);
   const searchQuery = React.useMemo(() => searchScopeQuery(view.searchScope), [view.searchScope]);
@@ -561,7 +562,6 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     return sessions.length > 0 ? sessions : NO_SESSIONS;
   }, [collection.orderedSessions, collection.pinnedSessionIds, isPinnedWork, sessionRootIndex, sessionWorkEnabled, workIndex]);
   useClosePinnedWork(pinnedSessionsInWork);
-  const { getTimeOrderedSessions } = collection;
   const sectionCandidates = React.useMemo(() => {
     const sessionRef = (session: Session): SidebarWorkRef => {
       const ref = workIndex.bySessionId.get(session.sessionId);
@@ -611,7 +611,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       all = [...unstarted.filter(leads), ...all, ...unstarted.filter((ref) => !leads(ref))];
     }
     return { pinned: [...pinnedSessions.map(sessionRef), ...pinnedWorktrees], work: listed, all };
-  }, [collection.orderedSessions, getTimeOrderedSessions, collection.pinnedSessionIds, customTimeSections, draftPlacement, isPinnedWork, liveSpaceIds, openDraftDirectory, openDraftSpaceId, ownership.bySessionId, removingWorktreePaths, rootSessionIds, sessionRootIndex, showPinned, showWork, workIndex, worktreeArchiveAnchors]);
+  }, [collection.orderedSessions, collection.pinnedSessionIds, customTimeSections, draftPlacement, isPinnedWork, liveSpaceIds, openDraftDirectory, openDraftSpaceId, ownership.bySessionId, removingWorktreePaths, rootSessionIds, sessionRootIndex, showPinned, showWork, workIndex, worktreeArchiveAnchors]);
   const projectIds = React.useMemo(() => new Set(projectSections.map((section) => section.project.id)), [projectSections]);
   const folderByMember = React.useMemo(() => {
     const byMember = new Map<string, SidebarFolderMembership>();
@@ -681,16 +681,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     )),
     [collection.orderedSessions, zoneWorks.work.length],
   );
-  // The root sessions the sections list, which search lists there only.
-  const zoneSessionIds = React.useMemo(() => {
-    const ids = new Set(zoneWorks.pinned.map((session) => session.sessionId));
-    const addRefs = (refs: readonly SidebarWorkRef[]) => {
-      for (const ref of refs) if (ref.kind === 'session') ids.add(ref.rootSessionId);
-    };
-    addRefs(zoneWorks.work);
-    for (const refs of membership.custom.values()) addRefs(refs);
-    return ids;
-  }, [membership.custom, zoneWorks]);
+  const zoneSearchQuery = view.hasSessionSearchQuery ? view.searchText.trim().toLowerCase() : '';
   const buildZoneItems = React.useCallback((zone: readonly Session[]) => {
     if (zone.length === 0) return EMPTY_ZONE_ITEMS;
     const locations = resolveSidebarSessionLocations({
@@ -704,7 +695,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       rootBranchByProjectId: topology.projectRootBranches,
       hideBranchMatchingProjectLabel: false,
     });
-    const query = view.hasSessionSearchQuery ? view.searchText.trim().toLowerCase() : '';
+    const query = zoneSearchQuery;
     const trees = new Map(zone.map((session) => [session.sessionId, buildActiveSessionNode(collection.childrenMap, session)]));
     const nodes = new Map(zone.map((session) => {
       const tree = trees.get(session.sessionId) ?? buildActiveSessionNode(collection.childrenMap, session);
@@ -733,7 +724,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       ...item,
       searchMatchCount: matched.matchCountById.get(item.node.session.sessionId),
     }));
-  }, [collection.childrenMap, ownership.bySessionId, spaceLabelById, topology.availableWorktreesByProject, topology.gitBranches, topology.projectRootBranches, topology.projects, view.hasSessionSearchQuery, view.homeDirectory, view.searchText.trim().toLowerCase()]);
+  }, [collection.childrenMap, ownership.bySessionId, spaceLabelById, topology.availableWorktreesByProject, topology.gitBranches, topology.projectRootBranches, topology.projects, view.homeDirectory, zoneSearchQuery]);
   // Works as the row model lists them: a session work's row from the zone
   // items (search may have left it out), a worktree work as its group.
   const toWorkEntries = React.useCallback((refs: readonly SidebarWorkRef[]): readonly SessionSidebarWorkEntry[] => {
@@ -780,7 +771,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
         .map(({ draft, projectId }): SessionSidebarWorkEntry => ({ kind: 'draft', draft, projectId })),
       ...toWorkEntries([...refs.filter(isPinnedWorktree), ...refs.filter((ref) => !isPinnedWorktree(ref))]),
     ];
-  }, [collection.orderedSessions, draftPlacement, folderByMember, liveSpaceIds, membership.claimedKeys, membership.claimedProjectIds, timeGrouping, toWorkEntries, workIndex, worktreeArchiveAnchors, zoneWorks]);
+  }, [collection.orderedSessions, draftPlacement, folderByMember, liveSpaceIds, membership.claimedKeys, membership.claimedProjectIds, membership.custom, timeGrouping, toWorkEntries, view.hasSessionSearchQuery, workIndex, worktreeArchiveAnchors, zoneWorks]);
   const { movedSessionIds, movedGroupKeys } = React.useMemo(() => {
     const sessionIds: string[] = [];
     const groupKeys: string[] = [];
@@ -1226,7 +1217,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     sessionBatchSize,
     runIndex,
     blocks: sidebarBlocks,
-  }), [blockDrag, sidebarBlocks, runIndex, chatGroup, showChatsSection, rowCollapsedActivities, pinnedItems, pinnedWorktreeEntries, workEntries, timeEntries, draftPlacement, movedSessionIds, movedGroupKeys, zoneSessionIds, detailedZoneRows, collapsedFolderIds, collection.pinnedSessionIds, expandedParents, folderAuthorityByOwner, foldersMap, groupStatusByKey, orderedSectionsForRender, ownership.bySessionId, projectSections, collapsedGroups, rowCollapsedProjects, selectedSingleProjectId, sessionOrderIndex, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.hideDirectoryControls, view.searchText.trim().toLowerCase(), view.showOnlyMainWorkspace, view.useGroupedSections, visibleCountByContainer, worktreeArchiveAnchors, liveSpaceIds]);
+  }), [blockDrag, sidebarBlocks, runIndex, chatGroup, showChatsSection, rowCollapsedActivities, pinnedItems, pinnedWorktreeEntries, workEntries, timeEntries, draftPlacement, movedSessionIds, movedGroupKeys, detailedZoneRows, collapsedFolderIds, collection.pinnedSessionIds, expandedParents, folderAuthorityByOwner, foldersMap, groupStatusByKey, orderedSectionsForRender, ownership.bySessionId, projectSections, collapsedGroups, rowCollapsedProjects, selectedSingleProjectId, sessionOrderIndex, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.hideDirectoryControls, view.showOnlyMainWorkspace, visibleCountByContainer, worktreeArchiveAnchors, liveSpaceIds, conversationResults, revealedSearchSections, searchSectionsWithMore, searchIncomplete, searchLocationById, searchProjectById, view.homeDirectory, sessionBatchSize]);
   React.useEffect(() => {
     onSearchMatchCountChange(searchTotalCount);
   }, [searchTotalCount, onSearchMatchCountChange]);
@@ -1338,30 +1329,30 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       workSessions={workSessions}
       prefetchSession={prefetchSession}
     >
-    <SessionRowOrderProvider
-      entries={sidebarRowModel.selectionEntries}
-      descendantIds={sidebarRowModel.selectionDescendantIds}
-      sessionsById={sidebarRowModel.sessionById}
-      works={sidebarRowModel.selectionWorks}
-    >
-      <SessionBulkActions
-        getFolderScopesForProject={getFolderScopesForProject}
-        folderOwnerKeyBySessionId={sidebarRowModel.folderOwnerKeyBySessionId}
-        isInlineEditing={editingId !== null}
-        startFolderRename={startFolderRename}
-      />
-      <div
-        className="contents"
-        onPointerEnter={(event) => {
-          if (holdsProjectOrder && event.pointerType === 'mouse') setHeldProjectOrder(shownProjectOrderRef.current);
-        }}
-        onPointerLeave={() => setHeldProjectOrder(null)}
+      <SessionRowOrderProvider
+        entries={sidebarRowModel.selectionEntries}
+        descendantIds={sidebarRowModel.selectionDescendantIds}
+        sessionsById={sidebarRowModel.sessionById}
+        works={sidebarRowModel.selectionWorks}
       >
-        {view.renderList
-          ? view.renderList({ model: scrollerModel, view: scrollerView, actions: scrollerActionSet })
-          : <SessionProjectScroller model={scrollerModel} view={scrollerView} actions={scrollerActionSet} />}
-      </div>
-    </SessionRowOrderProvider>
+        <SessionBulkActions
+          getFolderScopesForProject={getFolderScopesForProject}
+          folderOwnerKeyBySessionId={sidebarRowModel.folderOwnerKeyBySessionId}
+          isInlineEditing={editingId !== null}
+          startFolderRename={startFolderRename}
+        />
+        <div
+          className="contents"
+          onPointerEnter={(event) => {
+            if (holdsProjectOrder && event.pointerType === 'mouse') setHeldProjectOrder(shownProjectOrderRef.current);
+          }}
+          onPointerLeave={() => setHeldProjectOrder(null)}
+        >
+          {view.renderList
+            ? view.renderList({ model: scrollerModel, view: scrollerView, actions: scrollerActionSet })
+            : <SessionProjectScroller model={scrollerModel} view={scrollerView} actions={scrollerActionSet} />}
+        </div>
+      </SessionRowOrderProvider>
     </SessionPrefetchProvider>
   </>;
 };

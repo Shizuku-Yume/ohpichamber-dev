@@ -72,7 +72,7 @@ export function useFilePreviewRendering({ draft, editor, fileComments, fileDocum
       },
       onDelete: deleteDraft,
     });
-  }, [cancel, commentText, deleteDraft, editingDraftId, filesLineDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, startEdit]);
+  }, [cancel, commentText, deleteDraft, editingDraftId, filesLineDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, setLineSelection, startEdit]);
 
   const mainViewVirtualizer = useFileViewVirtualizer();
   const previewReady = !fileLoading && !fileError && loadedFilePath === selectedFilePath;
@@ -95,7 +95,7 @@ export function useFilePreviewRendering({ draft, editor, fileComments, fileDocum
     markdownPreviewRef.current = node;
     mdPreviewContainerRef.current = node;
     setMainMarkdownScroll(node);
-  }, [setMainMarkdownScroll]);
+  }, [markdownPreviewRef, mdPreviewContainerRef, setMainMarkdownScroll]);
   const openLinkedFile = React.useCallback((absolutePath: string) => {
     if (!panelRoot) return;
     useUIStore.getState().openContextFile(panelRoot, absolutePath);
@@ -155,7 +155,7 @@ export function useFilePreviewRendering({ draft, editor, fileComments, fileDocum
     );
   }, [currentTheme.metadata.variant, editorCode, isLargeFile, largeFileCacheKey, mainViewVirtualizer.virtualizer, pierreTheme, restoreMainCodeScroll, shikiWorkerPool, wrapLines]);
   return {
-  blockWidgets, showCanvas, setMainPreviewScroller, setMainMarkdownScroller, markdownDocumentAssets, isLargeFile,
-  renderShikiFileView,
+    blockWidgets, showCanvas, setMainPreviewScroller, setMainMarkdownScroller, markdownDocumentAssets, isLargeFile,
+    renderShikiFileView,
   };
 }

@@ -560,7 +560,6 @@ export function useTrackerItemDetail(item: { provider: string; id: string } | nu
     return { detail, refresh, followed: live.followed };
 }
 
-export const useGitHubReadContext = (directory: string | null) => useRepositoryReadContext(directory);
 export const readLinearIssueDetail = async (linear: LinearAPI | null | undefined, issueId: string) => {
     if (!linear) throw new Error('Linear is not available here');
     return linear.issueGet(issueId);

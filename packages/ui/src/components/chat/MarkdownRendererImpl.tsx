@@ -29,6 +29,7 @@ import type { ToolPopupContent } from './message/types';
 import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath } from './markdown/streamdownPlugins';
 import { parseMarkdownBlocksWithMath } from './markdown/mathBlocks';
 import { remarkEmojiShortcodes } from './markdown/remarkEmojiShortcodes';
+import { remarkRepositoryReferences } from './markdown/remarkRepositoryReferences';
 import { useProgramCheck } from './uiBlocks/useUiBlockComponent';
 import type { EmojiShortcodes } from '@/lib/emoji/shortcodes';
 import { MarkdownMediaProvider, type MarkdownDocumentAssets } from './markdown/MarkdownMediaContext';
@@ -314,6 +315,7 @@ export function MarkdownContent({
   preparedHighlights,
   onExportCode,
   emojiShortcodes,
+  repositoryLinks,
   tableWidthScope,
   windowed = false,
   uiBlocks = true,
@@ -424,10 +426,11 @@ export function MarkdownContent({
     const base = getMarkdownProcessingOptions(allowRawHtml, singleTilde, variant === 'reasoning');
     const extra: Pluggable[] = [];
     if (activeEmojiShortcodes) extra.push([remarkEmojiShortcodes, activeEmojiShortcodes]);
+    if (repositoryLinks) extra.push([remarkRepositoryReferences, repositoryLinks]);
     if (activeGuestLinks) extra.push([remarkGuestLinks, activeGuestLinks]);
     if (extra.length === 0) return base;
     return { ...base, remarkPlugins: [...(base.remarkPlugins ?? []), ...extra] };
-  }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes, activeGuestLinks]);
+  }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes, activeGuestLinks, repositoryLinks]);
   const presentation = React.useMemo(() => ({
     directory,
     fileReferences,

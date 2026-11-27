@@ -217,10 +217,6 @@ const RAW_FORM_EXEMPTIONS = new Map(Object.entries({
     tags: ['button'],
     reason: 'sidebar list-item selection row, not pane content',
   },
-  'snippets/SnippetAliasesField.tsx': {
-    tags: ['button', 'input'], inputTypes: ['text'],
-    reason: 'alias tag-input widget: inline draft input + chip remove toggles; a bespoke multi-value editor',
-  },
   'update/ReleaseNotesBody.tsx': {
     tags: ['button'],
     reason: 'changelog show-more/show-less text toggles, not form fields',
@@ -237,10 +233,6 @@ const RAW_FORM_EXEMPTIONS = new Map(Object.entries({
   'providers/ProviderOAuthMethods.tsx': {
     tags: ['form'],
     reason: 'OAuth manual-input code entry runs an explicit submit lifecycle',
-  },
-  'providers/CanonicalProviderPicker.tsx': {
-    tags: ['button'],
-    reason: 'provider list-row selection toggle, not a form field',
   },
   'providers/CustomProviderModelRow.tsx': {
     tags: ['button'],

@@ -5,8 +5,8 @@ import { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSch
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
 import { NativeOperationDescriptorSchema, HostActionRequestSchema, HostActionResultSchema, type HostActionRequest } from '../native-policy-protocol.ts';
-export { NativeOperationDescriptorSchema, NativeLspActionSchema, NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from '../native-policy-protocol.ts';
-export type { NativeOperationDescriptor, NativeLspAction, NativePolicyContext, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from '../native-policy-protocol.ts';
+export { NativeOperationDescriptorSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from '../native-policy-protocol.ts';
+export type { NativeOperationDescriptor, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from '../native-policy-protocol.ts';
 export const hostActionTimeoutMs = (request: HostActionRequest): number | undefined =>
   request.toolName === 'openchamber_secret' && request.action === 'secret.run' ? undefined : 120_000;
 export const CapturedHostBootstrapScopeSchema = z.strictObject({
@@ -41,8 +41,8 @@ export const HostSessionForkAckSchema = z.strictObject({
 });
 export const HostWorkerAuthorizationRequestSchema = z.strictObject({ type: z.literal('worker.authorization.request'), requestId: EntityIdSchema, scope: HostAuthorizationScopeSchema, request: WorkerPolicyRequestSchema, descriptor: NativeOperationDescriptorSchema.optional() });
 /** How a session answers the native ACP execution-permission gate. */
-export const PERMISSION_MODES = ['ask', 'safety', 'auto'] as const;
-export const PermissionModeSchema = z.enum(PERMISSION_MODES);
+const PERMISSION_MODES = ['ask', 'safety', 'auto'] as const;
+const PermissionModeSchema = z.enum(PERMISSION_MODES);
 export type PermissionMode = z.infer<typeof PermissionModeSchema>;
 /** Host push of the authoritative mode for one captured session. */
 export const HostSessionPermissionModeSchema = z.strictObject({ mode: PermissionModeSchema });
@@ -60,7 +60,6 @@ export const HostPermissionVerdictSchema = z.strictObject({
   type: z.literal('permission.verdict'), requestId: EntityIdSchema,
   verdict: z.enum(['accept', 'hold', 'unavailable']),
 });
-export type HostPermissionVerdict = z.infer<typeof HostPermissionVerdictSchema>;
 /** Service -> Host: the mode this session's lineage resolves to right now. */
 export const HostPermissionModeLoadRequestSchema = z.strictObject({
   type: z.literal('permission.mode.load'), requestId: EntityIdSchema, sessionId: EntityIdSchema,

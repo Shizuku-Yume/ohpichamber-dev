@@ -399,12 +399,3 @@ subscribeRuntimeEndpointChanged(() => {
   });
 });
 
-const DEFAULT_PLUGINS_CACHE_KEY = '__default__';
-
-const getPluginCacheKey = (directory: string | null): string => {
-  return JSON.stringify([getRuntimeKey(), directory?.trim() || DEFAULT_PLUGINS_CACHE_KEY]);
-};
-
-export const getPluginsScopeKey = getPluginCacheKey;
-
-export const getPluginUpdateKey = (scope: string, target: string): string => JSON.stringify([scope, target]);

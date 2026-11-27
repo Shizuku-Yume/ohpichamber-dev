@@ -69,7 +69,7 @@ export function useDiffViewFileSelection({
         expandStackedFile(value);
         setScrollRequestNonce((nonce) => nonce + 1);
         scrollToFile(value);
-    }, [cancelPendingScrollAlignment, expandStackedFile, isTreeMode, scrollToFile]);
+    }, [cancelPendingScrollAlignment, diffScrollRef, expandStackedFile, isTreeMode, pendingScrollTargetRef, scrollToFile, setDisplayFile, setDisplayFileStaged, setScrollRequestNonce, shouldPinAfterAlignRef]);
 
     const stepChangedFile = (event: KeyboardEvent, delta: -1 | 1): boolean | void => {
         if (!visible) return false;

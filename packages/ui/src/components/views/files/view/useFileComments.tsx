@@ -26,16 +26,17 @@ type FileComments = Pick<CommentController, 'commentText' | 'setCommentText' | '
 export function useFileComments({ draft, editor, fileDocument, tabs, isMobile, visible }: {
   draft: Pick<ReturnType<typeof useFileDraft>, 'setDraftContent' | 'setIsSaving'>;
   editor: Pick<ReturnType<typeof useFileEditor>, 'editorViewRef'>;
-  fileDocument: Pick<ReturnType<typeof useFileDocument>, 'fileContent' | 'fileLoading' | 'loadedFilePath' | 'pendingPathMoveRef'>;
+  fileDocument: Pick<ReturnType<typeof useFileDocument>, 'fileContent' | 'fileLoading' | 'loadedFilePath' | 'pendingPathMoveTo'>;
   tabs: Pick<ReturnType<typeof useFileTabs>, 'selectedFile'>;
   isMobile: boolean;
   visible: boolean;
 }): FileComments {
   const { setDraftContent, setIsSaving } = draft;
   const { editorViewRef } = editor;
-  const { fileContent, fileLoading, loadedFilePath, pendingPathMoveRef } = fileDocument;
+  const { fileContent, fileLoading, loadedFilePath, pendingPathMoveTo } = fileDocument;
   const { selectedFile } = tabs;
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
+  const lastSettledPathRef = React.useRef<string | null>(null);
 
   const extractSelectedCode = React.useCallback((content: string, range: SelectedLineRange): string => {
     const lines = content.split('\n');
@@ -86,12 +87,18 @@ export function useFileComments({ draft, editor, fileDocument, tabs, isMobile, v
   });
 
   React.useEffect(() => {
-    if (pendingPathMoveRef.current?.to === selectedFile?.path) return;
+    const path = selectedFile?.path ?? null;
+    if (pendingPathMoveTo !== null && pendingPathMoveTo === path) {
+      lastSettledPathRef.current = path;
+      return;
+    }
+    if (lastSettledPathRef.current === path) return;
+    lastSettledPathRef.current = path;
     setLineSelection(null);
     reset();
     setDraftContent('');
     setIsSaving(false);
-  }, [selectedFile?.path, reset]);
+  }, [selectedFile?.path, reset, setDraftContent, setIsSaving, pendingPathMoveTo]);
 
   React.useEffect(() => {
     setCommentSelection(lineSelection);
@@ -138,7 +145,7 @@ export function useFileComments({ draft, editor, fileDocument, tabs, isMobile, v
     if (domSelection && !domSelection.isCollapsed && domSelection.anchorNode && view.contentDOM.contains(domSelection.anchorNode)) {
       domSelection.removeAllRanges();
     }
-  }, [isMobile, lineSelection]);
+  }, [editorViewRef, isMobile, lineSelection]);
 
   const handleSaveComment = React.useCallback((text: string, range?: { start: number; end: number }) => {
     const finalRange = range ?? lineSelection ?? undefined;
@@ -157,8 +164,8 @@ export function useFileComments({ draft, editor, fileDocument, tabs, isMobile, v
   ) : null;
   const codeSelectionComment = useCodeSelectionComment({ filePath: selectedFile?.path ?? null, scope: String(visible) });
   return {
-  lineSelection, setLineSelection, wholeFileCommentPanel,
-  markdownPreviewRef, commentText, setCommentText, editingDraftId, cancel, startEdit, deleteDraft, filesLineDrafts,
-  wholeFileComment, codeSelectionComment, isDragging, lineNumbersConfig, handleSaveComment,
+    lineSelection, setLineSelection, wholeFileCommentPanel,
+    markdownPreviewRef, commentText, setCommentText, editingDraftId, cancel, startEdit, deleteDraft, filesLineDrafts,
+    wholeFileComment, codeSelectionComment, isDragging, lineNumbersConfig, handleSaveComment,
   };
 }

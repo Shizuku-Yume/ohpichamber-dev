@@ -133,7 +133,7 @@ export function useFileSaving({ canvasState, diagram, draft, fileDocument, scope
     diagramSavedXmlRef.current = editorContent;
     setDraftContent(editorContent);
     return editorContent;
-  }, []);
+  }, [diagramSavedXmlRef, diagramXmlRef, lastLoadedFileContentRef, lastLoadedFileRevisionRef, selectedFilePathRef, setCanvasRemountNonce, setDraftContent, setFileContent, setFileContentRevision, setLoadedFileLineEnding]);
 
   const saveDraft = React.useCallback(async () => {
     if (!selectedFile || !files.writeFile) {
@@ -236,7 +236,7 @@ export function useFileSaving({ canvasState, diagram, draft, fileDocument, scope
             lastLoadedFileStatRef.current = stat;
           }
         })
-        .catch(() => {});
+        .catch(() => { });
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('filesView.toast.saveFailed'));
@@ -244,7 +244,7 @@ export function useFileSaving({ canvasState, diagram, draft, fileDocument, scope
     } finally {
       setIsSaving(false);
     }
-  }, [applyLoadedTextContent, contentDetectedBinary, draftContent, canvasDirty, fileContent, fileLoading, files, isDirty, loadedFileLineEnding, loadedFilePath, readFileStat, root, selectedFile, t]);
+  }, [applyLoadedTextContent, binaryCanvasRef, canvasEditorRef, contentDetectedBinary, diagramSavedXmlRef, diagramXmlRef, draftContent, canvasDirty, fileContent, fileLoading, files, isDirty, lastLoadedFileContentRef, lastLoadedFileRevisionRef, lastLoadedFileStatRef, loadedFileLineEnding, loadedFilePath, pendingPathMoveRef, readFileStat, root, selectedFile, setCanvasDirty, setFileContent, setIsSaving, t]);
 
   React.useEffect(() => {
     if (autoSaveEnabled) {
@@ -256,7 +256,7 @@ export function useFileSaving({ canvasState, diagram, draft, fileDocument, scope
       clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
     }
-  }, [autoSaveEnabled]);
+  }, [autoSaveEnabled, autoSaveTimerRef, setAutoSaveStatus]);
 
   const AUTO_SAVE_DELAY = 1500;
 
@@ -299,11 +299,11 @@ export function useFileSaving({ canvasState, diagram, draft, fileDocument, scope
         autoSaveTimerRef.current = null;
       }
     };
-  }, [autoSaveEnabled, contentDetectedBinary, draftContent, fileContent, fileLoading, isDirty, loadedFilePath, selectedFile, files.writeFile, isSaving, saveDraft]);
+  }, [autoSaveEnabled, autoSaveTimerRef, binaryCanvasRef, canvasLastEditAtRef, contentDetectedBinary, draftContent, fileContent, fileLoading, isDirty, loadedFilePath, selectedFile, files.writeFile, isSaving, saveDraft, setAutoSaveStatus]);
 
   React.useEffect(() => {
     setAutoSaveStatus('idle');
-  }, [selectedFile?.path]);
+  }, [selectedFile?.path, setAutoSaveStatus]);
 
   const saveNow = React.useCallback(() => {
     if (autoSaveTimerRef.current) {
@@ -317,9 +317,9 @@ export function useFileSaving({ canvasState, diagram, draft, fileDocument, scope
         setTimeout(() => setAutoSaveStatus('idle'), 2000);
       });
     }
-  }, [isSaving, saveDraft]);
+  }, [autoSaveTimerRef, isSaving, saveDraft, setAutoSaveStatus]);
 
   return {
-  readFile, readFileStat, isDirty, applyLoadedTextContent, saveDraft, AUTO_SAVE_DELAY, saveNow,
+    readFile, readFileStat, isDirty, applyLoadedTextContent, saveDraft, AUTO_SAVE_DELAY, saveNow,
   };
 }

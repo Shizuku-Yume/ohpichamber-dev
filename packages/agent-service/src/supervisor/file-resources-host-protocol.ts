@@ -19,6 +19,4 @@ export const HostSkillSourceResultSchema = z.discriminatedUnion('status', [
 ]);
 export type HostSkillSourceResult = z.infer<typeof HostSkillSourceResultSchema>;
 export const HostSkillSourceRequestSchema = z.strictObject({ type: z.literal('host.skill-source.request'), requestId: EntityIdSchema, operation: HostSkillSourceOperationSchema });
-export type HostSkillSourceRequest = z.infer<typeof HostSkillSourceRequestSchema>;
 export const HostSkillSourceReplySchema = z.strictObject({ type: z.literal('host.skill-source.result'), requestId: EntityIdSchema, result: HostSkillSourceResultSchema });
-export type HostSkillSourceReply = z.infer<typeof HostSkillSourceReplySchema>;

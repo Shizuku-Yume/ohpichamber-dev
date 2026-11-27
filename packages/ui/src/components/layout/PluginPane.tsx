@@ -10,8 +10,6 @@ import {
  OPENCHAMBER_SDK_API_VERSION,
  OPENCHAMBER_SDK_CHANNEL,
  GUEST_REQUEST_TIMEOUT_MS,
- GUEST_POPOVER_HEIGHT_MIN,
- GUEST_POPOVER_HEIGHT_MAX,
  guestFileScope,
  type AttachIssueRequest,
  type GuestBlockCall,
@@ -19,7 +17,6 @@ import {
  type GuestItem,
  type GuestPopoverClosedEvent,
  type GuestPopoverContext,
- type GuestPopoverRequest,
  type GuestMessage,
  type HostMessage,
  type HostReadyContext,
@@ -85,8 +82,12 @@ import { useGuestsStore } from '@/lib/guests/store';
 import { readGuestWorkspace, observeGuestWorkspace, openGuestSession } from '@/lib/guests/workspace';
 import { observeGuestShells } from '@/lib/guests/shells';
 import { createGuestShellRequests, postGuestShellReply } from '@/lib/guests/shell-requests';
+import { canCaptureGuestMicrophone } from '@/lib/guests/microphone';
+import { createGuestMicrophoneSession } from '@/lib/guests/microphone-session';
+import { useHostDevice } from '@/lib/guests/useHostDevice';
+import { useHostTypography } from '@/lib/guests/useHostTypography';
 import { guestStorageOperation } from '@/lib/guests/storage';
-import { getGuestPopoverController, guestPopoverOwnerBlocked, positionGuestPopover, type GuestPopoverActivation, type GuestPopoverPosition } from '@/lib/guests/popovers';
+import { getGuestPopoverController, type GuestPopoverActivation } from '@/lib/guests/popovers';
 import { createGuestStatusControls, type GuestStatusControlBinding } from '@/lib/guests/status-controls';
 import { showGuestToast } from '@/lib/guests/toast';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
@@ -102,28 +103,30 @@ import { useChildStoreManager, useSessionSelector, useSessionStatus, useSessionM
 import { normalizePath } from '@/lib/pathNormalization';
 import type { Session } from '@openchamber/agent-contract';
 import { GuestPopover } from './GuestPopover';
+import { GuestPopoverSheet } from './GuestPopoverSheet';
+import { createPluginPanePopoverHandlers, usePluginPanePopover } from './pluginPanePopover';
 
 type PluginPaneProps = {
-  mode: PluginContextPanelMode;
-  surface?: GuestHostSurface;
-  item?: GuestItem | null;
-  panelOpen?: boolean;
-  headless?: boolean;
-  backgroundAction?: GuestBackgroundAction;
-  onDismiss?: () => void;
-  onAttach?: (issue: AttachIssueRequest) => void;
-  onSessionStarted?: () => void;
-  block?: { call: GuestBlockCall; entry: string; answer: (text: string) => Promise<void> };
-  onResize?: (height: number) => void;
-  onStatusControls?: (binding: GuestStatusControlBinding | null) => void;
-  statusDirectory?: string | null;
-  fileEditor?: { editorId: string; channel: GuestFileChannel };
-  pinnedDirectory?: string;
-  popover?: GuestPopoverContext;
-  popoverHost?: { entry: string; directory: string; context: GuestPopoverContext; activation: GuestPopoverActivation; focus: boolean };
-  isActive?: () => boolean;
-  onPopoverClosed?: (event: GuestPopoverClosedEvent) => void;
-  onPopoverActivity?: (active: boolean) => void;
+ mode: PluginContextPanelMode;
+ surface?: GuestHostSurface;
+ item?: GuestItem | null;
+ panelOpen?: boolean;
+ headless?: boolean;
+ backgroundAction?: GuestBackgroundAction;
+ onDismiss?: () => void;
+ onAttach?: (issue: AttachIssueRequest) => void;
+ onSessionStarted?: () => void;
+ block?: { call: GuestBlockCall; entry: string; answer: (text: string) => Promise<void> };
+ onResize?: (height: number) => void;
+ onStatusControls?: (binding: GuestStatusControlBinding | null) => void;
+ statusDirectory?: string | null;
+ fileEditor?: { editorId: string; channel: GuestFileChannel };
+ pinnedDirectory?: string;
+ popover?: GuestPopoverContext;
+ popoverHost?: { entry: string; directory: string; context: GuestPopoverContext; activation: GuestPopoverActivation; focus: boolean };
+ isActive?: () => boolean;
+ onPopoverClosed?: (event: GuestPopoverClosedEvent) => void;
+ onPopoverActivity?: (active: boolean) => void;
 };
 
 // Sandboxed frames without allow-same-origin have an opaque origin. The
@@ -133,9 +136,8 @@ const closeTransferredPort = (port: MessagePort): void => {
 };
 const handledGuestBootstrapEvents = new WeakSet<MessageEvent>();
 
+
 const HOST_RADIUS_FALLBACK = '0.5625rem';
-const HOST_FONT_FALLBACK = 'system-ui, sans-serif';
-const HOST_MONO_FALLBACK = 'ui-monospace, monospace';
 
 const NOT_GRANTED_MESSAGE = 'The user has not allowed this capability for the extension.';
 
@@ -154,26 +156,26 @@ const readCssVar = (name: string, fallback: string): string => {
 };
 
 export const PluginPane: React.FC<PluginPaneProps> = ({
-  mode,
-  surface = 'panel',
-  item: itemProp,
-  panelOpen = true,
-  headless = false,
-  backgroundAction,
-  onDismiss,
-  onAttach,
-  onSessionStarted,
-  block,
-  onResize,
-  onStatusControls,
-  statusDirectory,
-  fileEditor,
-  pinnedDirectory,
-  popover,
-  popoverHost,
-  isActive,
-  onPopoverClosed,
-  onPopoverActivity,
+ mode,
+ surface = 'panel',
+ item: itemProp,
+ panelOpen = true,
+ headless = false,
+ backgroundAction,
+ onDismiss,
+ onAttach,
+ onSessionStarted,
+ block,
+ onResize,
+ onStatusControls,
+ statusDirectory,
+ fileEditor,
+ pinnedDirectory,
+ popover,
+ popoverHost,
+ isActive,
+ onPopoverClosed,
+ onPopoverActivity,
 }) => {
  const { t, locale } = useI18n();
  const { currentTheme } = useThemeSystem();
@@ -224,12 +226,6 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  );
  const sessionStatus = useSessionStatus(currentSessionId ?? '', directory || undefined);
  const iframeRef = React.useRef<HTMLIFrameElement>(null);
- const [activePopover, setActivePopover] = React.useState<{ request: GuestPopoverRequest; position: GuestPopoverPosition; entry: string; directory: string; activation: GuestPopoverActivation } | null>(null);
- const activePopoverRef = React.useRef<typeof activePopover>(null);
- const popoverCloseTimerRef = React.useRef<number | null>(null);
- const popoverAnchorActiveRef = React.useRef(false);
- const popoverOverlayActiveRef = React.useRef(false);
- const closeActivePopoverRef = React.useRef<(reason: GuestPopoverClosedEvent['reason']) => void>(() => { });
  const guestId = pluginIdFromMode(mode);
  const guest = useGuestsStore((state) => state.guests.find((entry) => entry.id === guestId) ?? null);
  const catalogStatus = useGuestsStore((state) => state.status);
@@ -266,15 +262,18 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  } : null, [baseSessionSnapshot, fields.tokens, context]);
 
  const pageColors = usePageColors();
+ const typography = useHostTypography();
+ const device = useHostDevice();
  const readableColors = React.useMemo(() => getReadableThemeColors(currentTheme), [currentTheme]);
  const ready = React.useMemo<HostReadyContext>(() => {
   const features: NonNullable<HostReadyContext['features']> = {};
   if (guest?.storageId && globalThis.indexedDB) features.deviceStorage = true;
   if (surface === 'status' && onStatusControls) features.statusControls = true;
-  if (!popoverHost && !popover && !headless && !isMobileSurfaceRuntime()
+  if (!popoverHost && !popover && !headless
    && (surface === 'panel' || surface === 'page' || surface === 'status')) features.popovers = true;
   // A hidden frame is nobody's panel: it neither takes kept answers nor leaves any.
   if (!headless) features.lateGenerateResults = true;
+  if (!headless && canCaptureGuestMicrophone()) features.microphone = true;
   const payload: HostReadyContext = {
    theme: {
     mode: currentTheme.metadata.variant === 'dark' ? 'dark' : 'light',
@@ -304,8 +303,9 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
      warning: currentTheme.colors.status.warning,
      error: currentTheme.colors.status.error,
      info: currentTheme.colors.status.info,
-     font: readCssVar('--font-sans', HOST_FONT_FALLBACK),
-     mono: readCssVar('--font-mono', HOST_MONO_FALLBACK),
+     font: typography.font,
+     fontSize: typography.fontSize,
+     mono: typography.mono,
      radius: readCssVar('--radius', HOST_RADIUS_FALLBACK),
      syntaxKeyword: currentTheme.colors.syntax.base.keyword,
      syntaxString: currentTheme.colors.syntax.base.string,
@@ -326,19 +326,20 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    item,
    popover: popoverHost?.context ?? popover,
    features,
+   device,
   };
   if (block) {
    payload.block = block.call;
   }
   return payload;
- }, [block, connection, currentTheme, pageColors, readableColors, directory, guest?.backgroundEntry, guest?.storageId, headless, item, locale, oauthStatus, onStatusControls, popover, popoverHost, baseSessionSnapshot, surface]);
+ }, [block, connection, currentTheme, device, pageColors, readableColors, typography, directory, guest?.backgroundEntry, guest?.storageId, headless, item, locale, oauthStatus, onStatusControls, popover, popoverHost, baseSessionSnapshot, surface]);
 
-  const fileEditorEntry = surface === 'file' && fileEditor
-    ? guest?.fileEditors?.find((editor) => editor.id === fileEditor.editorId)?.entry ?? null
-    : null;
-  const approvedOrigins = guest?.capabilities.granted.includes('origins') ? guest.origins ?? [] : [];
-  const revision = surface === 'file' ? 0 : guest?.revision ?? 0;
-  const frameKey = `${guestId}:${guest?.storageId ?? ''}:${guest?.version ?? ''}:rev-${revision}:${guestEnabled}:grants-${guest?.capabilities.granted.join(',') ?? ''}:service-${guest?.service?.granted ? '1' : '0'}:origins-${approvedOrigins.join(',')}:${guest?.entry ?? ''}:${guest?.backgroundEntry ?? ''}:${guest?.statusEntry ?? ''}:${guest?.pageEntry ?? ''}:${guest?.attachEntry ?? ''}:${fileEditorEntry ?? ''}:${block?.entry ?? ''}:popover-${popoverHost?.context.id ?? popover?.id ?? ''}`;
+ const fileEditorEntry = surface === 'file' && fileEditor
+  ? guest?.fileEditors?.find((editor) => editor.id === fileEditor.editorId)?.entry ?? null
+  : null;
+ const approvedOrigins = guest?.capabilities.granted.includes('origins') ? guest.origins ?? [] : [];
+ const revision = surface === 'file' ? 0 : guest?.revision ?? 0;
+ const frameKey = `${guestId}:${guest?.storageId ?? ''}:${guest?.version ?? ''}:rev-${revision}:${guestEnabled}:grants-${guest?.capabilities.granted.join(',') ?? ''}:service-${guest?.service?.granted ? '1' : '0'}:origins-${approvedOrigins.join(',')}:${guest?.entry ?? ''}:${guest?.backgroundEntry ?? ''}:${guest?.statusEntry ?? ''}:${guest?.pageEntry ?? ''}:${guest?.attachEntry ?? ''}:${fileEditorEntry ?? ''}:${block?.entry ?? ''}:popover-${popoverHost?.context.id ?? popover?.id ?? ''}`;
 
  // Scoped auth is minted per mount/version/grant and renewed if an existing
  // iframe navigates after expiry. Healthy documents retain their local state.
@@ -422,6 +423,20 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   guestPortRef.current?.postMessage(message);
  }, []);
  const resolveIdsRef = React.useRef(0);
+ const popoverState = usePluginPanePopover({ iframeRef, postToGuest, popover, popoverHost, directory, frameKey });
+ const {
+  activePopover,
+  bridge: popoverBridge,
+  sheet,
+  closeActivePopover,
+  resizePopover,
+  childPopoverClosed,
+  childPopoverActivity,
+  overlayEnter,
+  overlayLeave,
+  overlayOutsideHover,
+ } = popoverState;
+
 
  React.useEffect(() => {
   if (!guestEnabled) return undefined;
@@ -518,41 +533,6 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   postToGuest(buildItemMessage(readyRef.current.item));
  }, [postToGuest]);
 
- const clearPopoverCloseTimer = React.useCallback(() => {
-  if (popoverCloseTimerRef.current != null) {
-   window.clearTimeout(popoverCloseTimerRef.current);
-   popoverCloseTimerRef.current = null;
-  }
- }, []);
- const schedulePopoverClose = React.useCallback((activation: GuestPopoverActivation, reason: GuestPopoverClosedEvent['reason']) => {
-  clearPopoverCloseTimer();
-  popoverCloseTimerRef.current = window.setTimeout(() => {
-   if (activePopoverRef.current?.activation !== activation || popoverAnchorActiveRef.current || popoverOverlayActiveRef.current) return;
-   closeActivePopoverRef.current(reason);
-  }, 250);
- }, [clearPopoverCloseTimer]);
- const closeActivePopover = React.useCallback((reason: GuestPopoverClosedEvent['reason']) => {
-  clearPopoverCloseTimer();
-  const active = activePopoverRef.current;
-  if (!active) return;
-  getGuestPopoverController(document).release(active.activation);
-  activePopoverRef.current = null;
-  popoverAnchorActiveRef.current = false;
-  popoverOverlayActiveRef.current = false;
-  setActivePopover(null);
-  if (reason === 'escape') iframeRef.current?.focus();
-  postToGuest({
-   channel: OPENCHAMBER_SDK_CHANNEL,
-   v: OPENCHAMBER_SDK_API_VERSION,
-   type: 'popover-closed',
-   payload: { id: active.request.id, reason },
-  });
- }, [clearPopoverCloseTimer, postToGuest]);
- closeActivePopoverRef.current = closeActivePopover;
- React.useEffect(() => () => closeActivePopover('owner'), [closeActivePopover]);
- React.useLayoutEffect(() => {
-  if (!popoverHost && !popover) closeActivePopover('owner');
- }, [closeActivePopover, directory, frameKey, popover, popoverHost]);
 
  const hasIntegration = Boolean(guest?.integration);
  React.useEffect(() => {
@@ -615,6 +595,15 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   });
   statusControlsRef.current = statusControls;
   const clearSubscriptions = () => { for (const unsubscribe of subscriptions.values()) unsubscribe(); subscriptions.clear(); };
+  const microphone = createGuestMicrophoneSession({
+   headless,
+   isDisposed: () => disposed,
+   currentGuest,
+   currentPort: () => guestPortRef.current,
+   guestId: () => guestIdRef.current,
+   postToGuest,
+  });
+  const stopMicrophone = microphone.stop;
   const generateOwner = (): GenerateOwner => ({
    runtimeKey,
    guestId: requestingGuestId,
@@ -624,7 +613,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   });
   let stopLateGenerate: (() => void) | null = null;
   const stopLateGenerateListening = () => { stopLateGenerate?.(); stopLateGenerate = null; };
-  const runtimeUnsubscribe = subscribeRuntimeEndpointChanged(() => { disposed = true; shellRequests.abortAll(); closeActivePopover('owner'); statusControls.dispose(); clearSubscriptions(); stopOauthPoll(); stopLateGenerateListening(); });
+  const runtimeUnsubscribe = subscribeRuntimeEndpointChanged(() => { disposed = true; shellRequests.abortAll(); closeActivePopover('owner'); statusControls.dispose(); clearSubscriptions(); stopMicrophone(); stopOauthPoll(); stopLateGenerateListening(); });
   const requireSessions = () => {
    if (!guestMay(currentGuest(), 'sessions')) throw new HostRequestError('NOT_GRANTED', NOT_GRANTED_MESSAGE);
   };
@@ -639,6 +628,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    port.close();
    guestPortRef.current = null;
    clearSubscriptions();
+   stopMicrophone();
   };
   guestPortCloseRef.current = closeGuestPort;
   const onMessage = (event: MessageEvent) => {
@@ -655,6 +645,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    const activeGuest = currentGuest();
    if (!activeGuest || !isGuestActive(activeGuest)) {
     clearSubscriptions();
+    stopMicrophone();
     if ('id' in message) messagePort.postMessage({
      channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION,
      type: 'result', id: message.id, ok: false, error: 'Extension is unavailable.', code: 'DISABLED'
@@ -668,6 +659,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     stopLateGenerateListening();
     acknowledgeHandshake();
     clearSubscriptions();
+    stopMicrophone();
     pushHostState();
     connectFileChannel();
     registerResolver();
@@ -705,8 +697,8 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    const requestDocument = frameDocumentRef.current;
 
    const bridgeEffects: Parameters<typeof answerGuestMessage>[1] & { answerBlock?: (text: string) => Promise<void> } = {
-    microphoneOpen: async () => { throw new HostRequestError('UNSUPPORTED', 'This frame does not advertise microphone capture.'); },
-    microphoneClose: () => {},
+    microphoneOpen: (sampleRate) => microphone.open(sampleRate, messagePort),
+    microphoneClose: () => microphone.close(),
     workspaceRead: (query) => { requireSessions(); return readGuestWorkspace(query, guestIdRef.current); },
     workspaceSubscribe: ({ subscriptionId, query }) => {
      requireSessions();
@@ -961,69 +953,10 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
      }
      waiter({ ok: true, item: payload.item });
     },
-    openPopover: (request) => {
-     if (childPopover || popover || headless || isMobileSurfaceRuntime()
-      || !(surface === 'panel' || surface === 'page' || surface === 'status')) {
-      throw new HostRequestError('UNSUPPORTED', 'This frame cannot open a popover.');
-     }
-     const frameBounds = iframeRef.current?.getBoundingClientRect();
-     const frame = iframeRef.current;
-     if (!frameBounds || !frame) throw new HostRequestError('HOST_REJECTED', 'The popover owner is unavailable.');
-     if (guestPopoverOwnerBlocked(frame)) {
-      throw new HostRequestError('HOST_REJECTED', 'A host dialog is active.');
-     }
-     const ownerFocused = document.activeElement === frame;
-     if (request.focus && !ownerFocused) {
-      throw new HostRequestError('HOST_REJECTED', 'Popover focus requires keyboard interaction with its owner.');
-     }
-     const position = positionGuestPopover({
-      anchor: request.anchor,
-      width: request.width,
-      height: request.height,
-      side: request.side,
-      frame: {
-       left: frameBounds.left, top: frameBounds.top, width: frameBounds.width, height: frameBounds.height,
-       clientWidth: frame.clientWidth, clientHeight: frame.clientHeight,
-      },
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-     });
-     if (!position) throw new HostRequestError('HOST_REJECTED', 'The popover anchor is not visible.');
-     if (!guestEntry) throw new HostRequestError('UNSUPPORTED', 'This extension has no entry for a popover.');
-     const capturedDirectory = directoryRef.current ?? '';
-     const activation = getGuestPopoverController(document).claim({
-      id: request.id,
-      authorize: () => ownsFrame() && directoryRef.current === capturedDirectory && !guestPopoverOwnerBlocked(frame),
-      close: (reason) => closeActivePopoverRef.current(reason),
-     });
-     const next = { request, position, entry: guestEntry, directory: capturedDirectory, activation };
-     popoverAnchorActiveRef.current = true;
-     popoverOverlayActiveRef.current = false;
-     activePopoverRef.current = next;
-     setActivePopover(next);
-    },
-    closePopover: (id, reason) => {
-     if (childPopover || popover) {
-      const context = childPopover?.context ?? popover;
-      if (id !== context?.id) throw new HostRequestError('HOST_REJECTED', 'A popover may close only itself.');
-      onPopoverClosedRef.current?.({ id, reason: reason ?? 'closed' });
-      return;
-     }
-     if (activePopoverRef.current?.request.id === id) closeActivePopover(reason ?? 'closed');
-    },
-    setPopoverAnchorActive: (id, active) => {
-     if (childPopover || popover) {
-      const context = childPopover?.context ?? popover;
-      if (id !== context?.id) throw new HostRequestError('HOST_REJECTED', 'A popover may report only its own activity.');
-      onPopoverActivityRef.current?.(active);
-      return;
-     }
-     if (activePopoverRef.current?.request.id !== id) return;
-     clearPopoverCloseTimer();
-     popoverAnchorActiveRef.current = active;
-     if (!active) {
-      schedulePopoverClose(activePopoverRef.current.activation, 'anchor');
-     }
-    },
+    ...createPluginPanePopoverHandlers({
+     bridge: popoverBridge,
+     ownsFrame, childPopover, popover, headless, surface, iframeRef, guestEntry, directoryRef, onPopoverClosedRef, onPopoverActivityRef,
+    }),
    };
    void answerGuestMessage(message, bridgeEffects).then((reply) => {
     if (message.type === 'shell-output' || message.type === 'shell-stop') {
@@ -1111,11 +1044,12 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    statusControls.dispose();
    if (statusControlsRef.current === statusControls) statusControlsRef.current = null;
    clearSubscriptions();
+   stopMicrophone();
    stopLateGenerateListening();
    guestPortCloseRef.current?.();
    guestPortCloseRef.current = null;
   };
- }, [acknowledgeHandshake, backgroundAction, clearPopoverCloseTimer, closeActivePopover, connectFileChannel, frameKey, guestEnabled, guestEntry, headless, popover, postToGuest, pushHostState, refreshOauth, registerResolver, rejectSdkVersion, schedulePopoverClose, sendBackgroundAction, setOauthStatus, src, srcDoc, stopOauthPoll, surface]);
+ }, [acknowledgeHandshake, backgroundAction, closeActivePopover, connectFileChannel, frameKey, guestEnabled, guestEntry, headless, popover, popoverBridge, postToGuest, pushHostState, refreshOauth, registerResolver, rejectSdkVersion, sendBackgroundAction, setOauthStatus, src, srcDoc, stopOauthPoll, surface]);
 
  // A project switch retires header callbacks, not the still-mounted frame's
  // workspace observers or unrelated in-flight requests.
@@ -1200,6 +1134,27 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   return null;
  }
 
+ const popoverChild = activePopover ? (
+  <DockedPanelSurfaceContext.Provider value={false}>
+   <PluginPane
+    mode={mode}
+    surface="popover"
+    item={null}
+    popoverHost={{
+     entry: activePopover.entry,
+     directory: activePopover.directory,
+     context: { id: activePopover.request.id, data: activePopover.request.data },
+     activation: activePopover.activation,
+     focus: Boolean(activePopover.request.focus),
+    }}
+    isActive={() => getGuestPopoverController(document).authorize(activePopover.activation)}
+    onResize={(height) => resizePopover(activePopover.activation, sheet, height)}
+    onPopoverClosed={childPopoverClosed}
+    onPopoverActivity={(active) => childPopoverActivity(activePopover.activation, sheet, active)}
+   />
+  </DockedPanelSurfaceContext.Provider>
+ ) : null;
+
  return (
   <>
    <iframe
@@ -1222,78 +1177,25 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
      recoverExpiredNavigation();
     }}
    />
-   {activePopover ? (
+   {!activePopover ? null : sheet ? (
+    <GuestPopoverSheet height={activePopover.request.height} label={guest.name} ownerFrame={iframeRef.current} onClose={() => closeActivePopover('outside')}>
+     {popoverChild}
+    </GuestPopoverSheet>
+   ) : (
     <GuestPopover
      position={activePopover.position}
      focused={Boolean(activePopover.request.focus)}
      label={guest.name}
      ownerFrame={iframeRef.current}
      onClose={(reason) => closeActivePopover(reason)}
-     onEnter={() => {
-      popoverOverlayActiveRef.current = true;
-      clearPopoverCloseTimer();
-     }}
-     onLeave={() => {
-      popoverOverlayActiveRef.current = false;
-      schedulePopoverClose(activePopover.activation, 'outside');
-     }}
-     onOutsideHover={() => {
-      if (!popoverAnchorActiveRef.current && !popoverOverlayActiveRef.current && popoverCloseTimerRef.current !== null) return;
-      popoverAnchorActiveRef.current = false;
-      popoverOverlayActiveRef.current = false;
-      schedulePopoverClose(activePopover.activation, 'outside');
-     }}
+     onEnter={overlayEnter}
+     onLeave={() => overlayLeave(activePopover.activation)}
+     onOutsideHover={() => overlayOutsideHover(activePopover.activation)}
     >
      {/* Floats over the app, so never on a docked panel's page. */}
-     <DockedPanelSurfaceContext.Provider value={false}>
-     <PluginPane
-      mode={mode}
-      surface="popover"
-      item={null}
-      popoverHost={{
-       entry: activePopover.entry,
-       directory: activePopover.directory,
-       context: { id: activePopover.request.id, data: activePopover.request.data },
-       activation: activePopover.activation,
-       focus: Boolean(activePopover.request.focus),
-      }}
-      isActive={() => getGuestPopoverController(document).authorize(activePopover.activation)}
-      onResize={(height) => {
-       const current = activePopoverRef.current;
-       const frame = iframeRef.current;
-       if (!current || current.activation !== activePopover.activation || !frame
-        || !getGuestPopoverController(document).authorize(current.activation)) return;
-       // The guest reports content height; include the host's two border pixels.
-       const nextHeight = Math.max(GUEST_POPOVER_HEIGHT_MIN, Math.min(GUEST_POPOVER_HEIGHT_MAX, height + 2));
-       if (current.request.height === nextHeight) return;
-       const bounds = frame.getBoundingClientRect();
-       const request = { ...current.request, height: nextHeight };
-       const position = positionGuestPopover({
-        ...request,
-        frame: {
-         left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height,
-         clientWidth: frame.clientWidth, clientHeight: frame.clientHeight
-        },
-        viewport: { width: window.innerWidth, height: window.innerHeight },
-       });
-       if (!position) { closeActivePopover('anchor'); return; }
-       const next = { ...current, request, position };
-       activePopoverRef.current = next;
-       setActivePopover(next);
-      }}
-      onPopoverClosed={(event) => {
-       if (activePopoverRef.current?.request.id === event.id) closeActivePopover(event.reason);
-      }}
-      onPopoverActivity={(active) => {
-       if (activePopoverRef.current?.activation !== activePopover.activation) return;
-       popoverOverlayActiveRef.current = active;
-       if (active) clearPopoverCloseTimer();
-       else schedulePopoverClose(activePopover.activation, 'outside');
-      }}
-     />
-     </DockedPanelSurfaceContext.Provider>
+     {popoverChild}
     </GuestPopover>
-   ) : null}
+   )}
   </>
  );
 };

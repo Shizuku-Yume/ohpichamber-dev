@@ -10,14 +10,11 @@ import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 const isSessionAdmitted = (directory: string | null | undefined): boolean => isSessionDirectoryAdmitted(
   directory, useProjectsStore.getState().projects, useSessionUIStore.getState().availableWorktreesByProject,
 );
-
 const admittedLineageDirectory = (sessionId: string): string | null => resolveAdmittedLineageDirectory(
   sessionId, useGlobalSessionsStore.getState().entityById, isSessionAdmitted,
 );
 
-export const withAdmittedLineage = (sessionId: string, directory: string | null): string | null => (
-  directory && !isSessionAdmitted(directory) ? admittedLineageDirectory(sessionId) ?? directory : directory
-);
+
 
 const ADMISSION_WAIT_MS = 10_000;
 

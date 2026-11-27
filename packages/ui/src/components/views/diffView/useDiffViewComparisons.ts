@@ -124,7 +124,7 @@ export function useDiffViewComparisons({
             setActiveDiffScope('working');
             onDiffScopeChange?.('working');
         }
-    }, [activeDiffScope, onDiffScopeChange]);
+    }, [activeDiffScope, onDiffScopeChange, setActiveDiffScope]);
     const branches = useGitStore((state) => (effectiveDirectory ? state.directories.get(effectiveDirectory)?.branches ?? null : null));
     const isLoadingBranches = useGitStore((state) => (effectiveDirectory ? state.directories.get(effectiveDirectory)?.isLoadingBranches ?? false : false));
 
@@ -159,7 +159,7 @@ export function useDiffViewComparisons({
     const showBranchOption = !isVSCodeRuntime() && isBranchScopeAvailable(currentBranch, qualifiedBranchBase);
     React.useEffect(() => {
         if (diffScope === null && showBranchOption) setActiveDiffScope('branch');
-    }, [diffScope, showBranchOption]);
+    }, [diffScope, setActiveDiffScope, showBranchOption]);
     const isBranchStatusResolved = status !== null;
     const branchScopeDefinitelyUnavailable = isVSCodeRuntime()
         || isGitRepo === false
@@ -180,7 +180,7 @@ export function useDiffViewComparisons({
                 onDiffScopeChange?.('working');
             }
         }
-    }, [activeDiffScope, branchScopeDefinitelyUnavailable, diffScope, onDiffScopeChange]);
+    }, [activeDiffScope, branchScopeDefinitelyUnavailable, diffScope, onDiffScopeChange, setActiveDiffScope]);
 
     const comparisonSource = React.useMemo<GitComparisonSource | null>(() => {
         if (activeDiffScope === 'pr') return prComparison.diffUnavailable ? null : selectedPr;

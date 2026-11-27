@@ -44,7 +44,7 @@ export function useFileFreshness({ diagram, draft, fileDocument, fileSaving, sco
     setFileError(null);
     setLoadedFilePath(null);
     setFileContentRevision((revision) => revision + 1);
-  }, []);
+  }, [activeFileLoadIdRef, lastLoadedFileStatRef, loadingFilePathRef, setDesktopImageSrc, setFileContentRevision, setFileError, setLoadedFilePath]);
 
   React.useEffect(() => subscribeToFileContentInvalidation(({ runtimeKey, paths }) => {
     const selectedPath = selectedFile?.path;
@@ -61,32 +61,33 @@ export function useFileFreshness({ diagram, draft, fileDocument, fileSaving, sco
   }), [reloadSelectedFile, selectedFile?.path]);
 
   React.useEffect(() => {
-    if (!visible || !selectedFile?.path || (loadedFilePath !== selectedFile.path && failedFilePath !== selectedFile.path)) {
+    const selectedPath = selectedFile?.path ?? null;
+    if (!visible || !selectedPath || (loadedFilePath !== selectedPath && failedFilePath !== selectedPath)) {
       return;
     }
 
-    const selectedPath = selectedFile.path;
-    const showsFailure = failedFilePath === selectedPath;
     const requestRuntime = getRuntimeKey();
     const requestScope = fileScopeRef.current;
+    const showsFailure = failedFilePath === selectedPath;
+
     const hasUnsavedChanges = () => isDirtyRef.current || (
       isDrawioFile(selectedPath) && diagramXmlRef.current !== diagramSavedXmlRef.current
     );
     const contentPoller = !isBinaryFile(selectedPath) && !isImageFile(selectedPath) && !contentDetectedBinary
       ? createFileContentPoller({
-          readContent: () => readFile(selectedPath, { fresh: true }),
-          getLoadedContent: () => lastLoadedFileContentRef.current,
-          getLoadedRevision: () => lastLoadedFileRevisionRef.current,
-          isDirty: hasUnsavedChanges,
-          applyContent: (content) => {
-            if (cancelled || getRuntimeKey() !== requestRuntime || fileScopeRef.current !== requestScope) return;
-            if (looksLikeBinaryText(content)) {
-              setLoadedFilePath(null);
-              return;
-            }
-            applyLoadedTextContent(content);
-          },
-        })
+        readContent: () => readFile(selectedPath, { fresh: true }),
+        getLoadedContent: () => lastLoadedFileContentRef.current,
+        getLoadedRevision: () => lastLoadedFileRevisionRef.current,
+        isDirty: hasUnsavedChanges,
+        applyContent: (content) => {
+          if (cancelled || getRuntimeKey() !== requestRuntime || fileScopeRef.current !== requestScope) return;
+          if (looksLikeBinaryText(content)) {
+            setLoadedFilePath(null);
+            return;
+          }
+          applyLoadedTextContent(content);
+        },
+      })
       : null;
 
     let cancelled = false;
@@ -182,8 +183,8 @@ export function useFileFreshness({ diagram, draft, fileDocument, fileSaving, sco
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [applyLoadedTextContent, contentDetectedBinary, failedFilePath, loadedFilePath, readFile, readFileStat, root, selectedFile?.path, t, visible]);
+  }, [applyLoadedTextContent, contentDetectedBinary, diagramSavedXmlRef, diagramXmlRef, failedFilePath, fileScopeRef, lastLoadedFileContentRef, lastLoadedFileRevisionRef, lastLoadedFileStatRef, loadedFilePath, missingSeenPathRef, pendingPathMoveRef, readFile, readFileStat, root, selectedFile?.path, setDraftContent, setFailedFilePath, setFileContent, setFileContentRevision, setFileError, setLoadedFilePath, t, visible]);
   return {
-  reloadSelectedFile,
+    reloadSelectedFile,
   };
 }

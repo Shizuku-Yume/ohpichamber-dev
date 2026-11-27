@@ -1,5 +1,4 @@
-import { normalizeProjectPath } from '@/lib/projectResolution';
-import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
+
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { CanonicalEvent, RuntimeSession, Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
@@ -329,20 +328,3 @@ export const useFirstSessionWithOpenTurn = (sessionIds: readonly string[]): stri
   return inTurn ?? inWorkflow ?? onShell ?? onPullRequest;
 };
 
-const statusWriteWatchers = new Set<Set<string>>();
-
-export const watchGlobalSessionStatusWrites = () => {
-  const touched = new Set<string>();
-  statusWriteWatchers.add(touched);
-  return { touched, stop: () => { statusWriteWatchers.delete(touched); } };
-};
-
-export const getDirectoryOwnedSessionIds = (directory: string, sessions: readonly Session[]): string[] => {
-  const scope = normalizeProjectPath(directory);
-  if (!scope) return [];
-  const ids: string[] = [];
-  for (const session of sessions) {
-    if (normalizeProjectPath(resolveGlobalSessionDirectory(session)) === scope) ids.push(session.sessionId);
-  }
-  return ids;
-};

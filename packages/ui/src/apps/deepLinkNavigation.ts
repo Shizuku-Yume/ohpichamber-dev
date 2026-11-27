@@ -1,6 +1,7 @@
 import React from 'react';
 import { z } from 'zod';
 import { reportSkippedSharedFiles, type RejectedSharedFile } from '@/lib/nativeSharedFiles';
+import { subscribeToNativeShortcutRequests } from '@/lib/nativeShortcutRequests';
 import { keepWorkDraftOwnSlot } from '@/lib/chatDraftPersistence';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { createSessionDraftId } from '@/stores/useSessionDraftsStore';
@@ -26,7 +27,26 @@ interface DeepLinkHandlers {
 let handlers: DeepLinkHandlers = {};
 type InstanceSwitcher = (serverId: string) => Promise<SavedInstanceSwitchOutcome>;
 type SharedFilesIntent = { type: 'shared-files'; files: File[]; text: string | null; rejected: RejectedSharedFile[]; accept?: () => void };
-type NavigationIntent = Exclude<DeepLinkIntent, { type: 'pairing' }>;
+type NavigationIntent = Exclude<DeepLinkIntent, { type: 'pairing' }> | ShortcutNewSessionIntent;
+
+type ShortcutNewSessionIntent = { type: 'shortcut-new-session'; projectId?: string; text?: string };
+
+const openShortcutSession = (intent: ShortcutNewSessionIntent): boolean => {
+  const projects = useProjectsStore.getState();
+  const project = intent.projectId
+    ? projects.projects.find((entry) => entry.id === intent.projectId) ?? null
+    : null;
+  if (intent.projectId && !project && !projects.hasServerSnapshot && !projects.serverSnapshotFailed) return false;
+  useSessionUIStore.getState().openNewSessionDraft(project ? { selectedProjectId: project.id } : undefined);
+  const text = intent.text?.trim();
+  if (!text) return true;
+  if (intent.projectId && !project) {
+    useInputStore.getState().setPendingInputText(text, 'append');
+    return true;
+  }
+  useInputStore.getState().requestDraftSubmit(useSessionUIStore.getState().newSessionDraft.draftId, text);
+  return true;
+};
 
 export const openSharedFilesSession = (intent: SharedFilesIntent): boolean => {
   if (intent.files.length === 0 && !intent.text) {
@@ -49,6 +69,9 @@ export const openSharedFilesSession = (intent: SharedFilesIntent): boolean => {
 
 const execute = (intent: NavigationIntent): boolean => {
   switch (intent.type) {
+    case 'shortcut-new-session':
+      return openShortcutSession(intent);
+
     case 'session':
       void openSession(intent.sessionId, { directory: intent.directory ?? null, messageId: intent.messageId ?? null });
       return true;
@@ -160,7 +183,7 @@ useProjectsStore.subscribe((state, previous) => {
     && state.hasServerSnapshot === previous.hasServerSnapshot
     && state.serverSnapshotFailed === previous.serverSnapshotFailed
   ) return;
-  queueMicrotask(() => void shareQueue.flush());
+  queueMicrotask(() => { void shareQueue.flush(); void queue.flush(); });
 });
 
 const applyDeepLinkIntent = (intent: NavigationIntent): void => {
@@ -228,6 +251,10 @@ export const useDeepLinkSource = ({ ready: isReady, onPairing, switchToServer }:
     let disposed = false;
     let receivedAppUrl = false;
     const cleanup: Array<() => void> = [];
+
+    cleanup.push(subscribeToNativeShortcutRequests((request) => {
+      applyDeepLinkIntent({ type: 'shortcut-new-session', projectId: request.projectId, text: request.text });
+    }));
 
     void import('@capacitor/app')
       .then(async ({ App }) => {

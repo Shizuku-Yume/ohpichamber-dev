@@ -1,10 +1,6 @@
-import type { GuestStatusActionEvent } from 'ohpichamber-sdk';
-import { z } from 'zod';
 import type { GuestRequest, GuestStatusView } from 'ohpichamber-sdk';
 import { guestStatusViewSchema } from 'ohpichamber-sdk/schemas';
 import { proxyGuestServiceRequest } from './service';
-
-type GuestStatusActionResult = { ok: true } | { ok: false; message: string | null };
 
 export type GuestStatusViewFailure = 'unreachable' | 'invalid';
 
@@ -183,24 +179,3 @@ export const startStatusViewPolling = ({
   };
 };
 
-const actionFailureSchema = z.object({ message: z.string().trim().min(1).max(300) });
-
-export const postGuestStatusAction = async (
-  guestId: string,
-  path: string,
-  context: GuestStatusContext,
-  event: GuestStatusActionEvent,
-): Promise<GuestStatusActionResult> => {
-  const answer = await proxyGuestServiceRequest(guestId, sourceRequest(path, context, {
-    method: 'POST',
-    body: JSON.stringify(event),
-  }));
-  if (!answer.ok) return { ok: false, message: null };
-  if (isSuccess(answer.result.status)) return { ok: true };
-  try {
-    const parsed = actionFailureSchema.safeParse(JSON.parse(answer.result.body));
-    return { ok: false, message: parsed.success ? parsed.data.message : null };
-  } catch {
-    return { ok: false, message: null };
-  }
-};

@@ -1,4 +1,4 @@
-import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
+import { TerminalTabsBar } from '@/components/terminal/TerminalTabsBar';
 import React from 'react';
 
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -46,9 +46,9 @@ import { useZoneInteractive } from '@/components/layout/zoneInteractiveContext';
 import { ZoneMoveMenuItems } from '@/components/layout/ZoneMoveMenuItems';
 
 type TerminalViewProps = {
-    visible?: boolean;
-    directory?: string | null;
-    onLastTabClosed?: () => void;
+ visible?: boolean;
+ directory?: string | null;
+ onLastTabClosed?: () => void;
 };
 
 const FALLBACK_TERMINAL_SIZE = { cols: 80, rows: 24 } as const;
@@ -186,6 +186,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    label: tab.label,
    title: tab.label,
    closeLabel: t('terminalView.tabs.closeTabTitle'),
+   renamable: tab.purpose.type === 'terminal',
   }));
  }, [directoryTerminalState?.tabs, t]);
 
@@ -1335,31 +1336,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    {directoryTerminalState ? (
     <ContextPanelHeaderToolbar>
      <div className={cn('app-region-no-drag flex min-w-0 items-center gap-2 text-xs', inPanelHeader ? 'flex-1 pe-1' : cn('oc-terminal-chrome sticky top-0 z-20 shrink-0 bg-[var(--surface-background)]', isTouchTerminal ? 'px-4 py-1.5' : 'ps-4 pe-2.5 py-1'))}>
-      <div className={cn('min-w-0 flex-1', inPanelHeader ? 'self-stretch' : isTouchTerminal ? 'h-8' : 'h-7')}>
-       <SortableTabsStrip
-        items={terminalTabItems}
-        activeId={activeTabId}
-        onSelect={handleSelectTab}
-        onClose={handleCloseTab}
-        onReorder={handleReorderTab}
-        tabContextMenu={renderTabContextMenu}
-        onTabDragOut={handleTabDragOut}
-        layoutMode="scrollable"
-        variant="default"
-        className="h-full bg-transparent"
-       />
-      </div>
-
-      <Button
-       type="button"
-       size="xs"
-       variant="ghost"
-       className={cn('shrink-0', isTouchTerminal ? 'h-8 w-8 p-0' : 'h-7 w-7 p-0')}
-       onClick={handleCreateTab}
-       title={t('terminalView.tabs.newTabTitle')}
-      >
-       <Icon name="add" className={`${isTouchTerminal ? 'h-[18px] w-[18px]' : 'h-4 w-4'}`} />
-      </Button>
+      <TerminalTabsBar
+       tabs={terminalTabItems}
+       activeId={activeTabId}
+       inPanelHeader={inPanelHeader}
+       onSelect={handleSelectTab}
+       onClose={handleCloseTab}
+       onReorder={handleReorderTab}
+       onRename={setRenamingTabId}
+       onCreate={handleCreateTab}
+       tabContextMenu={renderTabContextMenu}
+       onTabDragOut={handleTabDragOut}
+      />
 
       <div className="flex shrink-0 items-center gap-1 overflow-visible">
        <Button type="button" size="xs" variant="ghost" className="h-7 w-7 p-0" onClick={() => void handleRestart()} disabled={isRestarting || isActionTab || activeTab?.mode === 'command'} title={t('terminalView.actions.restart')} aria-label={t('terminalView.actions.restart')}>
@@ -1482,7 +1470,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/40 bg-[var(--surface-background)] px-3 py-2 text-xs text-muted-foreground">
      <span role="status">{t(inputRecovery === 'ready' ? 'terminalView.status.inputPaused'
       : inputRecovery === 'reconnecting' ? 'contextPanel.surface.status.reconnecting'
-      : 'contextPanel.surface.status.connecting')}</span>
+       : 'contextPanel.surface.status.connecting')}</span>
      {inputRecovery === 'ready' && (
       <Button type="button" size="sm" variant="secondary" onClick={resumeTerminalInput}>
        {t('terminalView.actions.resumeInput')}

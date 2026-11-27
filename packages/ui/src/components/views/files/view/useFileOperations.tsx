@@ -188,7 +188,7 @@ export function useFileOperations({ fileDirectory, fileDocument, layout, scope, 
     }
 
     done();
-  }, [activeDialog, dialogData, dialogInputValue, files, panelRoot, refreshDirectory, isMobile, removeOpenPathsByPrefix, root, selectedFile?.path, setSelectedPath, t]);
+  }, [activeDialog, dialogData, dialogInputValue, files, panelRoot, refreshDirectory, isMobile, removeOpenPathsByPrefix, root, selectedFile?.path, setDesktopImageSrc, setFileContent, setFileError, setLoadedFilePath, setSelectedPath, setShowMobilePageContent, t]);
 
   return { dialogInputRef, activeDialog, dialogData, dialogInputValue, setDialogInputValue, isDialogSubmitting, canCreateFile, canCreateFolder, canRename, canDelete, handleOpenDialog, handleCloseDialog, handleDialogSubmit };
 }

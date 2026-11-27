@@ -23,12 +23,3 @@ export function subscribeFirstServerConnect(listener: FirstServerConnectListener
   return () => { listeners.delete(listener); };
 }
 
-export function claimFirstServerConnect(owner: ChildStoreManager, runtimeKey: string): boolean {
-  if (connectedRuntimeByOwner.get(owner) === runtimeKey) return false
-  connectedRuntimeByOwner.set(owner, runtimeKey)
-  return true
-}
-
-export function notifyFirstServerConnect(runtimeKey: string): void {
-  for (const listener of listeners) listener(runtimeKey)
-}

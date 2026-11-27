@@ -69,10 +69,3 @@ export const useChatColumnExpandedInput = (): ChatColumnExpandedInput => {
   );
 };
 
-export const ChatTranscriptDirectoryContext = React.createContext<string | null>(null);
-
-export const useChatTranscriptDirectory = (): string | null => {
-  const nested = React.useContext(ChatTranscriptDirectoryContext);
-  const { directory } = useChatSessionSelection();
-  return nested ?? directory;
-};

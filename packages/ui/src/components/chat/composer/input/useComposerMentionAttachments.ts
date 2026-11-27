@@ -25,9 +25,9 @@ export const sanitizeAttachmentsForSend = (files: readonly AttachedFile[] | unde
             : file.dataUrl,
     }));
 type DocumentMentionPreparation =
-        | { status: 'ready'; prepared: Map<string, AttachedFile[]> }
-        | { status: 'failed'; filename: string }
-        | { status: 'runtime-changed' };
+    | { status: 'ready'; prepared: Map<string, AttachedFile[]> }
+    | { status: 'failed'; filename: string }
+    | { status: 'runtime-changed' };
 
 
 
@@ -75,7 +75,7 @@ export function useComposerMentionAttachments({
             serverPath: serverPath.replace(/\/+/g, '/'),
             filename: normalizedMentionPath.split('/').filter(Boolean).pop() || normalizedMentionPath,
         };
-    }, [chatSearchDirectory, currentDirectory]);
+    }, [chatSearchDirectory, confirmedMentionsRef, currentDirectory, knownAgentNamesRef]);
 
     const resolveFileMentionPath = React.useCallback(
         (name: string) => resolveInlineFileMention(name)?.serverPath ?? null,
@@ -135,7 +135,7 @@ export function useComposerMentionAttachments({
             sanitizedText: rawText,
             attachments,
         };
-    }, [resolveInlineFileMention]);
+    }, [confirmedMentionsRef, resolveInlineFileMention]);
 
     type ReadOnSendMentionPreparation =
         | { status: 'ready'; prepared: Map<string, AttachedFile[]> }
@@ -186,7 +186,7 @@ export function useComposerMentionAttachments({
         return { status: 'ready', prepared };
     }, [resolveInlineFileMention, confirmedMentionsRef]);
 
-        const prepareDocumentMentions = React.useCallback(async (
+    const prepareDocumentMentions = React.useCallback(async (
         texts: readonly string[],
         reservedFilenames: Set<string>,
         runtimeKey: string,
@@ -220,8 +220,9 @@ export function useComposerMentionAttachments({
             }
         }
         return { status: 'ready', prepared };
-    }, [resolveInlineFileMention]);
+    }, [confirmedMentionsRef, resolveInlineFileMention]);
 
-return {
-        sanitizeAttachmentsForSend, prepareReadOnSendMentions, mentionableAgents, extractInlineFileMentions, prepareDocumentMentions};
+    return {
+        sanitizeAttachmentsForSend, prepareReadOnSendMentions, mentionableAgents, extractInlineFileMentions, prepareDocumentMentions
+    };
 }

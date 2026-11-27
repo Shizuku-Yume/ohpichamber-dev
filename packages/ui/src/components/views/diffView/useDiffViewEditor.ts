@@ -77,9 +77,9 @@ export function useDiffViewEditor({
             }
 
             const resolvedTargetLine = targetLine
-            ?? (diffForNavigation && !diffForNavigation.isBinary && !hasFileVersionsDiff(filePath)
-              ? getFirstChangedModifiedLine(diffForNavigation.original, diffForNavigation.modified)
-              : 1);
+                ?? (diffForNavigation && !diffForNavigation.isBinary && !hasFileVersionsDiff(filePath)
+                    ? getFirstChangedModifiedLine(diffForNavigation.original, diffForNavigation.modified)
+                    : 1);
 
             const absolutePath = toAbsolutePath(effectiveDirectory, filePath);
             const openValidation = await validateContextFileOpen(files, absolutePath, { directory: effectiveDirectory });
@@ -101,7 +101,7 @@ export function useDiffViewEditor({
     const handleOpenInEditor = React.useCallback((filePath: string, diffData: DiffData | null) => {
         void openFileInEditorAtChange(filePath, diffData);
     }, [openFileInEditorAtChange]);
-    const handleRetryComparisonDiff = React.useCallback(() => setComparisonRetryRevision((revision) => revision + 1), []);
+    const handleRetryComparisonDiff = React.useCallback(() => setComparisonRetryRevision((revision) => revision + 1), [setComparisonRetryRevision]);
 
     return { handleHeaderLayoutChange, openingEditorFilePath, handleOpenInEditor, handleRetryComparisonDiff };
 }

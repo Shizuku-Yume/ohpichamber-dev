@@ -28,11 +28,3 @@ export function takeShareLink(link: FoundShareLink): SharedPageReference {
 export function readShareLinkRegistration(shareKey: string): Promise<ReceivedPage> | null {
   return registrations.get(shareKey) ?? null;
 }
-
-export async function withRegisteredSharedPages(references: ComposerReference[]): Promise<ComposerReference[]> {
-  return Promise.all(references.map(async (reference) => {
-    if (reference.kind !== 'shared-page' || reference.receivedId) return reference;
-    const registered = await readShareLinkRegistration(reference.shareKey)?.catch(() => null);
-    return registered ? { ...reference, receivedId: registered.receivedId } : reference;
-  }));
-}
