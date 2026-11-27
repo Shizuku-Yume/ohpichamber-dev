@@ -2,6 +2,8 @@ import { act } from 'react';
 import { expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
+import type { TrackerAPI } from '@/lib/api/types';
+
 class EventSourceFixture {
   static CLOSED = 2;
   static instances: EventSourceFixture[] = [];
@@ -56,7 +58,7 @@ test('the mounted sync composition drives a provider refetch on quota-providers-
   const { useHostInvalidationSync } = await import('./useHostInvalidationSync');
   const root = createRoot(document.body.appendChild(document.createElement('div')));
   function Probe() {
-    useHostInvalidationSync();
+    useHostInvalidationSync({ trackers: undefined });
     // The store only refreshes while a quota readout is visible; the Usage
     // surface and Work Status both register through this hook.
     useQuotaAutoRefresh(true);
@@ -80,6 +82,83 @@ test('the mounted sync composition drives a provider refetch on quota-providers-
     await act(async () => root.unmount());
     useQuotaStore.getState().resetForRuntimeSwitch();
     useConfigStore.setState({ isInitialized: false, workspaceId: '' });
+    fetch.mockRestore();
+    warn.mockRestore();
+    for (const [name, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+    await dom.happyDOM.close();
+  }
+});
+
+// The production mount point rendered as the roots render it — with the
+// trackers API wired: a tracker-providers-changed broadcast must reach the
+// tracker registry's refresh through this composition. When the
+// useTrackerProviderSync mount or the openchamber:tracker-providers-changed
+// parse branch is removed this test fails — the frame is emitted and no
+// tracker read ever happens.
+test('the mounted sync composition re-reads the tracker list on tracker-providers-changed', async () => {
+  const dom = new Window({ url: 'http://host-invalidation-sync.test' });
+  const originals = new Map<string, PropertyDescriptor | undefined>();
+  for (const [name, value] of Object.entries({
+    window: dom, document: dom.document, navigator: dom.navigator, localStorage: dom.localStorage,
+    Element: dom.Element, HTMLElement: dom.HTMLElement, Node: dom.Node, Event: dom.Event, CustomEvent: dom.CustomEvent,
+    EventSource: EventSourceFixture, IS_REACT_ACT_ENVIRONMENT: true,
+  })) {
+    originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  }
+  EventSourceFixture.instances = [];
+  const { linearLikeTrackerDescriptor, acmeTrackerDescriptor } = await import('@/lib/trackers/descriptor.fixture');
+  let served = [linearLikeTrackerDescriptor()];
+  let providerReads = 0;
+  const unexpected = (): never => { throw new Error('Unexpected tracker call'); };
+  const trackers: TrackerAPI = {
+    providers: async () => { providerReads += 1; return served; },
+    authStatus: async () => ({ connected: false }),
+    authStart: unexpected, authConnectToken: unexpected, authSaveOAuthClient: unexpected, authDisconnect: unexpected, authActivate: unexpected,
+    list: unexpected, refreshListReads: unexpected, get: unexpected, states: unexpected, updateState: unexpected,
+    mappingGet: unexpected, mappingSet: unexpected, sessionStatusPost: unexpected, preferencesGet: unexpected, preferencesSet: unexpected,
+  };
+  // The quota and guest-marks siblings read their own endpoints through
+  // fetch; the promise never resolves so their retries cannot interfere.
+  const fetch = spyOn(globalThis, 'fetch').mockImplementation(async () => new Promise<Response>(() => undefined));
+  const warn = spyOn(console, 'warn').mockImplementation(() => { });
+  const { createRoot } = await import('react-dom/client');
+  const { useTrackerRegistry } = await import('@/lib/trackers/registry');
+  const { useTrackerAuthStore } = await import('@/stores/useTrackerAuthStore');
+  const { useHostInvalidationSync } = await import('./useHostInvalidationSync');
+  const root = createRoot(document.body.appendChild(document.createElement('div')));
+  function Probe() {
+    useHostInvalidationSync({ trackers });
+    return null;
+  }
+  const ids = () => useTrackerRegistry.getState().ordered.map((descriptor) => descriptor.id);
+  try {
+    await act(async () => root.render(<Probe />));
+    const source = EventSourceFixture.instances[0];
+    expect(source).toBeDefined();
+    await act(async () => { await useTrackerRegistry.getState().refresh(trackers); });
+    expect(providerReads).toBe(1);
+    expect(ids()).toEqual(['linear']);
+
+    // An extension's tracker attached server-side: the announcement drives a
+    // re-read through the composition, and the registry holds the new list.
+    served = [linearLikeTrackerDescriptor(), acmeTrackerDescriptor({ id: 'ext-acme' })];
+    await act(async () => source.emit('openchamber:tracker-providers-changed'));
+    await act(async () => { });
+    expect(providerReads).toBe(2);
+    expect(ids()).toEqual(['linear', 'ext-acme']);
+
+    // An unrelated broadcast does not re-read the tracker list.
+    await act(async () => source.emit('openchamber:guests-changed'));
+    await act(async () => { });
+    expect(providerReads).toBe(2);
+  } finally {
+    await act(async () => root.unmount());
+    useTrackerAuthStore.getState().resetForRuntimeSwitch();
+    useTrackerRegistry.getState().resetForRuntimeSwitch('test-cleanup');
     fetch.mockRestore();
     warn.mockRestore();
     for (const [name, descriptor] of originals) {

@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-11-28 - Restore the upstream tracker-providers-changed sync wiring the v2.7.0 merge resolutions lost
+
+- **Decided:** `packages/ui/src/lib/openchamberEvents.ts` parses `openchamber:tracker-providers-changed` again and `useTrackerProviderSync` is mounted once per surface — through the round-1 `useHostInvalidationSync` composition, extended with a required `{ trackers }` key, in `App` and `MobileApp`. The hook itself is byte-identical to upstream v2.8.0: it answers the tracker announcement and the stream reconnect, never the extension catalog's own `guests-changed`, because the server-side extension-tracker reconcile emits `tracker-providers-changed` for every registry change exactly once (extension approval, pause, removal, instance or first-connect) and a catalog-driven read would duplicate the refresh.
+- **Instead of:** the state the v2.7.0 merge resolutions left behind (`57a1767d91`/`320fc5a54b` dropped the parse branch, `1675a7fb23` dropped the mounts): the hook answered `guests-changed` and was mounted nowhere, so a tracker extension approved or paused on another client never reached an open session's registry. Also instead of mounting `useTrackerProviderSync` per root beside the composition: the composition exists precisely because per-root mount lists drifted (LIVE-1), so the trackers API is a required key a root cannot forget.
+- **Because:** the merge loss was never a decision — no entry narrowed the tracker feature, the server emitter at `feature-routes-runtime.ts` stayed live, and upstream v2.8.0 carries the full wiring. The stale ledger rows that described the lost state as deliberate ("`tracker-providers-changed` no longer exists") were factually wrong about the fork's own server and are removed with the restoration; the hook drops out of the ledger by becoming byte-identical to upstream.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** upstream changes the tracker invalidation contract, or the composition's parameter shape blocks a future member.
+- **Effort:** release-hardening
+
 ## 2026-11-27 - Correct hook effect dependencies instead of disabling exhaustive-deps
 
 - **Decided:** The release-hardening lint sweep clears every `react-hooks/exhaustive-deps` warning on the upstream-shared diff-view and file-view hooks by reasoning about each effect's trigger — dependency arrays list the refs and setters the callback reads (refs are stable by contract), the file-move bridge the reset effect keys on is converted from a mutable-ref read to real state (`pendingPathMoveTo`), and the file-switch reset settles through a settled-path guard so the effect's behavior is observable and testable. Where upstream carries the same hooks byte-for-byte, the fork keeps these corrections rather than reverting to lint-warning code or disabling the rule.

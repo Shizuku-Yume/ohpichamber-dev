@@ -1215,7 +1215,7 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   React.useEffect(() => installServerStateBootEvents(), []);
   useRouter();
   useSourceControlProviderSync(apis.sourceControl);
-  useHostInvalidationSync();
+  useHostInvalidationSync({ trackers: apis.trackers });
   useNativeShellIntegration({ native: isNativeMobileApp, connected: isConnected, initialized: isInitialized, onPairing });
   const fontsReady = useFontsReady();
 

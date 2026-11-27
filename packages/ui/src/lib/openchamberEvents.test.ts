@@ -522,6 +522,23 @@ describe('openchamber events', () => {
     } finally { unsubscribe(); }
   });
 
+  test('a tracker registry change reaches subscribers as tracker-providers-changed, unrelated events do not', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const events: string[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => { events.push(event.type); });
+    const source = MockEventSource.instances[0];
+    try {
+      source.onmessage?.({
+        data: JSON.stringify({ type: 'openchamber:tracker-providers-changed', properties: {} }),
+      });
+      expect(events).toEqual(['tracker-providers-changed']);
+      // Unrelated announcements never produce the tracker invalidation.
+      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:guests-changed' }) });
+      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:source-control-providers-changed', properties: {} }) });
+      expect(events).toEqual(['tracker-providers-changed', 'guests-changed', 'source-control-providers-changed']);
+    } finally { unsubscribe(); }
+  });
+
   test('the control SSE stream carries permission modes and requests left for the user, and rereads the modes on connect and when a space reconnects', async () => {
     // The permission store's imports read localStorage once a window exists.
     const storage = new Map<string, string>();

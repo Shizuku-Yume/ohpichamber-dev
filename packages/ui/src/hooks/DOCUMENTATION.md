@@ -13,14 +13,18 @@ Extension quota cards reload their provider catalog on the Host's
 coalesces repeated reads, rejects stale runtime completions and retains the
 last catalog on failed reads; unrelated control events do not trigger reads.
 
-The Guest-marks and quota-provider invalidation consumers — the listeners for
-a Guest mark written through a guest service, a provider credential, a
-quota-provider lifecycle change — mount through the single composition
-`useHostInvalidationSync` in both app roots (`App` and `MobileApp`), never as
-per-root ad hoc lists. The composition exists because the quota sync shipped
-unmounted for a whole release cycle when every root composed its own list:
-one mount point keeps web, Electron and mobile on the same invalidations, and
-its test renders the composition itself so removing a member fails the suite.
+The Guest-marks, quota-provider and tracker-provider invalidation consumers —
+the listeners for a Guest mark written through a guest service, a provider
+credential, a quota-provider lifecycle change, the server's tracker registry
+changing — mount through the single composition `useHostInvalidationSync` in
+both app roots (`App` and `MobileApp`), never as per-root ad hoc lists. The
+composition takes the root's `apis.trackers` as a required key (possibly
+undefined where the server predates the tracker API) so a root cannot forget
+to wire it. The composition exists because the quota sync shipped unmounted
+for a whole release cycle when every root composed its own list, and the
+tracker sync was lost the same way in a merge resolution: one mount point
+keeps web, Electron and mobile on the same invalidations, and its test
+renders the composition itself so removing a member fails the suite.
 
 ### Per-turn diff reads
 
