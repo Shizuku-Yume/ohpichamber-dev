@@ -34,7 +34,7 @@ class ReceiptWorkers extends WorkerRegistry {
     };
   }
   override async request(rootSessionId: string, operation: WorkerOperation): Promise<WorkerOperationResult> {
-    if (operation.type !== 'prompt') throw new Error(`Unexpected operation ${operation.type}`);
+    if (operation.type !== 'prompt' && operation.type !== 'steer' && operation.type !== 'follow-up') throw new Error(`Unexpected operation ${operation.type}`);
     this.prompts.push(operation);
     if (this.behavior === 'die') {
       // Transport loss inside the service: the request never settles into an
@@ -43,11 +43,16 @@ class ReceiptWorkers extends WorkerRegistry {
       throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker did not answer the operation in time');
     }
     if (this.behavior === 'refuse') throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The worker refused the prompt');
+    if (operation.type === 'steer') return { type: 'steer', ack: { sessionId: rootSessionId, runId: this.activeRunId, acceptedAt: 3 } };
+    if (operation.type === 'follow-up') return { type: 'follow-up', ack: { sessionId: rootSessionId, followUpId: `followup-${operation.correlationId ?? 'plain'}`, acceptedAt: 3 } };
+    this.activeRunId = operation.runId;
     this.callbacks.onEvents?.(rootSessionId, 'generation', [
       { timestamp: 1, event: { type: 'run.started', runId: operation.runId, origin: 'host', createdAt: 1 } },
     ]);
     return { type: 'prompt', run: { runId: operation.runId, sessionId: rootSessionId, status: 'running', origin: 'host', createdAt: 1 } };
   }
+  /** The run id the in-memory admission currently answers steer acks for. */
+  activeRunId = 'run-unset';
   /** Settle the run admission opened, the way a worker finishing the turn does. */
   completeRun(rootSessionId: string, runId: string): void {
     this.callbacks.onEvents?.(rootSessionId, 'generation', [
@@ -56,12 +61,23 @@ class ReceiptWorkers extends WorkerRegistry {
   }
 }
 
-
 const promptOperation = (correlationId?: string) => {
   const base = {
     type: 'prompt' as const, runId: `run-${correlationId ?? 'plain'}`,
     request: {
       input: { text: 'Prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+    },
+  };
+  if (correlationId === undefined) return base;
+  return { ...base, correlationId };
+};
+
+const streamingOperation = (type: 'steer' | 'follow-up', correlationId?: string) => {
+  const base = {
+    type,
+    request: {
+      input: { text: 'Streaming input', attachments: [], context: [] },
       options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
     },
   };
@@ -315,6 +331,122 @@ test('a rejected receipt detail stays the fixed public wording even when the ref
       expect(receipt.detail).not.toContain('/home/user');
       expect(receipt.detail).not.toContain('secret');
     }
+    await registry.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test('a steer-accepted correlation id reused by a send is not answered from the receipt', async () => {
+  const { root, workers, registry } = await fixture();
+  try {
+    // An accepted steer records its receipt (operation 'steer', no userMessageId).
+    await registry.prompt('root', promptOperation('corr-steer-x-run'));
+    const steerAck = await registry.streamingPrompt('root', streamingOperation('steer', 'corr-steer-x'));
+    expect(steerAck.runId).toBe('run-corr-steer-x-run');
+    expect(registry.promptReceipt('root', 'corr-steer-x')).toMatchObject({ outcome: 'accepted', operation: 'steer' });
+    workers.completeRun('root', 'run-corr-steer-x-run');
+    const promptsBefore = workers.prompts.length;
+    // The same correlation id now arrives as a send. The receipt's operation
+    // differs, so it is not a replay match: the request re-enters admission —
+    // here it runs, because the session is idle. Answering from the steer
+    // receipt instead would silently drop the prompt while reporting admission.
+    const run = await registry.prompt('root', promptOperation('corr-steer-x'));
+    expect(run.runId).toBe('run-corr-steer-x');
+    expect(workers.prompts.length).toBe(promptsBefore + 1);
+    // Accepted rows are terminal and never overwritten, so the receipt still
+    // records the original steer admission — the durable truth about what this
+    // correlation id first admitted. Because it never records a send, the row
+    // can never replay as one; a later send resubmission enters admission again
+    // and is decided on live state. True transport retries of either request
+    // are the Host idempotency store's job, keyed by the same correlation id.
+    expect(registry.promptReceipt('root', 'corr-steer-x')).toMatchObject({ outcome: 'accepted', operation: 'steer' });
+    workers.completeRun('root', 'run-corr-steer-x');
+    const resubmitted = await registry.prompt('root', promptOperation('corr-steer-x'));
+    expect(resubmitted.runId).toBe('run-corr-steer-x');
+    expect(workers.prompts.length).toBe(promptsBefore + 2);
+    await registry.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test('a steer-accepted correlation id reused by a send behind an active run is refused on live state, not replayed', async () => {
+  const { root, workers, registry } = await fixture();
+  try {
+    await registry.prompt('root', promptOperation('corr-steer-y-run'));
+    await registry.streamingPrompt('root', streamingOperation('steer', 'corr-steer-y'));
+    const promptsBefore = workers.prompts.length;
+    // The run never settles: live admission must decide the reused id, and the
+    // live answer is the deterministic RUN_ACTIVE refusal — never the steer
+    // receipt's acceptance, which would report a turn nothing was admitted to.
+    await expect(registry.prompt('root', promptOperation('corr-steer-y'))).rejects.toMatchObject({ code: 'RUN_ACTIVE' });
+    expect(workers.prompts.length).toBe(promptsBefore);
+    await registry.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test('a send-accepted correlation id reused by a steer is not answered from the receipt', async () => {
+  const { root, workers, registry } = await fixture();
+  try {
+    await registry.prompt('root', promptOperation('corr-send-x'));
+    expect(registry.promptReceipt('root', 'corr-send-x')).toMatchObject({ outcome: 'accepted', operation: 'send', runId: 'run-corr-send-x' });
+    const promptsBefore = workers.prompts.length;
+    // The receipt belongs to the send. The steer re-enters admission and is
+    // answered by the live worker — never replayed as if the steer itself had
+    // been injected, which would report an injection that never happened.
+    const ack = await registry.streamingPrompt('root', streamingOperation('steer', 'corr-send-x'));
+    expect(ack.runId).toBe('run-corr-send-x');
+    expect(workers.prompts.length).toBe(promptsBefore + 1);
+    expect(workers.prompts[workers.prompts.length - 1]).toMatchObject({ type: 'steer' });
+    // The accepted send row is terminal: the steer admission does not
+    // overwrite it. The row therefore never records a steer, so the operation
+    // guard can never replay one — each cross-operation steer is decided by
+    // live admission, which is exactly what a genuine new steer requires.
+    expect(registry.promptReceipt('root', 'corr-send-x')).toMatchObject({ outcome: 'accepted', operation: 'send', runId: 'run-corr-send-x' });
+    const repeated = await registry.streamingPrompt('root', streamingOperation('steer', 'corr-send-x'));
+    expect(repeated.runId).toBe('run-corr-send-x');
+    expect(workers.prompts.length).toBe(promptsBefore + 2);
+    await registry.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test('a follow-up-accepted correlation id reused by a steer is not answered from the receipt', async () => {
+  const { root, workers, registry } = await fixture();
+  try {
+    await registry.prompt('root', promptOperation('corr-mixed-run'));
+    await registry.streamingPrompt('root', streamingOperation('follow-up', 'corr-mixed'));
+    expect(registry.promptReceipt('root', 'corr-mixed')).toMatchObject({ outcome: 'accepted', operation: 'followUp' });
+    const promptsBefore = workers.prompts.length;
+    // followUp and steer are distinct receipt operations: the follow-up
+    // receipt is not the steer's answer. Live admission injects the steer for
+    // real instead of reporting the follow-up's acceptance back.
+    const ack = await registry.streamingPrompt('root', streamingOperation('steer', 'corr-mixed'));
+    expect(ack.runId).toBe('run-corr-mixed-run');
+    expect(workers.prompts.length).toBe(promptsBefore + 1);
+    expect(workers.prompts[workers.prompts.length - 1]).toMatchObject({ type: 'steer' });
+    await registry.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test('a follow-up resubmission with its own correlation id still replays the original acceptance', async () => {
+  const { root, workers, registry } = await fixture();
+  try {
+    // The operation-matching guard narrows replay, it never removes it: a
+    // resubmission of the same operation replays exactly as before.
+    await registry.prompt('root', promptOperation('corr-fupe-run'));
+    const first = await registry.streamingPrompt('root', streamingOperation('follow-up', 'corr-fupe'));
+    expect(first.followUpId).toBe('followup-corr-fupe');
+    const promptsBefore = workers.prompts.length;
+    const replayed = await registry.streamingPrompt('root', streamingOperation('follow-up', 'corr-fupe'));
+    expect(replayed.followUpId).toBe('followup-corr-fupe');
+    expect(workers.prompts.length).toBe(promptsBefore);
     await registry.close();
   } finally {
     await rm(root, { recursive: true, force: true });
