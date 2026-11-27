@@ -70,13 +70,16 @@ with zero console errors across desktop and mobile surfaces. Evidence:
 W12 rework round 1 reconciles the upstream-drift ledger against the committed
 tree (the first round's green captures were taken pre-commit, while the guard
 reads `git ls-tree HEAD`): the 21 rows naming files W12 deleted are removed,
-and the 28 unexplained fork-differs paths are reconciled — two doc files
-reverted to upstream byte-for-byte, twelve lint-fixed hook files and thirteen
-dead-code-cleaned files kept with rows citing the new decisions
+and the 28 unexplained fork-differs paths are reconciled — twelve lint-fixed
+hook files, thirteen dead-code-cleaned files and the two module docs kept with
+rows citing the new decisions
 `2026-11-27 - Correct hook effect dependencies instead of disabling exhaustive-deps`
 and `2026-11-27 - Unreachable upstream leftovers are deleted, not carried byte-for-byte`
 (reverting the dead-code cleanups was probed and rejected: it reintroduces 25
-knip findings), plus task 11's server-frame shutdown-auth documentation citing
+knip findings; the first pass's revert of the two docs to upstream blobs was
+overturned in `858c7aac1b` because upstream's doc text references modules the
+fork deleted, so the fork texts are the truthful ones), plus task 11's
+server-frame shutdown-auth documentation citing
 `2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor`.
 Post-commit receipts: drift `--markers --check`, `bun run check`,
 `bun run type-check` all exit 0 with lint and dead-code still at zero.
