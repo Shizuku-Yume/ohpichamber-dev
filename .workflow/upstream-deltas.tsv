@@ -155,6 +155,7 @@ path	state	class	decision	reason
 .workflow/done/final-main-audit/03-ui-code-style-and-design-compliance.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/final-main-audit/04-full-product-web-and-mobile-walkthrough.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/final-main-audit/05-packaged-appimage-and-cli-product-audit.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
+.workflow/done/final-main-audit/06-final-main-convergence-and-signoff-gate.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/m4-orchestration/01-workflows-parent-and-admission.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/m4-orchestration/02-routing-and-model-roles.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/done/m4-orchestration/03-retire-behavior-and-dual-permissions.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
@@ -690,7 +691,6 @@ path	state	class	decision	reason
 .workflow/specs/ux-v270-omp-alignment.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/standards.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/tasks/.gitkeep	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
-.workflow/tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/technical-debt.md	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/upstream-baseline.json	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.
 .workflow/upstream-deltas.tsv	fork-only	excluded		Standing fork ownership/exclusion; see the v2.8.0 merge decision.

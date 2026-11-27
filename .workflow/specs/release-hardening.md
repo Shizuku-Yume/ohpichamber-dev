@@ -1,6 +1,6 @@
 # Release hardening: clear every solvable debt before 1.0
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** release-hardening/integration
 

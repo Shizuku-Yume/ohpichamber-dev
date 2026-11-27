@@ -4,6 +4,34 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The release-hardening effort closed on 2026-11-28 with `final-main-audit`:
+all 13 release-hardening tasks and all 6 final-main-audit tasks are archived,
+both specs are done, `.workflow/technical-debt.md` has no entries, and the
+zero-defect root gate passes on the final tree — `lint` 0 warnings, `dead-code`
+0 findings, strict `type-check` across all five projects (the fork-owned server
+no-check list is gone), `check` 5/5, `docs:validate` 720/60, the full
+`VITEST_MAX_WORKERS=2 bun run test` passing every test except the pre-existing
+upstream-inherited FLAKE-1 harness teardown race (assertion green, vite/esbuild
+teardown hang; diagnosed in the gate evidence), `workflow validate` clean, and
+the upstream-drift ledger consistent post-commit. The chat transcript renders
+through upstream's ChatViewport on Canonical records with 23/23 parity shots at
+noise floor against the task-10 oracle; queued messages edit/send-now through
+the atomic Host take; interrupted sends reconcile through durable receipts;
+ten providers read native OMP account quotas with their Host scrapers removed;
+scoped change events drive cross-client refresh on web, Electron and mobile.
+The real-path walkthrough passed on a real provider at 1600 px `zh-CN`/`en` and
+390×844 mobile with zero console errors across three rounds. Gate evidence,
+the final audit report and the follow-ups list (open minors: LIVE-2 unreproduced
+queue-failed spam, mobile IME return key untested on a physical device, mobile
+tracker two-client probe not run, the pre-existing `bun test` multi-file mock
+contamination) are under
+`ohpichamber-omp-artifacts/release-hardening-2026-11-26/`. Closeouts:
+[release-hardening](done/release-hardening/closeout.md),
+[final-main-audit](done/final-main-audit/closeout.md). What remains before the
+1.0 release is M7 (`.workflow/specs/m7-release-verification.md`): platform
+verification beyond Linux x64 and release distribution — neither was in this
+effort's scope.
+
 The OMP 19 and OMP 19.1 integration efforts closed on 2026-11-26 after their
 first independent review. That review found Host authorization gaps on paths
 where the SDK builds its own sessions or mints credentials: `/cleanse`,
@@ -1388,7 +1416,7 @@ packaged builds were not tested.
 
 **2026-11-19 Desktop runtime handoff:** A controlled Linux launch of the embedded Host with an OMP interpreter fixture that requires `BUN_BE_BUN=1` went from readiness HTTP 503 to 200 after forwarding the selected mode to the service, its readiness worker, and the Linux process cleanup helper. The fixture executes the real Bun Agent Service and SDK worker; it does not certify provider-backed turns or packaged release artifacts.
 
-**2026-11-19 Final main audit (task 06):** The candidate includes sidebar admission PR #2 and the PR #3 review fixes. The archived base reference, Agent Service lint and dead-code issues, Oxlint diagnostic parsing, and the Git clone timeout fixture are fixed. After the Web router test harness fix, the Ubuntu 24.04 gate passed on `d4feabd8c`, including all seven workspace suites and workflow validation. Devin signed off on local verification; Devin Review and maintainer merge are pending. See [task 06](tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md) for evidence and runtime walkthrough limitations. M7 release verification remains proposed.
+**2026-11-19 Final main audit (task 06, historical — superseded):** The candidate includes sidebar admission PR #2 and the PR #3 review fixes. The archived base reference, Agent Service lint and dead-code issues, Oxlint diagnostic parsing, and the Git clone timeout fixture are fixed. After the Web router test harness fix, the Ubuntu 24.04 gate passed on `d4feabd8c`, including all seven workspace suites and workflow validation. Devin signed off on local verification. The audit PR merged as #3 on 2026-11-19; the maintainer declined closing the effort on this stale candidate and the release-hardening gate reran the full Check on the final tree — the effort closed on 2026-11-28 (see Current state). Evidence and runtime walkthrough limitations: [task 06](done/final-main-audit/06-final-main-convergence-and-signoff-gate.md).
 
 **2026-11-18 Task 19 Round-2 visual acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/19`, base `4f9a7c7f39`, integration tip `57564bf232`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task19/`):**
 **2026-11-18 Operator cutover (task rebrand/07, base `7e9251f0d9`):** Cut the operator files (`omp-m0-provider.env`, `chats/`) over to OhPiChamber's own data directory, making `~/.config/ohpichamber` the maintainer's real product data directory. Dev/test runs now isolate data from this directory and real-provider checks configure the provider through the app instead of sourcing an environment file.
