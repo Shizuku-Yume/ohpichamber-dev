@@ -106,18 +106,27 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     }, [identity, persistEnabled]);
 
     const persistNow = React.useCallback((target: ChatDraftIdentity | null, draft: string) => {
-        if (!persistEnabled || !target) return;
+        if (!target) return;
         const key = getChatDraftIdentityKey(target);
+        const current = currentIdentityRef.current;
+        const isCurrent = Boolean(current && getChatDraftIdentityKey(current) === key);
 
+        const mentionSource = isCurrent
+            ? confirmedMentionsRef.current
+            : (draftMemoryRef.current.get(key)?.confirmedMentions ?? []);
         const activeMentions = new Set<string>();
-        for (const mention of confirmedMentionsRef.current) {
+        for (const mention of mentionSource) {
             if (isMentionEntryInText(mention, draft)) activeMentions.add(mention);
         }
         if (isBtwPendingComposerKey(target.sessionId)) {
             draftMemoryRef.current.set(key, { text: draft, confirmedMentions: activeMentions });
             return;
         }
-        confirmedMentionsRef.current = activeMentions;
+        if (isCurrent) {
+            confirmedMentionsRef.current = activeMentions;
+        }
+        draftMemoryRef.current.set(key, { text: draft, confirmedMentions: activeMentions });
+        if (!persistEnabled) return;
 
         const signature = draftSignature(draft, activeMentions);
         if (lastPersistedRef.current.get(key) === signature) return;

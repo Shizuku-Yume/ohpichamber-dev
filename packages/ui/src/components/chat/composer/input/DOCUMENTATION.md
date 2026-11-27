@@ -40,13 +40,20 @@ preferences are inputs to these owners.
   steal search focus; pinned chats focus only when already being worked in.
 - Input handlers read the live document even before React renders the previous
   key. IME composition bypasses autocomplete interception, including WebKit's
-  keyCode 229 fallback.
+  keyCode 229 fallback. Enter submits directly when the typed command already
+  equals the highlighted command row, while Tab and partial matches keep
+  completing.
 - Shell-mode entry consumes its trigger in the same transaction, including
   mobile keyboard and paste paths, so a later caret write cannot use stale text.
 - Empty-composer recall edits the last queued message through the same atomic
   take the strip's edit control uses; the Host retains delivery authority until
   the take transfers ownership back to the composer. Local and extension action
-  commands execute before attached context is consumed.
+  commands execute before attached context is consumed; session action and
+  builtin control commands keep composer text, mentions, and persisted drafts
+  intact until accepted, so any rejection or refusal leaves the typed command
+  in place, and acceptance clears the submitted draft in storage/memory while
+  leaving live composer state untouched if the active draft switched or the user
+  typed new text mid-flight.
 - A new worktree stays pinned while its list refreshes so target validation
   cannot reset the draft to the project root. Target dialogs retain the project
   they opened for even if the draft changes.

@@ -5,6 +5,7 @@ import { getModelDisplayName } from './mobileControlsUtils';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useI18n } from '@/lib/i18n';
 import { isAutoModel } from '@/lib/routing/autoModel';
+import { useActiveRunModelSelection } from './useActiveRunModelSelection';
 
 interface MobileModelButtonProps {
     onOpenModel: () => void;
@@ -14,8 +15,11 @@ interface MobileModelButtonProps {
 
 export const MobileModelButton: React.FC<MobileModelButtonProps> = ({ onOpenModel, className, model }) => {
     const { t } = useI18n();
-    const currentModelId = useConfigStore((state) => model === undefined ? state.currentModelId : model?.modelId);
-    const currentProviderId = useConfigStore((state) => model === undefined ? state.currentProviderId : model?.providerId);
+    const configModelId = useConfigStore((state) => model === undefined ? state.currentModelId : model?.modelId);
+    const configProviderId = useConfigStore((state) => model === undefined ? state.currentProviderId : model?.providerId);
+    const activeRunModel = useActiveRunModelSelection({ enabled: model === undefined });
+    const currentModelId = model === undefined ? (activeRunModel?.modelId ?? configModelId) : configModelId;
+    const currentProviderId = model === undefined ? (activeRunModel?.providerId ?? configProviderId) : configProviderId;
     const providers = useConfigStore((state) => state.providers);
     const currentProvider = providers.find((provider) => provider.providerId === currentProviderId);
     const isAuto = isAutoModel(currentProviderId, currentModelId);

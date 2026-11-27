@@ -7,6 +7,7 @@ import { readLocalCatalogSnapshot } from "../configCatalogCache";
 import { _providersLoadedAt, isConfigFresh } from "./catalogLifecycle";
 import { useAgentsStore } from "@/stores/useAgentsStore";
 import { useSessionUIStore } from "@/sync/session-ui-store";
+import { useSelectionStore } from "@/sync/selection-store";
 
 export const createDirectoryActivation: ConfigSlice<"activateDirectory"> = (set, get) => ({
     activateDirectory: async (directory, options) => {
@@ -33,16 +34,20 @@ export const createDirectoryActivation: ConfigSlice<"activateDirectory"> = (set,
         set(state => {
             const snapshot = state.directoryScoped[directoryKey];
             const directoryChanged = state.activeDirectoryKey !== directoryKey;
-            const carryManualModel = options?.preserveManualModel && state.activeDirectoryKey !== directoryKey && state.selectionSource === 'manual' && Boolean(state.currentProviderId && state.currentModelId);
+            const sessionUiState = useSessionUIStore.getState();
+            const activeSessionId = sessionUiState.currentSessionId;
+            const promotedSessionModel = activeSessionId && sessionUiState.materializedDraftSessionId === activeSessionId
+                ? useSelectionStore.getState().getSessionModelSelection(activeSessionId)
+                : null;
+            const carryManualModel = (options?.preserveManualModel && state.activeDirectoryKey !== directoryKey && state.selectionSource === 'manual' && Boolean(state.currentProviderId && state.currentModelId))
+                || Boolean(promotedSessionModel && state.activeDirectoryKey !== directoryKey);
             const manualModel = carryManualModel ? {
-                currentProviderId: state.currentProviderId,
-                currentModelId: state.currentModelId,
+                currentProviderId: promotedSessionModel?.providerId ?? state.currentProviderId,
+                currentModelId: promotedSessionModel?.modelId ?? state.currentModelId,
                 currentVariant: state.currentVariant,
                 currentVariantSelection: state.currentVariantSelection,
                 selectionSource: 'manual' as const
             } : null;
-            // An effort picked in the draft travels with it the same way,
-            // also when the model itself is still the automatic one.
             const carriedOverride = !manualModel && options?.preserveManualModel && state.activeDirectoryKey !== directoryKey ? state.currentVariantSelection.override : undefined;
             const carriedVariant = carriedOverride === undefined ? null : {
                 currentVariant: carriedOverride ?? undefined,

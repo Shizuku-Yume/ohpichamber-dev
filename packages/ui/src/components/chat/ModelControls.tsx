@@ -53,6 +53,8 @@ import {
 } from '@/lib/messages/userModelChoice';
 import type { ComposerModelSelection } from './pinnedComposerSelection';
 import { ROOT_SELECTION_AGENT } from '@/sync/selection-store';
+import { useActiveRunModelSelection } from './useActiveRunModelSelection';
+import { isDraftSessionId } from '@/lib/sessionIdentity';
 
 type IconComponent = IconName;
 
@@ -265,8 +267,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     React.useEffect(() => {
         void loadAgents(currentSessionDirectory);
     }, [currentSessionDirectory, loadAgents]);
-    const currentProviderId = useConfigStore((state) => selection ? selection.model?.providerId ?? '' : state.currentProviderId);
-    const currentModelId = useConfigStore((state) => selection ? selection.model?.modelId ?? '' : state.currentModelId);
+    const configProviderId = useConfigStore((state) => selection ? selection.model?.providerId ?? '' : state.currentProviderId);
+    const configModelId = useConfigStore((state) => selection ? selection.model?.modelId ?? '' : state.currentModelId);
+    const activeRunModel = useActiveRunModelSelection({
+        enabled: !selection,
+        sessionId: currentSessionId,
+        directory: currentSessionDirectory,
+    });
+    const currentProviderId = selection ? configProviderId : (activeRunModel?.providerId ?? configProviderId);
+    const currentModelId = selection ? configModelId : (activeRunModel?.modelId ?? configModelId);
     const effectiveCurrentVariant = useConfigStore((state) => state.currentVariant);
     const currentVariantSelection = useConfigStore((state) => state.currentVariantSelection);
     let currentVariant = currentVariantSelection.override === null
@@ -307,6 +316,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const sync = useSync();
 
     const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
+    const sessionSavedModel = useSelectionStore((state) => (
+        currentSessionId && !selection ? state.sessionModelSelections.get(currentSessionId) ?? null : null
+    ));
+    const materializedDraftSessionId = useSessionUIStore((state) => (
+        selection ? null : state.materializedDraftSessionId
+    ));
     const saveSessionModelSelection = useSelectionStore((state) => state.saveSessionModelSelection);
     const saveSessionAgentSelection = useSelectionStore((state) => state.saveSessionAgentSelection);
     const saveAgentModelForSession = useSelectionStore((state) => state.saveAgentModelForSession);
@@ -322,18 +337,26 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         currentSessionId ? state.sessionAgentSelections.get(currentSessionId) ?? null : null
     );
 
-    const stickySessionAgentRef = React.useRef<string | null>(null);
+    const stickySessionAgentRef = React.useRef<{ sessionId: string; agent: string } | null>(null);
     React.useEffect(() => {
         if (!currentSessionId) {
             stickySessionAgentRef.current = null;
             return;
         }
+        if (stickySessionAgentRef.current?.sessionId !== currentSessionId) {
+            stickySessionAgentRef.current = sessionSavedAgentName
+                ? { sessionId: currentSessionId, agent: sessionSavedAgentName }
+                : null;
+            return;
+        }
         if (sessionSavedAgentName) {
-            stickySessionAgentRef.current = sessionSavedAgentName;
+            stickySessionAgentRef.current = { sessionId: currentSessionId, agent: sessionSavedAgentName };
         }
     }, [currentSessionId, sessionSavedAgentName]);
 
-    const stickySessionAgentName = currentSessionId ? stickySessionAgentRef.current : null;
+    const stickySessionAgentName = currentSessionId && stickySessionAgentRef.current?.sessionId === currentSessionId
+        ? stickySessionAgentRef.current.agent
+        : null;
 
     // The session's saved profile takes precedence over the main draft selection.
     const uiAgentName = currentSessionId
@@ -500,7 +523,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const controlTextSize = isCompact ? 'typography-micro' : 'typography-meta';
     const inlineGapClass = isMobile ? 'gap-x-1' : 'gap-x-3';
 
-    const currentProvider = selection ? providers.find((provider) => provider.providerId === currentProviderId) : getCurrentProvider();
+    const currentProvider = (selection || activeRunModel) ? providers.find((provider) => provider.providerId === currentProviderId) : getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
 
     const visibleProviders = React.useMemo(() => {
@@ -605,6 +628,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         selectLatestReplyModelChoice,
         areModelChoicesEqual,
     );
+    const snapshotSelectionModel = useDirectorySync(
+        React.useCallback((state) => (
+            currentSessionId ? state.snapshot[currentSessionId]?.selection?.model ?? null : null
+        ), [currentSessionId]),
+        currentSessionDirectory ?? undefined,
+    );
     const latestLoadedUserChoice = React.useMemo(() => {
         if (selection) return null;
         return sessionRecordChoice ?? latestReplyChoice;
@@ -638,8 +667,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return 'model-missing';
             }
 
-            const providerMatches = currentProviderId === providerId;
-            const modelMatches = currentModelId === modelId;
+            const { currentProviderId: liveProviderId, currentModelId: liveModelId } = useConfigStore.getState();
+            const providerMatches = liveProviderId === providerId;
+            const modelMatches = liveModelId === modelId;
             if (providerMatches && modelMatches) {
                 return 'applied';
             }
@@ -656,7 +686,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
             return 'applied';
         },
-        [providers, currentProviderId, currentModelId, setProvider, setModel, currentSessionId, saveAgentModelForSession, saveSessionModelSelection, controlledSessionId, selection],
+        [providers, setProvider, setModel, currentSessionId, saveAgentModelForSession, saveSessionModelSelection, controlledSessionId, selection],
     );
 
     const getModelReasoningOptions = React.useCallback((providerId: string, modelId: string) => {
@@ -735,7 +765,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const liveConfigAgentName = useConfigStore.getState().currentAgentName;
         if (currentSessionId) {
             return useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
-                || stickySessionAgentRef.current
+                || (stickySessionAgentRef.current?.sessionId === currentSessionId ? stickySessionAgentRef.current.agent : null)
                 || liveConfigAgentName
                 || currentAgentName;
         }
@@ -794,7 +824,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
 
     React.useEffect(() => {
-        if (!currentSessionId) {
+        if (!currentSessionId || isDraftSessionId(currentSessionId)) {
             latestLoadedUserChoiceRestoreRef.current = null;
             return;
         }
@@ -803,6 +833,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         // choice does, so a partial snapshot is never treated as authoritative.
         const snapshotReady = hasRenderableCurrentSessionSnapshot || Boolean(sessionRecordChoice);
         if (!contextHydrated || providers.length === 0 || !snapshotReady || !latestLoadedUserChoice?.providerId || !latestLoadedUserChoice.modelId) {
+            return;
+        }
+        if (activeRunModel && (latestLoadedUserChoice.providerId !== activeRunModel.providerId || latestLoadedUserChoice.modelId !== activeRunModel.modelId)) {
             return;
         }
 
@@ -874,7 +907,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
 
         if (restoreAgentName && useConfigStore.getState().currentAgentName !== restoreAgentName) {
-            setAgent(restoreAgentName);
+            setAgent(restoreAgentName, { keepModel: true });
         }
 
         const historicalVariant = latestLoadedUserChoice.variant
@@ -933,12 +966,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         getModelVariantOptions,
         getSessionModelSelection,
         resolveModelVariantSelection,
+        activeRunModel,
         saveSessionAgentSelection,
         saveSessionModelSelection,
     ]);
 
     React.useEffect(() => {
-        if (!currentSessionId) {
+        if (!currentSessionId || isDraftSessionId(currentSessionId)) {
             latestLoadedUserChoiceRestoreRef.current = null;
             restoredSessionSelectionRef.current = null;
             return;
@@ -950,12 +984,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-        if (!contextHydrated || !providersResolved || !agentsResolved) {
+        if (!contextHydrated || !providersResolved) {
             return;
         }
 
         const applySavedSelections = (): 'resolved' | 'waiting' | 'continue' => {
-            const savedSessionModel = getSessionModelSelection(currentSessionId);
+            const savedSessionModel = sessionSavedModel ?? getSessionModelSelection(currentSessionId);
             const savedAgentName = currentSessionId
                 ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
                 : null;
@@ -973,24 +1007,32 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         return 'waiting';
                     }
                 } else {
-                    const savedAgent = agents.find((agent) => agent.agentId === savedAgentName);
-                    if (currentAgentName !== savedAgentName) {
-                        setAgent(savedAgentName);
-                    }
-                    if (savedAgent?.model) {
-                        return 'resolved';
+                    if (agentsResolved) {
+                        const savedAgent = agents.find((agent) => agent.agentId === savedAgentName);
+                        if (currentAgentName !== savedAgentName) {
+                            setAgent(savedAgentName);
+                        }
+                        if (savedAgent?.model) {
+                            return 'resolved';
+                        }
                     }
                 }
             }
 
-            if (savedSessionModel && !isStaleAutoSelection(savedSessionModel.providerId, savedSessionModel.modelId)) {
-                const result = tryApplyModelSelection(savedSessionModel.providerId, savedSessionModel.modelId, savedAgentName ?? undefined);
+            const knownSessionModel = (savedSessionModel && !isStaleAutoSelection(savedSessionModel.providerId, savedSessionModel.modelId) ? savedSessionModel : null)
+                ?? (snapshotSelectionModel && !isStaleAutoSelection(snapshotSelectionModel.providerId, snapshotSelectionModel.modelId) ? snapshotSelectionModel : null);
+            if (knownSessionModel) {
+                const result = tryApplyModelSelection(knownSessionModel.providerId, knownSessionModel.modelId, savedAgentName ?? undefined);
                 if (result === 'applied') {
                     if (savedAgentName && currentAgentName !== savedAgentName) {
                         setAgent(savedAgentName, { keepModel: true });
                     }
                     return 'resolved';
                 }
+                return 'waiting';
+            }
+
+            if (!agentsResolved) {
                 return 'waiting';
             }
 
@@ -1005,7 +1047,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     if (currentAgentName !== agent.agentId) {
                         setAgent(agent.agentId, { keepModel: true });
                     }
-                    const existingSelection = useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current;
+                    const stickyAgent = stickySessionAgentRef.current?.sessionId === currentSessionId ? stickySessionAgentRef.current.agent : null;
+                    const existingSelection = useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickyAgent;
                     if (!existingSelection) {
                         saveSessionAgentSelection(currentSessionId, agent.agentId);
                     }
@@ -1022,16 +1065,21 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return;
             }
 
+            const stickyAgent = currentSessionId && stickySessionAgentRef.current?.sessionId === currentSessionId
+                ? stickySessionAgentRef.current.agent
+                : null;
             const existingSelection = currentSessionId
-                ? (useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
+                ? (useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickyAgent)
                 : null;
 
+            const savedModel = currentSessionId ? (sessionSavedModel ?? getSessionModelSelection(currentSessionId)) : null;
+            if ((savedModel && !isStaleAutoSelection(savedModel.providerId, savedModel.modelId))
+                || (snapshotSelectionModel && !isStaleAutoSelection(snapshotSelectionModel.providerId, snapshotSelectionModel.modelId))) {
+                return;
+            }
+
             // Keep a valid saved profile instead of replacing it with a fallback.
-            const preferred =
-                (currentSessionId
-                    ? (useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
-                    : null) ||
-                currentAgentName;
+            const preferred = existingSelection || currentAgentName;
             if (preferred && agents.some((agent) => agent.agentId === preferred)) {
                 if (currentAgentName !== preferred) {
                     setAgent(preferred);
@@ -1059,7 +1107,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
         const savedOutcome = applySavedSelections();
         if (savedOutcome === 'resolved') {
-            restoredSessionSelectionRef.current = currentSessionId;
+            if (agentsResolved) {
+                restoredSessionSelectionRef.current = currentSessionId;
+            }
             return;
         }
         if (savedOutcome === 'waiting') {
@@ -1081,6 +1131,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
+        if (materializedDraftSessionId === currentSessionId) {
+            return;
+        }
+
         applyFallbackAgent();
         restoredSessionSelectionRef.current = currentSessionId;
     }, [
@@ -1092,6 +1146,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         agentsResolved,
         providersResolved,
         currentAgentName,
+        sessionSavedModel,
+        materializedDraftSessionId,
+        snapshotSelectionModel,
         getSessionModelSelection,
         getAgentModelForSession,
         setAgent,

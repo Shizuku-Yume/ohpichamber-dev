@@ -1004,6 +1004,14 @@ const createSessionWithDraftLifecycle = async (
     assertSendRuntime(runtimeKey, runtimeRevision)
     if (!session) return null
 
+    if (selectionTransition === "submitted-draft" && selection?.model) {
+      const selectionStore = useSelectionStore.getState()
+      selectionStore.saveSessionModelSelection(session.sessionId, selection.model.providerId, selection.model.modelId)
+      if (selection.agent) {
+        selectionStore.saveSessionAgentSelection(session.sessionId, selection.agent)
+      }
+    }
+
     const current = useSessionUIStore.getState()
     if (current.newSessionDraft.draftId === draft.draftId
       && (current.currentSessionId === selectedSessionId || current.currentSessionId === `draft_${draft.draftId}`)) {
@@ -1134,7 +1142,7 @@ export async function materializeOpenDraftSession(selection: {
 
   const draftSyntheticParts = draft.syntheticParts
   if (useSessionUIStore.getState().currentSessionId === created.sessionId) {
-    void activateConfigForDirectory(createdDirectory).catch((error) => {
+    void activateConfigForDirectory(createdDirectory, { preserveManualModel: true }).catch((error) => {
       console.warn("Failed to activate directory after creating session:", error)
     })
   }

@@ -105,11 +105,26 @@ export function createComposerKeyHandler({
 
         const autocomplete = openAutocomplete === 'command' ? commandRef.current
             : openAutocomplete === 'skill' ? skillRef.current
-                    : openAutocomplete === 'mention' ? mentionRef.current
-                        : openAutocomplete === 'emoji' && emojiRef.current?.hasResults?.() ? emojiRef.current
-                            : null;
+                : openAutocomplete === 'mention' ? mentionRef.current
+                    : openAutocomplete === 'emoji' && emojiRef.current?.hasResults?.() ? emojiRef.current
+                        : null;
         const autocompleteKey = getDropdownNavigationKey(e) ?? e.key;
-        if (autocomplete && (autocompleteKey === 'Enter' || autocompleteKey === 'ArrowUp' || autocompleteKey === 'ArrowDown' || autocompleteKey === 'Escape' || autocompleteKey === 'Tab')) {
+        const willSubmitEnter = e.key === 'Enter' && shouldSubmitEnter({
+            isMobile,
+            isDesktopExpanded,
+            enterToSend,
+            enterToSendConfigured,
+            returnKeySends: mobileReturnKeySends,
+            shiftKey: e.shiftKey,
+            ctrlKey: e.ctrlKey,
+            metaKey: e.metaKey,
+            altKey: e.altKey,
+        });
+        const skipCommandCompletion = autocompleteKey === 'Enter'
+            && willSubmitEnter
+            && openAutocomplete === 'command'
+            && commandRef.current?.isExactMatchHighlighted() === true;
+        if (autocomplete && !skipCommandCompletion && (autocompleteKey === 'Enter' || autocompleteKey === 'ArrowUp' || autocompleteKey === 'ArrowDown' || autocompleteKey === 'Escape' || autocompleteKey === 'Tab')) {
             e.preventDefault();
             e.stopPropagation();
             autocomplete.handleKeyDown(autocompleteKey);
@@ -201,17 +216,7 @@ export function createComposerKeyHandler({
         }
 
         const isCtrlEnter = e.ctrlKey || e.metaKey;
-        if (e.key === 'Enter' && shouldSubmitEnter({
-            isMobile,
-            isDesktopExpanded,
-            enterToSend,
-            enterToSendConfigured,
-            returnKeySends: mobileReturnKeySends,
-            shiftKey: e.shiftKey,
-            ctrlKey: e.ctrlKey,
-            metaKey: e.metaKey,
-            altKey: e.altKey,
-        })) {
+        if (willSubmitEnter) {
             e.preventDefault();
             if (pendingFirstSend) return;
 

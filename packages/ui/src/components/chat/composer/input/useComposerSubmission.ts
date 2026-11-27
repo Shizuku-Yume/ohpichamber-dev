@@ -42,7 +42,7 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { postTrackerSessionStarted } from '@/lib/trackers/sessionStatus';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { createChatDraftIdentity } from '@/lib/chatDraftPersistence';
+import { createChatDraftIdentity, getChatDraftIdentityKey } from '@/lib/chatDraftPersistence';
 import { useLinkedReferenceDrafts } from '../../composer/linkedReferenceDrafts';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useInputStore } from '@/sync/input-store';
@@ -109,7 +109,7 @@ export function useComposerSubmission({
     const { handleSubmitRef } = sendHandlers;
     const { attachmentsToSend } = inlineContext;
     const { t } = i18n;
-    const { confirmedMentionsRef, setMessage } = draftText;
+    const { confirmedMentionsRef, setMessage, currentChatDraftIdentityRef, composerText } = draftText;
     const { composerRef } = editorState;
     const { openTimelineDialog } = column;
     const { sendMessage } = sending;
@@ -360,35 +360,34 @@ export function useComposerSubmission({
             }
         }
 
-        // Action commands change session or UI state and send nothing. The
-        // command text goes; the queue and whatever the composer had attached
-        // stay exactly where they are.
         if ((commandPlan?.kind === 'builtin' || commandPlan?.kind === 'action') && currentSessionId) {
             const actionName = commandPlan.command.name;
-            setMessage('');
-            confirmedMentionsRef.current.clear();
-            persistDraftImmediately(chatDraftIdentity, '');
-            messageHistory.reset();
-            if (!isBtwActive) setExpandedInput(false);
-            if (isMobile) composerRef.current?.blur();
+            const isSubmitCurrent = () => getRuntimeKey() === submitRuntimeKey && getRuntimeSwitchRevision() === submitRuntimeRevision;
+            let accepted = false;
             try {
                 if (commandPlan.kind === 'builtin') {
                     const output = await sessionActions.runBuiltinCommand(currentSessionId, inputSnapshot.message);
+                    if (!isSubmitCurrent()) return;
                     if (output) toast.info(output);
+                    accepted = true;
                 } else if (actionName === 'undo') {
                     await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
+                    if (!isSubmitCurrent()) return;
                     scrollToBottom?.();
+                    accepted = true;
                 } else if (actionName === 'redo') {
                     await useSessionUIStore.getState().handleSlashRedo(currentSessionId);
+                    if (!isSubmitCurrent()) return;
                     scrollToBottom?.();
+                    accepted = true;
                 } else if (actionName === 'timeline') {
                     openTimelineDialog();
+                    accepted = true;
                 } else if (actionName === 'handoff-review') {
                     setReviewDialogOpen(true);
+                    accepted = true;
                 } else if (actionName === 'fork') {
                     const forkOutcome = await runForkCommand(currentSessionId, commandPlan.command.argument, {
-                        // The fork branches the main session, so it keeps that session's
-                        // selection even while the btw panel owns the composer.
                         providerID: currentProviderId,
                         modelID: currentModelId,
                         agent: undefined,
@@ -396,28 +395,36 @@ export function useComposerSubmission({
                     }, {
                         fork: sessionActions.forkFromLastCompletedTurn,
                         directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.sessionId) || currentDirectory || null,
-                        send: (text, selection, target) => useSessionUIStore.getState().sendMessage(
+                        send: (text, forkSelection, target) => useSessionUIStore.getState().sendMessage(
                             text,
-                            selection.providerID,
-                            selection.modelID,
+                            forkSelection.providerID,
+                            forkSelection.modelID,
                             null,
                             undefined,
                             undefined,
                             undefined,
-                            selection.variant,
+                            forkSelection.variant,
                             'normal',
                             target,
                         ),
                         draftIdentity: (directory, sessionId) => createChatDraftIdentity(getRuntimeKey(), directory, sessionId),
                         restoreText: (target, text) => useInputStore.setState({ pendingComposerRestore: { target, text, files: [] } }),
                     });
-                    if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
+                    if (!isSubmitCurrent()) return;
+                    if (forkOutcome === 'send-failed') {
+                        toast.error(t('chat.chatInput.toast.forkSendFailed'));
+                        return;
+                    }
+                    if (forkOutcome === 'stale') return;
+                    accepted = true;
                 } else if (actionName === 'compact') {
                     const instructions = commandPlan.command.argument.trim();
                     await sessionActions.compactSession(currentSessionId, instructions || undefined);
+                    if (!isSubmitCurrent()) return;
+                    accepted = true;
                 }
             } catch (error) {
-                restoreComposerText();
+                if (!isSubmitCurrent()) return;
                 if (actionName === 'fork') {
                     toast.error(error instanceof sessionActions.NothingToForkError
                         ? t('chat.chatInput.toast.forkNothingToFork')
@@ -428,12 +435,32 @@ export function useComposerSubmission({
                     toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
                     return;
                 }
-                if (actionName !== 'compact') throw error;
-                if (error instanceof CanonicalApiError && error.problem.code === 'SESSION_TOO_SMALL') {
-                    toast.info(t('chat.chatInput.toast.compactNotNeeded'));
+                if (actionName === 'compact') {
+                    if (error instanceof CanonicalApiError && error.problem.code === 'SESSION_TOO_SMALL') {
+                        toast.info(t('chat.chatInput.toast.compactNotNeeded'));
+                        return;
+                    }
+                    toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.compactFailed')));
                     return;
                 }
-                toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.compactFailed')));
+                toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
+                return;
+            }
+            if (!accepted) return;
+            const submittedIdentityKey = chatDraftIdentity ? getChatDraftIdentityKey(chatDraftIdentity) : null;
+            const liveIdentity = currentChatDraftIdentityRef.current;
+            const liveIdentityKey = liveIdentity ? getChatDraftIdentityKey(liveIdentity) : null;
+            const isSameComposerDraft = submittedIdentityKey === liveIdentityKey;
+            const isComposerTextUnchanged = composerText.get() === inputSnapshot.message;
+            if (!isSameComposerDraft || isComposerTextUnchanged) {
+                persistDraftImmediately(chatDraftIdentity, '');
+            }
+            if (isSameComposerDraft && isComposerTextUnchanged) {
+                setMessage('');
+                confirmedMentionsRef.current.clear();
+                messageHistory.reset();
+                if (!isBtwActive) setExpandedInput(false);
+                if (isMobile) composerRef.current?.blur();
             }
             return;
         }

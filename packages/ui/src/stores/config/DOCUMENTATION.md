@@ -21,6 +21,7 @@ Host preferences and voice keys use their existing Host services.
   provide startup continuity; successful live loads establish catalog readiness.
 - Manual model, agent and effort choices retain their existing precedence over
   resolved defaults. A failed load preserves the previous catalog.
+- Promoting a draft session (`materializedDraftSessionId`) carries the session's captured model selection across directory activation and initial provider loading instead of resetting to directory defaults.
 - Persistence keeps the existing `config-store` key, version, runtime check and
   selection-only snapshots. Catalog persistence stays in `../configCatalogCache.ts`.
 - The provider loader reads canonical catalogs and OMP settings. It does not

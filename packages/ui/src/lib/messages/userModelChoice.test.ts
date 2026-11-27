@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { Message, Part } from '@openchamber/agent-contract'
+import type { Message, Part, Run, Turn } from '@openchamber/agent-contract'
 
 import {
   extractAssistantModelChoice,
   findLatestUserModelChoice,
+  isSessionRunActive,
+  resolveActiveRunModelSelection,
   shouldPreserveManualModelOverride,
 } from './userModelChoice'
 
@@ -75,5 +77,108 @@ describe('extractAssistantModelChoice', () => {
   })
   test('ignores non-assistant messages', () => {
     expect(extractAssistantModelChoice(userMessage('u1'))).toBeNull()
+  })
+})
+
+const runningTurn = (turnId: string, runId: string, assistantMessageIds: string[] = []): Turn => ({
+  turnId,
+  sessionId: 'ses_1',
+  runId,
+  status: 'running',
+  userMessageId: `u-${turnId}`,
+  assistantMessageIds,
+  startedAt: 1,
+})
+
+const activeRun = (runId: string): Run => ({
+  runId,
+  sessionId: 'ses_1',
+  status: 'running',
+  origin: 'host',
+  createdAt: 1,
+})
+
+describe('isSessionRunActive', () => {
+  test('detects active runs from run state or runtime status', () => {
+    expect(isSessionRunActive({ activeRun: activeRun('r1') })).toBe(true)
+    expect(isSessionRunActive({ status: 'running' })).toBe(true)
+    expect(isSessionRunActive({ sessionRuntimeStatus: 'awaiting_approval' })).toBe(true)
+    expect(isSessionRunActive({ status: 'idle', activeRun: null })).toBe(false)
+  })
+})
+
+describe('resolveActiveRunModelSelection', () => {
+  test('returns null outside an active run', () => {
+    expect(resolveActiveRunModelSelection({
+      isRunActive: false,
+      sessionSavedModel: { providerId: 'cliproxy', modelId: 'devin-swe-2' },
+      snapshotSelectionModel: { providerId: 'cliproxy', modelId: 'devin-swe-2' },
+    })).toBeNull()
+  })
+
+  test('uses active turn assistant message even before parts arrive, and ignores prior turn replies', () => {
+    expect(resolveActiveRunModelSelection({
+      isRunActive: true,
+      activeRun: activeRun('r2'),
+      turns: [
+        { ...runningTurn('t1', 'r1', ['a1']), status: 'completed', finishedAt: 2 },
+        runningTurn('t2', 'r2', []),
+      ],
+      messages: [assistantMessage('a1', 'gemini-3.5-flash-lite', 'cliproxy')],
+      sessionSavedModel: { providerId: 'cliproxy', modelId: 'devin-swe-2' },
+    })).toEqual({ providerId: 'cliproxy', modelId: 'devin-swe-2' })
+
+    expect(resolveActiveRunModelSelection({
+      isRunActive: true,
+      activeRun: activeRun('r2'),
+      turns: [runningTurn('t2', 'r2', ['a2'])],
+      messages: [assistantMessage('a2', 'devin-swe-2', 'cliproxy', [])],
+      snapshotSelectionModel: { providerId: 'cliproxy', modelId: 'gemini-3.5-flash-lite' },
+    })).toEqual({ providerId: 'cliproxy', modelId: 'devin-swe-2' })
+  })
+
+  test('ignores prior completed turn assistant messages when activeRun has no turn yet', () => {
+    expect(resolveActiveRunModelSelection({
+      isRunActive: true,
+      activeRun: activeRun('r2'),
+      turns: [
+        { ...runningTurn('t1', 'r1', ['a1']), status: 'completed', finishedAt: 2 },
+      ],
+      messages: [assistantMessage('a1', 'gemini-3.5-flash-lite', 'cliproxy')],
+      sessionSavedModel: { providerId: 'cliproxy', modelId: 'devin-swe-2' },
+      snapshotSelectionModel: { providerId: 'cliproxy', modelId: 'gpt-5' },
+    })).toEqual({ providerId: 'cliproxy', modelId: 'devin-swe-2' })
+
+    expect(resolveActiveRunModelSelection({
+      isRunActive: true,
+      activeRun: activeRun('r2'),
+      turns: [
+        { ...runningTurn('t1', 'r1', ['a1']), status: 'completed', finishedAt: 2 },
+      ],
+      messages: [assistantMessage('a1', 'gemini-3.5-flash-lite', 'cliproxy')],
+      snapshotSelectionModel: { providerId: 'cliproxy', modelId: 'devin-swe-2' },
+    })).toEqual({ providerId: 'cliproxy', modelId: 'devin-swe-2' })
+
+    expect(resolveActiveRunModelSelection({
+      isRunActive: true,
+      activeRun: null,
+      turns: [
+        { ...runningTurn('t1', 'r1', ['a1']), status: 'completed', finishedAt: 2 },
+      ],
+      messages: [assistantMessage('a1', 'gemini-3.5-flash-lite', 'cliproxy')],
+      sessionSavedModel: { providerId: 'cliproxy', modelId: 'devin-swe-2' },
+    })).toEqual({ providerId: 'cliproxy', modelId: 'devin-swe-2' })
+  })
+
+  test('preserves openchamber/auto while routing is ready', () => {
+    expect(resolveActiveRunModelSelection({
+      isRunActive: true,
+      activeRun: activeRun('r1'),
+      turns: [runningTurn('t1', 'r1', ['a1'])],
+      messages: [assistantMessage('a1', 'devin-swe-2', 'cliproxy')],
+      sessionSavedModel: { providerId: 'openchamber', modelId: 'auto' },
+      autoReady: true,
+      isStaleAuto: false,
+    })).toEqual({ providerId: 'openchamber', modelId: 'auto' })
   })
 })

@@ -11,6 +11,8 @@ import { canonicalClient } from "@/api/canonicalClient";
 import { getProjectDefaultsForConfigDirectory } from "./projectDefaults";
 import { resolveProviderModelSelection, readFallbackModelPrefs, variantAfterResolve } from "./selectionResolution";
 import { _providersLoadedAt, persistLoadedCatalog, catalogLifecycle } from "./catalogLifecycle";
+import { useSessionUIStore } from "@/sync/session-ui-store";
+import { useSelectionStore } from "@/sync/selection-store";
 
 const PROVIDER_CONFIG_REFRESH_CONCURRENCY = 4;
 const PROVIDERS_RETRY_SOURCE = "loadProviders:retryAfterFailure";
@@ -20,7 +22,7 @@ const combineCanonicalCatalog = (providerCatalog: ProviderCatalog, modelCatalog:
     for (const model of modelCatalog.models) {
         if (model.enabled === false) continue;
         const bucket = modelsByProvider.get(model.provider);
-        if (bucket) bucket.push(model);else modelsByProvider.set(model.provider, [model]);
+        if (bucket) bucket.push(model); else modelsByProvider.set(model.provider, [model]);
     }
     return providerCatalog.providers.filter(provider => modelsByProvider.has(provider.providerId)).map(provider => ({
         ...provider,
@@ -231,16 +233,27 @@ export const createProviderCatalog: ConfigSlice<"invalidateProviderCache" | "loa
                             agentModelSelections: {},
                             defaultProviders: {}
                         };
-                        const currentProviderId = state.activeDirectoryKey === directoryKey ? state.currentProviderId : baseSnapshot.currentProviderId;
-                        const currentModelId = state.activeDirectoryKey === directoryKey ? state.currentModelId : baseSnapshot.currentModelId;
+                        const sessionUiState = useSessionUIStore.getState();
+                        const activeSessionId = sessionUiState.currentSessionId;
+                        const isPromotedSession = Boolean(activeSessionId && sessionUiState.materializedDraftSessionId === activeSessionId);
+                        const activeSessionModel = activeSessionId && state.activeDirectoryKey === directoryKey
+                            ? useSelectionStore.getState().getSessionModelSelection(activeSessionId)
+                            : null;
+                        const currentProviderId = state.activeDirectoryKey === directoryKey
+                            ? (activeSessionModel?.providerId || state.currentProviderId)
+                            : baseSnapshot.currentProviderId;
+                        const currentModelId = state.activeDirectoryKey === directoryKey
+                            ? (activeSessionModel?.modelId || state.currentModelId)
+                            : baseSnapshot.currentModelId;
                         const currentVariant = state.activeDirectoryKey === directoryKey ? state.currentVariant : baseSnapshot.currentVariant;
                         const projectDefaults = getProjectDefaultsForConfigDirectory(fromDirectoryKey(directoryKey));
+                        const activeSelectionSource = state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource;
                         const resolvedModel = resolveProviderModelSelection({
                             providers: nextProviders,
                             currentProviderId,
                             currentModelId,
                             currentVariant,
-                            preserveCurrent: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual',
+                            preserveCurrent: activeSelectionSource === 'manual' || Boolean(isPromotedSession && activeSessionModel),
                             settingsDefaultModel: projectDefaults.projectDefaultModel || ompDefaultModel,
                             defaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : undefined,
                             allowFallback: state.settingsDefaultsLoaded,
