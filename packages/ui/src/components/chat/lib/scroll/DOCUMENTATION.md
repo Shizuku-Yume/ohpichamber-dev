@@ -23,6 +23,12 @@ The transcript is a LegendList (`@legendapp/list`) owned by `useChatTimelineScro
   state alone. Modified keys remain shortcuts. A middle-button press outside a
   nested scroller releases follow because platform autoscroll can move the
   transcript without further wheel events.
+- A `scrollTop` move away from a remembered end releases follow even without a
+  gesture: layout above the reading line or a programmatic scroll from another
+  surface would otherwise pin the reader back on growth. `externalScrollUp.ts`
+  remembers the end it pinned, spots that move while the turn is not live, and
+  re-anchors the list where the reader now is. `followStops.ts` owns the stop
+  markup reading that a live follow uses for the same reason.
 - The navigator's active turn is the owner of the last row above the reading
   line at half the viewport. This monotonic boundary avoids visibility-ratio
   flips inside long turns; its pinned zone matches the transcript's bottom

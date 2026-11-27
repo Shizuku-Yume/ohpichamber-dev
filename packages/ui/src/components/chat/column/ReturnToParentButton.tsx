@@ -3,7 +3,7 @@ import { useParentSessionBack } from '@/hooks/useParentSessionBack';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useParentSession } from '@/sync/sync-context';
+import { useParentSession, useSessionDirectory } from '@/sync/sync-context';
 import { useI18n } from '@/lib/i18n';
 
 export const ReturnToParentButton: React.FC<{
@@ -15,7 +15,13 @@ export const ReturnToParentButton: React.FC<{
 }> = ({ sessionId, directory, hidden, openSession, registerParentSessionBack }) => {
     const { t } = useI18n();
     const parentSession = useParentSession(sessionId, directory);
-    const handleReturnToParentSession = useParentSessionBack(parentSession, hidden, openSession, registerParentSessionBack);
+    const parentDirectory = useSessionDirectory(parentSession?.sessionId, directory);
+    const handleReturnToParentSession = useParentSessionBack(
+        parentSession ? { sessionId: parentSession.sessionId, displayPath: parentDirectory ?? parentSession.displayPath } : null,
+        hidden,
+        openSession,
+        registerParentSessionBack,
+    );
 
     if (!parentSession || hidden) return null;
     return (

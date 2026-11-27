@@ -26,9 +26,9 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - Contains static tool short description logic (`getToolShortDescription`).
   - Owns compact `read` call navigation. Results always retain an expandable body.
 
-- `ToolPart.tsx`
+- `ToolPart.tsx` & `toolRow/*`
+  - `ToolPart.tsx` wraps `ToolPartErrorBoundary` + `toolRow/ToolPartContent`; expanded body, diffs, JSON trees, task rows (`TaskToolSessions`), and scrollable sections live under `toolRow/`.
   - Renders canonical `tool_call` and `tool_result` rows, headers, reported diff counts, errors, images, and output.
-  - Restores the original compact animated tool execution row, hover disclosures, duration labels (from authoritative native records only), and live status feedback.
   - Integrates structured diff presentations (`ToolPartDiffPreview.tsx` via `@pierre/diffs`, lazy loaded with Shiki theme integration, unified/split modes, and line metrics) with fallback to `PlainDiffFallback.tsx` when diffs exceed size thresholds (`isToolDiffPreviewOversized`).
   - Opens `ToolOutputDialog.tsx` for deep inspection of full stdout/stderr streams, raw JSON responses via `JsonTreeView`, worker-highlighted code blocks, and dedicated renderers (`../toolRenderers.tsx` for bash, glob, grep, websearch, JSON).
   - `TaskToolSessions` and collapsed `task` headers subscribe to narrow `useSubagentsStore` slices matched by `toolCallId` (hydrating via `hydrateParent` when `details.async.state === 'running'` even while collapsed, falling back to `async_job_result` report statuses and then `details.progress` while the store is empty) rather than a one-shot `listSubagents` fetch; `TaskToolSessions` renders live per-subagent rows with `OpenSubtaskButton`/`openSubagentsPanel` links and suppresses the model-only `Spawned N background agents … proc://` boilerplate lines when structured rows are shown.
@@ -263,7 +263,7 @@ Descriptions must not invent protocol metadata, aliases, or a successful mutatio
 
 - Do not duplicate icon logic; keep it in `toolPresentation.tsx`.
 - For static tool copy changes, prefer `ProgressiveGroup.tsx` first.
-- For expanded output changes, edit `ToolPart.tsx` (expanded sections live there; `toolRow/` only retains `OpenSubtaskButton.tsx`).
+- For expanded output and row changes, edit `toolRow/ToolPartContent.tsx` and `toolRow/ToolExpandedContent.tsx` (`ToolPart.tsx` is a thin boundary/content wrapper).
 - After edits run:
   - `bun run type-check`
   - `bun run lint`

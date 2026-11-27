@@ -219,6 +219,14 @@ export const areRelevantTurnGroupingContextsEqual = (
   if (left.snapshotTurnId !== right.snapshotTurnId) return false;
   if (left.isFirstAssistantInTurn !== right.isFirstAssistantInTurn) return false;
   if (left.hasEarlierAssistantText !== right.hasEarlierAssistantText) return false;
+  if (left.opensAnswerText !== right.opensAnswerText) return false;
+  if (left.earlierAssistantText !== right.earlierAssistantText) {
+    if (!left.earlierAssistantText || !right.earlierAssistantText) return false;
+    if (left.earlierAssistantText.length !== right.earlierAssistantText.length) return false;
+    for (let i = 0; i < left.earlierAssistantText.length; i += 1) {
+      if (left.earlierAssistantText[i] !== right.earlierAssistantText[i]) return false;
+    }
+  }
   if (left.isLastAssistantInTurn !== right.isLastAssistantInTurn) return false;
   if (left.isLatestTurn !== right.isLatestTurn) return false;
   if (left.isWorking !== right.isWorking) return false;

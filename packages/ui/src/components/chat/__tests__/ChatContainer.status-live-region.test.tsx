@@ -149,7 +149,7 @@ client.listWorkspaces = async () => ({
   items: [{ workspaceId: 'workspace-a', projectId: PROJECT_ID, name: 'Workspace', displayPath: '.' }],
   errors: {},
 });
-client.subscribeSessionEvents = () => () => {};
+client.subscribeSessionEvents = () => () => { };
 
 let container: HTMLDivElement;
 let root: Root;
@@ -250,7 +250,7 @@ describe('chat status live region on an accepted new-session run', () => {
     const welcome = container.querySelector('.oc-draft-center');
     const heading = welcome?.querySelector('h1');
     expect(container.querySelectorAll('h1').length).toBe(1);
-    expect(heading?.textContent).toContain(target === 'project' ? 'What are we working on in ' : 'What are we working on?');
+    expect(heading?.textContent).toContain(target === 'project' ? 'Workspace' : 'What are we working on?');
     expect(welcome?.classList.contains('overflow-y-auto')).toBe(true);
     expect(welcome?.classList.contains('min-h-0')).toBe(true);
     expect(welcome?.classList.contains('flex-1')).toBe(true);
