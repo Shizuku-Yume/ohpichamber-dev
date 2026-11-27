@@ -28,11 +28,15 @@ kill of the host process group must never be reachable. The passwordless
 loopback case still passes because a controller exists then — `createUiAuth` is
 always constructed at bootstrap, and with no password configured its
 `requireAuth` admits the request. The dev shutdown keeps its opt-in environment
-flag and same-origin check ahead of the auth. No socket-peer carve-out remains
-and forwarding headers never play a role: admission is decided by credentials
-alone, so a reverse proxy or relay that terminates elsewhere reaches the routes
-only when the caller carries a valid tunnel session, UI session, or client
-bearer token.
+flag and same-origin check ahead of the auth. No socket-peer carve-out
+remains, and forwarding headers never grant access or weaken the credential
+requirement: under an active tunnel they only feed the request-scope
+classification that selects which credential is required, and they can only
+reduce trust — a forwarded non-loopback address demotes the request to the
+stricter `unknown-public` handling, never the reverse. Admission is decided by
+credentials alone, so a reverse proxy or relay that terminates elsewhere
+reaches the routes only when the caller carries a valid tunnel session, UI
+session, or client bearer token.
 
 ### Why static assets and service workers use different cache lifetimes
 

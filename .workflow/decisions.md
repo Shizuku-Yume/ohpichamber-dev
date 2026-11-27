@@ -27,6 +27,16 @@
 - **Revisit when:** the retired surfaces are restored — the shared-page card is a recorded technical-debt item (the transcript-cutover entry in `.workflow/technical-debt.md` lists shared-page cards among the features blocked on the ChatViewport port) — and the restoration re-adds the caller and the export together, and the ledger row is removed when upstream and the fork agree again.
 - **Effort:** release-hardening
 
+## 2026-11-28 - Shutdown routes fail closed without an auth controller
+
+- **Decided:** When no auth controller is configured, `POST /api/system/shutdown` and `POST /api/system/dev-shutdown` fail closed and refuse every peer with 403, loopback included. Production always wires the controllers, so a missing controller is a wiring defect and the one-shot kill primitive must stay closed rather than guess; the passwordless loopback case stays served because a controller exists then — `createUiAuth` is always constructed at bootstrap, and with no password configured its `requireAuth` passes the request through. No socket-peer carve-out remains on these routes, and forwarding headers never grant access or weaken the credential requirement: under an active tunnel they only feed the scope classification that selects which credential is required, and only toward stricter handling (a forwarded non-loopback address demotes the request to `unknown-public` and its tunnel-session requirement, never the reverse). Admission is decided by credentials alone.
+- **Instead of:** the loopback floor of the 2026-11-27 entry, which let an unauthenticated loopback peer kill the host process group whenever the controllers were not wired — exactly the state a wiring defect produces.
+- **Because:** an unauthenticated kill of the host process group must never be reachable, and a floor keyed on the socket peer exists to compensate for missing authentication; the correct answer to missing authentication on a kill primitive is refusal, not a weaker fallback check.
+- **Mine:** yes
+- **Revisit when:** the Host gains a unified pre-gate auth mount point, so the per-handler binding can move back into middleware.
+- **Effort:** release-hardening
+- **Supersedes:** 2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor
+
 ## 2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor
 
 - **Decided:** `POST /api/system/shutdown` and `POST /api/system/dev-shutdown` each invoke `requireShutdownAuth` inside their own handler, because `registerServerStatusRoutes` mounts before the `/api` auth middleware and cannot rely on ordering. A tunnel-scoped request answers to the tunnel session, everything else to the UI session or client bearer token. When no auth controller is configured, a non-loopback socket peer is refused — an unauthenticated kill of the host process group must never be reachable from the network — and the peer check never trusts forwarding headers. The dev shutdown keeps its opt-in environment flag and same-origin check ahead of the auth.
@@ -35,7 +45,7 @@
 - **Mine:** yes
 - **Revisit when:** the Host gains a unified pre-gate auth mount point, so the per-handler binding can move back into middleware.
 - **Effort:** release-hardening
-- **Superseded in part (2026-11-28):** the loopback-floor carve-out was removed in the security review's SEC-2 fix (`e19f5e15ac`). With no auth controller configured the shutdown routes now fail closed and refuse every peer with 403, loopback included — production always wires the controllers, so a missing controller is a wiring defect and the one-shot kill primitive must stay closed rather than guess. The passwordless loopback case stays served because a controller exists then: `createUiAuth` is always constructed at bootstrap, and with no password configured its `requireAuth` passes the request through. No socket-peer check remains on these routes at all; admission is decided by credentials alone. The rest of the entry stands as decided.
+- **Superseded by:** 2026-11-28 - Shutdown routes fail closed without an auth controller
 
 ## 2026-11-27 - One canonical turn is one outer run, not one model step
 

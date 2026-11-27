@@ -835,10 +835,12 @@ describe('core-routes', () => {
       expect(dependencies.process.kill).not.toHaveBeenCalled();
     });
 
-    it('refuses a non-loopback peer when no auth is configured', async () => {
+    it('refuses a non-loopback peer the same way when no auth controller is wired at all', async () => {
+      // The socket peer is no longer part of the admission decision: a remote
+      // network caller gains nothing from the missing controller either.
       const { app, dependencies } = createDevShutdownApp();
 
-      await postDevShutdown(app, '203.0.113.10').expect(403);
+      await postDevShutdown(app, '203.0.113.10').expect(403, { error: 'Shutdown requires authentication' });
 
       expect(dependencies.gracefulShutdown).not.toHaveBeenCalled();
       expect(dependencies.process.kill).not.toHaveBeenCalled();
