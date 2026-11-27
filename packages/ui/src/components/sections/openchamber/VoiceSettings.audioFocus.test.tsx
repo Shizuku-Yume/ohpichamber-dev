@@ -27,7 +27,9 @@ mock.module('@/stores/useConfigStore', () => ({
     useConfigStore: Object.assign((select: (value: typeof state) => unknown) => select(state), { getState: () => state }),
 }));
 mock.module('@/lib/device', () => ({ useDeviceInfo: () => ({ isMobile: false }) }));
+const i18nModule = await import('@/lib/i18n');
 mock.module('@/lib/i18n', () => ({
+    ...i18nModule,
     useI18n: () => ({ t: (key: string) => key }),
     isRightToLeft: () => false,
 }));
@@ -49,8 +51,8 @@ mock.module('@/components/sections/shared/SettingsSection', () => ({
     SettingsDisclosure: Wrapper, SettingsRadioGroup: Wrapper, SettingsRadioOption: () => null,
     SETTINGS_WIDTH_NUMBER_CLASS: '', SETTINGS_WIDTH_SELECT_CLASS: '', SETTINGS_WIDTH_LONG_TEXT_CLASS: '',
     SETTINGS_WIDTH_SHORT_TEXT_CLASS: '', SETTINGS_NUMBER_STEPPER_ROW_CLASS: '',
-    SETTINGS_HELPER_CLASS: '', SETTINGS_ICON_BUTTON_CLASS: '', SETTINGS_SPACE_CHECKBOX_CLASS: '',
-    SETTINGS_SPACE_ROW_CLASS: '',
+    SETTINGS_NUMBER_UNIT_CLASS: '', SETTINGS_HELPER_CLASS: '', SETTINGS_ICON_BUTTON_CLASS: '',
+    SETTINGS_SPACE_CHECKBOX_CLASS: '', SETTINGS_SPACE_ROW_CLASS: '',
 }));
 
 type FocusEvent = { id: string; state: 'paused' | 'gained' | 'lost' };

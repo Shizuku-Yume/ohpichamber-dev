@@ -1551,3 +1551,34 @@ test('lossless OMP 19.0.0 native provider round-trip preserves multi-protocol mo
     await fixture.close();
   }
 });
+
+test('model listing skips bundled fireworks and openrouter models without usable token limits while keeping single-model lookup strict', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.authStorage.credentials.upsert('fireworks', { type: 'api_key', key: 'fw-test-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.upsert('openrouter', { type: 'api_key', key: 'or-test-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    const catalog = await fixture.writer.models.readModels('workspace_1', '1');
+    const fwModels = catalog.models.filter(model => model.provider === 'fireworks');
+    const orModels = catalog.models.filter(model => model.provider === 'openrouter');
+    expect(fwModels.length).toBeGreaterThan(0);
+    expect(orModels.length).toBeGreaterThan(0);
+    for (const skippedId of ['ember-1', 'flux-1-schnell-fp8', 'muse-glimmer-30b', 'nemotron-lightning-3.5-30b-a3b', 'qwen3-embedding-8b']) {
+      expect(fwModels.some(model => model.modelId === skippedId)).toBe(false);
+    }
+    expect(orModels.some(model => model.modelId === 'openrouter/pareto-code')).toBe(false);
+
+    const fwConfig = await fixture.writer.models.readProviderConfiguration('fireworks', '1');
+    expect(fwConfig.models.length).toBeGreaterThan(0);
+    expect(fwConfig.models.some(model => model.modelId === 'ember-1')).toBe(false);
+
+    const pareto = getBundledModel('openrouter', 'openrouter/pareto-code');
+    expect(() => publicModel(pareto)).toThrow('Native model has no published usable token limits');
+    await expect(fixture.writer.models.selection({ providerId: 'openrouter', modelId: 'openrouter/pareto-code' })).rejects.toMatchObject({
+      status: 422,
+      code: 'MODEL_UNAVAILABLE',
+    });
+  } finally {
+    await fixture.close();
+  }
+});

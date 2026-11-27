@@ -579,6 +579,119 @@ test('the auto thinking ceiling reports its condition against defaultThinkingLev
   } finally { await f.close(); }
 });
 
+test('provider tier/protocol, subagent/advisor tier, and voice agent-speech placements are exposed and writable', async () => {
+  const f = await fixture();
+  try {
+    const read = await f.native.read('workspace_1', '0');
+    const byId = new Map(read.settings.map((setting) => [setting.id, setting]));
+
+    const expectedPlacements = {
+      'tier.openai': { type: 'page', page: 'providers', section: 'service-tier' },
+      'tier.anthropic': { type: 'page', page: 'providers', section: 'service-tier' },
+      'tier.google': { type: 'page', page: 'providers', section: 'service-tier' },
+      'providers.fireworksTier': { type: 'page', page: 'providers', section: 'service-tier' },
+      'providers.kimiApiFormat': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openaiWebsockets': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openaiResponsesWebsockets': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openaiLiveSteering': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openrouterVariant': { type: 'page', page: 'providers', section: 'protocol' },
+      'tier.subagent': { type: 'page', page: 'agents', section: 'subagents' },
+      'tier.advisor': { type: 'page', page: 'agents', section: 'advisor' },
+      'tts.localVoice': { type: 'page', page: 'voice', section: 'agent-speech' },
+      'tts.localSpeed': { type: 'page', page: 'voice', section: 'agent-speech' },
+    } as const;
+
+    for (const [id, placement] of Object.entries(expectedPlacements)) {
+      expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
+      expect(byId.get(id)?.placement, id).toEqual(placement);
+    }
+
+    const changes = [
+      { id: 'tier.openai', value: 'priority' },
+      { id: 'tier.anthropic', value: 'priority' },
+      { id: 'tier.google', value: 'flex' },
+      { id: 'providers.fireworksTier', value: 'priority' },
+      { id: 'providers.kimiApiFormat', value: 'anthropic' },
+      { id: 'providers.openaiWebsockets', value: 'on' },
+      { id: 'providers.openaiResponsesWebsockets', value: true },
+      { id: 'providers.openaiLiveSteering', value: true },
+      { id: 'providers.openrouterVariant', value: 'nitro' },
+      { id: 'tier.subagent', value: 'priority' },
+      { id: 'tier.advisor', value: 'flex' },
+      { id: 'tts.localVoice', value: 'maeve' },
+      { id: 'tts.localSpeed', value: 1.2 },
+    ];
+    await f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes,
+    });
+
+    const after = await f.native.read('workspace_1', '2');
+    const afterById = new Map(after.settings.map((setting) => [setting.id, setting]));
+    for (const change of changes) {
+      expect(afterById.get(change.id)?.value, change.id).toBe(change.value);
+    }
+
+    await expect(f.native.write('workspace_1', '3', {
+      expectedRevision: after.revision,
+      changes: [{ id: 'providers.kimiApiFormat', value: 'invalid-protocol' }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  } finally { await f.close(); }
+});
+
+test('tier.advisor conditionActive follows advisor.enabled', async () => {
+  const f = await fixture();
+  try {
+    const before = await f.native.read('workspace_1', '0');
+    expect(before.settings.find((setting) => setting.id === 'tier.advisor')).toMatchObject({
+      condition: 'advisorEnabled',
+      conditionActive: false,
+    });
+
+    await f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{ id: 'advisor.enabled', value: true }],
+    });
+    const after = await f.native.read('workspace_1', '2');
+    expect(after.settings.find((setting) => setting.id === 'tier.advisor')).toMatchObject({
+      condition: 'advisorEnabled',
+      conditionActive: true,
+    });
+  } finally { await f.close(); }
+});
+
+test('muse-code, daybreak, stt, and speech settings stay unexposed and are refused on write', async () => {
+  const f = await fixture();
+  try {
+    expect(OMP_SETTING_PLACEMENTS['providers.muse-code.storeResponses']).toEqual({ type: 'boundary' });
+    expect(OMP_SETTING_PLACEMENTS['providers.openai-codex.daybreak']).toEqual({ type: 'boundary' });
+
+    const state = await f.native.read('workspace_1', '0');
+    const byId = new Map(state.settings.map((setting) => [setting.id, setting]));
+    const refused: ReadonlyArray<readonly [id: string, value: string | number | boolean]> = [
+      ['providers.muse-code.storeResponses', true],
+      ['providers.openai-codex.daybreak', false],
+      ['stt.enabled', true],
+      ['stt.submitTrigger', 'release'],
+      ['speech.enabled', true],
+      ['speech.mode', 'yield'],
+      ['speech.enhanced', true],
+      ['speech.voice', 'maeve'],
+      ['speech.speed', 1.1],
+      ['live.voice', 'ember'],
+    ];
+
+    for (const [id, value] of refused) {
+      expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
+      expect(byId.has(id), id).toBe(false);
+      await expect(f.native.write('workspace_1', '1', {
+        expectedRevision: state.revision,
+        changes: [{ id, value }],
+      }), id).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    }
+  } finally { await f.close(); }
+});
+
 test('every exposed page row is drawn by the section a GUI owner renders', () => {
   // A placement on a page section nobody draws makes the row writable but
   // invisible: the "hollow setting" this effort exists to remove. The section

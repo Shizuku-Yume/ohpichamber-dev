@@ -93,9 +93,9 @@ export const AgentsPage: React.FC = () => {
   })));
   const models = useSettingsModels(settingsDirectory);
   const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, updateSettings, getSectionSettings, loading: ompLoading, saving: ompSaving } = useOmpPageSettings('agents');
-  const subagentSettings = getSectionSettings('subagents');
-  const prewalkSettings = getSectionSettings('prewalk');
-  const advisorSettings = getSectionSettings('advisor');
+  const subagentSettings = getSectionSettings('subagents').filter((s) => s.conditionActive !== false);
+  const prewalkSettings = getSectionSettings('prewalk').filter((s) => s.conditionActive !== false);
+  const advisorSettings = getSectionSettings('advisor').filter((s) => s.conditionActive !== false);
 
   const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
   const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);

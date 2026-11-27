@@ -56,6 +56,8 @@ import { problemMessage } from '@/lib/problemMessage';
 import { ProviderLogoImageControl } from './ProviderLogoImageControl';
 import { providerLogoUploadSupported, removeProviderLogo, uploadProviderLogo } from '@/lib/customProviderLogos';
 import type { CustomProviderLogoPlan } from './custom-provider-form';
+import { ProviderOptionsSection } from './ProviderOptionsSection';
+import { providerOptionSettingIds } from './providerOptionRows';
 
 const ADD_PROVIDER_ID = '__add_provider__';
 const CLASSIFICATION_PAGE_ID = '__classification__';
@@ -453,6 +455,10 @@ function ProviderDetail({
         {accountError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{accountError}</p> : null}
         {authFailureHint ? <p role="status" className="typography-meta text-[var(--status-warning)]">{authFailureHint}</p> : null}
       </SettingsSection>
+
+      {providerOptionSettingIds(provider.providerId).length > 0 ? (
+        <ProviderOptionsSection providerId={provider.providerId} />
+      ) : null}
 
       {providerLogoUploadSupported() && (!detail?.configuration || enterprise) ? (
         <SettingsSection
@@ -1037,7 +1043,7 @@ export const ProvidersPage: React.FC = () => {
             <span className="font-mono">{provider.providerId}</span>
           </span>
         )}
-        showSaveStatus={false}
+        showSaveStatus={providerOptionSettingIds(provider.providerId).length > 0}
       >
         <ProviderDetail
           key={`${state.runtimeKey}:${state.workspaceId}:${provider.providerId}`}

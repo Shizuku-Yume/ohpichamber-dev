@@ -236,8 +236,18 @@ system D-Bus socket display that the feature is unavailable; no deployment
 permissions are added. The native settings tests cover both guards, including a
 container without a bus. It adds a registry guard against missing SDK IDs and unrendered page
 placements, leaving terminal-only controls and existing Web Search catalog
-writes with their respective owners. Provider protocol/tier, usage, and voice
-controls still need their owner-specific work.
+writes with their respective owners. Service tier and protocol controls
+(`tier.openai`/`anthropic`/`google`, `providers.fireworksTier`,
+`providers.kimiApiFormat`, `providers.openaiWebsockets`,
+`providers.openaiResponsesWebsockets`, `providers.openaiLiveSteering`,
+`providers.openrouterVariant`) render on the owning provider's detail page only
+for that provider; `tier.subagent` and `tier.advisor` are on the Agents page,
+`tts.localVoice`/`tts.localSpeed` are the Voice page's Agent speech section, and
+reset-redemption policy stays on OMP → Advanced (`omp:resets`). The rest —
+internal tuning, terminal/host-speaker speech, and duplicates of Voice and Web
+Search controls — is config-only with the reason beside each entry in
+`settings-ui.ts`, and the muse-code/daybreak data-use consent switches are
+boundary.
 
 The v2.8.0 reply-command follow-up restores command-mode lifecycle guards in
 `TerminalView`: completed output stays visible despite close-on-exit, a missing
