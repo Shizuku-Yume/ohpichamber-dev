@@ -910,7 +910,7 @@ export class SessionRegistry {
     this.ensureOpen();
     if (operation.correlationId !== undefined) {
       const existing = this.references.receipt(sessionId, operation.correlationId);
-      if (existing?.outcome === 'accepted') return this.replayedSendRun(sessionId, existing);
+      if (existing?.outcome === 'accepted' && existing.operation === 'send') return this.replayedSendRun(sessionId, existing);
     }
     try {
       this.assertWritable(sessionId);
@@ -1008,7 +1008,7 @@ export class SessionRegistry {
     const receiptOperation = operation.type === 'steer' ? 'steer' as const : 'followUp' as const;
     if (operation.correlationId !== undefined) {
       const existing = this.references.receipt(sessionId, operation.correlationId);
-      if (existing?.outcome === 'accepted') {
+      if (existing?.outcome === 'accepted' && existing.operation === receiptOperation) {
         if (operation.type === 'steer') return { sessionId, runId: existing.runId, acceptedAt: existing.acceptedAt };
         return { sessionId, followUpId: existing.userMessageId ?? existing.correlationId, acceptedAt: existing.acceptedAt };
       }
