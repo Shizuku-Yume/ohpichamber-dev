@@ -61,8 +61,6 @@ class ReceiptWorkers extends WorkerRegistry {
   }
 }
 
-
-
 const promptOperation = (correlationId?: string) => {
   const base = {
     type: 'prompt' as const, runId: `run-${correlationId ?? 'plain'}`,
