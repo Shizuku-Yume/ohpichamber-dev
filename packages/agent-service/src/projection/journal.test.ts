@@ -306,4 +306,38 @@ describe('SessionJournal consumer boundary', () => {
     expect(journal.snapshot().messages.filter(m => m.messageId === 'c-live')).toHaveLength(1);
     journal.close();
   });
+
+  test('reconstructs run records from seeded turns so a cold replay reports the settled truth', () => {
+    const turn = (overrides) => ({
+      turnId: 't1', sessionId: 's', runId: 'r1', userMessageId: 'u1', assistantMessageIds: [],
+      status: 'completed', startedAt: 100, finishedAt: 160, ...overrides,
+    });
+    const seeded = (turns) => ({ ...seed, turns, messages: [] });
+    // A run whose last turn settled terminally replays that terminal state:
+    // the cold journal never fabricates 'running' for a run the transcript
+    // already settled.
+    const settled = new SessionJournal(session, seeded([turn({})]));
+    expect(settled.run('r1')).toMatchObject({ runId: 'r1', status: 'completed', createdAt: 100, finishedAt: 160 });
+    settled.close();
+    const failed = new SessionJournal(session, seeded([turn({ status: 'failed', error: 'interrupted' })]));
+    expect(failed.run('r1')).toMatchObject({ status: 'failed', error: 'interrupted', finishedAt: 160 });
+    failed.close();
+    // A multi-turn run takes its state from the last turn and its creation
+    // from the first: intermediate settled turns do not close the run early.
+    const multi = new SessionJournal(session, seeded([
+      turn({ turnId: 't1', startedAt: 100, finishedAt: 120 }),
+      turn({ turnId: 't2', status: 'running', startedAt: 130, finishedAt: undefined }),
+    ]));
+    expect(multi.run('r1')).toMatchObject({ runId: 'r1', status: 'running', createdAt: 100 });
+    expect(multi.run('r1')?.finishedAt).toBeUndefined();
+    multi.close();
+    // Event-sourced records win over reconstruction: a live run.started that
+    // the seed's turns do not know stays the authority across a reseed.
+    const live = new SessionJournal(session, seeded([turn({})]));
+    live.append([input({ type: 'run.started', runId: 'r-live', createdAt: 300 }, 300)]);
+    live.replaceInitialSeed(seeded([turn({})]));
+    expect(live.run('r-live')).toMatchObject({ status: 'running', createdAt: 300 });
+    expect(live.run('r1')).toMatchObject({ status: 'completed' });
+    live.close();
+  });
 });

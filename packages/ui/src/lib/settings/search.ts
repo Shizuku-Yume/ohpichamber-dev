@@ -82,6 +82,11 @@ const OMP_PAGE_SETTINGS: ReadonlyArray<readonly [page: SettingsPageSlug, setting
     'modelRoleStorage', 'personality', 'inlineToolDescriptors',
     'includeModelInPrompt', 'includeWorkspaceTree', 'skillful',
   ]],
+  ['providers', [
+    'tier.openai', 'tier.anthropic', 'tier.google', 'providers.fireworksTier',
+    'providers.kimiApiFormat', 'providers.openaiWebsockets', 'providers.openaiResponsesWebsockets',
+    'providers.openaiLiveSteering', 'providers.openrouterVariant',
+  ]],
   ['agents', [
     'prewalk.enabled', 'prewalk.from', 'prewalk.into', 'prewalk.auto', 'prewalk.autoTarget',
     'advisor.enabled', 'advisor.syncBacklog', 'advisor.immuneTurns', 'advisor.continueSeverity',
@@ -90,6 +95,7 @@ const OMP_PAGE_SETTINGS: ReadonlyArray<readonly [page: SettingsPageSlug, setting
     'task.perCallModel', 'task.enableLsp', 'task.maxRuntimeMs',
     'task.completionProbe', 'task.agentIdleTtlMs', 'task.softRequestBudget',
     'task.softRequestBudgetNotice', 'task.maxEffort', 'task.prewalk',
+    'tier.subagent', 'tier.advisor',
   ]],
   ['commands', ['commands.enableClaudeProject']],
   ['skills.installed', [
@@ -117,6 +123,7 @@ const OMP_PAGE_SETTINGS: ReadonlyArray<readonly [page: SettingsPageSlug, setting
     'github.cache.enabled', 'github.cache.softTtlSec', 'github.cache.hardTtlSec',
     'browser.headless', 'browser.cmux', 'browser.tern', 'browser.freezeOnTurnEnd', 'browser.idleCloseSec',
   ]],
+  ['voice', ['tts.localVoice', 'tts.localSpeed']],
 ];
 
 const OMP_PAGE_SETTING_KEYWORDS: Readonly<Record<string, string[]>> = {
@@ -1808,6 +1815,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['roles', 'specialized', 'vision', 'image'],
   },
   MODEL_ROLES_CUSTOM_SECTION_SEARCH_ITEM,
+  {
+    id: 'model-roles.section.presets',
+    page: 'model-roles',
+    titleKey: 'settings.omp.modelRoles.section.presets.title',
+    descriptionKey: 'settings.omp.modelRoles.section.presets.description',
+    keywords: ['model presets', 'presets', 'modelpreset', 'role assignments', 'thinking level', 'snapshot'],
+  },
   {
     id: 'chat.section.thinking',
     page: 'chat',

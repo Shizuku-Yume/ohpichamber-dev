@@ -90,6 +90,11 @@ export class SessionJournal {
     return structuredClone(events);
   }
 
+  run(runId: string): Run | undefined {
+    const run = this.runs.get(runId);
+    return run ? structuredClone(run) : undefined;
+  }
+
   runtime(): RuntimeSession {
     const runtime = {
       ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
@@ -226,6 +231,24 @@ export class SessionJournal {
   private rebuildIndexes(): void {
     this.turnById.clear(); this.messageById.clear(); this.partById.clear(); this.toolPartByCall.clear(); this.messagesByTurn.clear();
     for (const turn of this.turns) this.turnById.set(turn.turnId, turn);
+    const reconstructedRuns = new Map<string, Run>();
+    for (const turn of this.turns) {
+      const terminalStatus = turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled' ? turn.status : null;
+      if (terminalStatus !== null && turn.finishedAt === undefined) continue;
+      const run: Run = {
+        runId: turn.runId, sessionId: this.identity.sessionId, origin: 'host',
+        status: terminalStatus ?? 'running',
+        createdAt: reconstructedRuns.get(turn.runId)?.createdAt ?? turn.startedAt,
+      };
+      if (terminalStatus !== null) {
+        run.finishedAt = turn.finishedAt;
+        if (turn.error !== undefined) run.error = turn.error;
+      }
+      reconstructedRuns.set(turn.runId, run);
+    }
+    for (const [runId, run] of reconstructedRuns) {
+      if (!this.runs.has(runId)) this.runs.set(runId, run);
+    }
     for (const message of this.messages) {
       this.messageById.set(message.messageId, message);
       this.indexMessage(message);

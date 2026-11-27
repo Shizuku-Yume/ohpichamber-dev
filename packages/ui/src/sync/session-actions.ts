@@ -14,7 +14,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
 import { isRestorableOnItsOwn } from "./session-restore-rule"
 import { useGlobalSessionStatusStore, removeGlobalSessionStatuses } from "./global-session-status"
-import { recordSendFailure } from "./send-failure-log"
+import { recordSendFailure, markSendConfirmation } from "./send-failure-log"
 import {
  withoutReviewSessionLink,
  type SessionMetadataRecord,
@@ -35,6 +35,7 @@ import { getRuntimeKey, getRuntimeSwitchRevision } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
 import { retireSessionIdentity } from "./session-rekey-registry"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
+import { reconcileInterruptedSend } from "./send-reconciliation"
 import { promoteRestoredSessionOrdering } from "./session-ordering"
 import { normalizePath } from "@/lib/pathNormalization"
 import { deleteChatDirectory } from "@/lib/chatDirectories"
@@ -135,6 +136,14 @@ export function applyCanonicalMetadataEvent(metadata: SessionMetadataState): voi
  }
 }
 
+export class AmbiguousSendAdoptedError extends Error {
+ correlationId?: string
+ sessionId?: string
+ constructor(message: string) {
+  super(message)
+  this.name = "AmbiguousSendAdoptedError"
+ }
+}
 
 export type SessionSendInput = {
  sessionId: string
@@ -146,6 +155,46 @@ export type SessionSendInput = {
  directory?: string | null
  optimistic?: boolean
  onOptimisticInsert?: () => void
+}
+
+function adoptAmbiguousSend(input: {
+ runtimeKey: string
+ runtimeRevision: number
+ sessionId: string
+ directory: string | null | undefined
+ correlationId: string
+ content: string
+ error: unknown
+ removePendingEcho: (() => void) | null
+ reconcileAccepted: ((runId: string | null) => void) | null
+}): AmbiguousSendAdoptedError {
+ void reconcileInterruptedSend({
+  runtimeKey: input.runtimeKey,
+  runtimeRevision: input.runtimeRevision,
+  sessionId: input.sessionId,
+  directory: input.directory,
+  correlationId: input.correlationId,
+  content: input.content,
+  removePendingEcho: input.removePendingEcho,
+  reconcileAccepted: input.reconcileAccepted,
+  restoreDraft: () => { },
+  notifyResolved: (resolution) => {
+   if (resolution.outcome === 'accepted' || resolution.outcome === 'rejected') markSendConfirmation(input.correlationId)
+  },
+ })
+ recordSendFailure({
+  sessionId: input.sessionId,
+  messageId: input.correlationId,
+  directory: input.directory ?? null,
+  status: getErrorStatus(input.error),
+  ambiguous: true,
+  confirmationChecked: false,
+  reason: input.error instanceof Error ? input.error.message : String(input.error),
+ })
+ const adopted = new AmbiguousSendAdoptedError(input.error instanceof Error ? input.error.message : String(input.error))
+ adopted.correlationId = input.correlationId
+ adopted.sessionId = input.sessionId
+ return adopted
 }
 
 /**
@@ -161,16 +210,28 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
  const request = PromptRequestSchema.parse(input.request)
  await waitForConnectionOrThrow({ intent: 'prompt' })
  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
- if (input.mode === "steer") {
-  const result = await canonicalClient.steer(input.sessionId, request, input.commandId)
-  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
-  if (result.sessionId !== input.sessionId) throw new Error("Steer response identified another session")
-  return null
- } else if (input.mode === "follow-up") {
-  const result = await canonicalClient.followUp(input.sessionId, request, input.commandId)
-  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
-  if (result.sessionId !== input.sessionId) throw new Error("Follow-up response identified another session")
-  return null
+
+ const commandId = input.commandId ?? globalThis.crypto.randomUUID()
+ if (input.mode === "steer" || input.mode === "follow-up") {
+  const steerDirectory = input.directory ?? getSessionDirectory(input.sessionId)
+  try {
+   const result = input.mode === "steer"
+    ? await canonicalClient.steer(input.sessionId, request, commandId)
+    : await canonicalClient.followUp(input.sessionId, request, commandId)
+   if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
+   if (result.sessionId !== input.sessionId) throw new Error("Delivery acknowledgement identified another session")
+   return null
+  } catch (error) {
+   if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw error
+   if (isAmbiguousSendFailure(error)) {
+    throw adoptAmbiguousSend({
+     runtimeKey, runtimeRevision, sessionId: input.sessionId, directory: steerDirectory,
+     correlationId: commandId, content: request.input.text, error,
+     removePendingEcho: null, reconcileAccepted: null,
+    })
+   }
+   throw error
+  }
  } else {
   const directory = input.directory ?? getSessionDirectory(input.sessionId)
   const snapshot = directory ? _childStores?.getChild(directory)?.getState().snapshot[input.sessionId] : undefined
@@ -178,12 +239,10 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
   _ensureSessionStream?.(input.sessionId, directory)
 
   const isOptimistic = Boolean(input.optimistic && _optimisticAdd && _optimisticRemove)
-  let correlationId: string | undefined
   let pendingMessage: CanonicalMessage | undefined
   let knownMessageIds: Set<string> | undefined
 
   if (isOptimistic) {
-   correlationId = `msg_${globalThis.crypto.randomUUID()}`
    const text = request.input.text
    const parts: CanonicalMessage['parts'] = [{ type: "text", partId: `part_${globalThis.crypto.randomUUID()}`, content: text }]
    for (const attachment of request.input.attachments ?? []) {
@@ -198,7 +257,7 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
     })
    }
    pendingMessage = {
-    messageId: correlationId,
+    messageId: commandId,
     sessionId: input.sessionId,
     turnId: `turn_${globalThis.crypto.randomUUID()}`,
     role: "user",
@@ -215,7 +274,7 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
 
   try {
    const baselines = captureRunControlBaselines(input.sessionId)
-   const result = await canonicalClient.createRun(input.sessionId, request, input.commandId)
+   const result = await canonicalClient.createRun(input.sessionId, request, commandId)
    if (result.run.sessionId !== input.sessionId) throw new Error("Run response identified another session")
    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
    publishRuntimeRun(result.run, baselines)
@@ -235,19 +294,36 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
 
    return result.run
   } catch (error) {
-   if (isOptimistic && correlationId) {
-    if (!isStaleRuntime(runtimeKey) && runtimeRevision === getRuntimeSwitchRevision()) {
-     _optimisticRemove!({ sessionId: input.sessionId, directory, messageId: correlationId })
-     recordSendFailure({
-      sessionId: input.sessionId,
-      messageId: correlationId,
-      directory: directory ?? null,
-      status: getErrorStatus(error),
-      ambiguous: isAmbiguousSendFailure(error),
-      confirmationChecked: false,
-      reason: error instanceof Error ? error.message : String(error),
-     })
-    }
+   const runtimeCurrent = !isStaleRuntime(runtimeKey) && runtimeRevision === getRuntimeSwitchRevision()
+   if (isOptimistic && runtimeCurrent && isAmbiguousSendFailure(error) && pendingMessage && knownMessageIds) {
+    const echo = pendingMessage
+    const known = knownMessageIds
+    throw adoptAmbiguousSend({
+     runtimeKey,
+     runtimeRevision,
+     sessionId: input.sessionId,
+     directory,
+     correlationId: commandId,
+     content: request.input.text,
+     error,
+     removePendingEcho: () => _optimisticRemove?.({ sessionId: input.sessionId, directory, messageId: commandId }),
+     reconcileAccepted: (runId) => reconcileAcceptedSend({
+      runtimeKey, sessionId: input.sessionId, directory,
+      pendingMessage: echo, content: request.input.text, runId, knownMessageIds: known,
+     }),
+    })
+   }
+   if (isOptimistic && runtimeCurrent) {
+    _optimisticRemove!({ sessionId: input.sessionId, directory, messageId: commandId })
+    recordSendFailure({
+     sessionId: input.sessionId,
+     messageId: commandId,
+     directory: directory ?? null,
+     status: getErrorStatus(error),
+     ambiguous: isAmbiguousSendFailure(error),
+     confirmationChecked: false,
+     reason: error instanceof Error ? error.message : String(error),
+    })
    }
    throw error
   }
@@ -1838,9 +1914,8 @@ export async function optimisticSend(input: {
  const leading = await input.leadingContext
  assertRuntimeUnchanged()
  if (leading?.text.trim()) context.unshift(leading)
- // The callback's ID correlates the legacy transport and the returned send
- // identity. It is never installed as a native message ID.
- const correlationId = `msg_${globalThis.crypto.randomUUID()}`
+ const correlationId = globalThis.crypto.randomUUID()
+
  const pendingMessage: CanonicalMessage = {
   messageId: correlationId,
   sessionId: input.sessionId,
@@ -1863,9 +1938,23 @@ export async function optimisticSend(input: {
   assertRuntimeUnchanged()
   acceptedRun = await input.send(correlationId, context)
  } catch (error) {
-  // A definite failure removes only the unconfirmed record. Once an echo
-  // has promoted this ID, optimisticRemove refuses to delete it.
+  if (error instanceof AmbiguousSendAdoptedError) throw error
   if (!isStaleRuntime(runtimeKey) && runtimeRevision === getRuntimeSwitchRevision()) {
+   if (isAmbiguousSendFailure(error)) {
+    throw adoptAmbiguousSend({
+     runtimeKey,
+     runtimeRevision,
+     sessionId: input.sessionId,
+     directory,
+     correlationId,
+     content: input.content,
+     error,
+     removePendingEcho: () => _optimisticRemove?.({ sessionId: input.sessionId, directory, messageId: correlationId }),
+     reconcileAccepted: (runId) => reconcileAcceptedSend({
+      runtimeKey, sessionId: input.sessionId, directory, pendingMessage, content: input.content, runId, knownMessageIds,
+     }),
+    })
+   }
    _optimisticRemove({ sessionId: input.sessionId, directory, messageId: correlationId })
    recordSendFailure({
     sessionId: input.sessionId, messageId: correlationId, directory: directory ?? null,

@@ -534,6 +534,11 @@ export const MCPApplyResultSchema = z.strictObject({
   // applied, waiting for sign-in, or not connected. A reader must not infer it
   // from `status`, which only says how many captured workers answered.
   outcome: MCPApplyOutcomeSchema,
+  // Entries the save skipped because their stored credential reference could not
+  // be resolved from this workspace: the user re-enters that server's value. Only
+  // a server carried unchanged from the previous revision can land here; a newly
+  // written or edited reference is refused instead, so fail-closed never degrades.
+  needsCredentialReentry: z.array(EntityIdSchema).optional(),
   configuration: MCPConfigurationStateSchema,
   workers: z.array(MCPWorkerApplyOutcomeSchema),
 }).refine(validAggregate, 'Aggregate status reflects every unique captured live worker outcome').refine(

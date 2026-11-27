@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as contract from '@openchamber/agent-contract';
+import type { JsonValue } from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_OWNER_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
@@ -58,7 +59,7 @@ test('misclassifications are fixed: followUpMode is not a chat owner; recap belo
 
 test('an owned-by placement names an owner control, and all placement types stay populated', () => {
   expect([...OMP_SETTING_OWNER_IDS].sort()).toEqual([
-    'chat.session-recap', 'chat.suggestion-generator', 'model-roles.section.chat', 'model-roles.section.custom', 'sessions.default-thinking',
+    'chat.session-recap', 'chat.suggestion-generator', 'model-roles.section.chat', 'model-roles.section.custom', 'model-roles.section.presets', 'sessions.default-thinking',
     'sessions.fallback-model', 'sessions.model-compaction',
   ]);
   const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, 'config-only': 0, hidden: 0, boundary: 0 };
@@ -160,9 +161,10 @@ test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page
   for (const id of ['tools.approval', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
-  for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles', 'modelTags', 'steeringMode', 'plan.enabled', 'goal.enabled', 'retry.fallbackChains']) {
+  for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles', 'modelTags', 'modelPresets', 'steeringMode', 'plan.enabled', 'goal.enabled', 'retry.fallbackChains']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }
+  expect(OMP_SETTING_PLACEMENTS['modelPresets']).toEqual({ type: 'owned-by', owner: 'model-roles.section.presets' });
 });
 
 test('a moved row is absent from state and refused on write', async () => {
@@ -422,6 +424,290 @@ test('project model tags cannot replace the shared record', async () => {
   } finally { await f.close(); }
 });
 
+test('model presets round-trip through the CAS write path and persist key removal', async () => {
+  const f = await fixture();
+  try {
+    const path = join(f.agentDirectory, 'config.yml');
+    await writeFile(path, 'modelPresets:\n  fast:\n    modelRoles:\n      default: provider/fast-model\n      smol: provider/smol-model\n    defaultThinkingLevel: low\n  thorough:\n    modelRoles:\n      default: provider/big-model\n');
+    const state = await f.native.read('workspace_1', '0');
+    const presets = state.settings.find((setting) => setting.id === 'modelPresets');
+    expect(presets).toMatchObject({
+      placement: { type: 'owned-by', owner: 'model-roles.section.presets' },
+      value: {
+        fast: { modelRoles: { default: 'provider/fast-model', smol: 'provider/smol-model' }, defaultThinkingLevel: 'low' },
+        thorough: { modelRoles: { default: 'provider/big-model' } },
+      },
+    });
+    // CAS: a stale expected value conflicts and writes nothing.
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{ id: 'modelPresets', value: {}, expectedValue: {} }],
+    })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+    // Edit one entry and drop the other; deletion persists across a reload.
+    const written = await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: { fast: { modelRoles: { default: 'provider/other-model', smol: 'provider/smol-model' }, defaultThinkingLevel: 'high' } },
+        expectedValue: presets?.value,
+      }],
+    });
+    expect(written.settings.find((setting) => setting.id === 'modelPresets')?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/other-model', smol: 'provider/smol-model' }, defaultThinkingLevel: 'high' },
+    });
+    const after = await f.native.read('workspace_1', '2');
+    expect(after.settings.find((setting) => setting.id === 'modelPresets')?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/other-model', smol: 'provider/smol-model' }, defaultThinkingLevel: 'high' },
+    });
+    expect(readFileSync(path, 'utf8')).not.toContain('thorough');
+  } finally { await f.close(); }
+});
+
+test('a preset that violates the SDK shape is refused and writes nothing', async () => {
+  const f = await fixture();
+  try {
+    const path = join(f.agentDirectory, 'config.yml');
+    await writeFile(path, 'modelPresets:\n  fast:\n    modelRoles:\n      default: provider/fast-model\n');
+    const state = await f.native.read('workspace_1', '0');
+    const presets = state.settings.find((setting) => setting.id === 'modelPresets');
+    const write = (value: JsonValue) => f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{ id: 'modelPresets', value, expectedValue: presets?.value }],
+    });
+    // A preset whose roles are not a mapping of non-empty selectors.
+    await expect(write({ fast: { defaultThinkingLevel: 'low' } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(write({ fast: { modelRoles: { default: '' } } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(write({ fast: { modelRoles: { default: '   ' } } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(write({ fast: { modelRoles: 'provider/fast-model' } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    // A thinking level OMP would reject when applying the preset. `off` and
+    // `inherit` parse as configured thinking levels but are not valid inside a
+    // preset (SDK `isDefaultThinkingLevel`): only `auto` or a concrete effort.
+    await expect(write({ fast: { modelRoles: { default: 'provider/fast-model' }, defaultThinkingLevel: 'ludicrous' } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(write({ fast: { modelRoles: { default: 'provider/fast-model' }, defaultThinkingLevel: 'off' } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(write({ fast: { modelRoles: { default: 'provider/fast-model' }, defaultThinkingLevel: 'inherit' } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(write({ fast: { modelRoles: { default: 'provider/fast-model' }, defaultThinkingLevel: 'h' } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    // A name `/modelpreset switch` could never address.
+    await expect(write({ '1bad': { modelRoles: { default: 'provider/fast-model' } } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    // An extra key the SDK shape does not carry.
+    await expect(write({ fast: { modelRoles: { default: 'provider/fast-model' }, extra: true } })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    // Nothing was written through any of the refusals.
+    const after = await f.native.read('workspace_1', '1');
+    expect(after.settings.find((setting) => setting.id === 'modelPresets')?.value).toEqual(presets?.value);
+    // A valid write still lands after the refusals: a preset without a
+    // thinking level and an `auto` thinking level are both in the SDK shape.
+    const saved = await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          fast: { modelRoles: { default: 'provider/fast-model' }, defaultThinkingLevel: 'auto' },
+          slow_lane: { modelRoles: { default: 'provider/big-model', slow: 'provider/slow-model' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    });
+    expect(saved.settings.find((setting) => setting.id === 'modelPresets')?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/fast-model' }, defaultThinkingLevel: 'auto' },
+      slow_lane: { modelRoles: { default: 'provider/big-model', slow: 'provider/slow-model' } },
+    });
+  } finally { await f.close(); }
+});
+
+test('a project layer cannot replace the shared preset record but shadows it whole', async () => {
+  const f = await fixture();
+  try {
+    const sharedPath = join(f.agentDirectory, 'config.yml');
+    await writeFile(sharedPath, 'modelPresets:\n  fast:\n    modelRoles:\n      default: provider/shared-fast\n');
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'modelPresets:\n  fast:\n    modelRoles:\n      default: provider/project-fast\n  local:\n    modelRoles:\n      default: provider/project-local\n');
+    const state = await f.native.read('workspace_1', '0');
+    const presets = state.settings.find((setting) => setting.id === 'modelPresets');
+    // Same-name entries never merge across layers: the project `fast` wins
+    // whole, and the merged record lists the project-only `local` beside it.
+    expect(presets?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/project-fast' } },
+      local: { modelRoles: { default: 'provider/project-local' } },
+    });
+    // Replacing a project-owned entry is refused: no session in this project
+    // would read the shared write.
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          fast: { modelRoles: { default: 'provider/changed' } },
+          local: { modelRoles: { default: 'provider/project-local' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    })).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    // A write that keeps the project entries intact may proceed: the shared
+    // layer is written and the project shadow stays untouched.
+    const saved = await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          fast: { modelRoles: { default: 'provider/project-fast' } },
+          local: { modelRoles: { default: 'provider/project-local' } },
+          extra: { modelRoles: { default: 'provider/extra-model' }, defaultThinkingLevel: 'medium' },
+        },
+        expectedValue: presets?.value,
+      }],
+    });
+    expect(saved.settings.find((setting) => setting.id === 'modelPresets')?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/project-fast' } },
+      local: { modelRoles: { default: 'provider/project-local' } },
+      extra: { modelRoles: { default: 'provider/extra-model' }, defaultThinkingLevel: 'medium' },
+    });
+    const sharedOnDisk = readFileSync(sharedPath, 'utf8');
+    expect(sharedOnDisk).toContain('extra');
+    expect(sharedOnDisk).not.toContain('project-local');
+    expect(sharedOnDisk).toContain('provider/shared-fast');
+    expect(sharedOnDisk).not.toContain('provider/project-fast');
+  } finally { await f.close(); }
+});
+
+test('an unchanged hand-edited invalid preset does not block adding, editing, or deleting other presets', async () => {
+  const f = await fixture();
+  try {
+    const path = join(f.agentDirectory, 'config.yml');
+    await writeFile(
+      path,
+      'modelPresets:\n  broken:\n    modelRoles:\n      default: provider/old\n    defaultThinkingLevel: off\n  1bad:\n    notRoles: true\n  fast:\n    modelRoles:\n      default: provider/fast-model\n',
+    );
+    let state = await f.native.read('workspace_1', '0');
+    let presets = state.settings.find((setting) => setting.id === 'modelPresets');
+    const brokenEntry = { modelRoles: { default: 'provider/old' }, defaultThinkingLevel: 'off' };
+    const badNameEntry = { notRoles: true };
+
+    // Adding a valid preset and editing another valid preset succeed while invalid entries stay untouched.
+    state = await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          broken: brokenEntry,
+          '1bad': badNameEntry,
+          fast: { modelRoles: { default: 'provider/fast-v2' }, defaultThinkingLevel: 'low' },
+          slow: { modelRoles: { default: 'provider/slow-model' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    });
+    presets = state.settings.find((setting) => setting.id === 'modelPresets');
+    expect(presets?.value).toEqual({
+      broken: brokenEntry,
+      '1bad': badNameEntry,
+      fast: { modelRoles: { default: 'provider/fast-v2' }, defaultThinkingLevel: 'low' },
+      slow: { modelRoles: { default: 'provider/slow-model' } },
+    });
+
+    // New or changed invalid entries are still rejected with 400 INVALID_REQUEST.
+    await expect(f.native.write('workspace_1', '2', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          broken: { modelRoles: { default: 'provider/old' }, defaultThinkingLevel: 'inherit' },
+          '1bad': badNameEntry,
+          fast: { modelRoles: { default: 'provider/fast-v2' }, defaultThinkingLevel: 'low' },
+          slow: { modelRoles: { default: 'provider/slow-model' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+
+    await expect(f.native.write('workspace_1', '2', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          broken: brokenEntry,
+          '1bad': badNameEntry,
+          fast: { modelRoles: { default: 'provider/fast-v2' }, defaultThinkingLevel: 'low' },
+          slow: { modelRoles: { default: 'provider/slow-model' } },
+          newInvalid: { modelRoles: { default: '' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+
+    // Deleting invalid entries works and persists.
+    const deleted = await f.native.write('workspace_1', '2', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          fast: { modelRoles: { default: 'provider/fast-v2' }, defaultThinkingLevel: 'low' },
+          slow: { modelRoles: { default: 'provider/slow-model' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    });
+    expect(deleted.settings.find((setting) => setting.id === 'modelPresets')?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/fast-v2' }, defaultThinkingLevel: 'low' },
+      slow: { modelRoles: { default: 'provider/slow-model' } },
+    });
+    const disk = readFileSync(path, 'utf8');
+    expect(disk).not.toContain('broken');
+    expect(disk).not.toContain('1bad');
+  } finally { await f.close(); }
+});
+
+test('a non-object project preset entry still shadows that key against shared writes', async () => {
+  const f = await fixture();
+  try {
+    const sharedPath = join(f.agentDirectory, 'config.yml');
+    await writeFile(sharedPath, 'modelPresets:\n  fast:\n    modelRoles:\n      default: provider/shared-fast\n');
+    await mkdir(join(f.cwd, '.omp'));
+    await writeFile(join(f.cwd, '.omp', 'config.yml'), 'modelPresets:\n  local: invalid-scalar\n');
+    const state = await f.native.read('workspace_1', '0');
+    const presets = state.settings.find((setting) => setting.id === 'modelPresets');
+    expect(presets?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/shared-fast' } },
+      local: 'invalid-scalar',
+    });
+
+    // Trying to overwrite the project-shadowed scalar key must fail with CATALOG_CONFLICT, not INVALID_REQUEST.
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          fast: { modelRoles: { default: 'provider/shared-fast' } },
+          local: { modelRoles: { default: 'provider/hijack' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+
+    // Saving other shared presets keeps the scalar project shadow untouched and out of shared config.
+    const saved = await f.native.write('workspace_1', '1', {
+      expectedRevision: state.revision,
+      changes: [{
+        id: 'modelPresets',
+        value: {
+          fast: { modelRoles: { default: 'provider/shared-fast' } },
+          local: 'invalid-scalar',
+          extra: { modelRoles: { default: 'provider/extra' } },
+        },
+        expectedValue: presets?.value,
+      }],
+    });
+    expect(saved.settings.find((setting) => setting.id === 'modelPresets')?.value).toEqual({
+      fast: { modelRoles: { default: 'provider/shared-fast' } },
+      local: 'invalid-scalar',
+      extra: { modelRoles: { default: 'provider/extra' } },
+    });
+    expect(readFileSync(sharedPath, 'utf8')).not.toContain('local');
+  } finally { await f.close(); }
+});
+
 test('General power uses the native OMP sleep-prevention setting', async () => {
   const f = await fixture();
   try {
@@ -576,6 +862,119 @@ test('the auto thinking ceiling reports its condition against defaultThinkingLev
     });
     const after = new Map((await f.native.read('workspace_1', '2')).settings.map(setting => [setting.id, setting]));
     expect(after.get('providers.autoThinkingMaxEffort')).toMatchObject({ conditionActive: true });
+  } finally { await f.close(); }
+});
+
+test('provider tier/protocol, subagent/advisor tier, and voice agent-speech placements are exposed and writable', async () => {
+  const f = await fixture();
+  try {
+    const read = await f.native.read('workspace_1', '0');
+    const byId = new Map(read.settings.map((setting) => [setting.id, setting]));
+
+    const expectedPlacements = {
+      'tier.openai': { type: 'page', page: 'providers', section: 'service-tier' },
+      'tier.anthropic': { type: 'page', page: 'providers', section: 'service-tier' },
+      'tier.google': { type: 'page', page: 'providers', section: 'service-tier' },
+      'providers.fireworksTier': { type: 'page', page: 'providers', section: 'service-tier' },
+      'providers.kimiApiFormat': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openaiWebsockets': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openaiResponsesWebsockets': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openaiLiveSteering': { type: 'page', page: 'providers', section: 'protocol' },
+      'providers.openrouterVariant': { type: 'page', page: 'providers', section: 'protocol' },
+      'tier.subagent': { type: 'page', page: 'agents', section: 'subagents' },
+      'tier.advisor': { type: 'page', page: 'agents', section: 'advisor' },
+      'tts.localVoice': { type: 'page', page: 'voice', section: 'agent-speech' },
+      'tts.localSpeed': { type: 'page', page: 'voice', section: 'agent-speech' },
+    } as const;
+
+    for (const [id, placement] of Object.entries(expectedPlacements)) {
+      expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
+      expect(byId.get(id)?.placement, id).toEqual(placement);
+    }
+
+    const changes = [
+      { id: 'tier.openai', value: 'priority' },
+      { id: 'tier.anthropic', value: 'priority' },
+      { id: 'tier.google', value: 'flex' },
+      { id: 'providers.fireworksTier', value: 'priority' },
+      { id: 'providers.kimiApiFormat', value: 'anthropic' },
+      { id: 'providers.openaiWebsockets', value: 'on' },
+      { id: 'providers.openaiResponsesWebsockets', value: true },
+      { id: 'providers.openaiLiveSteering', value: true },
+      { id: 'providers.openrouterVariant', value: 'nitro' },
+      { id: 'tier.subagent', value: 'priority' },
+      { id: 'tier.advisor', value: 'flex' },
+      { id: 'tts.localVoice', value: 'maeve' },
+      { id: 'tts.localSpeed', value: 1.2 },
+    ];
+    await f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes,
+    });
+
+    const after = await f.native.read('workspace_1', '2');
+    const afterById = new Map(after.settings.map((setting) => [setting.id, setting]));
+    for (const change of changes) {
+      expect(afterById.get(change.id)?.value, change.id).toBe(change.value);
+    }
+
+    await expect(f.native.write('workspace_1', '3', {
+      expectedRevision: after.revision,
+      changes: [{ id: 'providers.kimiApiFormat', value: 'invalid-protocol' }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  } finally { await f.close(); }
+});
+
+test('tier.advisor conditionActive follows advisor.enabled', async () => {
+  const f = await fixture();
+  try {
+    const before = await f.native.read('workspace_1', '0');
+    expect(before.settings.find((setting) => setting.id === 'tier.advisor')).toMatchObject({
+      condition: 'advisorEnabled',
+      conditionActive: false,
+    });
+
+    await f.native.write('workspace_1', '1', {
+      expectedRevision: before.revision,
+      changes: [{ id: 'advisor.enabled', value: true }],
+    });
+    const after = await f.native.read('workspace_1', '2');
+    expect(after.settings.find((setting) => setting.id === 'tier.advisor')).toMatchObject({
+      condition: 'advisorEnabled',
+      conditionActive: true,
+    });
+  } finally { await f.close(); }
+});
+
+test('muse-code, daybreak, stt, and speech settings stay unexposed and are refused on write', async () => {
+  const f = await fixture();
+  try {
+    expect(OMP_SETTING_PLACEMENTS['providers.muse-code.storeResponses']).toEqual({ type: 'boundary' });
+    expect(OMP_SETTING_PLACEMENTS['providers.openai-codex.daybreak']).toEqual({ type: 'boundary' });
+
+    const state = await f.native.read('workspace_1', '0');
+    const byId = new Map(state.settings.map((setting) => [setting.id, setting]));
+    const refused: ReadonlyArray<readonly [id: string, value: string | number | boolean]> = [
+      ['providers.muse-code.storeResponses', true],
+      ['providers.openai-codex.daybreak', false],
+      ['stt.enabled', true],
+      ['stt.submitTrigger', 'release'],
+      ['speech.enabled', true],
+      ['speech.mode', 'yield'],
+      ['speech.enhanced', true],
+      ['speech.voice', 'maeve'],
+      ['speech.speed', 1.1],
+      ['live.voice', 'ember'],
+    ];
+
+    for (const [id, value] of refused) {
+      expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
+      expect(byId.has(id), id).toBe(false);
+      await expect(f.native.write('workspace_1', '1', {
+        expectedRevision: state.revision,
+        changes: [{ id, value }],
+      }), id).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    }
   } finally { await f.close(); }
 });
 

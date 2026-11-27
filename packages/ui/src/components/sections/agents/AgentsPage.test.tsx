@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import type { Agent } from '@openchamber/agent-contract';
+import { OmpSettingsUpdateRequestSchema, type Agent, type OmpSetting, type OmpSettingsState } from '@openchamber/agent-contract';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { plugin } from 'bun';
@@ -671,4 +671,96 @@ test('global agents view renders inline task and advisor ModelRoleEditors withou
   expect(container.textContent).toContain('Subagents');
   expect(container.textContent).toContain('Advisor');
   expect(container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBeGreaterThanOrEqual(2);
+});
+
+test('global agents view draws tier.subagent in Subagents and gates tier.advisor on advisor.enabled', async () => {
+  useAgentsStore.setState({ selectedAgentName: null });
+  let advisorEnabled = false;
+  let revision = 1;
+
+  const snapshot = (): OmpSettingsState => {
+    const settings: OmpSetting[] = [
+      {
+        id: 'tier.subagent',
+        type: 'enum',
+        value: 'inherit',
+        default: 'inherit',
+        configured: false,
+        enumValues: ['none', 'inherit', 'priority'],
+        options: [
+          { value: 'none', label: 'None' },
+          { value: 'inherit', label: 'Inherit' },
+          { value: 'priority', label: 'Priority' },
+        ],
+        placement: { type: 'page', page: 'agents', section: 'subagents' },
+      },
+      {
+        id: 'advisor.enabled',
+        type: 'boolean',
+        value: advisorEnabled,
+        default: false,
+        configured: advisorEnabled,
+        placement: { type: 'page', page: 'agents', section: 'advisor' },
+      },
+      {
+        id: 'tier.advisor',
+        type: 'enum',
+        value: 'none',
+        default: 'none',
+        configured: false,
+        enumValues: ['none', 'inherit', 'priority'],
+        options: [
+          { value: 'none', label: 'None' },
+          { value: 'inherit', label: 'Inherit' },
+          { value: 'priority', label: 'Priority' },
+        ],
+        placement: { type: 'page', page: 'agents', section: 'advisor' },
+        condition: 'advisorEnabled',
+        conditionActive: advisorEnabled,
+      },
+    ];
+    return { workspaceId: 'ws_1', revision: String(revision), totalCount: settings.length, settings };
+  };
+
+  fetchSpy.mockImplementation(async (input, init) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes('/workspaces/resolve')) {
+      return Response.json({ workspaceId: 'ws_1', projectId: 'project', name: 'project' });
+    }
+    if (url.includes('/workspaces/ws_1/settings')) {
+      if (init?.method === 'PUT') {
+        const body = OmpSettingsUpdateRequestSchema.parse(JSON.parse(String(init.body ?? '{}')));
+        const toggle = body.changes.find((change) => change.id === 'advisor.enabled');
+        if (toggle) advisorEnabled = toggle.value === true;
+        revision += 1;
+      }
+      return Response.json(snapshot());
+    }
+    return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  });
+
+  const settle = async () => {
+    await act(async () => {
+      for (let i = 0; i < 6; i += 1) {
+        await Promise.resolve();
+      }
+    });
+  };
+
+  await render();
+  await settle();
+
+  const subagentsSection = container.querySelector('[data-settings-item="agents.section.subagents"]');
+  const advisorSection = container.querySelector('[data-settings-item="agents.section.advisor"]');
+  expect(subagentsSection?.querySelector('[data-settings-item="omp.tier.subagent"]')?.getAttribute('data-settings-item')).toBe('omp.tier.subagent');
+  expect(advisorSection?.querySelector('[data-settings-item="omp.advisor.enabled"]')?.getAttribute('data-settings-item')).toBe('omp.advisor.enabled');
+  expect(advisorSection?.querySelector('[data-settings-item="omp.tier.advisor"]')?.getAttribute('data-settings-item') ?? null).toBeNull();
+
+  const advisorToggle = advisorSection?.querySelector<HTMLElement>('[data-settings-item="omp.advisor.enabled"]');
+  if (!advisorToggle) throw new Error('advisor.enabled toggle missing');
+  await act(async () => { advisorToggle.click(); });
+  await settle();
+
+  expect(advisorEnabled).toBe(true);
+  expect(advisorSection?.querySelector('[data-settings-item="omp.tier.advisor"]')?.getAttribute('data-settings-item')).toBe('omp.tier.advisor');
 });

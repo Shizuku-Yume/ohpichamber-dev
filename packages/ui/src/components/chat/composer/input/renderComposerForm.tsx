@@ -54,6 +54,7 @@ import { PromptHistorySearchPanel } from '../../composer/ui/PromptHistorySearchP
 import { LargeTextPasteChoice } from '../../composer/ui/LargeTextPasteChoice';
 import { FormDock } from '@/components/chat/FormDock';
 import { PermissionDock } from '@/components/chat/PermissionDock';
+import { MessageSelectionBar } from '@/components/chat/messageSelection/MessageSelectionBar';
 import type { ChatInputProps } from './chatInputProps';
 import { renderDraftTitle } from './ComposerDraftTitle';
 import { MAX_MOBILE_COMPOSER_LINES, MAX_VISIBLE_COMPOSER_LINES, MOBILE_COMPOSER_BOUND_GAP_PX } from './composerInputLimits';
@@ -111,7 +112,7 @@ export function renderComposerForm({
 }: Dependencies) {
     const { setPromptHistorySearchForm, promptHistorySearch } = historySearchState;
     const { largeTextPasteGesture, largeTextPasteOffer } = largePasteState;
-    const { columnPinned } = column;
+    const { chatColumnSession, columnPinned } = column;
     const {
         openAutocomplete, autocompleteQuery, commandRef, skillRef, mentionRef, emojiRef,
         closeAutocomplete,
@@ -260,7 +261,14 @@ export function renderComposerForm({
                         isMobileExpanded && 'flex min-h-0 flex-1 flex-col',
                     )}
                 >
-                {mobileCommentActive && mobileComment.draft.status === 'open' ? (
+                {messageSelectionActive && currentSessionId ? (
+                    <MessageSelectionBar
+                        sessionId={currentSessionId}
+                        directory={chatColumnSession?.directory ?? currentSessionDirectoryForSync ?? currentDirectory ?? null}
+                        isMobile={isMobile}
+                        radius={chatInputRadius}
+                    />
+                ) : mobileCommentActive && mobileComment.draft.status === 'open' ? (
                     <MobileCommentComposer
                         key={mobileComment.draft.generation}
                         draft={mobileComment.draft}

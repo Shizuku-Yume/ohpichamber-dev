@@ -38,6 +38,8 @@ test('falls back to the rendered message list when the timeline index misses', a
         holdViewportAnchor: () => undefined,
         isHistoryVirtualized: () => false,
         scrollToBottom: () => undefined,
+        resolveUiPageMessageId: (_messageId, partId) => partId,
+        scrollToUiPageRow: () => false,
     };
 
     const scrolled = await scrollToQuoteSource('parentless-reply', {

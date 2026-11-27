@@ -44,7 +44,7 @@ const loadDatabaseSync = () => {
 
 const metadataDatabasePath = (dataDir, nodePath = path) => nodePath.join(dataDir, 'host-metadata.sqlite');
 
-export const CURRENT_HOST_METADATA_VERSION = 8;
+export const CURRENT_HOST_METADATA_VERSION = 9;
 
 const HOST_METADATA_MIGRATIONS = [
   // Migration 1: baseline Host metadata tables and prompt queue tables
@@ -191,6 +191,9 @@ const HOST_METADATA_MIGRATIONS = [
   },
   (db) => {
     db.exec('ALTER TABLE host_worktree_archives ADD COLUMN restore_cas_started INTEGER NOT NULL DEFAULT 0 CHECK (restore_cas_started IN (0, 1))');
+  },
+  (db) => {
+    db.exec('ALTER TABLE host_direct_command ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0');
   },
 ];
 

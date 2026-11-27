@@ -3,9 +3,8 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { TurnDiffSchema, type TurnDiff, AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionCacheWarmingUpdateRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptReceiptResultSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionCacheWarmingUpdateRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema, TurnDiffSchema, type TurnDiff } from '@openchamber/agent-contract';
 import type {
   SessionControlAck,
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest,
@@ -13,7 +12,7 @@ import type {
   MCPConfigurationState, MCPConnectionTestResult, MCPWorkspaceReconnectResult, MCPSecretWriteResult,
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
-  QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
+  QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent, PromptReceiptResult,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, ShellStreamResponse, ShellStdinResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderAccountSelection, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderModelEnrichResult, ProviderConfigurationRead,
   CacheWarmingState, CacheWarmingApplyResult, SessionCacheWarmingState, SessionCacheWarmingApplyResult, OmpSettingsState,
@@ -28,6 +27,7 @@ import type {
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
+import { RequestError, readBody, identity } from './service-http.ts';
 import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventory, type NativeEntryResult, type SessionForkResult, type SessionList } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
@@ -75,9 +75,6 @@ const HostSkillFilesApplySchema = z.strictObject({ scope: z.enum(['workspace', '
 const HostSkillSourceReconcileSchema = z.strictObject({ agentDirectoryId: EntityIdSchema });
 const WorktreeLeaseRequestSchema = z.strictObject({ leaseId: z.string().min(1), directory: z.string().min(1) });
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
-class RequestError extends Error {
-  constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
-}
 const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: true, followUpQueue: true, subagents: true, attachments: true, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
 type ServiceHealthObservation = Pick<AgentServiceReady, 'engine' | 'version'> & { status: 'ready' | 'starting' };
 type ServiceResponse =
@@ -89,8 +86,8 @@ type ServiceResponse =
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
   | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult | Subagent[]
   | NativeArchiveInventory | NativeArchiveImported
-  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run } | SessionControlAck
-  | SteerAck | FollowUpAck
+  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run; runCreatedAt?: number } | SessionControlAck
+  | SteerAck | FollowUpAck | PromptReceiptResult
   | SessionBranchResult
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
   | MCPConfigurationState | MCPConnectionTestResult | MCPWorkspaceReconnectResult | MCPSecretWriteResult
@@ -129,23 +126,6 @@ function respondProblem(response: ServerResponse, status: number, code: ProblemC
   });
   response.writeHead(status, { 'Content-Type': 'application/problem+json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(problem));
-}
-async function readBody<T>(request: IncomingMessage, schema: z.ZodType<T>): Promise<T> {
-  const decoder = new StringDecoder('utf8');
-  let bytes = 0;
-  let text = '';
-  for await (const chunk of request) {
-    bytes += chunk.length;
-    if (bytes > 1_048_576) throw new RequestError(413, 'PAYLOAD_TOO_LARGE', 'Request exceeds the service limit');
-    text += decoder.write(chunk);
-  }
-  text += decoder.end();
-  try { return schema.parse(JSON.parse(text)); }
-  catch { throw new RequestError(400, 'INVALID_REQUEST', 'Request body is invalid'); }
-}
-function identity(value: string): string {
-  try { return EntityIdSchema.parse(decodeURIComponent(value)); }
-  catch { throw new RequestError(400, 'INVALID_REQUEST', 'Route identity is invalid'); }
 }
 
 export class AgentService {
@@ -219,6 +199,7 @@ export class AgentService {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
         const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'persist', request, configuration } });
         if (result.type !== 'mcp' || result.result.type !== 'persisted' || result.result.configuration.persistedRevision !== configuration.persistedRevision) throw new WorkerOperationError(503, 'MCP_CONFIG_WRITE_FAILED', 'The persisted MCP configuration revision did not match the request');
+        return result.result.needsCredentialReentry === undefined ? undefined : { needsCredentialReentry: result.result.needsCredentialReentry };
       },
       probeMcp: async (workspaceId, serverId, configuration) => {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
@@ -676,11 +657,13 @@ export class AgentService {
       const privateRun = /^\/internal\/sessions\/([^/]+)\/runs$/.exec(url.pathname);
       if (privateRun && request.method === 'POST') {
         const operation = await readBody(request, WorkerOperationSchema.options[0]);
-        respondJson(response, 202, { run: await this.sessions.prompt(identity(privateRun[1]), operation) }); return;
+        const runCreatedAt = Date.now();
+        const run = await this.sessions.prompt(identity(privateRun[1]), operation);
+        respondJson(response, 202, { run, runCreatedAt }); return;
       }
       const streamingPrompt = /^\/internal\/sessions\/([^/]+)\/(steer|follow-up)$/.exec(url.pathname);
       if (streamingPrompt && request.method === 'POST') {
-        const input = await readBody(request, HostStreamingPromptRequestSchema);
+        const input = await readBody(request, HostStreamingPromptRequestSchema.extend({ correlationId: EntityIdSchema.optional() }));
         const operation = streamingPrompt[2] === 'steer' ? { type: 'steer' as const, ...input } : { type: 'follow-up' as const, ...input };
         respondJson(response, 202, await this.sessions.streamingPrompt(identity(streamingPrompt[1]), operation)); return;
       }
@@ -697,6 +680,16 @@ export class AgentService {
       if (questionRespond && request.method === 'POST') {
         const sessionId = identity(questionRespond[1]);
         respondJson(response, 200, await this.sessions.resolveQuestion(sessionId, identity(questionRespond[2]), await readBody(request, QuestionReplySchema))); return;
+      }
+      const promptReceipts = /^\/api\/agent\/v1\/sessions\/([^/]+)\/prompt-receipts\/([^/]+)$/.exec(url.pathname);
+      if (promptReceipts && request.method === 'GET') {
+        const sessionId = identity(promptReceipts[1]);
+        const correlationId = identity(promptReceipts[2]);
+        const receipt = this.sessions.promptReceipt(sessionId, correlationId);
+        if (receipt === null) respondJson(response, 200, PromptReceiptResultSchema.parse({ status: 'unknown', correlationId, sessionId }));
+        else if (receipt.outcome === 'accepted') respondJson(response, 200, PromptReceiptResultSchema.parse({ status: 'accepted', receipt }));
+        else respondJson(response, 200, PromptReceiptResultSchema.parse({ status: 'rejected', receipt }));
+        return;
       }
       // The Host pushes a mode change here so a switch reaches approvals already waiting.
       const privatePermissionMode = /^\/internal\/sessions\/([^/]+)\/permission-mode$/.exec(url.pathname);

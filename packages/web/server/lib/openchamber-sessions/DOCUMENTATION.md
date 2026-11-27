@@ -30,6 +30,30 @@ checkout creation, bootstrap and removal.
   execution, checks session write authority and participates in the shared
   Host lifecycle.
 
+## Admission and liveness lifecycle
+
+- Session-scoped operations always resolve through the workspace-admitting
+  scope resolver, including roots this process confirmed live. The supervisor's
+  workspace scope capture is era-scoped to the service child and dies with it;
+  re-admission is what re-captures it, so no in-memory liveness confirmation
+  may bypass admission. A post-restart cold retry depends on this: the reopen's
+  service-side skill-source reconcile authorizes against the captured scope.
+- A verified refusal — a well-formed Agent Service problem document — completes
+  a `reopen` admission at any status, because reopen is idempotent worker
+  restoration and the refusal proves the service decided the outcome; the
+  caller keeps the verified refusal itself. `create` and `fork` admissions are
+  not idempotent, so a 5xx cannot prove non-commit for them: those still strand
+  as uncertain and settle through the workspace-listing recovery.
+- Stranded `create` and `reopen` admissions share one recovery path: the
+  service's complete workspace listing settles the row. A reopen creates no
+  native state, so a listed root settles it exactly like a create, and an
+  absent root can never be restored.
+- A direct-command delivery claim (`host_direct_command`) is released only on a
+  verified refusal — a well-formed Agent Service problem document proving
+  admission never accepted the command. Transport loss and uncertain failures
+  leave the row pending as `COMMAND_IN_FLIGHT`; an accepted row is never
+  released.
+
 ## Domain boundaries
 
 - Prepared sessions remain speculative until create claims them or an authorized

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -245,21 +246,23 @@ describe('canonical session route contracts', () => {
     registerCanonicalSessionRoutes(router, sessionService);
     app.use('/api/agent/v1/sessions', router);
     const prompt = { input: { text: 'Warm prompt', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
-    // A cold root reopens before its first dispatch.
-    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    // A cold root reopens before its first dispatch. Each logical send keys its
+    // own idempotency claim, so the verified cold refusal's retry exercises the
+    // claim path end to end: same body, same key, one admitted run.
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
     expect(runs).toBe(1);
     // The supervisor evicted the worker after this root was confirmed live: the
     // cached dispatch is refused cold, reopens once, and runs on the retry.
     calls.length = 0;
     live = false;
-    const response = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    const response = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
     expect(response.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
     expect(runs).toBe(3);
     expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(1);
     expect(calls.filter(path => path.endsWith('/runs'))).toHaveLength(2);
     // The third prompt rides the confirmed live worker: no reopen, no retry.
     calls.length = 0;
-    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
     expect(runs).toBe(4);
     expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(0);
     expect(calls.filter(path => path.endsWith('/runs'))).toHaveLength(1);
@@ -315,6 +318,239 @@ describe('canonical session route contracts', () => {
       expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(1);
       expect(calls.filter(path => path.endsWith('/runs'))).toHaveLength(1);
     }
+  });
+
+  it('releases the command claim on a verified refusal so the same key admits again, but transport loss keeps it pending', async () => {
+    const pendingFor = (commandId) => {
+      const db = new DatabaseSync(routeFixture.databasePath);
+      try { return db.prepare("SELECT COUNT(*) AS count FROM host_direct_command WHERE command_id = ? AND state = 'pending'").get(commandId).count; } finally { db.close(); }
+    };
+    const runtime = id => ({
+      sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+    });
+    let mode = 'refuse';
+    const service = {
+      request: async (pathname, init = {}) => {
+        if (pathname.endsWith('/reopen')) return Response.json(runtime('ses_admitted'));
+        if (pathname.endsWith('/runs')) {
+          if (mode === 'refuse') return Response.json({ type: 'urn:ohpichamber:problem:RUN_ACTIVE', title: 'Run active', status: 409, code: 'RUN_ACTIVE', detail: 'A run is already active in this session', retryable: false }, { status: 409 });
+          if (mode === 'loss') throw new Error('native disconnected');
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { runId: body.runId, sessionId: 'ses_admitted', status: 'running', origin: 'host', createdAt: 1 } });
+        }
+        throw new Error(`Unexpected service request ${pathname}`);
+      }
+    };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Refused prompt', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+
+    const verifiedKey = crypto.randomUUID();
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', verifiedKey).send(prompt).expect(409);
+    expect(pendingFor(verifiedKey)).toBe(0);
+    mode = 'accept';
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', verifiedKey).send(prompt).expect(200);
+
+    const lostKey = crypto.randomUUID();
+    mode = 'loss';
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', lostKey).send(prompt).expect(409);
+    expect(pendingFor(lostKey)).toBe(1);
+    mode = 'accept';
+    const conflict = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', lostKey).send(prompt);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.code).toBe('COMMAND_IN_FLIGHT');
+    expect(pendingFor(lostKey)).toBe(1);
+  });
+
+
+  it('re-admits the workspace through the scope owner even for a root confirmed live', async () => {
+    const admissions = [];
+    const scopeResolvers = { host: 0, admitting: 0 };
+    const runtime = id => ({
+      sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+    });
+    const service = {
+      request: async (pathname, init = {}) => {
+        const id = decodeURIComponent(pathname.split('/').at(-2));
+        if (pathname.endsWith('/reopen')) return Response.json(runtime(id));
+        if (pathname.endsWith('/runs')) {
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+        }
+        throw new Error(`Unexpected service request ${pathname}`);
+      }
+    };
+    const base = validScope('ses_admitted');
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => { scopeResolvers.admitting += 1; return validScope(id); },
+      resolveHostSessionScope: async id => { scopeResolvers.host += 1; return id === 'ses_admitted' ? validScope(id) : null; },
+      resolveHostRelocationScope: async id => validScope(id),
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Admission scope prompt', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
+    const afterFirst = { ...scopeResolvers };
+    expect(afterFirst.admitting).toBeGreaterThan(0);
+    // The root is now confirmed live. A second send must STILL resolve its scope
+    // through the workspace-admitting resolver: the admission is what re-captures
+    // the Host scope in the supervisor after a service restart, so skipping it
+    // for a remembered-live root strands the reopen's skill-source reconcile.
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
+    expect(scopeResolvers.admitting).toBeGreaterThan(afterFirst.admitting);
+    expect(base.workspaceId).toBe('ws_1');
+  });
+
+  it('surfaces a verified 5xx reopen refusal as itself and never strands the workspace admission', async () => {
+    let workerLive = true;
+    let reopenFails = false;
+    const runtime = id => ({
+      sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+    });
+    const problem = (code, status, detail) => Response.json({ type: `urn:ohpichamber:problem:${code}`, title: 'Refused', status, code, detail, retryable: true }, { status });
+    const service = {
+      request: async (pathname, init = {}) => {
+        const id = decodeURIComponent(pathname.split('/').at(-2));
+        if (pathname.endsWith('/reopen')) {
+          if (reopenFails) return problem('SERVICE_UNAVAILABLE', 503, 'The Host skill source operation failed');
+          workerLive = true;
+          return Response.json(runtime(id));
+        }
+        if (pathname.endsWith('/runs')) {
+          if (!workerLive) return problem('SESSION_RESTORE_FAILED', 503, 'The session is unloaded and has no opened projection');
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+        }
+        if (pathname.includes('/api/agent/v1/sessions?')) return Response.json({ items: [], errors: [] });
+        throw new Error(`Unexpected service request ${pathname}`);
+      }
+    };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Restart prompt', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    // Warm the root live, then simulate the service restart: the worker is gone
+    // and the reopen is refused with a verified 503 (the skill-source capture
+    // died with the service child, exactly the release-hardening repro).
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
+    workerLive = false;
+    reopenFails = true;
+    const refused = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt);
+    // The verified refusal must surface as itself — never as a fabricated
+    // "acceptance uncertain" 409 that bricks the workspace behind a stranded row.
+    expect(refused.status).toBe(503);
+    expect(refused.body.code).toBe('SERVICE_UNAVAILABLE');
+    expect(refused.body.detail).toBe('The Host skill source operation failed');
+    // The workspace is not bricked: once the reopen can succeed again, a fresh
+    // send is admitted without any manual admission-row recovery.
+    reopenFails = false;
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
+  });
+
+  it('recovers a stranded reopen admission through the workspace listing instead of bricking', async () => {
+    // A reopen row written by a Host process that died before settling it: no
+    // live owner, never answered. The next admission in the workspace must
+    // recover it — a reopen is idempotent worker restoration, so the native
+    // listing settles the row exactly like a stranded create.
+    const orphanId = crypto.randomUUID();
+    const db = new DatabaseSync(path.join(routeFixtureDataDir, 'host-metadata.sqlite'));
+    db.prepare('INSERT INTO host_session_admissions (admission_id, workspace_id, operation, root_session_id) VALUES (?, ?, ?, ?)')
+      .run(crypto.randomUUID(), 'ws_1', 'reopen', orphanId);
+    db.close();
+    let workerLive = false;
+    const runtime = id => ({
+      sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+    });
+    const service = {
+      request: async (pathname, init = {}) => {
+        const id = decodeURIComponent(pathname.split('/').at(-2));
+        if (pathname.endsWith('/reopen')) { workerLive = true; return Response.json(runtime(id)); }
+        if (pathname.endsWith('/runs')) {
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+        }
+        if (pathname.startsWith('/api/agent/v1/sessions?') || pathname.startsWith('/api/agent/v1/sessions?workspaceId')) {
+          return Response.json({ items: [], errors: [] });
+        }
+        throw new Error(`Unexpected service request ${pathname}`);
+      }
+    };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Recovery prompt', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').set('Idempotency-Key', crypto.randomUUID()).send(prompt).expect(200);
+    await expect(routeFixture.agentScopeStore.listPriorSessionAdmissions('ws_1')).resolves.toEqual([]);
   });
 
   it('enforces Host admission invariant: rejects cold send when agentScopeStore is missing instead of bypassing admission', async () => {
@@ -921,6 +1157,167 @@ describe('canonical session route contracts', () => {
         .expect(400);
     });
   });
+
+  it('proxies prompt receipt queries with scope re-validation and no reopen', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-receipt-read-'));
+    const state = createHostSessionState({ dataDir });
+    const calls = [];
+    try {
+      await state.initialize();
+      const { createOpenChamberSessionService } = await import('./routes.js');
+      const correlationId = 'c9a3e264-9721-4f9e-a81d-8f2e604f3219';
+      const accepted = {
+        status: 'accepted',
+        receipt: {
+          outcome: 'accepted', correlationId, sessionId: 'session', operation: 'send', runId: 'run-1',
+          acceptedAt: 10, expiresAt: 10 + 24 * 60 * 60 * 1000,
+        },
+      };
+      const service = createOpenChamberSessionService({
+        service: {
+          request: async (pathname) => {
+            calls.push(pathname);
+            return Response.json(accepted);
+          }
+        },
+        resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
+        resolveSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
+        resolveHostSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
+        sessionMetadataStore: state.sessionMetadataStore,
+        archiveStore: state.archiveStore,
+        directCommandAdmissionStore: state.directCommandAdmissionStore,
+      });
+      const result = await service.promptReceipt('session', correlationId);
+      expect(result).toEqual(accepted);
+      expect(calls).toEqual([`/api/agent/v1/sessions/session/prompt-receipts/${correlationId}`]);
+      expect(calls.some(path => path.endsWith('/reopen'))).toBe(false);
+    } finally {
+      await state.close();
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('answers 200 with the three receipt shapes over the canonical route and rejects echo mismatches', async () => {
+    const correlationId = 'c9a3e264-9721-4f9e-a81d-8f2e604f3219';
+    const receiptOutcomes = {
+      accepted: {
+        status: 'accepted',
+        receipt: {
+          outcome: 'accepted', correlationId, sessionId: 'ses_admitted', operation: 'send', runId: 'run-1',
+          acceptedAt: 10, expiresAt: 10 + 24 * 60 * 60 * 1000,
+        },
+      },
+      rejected: {
+        status: 'rejected',
+        receipt: {
+          outcome: 'rejected', correlationId, sessionId: 'ses_admitted', operation: 'followUp', code: 'RUN_ACTIVE',
+          detail: 'A run is already active in this session', rejectedAt: 12, expiresAt: 12 + 24 * 60 * 60 * 1000,
+        },
+      },
+      unknown: { status: 'unknown', correlationId, sessionId: 'ses_admitted' },
+    };
+    for (const receiptOutcome of Object.values(receiptOutcomes)) {
+      let payload = receiptOutcome;
+      const service = {
+        request: async () => Response.json(payload),
+      };
+      const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+      const sessionService = createOpenChamberSessionService({
+        agentScopeStore: routeFixture.agentScopeStore,
+        service,
+        resolveWorkspaceScope: async () => validScope('workspace'),
+        resolveSessionScope: async id => validScope(id),
+        resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
+        directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+        archiveStore: createMemoryArchiveStore(),
+        sessionMetadataStore: createMemorySessionMetadataStore(),
+      });
+      const app = express();
+      const router = express.Router();
+      registerCanonicalSessionRoutes(router, sessionService);
+      app.use('/api/agent/v1/sessions', router);
+      const response = await request(app).get(`/api/agent/v1/sessions/ses_admitted/prompt-receipts/${correlationId}`).expect(200);
+      expect(response.body).toEqual(receiptOutcome);
+
+      // An echo naming another session or another correlation id is a 502,
+      // never a successful empty or foreign answer.
+      payload = receiptOutcome.status === 'unknown'
+        ? { ...receiptOutcome, sessionId: 'ses_other' }
+        : { ...receiptOutcome, receipt: { ...receiptOutcome.receipt, correlationId: 'corr_other' } };
+      await request(app).get(`/api/agent/v1/sessions/ses_admitted/prompt-receipts/${correlationId}`).expect(502);
+
+      // A malformed service answer is failure, not a guessed unknown.
+      payload = { status: 'pending', correlationId, sessionId: 'ses_admitted' };
+      await request(app).get(`/api/agent/v1/sessions/ses_admitted/prompt-receipts/${correlationId}`).expect(500);
+    }
+  });
+
+  it('forwards the idempotency key as the receipt correlation id on the internal dispatch', async () => {
+    const correlationId = 'c9a3e264-9721-4f9e-a81d-8f2e604f3219';
+    for (const [operation, route] of [['send', 'runs'], ['steer', 'steer'], ['followUp', 'follow-up']]) {
+      const dispatched = [];
+      const live = operation !== 'send';
+      const runtime = id => ({
+        sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+        createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+      });
+      const service = {
+        request: async (pathname, init = {}) => {
+          const id = decodeURIComponent(pathname.split('/').at(-2));
+          if (pathname.endsWith('/reopen')) return Response.json(runtime(id));
+          if (pathname.endsWith(`/${route}`)) {
+            dispatched.push({ pathname, body: JSON.parse(init.body) });
+            if (operation === 'send') return Response.json({ run: { runId: init.body ? JSON.parse(init.body).runId : 'run', sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+            if (operation === 'steer') return Response.json({ sessionId: id, runId: 'run-live', acceptedAt: 2 });
+            return Response.json({ sessionId: id, followUpId: 'follow-1', acceptedAt: 2 });
+          }
+          throw new Error(`Unexpected service request ${pathname}`);
+        }
+      };
+      const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+      const sessionService = createOpenChamberSessionService({
+        agentScopeStore: routeFixture.agentScopeStore,
+        service,
+        resolveWorkspaceScope: async () => validScope('workspace'),
+        resolveSessionScope: async id => validScope(id),
+        resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
+        directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+        archiveStore: createMemoryArchiveStore(),
+        sessionMetadataStore: createMemorySessionMetadataStore(),
+      });
+      const app = express();
+      const router = express.Router();
+      registerCanonicalSessionRoutes(router, sessionService);
+      app.use('/api/agent/v1/sessions', router);
+      const prompt = {
+        input: { text: 'Keyed prompt', attachments: [], context: [] },
+        options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+      };
+      const payload = operation === 'send' ? prompt : { sessionId: 'ses_admitted', request: prompt };
+      await request(app).post(`/api/agent/v1/sessions/ses_admitted/${route}`)
+        .set('Idempotency-Key', `${correlationId}-${operation}`)
+        .send(payload)
+        .expect(200);
+      expect(dispatched).toHaveLength(1);
+      expect(dispatched[0].body.correlationId).toBe(`${correlationId}-${operation}`);
+    }
+  });
+
 });
 
 describe('canonical session list persistence', () => {
@@ -1432,7 +1829,7 @@ describe('speculative session preparation', () => {
     return { app, sessionService };
   };
 
-  const setupPreparedSession = async ({ waitForPrepare = true, onReopen = async () => {}, onRun = async () => {}, onDelete = async () => {} } = {}) => {
+  const setupPreparedSession = async ({ waitForPrepare = true, onReopen = async () => { }, onRun = async () => { }, onDelete = async () => { } } = {}) => {
     const ws = await createTestWorkspace();
     const deleted = [];
     let runtime;
@@ -1730,14 +2127,16 @@ describe('speculative session preparation', () => {
     const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
     const sessionService = createOpenChamberSessionService({
       agentScopeStore: prepState.agentScopeStore,
-      service: { request: async (pathname, init) => {
-        if (pathname === '/internal/sessions' && init.method === 'POST') {
-          createdCount += 1;
-          const body = JSON.parse(init.body);
-          return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      service: {
+        request: async (pathname, init) => {
+          if (pathname === '/internal/sessions' && init.method === 'POST') {
+            createdCount += 1;
+            const body = JSON.parse(init.body);
+            return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+          }
+          return Response.json({});
         }
-        return Response.json({});
-      } },
+      },
       resolveWorkspaceScope: async (id) => {
         scopeResolves += 1;
         if (scopeResolves === 1) await new Promise(resolve => setTimeout(resolve, 150));

@@ -51,15 +51,16 @@ claim that the carried-over bodies have been type-verified.
 - **Solution:** convert the retained modules by owner with real types and existing runtime tests, removing each path from the explicit list. Preserve the isolated-space release exclusion and Canonical/Host boundaries.
 - **Cost:** a separate server migration rather than mechanical renames or broad guard exemptions.
 
-## Interrupted sends lack durable Canonical receipts
+## Security docs enterprise mode still mentions update checks
 
-- **Where:** Canonical prompt submission and `packages/ui/src/sync/send-failure-classification.ts`.
-- **Added:** 2026-11-20
+- **Where:** `packages/docs/content/docs/security.mdx:157` (and localized `packages/docs/content/docs/*/security.mdx`)
+- **Added:** 2026-11-18
+- **Effort:** rebrand
 - **Priority:** worth-doing
-- **Problem:** losing the response does not prove whether a prompt was accepted; there is no durable receipt query keyed by the caller's correlation/idempotency ID.
-- **Impact:** an unconfirmed send must remain pending. Automatically restoring its draft can duplicate an accepted turn.
-- **Solution:** persist Canonical interrupted-send receipts keyed by caller correlation/idempotency ID and expose authoritative reconciliation. Keep unconfirmed sends pending without auto-restore until then.
-- **Cost:** Agent Contract, service persistence, retry semantics and UI reconciliation tests.
+- **Problem:** the enterprise mode section still states that "Update checks keep running, so security fixes still reach you, but they never report usage, not even the anonymous install ID", even though Phase A removed the CLI/host update check and telemetry reporting (`rebrand/03`, `rebrand/05`).
+- **Impact:** readers configuring enterprise mode are told update checks run when the fork has removed that check.
+- **Solution:** update or remove that bullet in `packages/docs/content/docs/security.mdx` and its localized translations.
+- **Cost:** small docs-only edit across the security MDX files.
 
 ## Chat transcript still renders through ChatContainer instead of upstream ChatViewport
 

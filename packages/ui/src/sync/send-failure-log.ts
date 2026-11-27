@@ -29,3 +29,13 @@ export function recordSendFailure(record: Omit<SendFailureRecord, 'at' | 'reason
 export function getRecentSendFailures(): SendFailureRecord[] {
   return [...records].reverse()
 }
+
+export function markSendConfirmation(messageId: string): void {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index]
+    if (record?.messageId === messageId && !record.confirmationChecked) {
+      record.confirmationChecked = true
+      return
+    }
+  }
+}

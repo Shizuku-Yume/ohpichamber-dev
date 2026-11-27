@@ -2,7 +2,7 @@ import React from 'react';
 import { AnimatePresence } from 'motion/react';
 import { ComposerFloatingPanel } from '../composer/ui/ComposerFloatingPanel';
 import { useI18n } from '@/lib/i18n';
-import { canonicalClient } from '@/api/canonicalClient';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
@@ -68,16 +68,15 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
                 options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
             };
             try {
-                await canonicalClient.steer(parentSessionId, requestPayload);
+                await canonicalClient.steer(parentSessionId, requestPayload, globalThis.crypto.randomUUID());
             } catch (err: unknown) {
-                const isObject = typeof err === 'object' && err !== null;
-                const code = isObject && 'code' in err ? (err as Record<string, unknown>).code : undefined;
-                const status = isObject && 'status' in err ? (err as Record<string, unknown>).status : undefined;
-                const isRunNotActive = code === 'RUN_NOT_ACTIVE'
-                    || status === 404
+                const refusalCode = err instanceof CanonicalApiError ? err.problem.code : undefined;
+                const refusalStatus = err instanceof CanonicalApiError ? err.problem.status : undefined;
+                const isRunNotActive = refusalCode === 'RUN_NOT_FOUND'
+                    || refusalStatus === 404
                     || (err instanceof Error && (err.message.includes('RUN_NOT_ACTIVE') || err.message.includes('No active run') || err.message.includes('Run not found')));
                 if (isRunNotActive) {
-                    await canonicalClient.createRun(parentSessionId, requestPayload);
+                    await canonicalClient.createRun(parentSessionId, requestPayload, globalThis.crypto.randomUUID());
                 } else {
                     throw err;
                 }

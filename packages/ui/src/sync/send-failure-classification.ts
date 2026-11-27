@@ -1,8 +1,10 @@
+import { CanonicalApiError } from "@/api/canonicalClient"
 
 import { isAmbiguousTransportFailure, isDefiniteTransportFailure } from "@/lib/relay/transport-error"
 
 export function getErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== "object") return null
+  if (error instanceof CanonicalApiError) return error.problem.status
   // SAFETY: `error` is a non-null object here; both probes read optional
   // properties an SDK/fetch rejection may carry and validate them below.
   const direct = (error as { status?: unknown }).status
@@ -13,6 +15,10 @@ export function getErrorStatus(error: unknown): number | null {
 }
 
 export function isAmbiguousSendFailure(error: unknown): boolean {
+  if (error instanceof CanonicalApiError) {
+    if (error.problem.code === "COMMAND_IN_FLIGHT" || error.problem.retryable) return true
+    return false
+  }
   if (error instanceof Error && isDefiniteTransportFailure(error)) return false
   if (isAmbiguousTransportFailure(error)) return true
 

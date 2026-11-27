@@ -123,7 +123,7 @@ describe('restored transcript composition', () => {
             window: win, document: win.document, navigator: win.navigator, localStorage: win.localStorage,
             customElements: win.customElements, Window: win.Window, Event: win.Event, CustomEvent: win.CustomEvent,
             Node: win.Node, NodeList: win.NodeList, Element: win.Element, HTMLElement: win.HTMLElement, SVGElement: win.SVGElement,
-            HTMLAnchorElement: win.HTMLAnchorElement, DOMParser: win.DOMParser, DOMRect: win.DOMRect,
+            HTMLAnchorElement: win.HTMLAnchorElement, CSSRule: win.CSSRule, DOMParser: win.DOMParser, DOMRect: win.DOMRect,
             MutationObserver: win.MutationObserver, ResizeObserver: win.ResizeObserver,
             IntersectionObserver: win.IntersectionObserver,
             requestAnimationFrame: win.requestAnimationFrame.bind(win), cancelAnimationFrame: win.cancelAnimationFrame.bind(win),
@@ -174,8 +174,14 @@ describe('restored transcript composition', () => {
         expect(bubble?.textContent).toContain('Restore this layout');
         expect(container.querySelector('.group\\/user-shell')).not.toBeNull();
         expect(container.querySelector('button[aria-label="Copy message text"]')).not.toBeNull();
-        expect(container.querySelector('button[aria-label="Fork from this message"]')).not.toBeNull();
         expect(container.querySelector('button[aria-label="Revert to this message"]')).not.toBeNull();
+        const moreActions = container.querySelector<HTMLButtonElement>('button[aria-label="More actions"]');
+        expect(moreActions).not.toBeNull();
+        await act(async () => {
+            moreActions?.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: false }));
+            moreActions?.click();
+        });
+        expect(document.body.textContent).toContain('Fork from here');
     });
 
     test('dispatches tool parts to the rich tool row, not a JSON details block', async () => {
@@ -205,39 +211,48 @@ describe('restored transcript composition', () => {
     });
 
     test('groups a turn and collapses its activity until the live header is opened', async () => {
-        const { TurnBlock } = await import('../MessageList');
+        const { TurnRow } = await import('../timeline/TurnRow');
+        const { buildTimelineRows } = await import('../lib/turns/timelineRows');
         const turn = projectTurnRecords([userMessage, progressMessage, finalMessage], {
             showTextJustificationActivity: false,
             showTurnChangedFiles: true,
         }).turns[0];
+        const entry = { kind: 'turn' as const, key: `turn:${turn.turnId}`, turn, isLastTurn: true };
 
         function Harness() {
-            const [turnUiStates, setTurnUiStates] = React.useState<Map<string, { isExpanded: boolean; isLiveExpanded?: boolean }>>(
-                () => new Map<string, { isExpanded: boolean; isLiveExpanded?: boolean }>([[turn.turnId, { isExpanded: false }]]),
-            );
-            const onToggleTurnGroup = React.useCallback((turnId: string, mode?: 'sorted' | 'live') => {
-                setTurnUiStates((previous) => {
+            const [turnExpansion, setTurnExpansion] = React.useState<Map<string, boolean>>(() => new Map());
+            const onToggleTurnActivity = React.useCallback((turnId: string) => {
+                setTurnExpansion((previous) => {
                     const next = new Map(previous);
-                    const current = next.get(turnId) ?? { isExpanded: false };
-                    next.set(turnId, mode === 'live'
-                        ? { ...current, isLiveExpanded: !current.isLiveExpanded }
-                        : { ...current, isExpanded: !current.isExpanded });
+                    next.set(turnId, previous.get(turnId) !== true);
                     return next;
                 });
             }, []);
+            const rows = buildTimelineRows([entry], {
+                collapsedActivity: true,
+                keepActivityText: false,
+                expandedTurns: turnExpansion,
+                showReasoningTraces: true,
+            }, []);
             return (
-                <TurnBlock
-                    turn={turn}
-                    isLastTurn
-                    sessionIsWorking
-                    defaultActivityExpanded={false}
-                    turnUiStates={turnUiStates}
-                    onToggleTurnGroup={onToggleTurnGroup}
-                    chatRenderMode="live"
-                    stickyUserHeader
-                    shouldAnimateUserMessage={() => false}
-                    onUserAnimationConsumed={() => undefined}
-                />
+                <>
+                    {rows.map((row) => (
+                        row.kind === 'ungrouped' ? null : (
+                            <TurnRow
+                                key={row.key}
+                                row={row}
+                                entry={entry}
+                                sessionIsWorking
+                                turnExpansion={turnExpansion}
+                                onToggleTurnActivity={onToggleTurnActivity}
+                                shouldAnimateUserMessage={() => false}
+                                onUserAnimationConsumed={() => undefined}
+                                chatRenderMode="live"
+                                defaultActivityExpanded={false}
+                            />
+                        )
+                    ))}
+                </>
             );
         }
 

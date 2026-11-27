@@ -1,37 +1,47 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { toast } from '@/components/ui';
+import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import type { NotificationsAPI } from '@/lib/api/types';
+import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { handleUiNotificationEvent } from './surface-notifications';
 
-const notify = mock(async (_payload: unknown) => undefined);
-const showToast = mock((_title: string, _options?: unknown) => 'toast');
-let runtimeKey = 'local';
-let available = true;
+// Module mocks of @/lib/runtime-switch survive the file in the shared worker
+// process and break every other suite's runtime-switch staleness detection, so
+// this suite drives the real switch end to end.
+const notify = mock(async (_payload?: import('@/lib/api/types').NotificationPayload) => false);
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const registeredNotifications: NotificationsAPI = { notifyAgentCompletion: async () => false };
+const originalRuntimeKey = getRuntimeKey();
+const originalBase = getRuntimeApiBaseUrl();
 
-mock.module('@/components/ui', () => ({ toast: { info: showToast } }));
-mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
-mock.module('@/contexts/runtimeAPIRegistry', () => ({
-  getRegisteredRuntimeAPIs: () => available ? { notifications: { notifyAgentCompletion: notify } } : null,
-}));
-
-const { handleUiNotificationEvent } = await import('./surface-notifications');
+const useRuntime = (runtimeKey: string) => {
+  switchRuntimeEndpoint({ apiBaseUrl: `https://surface-${runtimeKey}.test`, runtimeKey });
+};
 
 beforeEach(() => {
-  runtimeKey = 'local';
-  available = true;
+  useRuntime('local');
   notify.mockReset();
-  notify.mockResolvedValue(undefined);
-  showToast.mockClear();
+  notify.mockResolvedValue(false);
+  registeredNotifications.notifyAgentCompletion = notify;
+  // SAFETY: the handler under test only reads `.notifications` off the registered
+  // runtime APIs; the remaining surface is never touched by this suite.
+  registerRuntimeAPIs({ notifications: registeredNotifications } as import('@/lib/api/types').RuntimeAPIs);
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
     value: { visibilityState: 'visible', hasFocus: () => true },
   });
 });
+
 afterEach(() => {
+  registerRuntimeAPIs(null);
   if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument);
   else Reflect.deleteProperty(globalThis, 'document');
+  switchRuntimeEndpoint({ apiBaseUrl: originalBase, runtimeKey: originalRuntimeKey });
 });
 
 describe('Host notification presentation', () => {
   test('uses the runtime notification capability and preserves the Host session scope', () => {
+    const showToast = spyOn(toast, 'info');
     handleUiNotificationEvent({ title: ' Done ', body: ' Finished ', kind: 'complete', sessionId: 'session-a', directory: '/repo', tag: 'done' });
     expect(notify).toHaveBeenCalledWith({
       title: 'Done', body: 'Finished', kind: 'complete', sessionId: 'session-a', directory: '/repo', tag: 'done',
@@ -41,6 +51,7 @@ describe('Host notification presentation', () => {
   });
 
   test('retains focused plugin toasts and leaves native notifications hidden-only', () => {
+    const showToast = spyOn(toast, 'info').mockReturnValue('toast');
     handleUiNotificationEvent({ kind: ' plugin ', title: ' Ready ', body: 'Done', showWhenFocused: true });
     expect(showToast).toHaveBeenCalledWith('Ready', { id: 'plugin|Ready|Done', description: 'Done' });
     expect(notify.mock.calls[0]?.[0]).toMatchObject({ kind: 'plugin', requireHidden: true });
@@ -58,14 +69,14 @@ describe('Host notification presentation', () => {
     handleUiNotificationEvent({ title: 'Done', desktopNotificationDelivered: true });
     handleUiNotificationEvent({ title: 'Done', desktopStdoutActive: true });
     expect(notify).not.toHaveBeenCalled();
-    runtimeKey = 'remote-host';
+    useRuntime('remote-host');
     handleUiNotificationEvent({ title: 'Done', desktopNotificationDelivered: true });
     expect(notify).toHaveBeenCalledTimes(1);
   });
 
   test('keeps toast-only answers and unsupported capabilities out of native delivery', () => {
     handleUiNotificationEvent({ kind: 'share-answer', title: 'Answered', toastOnly: true });
-    available = false;
+    registerRuntimeAPIs(null);
     expect(() => handleUiNotificationEvent({ title: 'Done' })).not.toThrow();
     expect(notify).not.toHaveBeenCalled();
   });
