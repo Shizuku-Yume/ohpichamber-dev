@@ -23,6 +23,7 @@ import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@open
 import { MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from '../worker/mcp/protocol.ts';
 import { mcpAuthRequired } from '../mcp-auth.ts';
 import { WorkerOperationError } from './workers.ts';
+import { aggregate, nextRevision, ownerIdentity, applyFailureCause } from './catalog-helpers.ts';
 import { PluginWorkerApplyOutcomeSchema, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
 import type { HostSkillSourceCommit } from './file-resources-host-protocol.ts';
 interface SkillSourcePublication { scope: 'workspace' | 'agent'; sourceRevision: string; expectedSourceRevision: string; agentDirectoryId?: string; }
@@ -50,7 +51,7 @@ export interface CatalogWorker {
 
 export interface CatalogCoordinatorOptions {
   readMcpConfiguration(workspaceId: string): Promise<MCPConfigurationState | null>;
-  commitMcp(workspaceId: string, request: MCPConfigureRequest, configuration: MCPConfigurationState): Promise<void>;
+  commitMcp(workspaceId: string, request: MCPConfigureRequest, configuration: MCPConfigurationState): Promise<{ needsCredentialReentry?: string[] } | void>;
   /** Stateless isolated handshake for one server; the only connectivity evidence without a live worker. */
   probeMcp(workspaceId: string, serverId: string, configuration: MCPConfigurationState): Promise<MCPConnectionTestResult>;
   /** Stateless isolated handshake per enabled server, naming the tools a saved profile may select. */
@@ -98,40 +99,6 @@ const AgentStateSchema = z.strictObject({ agentDirectoryId: EntityIdSchema, sour
 const StateSchema = z.strictObject({ workspaces: z.array(WorkspaceStateSchema), agents: z.array(AgentStateSchema) });
 type WorkspaceState = z.infer<typeof WorkspaceStateSchema>;
 type AgentState = z.infer<typeof AgentStateSchema>;
-
-function aggregate(outcomes: Array<{ outcome: string }>): 'applied' | 'partial' | 'failed' | 'no-active-workers' {
-  const applied = outcomes.some(item => item.outcome === 'applied');
-  const failed = outcomes.some(item => item.outcome === 'failed');
-  return applied ? (failed ? 'partial' : 'applied') : (failed ? 'failed' : 'no-active-workers');
-}
-
-function nextRevision(revision: string): string {
-  CounterSchema.parse(revision);
-  return (BigInt(revision) + 1n).toString();
-}
-
-function ownerIdentity(worker: CatalogWorker): ContractCatalogWorkerIdentity {
-  return {
-    rootSessionId: worker.identity.rootSessionId,
-    workspaceId: worker.identity.workspaceId,
-    workerGeneration: worker.identity.workerGeneration,
-  };
-}
-
-/** The cause a failed apply reported, so the reader sees why it failed instead of
- * only that it did. Workers answer first; with no live worker the stateless probe
- * already knows the server's own failure, and its detail is the same kind of
- * evidence a worker error carries. The full per-worker result stays in `details`. */
-function applyFailureCause(
-  result: { workers: Array<{ outcome: string; error?: { detail: string } }> },
-  fallback: string,
-  probedCause?: string,
-): string {
-  const causes = [...new Set(result.workers.flatMap(worker => worker.outcome === 'failed' && worker.error?.detail ? [worker.error.detail] : []))];
-  if (causes.length > 0) return causes.join('; ');
-  return probedCause ?? fallback;
-}
-
 
 function operationError(error: Error | undefined, fallbackCode: string, fallbackDetail: string): CatalogOperationError {
   if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {
@@ -467,8 +434,6 @@ export class CatalogCoordinator {
     return outcomes;
   }
 
-
-
   async configure(rootSessionId: string, request: MCPConfigureRequest): Promise<MCPApplyResult> {
     return this.serial(async () => {
       const worker = await this.resolveWorker(rootSessionId);
@@ -532,7 +497,8 @@ export class CatalogCoordinator {
     const current = owner.configuration;
     if (input.expectedPersistedRevision !== current.persistedRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP configuration revision does not match the expected persisted revision', { currentRevision: current.persistedRevision });
     const next: MCPConfigurationState = { workspaceId, persistedRevision: nextRevision(current.persistedRevision), config: MCPConfigSchema.parse(input.config) };
-    try { await this.options.commitMcp(workspaceId, input, next); }
+    let committed: string[] | undefined;
+    try { committed = (await this.options.commitMcp(workspaceId, input, next))?.needsCredentialReentry; }
     catch (error) {
       if (error instanceof WorkerOperationError) throw error;
       throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', 'The MCP configuration could not be committed to the workers', {});
@@ -540,7 +506,7 @@ export class CatalogCoordinator {
     owner.configuration = next;
     try { await this.persist(); }
     catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', 'The MCP configuration revision could not be persisted', {}); }
-    return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision }, true);
+    return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision }, true, committed);
   }
 
   reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest): Promise<MCPWorkspaceReconnectResult> {
@@ -574,7 +540,7 @@ export class CatalogCoordinator {
     });
   }
 
-  private async applyMcpNow(workspaceId: string, request: MCPApplyRequest, isConfigure = false): Promise<MCPApplyResult> {
+  private async applyMcpNow(workspaceId: string, request: MCPApplyRequest, isConfigure = false, needsCredentialReentry?: string[]): Promise<MCPApplyResult> {
     const input = MCPApplyRequestSchema.parse(request);
     const configuration = this.workspace(workspaceId).configuration;
     if (input.persistedRevision !== configuration.persistedRevision) {
@@ -596,7 +562,7 @@ export class CatalogCoordinator {
       const authNeeded = outcomes.some(o => o.outcome === 'failed' && mcpAuthRequired(o.error));
       outcome = authNeeded ? 'saved-needs-auth' : 'saved-not-connected';
     }
-    const result: MCPApplyResult = { kind: 'mcp' as const, status, outcome, configuration, workers: outcomes };
+    const result: MCPApplyResult = { kind: 'mcp' as const, status, outcome, configuration, workers: outcomes, needsCredentialReentry };
     if (!isConfigure && (result.status === 'partial' || result.status === 'failed')) {
       throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
     }
@@ -678,7 +644,6 @@ export class CatalogCoordinator {
       return parsed;
     });
   }
-
 
   async publishSources(workspaceId: string, input: SkillSourcePublication): Promise<SkillInstallResult> {
     return this.serial(() => this.publishSourcesNow(workspaceId, input));
@@ -968,7 +933,6 @@ export class CatalogCoordinator {
     this.skillSnapshots.set(worker.identity.rootSessionId, current);
     return current;
   }
-
 
   /** No live worker: the stateless probe of each enabled server classifies the saved
    * configuration honestly, and reports the server's own failure so the caller can

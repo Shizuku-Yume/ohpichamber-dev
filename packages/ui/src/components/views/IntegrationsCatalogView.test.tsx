@@ -717,20 +717,50 @@ test('the save after the env references reports its own handshake failure', asyn
   expect(errors).toEqual(['Could not install Grafana']);
 });
 
-/** The user-scope radio in the scope dialog, which env credentials forbid. */
+/** The user-scope radio in the scope dialog, offered for every entry. */
 const scopeRadios = () => [...browser.document.body.querySelectorAll('input[name="mcp-install-scope"]')];
 const userScopeRadio = () => scopeRadios().find((radio) => radio.getAttribute('value') === 'user');
 
-test('a filled env value makes the install project-scope only', async () => {
+test('a filled env value keeps the user scope offered and installs at user scope when chosen', async () => {
   useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
   useUIStore.setState({ settingsProjectPath: '/repo' });
+  const savedServers: MCPServerConfig[] = [];
+  useMcpConfigStore.setState({
+    createMcp: async (config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+    updateMcp: async (_serverId, config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+  });
   const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
   await clickButton('Install');
 
   expect(scopeRadios().map((radio) => radio.getAttribute('value'))).toEqual(['project', 'user']);
-  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
   expect(scopeRadios()[0]?.hasAttribute('checked')).toBe(true);
-  expect(body.textContent?.includes('Environment values are stored per project, so this server installs at project scope only.')).toBe(true);
+  expect(body.textContent?.includes('installs at project scope only')).toBe(false);
+
+  // Choosing User and confirming writes a user-scope server whose env values
+  // are still credential references.
+  const userRadio = userScopeRadio();
+  if (!(userRadio instanceof HTMLElement)) throw new Error('User scope radio missing');
+  await act(async () => userRadio.click());
+  const confirm = [...body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
+  if (!confirm) throw new Error('Scope dialog confirm missing');
+  await act(async () => confirm.click());
+  await settle();
+
+  expect(savedServers.at(-1)?.scope).toBe('user');
+  const transport = savedServers.at(-1)?.transport;
+  expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({ GRAFANA_URL: 'credential-grafana-1' });
+  expect(errors).toEqual([]);
 });
 
 test('an entry with every env value empty keeps both scopes', async () => {
@@ -746,9 +776,24 @@ test('an entry with every env value empty keeps both scopes', async () => {
   expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
 });
 
-test('a filled env value without a selected project blocks Install and says why', async () => {
-  useProjectsStore.setState({ projects: [], activeProjectId: null });
+test('a filled env value without a selected project can install at user scope', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: null });
   useUIStore.setState({ settingsProjectPath: null });
+  const savedServers: MCPServerConfig[] = [];
+  useMcpConfigStore.setState({
+    createMcp: async (config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+    updateMcp: async (_serverId, config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+  });
   await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
   const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'Grafana');
   if (!card) throw new Error('Grafana card missing');
@@ -758,10 +803,22 @@ test('a filled env value without a selected project blocks Install and says why'
   if (!urlField) throw new Error('GRAFANA_URL field missing');
   await setInputValue(urlField, 'https://grafana.example.invalid');
 
+  // With no project selected the dialog defaults to user scope, which is a
+  // valid target for environment credentials now.
   const install = [...browser.document.body.querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === 'Install');
   if (!install) throw new Error('Install button missing');
-  expect(install.disabled).toBe(true);
-  expect(browser.document.body.textContent?.includes('Environment values are stored per project, so this server installs at project scope only.')).toBe(true);
+  expect(install.disabled).toBe(false);
+  await act(async () => install.click());
+  expect(userScopeRadio()?.hasAttribute('checked')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+
+  const confirm = [...browser.document.body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
+  if (!confirm) throw new Error('Scope dialog confirm missing');
+  await act(async () => confirm.click());
+  await settle();
+
+  expect(savedServers.at(-1)?.scope).toBe('user');
+  expect(errors).toEqual([]);
 });
 
 const projectRadio = () => scopeRadios().find((radio) => radio.getAttribute('value') === 'project');

@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
 import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptReceiptResultSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionCacheWarmingUpdateRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema, TurnDiffSchema, type TurnDiff } from '@openchamber/agent-contract';
 import type {
@@ -28,6 +27,7 @@ import type {
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
+import { RequestError, readBody, identity } from './service-http.ts';
 import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventory, type NativeEntryResult, type SessionForkResult, type SessionList } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
@@ -75,9 +75,6 @@ const HostSkillFilesApplySchema = z.strictObject({ scope: z.enum(['workspace', '
 const HostSkillSourceReconcileSchema = z.strictObject({ agentDirectoryId: EntityIdSchema });
 const WorktreeLeaseRequestSchema = z.strictObject({ leaseId: z.string().min(1), directory: z.string().min(1) });
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
-class RequestError extends Error {
-  constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
-}
 const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: true, followUpQueue: true, subagents: true, attachments: true, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
 type ServiceHealthObservation = Pick<AgentServiceReady, 'engine' | 'version'> & { status: 'ready' | 'starting' };
 type ServiceResponse =
@@ -129,23 +126,6 @@ function respondProblem(response: ServerResponse, status: number, code: ProblemC
   });
   response.writeHead(status, { 'Content-Type': 'application/problem+json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(problem));
-}
-async function readBody<T>(request: IncomingMessage, schema: z.ZodType<T>): Promise<T> {
-  const decoder = new StringDecoder('utf8');
-  let bytes = 0;
-  let text = '';
-  for await (const chunk of request) {
-    bytes += chunk.length;
-    if (bytes > 1_048_576) throw new RequestError(413, 'PAYLOAD_TOO_LARGE', 'Request exceeds the service limit');
-    text += decoder.write(chunk);
-  }
-  text += decoder.end();
-  try { return schema.parse(JSON.parse(text)); }
-  catch { throw new RequestError(400, 'INVALID_REQUEST', 'Request body is invalid'); }
-}
-function identity(value: string): string {
-  try { return EntityIdSchema.parse(decodeURIComponent(value)); }
-  catch { throw new RequestError(400, 'INVALID_REQUEST', 'Route identity is invalid'); }
 }
 
 export class AgentService {
@@ -219,6 +199,7 @@ export class AgentService {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
         const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'persist', request, configuration } });
         if (result.type !== 'mcp' || result.result.type !== 'persisted' || result.result.configuration.persistedRevision !== configuration.persistedRevision) throw new WorkerOperationError(503, 'MCP_CONFIG_WRITE_FAILED', 'The persisted MCP configuration revision did not match the request');
+        return result.result.needsCredentialReentry === undefined ? undefined : { needsCredentialReentry: result.result.needsCredentialReentry };
       },
       probeMcp: async (workspaceId, serverId, configuration) => {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
