@@ -2,7 +2,7 @@
 
 ## Ownership
 
-This module owns the shared-page request failure contract and synthetic answer parsing. The server owns recipients, encryption, relay links, PINs and authoritative page state. The author's card (`SharedPageCard`) and its group/upload/preview reads were dropped with the OpenCode-parts chat modules in merge `ea32dd3f3f`; restoring them is a recorded regression task, and git history carries the implementation this document's invariants describe.
+This module owns the shared-page request failure contract and synthetic answer parsing. The server owns recipients, encryption, relay links, PINs and authoritative page state. The author's card (`SharedPageCard`) and its group/upload/preview reads were dropped with the OpenCode-parts chat modules in merge `ea32dd3f3f`; restoring them is a recorded technical-debt item (the transcript-cutover entry in `.workflow/technical-debt.md` lists shared-page cards among the features blocked on the ChatViewport port), and git history carries the implementation this document's invariants describe.
 
 ## Invariants
 

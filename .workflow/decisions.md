@@ -3,7 +3,7 @@
 ## 2026-11-27 - Correct hook effect dependencies instead of disabling exhaustive-deps
 
 - **Decided:** The release-hardening lint sweep clears every `react-hooks/exhaustive-deps` warning on the upstream-shared diff-view and file-view hooks by reasoning about each effect's trigger — dependency arrays list the refs and setters the callback reads (refs are stable by contract), the file-move bridge the reset effect keys on is converted from a mutable-ref read to real state (`pendingPathMoveTo`), and the file-switch reset settles through a settled-path guard so the effect's behavior is observable and testable. Where upstream carries the same hooks byte-for-byte, the fork keeps these corrections rather than reverting to lint-warning code or disabling the rule.
-- **Instead of:** eslint-disable comments, or reverting to the upstream dependency arrays that re-introduce the 96 warnings.
+- **Instead of:** eslint-disable comments, or reverting to the upstream dependency arrays that re-introduce the 23 warnings these 12 files carried (`task12/start-lint.log`; the other 73 of the 96 baseline warnings lived in fork-only files outside this decision).
 - **Because:** an effect that reads a value without depending on it fires on stale data; the maintainer's release rule forbids both rule disables and new lint warnings, so the only clean resolution is the correction itself — and once the correction exists, the files genuinely differ from upstream and the ledger records the difference here.
 - **Mine:** yes
 - **Revisit when:** upstream fixes the same dependency arrays, so the fork files can rejoin upstream byte-for-byte.
@@ -15,7 +15,7 @@
 - **Instead of:** reverting the files to the upstream blobs, which reintroduces 25 dead-code findings the maintainer's zero-dead-code release gate forbids, or widening knip ignores to hide them.
 - **Because:** dead exports are the maintenance cost the release-hardening effort exists to remove (2026-11-26 - Clear every solvable technical debt before the 1.0 release): every upstream sync would re-review code no caller can reach, and the fork's zero-finding gate cannot hold while they exist.
 - **Mine:** yes
-- **Revisit when:** a regression task restores one of the retired surfaces (the shared-page card, folder filing outside session creation); the restoration re-adds the caller and the export together, and the ledger row is removed when upstream and the fork agree again.
+- **Revisit when:** the retired surfaces are restored — the shared-page card is a recorded technical-debt item (the transcript-cutover entry in `.workflow/technical-debt.md` lists shared-page cards among the features blocked on the ChatViewport port) — and the restoration re-adds the caller and the export together, and the ledger row is removed when upstream and the fork agree again.
 - **Effort:** release-hardening
 
 ## 2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor
