@@ -51,7 +51,7 @@ const installMinimalDom = () => {
         descriptors.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
         Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
     };
-    class ElementStub {}
+    class ElementStub { }
     const documentStub: Record<string, unknown> = {
         nodeType: 9,
         defaultView: globalThis,
@@ -118,9 +118,11 @@ describe('loadHistoryUntilMessage', () => {
                     captureViewportAnchor: () => null,
                     restoreViewportAnchor: () => false,
                     alignViewportAnchor: () => 'missing',
-                    holdViewportAnchor: () => {},
+                    holdViewportAnchor: () => { },
                     isHistoryVirtualized: () => false,
-                    scrollToBottom: () => {},
+                    scrollToBottom: () => { },
+                    resolveUiPageMessageId: (_messageId, partId) => partId,
+                    scrollToUiPageRow: () => false,
                 }
                 : null,
         };
@@ -285,8 +287,10 @@ describe('useChatTimelineController identity lifecycle', () => {
                 scrollToMessageId: () => false,
                 hasMessageRow: () => false,
                 alignViewportAnchor: () => 'missing',
-                holdViewportAnchor: () => {},
-                scrollToBottom: () => {},
+                holdViewportAnchor: () => { },
+                scrollToBottom: () => { },
+                resolveUiPageMessageId: (_messageId, partId) => partId,
+                scrollToUiPageRow: () => false,
             } satisfies MessageListHandle,
         };
         let controller!: UseChatTimelineControllerResult;

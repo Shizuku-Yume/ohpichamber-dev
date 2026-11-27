@@ -48,7 +48,7 @@ function Harness() {
                     return () => { subscribers.delete(notify); };
                 },
             }),
-            scrollToEnd: () => { writes += 1; }, scrollToOffset: ({ offset }) => { listOffsets.push(offset); }, scrollToIndex: () => {},
+            scrollToEnd: () => { writes += 1; }, scrollToOffset: ({ offset }) => { listOffsets.push(offset); }, scrollToIndex: () => { },
         };
         registerList(list);
         return () => registerList(null);
@@ -182,7 +182,7 @@ for (const leaving of ['first reading position', 'changed reading position', 'en
                         positionAtIndex: () => undefined, sizeAtIndex: () => undefined,
                     }),
                     scrollToEnd: () => { element.scrollTop = 1500; },
-                    scrollToOffset: () => {}, scrollToIndex: () => {},
+                    scrollToOffset: () => { }, scrollToIndex: () => { },
                 });
                 return () => {
                     if (anchorRef.current === handle) anchorRef.current = null;
@@ -521,4 +521,16 @@ test('while the turn runs, a reader who scrolls back to the end is followed at o
         contentLength = 2200;
     });
     expect(scroll.userOwnsScroll).toBe(false);
+});
+
+test('at rest, scrolling scrollTop up away from the end releases follow instead of snapping back on totalSize updates', async () => {
+    working = false;
+    await render('visible'); await frame();
+    expect(node.scrollTop).toBe(1500);
+    await act(async () => {
+        node.scrollTop = 0;
+        scroll.onTimelineDataChange();
+    });
+    expect(node.scrollTop).toBe(0);
+    expect(scroll.userOwnsScroll).toBe(true);
 });

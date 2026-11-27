@@ -8,7 +8,7 @@ The selection itself is `@/stores/useMessageSelectionStore`. Ending it when the 
 
 ## Invariants
 
-- A unit is a turn's prompt (`prompt:<turnId>`) or its whole answer (`answer:<turnId>`): the text of every assistant message of the turn, in order, without tool output or reasoning. The keys come from the same grouping the timeline uses: `attachSyntheticContext` first, which folds the quotes, comments and other context sent as their own synthetic messages into the prompt, then `projectTurnRecords` with `mergeHiddenUserTurns`. A prompt's text is `formatMessageText` of the folded prompt, as the session export writes it, so a prompt that is only a quote with a comment still has text and its quote comes along.
+- A unit is a turn's prompt (`prompt:<turnId>`) or its whole answer (`answer:<turnId>`): the text of every assistant message of the turn, in order, without tool output or reasoning. The keys come from the same grouping the timeline uses: `projectTurnRecords` with `mergeHiddenUserTurns`. A prompt's text is `formatMessageText` of the folded prompt, as the session export writes it, so a prompt that is only a quote with a comment still has text and its quote comes along.
 - One selection exists at a time, for one session. It starts from a message's menu with that message selected, and ends on Cancel, Escape, a successful export, or when the column shows another session.
 - An export holds every selected unit or none. Loaded records are read first; when one is missing the complete history is loaded; a unit that is gone from the session is deselected with a toast, and nothing is exported.
 - A save dialog or share sheet the user dismissed is not an error: the selection stays as it was and no toast shows.

@@ -25,7 +25,7 @@ export const useColumnPromptReadOnly = ({
     React.useEffect(() => {
         ensureSpaceArchives();
     }, []);
-    const spaceArchive = useSpaceArchiveOf(currentSessionId ? effectiveSessionDirectory : null);
+    const spaceArchive = useSpaceArchiveOf(currentSession?.workspaceId);
     const projects = useProjectsStore((state) => state.projects);
     const worktrees = useSessionUIStore((state) => state.availableWorktreesByProject);
     const ownDirectory = currentSession ? resolveGlobalSessionDirectory(currentSession) : null;
