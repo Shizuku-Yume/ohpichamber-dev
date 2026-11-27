@@ -16,9 +16,10 @@ import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { ChildStoreManager } from './child-store';
 import { setSyncRefs } from './sync-refs';
-import { setActionRefs, setOptimisticRefs } from './session-actions';
+import { AmbiguousSendAdoptedError, setActionRefs, setOptimisticRefs } from './session-actions';
 import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore } from './session-ui-store';
+import { resetSendReconciliationForTests, setSendReconciliationTestClock } from './send-reconciliation';
 import { ROOT_SELECTION_AGENT, useSelectionStore } from './selection-store';
 import { buildComposerContext, buildOutgoingMessage, queuedContextToParts } from '@/components/chat/composer/submit/buildOutgoingMessage';
 import { deferred, nativeSnapshot } from './session-message-loader-test-fixtures';
@@ -83,6 +84,16 @@ const fakeFileResources = ({ expand, fallback } = {}) => {
 
 beforeEach(async () => {
   switchRuntimeEndpoint({ apiBaseUrl: 'https://ui-native.test', runtimeKey: `ui-native-${++runtimeNumber}` });
+  setSendReconciliationTestClock((() => {
+    let virtualNow = 0
+    return {
+      pollDelays: [1, 2, 4],
+      steadyDelay: 5,
+      retentionMs: 60_000,
+      sleep: async (ms) => { virtualNow += ms },
+      now: () => virtualNow,
+    }
+  })());
   stub(hostFilesystem, 'getFilesystemHomeInfo', async () => ({
     home: '/Users/tester',
     chatsRoot: '/Users/tester/.config/ohpichamber/chats',
@@ -136,6 +147,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  resetSendReconciliationForTests();
   manager.disposeAll();
   setOptimisticRefs(() => { }, () => { }, () => { });
   for (const restore of restorers.splice(0).reverse()) restore();
@@ -534,7 +546,7 @@ describe('openNewSessionDraft project binding', () => {
   test('paints the Chats default on a chat draft before discovery, and the project default on a project draft', () => {
     const original = useConfigStore.getState();
     useConfigStore.setState({
-      activateDirectory: () => new Promise(() => {}),
+      activateDirectory: () => new Promise(() => { }),
       providers: [], agents: [], settingsDefaultsLoaded: false, isConnected: false,
       settingsDefaultModel: 'global/model', settingsDefaultAgent: 'build',
       chatsDefaultModel: 'chat/model', chatsDefaultVariant: 'high', chatsDefaultAgent: 'plan',
@@ -1357,6 +1369,34 @@ describe('native UI submit lifecycle', () => {
     expect(useSessionUIStore.getState().newSessionDraft).toEqual(draft);
     expect(runCalls).toEqual([]);
   });
+  test('an adopted ambiguous draft send does not restore the draft shell', async () => {
+    setOptimisticRefs(() => { }, () => { }, () => { });
+    const draft = { draftId: 42, open: true, target: 'project', directoryOverride: '/alpha', preserveDirectoryOverride: true };
+    useSessionUIStore.setState({ currentSessionId: null, newSessionDraft: draft });
+    stub(canonicalClient, 'createSession', async () => ({ session: hostSession('materialized-chat-session', 'workspace-a') }));
+    const dispatch = deferred();
+    const dispatched = deferred();
+    stub(canonicalClient, 'createRun', async () => { dispatched.resolve(); return dispatch.promise; });
+    stub(canonicalClient, 'getPromptReceipt', async (queriedSession, queriedCorrelation) => ({
+      status: 'unknown', correlationId: queriedCorrelation, sessionId: queriedSession,
+    }));
+
+    const sending = send('uncertain draft prompt');
+    await dispatched.promise;
+
+    // The session materialized and the draft shell closed; the user then
+    // navigates back to a fresh no-selection view before the answer is lost.
+    expect(useSessionUIStore.getState().currentSessionId).toBe('materialized-chat-session');
+    useSessionUIStore.setState({ currentSessionId: null });
+
+    dispatch.reject(new TypeError('Failed to fetch'));
+    await expect(sending).rejects.toBeInstanceOf(AmbiguousSendAdoptedError);
+
+    // The materialized session and its adopted echo are the visible truth:
+    // the closed draft shell must not come back.
+    expect(useSessionUIStore.getState().newSessionDraft.open).toBe(false);
+  });
+
   test('a new chat renders the user bubble before POST /sessions resolves', async () => {
     const optimisticMessages = new Map();
     setOptimisticRefs(

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionCacheWarmingUpdateRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptReceiptResultSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionCacheWarmingUpdateRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
 import type {
   SessionControlAck,
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest,
@@ -13,7 +13,7 @@ import type {
   MCPConfigurationState, MCPConnectionTestResult, MCPWorkspaceReconnectResult, MCPSecretWriteResult,
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
-  QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
+  QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent, PromptReceiptResult,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, ShellStreamResponse, ShellStdinResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderAccountSelection, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderModelEnrichResult, ProviderConfigurationRead,
   CacheWarmingState, CacheWarmingApplyResult, SessionCacheWarmingState, SessionCacheWarmingApplyResult, OmpSettingsState,
@@ -89,8 +89,8 @@ type ServiceResponse =
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
   | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult | Subagent[]
   | NativeArchiveInventory | NativeArchiveImported
-  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run } | SessionControlAck
-  | SteerAck | FollowUpAck
+  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run; runCreatedAt?: number } | SessionControlAck
+  | SteerAck | FollowUpAck | PromptReceiptResult
   | SessionBranchResult
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
   | MCPConfigurationState | MCPConnectionTestResult | MCPWorkspaceReconnectResult | MCPSecretWriteResult
@@ -675,11 +675,13 @@ export class AgentService {
       const privateRun = /^\/internal\/sessions\/([^/]+)\/runs$/.exec(url.pathname);
       if (privateRun && request.method === 'POST') {
         const operation = await readBody(request, WorkerOperationSchema.options[0]);
-        respondJson(response, 202, { run: await this.sessions.prompt(identity(privateRun[1]), operation) }); return;
+        const runCreatedAt = Date.now();
+        const run = await this.sessions.prompt(identity(privateRun[1]), operation);
+        respondJson(response, 202, { run, runCreatedAt }); return;
       }
       const streamingPrompt = /^\/internal\/sessions\/([^/]+)\/(steer|follow-up)$/.exec(url.pathname);
       if (streamingPrompt && request.method === 'POST') {
-        const input = await readBody(request, HostStreamingPromptRequestSchema);
+        const input = await readBody(request, HostStreamingPromptRequestSchema.extend({ correlationId: EntityIdSchema.optional() }));
         const operation = streamingPrompt[2] === 'steer' ? { type: 'steer' as const, ...input } : { type: 'follow-up' as const, ...input };
         respondJson(response, 202, await this.sessions.streamingPrompt(identity(streamingPrompt[1]), operation)); return;
       }
@@ -696,6 +698,16 @@ export class AgentService {
       if (questionRespond && request.method === 'POST') {
         const sessionId = identity(questionRespond[1]);
         respondJson(response, 200, await this.sessions.resolveQuestion(sessionId, identity(questionRespond[2]), await readBody(request, QuestionReplySchema))); return;
+      }
+      const promptReceipts = /^\/api\/agent\/v1\/sessions\/([^/]+)\/prompt-receipts\/([^/]+)$/.exec(url.pathname);
+      if (promptReceipts && request.method === 'GET') {
+        const sessionId = identity(promptReceipts[1]);
+        const correlationId = identity(promptReceipts[2]);
+        const receipt = this.sessions.promptReceipt(sessionId, correlationId);
+        if (receipt === null) respondJson(response, 200, PromptReceiptResultSchema.parse({ status: 'unknown', correlationId, sessionId }));
+        else if (receipt.outcome === 'accepted') respondJson(response, 200, PromptReceiptResultSchema.parse({ status: 'accepted', receipt }));
+        else respondJson(response, 200, PromptReceiptResultSchema.parse({ status: 'rejected', receipt }));
+        return;
       }
       // The Host pushes a mode change here so a switch reaches approvals already waiting.
       const privatePermissionMode = /^\/internal\/sessions\/([^/]+)\/permission-mode$/.exec(url.pathname);

@@ -245,7 +245,7 @@ describe('Host native session control saga', () => {
     native.listed = !rootListed ? [] : [{ sessionId: strandedRoot, rootSessionId: strandedRoot, projectId: source.projectId, workspaceId: source.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001, mode: { kind: 'main' }, epoch: 'epoch-native', headSequence: '0', runtimeStatus: 'idle', activeRunId: null }];
     await expect(create(makeService(reopened))).resolves.toBeDefined();
     expect(registrations.includes(strandedRoot)).toBe(rootListed);
-    await expect(reopened.agentScopeStore.listPriorCreateAdmissions(source.workspaceId)).resolves.toEqual([]);
+    await expect(reopened.agentScopeStore.listPriorSessionAdmissions(source.workspaceId)).resolves.toEqual([]);
   });
   it.each([false, true])('settles a create the Agent Service answered with a failure before the next admission in the same Host process (root listed: %s)', async (rootListed) => {
     const { source, native, makeService, registrations, owner } = await fixture();
@@ -261,7 +261,7 @@ describe('Host native session control saga', () => {
     native.listed = !rootListed ? [] : [{ sessionId: strandedRoot, rootSessionId: strandedRoot, projectId: source.projectId, workspaceId: source.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001, mode: { kind: 'main' }, epoch: 'epoch-native', headSequence: '0', runtimeStatus: 'idle', activeRunId: null }];
     await expect(create()).resolves.toBeDefined();
     expect(registrations.includes(strandedRoot)).toBe(rootListed);
-    await expect(owner.agentScopeStore.listPriorCreateAdmissions(source.workspaceId)).resolves.toEqual([]);
+    await expect(owner.agentScopeStore.listPriorSessionAdmissions(source.workspaceId)).resolves.toEqual([]);
   });
   it('keeps an uncertain fork admission fenced after Host restart', async () => {
     const { owner, root, native, makeService } = await fixture();

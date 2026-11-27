@@ -4,6 +4,7 @@ export * from './metadata.ts';
 export * from './session.ts';
 export * from './messages.ts';
 export * from './prompt.ts';
+export * from './prompt-receipts.ts';
 export * from './requests.ts';
 export * from './questions.ts';
 export * from './snapshot.ts';

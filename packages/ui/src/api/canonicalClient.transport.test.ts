@@ -159,6 +159,52 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     await expect(client.deleteSession(sessionId)).rejects.toThrow();
   });
 
+  test('prompt receipt queries validate the three-way shape and reject mismatched echoes', async () => {
+    const correlationId = 'c9a3e264-9721-4f9e-a81d-8f2e604f3219';
+    const accepted: C.PromptReceiptResult = {
+      status: 'accepted',
+      receipt: {
+        outcome: 'accepted', correlationId, sessionId, operation: 'send', runId: 'run_receipt',
+        acceptedAt: 10, expiresAt: 10 + 24 * 60 * 60 * 1000,
+      },
+    };
+    respondWith(accepted);
+    expect(await client.getPromptReceipt(sessionId, correlationId)).toEqual(accepted);
+    expect(calls.at(-1)).toBe(`GET /api/agent/v1/sessions/${sessionId}/prompt-receipts/${correlationId}`);
+
+    const rejected: C.PromptReceiptResult = {
+      status: 'rejected',
+      receipt: {
+        outcome: 'rejected', correlationId, sessionId, operation: 'steer', code: 'RUN_ACTIVE',
+        detail: 'A run is already active in this session', rejectedAt: 12, expiresAt: 12 + 24 * 60 * 60 * 1000,
+      },
+    };
+    respondWith(rejected);
+    expect(await client.getPromptReceipt(sessionId, correlationId)).toEqual(rejected);
+
+    const unknown: C.PromptReceiptResult = { status: 'unknown', correlationId, sessionId };
+    respondWith(unknown);
+    expect(await client.getPromptReceipt(sessionId, correlationId)).toEqual(unknown);
+
+    // An echo naming another session or another correlation id is outside the
+    // requested scope, in all three shapes.
+    respondWith({ ...accepted, receipt: { ...accepted.receipt, sessionId: 'session_other' } });
+    await expect(client.getPromptReceipt(sessionId, correlationId)).rejects.toThrow();
+    respondWith({ ...rejected, receipt: { ...rejected.receipt, correlationId: 'corr_other' } });
+    await expect(client.getPromptReceipt(sessionId, correlationId)).rejects.toThrow();
+    respondWith({ status: 'unknown', correlationId: 'corr_other', sessionId });
+    await expect(client.getPromptReceipt(sessionId, correlationId)).rejects.toThrow();
+    respondWith({ status: 'unknown', correlationId, sessionId: 'session_other' });
+    await expect(client.getPromptReceipt(sessionId, correlationId)).rejects.toThrow();
+
+    // Malformed payloads are failure, never a guessed answer.
+    respondWith({ status: 'accepted' });
+    await expect(client.getPromptReceipt(sessionId, correlationId)).rejects.toThrow();
+    respondWith({ status: 'pending', correlationId, sessionId });
+    await expect(client.getPromptReceipt(sessionId, correlationId)).rejects.toThrow();
+  });
+
+
   test('rejects session creation, fork and archive receipts outside the requested ownership', async () => {
     const other = { ...runtimeSession, sessionId: 'session_child', workspaceId: 'workspace_other', metadata: null, metadataRevision: '0', archiveRevision: '0' };
     respondWith({ session: other });

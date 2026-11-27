@@ -60,16 +60,6 @@ claim that the carried-over bodies have been type-verified.
 - **Solution:** convert the retained modules by owner with real types and existing runtime tests, removing each path from the explicit list. Preserve the isolated-space release exclusion and Canonical/Host boundaries.
 - **Cost:** a separate server migration rather than mechanical renames or broad guard exemptions.
 
-## Interrupted sends lack durable Canonical receipts
-
-- **Where:** Canonical prompt submission and `packages/ui/src/sync/send-failure-classification.ts`.
-- **Added:** 2026-11-20
-- **Priority:** worth-doing
-- **Problem:** losing the response does not prove whether a prompt was accepted; there is no durable receipt query keyed by the caller's correlation/idempotency ID.
-- **Impact:** an unconfirmed send must remain pending. Automatically restoring its draft can duplicate an accepted turn.
-- **Solution:** persist Canonical interrupted-send receipts keyed by caller correlation/idempotency ID and expose authoritative reconciliation. Keep unconfirmed sends pending without auto-restore until then.
-- **Cost:** Agent Contract, service persistence, retry semantics and UI reconciliation tests.
-
 ## Guest marks and quota providers lack Host change producers
 
 - **Where:** Host guest marks/quota providers and the shared UI control stream.
@@ -162,3 +152,13 @@ claim that the carried-over bodies have been type-verified.
 - **Impact:** Every exact slash command costs an extra keypress, and a failed command loses the typed text.
 - **Solution:** Submit on Enter when the input already equals the highlighted command. Restore the draft when a control command is rejected. Cover keyboard and touch submission.
 - **Cost:** Composer input state changes and regression tests across desktop and mobile layouts.
+
+## Server-side queue redelivery is not keyed by the Canonical correlation id
+
+- **Where:** `packages/web/server/lib/message-queue/canonical-runtime.js`, `packages/web/server/lib/message-queue/prompt-admission.js`
+- **Added:** 2026-11-27
+- **Priority:** worth-doing
+- **Problem:** Queue-driven delivery posts `{type: 'prompt', runId, request, attachments}` to `/internal/sessions/:id/runs` without a `correlationId`, even though the queue append path mints and persists a `commandId` per item. Redelivery after a transport failure re-enters admission as a brand-new prompt, and the service writes no receipt row it could reconcile against.
+- **Impact:** When the admission response is lost on a queue-driven delivery — worker admitted the run, the answer never reached the Host — the retry cannot be reconciled through prompt receipts: a resubmission without the correlation id admits a duplicate run instead of replaying the original acceptance. The direct-send path already keys every prompt; only the queued path is dark.
+- **Solution:** Carry the queue item's `commandId` through capture, persistence and redelivery, and pass it as the prompt `correlationId` on every dispatch attempt. The service deduplicates by that id (accepted receipts replay; rejected rows re-enter admission), so retries become idempotent without new queue semantics.
+- **Cost:** SQLite queue schema migration for the stored correlation id, capture/dispatch plumbing, and redelivery tests covering the lost-response window.

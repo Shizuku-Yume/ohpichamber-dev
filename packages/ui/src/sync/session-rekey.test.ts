@@ -1,14 +1,28 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { Window } from 'happy-dom';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 
-const browser = new Window({ url: 'http://localhost/' });
-Object.assign(globalThis, {
-  window: browser,
-  document: browser.document,
-  navigator: browser.navigator,
-  localStorage: browser.localStorage,
+// A happy-dom Window rejects the runtime-switch CustomEvent and breaks every
+// later runtime switch in the shared process. These tests only need storage
+// and an event target, the same shape mobileConnections.test.ts installs.
+const storageBacking = new Map<string, string>();
+const storageStub = {
+  getItem: (key: string) => storageBacking.get(key) ?? null,
+  setItem: (key: string, value: string) => { storageBacking.set(key, value); },
+  removeItem: (key: string) => { storageBacking.delete(key); },
+  clear: () => { storageBacking.clear(); },
+  key: (index: number) => [...storageBacking.keys()][index] ?? null,
+  get length() { return storageBacking.size; },
+};
+const eventTargetWindow = Object.assign(new EventTarget(), {
+  localStorage: storageStub,
+  location: { protocol: 'http:', href: 'http://localhost/', origin: 'http://localhost', search: '' },
+  screen: { width: 1024, height: 768 },
+  innerWidth: 1024,
+  matchMedia: () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined }),
 });
+for (const [key, value] of Object.entries({ window: eventTargetWindow, localStorage: storageStub })) {
+  Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+}
 
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');

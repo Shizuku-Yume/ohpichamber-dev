@@ -84,9 +84,9 @@ export const WorkerPolicyResultSchema = z.discriminatedUnion('allowed', [
 export type WorkerPolicyResult = z.infer<typeof WorkerPolicyResultSchema>;
 
 export const WorkerOperationSchema = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('prompt'), runId: EntityIdSchema, request: PromptRequestSchema, attachments: z.array(AttachmentReferenceSchema).optional() }),
-  HostStreamingPromptRequestSchema.extend({ type: z.literal('steer') }),
-  HostStreamingPromptRequestSchema.extend({ type: z.literal('follow-up') }),
+  z.strictObject({ type: z.literal('prompt'), runId: EntityIdSchema, request: PromptRequestSchema, attachments: z.array(AttachmentReferenceSchema).optional(), correlationId: EntityIdSchema.optional() }),
+  HostStreamingPromptRequestSchema.extend({ type: z.literal('steer'), correlationId: EntityIdSchema.optional() }),
+  HostStreamingPromptRequestSchema.extend({ type: z.literal('follow-up'), correlationId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.branch'), recordId: EntityIdSchema }),

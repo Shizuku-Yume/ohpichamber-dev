@@ -3,7 +3,7 @@ import * as C from '@openchamber/agent-contract';
 import { runtimeFetch } from '../lib/runtime-fetch';
 import type {
   AgentCatalog, AgentCreateRequest, AgentDeleteRequest, AgentMutationResult, AgentUpdateRequest,
-  ApprovalReply, ApprovalRequest, CanonicalEvent, FollowUpRequest, HistoryPage, HistoryPageRequest,
+  ApprovalReply, ApprovalRequest, CanonicalEvent, FollowUpRequest, HistoryPage, HistoryPageRequest, PromptReceiptResult,
   ModelCatalog, ModelConfigureRequest, ModelDeleteRequest, ProviderCatalog, ProviderConfigureRequest,
   ProviderCredentialDeleteRequest, ProviderCredentialMutationResult, ProviderCredentialWriteRequest, ProviderDeleteRequest,
   ProviderMutationResult, QuestionReply, QuestionRequest, RunAbortAck, RunCreateRequest, Session, SessionCreateAck,
@@ -256,6 +256,13 @@ export class CanonicalClient {
   getSnapshot(sessionId: string): Promise<SessionSnapshot> { return request(`/api/agent/v1/sessions/${id(sessionId)}/snapshot`, scoped(C.SessionSnapshotSchema, result => result.session.sessionId === sessionId)); }
   getHistory(sessionId: string, options: Omit<HistoryPageRequest, 'sessionId'> = {}): Promise<HistoryPage> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/history${query(options)}`, scoped(C.HistoryPageSchema, result => result.sessionId === sessionId));
+  }
+  getPromptReceipt(sessionId: string, correlationId: string): Promise<PromptReceiptResult> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/prompt-receipts/${id(correlationId)}`, scoped(C.PromptReceiptResultSchema, result =>
+      result.status === 'unknown'
+        ? result.sessionId === sessionId && result.correlationId === correlationId
+        : result.receipt.sessionId === sessionId && result.receipt.correlationId === correlationId
+    ));
   }
   getSessionMetadata(sessionId: string): Promise<SessionMetadataState> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/metadata`, scoped(C.SessionMetadataStateSchema, result => result.sessionId === sessionId));
