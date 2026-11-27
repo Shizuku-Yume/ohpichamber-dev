@@ -1,6 +1,14 @@
+import { z } from 'zod';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 
 const OFFICIAL_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const baseUrlInput = z.string();
+
+export interface NormalizedBaseUrlResult {
+  value?: string | undefined;
+  official?: boolean | undefined;
+  error?: string | undefined;
+}
 
 const LOCAL_BASE_URL_HOSTS = new Set([
   'localhost',
@@ -9,12 +17,12 @@ const LOCAL_BASE_URL_HOSTS = new Set([
   'host.docker.internal',
 ]);
 
-const isEnvFlagEnabled = (value: string) => {
+const isEnvFlagEnabled = (value: string): boolean => {
   const normalized = value.trim().toLowerCase();
   return normalized === '1' || normalized === 'true';
 };
 
-const normalizeHostname = (hostname: string) => {
+const normalizeHostname = (hostname: string): string => {
   const trimmed = hostname.trim().toLowerCase();
   if (!trimmed) return '';
   if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
@@ -23,19 +31,23 @@ const normalizeHostname = (hostname: string) => {
   return trimmed;
 };
 
-const isAllowedLocalHost = (hostname: string) => {
+const isAllowedLocalHost = (hostname: string): boolean => {
   const normalized = normalizeHostname(hostname);
   return LOCAL_BASE_URL_HOSTS.has(normalized);
 };
 
-const normalizeOpenAIBaseURL = (value, selected) => {
-  if (typeof value !== 'string' || !value.trim()) {
+const normalizeOpenAIBaseURL = (
+  value: Parameters<typeof baseUrlInput.safeParse>[0],
+  selected: boolean,
+): NormalizedBaseUrlResult => {
+  const parsedInput = baseUrlInput.safeParse(value);
+  if (!parsedInput.success || !parsedInput.data.trim()) {
     return { value: undefined };
   }
 
-  let parsed;
+  let parsed: URL;
   try {
-    parsed = new URL(value.trim());
+    parsed = new URL(parsedInput.data.trim());
   } catch {
     return { error: 'Custom server URL is invalid' };
   }
@@ -54,14 +66,10 @@ const normalizeOpenAIBaseURL = (value, selected) => {
   const normalizedPath = pathname.length > 0 ? pathname : '';
   const normalized = `${parsed.protocol}//${parsed.host}${normalizedPath}`;
 
-  // Speech and transcription carry conversation content, so enterprise mode
-  // keeps them on this machine whatever else allows a remote host.
   if (isEnterpriseMode() && !isAllowedLocalHost(parsed.hostname)) {
     return { error: 'In enterprise mode a custom speech server has to run on this machine.' };
   }
 
-  // Only the Host-selected standard OpenAI endpoint uses the official speech
-  // path. Browser custom URLs never receive this policy exemption.
   if (selected && normalized === OFFICIAL_OPENAI_BASE_URL) {
     return { value: normalized, official: true };
   }
@@ -79,5 +87,7 @@ const normalizeOpenAIBaseURL = (value, selected) => {
   return { value: normalized };
 };
 
-export const normalizeCustomOpenAIBaseURL = (value) => normalizeOpenAIBaseURL(value, false);
-export const normalizeSelectedOpenAIBaseURL = (value) => normalizeOpenAIBaseURL(value, true);
+export const normalizeCustomOpenAIBaseURL = (value: Parameters<typeof baseUrlInput.safeParse>[0]): NormalizedBaseUrlResult =>
+  normalizeOpenAIBaseURL(value, false);
+export const normalizeSelectedOpenAIBaseURL = (value: Parameters<typeof baseUrlInput.safeParse>[0]): NormalizedBaseUrlResult =>
+  normalizeOpenAIBaseURL(value, true);

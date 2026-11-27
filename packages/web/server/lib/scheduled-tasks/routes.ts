@@ -2,6 +2,7 @@ import { asNonEmptyString } from '../shared/guards.js';
 import { randomUUID } from 'node:crypto';
 import { controlErrorFields } from '../openchamber-control/error.js';
 import type { ControlErrorFields } from '../openchamber-control/error.js';
+import type { JsonValue } from '../shared/json-values.js';
 import type { Application, Request, Response } from '../shared/http-contracts.js';
 import type { createScheduledTasksRuntime } from './runtime.js';
 import type { createProjectConfigRuntime } from '../projects/project-config.js';
@@ -24,7 +25,7 @@ export interface ScheduledTaskRouteDependencies extends ScheduledTaskServiceDepe
 interface TaskRequestBody {
   task?: unknown;
   candidates?: unknown;
-  enabled?: unknown;
+  enabled?: JsonValue;
 }
 
 interface ScheduledTaskFailure {

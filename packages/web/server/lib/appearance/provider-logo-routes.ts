@@ -15,6 +15,7 @@ export interface ProviderLogo {
 
 const logoSettingsUpdateSchema = z.object({ customProviderLogos: z.record(z.string(), z.unknown()) });
 export type ProviderLogoSettingsUpdate = z.infer<typeof logoSettingsUpdateSchema>;
+export type ProviderLogoSettingsResult = { customProviderLogos?: Record<string, ProviderLogo> } | SettingsDocument;
 
 export interface ProviderLogoDependencies {
   fsPromises: Pick<typeof fs, 'readdir' | 'unlink' | 'readFile' | 'mkdir' | 'writeFile'>;
@@ -22,12 +23,9 @@ export interface ProviderLogoDependencies {
   crypto: Pick<typeof nodeCrypto, 'createHash'>;
   openchamberDataDir: string;
   readSettingsFromDiskMigrated: () => Promise<SettingsDocument>;
-  persistResolvedSettings: (resolve: (current: SettingsDocument) => ProviderLogoSettingsUpdate) => Promise<SettingsDocument>;
+  persistResolvedSettings: (resolve: (current: SettingsDocument) => ProviderLogoSettingsUpdate) => Promise<ProviderLogoSettingsResult>;
 }
 
-interface LogoUploadBody {
-  dataUrl?: unknown;
-}
 
 interface ProviderLogoInput {
   mime?: unknown;
@@ -38,7 +36,6 @@ type ParsedLogo = { ok: false; error: string } | { ok: true; mime: string; bytes
 
 const hasLogoEntries = (value: unknown): value is Record<string, unknown> => value != null;
 const hasLogoFields = (value: unknown): value is ProviderLogoInput => value != null;
-const hasUploadBody = (value: unknown): value is LogoUploadBody => value != null;
 const hasErrorCode = (value: unknown): value is { code?: unknown } => value != null;
 const isSafeInteger = (value: unknown): value is number => Number.isSafeInteger(value);
 
@@ -51,7 +48,6 @@ const PROVIDER_LOGO_EXTENSIONS = new Map([
 
 export const PROVIDER_LOGO_MIMES = Object.freeze([...PROVIDER_LOGO_EXTENSIONS.keys()]);
 
-// A logo is drawn at 13 to 20 px; 1 MB leaves room for a detailed SVG.
 export const PROVIDER_LOGO_MAX_BYTES = 1024 * 1024;
 const SVG_THEME_COLORS = new Map<QueryValue | undefined, string>([['light', '#111111'], ['dark', '#f5f5f5']]);
 const isProviderLogoMime = (value: unknown): value is string => isString(value) && PROVIDER_LOGO_EXTENSIONS.has(value);
@@ -64,8 +60,10 @@ export const themedLogoSvg = (data: Buffer, theme: QueryValue | undefined) => {
 const providerIdSchema = z.string().trim().min(1).max(128);
 const readProviderId = (req: Request) => providerIdSchema.safeParse(req.params.providerId).data ?? null;
 
-const parseLogoDataUrl = (value: LogoUploadBody['dataUrl']): ParsedLogo => {
-  const match = z.string().safeParse(value).data?.trim().match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/i);
+const logoUploadBodySchema = z.object({ dataUrl: z.string() });
+
+const parseLogoDataUrl = (value: string | undefined): ParsedLogo => {
+  const match = value?.trim().match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/i);
   if (!match) {
     return { ok: false, error: 'dataUrl must be a base64 data URL' };
   }
@@ -183,7 +181,8 @@ export const registerProviderLogoRoutes = (app: Application, dependencies: Provi
     if (!providerId) {
       return res.status(400).json({ error: 'providerId is required' });
     }
-    const parsed = parseLogoDataUrl(hasUploadBody(req.body) ? req.body.dataUrl : undefined);
+    const bodyResult = logoUploadBodySchema.safeParse(req.body);
+    const parsed = parseLogoDataUrl(bodyResult.success ? bodyResult.data.dataUrl : undefined);
     if (!parsed.ok) {
       return res.status(400).json({ error: parsed.error });
     }
@@ -197,7 +196,7 @@ export const registerProviderLogoRoutes = (app: Application, dependencies: Provi
         try {
           await writeLogoSetting(providerId, next);
         } catch (error) {
-          await fsPromises.unlink(filePath).catch(() => {});
+          await fsPromises.unlink(filePath).catch(() => { });
           throw error;
         }
         await removeLogoFiles(providerId, filePath);

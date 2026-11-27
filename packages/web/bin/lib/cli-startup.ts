@@ -1,16 +1,39 @@
 import fs from 'fs';
+import { z } from 'zod';
 import os from 'os';
 import path from 'path';
-import { spawnSync } from 'child_process';
-import { DEFAULT_PORT } from './cli-args.js';
+import { spawnSync, type StdioOptions } from 'child_process';
+import { DEFAULT_PORT, type CliOptions } from './cli-args.js';
 import { EXIT_CODE, TunnelCliError } from './cli-errors.js';
 import { getDataDir } from './cli-paths.js';
 import { hasUiPasswordConfigured } from './cli-network.js';
 import { injectedEnvKeys } from '../../server/lib/injected-env.js';
+import { isString } from '../../server/lib/shared/object-guards.js';
 
 const STARTUP_SERVICE_ID = 'dev.ohpichamber.web';
 
-function getStartupServicePaths() {
+export type StartupServiceOptions = Partial<Pick<CliOptions, 'port' | 'host' | 'uiPassword' | 'apiOnly' | 'envSnapshot'>>;
+
+export type StartupStatus = {
+  supported: boolean;
+  platform: string;
+  enabled: boolean;
+  active?: boolean | null;
+  activeState?: string;
+  servicePath: string | null;
+  lingerEnabled?: boolean | null;
+  lingerUser?: string | null;
+};
+
+interface StartupCommandOptions {
+  stdio?: StdioOptions | undefined;
+  timeout?: number | undefined;
+  allowFailure?: boolean | undefined;
+}
+
+type StartupServicePaths = { platform: string; servicePath: string | null };
+
+function getStartupServicePaths(): StartupServicePaths {
   if (process.platform === 'darwin') {
     return {
       platform: 'macos',
@@ -29,7 +52,7 @@ function getStartupServicePaths() {
   return { platform: process.platform, servicePath: null };
 }
 
-function escapeXml(value) {
+function escapeXml(value: string): string {
   return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -38,27 +61,27 @@ function escapeXml(value) {
     .replace(/'/g, '&apos;');
 }
 
-function systemdEscapeArg(value) {
+function systemdEscapeArg(value: string): string {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-function startupShellQuote(value) {
+function startupShellQuote(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function systemdUnitPath(value) {
+function systemdUnitPath(value: string): string {
   return String(value).replace(/\\/g, '\\\\').replace(/ /g, '\\x20');
 }
 
-function powershellQuote(value) {
+function powershellQuote(value: string): string {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
-function startupEnvFileQuote(value) {
+function startupEnvFileQuote(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function systemdEnvFileQuote(value) {
+function systemdEnvFileQuote(value: string): string {
   return `"${String(value)
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
@@ -66,27 +89,28 @@ function systemdEnvFileQuote(value) {
     .replace(/\$/g, '\\$')}"`;
 }
 
-function getStartupEnvFilePath() {
+function getStartupEnvFilePath(): string {
   return path.join(getDataDir(), 'startup.env');
 }
 
-function getMacosStartupWrapperPath() {
+function getMacosStartupWrapperPath(): string {
   return path.join(getDataDir(), 'bin', 'OhPiChamber');
 }
 
-function getWindowsStartupWrapperPath() {
+function getWindowsStartupWrapperPath(): string {
   return path.join(getDataDir(), 'bin', 'OhPiChamber.ps1');
 }
 
-function collectStartupEnv(options = {}) {
-  // Variables OpenChamber itself put into this shell (the desktop app's
-  // terminal, an agent's shell) describe that instance, not the service.
+function collectStartupEnv(options: StartupServiceOptions = {}) {
   const injected = injectedEnvKeys(process.env);
-  const env = options.envSnapshot === false ? {} : Object.fromEntries(
-    Object.entries(process.env)
-      .filter(([key, value]) => !injected.has(key) && shouldPersistStartupEnv(key, value))
-      .map(([key, value]) => [key, String(value)])
-  );
+  const env: Record<string, string> = {};
+  if (options.envSnapshot !== false) {
+    for (const [key, value] of Object.entries(process.env)) {
+      if (!injected.has(key) && isString(value) && shouldPersistStartupEnv(key, value)) {
+        env[key] = value;
+      }
+    }
+  }
 
   const uiPassword = hasUiPasswordConfigured(options.uiPassword) ? options.uiPassword : undefined;
   if (uiPassword) {
@@ -95,18 +119,18 @@ function collectStartupEnv(options = {}) {
   if (options.apiOnly === true) {
     env.OPENCHAMBER_API_ONLY = 'true';
   }
-  if (typeof process.env.OPENCHAMBER_DATA_DIR === 'string' && process.env.OPENCHAMBER_DATA_DIR.trim().length > 0) {
-    env.OPENCHAMBER_DATA_DIR = path.resolve(process.env.OPENCHAMBER_DATA_DIR.trim());
+  const dataDirEnv = process.env.OPENCHAMBER_DATA_DIR;
+  if (isString(dataDirEnv) && dataDirEnv.trim().length > 0) {
+    env.OPENCHAMBER_DATA_DIR = path.resolve(dataDirEnv.trim());
   }
   return env;
 }
 
-function shouldPersistStartupEnv(key, value) {
-  if (typeof key !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return false;
-  if (typeof value !== 'string') return false;
+function shouldPersistStartupEnv(key: string, value: string | undefined): value is string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return false;
+  if (!isString(value)) return false;
   if (/[\r\n]/.test(value)) return false;
 
-  // These are shell/session implementation details, not app configuration.
   const volatileKeys = new Set([
     '_',
     'BASH_ENV',
@@ -140,11 +164,14 @@ function shouldPersistStartupEnv(key, value) {
   return !volatileKeys.has(key);
 }
 
-function writeStartupEnvFile(options = {}, fileOptions = {}) {
+function writeStartupEnvFile(
+  options: StartupServiceOptions = {},
+  fileOptions: { quoteValue?: (value: string) => string } = {},
+): string {
   const envFilePath = getStartupEnvFilePath();
-  const lines = [];
+  const lines: string[] = [];
   const env = collectStartupEnv(options);
-  const quoteValue = typeof fileOptions.quoteValue === 'function' ? fileOptions.quoteValue : startupEnvFileQuote;
+  const quoteValue = fileOptions.quoteValue ?? startupEnvFileQuote;
   for (const [key, value] of Object.entries(env)) {
     lines.push(`${key}=${quoteValue(value)}`);
   }
@@ -153,17 +180,18 @@ function writeStartupEnvFile(options = {}, fileOptions = {}) {
   return envFilePath;
 }
 
-function removeStartupEnvFile() {
-  try { fs.unlinkSync(getStartupEnvFilePath()); } catch {}
+function removeStartupEnvFile(): void {
+  try {
+    fs.unlinkSync(getStartupEnvFilePath());
+  } catch {
+    void 0;
+  }
 }
 
 const PNPM_STORE_SEGMENT = `${path.sep}.pnpm${path.sep}`;
 const PACKAGE_SEGMENT = `${path.sep}node_modules${path.sep}ohpichamber${path.sep}`;
 
-// pnpm keeps every installed version in its own store directory and links the
-// current one into node_modules. A startup service pointed at the store path
-// keeps launching the old version after an update, so prefer the link.
-function stablePnpmEntrypoint(resolved, exists = fs.existsSync) {
+function stablePnpmEntrypoint(resolved: string, exists: (candidate: string) => boolean = fs.existsSync): string | null {
   const storeIndex = resolved.indexOf(PNPM_STORE_SEGMENT);
   if (storeIndex < 0) return null;
   const packageIndex = resolved.indexOf(PACKAGE_SEGMENT, storeIndex);
@@ -176,12 +204,7 @@ function stablePnpmEntrypoint(resolved, exists = fs.existsSync) {
   return exists(stable) ? stable : null;
 }
 
-// pnpm 11 and later install a global package into a new directory under
-// global/v11 on every update and delete the old one. A link beside it, named
-// after the installed packages, moves to each new directory, and pnpm's shim
-// starts the CLI through that link. Resolving it would pin the service to a
-// directory the next update deletes.
-function isPnpmGlobalLinkEntrypoint(invoked) {
+function isPnpmGlobalLinkEntrypoint(invoked: string): boolean {
   const packageIndex = invoked.indexOf(PACKAGE_SEGMENT);
   if (packageIndex < 0) return false;
   const linkPath = invoked.slice(0, packageIndex);
@@ -196,15 +219,16 @@ function isPnpmGlobalLinkEntrypoint(invoked) {
   }
 }
 
-function resolveCliEntrypoint() {
-  const entry = typeof process.argv[1] === 'string' && process.argv[1].trim().length > 0
-    ? process.argv[1]
+function resolveCliEntrypoint(): string {
+  const argvEntry = process.argv[1];
+  const entry = isString(argvEntry) && argvEntry.trim().length > 0
+    ? argvEntry
     : path.join(__dirname, 'cli.js');
   const invoked = path.resolve(entry);
   if (isPnpmGlobalLinkEntrypoint(invoked)) {
     return invoked;
   }
-  let resolved;
+  let resolved: string;
   try {
     resolved = fs.realpathSync(entry);
   } catch {
@@ -213,9 +237,9 @@ function resolveCliEntrypoint() {
   return stablePnpmEntrypoint(resolved) ?? resolved;
 }
 
-function buildStartupArgs(options = {}) {
+function buildStartupArgs(options: StartupServiceOptions = {}): string[] {
   const args = [resolveCliEntrypoint(), 'serve', '--foreground', '--port', String(options.port || DEFAULT_PORT)];
-  if (typeof options.host === 'string' && options.host.length > 0) {
+  if (isString(options.host) && options.host.length > 0) {
     args.push('--host', options.host);
   }
   if (options.apiOnly === true) {
@@ -224,7 +248,7 @@ function buildStartupArgs(options = {}) {
   return args;
 }
 
-function writeMacosStartupWrapper(options = {}) {
+function writeMacosStartupWrapper(options: StartupServiceOptions = {}): string {
   const wrapperPath = getMacosStartupWrapperPath();
   const args = buildStartupArgs(options).map(startupShellQuote).join(' ');
   const content = `#!/bin/sh
@@ -235,7 +259,7 @@ exec ${startupShellQuote(process.execPath)} ${args}
   return wrapperPath;
 }
 
-function writeWindowsStartupWrapper(options = {}) {
+function writeWindowsStartupWrapper(options: StartupServiceOptions = {}): string {
   const wrapperPath = getWindowsStartupWrapperPath();
   const envFilePath = getStartupEnvFilePath();
   const startupArgs = buildStartupArgs(options).map(powershellQuote).join(' ');
@@ -249,11 +273,11 @@ function writeWindowsStartupWrapper(options = {}) {
   return wrapperPath;
 }
 
-function buildWindowsStartupTaskCommand(wrapperPath) {
+function buildWindowsStartupTaskCommand(wrapperPath: string): string {
   return `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${wrapperPath}"`;
 }
 
-function buildMacosLaunchAgent(options = {}) {
+function buildMacosLaunchAgent(options: StartupServiceOptions = {}): string {
   const wrapperPath = writeMacosStartupWrapper(options);
   const args = [wrapperPath];
   const env = collectStartupEnv(options);
@@ -287,7 +311,7 @@ ${envXml}  <key>RunAtLoad</key>
 `;
 }
 
-function buildSystemdUserService(options = {}) {
+function buildSystemdUserService(options: StartupServiceOptions = {}): string {
   const args = buildStartupArgs(options).map((arg) => `"${systemdEscapeArg(arg)}"`).join(' ');
   const envFilePath = getStartupEnvFilePath();
   return `[Unit]
@@ -309,10 +333,10 @@ WantedBy=default.target
 `;
 }
 
-function runStartupCommand(command, args, options = {}) {
+function runStartupCommand(command: string, args: string[], options: StartupCommandOptions = {}) {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
-    stdio: options.stdio || 'pipe',
+    stdio: options.stdio ?? 'pipe',
     timeout: options.timeout,
     windowsHide: true,
   });
@@ -326,12 +350,12 @@ function runStartupCommand(command, args, options = {}) {
   return result;
 }
 
-function parseLingerState(stdout) {
-  if (typeof stdout !== 'string') {
+function parseLingerState(stdout: string | null | undefined): boolean | null {
+  if (!isString(stdout)) {
     return null;
   }
   const match = stdout.match(/^Linger=([A-Za-z]+)\s*$/m);
-  if (!match) {
+  if (!match?.[1]) {
     return null;
   }
   const value = match[1].toLowerCase();
@@ -340,23 +364,19 @@ function parseLingerState(stdout) {
   return null;
 }
 
-function getCurrentUsername() {
+function getCurrentUsername(): string {
   try {
     const name = os.userInfo().username;
-    if (typeof name === 'string' && name.length > 0) {
+    if (isString(name) && name.length > 0) {
       return name;
     }
   } catch {
-    // userInfo() can throw when the uid has no passwd entry; fall back to env.
+    void 0;
   }
   return process.env.USER || process.env.LOGNAME || '';
 }
 
-// A systemd --user service only keeps running without an active login session
-// when the user has lingering enabled. Detect it so `startup enable` can warn
-// that the service may otherwise stop on logout. Returns null when the state
-// cannot be determined (no username, loginctl unavailable, or odd output).
-function getUserLingerEnabled(user) {
+function getUserLingerEnabled(user: string): boolean | null {
   if (!user) {
     return null;
   }
@@ -372,7 +392,7 @@ function getUserLingerEnabled(user) {
   return parseLingerState(result.stdout);
 }
 
-function getStartupStatus() {
+function getStartupStatus(): StartupStatus {
   const paths = getStartupServicePaths();
   if (!paths.servicePath) {
     return { supported: false, platform: paths.platform, enabled: false, servicePath: null };
@@ -406,11 +426,11 @@ function getStartupStatus() {
   };
 }
 
-function restartSystemdService() {
+function restartSystemdService(): void {
   runStartupCommand('systemctl', ['--user', 'restart', 'ohpichamber.service']);
 }
 
-function enableStartupService(options = {}) {
+function enableStartupService(options: StartupServiceOptions = {}): StartupStatus {
   const paths = getStartupServicePaths();
   if (!paths.servicePath) {
     throw new TunnelCliError(`Startup integration is not supported on ${paths.platform}.`, EXIT_CODE.USAGE_ERROR);
@@ -421,9 +441,10 @@ function enableStartupService(options = {}) {
     fs.mkdirSync(path.dirname(paths.servicePath), { recursive: true, mode: 0o700 });
     fs.mkdirSync(path.join(os.homedir(), 'Library', 'Logs', 'OhPiChamber'), { recursive: true, mode: 0o700 });
     fs.writeFileSync(paths.servicePath, buildMacosLaunchAgent(options), { mode: 0o600 });
-    runStartupCommand('/bin/launchctl', ['bootout', `gui/${process.getuid()}`, paths.servicePath], { allowFailure: true });
-    runStartupCommand('/bin/launchctl', ['bootstrap', `gui/${process.getuid()}`, paths.servicePath]);
-    runStartupCommand('/bin/launchctl', ['kickstart', '-k', `gui/${process.getuid()}/${STARTUP_SERVICE_ID}`], { allowFailure: true });
+    const uid = z.function().parse(process.getuid)();
+    runStartupCommand('/bin/launchctl', ['bootout', `gui/${uid}`, paths.servicePath], { allowFailure: true });
+    runStartupCommand('/bin/launchctl', ['bootstrap', `gui/${uid}`, paths.servicePath]);
+    runStartupCommand('/bin/launchctl', ['kickstart', '-k', `gui/${uid}/${STARTUP_SERVICE_ID}`], { allowFailure: true });
     return getStartupStatus();
   }
 
@@ -433,8 +454,6 @@ function enableStartupService(options = {}) {
     fs.writeFileSync(paths.servicePath, buildSystemdUserService(options), { mode: 0o600 });
     runStartupCommand('systemctl', ['--user', 'daemon-reload']);
     runStartupCommand('systemctl', ['--user', 'enable', 'ohpichamber.service']);
-    // `enable --now` leaves a running service alone, so it would keep the old
-    // unit and the old release.
     restartSystemdService();
     return getStartupStatus();
   }
@@ -454,32 +473,44 @@ function enableStartupService(options = {}) {
   return getStartupStatus();
 }
 
-function disableStartupService() {
+function disableStartupService(): StartupStatus {
   const paths = getStartupServicePaths();
   if (!paths.servicePath) {
     throw new TunnelCliError(`Startup integration is not supported on ${paths.platform}.`, EXIT_CODE.USAGE_ERROR);
   }
 
   if (paths.platform === 'macos') {
-    runStartupCommand('/bin/launchctl', ['bootout', `gui/${process.getuid()}`, paths.servicePath], { allowFailure: true });
-    try { fs.unlinkSync(paths.servicePath); } catch {}
+    const uid = z.function().parse(process.getuid)();
+    runStartupCommand('/bin/launchctl', ['bootout', `gui/${uid}`, paths.servicePath], { allowFailure: true });
+    try {
+      fs.unlinkSync(paths.servicePath);
+    } catch {
+      void 0;
+    }
     return getStartupStatus();
   }
 
   if (paths.platform === 'linux') {
     runStartupCommand('systemctl', ['--user', 'disable', '--now', 'ohpichamber.service'], { allowFailure: true });
-    try { fs.unlinkSync(paths.servicePath); } catch {}
+    try {
+      fs.unlinkSync(paths.servicePath);
+    } catch {
+      void 0;
+    }
     runStartupCommand('systemctl', ['--user', 'daemon-reload'], { allowFailure: true });
     return getStartupStatus();
   }
 
   runStartupCommand('schtasks.exe', ['/End', '/TN', STARTUP_SERVICE_ID], { allowFailure: true });
   runStartupCommand('schtasks.exe', ['/Delete', '/TN', STARTUP_SERVICE_ID, '/F'], { allowFailure: true });
-  try { fs.unlinkSync(getWindowsStartupWrapperPath()); } catch {}
+  try {
+    fs.unlinkSync(getWindowsStartupWrapperPath());
+  } catch {
+    void 0;
+  }
   removeStartupEnvFile();
   return getStartupStatus();
 }
-
 
 export {
   stablePnpmEntrypoint,

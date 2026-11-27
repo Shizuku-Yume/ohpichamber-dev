@@ -1,4 +1,73 @@
-export const createGracefulShutdownRuntime = (dependencies) => {
+import type { Server } from 'node:http';
+import type { Socket } from 'node:net';
+import type { createTerminalRuntime } from '../terminal/runtime.js';
+import type { createDictationRuntime } from '../dictation/runtime.js';
+import type { createMessageStreamWsRuntime } from '../event-stream/index.js';
+import type { GlobalMessageStreamHub } from '../event-stream/global-hub.js';
+import type { createUiAuth } from '../ui-auth/ui-auth.js';
+import type { TunnelController } from '../tunnels/contracts.js';
+import type { createTunnelAuth } from '../tunnels/tunnel-auth.js';
+
+interface Stoppable {
+  stop: () => void | Promise<void> | null;
+}
+
+interface Closeable {
+  close: () => void | Promise<void>;
+}
+
+interface Disposable {
+  dispose: () => void | Promise<void>;
+}
+
+export interface ShutdownOptions {
+  exitProcess?: boolean;
+}
+
+export interface GracefulShutdownDependencies {
+  process: Pick<NodeJS.Process, 'exit'>;
+  shutdownTimeoutMs: number;
+  getExitOnShutdown: () => boolean;
+  getIsShuttingDown: () => boolean;
+  setIsShuttingDown: (shuttingDown: boolean) => void;
+  syncToHmrState: () => void;
+  globalMessageStreamHub: Pick<GlobalMessageStreamHub, 'stop'>;
+  hostAgentRuntime: Closeable;
+  openChamberSessionService?: Closeable | null;
+  chatDirectoryCleanupRuntime?: Stoppable | null;
+  sessionRuntime: Disposable;
+  sessionAssistRuntime?: Stoppable | null;
+  sessionWorkRuntime?: Stoppable | null;
+  contextObligatoryRuntime?: Stoppable | null;
+  autoReviewRuntime?: Stoppable | null;
+  prWatchRuntime?: Stoppable | null;
+  extensionWaitsRuntime?: { stop: () => void; flush: () => void | Promise<void> } | null;
+  messageQueueRuntime?: Stoppable | null;
+  dispatchResultsRuntime?: Stoppable | null;
+  messageSearchRuntime?: Stoppable | null;
+  scheduledTasksRuntime?: Stoppable | null;
+  hostSessionState: Closeable;
+  getTerminalRuntime: () => Pick<ReturnType<typeof createTerminalRuntime>, 'shutdown'> | null;
+  setTerminalRuntime: (runtime: ReturnType<typeof createTerminalRuntime> | null) => void;
+  getMessageStreamRuntime: () => ReturnType<typeof createMessageStreamWsRuntime> | null;
+  setMessageStreamRuntime: (runtime: ReturnType<typeof createMessageStreamWsRuntime> | null) => void;
+  getServer: () => Server | null;
+  getUiAuthController: () => Pick<ReturnType<typeof createUiAuth>, 'dispose'> | null;
+  setUiAuthController: (controller: ReturnType<typeof createUiAuth> | null) => void;
+  getActiveTunnelController: () => Pick<TunnelController, 'stop'> | null;
+  setActiveTunnelController: (controller: TunnelController | null) => void;
+  tunnelAuthController: Pick<ReturnType<typeof createTunnelAuth>, 'clearActiveTunnel'>;
+  beginGuestServiceShutdown: () => void;
+  stopAllGuestServices: () => void | Promise<void>;
+  getGuestSurfaceRuntime: () => Stoppable | null;
+  getRealtimeProxyRuntime: () => Stoppable | null;
+  getDictationRuntime: () => ReturnType<typeof createDictationRuntime> | null;
+  getRelayService: () => Stoppable | null;
+  getRelayReconcileTimer: () => ReturnType<typeof setInterval> | null;
+  getSpacesHost?: () => Closeable | null;
+}
+
+export const createGracefulShutdownRuntime = (dependencies: GracefulShutdownDependencies) => {
   const {
     process,
     shutdownTimeoutMs,
@@ -42,14 +111,12 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     getSpacesHost = () => null,
   } = dependencies;
 
-  let shutdownPromise = null;
-  const serverConnections = new Set();
+  let shutdownPromise: Promise<void> | null = null;
+  const serverConnections = new Set<Socket>();
   let closingHttpServer = false;
 
-  // Track TCP sockets before listen(): HTTP stops tracking them on upgrade,
-  // even when no WebSocket handler completes the handshake.
-  const trackServerConnections = (server) => {
-    const onConnection = (socket) => {
+  const trackServerConnections = (server: Server) => {
+    const onConnection = (socket: Socket) => {
       if (closingHttpServer) {
         socket.destroy();
         return;
@@ -61,28 +128,26 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     server.once('close', () => server.off('connection', onConnection));
   };
 
-  const runShutdown = async (options = {}) => {
+  const runShutdown = async (options: ShutdownOptions = {}) => {
     if (getIsShuttingDown()) return;
 
     setIsShuttingDown(true);
     beginGuestServiceShutdown();
     syncToHmrState();
     console.log('Starting graceful shutdown...');
-    const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : getExitOnShutdown();
+    const exitProcess = options.exitProcess ?? getExitOnShutdown();
 
-    // Both embedded stop() and daemon exits use this sequence. Close admission
-    // synchronously above, then stop viewers before draining their services.
-    const cleanupOperations = [
-      () => clearInterval(getRelayReconcileTimer()),
+    const cleanupOperations: Array<() => void | Promise<void> | null | undefined> = [
+      () => {
+        const timer = getRelayReconcileTimer();
+        if (timer) clearInterval(timer);
+      },
       () => getGuestSurfaceRuntime()?.stop(),
       () => getRealtimeProxyRuntime()?.stop(),
-      // The isolated-spaces host, when the switch is on: its connections into spaces end here.
       () => getSpacesHost()?.close(),
       () => getRelayService()?.stop(),
       () => getDictationRuntime()?.stop(),
       () => chatDirectoryCleanupRuntime?.stop(),
-      // Discard prepared-but-unused sessions before their workers are stopped, so a
-      // speculative prepare never outlives the Host.
       () => openChamberSessionService?.close?.(),
       () => sessionRuntime.dispose(),
       () => sessionAssistRuntime?.stop?.(),
@@ -104,9 +169,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     for (const cleanup of cleanupOperations) {
       try {
         await cleanup();
-      } catch {
-        // One failed runtime must not skip the rest of host teardown.
-      }
+      } catch { void 0; }
     }
 
     const terminalRuntime = getTerminalRuntime();
@@ -114,6 +177,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       try {
         await terminalRuntime.shutdown();
       } catch {
+        void 0;
       } finally {
         setTerminalRuntime(null);
       }
@@ -124,32 +188,27 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       try {
         await messageStreamRuntime.close();
       } catch {
+        void 0;
       } finally {
         setMessageStreamRuntime(null);
       }
     }
 
-    // The OMP Agent Service owns agent execution. The Host never starts, stops, or probes an OpenCode process.
-
     const server = getServer();
     if (server) {
       closingHttpServer = true;
-      let closeTimeout = null;
+      let closeTimeout: ReturnType<typeof setTimeout> | null = null;
       try {
         await Promise.race([
-          new Promise((resolve) => {
+          new Promise<void>((resolve) => {
             server.close(() => {
               console.log('HTTP server closed');
               resolve();
             });
-            // The backend has stopped. Active SSE/HTTP clients must not keep
-            // Desktop waiting for the outer shutdown deadline.
             server.closeAllConnections?.();
-            // Includes upgraded sockets and reconnects accepted while the
-            // services above were draining. No child-process grace is cut short.
             for (const socket of serverConnections) socket.destroy();
           }),
-          new Promise((resolve) => {
+          new Promise<void>((resolve) => {
             closeTimeout = setTimeout(() => {
               console.warn('Server close timeout reached, forcing shutdown');
               resolve();
@@ -163,11 +222,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       }
     }
 
-    // Stop SDK workers and drain private Host callbacks before closing their operational state.
     await hostAgentRuntime.close();
-
-    // No producer or HTTP admission remains; drain accepted metadata operations
-    // before the sole owner closes its shared SQLite connection.
     await hostSessionState.close();
 
     const uiAuthController = getUiAuthController();
@@ -190,7 +245,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     }
   };
 
-  const gracefulShutdown = (options = {}) => {
+  const gracefulShutdown = (options: ShutdownOptions = {}) => {
     if (shutdownPromise) return shutdownPromise;
     shutdownPromise = runShutdown(options);
     return shutdownPromise;

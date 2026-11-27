@@ -149,7 +149,7 @@ and the session as waiting. VS Code has no server, so no agent there has the
 tool and the UI reads no waits. The server inside an isolated space refuses
 `wait.start`, timer included, and `wait.list` offers no source there: it runs
 no extensions, and it stops itself after a time with no working session
-(`../spaces/idle-stop.js`), so a timer could be stopped before it fires. Both
+(`../spaces/idle-stop.ts`), so a timer could be stopped before it fires. Both
 mobile clients show the composer row, the waiting session and the wake row
 through the server they are connected to.
 

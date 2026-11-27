@@ -1,20 +1,68 @@
 import express from 'express';
 import { constants as fsConstants } from 'node:fs';
-import { EntityIdSchema, HistoryPageSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
-const asString = (value) => typeof value === 'string' ? value.trim() : '';
-
+import type fs from 'node:fs/promises';
+import type nodePath from 'node:path';
+import type nodeCrypto from 'node:crypto';
+import { z } from 'zod';
+import { EntityIdSchema, HistoryPageSchema, SessionSnapshotSchema, type HistoryPage, type Message, type SessionSnapshot } from '@openchamber/agent-contract';
+import type { Application } from '../shared/http-contracts.js';
+import { isRecord, isString } from '../shared/object-guards.js';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_SOURCES = 12;
 
-type OutsideFileGrantOptions = NonNullable<Parameters<typeof mintOutsideFileGrant>[1]>;
+export interface MarkdownImageGrantSessionScope {
+  workspaceId: string;
+  rootSessionId: string;
+  cwd: string;
+}
 
-const isWithin = (target, root, path) => {
+export interface MarkdownImageGrantSessionService {
+  open: (sessionId: string) => Promise<SessionSnapshot>;
+  history: (sessionId: string, query: string) => Promise<HistoryPage>;
+}
+
+export interface MarkdownImageGrantDependencies {
+  fsPromises: Pick<typeof fs, 'realpath' | 'open'>;
+  path: Pick<typeof nodePath, 'relative' | 'isAbsolute' | 'resolve' | 'dirname' | 'basename'>;
+  crypto: Pick<typeof nodeCrypto, 'randomUUID'>;
+  sessionService: MarkdownImageGrantSessionService;
+  resolveSessionScope: (sessionId: string) => Promise<MarkdownImageGrantSessionScope | null>;
+  approvedTempRoot: string;
+  now?: () => number;
+}
+
+interface ImageGrant {
+  path: string;
+  source: string;
+  sessionId: string;
+  workspaceId: string;
+  rootSessionId: string;
+  cwd: string;
+  expiresAt: number;
+}
+
+type ImageInspectionResult =
+  | { status: 'error' | 'missing' }
+  | { status: 'ready'; path: string; outsideWorkspace: boolean };
+
+type ImageGrantPrepareResult =
+  | { sourceIndex: number; status: 'error' | 'missing' }
+  | { sourceIndex: number; status: 'ready'; expiresAt: number; assetPath: string };
+
+const grantRequestBodySchema = z.object({
+  messageId: z.string().transform((value) => value.trim()).pipe(EntityIdSchema),
+  sources: z.array(z.string().transform((value) => value.trim()).pipe(z.string().min(1))).min(1).max(MAX_IMAGE_SOURCES),
+});
+
+const hasFsErrorCode = (value: unknown): value is { code?: unknown } => isRecord(value);
+
+const isWithin = (target: string, root: string, path: MarkdownImageGrantDependencies['path']) => {
   const relative = path.relative(root, target);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 };
 
-const parseFileSource = (source) => {
+const parseFileSource = (source: string) => {
   if (/^file:\/\//i.test(source)) {
     try {
       const url = new URL(source);
@@ -33,7 +81,7 @@ const parseFileSource = (source) => {
   }
 };
 
-const hasImageSignature = (bytes) => {
+const hasImageSignature = (bytes: Buffer) => {
   if (bytes.length >= 8
     && bytes[0] === 0x89 && bytes.subarray(1, 4).toString('ascii') === 'PNG'
     && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return true;
@@ -43,9 +91,6 @@ const hasImageSignature = (bytes) => {
     || header.startsWith('GIF89a')
     || (header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP');
 };
-
-const hasErrorMessage = (value: unknown): value is { message?: unknown } => value != null;
-
 const normalizeReferenceLabel = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
 const unescapeMarkdownDestination = (value: string) => value.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]^_`{|}~\\])/g, '$1');
@@ -132,18 +177,15 @@ const parseDefinitionDestination = (value: string) => {
   return match ? unescapeMarkdownDestination(match[0]) : '';
 };
 
-/** Only finalized canonical assistant text can authorize an image. */
-const messageTextParts = (message) => message.parts;
-
-const collectMarkdownLinesOutsideCode = (message: JsonObject) => {
-  const lines = [];
-  for (const part of messageTextParts(message)) {
+const collectMarkdownLinesOutsideCode = (message: Message) => {
+  const lines: string[] = [];
+  for (const part of message.parts) {
     if (part.type !== 'text') continue;
-    let fence = null;
+    let fence: { char: string; size: number } | null = null;
     for (const line of part.content.split('\n')) {
       const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
-      if (fenceMatch) {
-        const marker = fenceMatch[1];
+      const marker = fenceMatch?.[1];
+      if (marker) {
         if (!fence) {
           fence = { char: marker.charAt(0), size: marker.length };
         } else if (marker.charAt(0) === fence.char && marker.length >= fence.size) {
@@ -158,7 +200,7 @@ const collectMarkdownLinesOutsideCode = (message: JsonObject) => {
   return lines;
 };
 
-const markdownImageSources = (message: JsonObject) => {
+const markdownImageSources = (message: Message) => {
   const sources = new Set<string>();
   const markdownLines = collectMarkdownLinesOutsideCode(message);
   const definitions = new Map<string, string>();
@@ -195,16 +237,16 @@ const markdownImageSources = (message: JsonObject) => {
       if (source) sources.add(source);
     }
   }
-  for (const part of messageTextParts(message)) {
+  for (const part of message.parts) {
     if (part.type === 'tool_result') {
       const output = part.output;
-      if (output && typeof output === 'object') {
+      if (isRecord(output)) {
         const details = output.details;
-        if (details && typeof details === 'object' && Array.isArray(details.imagePaths)) {
-          for (const p of details.imagePaths) if (typeof p === 'string' && p) sources.add(p);
+        if (isRecord(details) && Array.isArray(details.imagePaths)) {
+          for (const p of details.imagePaths) if (isString(p) && p) sources.add(p);
         }
         if (Array.isArray(output.images)) {
-          for (const img of output.images) if (typeof img?.path === 'string') sources.add(img.path);
+          for (const img of output.images) if (isRecord(img) && isString(img.path)) sources.add(img.path);
         }
       }
     }
@@ -212,18 +254,27 @@ const markdownImageSources = (message: JsonObject) => {
   return sources;
 };
 
-const fetchMessage = async ({ sessionId, messageId, sessionService }) => {
+const fetchMessage = async ({
+  sessionId,
+  messageId,
+  sessionService,
+}: {
+  sessionId: string;
+  messageId: string;
+  sessionService: MarkdownImageGrantSessionService;
+}): Promise<Message | null> => {
   const snapshot = SessionSnapshotSchema.parse(await sessionService.open(sessionId));
   if (snapshot.session.sessionId !== sessionId) throw new Error('Canonical snapshot scope mismatch');
-  const locate = (selection) => {
+  const locate = (selection: Pick<SessionSnapshot, 'turns' | 'messages'>) => {
     const settled = new Set(selection.turns.filter((turn) => ['completed', 'failed', 'cancelled'].includes(turn.status)).map((turn) => turn.turnId));
     return selection.messages.find((message) => message.messageId === messageId && message.role === 'assistant' && settled.has(message.turnId));
   };
   const recent = locate(snapshot);
   if (recent) return recent;
-  let cursor;
+  let cursor: string | null | undefined;
   do {
-    const query = new URLSearchParams({ limit: '100', ...(cursor ? { cursor } : {}) });
+    const query = new URLSearchParams({ limit: '100' });
+    if (cursor) query.set('cursor', cursor);
     const page = HistoryPageSchema.parse(await sessionService.history(sessionId, query.toString()));
     if (page.sessionId !== sessionId) throw new Error('Canonical history scope mismatch');
     const message = locate(page);
@@ -233,7 +284,19 @@ const fetchMessage = async ({ sessionId, messageId, sessionService }) => {
   return null;
 };
 
-const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, path }) => {
+const inspectImage = async ({
+  source,
+  directory,
+  approvedTempRoot,
+  fsPromises,
+  path,
+}: {
+  source: string;
+  directory: string;
+  approvedTempRoot: string;
+  fsPromises: MarkdownImageGrantDependencies['fsPromises'];
+  path: MarkdownImageGrantDependencies['path'];
+}): Promise<ImageInspectionResult> => {
   const parsed = parseFileSource(source);
   if (!parsed) return { status: 'error' };
   const sourcePath = path.isAbsolute(parsed) ? parsed : path.resolve(directory, parsed);
@@ -242,14 +305,11 @@ const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, p
   const root = outsideWorkspace ? approvedTempRoot : workspaceRoot;
 
   try {
-    // Resolve symlinks before comparing roots; lexical prefixes are not an authorization boundary.
     const [canonicalRoot, canonicalPath] = await Promise.all([
       fsPromises.realpath(root),
       fsPromises.realpath(sourcePath),
     ]);
     if (!isWithin(canonicalPath, canonicalRoot, path)) return { status: 'error' };
-    // Native image, browser and computer tools write these direct temp files.
-    // A Host-approved temp root is not permission to read unrelated temp data.
     if (outsideWorkspace && (path.dirname(canonicalPath) !== canonicalRoot
       || !/^omp-(?:image|sshots|screenshot-diff|computer)-[A-Za-z0-9_-]+\.(?:png|jpe?g|gif|webp)$/i.test(path.basename(canonicalPath)))) {
       return { status: 'error' };
@@ -270,46 +330,45 @@ const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, p
       await handle.close();
     }
   } catch (error) {
-    if (error?.code === 'ENOENT') return { status: 'missing' };
-    if (error?.code === 'EACCES' || error?.code === 'EPERM' || error?.code === 'ELOOP') {
+    if (hasFsErrorCode(error) && error.code === 'ENOENT') return { status: 'missing' };
+    if (hasFsErrorCode(error) && (error.code === 'EACCES' || error.code === 'EPERM' || error.code === 'ELOOP')) {
       return { status: 'error' };
     }
     throw error;
   }
 };
 
-export const registerMarkdownImageGrantRoutes = (app, dependencies) => {
+export const registerMarkdownImageGrantRoutes = (app: Application, dependencies: MarkdownImageGrantDependencies) => {
   const { fsPromises, path, crypto, sessionService, resolveSessionScope, approvedTempRoot, now = Date.now } = dependencies;
-  if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function'
-    || typeof resolveSessionScope !== 'function' || !approvedTempRoot) {
+  if (!sessionService || !resolveSessionScope || !approvedTempRoot) {
     throw new TypeError('Canonical session reader, Host scope resolver and approved image root are required');
   }
-  const grants = new Map();
+  const grants = new Map<string, ImageGrant>();
   const ttl = 10 * 60 * 1000;
   const prune = () => {
     for (const [id, grant] of grants) if (grant.expiresAt <= now()) grants.delete(id);
-    while (grants.size >= 256) grants.delete(grants.keys().next().value);
+    while (grants.size >= 256) {
+      const oldest = grants.keys().next().value;
+      if (oldest === undefined) break;
+      grants.delete(oldest);
+    }
   };
   const route = '/api/openchamber/sessions/:sessionId/markdown-image-grants';
   app.post(route, express.json({ limit: '32kb' }), async (req, res) => {
-    const sessionId = asString(req.params.sessionId);
-    const messageId = asString(req.body?.messageId);
-    const sources = req.body?.sources;
-    if (!EntityIdSchema.safeParse(sessionId).success || !EntityIdSchema.safeParse(messageId).success
-      || !Array.isArray(sources) || sources.length === 0 || sources.length > MAX_IMAGE_SOURCES
-      || sources.some((source) => typeof source !== 'string' || !source.trim())) {
+    const sessionId = isString(req.params.sessionId) ? req.params.sessionId.trim() : '';
+    const parsedBody = grantRequestBodySchema.safeParse(req.body);
+    if (!EntityIdSchema.safeParse(sessionId).success || !parsedBody.success) {
       return res.status(400).json({ error: 'sessionId, messageId, and 1-12 sources are required' });
     }
+    const { messageId, sources } = parsedBody.data;
     try {
-      // Client directories never authorize filesystem reads or message access.
       const scope = await resolveSessionScope(sessionId);
       if (!scope?.cwd || !scope?.workspaceId) return res.status(403).json({ error: 'Session scope unavailable' });
       const message = await fetchMessage({ sessionId, messageId, sessionService });
       if (!message) return res.status(404).json({ error: 'Assistant message not found' });
       const referenced = markdownImageSources(message);
-      const results = [];
-      for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
-        const source = sources[sourceIndex].trim();
+      const results: ImageGrantPrepareResult[] = [];
+      for (const [sourceIndex, source] of sources.entries()) {
         if (!referenced.has(source)) { results.push({ sourceIndex, status: 'error' }); continue; }
         try {
           const inspected = await inspectImage({ source, directory: scope.cwd, approvedTempRoot, fsPromises, path });
@@ -333,18 +392,17 @@ export const registerMarkdownImageGrantRoutes = (app, dependencies) => {
     }
   });
   app.get(`${route}/:grantId/raw`, async (req, res) => {
-    const grant = grants.get(req.params.grantId);
+    const grantId = req.params.grantId ?? '';
+    const grant = grants.get(grantId);
     if (!grant || grant.expiresAt <= now() || grant.sessionId !== req.params.sessionId) {
-      if (grant?.expiresAt <= now()) grants.delete(req.params.grantId);
+      if (grant && grant.expiresAt <= now()) grants.delete(grantId);
       return res.status(404).json({ error: 'Image grant unavailable' });
     }
     try {
       const scope = await resolveSessionScope(grant.sessionId);
-      if (scope.workspaceId !== grant.workspaceId || scope.rootSessionId !== grant.rootSessionId || scope.cwd !== grant.cwd) {
+      if (!scope || scope.workspaceId !== grant.workspaceId || scope.rootSessionId !== grant.rootSessionId || scope.cwd !== grant.cwd) {
         return res.status(403).json({ error: 'Session scope changed' });
       }
-      // Recheck realpath containment, size and signature at use time. Hold the
-      // no-follow descriptor while reading so a replaced symlink cannot escape.
       const inspected = await inspectImage({ source: grant.source, directory: scope.cwd, approvedTempRoot, fsPromises, path });
       if (inspected.status !== 'ready' || inspected.path !== grant.path) return res.status(404).json({ error: 'Image unavailable' });
       const handle = await fsPromises.open(grant.path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);

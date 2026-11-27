@@ -1,32 +1,136 @@
 import path from 'node:path';
 import fsPromises from 'node:fs/promises';
+import { z } from 'zod';
+import type { CanonicalEvent } from '@openchamber/agent-contract';
 
 import { createMessageSearchIndexer } from './indexer.js';
+import type { IndexerSessionScope, IndexerSessionService, IndexerStatus, MessageSearchIndexer } from './indexer.js';
 import { loadSqliteOpener } from './sqlite.js';
 import type { SqliteOpener } from './sqlite.js';
 import { buildSnippet, openMessageSearchStore, toMatchExpression, toSearchTerms } from './store.js';
-import type { ArchiveSnapshot } from './store.js';
-import type { GlobalMessageStreamHub } from '../event-stream/global-hub.js';
-import type { SearchOptions, SessionSearchOptions } from './contracts.js';
+import type { ArchiveSnapshot, MessageSearchStore, SessionSearchTotals } from './store.js';
+import type { MessageCursor, SearchOptions, SessionCursor, SessionSearchOptions } from './contracts.js';
+import { controlErrorFields } from '../openchamber-control/error.js';
+import { isString } from '../shared/guards.js';
 
 const INDEX_FILE = 'message-search.sqlite';
 const REASONING_META_KEY = 'reasoning';
 const INDEX_FILE_SUFFIXES = ['', '-wal', '-shm'];
 const MAX_LIMIT = 200;
 
+const StoreSearchHitSchema = z.object({
+  rowId: z.string(),
+  id: z.string(),
+  sessionId: z.string(),
+  role: z.enum(['user', 'assistant', 'reasoning']),
+  createdAt: z.number(),
+  sessionTitle: z.string(),
+  directory: z.string(),
+  archivedAt: z.number().nullable(),
+  text: z.string(),
+});
 
-interface MessageSearchRuntimeOptions {
+const StoreSessionSearchHitSchema = z.object({
+  sessionId: z.string(),
+  sessionTitle: z.string(),
+  directory: z.string(),
+  archivedAt: z.number().nullable(),
+  messageId: z.string(),
+  role: z.enum(['user', 'assistant', 'reasoning']),
+  createdAt: z.number(),
+  text: z.string(),
+  matchCount: z.number(),
+});
+
+export interface MessageSearchEventHub {
+  subscribeEvent: (listener: (event: CanonicalEvent, scope?: IndexerSessionScope) => void | Promise<void>) => () => void;
+  subscribeStatus: (listener: (status: { type: string; sessionId?: string }) => void) => () => void;
+  isConnected?: () => boolean;
+}
+
+export interface MessageSearchRuntimeOptions {
   dataDir: string;
-  sessionService: Parameters<typeof createMessageSearchIndexer>[0]['sessionService'];
-  resolveSessionScope: Parameters<typeof createMessageSearchIndexer>[0]['resolveSessionScope'];
+  sessionService: IndexerSessionService;
+  resolveSessionScope: (sessionId: string) => Promise<IndexerSessionScope | null>;
   readArchiveStates: () => Promise<ArchiveSnapshot>;
   logger?: Pick<Console, 'warn'>;
-  globalEventHub: Pick<GlobalMessageStreamHub, 'subscribeEvent' | 'subscribeStatus'> & Partial<Pick<GlobalMessageStreamHub, 'isConnected'>>;
+  globalEventHub: MessageSearchEventHub;
   readSettings: () => Promise<{ enabled: boolean; reasoning: boolean }>;
 }
 
-const hasMessage = (error: unknown): error is { message: unknown } =>
-  error != null && 'message' in Object(error);
+export interface MessageSearchHit {
+  id: string;
+  sessionId: string;
+  role: 'user' | 'assistant' | 'reasoning';
+  createdAt: number;
+  sessionTitle: string;
+  directory: string;
+  archived: boolean;
+  snippet: string;
+}
+
+export interface SessionSearchHit {
+  sessionId: string;
+  sessionTitle: string;
+  directory: string;
+  archived: boolean;
+  messageId: string;
+  role: 'user' | 'assistant' | 'reasoning';
+  createdAt: number;
+  snippet: string;
+  matchCount: number;
+}
+
+export type MessageSearchResult =
+  | { status: 'query-too-short'; hits: [] }
+  | {
+    status: 'ok';
+    hits: MessageSearchHit[];
+    next: MessageCursor | null;
+    index: IndexerStatus;
+    errors: Record<string, string>;
+    archiveError: string | null;
+  };
+
+export type SessionSearchResult =
+  | { status: 'query-too-short'; hits: [] }
+  | {
+    status: 'ok';
+    hits: SessionSearchHit[];
+    next: SessionCursor | null;
+    totals: SessionSearchTotals | null;
+    index: IndexerStatus;
+    errors: Record<string, string>;
+    archiveError: string | null;
+  };
+
+export interface MessageSearchStatus {
+  state: 'unsupported' | 'on' | 'off' | 'failed';
+  sizeBytes: number;
+  index: IndexerStatus | null;
+}
+
+export interface MessageSearchRuntime {
+  supported: boolean;
+  setEnabled: (next: boolean) => Promise<void>;
+  setReasoningEnabled: (next: boolean) => Promise<void>;
+  deleteIndex: () => Promise<void>;
+  search: (options: SearchOptions) => Promise<MessageSearchResult | null>;
+  searchSessions: (options: SessionSearchOptions) => Promise<SessionSearchResult | null>;
+  status: () => Promise<MessageSearchStatus>;
+  stop: () => Promise<void>;
+}
+
+interface RunningEngine {
+  store: MessageSearchStore;
+  indexer: MessageSearchIndexer;
+  stop: () => Promise<void>;
+}
+
+const errorMessageOf = (cause: Parameters<typeof controlErrorFields>[0]): string | undefined => {
+  const message = controlErrorFields(cause)?.message;
+  return isString(message) ? message : undefined;
+};
 
 export const createMessageSearchRuntime = ({
   dataDir,
@@ -36,24 +140,23 @@ export const createMessageSearchRuntime = ({
   readArchiveStates,
   readSettings,
   logger = console,
-}: MessageSearchRuntimeOptions) => {
+}: MessageSearchRuntimeOptions): MessageSearchRuntime => {
   const indexPath = path.join(dataDir, INDEX_FILE);
   const open = loadSqliteOpener();
   let enabled = false;
   let reasoning = false;
-  let engine: ReturnType<typeof startEngine> | null = null;
+  let engine: RunningEngine | null = null;
   let failed = false;
-  let transition = Promise.resolve();
-  const enqueue = (work: () => Promise<void>) => {
+  let transition: Promise<void> = Promise.resolve();
+  const enqueue = (work: () => Promise<void>): Promise<void> => {
     const run = transition.then(work);
     transition = run.catch((error) => {
-      logger.warn?.('[message-search]', (hasMessage(error) ? error.message : undefined) ?? error);
+      logger.warn?.('[message-search]', errorMessageOf(error) ?? error);
     });
     return run;
   };
 
-
-  const reconcileReasoning = (store: ReturnType<typeof openMessageSearchStore>) => {
+  const reconcileReasoning = (store: MessageSearchStore): boolean => {
     const indexed = store.readMeta(REASONING_META_KEY) === '1';
     if (reasoning && !indexed) {
       store.rereadAssistantRecords();
@@ -67,13 +170,14 @@ export const createMessageSearchRuntime = ({
     return false;
   };
 
-  const startEngine = (open: SqliteOpener) => {
-    const store = openMessageSearchStore(open(indexPath));
+  const startEngine = (openDb: SqliteOpener): RunningEngine => {
+    const store = openMessageSearchStore(openDb(indexPath));
     reconcileReasoning(store);
     const indexer = createMessageSearchIndexer({ store, sessionService, resolveSessionScope, includeReasoning: () => reasoning, logger });
     const unsubscribeEvents = globalEventHub.subscribeEvent((event, scope) => indexer.processCanonicalEvent(event, scope));
     const unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
       if (status.type === 'connect') return indexer.onConnected(status.sessionId);
+      return undefined;
     });
     void indexer.onConnected();
     return {
@@ -89,14 +193,14 @@ export const createMessageSearchRuntime = ({
     };
   };
 
-  const apply = async () => {
+  const apply = async (): Promise<void> => {
     if (enabled && !engine && open) {
       try {
         engine = startEngine(open);
         failed = false;
       } catch (error) {
         failed = true;
-        logger.warn?.('[message-search] index unavailable:', (hasMessage(error) ? error.message : undefined) ?? error);
+        logger.warn?.('[message-search] index unavailable:', errorMessageOf(error) ?? error);
       }
     } else if (!enabled && engine) {
       const running = engine;
@@ -105,7 +209,7 @@ export const createMessageSearchRuntime = ({
     }
   };
 
-  const indexSize = async () => {
+  const indexSize = async (): Promise<number> => {
     let bytes = 0;
     for (const suffix of INDEX_FILE_SUFFIXES) {
       const stat = await fsPromises.stat(`${indexPath}${suffix}`).catch(() => null);
@@ -113,7 +217,8 @@ export const createMessageSearchRuntime = ({
     }
     return bytes;
   };
-  const refreshArchiveStates = async (active: NonNullable<typeof engine>) => {
+
+  const refreshArchiveStates = async (active: RunningEngine): Promise<ArchiveSnapshot | null> => {
     const snapshot = await readArchiveStates();
     if (active !== engine) return null;
     active.store.applyArchiveSnapshot(snapshot);
@@ -158,11 +263,11 @@ export const createMessageSearchRuntime = ({
       if (!engine) return null;
       const active = engine;
       const match = toMatchExpression(query);
-      if (!match) return { status: 'query-too-short' as const, hits: [] };
+      if (!match) return { status: 'query-too-short', hits: [] };
       const archive = await refreshArchiveStates(active);
       if (!archive) return null;
       const size = Math.min(Math.max(1, limit), MAX_LIMIT);
-      const hits = active.store.search({
+      const rawHits = active.store.search({
         match,
         sessionId,
         directories,
@@ -173,11 +278,12 @@ export const createMessageSearchRuntime = ({
         limit: size + 1,
         order,
       });
+      const hits = rawHits.map((row) => StoreSearchHitSchema.parse(row));
       const terms = toSearchTerms(query);
       const page = hits.slice(0, size);
       const last = page[page.length - 1];
       return {
-        status: 'ok' as const,
+        status: 'ok',
         hits: page.map((hit) => ({
           id: hit.id,
           sessionId: hit.sessionId,
@@ -199,13 +305,14 @@ export const createMessageSearchRuntime = ({
       if (!engine) return null;
       const active = engine;
       const match = toMatchExpression(query);
-      if (!match) return { status: 'query-too-short' as const, hits: [] };
+      if (!match) return { status: 'query-too-short', hits: [] };
       const archive = await refreshArchiveStates(active);
       if (!archive) return null;
       const size = Math.min(Math.max(1, limit), 100);
       const result = active.store.searchSessions({ match, directories, role, includeReasoning: reasoning && includeReasoning !== false, lifecycle, before, limit: size + 1, exclude, withTotals: !before });
+      const parsedHits = result.hits.map((row) => StoreSessionSearchHitSchema.parse(row));
       const terms = toSearchTerms(query);
-      const page = result.hits.slice(0, size);
+      const page = parsedHits.slice(0, size);
       const last = page.at(-1);
       return {
         status: 'ok',
@@ -220,7 +327,7 @@ export const createMessageSearchRuntime = ({
           snippet: buildSnippet(hit.text, terms),
           matchCount: hit.matchCount,
         })),
-        next: result.hits.length > size && last ? { createdAt: last.createdAt, sessionId: last.sessionId } : null,
+        next: parsedHits.length > size && last ? { createdAt: last.createdAt, sessionId: last.sessionId } : null,
         totals: Object.keys(archive.errors).length > 0 || archive.conversion?.code ? null : result.totals,
         index: engine.indexer.status(),
         errors: archive.errors,

@@ -1,7 +1,8 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult } from '../utils/contracts.js';
 import { buildResult, toUsageWindow, toNumber, formatMoney, asNonEmptyString, asObject } from '../utils/index.js';
-import { z } from "zod";
-
 
 interface KiloFields {
   key?: unknown;
@@ -21,9 +22,13 @@ const isObject = (value: unknown): value is KiloFields => asObject(value) !== nu
 const asFields = z.custom<KiloFields | null>(isObject).catch(null).parse;
 
 export interface KiloDependencies {
-  readAuth?: () => LegacyAuthFile | Promise<LegacyAuthFile>;
-  readOpencodeConfig?: typeof readConfig;
-  fetchImpl?: typeof fetch;
+  readAuth?: (() => CredentialJson | Promise<CredentialJson>) | undefined;
+  fetchImpl?: typeof fetch | undefined;
+}
+
+export interface KiloFetchOptions {
+  credential?: CredentialJson | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 type KiloHeaders = {
@@ -38,21 +43,15 @@ export const providerName = 'Kilo Code';
 
 const KILO_BALANCE_URL = 'https://api.kilo.ai/api/profile/balance';
 
-const getApiKey = (credential) => credentialAccessToken(credential);
-
-
-
-
+const getApiKey = (credential?: CredentialJson): string | null => credentialAccessToken(credential);
 
 const parseBalance = z.unknown().transform((value) => toNumber(asNonEmptyString(value)
   ?? (Number.isFinite(value) ? value : null))).parse;
 
-export const isConfigured = (auth: LegacyAuthFile) => Boolean(getApiKey(auth));
+export const isConfigured = (auth?: CredentialJson): boolean => Boolean(getApiKey(auth));
 
-export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
-  
+export const fetchQuota = async ({ credential, fetchImpl = fetch }: KiloFetchOptions = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = getApiKey(credential);
-
   if (!apiKey) {
     return buildResult({
       providerId,
@@ -63,7 +62,7 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
     });
   }
 
-  
+
 
   const timeoutSignal = AbortSignal.timeout(15_000);
 
@@ -73,7 +72,7 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
       'Content-Type': 'application/json',
       'Accept-Encoding': 'identity'
     };
-    
+
 
     const response = await fetchImpl(KILO_BALANCE_URL, {
       method: 'GET',

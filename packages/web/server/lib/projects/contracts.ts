@@ -1,5 +1,23 @@
 import { z } from 'zod';
-import type { discoverLoops } from '../scheduled-tasks/loops.js';
+export interface LoopDefinition {
+  name: string;
+  enabled: boolean;
+  schedule: {
+    kind: 'cron';
+    cron: string;
+    timezone?: string;
+  };
+  execution: {
+    prompt: string;
+    providerID: string;
+    modelID: string;
+    agent?: string;
+  };
+}
+
+export type DiscoveredLoop =
+  | { scope: 'user' | 'project'; filePath: string; definition: null }
+  | { scope: 'user' | 'project'; filePath: string; definition: LoopDefinition; fingerprint: string };
 
 const sharedProjectDocumentSchema = z.record(z.string(), z.unknown());
 export type SharedProjectDocument = z.infer<typeof sharedProjectDocumentSchema>;
@@ -33,6 +51,7 @@ export interface SharedProjectConfig {
 
 export interface PersonalProjectSetup extends Omit<SharedProjectConfig, 'plansDir'> {
   setupWorktreeMode: 'append' | 'replace';
+  worktreeDirectory: string | null;
   createWorktreeCommand: string;
   projectActionsPrimaryId: string | null;
   hiddenSharedActionIds: string[];
@@ -55,6 +74,7 @@ export interface StoredProjectSetupPatch {
   draftStarters?: DraftStarter[];
   hiddenSharedActionIds?: string[];
   setupWorktreeMode?: 'append' | 'replace';
+  worktreeDirectory?: string | undefined;
   sharedTrust?: { hash: string; trustedAt: number } | undefined;
   notesTodosInRepository?: true | undefined;
   projectPath?: string;
@@ -172,7 +192,7 @@ export interface ScheduledTaskInput {
 
 export interface ScheduledTaskStore extends ScheduledTaskConfig {
   upsertScheduledTask: (projectID: string, input: ScheduledTaskInput) => Promise<{ task: ScheduledTask; tasks: ScheduledTask[]; created: boolean }>;
-  reconcileLoopTasks: (projectID: string, loops: Awaited<ReturnType<typeof discoverLoops>>) => Promise<ScheduledTask[]>;
+  reconcileLoopTasks: (projectID: string, loops: DiscoveredLoop[]) => Promise<ScheduledTask[]>;
   listScheduledWorktreeCleanups: () => Promise<ScheduledWorktreeCleanup[]>;
   saveScheduledWorktreeCleanup: (projectID: string, record: Omit<ScheduledWorktreeCleanup, 'projectID'>) => Promise<ScheduledWorktreeCleanup>;
   finishScheduledWorktreeCleanup: (projectID: string, sessionID: string, remove: ((record: ScheduledWorktreeCleanup, resumingRemoval: boolean) => Promise<void>) | null, options: { signal: AbortSignal }) => Promise<boolean>;

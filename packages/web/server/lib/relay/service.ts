@@ -1,7 +1,7 @@
 
 import express from 'express';
 import type { Server } from 'node:http';
-
+import { z } from 'zod';
 import { createRelayIdentityRuntime } from './identity.js';
 import { describeRelayError, startRelayHost } from './host-client.js';
 import { consumeRelayProof } from './provenance.js';
@@ -43,7 +43,7 @@ export interface RelayStatus {
   state: string;
   serverId: string;
   connectedClients: number;
-  relayUrl: string;
+  relayUrl: string | null;
   relayUrlLocked: boolean;
   blockedByEnterprise: boolean;
   identityConflict: boolean | undefined;
@@ -52,17 +52,15 @@ export interface RelayStatus {
 
 interface RelayConfig {
   enabled: boolean;
-  relayUrl: string;
+  relayUrl: string | null;
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string';
 const hasRelayConfigFields = (value: unknown): value is { enabled?: unknown; relayUrl?: unknown } =>
   value !== null && value !== undefined;
-const hasRelayUrlField = (value: unknown): value is { relayUrl?: unknown } =>
-  value !== null && value !== undefined;
 const hasErrorMessage = (value: unknown): value is { message?: unknown } => value !== null && value !== undefined;
 
-
+const enableRelayBodySchema = z.object({ relayUrl: z.unknown().optional() }).optional();
 
 const isValidRelayUrl = (value: unknown): value is string => {
   if (!isString(value)) return false;
@@ -74,8 +72,8 @@ const isValidRelayUrl = (value: unknown): value is string => {
   }
 };
 
-export const normalizeRelayUrl = (value) => {
-  if (typeof value !== 'string') return null;
+export const normalizeRelayUrl = (value: string | null | undefined) => {
+  if (!isString(value)) return null;
   const trimmed = value.trim();
   if (!trimmed || !isValidRelayUrl(trimmed)) return null;
   return trimmed;
@@ -99,7 +97,7 @@ export const createRelayService = ({
   hasRelayDemand = async () => false,
   hostLock = null,
   allowPassiveHost = true,
-  onShareState = () => {},
+  onShareState = () => { },
   logger = console,
 }: RelayServiceDependencies) => {
   const identityRuntime = createRelayIdentityRuntime({ crypto, relayKeyStore });
@@ -144,18 +142,9 @@ export const createRelayService = ({
     connectedClients: 0,
   });
 
-  // Claim watcher, active while the relay is enabled:
-  //   - standby → claimant died → take over (start our host);
-  //   - running → another live process claimed → stand down (stop, standby);
-  //     otherwise refresh the claim, which keeps it live for instances on
-  //     other hosts or containers that cannot probe our pid.
-  // This back-off is what actually ends the mutual-eviction fight: the loser
-  // must STOP reconnecting, otherwise both keep replacing each other forever.
   const ensureClaimWatch = () => {
     if (!hostLock || claimWatchTimer) return;
     claimWatchTimer = setInterval(() => {
-      // Same queue as start/stop/disable: the tick must not act on a config
-      // (enabled, enterprise, passive) that changed while it was scheduled.
       void serializedLifecycle(async () => {
         try {
           const config = await readConfig();
@@ -207,7 +196,7 @@ export const createRelayService = ({
     claimFreeSinceMs = null;
   };
 
-  const startHost = async (relayUrl, { claim = 'try' } = {}) => {
+  const startHost = async (relayUrl: string | null, { claim = 'try' }: { claim?: 'try' | 'force' } = {}) => {
     if (hostClient) return;
     if (relayBlockedByEnterprise()) {
       status = { state: 'disabled', lastError: RELAY_BLOCKED_ERROR, connectedClients: 0 };
@@ -268,9 +257,6 @@ export const createRelayService = ({
     }
   };
 
-  // Drive the relay lifecycle from demand: run it when a device or pending
-  // session uses the relay, stop it when none remain. Called on startup and after
-  // pairing/device changes, so the operator never toggles it manually.
   const reconcileHost = async () => {
     try {
       const demand = await hasRelayDemand();
@@ -323,13 +309,11 @@ export const createRelayService = ({
     return result;
   };
 
-  // Pairing candidate for the unified connection payload (pairing v2). Relay is
-  // just another transport: it carries the relay route + E2EE trust anchor, no
-  // embedded token — the client redeems the one-time pairing secret over the
-  // tunnel like any other candidate. Returns null when the host relay is off, so
-  // callers only advertise relay when it is actually reachable. Priority is high
-  // (tried after LAN/tunnel) since the relay path is the last-resort transport.
-  const buildPairingCandidate = async (configOverride) => {
+  const buildPairingCandidate = async (configOverride?: {
+    enabled: boolean;
+    relayUrl: string | null;
+    relayUrlLocked: boolean;
+  }): Promise<RelayPairingCandidate | null> => {
     const config = configOverride ?? await readConfig();
     if (!config.relayUrl) return null;
     const identity = await identityRuntime.getRelayIdentity();
@@ -348,12 +332,7 @@ export const createRelayService = ({
     return buildPairingCandidate(config);
   };
 
-  // Enable the relay host on demand and return its pairing candidate. Creating a
-  // relay pairing link IS the demand signal, so the relay turns itself on here
-  // rather than requiring a separate manual toggle. Idempotent: a no-op when the
-  // relay is already enabled and running.
   const ensureEnabledForPairingHost = async () => {
-    // Direct pairing still works: the pairing route drops a failed relay candidate.
     if (relayBlockedByEnterprise()) throw Object.assign(new Error(RELAY_BLOCKED_ERROR), { statusCode: 403 });
     const config = await readConfig();
     if (!config.relayUrl) throw Object.assign(new Error(RELAY_UNCONFIGURED_ERROR), { statusCode: 400 });
@@ -363,55 +342,39 @@ export const createRelayService = ({
     if (!hostClient) {
       const next = await readConfig();
       if (!next.relayUrl) throw Object.assign(new Error(RELAY_UNCONFIGURED_ERROR), { statusCode: 400 });
-      // Force-claim: creating a pairing link is explicit user intent — the
-      // instance the user is pairing against MUST be the one devices reach,
-      // even if another local process currently holds the machine's claim
-      // (its claim watcher sees the takeover and stands down).
       await startHost(next.relayUrl, { claim: 'force' });
     }
     return buildPairingCandidate();
   };
 
-  // Gives this copy its own identity. Both copies of a copied data dir hold the
-  // same keys and evict each other at the relay; after the reset, devices that
-  // know the old identity keep reaching the other copy until they pair here again.
   const resetIdentityHost = async () => {
     const wasHosting = hostClient !== null;
     stopHostClient();
     await relayKeyStore.reset();
-    // A reset only runs through this queue, but a host started before it can
-    // still be live; stop whatever exists now so no host keeps signing with
-    // the abandoned identity.
     stopHostClient();
     if (!wasHosting) return;
     const config = await readConfig();
     if (!config.enabled || !config.relayUrl || relayBlockedByEnterprise()) return;
-    // Explicit identity rotation is user intent: claim the host like enable.
     await startHost(config.relayUrl, { claim: 'force' });
   };
 
-  // One lifecycle mutation at a time: boot, demand reconcile, explicit
-  // enable/disable and identity reset read and replace the same host and key
-  // state. Serializing them also keeps a reset from restarting a host built
-  // from the identity it is replacing.
   let lifecycleQueue = Promise.resolve();
-  const serializedLifecycle = (task) => {
+  const serializedLifecycle = <T>(task: () => Promise<T>): Promise<T> => {
     const run = lifecycleQueue.then(task, task);
     lifecycleQueue = run.then(() => undefined, () => undefined);
     return run;
   };
-  const start = (relayUrl, options) => serializedLifecycle(() => startHost(relayUrl, options));
-  const stop = () => serializedLifecycle(() => stopHost());
+  const stop = () => serializedLifecycle(() => Promise.resolve(stopHost()));
   const startIfEnabled = () => serializedLifecycle(() => startIfEnabledHost());
   const reconcile = () => serializedLifecycle(() => reconcileHost());
   const ensureEnabledForPairing = () => serializedLifecycle(() => ensureEnabledForPairingHost());
   const resetIdentity = () => serializedLifecycle(() => resetIdentityHost());
-  const enableRelay = (relayUrl) => serializedLifecycle(async () => {
+  const enableRelay = (relayUrl: string) => serializedLifecycle(async () => {
     stopHost();
     await startHost(relayUrl, { claim: 'force' });
   });
 
-  const registerRoutes = (app, server) => {
+  const registerRoutes = (app: Application, server: Pick<Server, 'prependListener'>) => {
     server.prependListener('request', consumeRelayProof);
     server.prependListener('upgrade', consumeRelayProof);
     app.get('/api/openchamber/relay/status', async (_req, res) => {
@@ -428,20 +391,21 @@ export const createRelayService = ({
       }
       try {
         const current = await readConfig();
-        const hasExplicitUrl = req.body?.relayUrl !== undefined && req.body?.relayUrl !== null;
-        if (hasExplicitUrl && !isValidRelayUrl(req.body.relayUrl)) {
+        const parsedBody = enableRelayBodySchema.safeParse(req.body);
+        const requestedUrl = parsedBody.success ? parsedBody.data?.relayUrl : undefined;
+        const hasExplicitUrl = requestedUrl !== undefined && requestedUrl !== null;
+        if (hasExplicitUrl && !isValidRelayUrl(requestedUrl)) {
           return res.status(400).json({ error: 'Invalid relay URL. Use a ws:// or wss:// URL.' });
         }
         const relayUrl = current.relayUrlLocked
           ? current.relayUrl
-          : hasExplicitUrl
-            ? normalizeRelayUrl(req.body.relayUrl)
+          : hasExplicitUrl && isString(requestedUrl)
+            ? normalizeRelayUrl(requestedUrl)
             : current.relayUrl;
         if (!relayUrl) {
           return res.status(400).json({ error: RELAY_UNCONFIGURED_ERROR });
         }
         await writeConfig({ enabled: true, relayUrl });
-        // Explicit user action: take the machine's host claim like pairing does.
         await enableRelay(relayUrl);
         res.json(await getStatus());
       } catch (error) {

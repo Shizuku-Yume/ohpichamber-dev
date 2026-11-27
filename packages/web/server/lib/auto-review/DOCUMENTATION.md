@@ -56,7 +56,7 @@ Each step is one send and the end of the turn it starts.
 
 1. A send waits until its session's turn is over: `runtimeStatus` is not
    `running`/`awaiting_approval`/`awaiting_input` and no subagent is active
-   (`../canonical-session-state.js` `createCanonicalSessionState`), so a prompt
+   (`../canonical-session-state.ts` `createCanonicalSessionState`), so a prompt
    never steers into a live turn. Unknown is never idle: a failed read retries
    with backoff.
 2. Before the first attempt the send gets its baseline, the session's newest

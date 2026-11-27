@@ -300,11 +300,11 @@ for (const file of activeServerFiles.filter(isMountedFile)) {
 }
 
 // Explicit dynamic/table-driven mounts verified in active server files:
-addRoute('ANY', '/api/agent/v1/workspaces/:workspaceId/skills/files*', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-file-routes.js'), 12, 'regex-router');
-addRoute('GET', '/api/agent/v1/workspaces/:workspaceId/skills/repositories', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.js'), 17, 'regex-router');
-addRoute('POST', '/api/agent/v1/workspaces/:workspaceId/skills/repositories/source', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.js'), 20, 'regex-router');
-addRoute('POST', '/api/agent/v1/workspaces/:workspaceId/skills/repositories/scan', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.js'), 21, 'regex-router');
-addRoute('POST', '/api/agent/v1/workspaces/:workspaceId/skills/repositories/install', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.js'), 22, 'regex-router');
+addRoute('ANY', '/api/agent/v1/workspaces/:workspaceId/skills/files*', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-file-routes.ts'), 12, 'regex-router');
+addRoute('GET', '/api/agent/v1/workspaces/:workspaceId/skills/repositories', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.ts'), 17, 'regex-router');
+addRoute('POST', '/api/agent/v1/workspaces/:workspaceId/skills/repositories/source', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.ts'), 20, 'regex-router');
+addRoute('POST', '/api/agent/v1/workspaces/:workspaceId/skills/repositories/scan', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.ts'), 21, 'regex-router');
+addRoute('POST', '/api/agent/v1/workspaces/:workspaceId/skills/repositories/install', path.join(REPO_ROOT, 'packages/web/server/lib/host/skill-catalog-routes.ts'), 22, 'regex-router');
 addRoute('POST', '/api/config/themes/catalog/search', path.join(REPO_ROOT, 'packages/web/server/lib/host/theme-catalog.js'), 177, 'table-route');
 addRoute('POST', '/api/config/themes/catalog/package', path.join(REPO_ROOT, 'packages/web/server/lib/host/theme-catalog.js'), 178, 'table-route');
 addRoute('WS', '/api/guests/:id/surface/ws', path.join(REPO_ROOT, 'packages/web/server/lib/guests/surface.js'), 1, 'ws-upgrade');

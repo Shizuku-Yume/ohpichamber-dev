@@ -2,7 +2,7 @@
 
 ## Ownership
 
-This module owns OhPiChamber's settings persistence: the instance and profile files, their migrations, path and record normalization, request sanitizing and response shaping, and the generated registry snapshot `settings-registry.json` (`bun run settings-registry:generate` writes it from the UI registry). `GET` and `PUT /api/config/settings` are registered by `../host/settings-routes.js`, which receives this runtime from server composition. What a setting means belongs to the feature that reads it.
+This module owns OhPiChamber's settings persistence: the instance and profile files, their migrations, path and record normalization, request sanitizing and response shaping, and the generated registry snapshot `settings-registry.json` (`bun run settings-registry:generate` writes it from the UI registry). `GET` and `PUT /api/config/settings` are registered by `../host/settings-routes.ts`, which receives this runtime from server composition. What a setting means belongs to the feature that reads it.
 
 ## Invariants
 

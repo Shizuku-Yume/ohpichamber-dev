@@ -12,20 +12,10 @@ const HANDSHAKE_TIMEOUT_MS = 15_000;
 
 const SPACE_ID = /^[0-9a-f]{12}$/;
 
-/**
- * The host's own tunnel, or the one of an isolated space on that host: the
- * host forwards `/api/spaces/<id>/dev-tunnel` to the server inside the space,
- * which dials the port on its own loopback, the space's.
- */
-const tunnelPath = (spaceId) => (spaceId ? `/api/spaces/${spaceId}/dev-tunnel` : '/api/dev-tunnel');
+const tunnelPath = (spaceId: string | null) => (spaceId ? `/api/spaces/${spaceId}/dev-tunnel` : '/api/dev-tunnel');
 
-const toWebSocketUrl = (baseUrl, port, spaceId) => {
+const toWebSocketUrl = (baseUrl: string, port: number, spaceId: string | null) => {
   const parsed = new URL(tunnelPath(spaceId), baseUrl);
-  // WHATWG URL silently ignores a protocol assignment that crosses from a
-  // non-special scheme (custom app protocols, relay-virtual URLs) to `ws:`.
-  // Without this check the stale scheme survives into `new WebSocket(...)`,
-  // which then throws inside the connection handler and takes the whole
-  // process down; rejecting here fails the open() call cleanly instead.
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`The remote base URL must be http(s); got "${parsed.protocol}"`);
   }

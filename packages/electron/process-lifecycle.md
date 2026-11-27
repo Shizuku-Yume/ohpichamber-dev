@@ -8,7 +8,7 @@ Node runtime. Its Git commands use Node `child_process` and `simple-git`, not
 
 | Owner | Children and workload | End of ownership |
 |---|---|---|
-| `web/server/lib/host/agent-service-supervisor.js` | Supervised Bun Agent Service process (`packages/agent-service/src/index.ts`) | Host close or backend shutdown terminates the supervisor and child service processes. |
+| `web/server/lib/host/agent-service-supervisor.ts` | Supervised Bun Agent Service process (`packages/agent-service/src/index.ts`) | Host close or backend shutdown terminates the supervisor and child service processes. |
 | Bun Workers | Agent execution, tools, MCP, and workspace catalogs | Worker processes run under Bun scoped to workspace cwd; termination on session deletion or backend stop. |
 | `web/server/lib/git/service.js` | Git status, diff, branch and worktree reads plus explicit mutations | Command completion. Status includes several subprocesses and runs at most once per directory at a time (see the git module documentation); branch discovery can contact remotes. Git never waits on a terminal prompt: `GIT_TERMINAL_PROMPT=0` makes an unanswerable credential prompt fail instead of holding a hidden console open. These commands are independent of the selected terminal shell. |
 | `web/server/lib/fs/` | `git check-ignore` during file listing and search; explicit background exec jobs | Ignore checks finish with the command. Exec jobs have their own deadline. |

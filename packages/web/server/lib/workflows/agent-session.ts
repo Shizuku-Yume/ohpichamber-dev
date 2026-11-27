@@ -1,40 +1,53 @@
 import { z } from 'zod';
-import { parseModelSelector, thinkingLevelToReasoningEffort, modelRefKey } from '@openchamber/agent-contract';
+import {
+  modelRefKey,
+  parseModelSelector,
+  thinkingLevelToReasoningEffort,
+} from '@openchamber/agent-contract';
+import type {
+  CapturedSendOptions,
+  HistoryPage,
+  Message,
+  PromptRequest,
+  SessionControlAck,
+  Turn,
+} from '@openchamber/agent-contract';
+import type { DispatchOutcome } from '../dispatch-results/runtime.js';
+import type { SyntheticMessage, WorkflowAgentSessions } from './contracts.js';
 
-// The idle turn is polled: the Host has no push subscription this module may
-// hold, and a workflow agent is one prompt, so a short poll is enough.
 const POLL_MS = 1_000;
 const HISTORY_LIMIT = 50;
 
-const terminalTurn = (turn) => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled';
+const OUTCOME_STATES = {
+  completed: 'completed',
+  failed: 'error',
+  cancelled: 'cancelled',
+} as const;
 
-const historyQuery = () => new URLSearchParams({ limit: String(HISTORY_LIMIT) }).toString();
+type TerminalStatus = keyof typeof OUTCOME_STATES;
 
-/**
- * The text of an assistant message. Canonical messages carry typed parts; a
- * workflow answer is their text, in order.
- */
-const messageText = (message) => (Array.isArray(message?.parts) ? message.parts : [])
-  .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+const terminalTurn = (turn: Turn): turn is Turn & { status: TerminalStatus } =>
+  turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled';
+
+const historyQuery = (): string => new URLSearchParams({ limit: String(HISTORY_LIMIT) }).toString();
+
+const messageText = (message: Message): string => (Array.isArray(message.parts) ? message.parts : [])
+  .filter((part): part is Extract<Message['parts'][number], { type: 'text' }> => part.type === 'text')
   .map((part) => part.content)
   .join('')
   .trim();
 
-const OUTCOME_STATES = { completed: 'completed', failed: 'error', cancelled: 'cancelled' };
-
-/** The outcome of one terminal turn, in dispatch-results' shape. */
-const outcomeOf = (page, turn) => {
+const outcomeOf = (page: HistoryPage, turn: Turn & { status: TerminalStatus }): DispatchOutcome => {
   const message = page.messages.find((candidate) =>
     candidate.role === 'assistant' && turn.assistantMessageIds.includes(candidate.messageId));
   return {
     state: OUTCOME_STATES[turn.status],
     text: message ? messageText(message) : '',
-    errorMessage: typeof turn.error === 'string' ? turn.error.trim() : '',
+    errorMessage: turn.error ? turn.error.trim() : '',
   };
 };
 
-/** `provider/model`, optionally with `[:level]`, `#variant` or `@upstream`. */
-const parseModelRef = (value) => {
+const parseModelRef = (value: string) => {
   const parsed = parseModelSelector(value);
   if (!parsed) return null;
   return {
@@ -45,18 +58,47 @@ const parseModelRef = (value) => {
   };
 };
 
-export interface WorkflowAgentSessionOptions {
-  buildOpenCodeUrl: SessionActivityOptions['buildOpenCodeUrl'];
-  getOpenCodeAuthHeaders: SessionActivityOptions['getOpenCodeAuthHeaders'];
-  waitForOpenCodeReady?: (timeoutMs: number, pollMs: number) => Promise<void>;
-  globalEventHub: Pick<DispatchResultsOptions['globalEventHub'], 'subscribeEvent'>;
-  createClient?: WorkflowClientFactory;
-  fetchImpl?: typeof fetch;
-  pollMs?: number;
+export interface WorkflowSessionService {
+  create: (payload: {
+    projectId: string;
+    workspaceId: string;
+    parentSessionId?: string;
+    options?: CapturedSendOptions;
+    title?: string;
+  }) => Promise<{ session?: { sessionId?: string } | null } | null | undefined>;
+  send: (sessionId: string, payload: PromptRequest) => Promise<{ run?: { runId?: string } | null } | null | undefined>;
+  followUp: (sessionId: string, payload: { request: PromptRequest }) => Promise<{ followUpId?: string } | null | undefined>;
+  history: (sessionId: string, query: string) => Promise<HistoryPage | null | undefined>;
+  open: (sessionId: string) => Promise<{ activeRun?: { runId?: string } | null } | null | undefined>;
+  control: (sessionId: string, operation: { type: 'abort'; runId: string }) => Promise<{ run?: { runId?: string } | null } | SessionControlAck | null | undefined>;
+  unloadWorker?: ((sessionId: string) => Promise<void>) | undefined;
 }
 
-type AgentSessions = WorkflowRuntimeOptions['agentSessions'];
-type ModelRef = NonNullable<z.infer<typeof sessionSchema>['model']>;
+export interface WorkflowWorkspaceScope {
+  projectId: string;
+  workspaceId: string;
+  cwd?: string;
+}
+
+export interface WorkflowAgentSessionOptions {
+  sessionService: WorkflowSessionService;
+  resolveWorkspace: (directory: string) => Promise<WorkflowWorkspaceScope | null | undefined>;
+  pollMs?: number;
+  sleep?: (duration: number) => Promise<void>;
+}
+
+const statusErrorSchema = z.object({
+  status: z.number().optional(),
+  statusCode: z.number().optional(),
+});
+
+const usageSchema = z.object({
+  input: z.number(),
+  output: z.number(),
+  cacheRead: z.number(),
+  cacheWrite: z.number(),
+  cost: z.object({ total: z.number() }),
+});
 
 export class WorkflowAgentStopped extends Error {
   constructor() {
@@ -65,36 +107,30 @@ export class WorkflowAgentStopped extends Error {
   }
 }
 
-/**
- * Workflow agents run as canonical Host sessions on the Agent Service. One
- * agent is one session and one prompt; a JSON answer that does not match its
- * schema gets a follow-up prompt in the same session.
- *
- * Unlike upstream's OpenCode child sessions these are root sessions: the
- * canonical create contract carries no parent link, and the Agent Service
- * writes `parentSessionId` only for sessions its own subagent tool opens.
- * The run record links every agent's session, and the report goes back into
- * the session that proposed the run.
- */
+export type WorkflowAgentSessionsHandle = WorkflowAgentSessions & {
+  postSynthetic: (sessionId: string, message: Pick<SyntheticMessage, 'text' | 'resume'>) => Promise<void>;
+};
+
 export const createWorkflowAgentSessions = ({
   sessionService,
   resolveWorkspace,
   pollMs = POLL_MS,
-  sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
-}) => {
-  if (!sessionService || typeof sessionService.send !== 'function' || typeof sessionService.create !== 'function') {
+}: WorkflowAgentSessionOptions): WorkflowAgentSessionsHandle => {
+  if (!sessionService?.send || !sessionService?.create) {
     throw new Error('Workflow agents need the canonical session service');
   }
 
-  const workspaceFor = async (directory) => {
+  const workspaceFor = async (directory: string): Promise<WorkflowWorkspaceScope> => {
     const scope = await resolveWorkspace(directory);
     if (!scope?.projectId || !scope?.workspaceId) throw new Error(`No workspace is registered for ${directory}`);
     return scope;
   };
 
-  const optionsFor = (model, _agent) => {
+  const optionsFor = (model: string | null | undefined, _agent: string | null | undefined): CapturedSendOptions => {
     const ref = model ? parseModelRef(model) : null;
-    if (model && !ref) throw new Error(`model must be provider/model, optionally with :thinkingLevel, #variant or @upstream, got ${model}`);
+    if (model && !ref) {
+      throw new Error(`model must be provider/model, optionally with :thinkingLevel, #variant or @upstream, got ${model}`);
+    }
     return {
       providerId: ref?.providerId ?? null,
       modelId: ref?.modelId ?? null,
@@ -104,24 +140,32 @@ export const createWorkflowAgentSessions = ({
     };
   };
 
-  /** The model the proposing session last answered on, so an agent inherits it. */
-  const inheritedOptions = async (parentSessionId) => {
+  const inheritedOptions = async (parentSessionId: string | null | undefined): Promise<CapturedSendOptions> => {
     if (!parentSessionId) return optionsFor(null, null);
     const page = await sessionService.history(parentSessionId, historyQuery()).catch(() => null);
     const last = [...(page?.messages ?? [])].reverse()
       .find((message) => message.role === 'assistant' && message.providerId && message.modelId);
-    if (!last) return optionsFor(null, null);
+    if (!last?.providerId || !last.modelId) return optionsFor(null, null);
     return { providerId: last.providerId, modelId: last.modelId, agentId: null, variant: null, reasoningEffort: null };
   };
 
-  const promptRequest = (text, options) => ({
+  const promptRequest = (text: string, options: CapturedSendOptions): PromptRequest => ({
     input: { text, attachments: [], context: [] },
     options,
   });
 
-  /** Resolves when the run's turn is over, or when the newest turn after `afterTurnId` is. */
-  const waitForTurn = async ({ sessionId, runId, afterTurnId, signal }) => {
-    for (;;) {
+  const waitForTurn = async ({
+    sessionId,
+    runId,
+    afterTurnId,
+    signal,
+  }: {
+    sessionId: string;
+    runId?: string | undefined;
+    afterTurnId?: string | undefined;
+    signal: AbortSignal;
+  }): Promise<DispatchOutcome> => {
+    for (; ;) {
       if (signal.aborted) throw new WorkflowAgentStopped();
       const page = await sessionService.history(sessionId, historyQuery()).catch(() => null);
       if (page) {
@@ -131,7 +175,7 @@ export const createWorkflowAgentSessions = ({
           : [...turns].reverse().find((candidate) => candidate.turnId !== afterTurnId);
         if (turn) return outcomeOf(page, turn);
       }
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, pollMs);
         const wake = () => {
           clearTimeout(timer);
@@ -144,47 +188,52 @@ export const createWorkflowAgentSessions = ({
     }
   };
 
-  /**
-   * Interrupts a running agent session. Failure is reported, not thrown: the
-   * run is being stopped either way.
-   */
-  const interrupt = async (directory, sessionId) => {
+  const unloadWorker = async (sessionId: string): Promise<void> => {
+    if (sessionService.unloadWorker) {
+      await sessionService.unloadWorker(sessionId).catch(() => { });
+    }
+  };
+
+  const interrupt = async (_directory: string, sessionId: string): Promise<void> => {
     try {
       const snapshot = await sessionService.open(sessionId);
       const runId = snapshot?.activeRun?.runId;
       if (!runId) return;
       await sessionService.control(sessionId, { type: 'abort', runId });
     } catch (error) {
-      console.warn(`[workflows] could not interrupt agent session ${sessionId}:`, error?.message ?? error);
+      const detail = error instanceof Error ? error.message : String(error);
+      console.warn(`[workflows] could not interrupt agent session ${sessionId}:`, detail);
     } finally {
-      if (typeof sessionService.unloadWorker === 'function') {
-        await sessionService.unloadWorker(sessionId).catch(() => {});
-      }
+      await unloadWorker(sessionId);
     }
   };
 
-
-  /**
-   * Creates the agent's session in the run's workspace and prompts it once.
-   * `onSession(sessionId)` hears the id as soon as the session exists, so a
-   * stop can interrupt it. Resolves to `{ sessionId, outcome }`.
-   */
-  const start = async ({ directory, parentSessionId, title, agent: _agent, model, text, signal, onSession }) => {
+  const start = async ({
+    directory,
+    parentSessionId,
+    title,
+    agent: _agent,
+    model,
+    text,
+    signal,
+    onSession,
+  }: Parameters<WorkflowAgentSessions['start']>[0]): Promise<{ sessionId: string; outcome: DispatchOutcome }> => {
     const workspace = await workspaceFor(directory);
     const options = model ? optionsFor(model, null) : {
       ...await inheritedOptions(parentSessionId),
       agentId: null,
     };
-    const created = await sessionService.create({
+    const createPayload: Parameters<WorkflowSessionService['create']>[0] = {
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
-      ...(parentSessionId ? { parentSessionId } : {}),
       options,
-      ...(title ? { title } : {}),
-    });
+    };
+    if (parentSessionId) createPayload.parentSessionId = parentSessionId;
+    if (title) createPayload.title = title;
+    const created = await sessionService.create(createPayload);
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
-    onSession(sessionId);
+    await onSession(sessionId);
     if (signal.aborted) throw new WorkflowAgentStopped();
     const sent = await sessionService.send(sessionId, promptRequest(text, options));
     if (signal.aborted) {
@@ -195,22 +244,29 @@ export const createWorkflowAgentSessions = ({
     return { sessionId, outcome };
   };
 
-  /** A plain session for a saved workflow the user runs where no session is open. */
-  const createSession = async ({ directory, title, signal }) => {
+  const createSession = async ({
+    directory,
+    title,
+  }: Parameters<WorkflowAgentSessions['createSession']>[0]): Promise<string> => {
     const workspace = await workspaceFor(directory);
-    const created = await sessionService.create({
+    const createPayload: Parameters<WorkflowSessionService['create']>[0] = {
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options: optionsFor(null, null),
-      ...(title ? { title } : {}),
-    });
+    };
+    if (title) createPayload.title = title;
+    const created = await sessionService.create(createPayload);
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
     return sessionId;
   };
 
-  /** A follow-up prompt in an agent's own session, such as a schema correction. */
-  const followUp = async ({ directory, sessionId, text, signal }) => {
+  const followUp = async ({
+    directory,
+    sessionId,
+    text,
+    signal,
+  }: Parameters<WorkflowAgentSessions['followUp']>[0]): Promise<DispatchOutcome> => {
     const page = await sessionService.history(sessionId, historyQuery()).catch(() => null);
     const afterTurnId = [...(page?.turns ?? [])].reverse().find(terminalTurn)?.turnId;
     const options = await inheritedOptions(sessionId);
@@ -222,20 +278,15 @@ export const createWorkflowAgentSessions = ({
     return waitForTurn({ sessionId, afterTurnId, signal });
   };
 
-  /**
-   * The model an agent's session ran on and what it spent, as the Agent
-   * Service keeps them on the last assistant message. Null when unreadable.
-   */
-  const readUsage = async ({ directory: _directory, sessionId }) => {
+  const readUsage = async ({
+    directory: _directory,
+    sessionId,
+  }: Parameters<WorkflowAgentSessions['readUsage']>[0]) => {
     const page = await sessionService.history(sessionId, historyQuery()).catch(() => null);
     const message = [...(page?.messages ?? [])].reverse()
       .find((candidate) => candidate.role === 'assistant' && candidate.usage);
     if (!message) return null;
-    const usage = z.object({
-      input: z.number(), output: z.number(),
-      cacheRead: z.number(), cacheWrite: z.number(),
-      cost: z.object({ total: z.number() }),
-    }).safeParse(message.usage);
+    const usage = usageSchema.safeParse(message.usage);
     if (!usage.success) return null;
     return {
       model: modelRefKey(message.providerId, message.modelId) || null,
@@ -250,18 +301,15 @@ export const createWorkflowAgentSessions = ({
     };
   };
 
-  /**
-   * Delivers the run's report into the proposing session, waking it so the
-   * agent continues. A declined or stopped run reports without waking
-   * upstream; the canonical send always starts a run, so those reports stay in
-   * the run record instead of starting a turn no one asked for.
-   */
-  const postSynthetic = async (sessionId, message) => {
+  const postSynthetic = async (
+    sessionId: string,
+    message: Pick<SyntheticMessage, 'text' | 'resume'>,
+  ): Promise<void> => {
     if (message?.resume !== true) return;
     const page = await sessionService.history(sessionId, historyQuery()).catch(() => null);
     const last = [...(page?.messages ?? [])].reverse()
       .find((candidate) => candidate.role === 'assistant' && candidate.providerId && candidate.modelId);
-    const options = last
+    const options = last?.providerId && last.modelId
       ? { providerId: last.providerId, modelId: last.modelId, agentId: null, variant: null, reasoningEffort: null }
       : optionsFor(null, null);
     try {
@@ -270,15 +318,11 @@ export const createWorkflowAgentSessions = ({
         options,
       });
     } catch (error) {
-      // The runtime tells a repeated delivery (409) and a gone session (404)
-      // from a real failure by `status`; the canonical error carries `statusCode`.
-      if (error && error.status === undefined) error.status = error.statusCode;
+      const parsed = statusErrorSchema.safeParse(error);
+      if (parsed.success && parsed.data.status === undefined && parsed.data.statusCode !== undefined && error instanceof Error) {
+        Object.assign(error, { status: parsed.data.statusCode });
+      }
       throw error;
-    }
-  };
-  const unloadWorker = async (sessionId) => {
-    if (typeof sessionService.unloadWorker === 'function') {
-      await sessionService.unloadWorker(sessionId).catch(() => {});
     }
   };
 

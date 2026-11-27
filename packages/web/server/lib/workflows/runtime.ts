@@ -1,21 +1,40 @@
 import crypto from 'node:crypto';
+import { z } from 'zod';
 
-import { asNonEmptyString, isPlainObject, isString } from '../shared/guards.js';
+import { asNonEmptyString, isString } from '../shared/guards.js';
 import { escapeAttribute } from '../dispatch-results/runtime.js';
 import { WORKFLOW_ANSWER_TOOL } from '../openchamber-control/actions.js';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
 import { WorkflowAgentStopped } from './agent-session.js';
-import { hasErrorCode, hasErrorMessage, hasErrorStatus, isAgentOptions, isAnswerWrapper, isWorkflowSchema, isWorkflowText } from './contracts.js';
+import {
+  hasErrorCode,
+  hasErrorMessage,
+  hasErrorStatus,
+  isAgentOptions,
+  isAnswerWrapper,
+  isWorkflowSchema,
+} from './contracts.js';
+import type {
+  AgentOptions,
+  AnswerSlot,
+  Ending,
+  Execution,
+  RunInput,
+  WorkflowInput,
+  WorkflowRuntimeOptions,
+  WorkflowSchema,
+  WorkflowScope,
+  WorkflowText,
+} from './contracts.js';
 import { findSchemaContradiction, parseJsonAnswer, validateJsonSchema } from './json-schema.js';
 import { createLimiter } from './limiter.js';
 import { readWorkflowProcessStart } from './process-owner.js';
 import { runWorkflowSandbox } from './sandbox.js';
+import type { WorkflowAgentCall } from './sandbox.js';
 import { WorkflowScriptError, parseWorkflowScript, plannedPhases } from './script.js';
 import { isWorkflowRunId } from './store.js';
+import type { WorkflowAgent, WorkflowRun } from './store.js';
 
-// How many agents of one run work at once, and how many one run may start in
-// all. A script with a loop must not be able to spend a subscription in a
-// minute; a run that needs more is split into several.
 const MAX_CONCURRENT_AGENTS = 8;
 const MAX_AGENTS_PER_RUN = 200;
 const SCHEMA_ATTEMPTS = 3;
@@ -30,19 +49,22 @@ const DELIVERY_BASE_DELAY_MS = 2_000;
 const SAVED_DIRECTORY = ['.openchamber', 'workflows'];
 const WORKFLOW_RESULT_SOURCE = 'openchamber-workflow';
 
-// The report's id is minted once and kept, so a retry never delivers twice.
-const createMessageId = (now) => {
-  const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
+const stoppedErrorSchema = z.object({ stopped: z.boolean().optional() });
+
+const createMessageId = (nowMs: number): string => {
+  const time = (BigInt(nowMs) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
   return `wfmsg_${time}${crypto.randomBytes(8).toString('hex')}`;
 };
 
-const truncate = (text, limit) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
-const asText = (value) => (isString(value) ? value : JSON.stringify(value ?? null, null, 2));
+const truncate = (text: string, limit: number): string => (text.length > limit ? `${text.slice(0, limit)}…` : text);
+const asText = (value: WorkflowRun['result']): string => (isString(value) ? value : JSON.stringify(value ?? null, null, 2));
 
-const callKey = (prompt: string, options: AgentOptions) => crypto.createHash('sha256').update(JSON.stringify([prompt, options])).digest('hex').slice(0, 24);
-const createRunId = () => `wf_${crypto.randomBytes(12).toString('base64url').replace(/[-_]/g, '').slice(0, 16).padEnd(16, '0')}`;
+const callKey = (prompt: string, options: AgentOptions): string =>
+  crypto.createHash('sha256').update(JSON.stringify([prompt, options])).digest('hex').slice(0, 24);
+const createRunId = (): string =>
+  `wf_${crypto.randomBytes(12).toString('base64url').replace(/[-_]/g, '').slice(0, 16).padEnd(16, '0')}`;
 
-const readAgentOptions = (raw: WorkflowAgentCall['options']) => {
+const readAgentOptions = (raw: WorkflowAgentCall['options']): AgentOptions => {
   const source = isAgentOptions(raw) ? raw : {};
   const label = asNonEmptyString(source.label);
   const agent = asNonEmptyString(source.agent);
@@ -55,7 +77,7 @@ const readAgentOptions = (raw: WorkflowAgentCall['options']) => {
   return options;
 };
 
-const schemaInstruction = (schema: WorkflowSchema) => [
+const schemaInstruction = (schema: WorkflowSchema): string => [
   '',
   `Your answer is a JSON value matching the JSON Schema below. Hand it over with the openchamber tool, action workflow.answer: pass the value itself as answer, as a JSON object, not as text${schema.type === 'object' ? '' : ' (this schema is not an object, so pass { "value": <your value> })'}. It checks the value at once and says what to fix; call it again until it is accepted, then end your turn. If you do not have that tool, end your turn with only the JSON value and no text around it.`,
   '```json',
@@ -63,7 +85,7 @@ const schemaInstruction = (schema: WorkflowSchema) => [
   '```',
 ].join('\n');
 
-const submittedAnswerCandidates = (raw: WorkflowInput['answer'], schema: WorkflowSchema) => {
+const submittedAnswerCandidates = (raw: WorkflowInput['answer'], schema: WorkflowSchema): unknown[] => {
   const candidates: unknown[] = [];
   if (schema?.type !== 'object' && isAnswerWrapper(raw) && Object.hasOwn(raw, 'value')) candidates.push(raw.value);
   if (isString(raw)) {
@@ -74,7 +96,8 @@ const submittedAnswerCandidates = (raw: WorkflowInput['answer'], schema: Workflo
   return candidates;
 };
 
-const preview = (value: WorkflowRun['result']): WorkflowRun['result'] => JSON.parse(JSON.stringify(asText(value).slice(0, PREVIEW_CHAR_LIMIT + 1)));
+const preview = (value: WorkflowRun['result']): WorkflowRun['result'] =>
+  z.json().parse(JSON.parse(JSON.stringify(asText(value).slice(0, PREVIEW_CHAR_LIMIT + 1))));
 
 export const lightenWorkflowRun = (run: WorkflowRun): WorkflowRun => ({
   ...run,
@@ -90,7 +113,41 @@ export const lightenWorkflowRun = (run: WorkflowRun): WorkflowRun => ({
   result: run.result === undefined ? undefined : preview(run.result),
 });
 
-export const summarizeRun = (run: WorkflowRun) => ({
+export interface WorkflowAgentSummary {
+  key: string;
+  label: string;
+  phase: string | null;
+  state: WorkflowAgent['state'];
+  sessionId: string | undefined;
+  replayed: boolean | undefined;
+  startedAt: number | undefined;
+  endedAt: number | undefined;
+  model: string | undefined;
+  usage: WorkflowAgent['usage'] | undefined;
+  error: string | undefined;
+  preview: string | undefined;
+}
+
+export interface WorkflowRunSummary {
+  id: string;
+  parentSessionId: string;
+  directory: string;
+  name: string;
+  description: string;
+  state: WorkflowRun['state'];
+  attempt: number;
+  createdAt: number;
+  startedAt: number | undefined;
+  endedAt: number | undefined;
+  currentPhase: string | null;
+  phases: string[];
+  agents: WorkflowAgentSummary[];
+  logs: WorkflowRun['logs'];
+  error: string | undefined;
+  resultPreview: string | undefined;
+}
+
+export const summarizeRun = (run: WorkflowRun): WorkflowRunSummary => ({
   id: run.id,
   parentSessionId: run.parentSessionId,
   directory: run.directory,
@@ -122,9 +179,12 @@ export const summarizeRun = (run: WorkflowRun) => ({
   resultPreview: run.result === undefined ? undefined : truncate(asText(run.result), PREVIEW_CHAR_LIMIT),
 });
 
-const reportText = (run: WorkflowRun) => {
+const reportText = (run: WorkflowRun): string => {
   const attributes = `runId="${run.id}" name="${escapeAttribute(run.name)}" state="${run.state}"`;
-  const counts = run.agents.reduce<Partial<Record<WorkflowAgent['state'], number>>>((total, agent) => ({ ...total, [agent.state]: (total[agent.state] ?? 0) + 1 }), {});
+  const counts = run.agents.reduce<Partial<Record<WorkflowAgent['state'], number>>>(
+    (total, agent) => ({ ...total, [agent.state]: (total[agent.state] ?? 0) + 1 }),
+    {},
+  );
   const tally = Object.entries(counts).map(([state, count]) => `${count} ${state}`).join(', ') || 'no agents';
   const lines: (string | WorkflowText)[] = [`Agents: ${tally}.`];
   if (run.state === 'completed') {
@@ -143,7 +203,7 @@ const reportText = (run: WorkflowRun) => {
   return `<openchamber-workflow ${attributes}>\n${lines.join('\n')}\n</openchamber-workflow>`;
 };
 
-const isPidAlive = (pid: number) => {
+const isPidAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
     return true;
@@ -152,11 +212,76 @@ const isPidAlive = (pid: number) => {
   }
 };
 
+export interface WorkflowStartSavedInput {
+  directory: string;
+  scriptDirectory?: string | undefined;
+  sessionId?: string | null | undefined;
+  name: string;
+  args?: WorkflowInput['args'];
+}
+
+export type WorkflowActionResult =
+  | { name: string; description: string; phases: string[]; limits: { concurrentAgents: number; agentsPerRun: number } }
+  | { runId: string; state: WorkflowRun['state']; name: string; phases: string[]; note: string }
+  | WorkflowRunSummary
+  | { runId: string; state: WorkflowRun['state']; result: WorkflowRun['result']; error: string | undefined }
+  | {
+    runId: string;
+    agent: {
+      key: string;
+      label: string;
+      phase: string | null;
+      state: WorkflowAgent['state'];
+      sessionId: string | undefined;
+      prompt: string;
+      result: WorkflowAgent['result'];
+      error: string | undefined;
+    };
+  }
+  | { runId: string; state: WorkflowRun['state'] | 'stopping' }
+  | { runId: string; state: 'running'; reused: number }
+  | { name: string; path: string; run: string }
+  | { accepted: boolean; note: string }
+  | {
+    workflows: ({ name: string; description: string } | { name: string; error: string })[];
+    runs: { runId: string; name: string; state: WorkflowRun['state']; createdAt: number }[];
+  };
+
+export interface WorkflowRuntime {
+  executeAction: (action: string, input: WorkflowInput, scope: WorkflowScope) => Promise<WorkflowActionResult>;
+  approve: (input: RunInput) => Promise<{ runId: string; state: 'running' }>;
+  decline: (input: RunInput) => Promise<{ runId: string; state: WorkflowRun['state'] }>;
+  stop: (input: RunInput, scope?: WorkflowScope) => Promise<{ runId: string; state: WorkflowRun['state'] | 'stopping' }>;
+  resume: (input: RunInput, scope?: WorkflowScope) => Promise<{ runId: string; state: 'running'; reused: number }>;
+  remove: (input: RunInput) => Promise<{ runId: string; removed: true }>;
+  list: (input: { sessionId: string }) => Promise<WorkflowRunSummary[]>;
+  listByDirectory: (input: { directories: string[] }) => Promise<WorkflowRunSummary[]>;
+  listSaved: (scope: WorkflowScope) => Promise<{ workflows: ({ name: string; description: string } | { name: string; error: string })[] }>;
+  startSaved: (input: WorkflowStartSavedInput) => Promise<{ runId: string; sessionId: string }>;
+  detail: (input: RunInput) => Promise<{
+    runId: string;
+    logs: WorkflowRun['logs'];
+    script: string;
+    args: WorkflowRun['args'];
+    result: WorkflowRun['result'];
+  }>;
+  agentDetail: (input: RunInput & { key: string }) => Promise<{
+    key: string;
+    prompt: string;
+    schema: WorkflowAgent['schema'];
+    result: WorkflowAgent['result'];
+    error: string | undefined;
+  }>;
+  start: () => Promise<void>;
+  deliverPending: () => Promise<void>;
+  shutdown: () => void;
+}
+
 export const createWorkflowRuntime = ({
   store,
   agentSessions,
   postSynthetic,
-  broadcast = () => {},
+  broadcast = () => { },
   isEnabled = async () => true,
   startsWithoutApproval = async () => false,
   fsPromises,
@@ -168,7 +293,7 @@ export const createWorkflowRuntime = ({
   pid = process.pid,
   isProcessAlive = isPidAlive,
   readProcessStart = readWorkflowProcessStart,
-}: WorkflowRuntimeOptions) => {
+}: WorkflowRuntimeOptions): WorkflowRuntime => {
   const active = new Map<string, Execution>();
   const answerSlots = new Map<string, AnswerSlot>();
   const broadcastTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -209,7 +334,7 @@ export const createWorkflowRuntime = ({
     } catch (error) {
       if (!removedRuns.has(run.id)) {
         for (const key in run) {
-          if (Object.hasOwn(run, key) && !Object.hasOwn(before, key)) delete run[key];
+          if (Object.hasOwn(run, key) && !Object.hasOwn(before, key)) Reflect.deleteProperty(run, key);
         }
         Object.assign(run, before);
         if (await store.get(run.id)) announce(run, { immediate: true });
@@ -222,7 +347,7 @@ export const createWorkflowRuntime = ({
     if (!await isEnabled()) throw new OpenChamberControlError('Workflows are turned off in OhPiChamber settings', 403);
   };
 
-  const requireRun = async (runId: WorkflowInput['runId'], parentSessionId?: string | null) => {
+  const requireRun = async (runId: WorkflowInput['runId'], parentSessionId?: string | null): Promise<WorkflowRun> => {
     const id = asNonEmptyString(runId);
     if (!id || !isWorkflowRunId(id)) throw new OpenChamberControlError('runId is required: the id workflow.run answered', 400);
     const run = await store.get(id);
@@ -233,20 +358,24 @@ export const createWorkflowRuntime = ({
     return run;
   };
 
-  const savedPath = (directory: string, name: string) => path.join(directory, ...SAVED_DIRECTORY, `${name}.js`);
+  const savedPath = (directory: string, name: string): string => path.join(directory, ...SAVED_DIRECTORY, `${name}.js`);
 
-  const readScript = async (input: WorkflowInput, directory?: string | null) => {
+  const readScript = async (input: WorkflowInput, directory?: string | null): Promise<string> => {
     const name = asNonEmptyString(input.name);
     const script = asNonEmptyString(input.script);
     if (script && name) throw new OpenChamberControlError('Provide script or name, not both', 400);
     if (script) return script;
     if (!name) throw new OpenChamberControlError('script is required, or name of a saved workflow', 400);
-    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) throw new OpenChamberControlError('name is a saved workflow name such as audit-routes', 400);
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) {
+      throw new OpenChamberControlError('name is a saved workflow name such as audit-routes', 400);
+    }
     if (!directory) throw new OpenChamberControlError('A saved workflow needs the session directory', 400);
     try {
       return await fsPromises.readFile(savedPath(directory, name), 'utf8');
     } catch (error) {
-      if (hasErrorCode(error) && error.code === 'ENOENT') throw new OpenChamberControlError(`No saved workflow ${name} in ${path.join(...SAVED_DIRECTORY)}`, 404);
+      if (hasErrorCode(error) && error.code === 'ENOENT') {
+        throw new OpenChamberControlError(`No saved workflow ${name} in ${path.join(...SAVED_DIRECTORY)}`, 404);
+      }
       throw error;
     }
   };
@@ -272,7 +401,9 @@ export const createWorkflowRuntime = ({
     }
     const serialized = JSON.stringify(value);
     if (serialized === undefined) throw new OpenChamberControlError('args must be JSON', 400);
-    if (serialized.length > MAX_ARGS_LENGTH) throw new OpenChamberControlError(`args is ${serialized.length} characters as JSON; the limit is ${MAX_ARGS_LENGTH}`, 400);
+    if (serialized.length > MAX_ARGS_LENGTH) {
+      throw new OpenChamberControlError(`args is ${serialized.length} characters as JSON; the limit is ${MAX_ARGS_LENGTH}`, 400);
+    }
     return JSON.parse(serialized);
   };
 
@@ -303,7 +434,8 @@ export const createWorkflowRuntime = ({
       if (run.report !== report || report.delivered) return;
       report.delivered = true;
       await persist(run, { immediate: true }).catch((error) => {
-        console.warn(`[workflows] report ${report.messageId} of ${run.id} was delivered but its marker was not saved:`, error.message);
+        const detail = hasErrorMessage(error) ? error.message : error;
+        console.warn(`[workflows] report ${report.messageId} of ${run.id} was delivered but its marker was not saved:`, detail);
       });
       return;
     }
@@ -328,7 +460,11 @@ export const createWorkflowRuntime = ({
     if (notify) announce(run);
   };
 
-  const runAgent = async (run: WorkflowRun, execution: Execution, { prompt, options: rawOptions, phase }: WorkflowAgentCall): Promise<WorkflowAgent['result']> => {
+  const runAgent = async (
+    run: WorkflowRun,
+    execution: Execution,
+    { prompt, options: rawOptions, phase }: WorkflowAgentCall,
+  ): Promise<WorkflowAgent['result']> => {
     const options = readAgentOptions(rawOptions);
     const base = callKey(prompt, options);
     const occurrence = (execution.occurrences.get(base) ?? 0) + 1;
@@ -364,7 +500,7 @@ export const createWorkflowRuntime = ({
     announce(run);
 
     const { signal } = execution.controller;
-    let release;
+    let release: (() => void) | undefined;
     let counted = false;
     try {
       release = await execution.limiter.acquire(signal);
@@ -402,7 +538,7 @@ export const createWorkflowRuntime = ({
         },
       });
       let current = outcome;
-      let value: unknown = current.text;
+      let value: WorkflowAgent['result'] = current.text;
       for (let attempt = 1; slot; attempt += 1) {
         if (slot.submitted && !signal.aborted) {
           current = { state: 'completed', text: current.text, errorMessage: '' };
@@ -458,10 +594,11 @@ export const createWorkflowRuntime = ({
         const read = await agentSessions.readUsage({ directory: run.directory, sessionId: record.sessionId }).catch(() => null);
         if (read?.model) record.modelUsed = read.model;
         if (read) record.usage = read.usage;
-        await agentSessions.unloadWorker?.(record.sessionId).catch(() => {});
+        await agentSessions.unloadWorker?.(record.sessionId).catch(() => { });
       }
       await persist(run).catch((error) => {
-        console.warn(`[workflows] agent ${record.key} of ${run.id} ended but could not be saved:`, error.message);
+        const detail = hasErrorMessage(error) ? error.message : error;
+        console.warn(`[workflows] agent ${record.key} of ${run.id} ended but could not be saved:`, detail);
       });
     }
   };
@@ -506,10 +643,14 @@ export const createWorkflowRuntime = ({
       });
       if (execution.stopReason) execution.sandbox.terminate();
       ending = await execution.sandbox.result.then(
-        (result) => ({ state: 'completed', result, resume: true }),
-        (error) => (error?.stopped
-          ? { state: 'stopped', error: execution.stopReason ?? 'The user stopped the workflow.', resume: false }
-          : { state: 'failed', error: error instanceof Error ? error.message : String(error), resume: true }),
+        (result): Ending => ({ state: 'completed', result, resume: true }),
+        (error): Ending => {
+          const parsed = stoppedErrorSchema.safeParse(error);
+          if (parsed.success && parsed.data.stopped) {
+            return { state: 'stopped', error: execution.stopReason ?? 'The user stopped the workflow.', resume: false };
+          }
+          return { state: 'failed', error: error instanceof Error ? error.message : String(error), resume: true };
+        },
       );
     } catch (error) {
       ending = { state: 'failed', error: error instanceof Error ? error.message : String(error), resume: true };
@@ -533,7 +674,7 @@ export const createWorkflowRuntime = ({
     }
     await deliverReport(run);
     if (run.parentSessionId) {
-      await agentSessions.unloadWorker?.(run.parentSessionId).catch(() => {});
+      await agentSessions.unloadWorker?.(run.parentSessionId).catch(() => { });
     }
   };
 
@@ -573,7 +714,8 @@ export const createWorkflowRuntime = ({
       throw error;
     }
     void execute(run, execution, body).catch((error) => {
-      console.warn(`[workflows] run ${run.id} ended with an internal error:`, error?.message ?? error);
+      const detail = hasErrorMessage(error) ? error.message : error;
+      console.warn(`[workflows] run ${run.id} ended with an internal error:`, detail);
     });
   };
 
@@ -632,7 +774,7 @@ export const createWorkflowRuntime = ({
     };
   };
 
-  const approve = async ({ runId }: RunInput) => {
+  const approve = async ({ runId }: RunInput): Promise<{ runId: string; state: 'running' }> => {
     await assertEnabled();
     const run = await requireRun(runId);
     if (run.state !== 'awaiting-approval') throw new OpenChamberControlError(`The run is ${run.state}, not waiting for approval`, 409);
@@ -640,7 +782,7 @@ export const createWorkflowRuntime = ({
     return { runId: run.id, state: 'running' };
   };
 
-  const decline = async ({ runId }: RunInput) => {
+  const decline = async ({ runId }: RunInput): Promise<{ runId: string; state: WorkflowRun['state'] }> => {
     const run = await requireRun(runId);
     if (run.state !== 'awaiting-approval') throw new OpenChamberControlError(`The run is ${run.state}, not waiting for approval`, 409);
     await withRollback(run, () => settleRun(run, 'declined', { resume: false }));
@@ -648,7 +790,7 @@ export const createWorkflowRuntime = ({
     return { runId: run.id, state: run.state };
   };
 
-  const stop = async ({ runId }: RunInput, { sessionId }: WorkflowScope = {}) => {
+  const stop = async ({ runId }: RunInput, { sessionId }: WorkflowScope = {}): Promise<{ runId: string; state: WorkflowRun['state'] | 'stopping' }> => {
     const run = await requireRun(runId, sessionId);
     const execution = active.get(run.id);
     if (!execution) {
@@ -660,7 +802,7 @@ export const createWorkflowRuntime = ({
     return { runId: run.id, state: 'stopping' };
   };
 
-  const resume = async ({ runId }: RunInput, { sessionId }: WorkflowScope = {}) => {
+  const resume = async ({ runId }: RunInput, { sessionId }: WorkflowScope = {}): Promise<{ runId: string; state: 'running'; reused: number }> => {
     await assertEnabled();
     const run = await requireRun(runId, sessionId);
     if (active.has(run.id) || run.state === 'running') throw new OpenChamberControlError('The run is already running', 409);
@@ -674,7 +816,7 @@ export const createWorkflowRuntime = ({
 
   const status = async ({ runId }: RunInput, { sessionId }: WorkflowScope = {}) => summarizeRun(await requireRun(runId, sessionId));
 
-  const remove = async ({ runId }: RunInput) => {
+  const remove = async ({ runId }: RunInput): Promise<{ runId: string; removed: true }> => {
     const run = await requireRun(runId);
     if (run.state === 'running' || run.state === 'awaiting-approval') {
       throw new OpenChamberControlError('Stop or decline the run before deleting it', 409);
@@ -721,18 +863,18 @@ export const createWorkflowRuntime = ({
     };
   };
 
-  const list = async ({ sessionId }: { sessionId: string }) => {
+  const list = async ({ sessionId }: { sessionId: string }): Promise<WorkflowRunSummary[]> => {
     const runs = await store.list();
     return runs.filter((run) => run.parentSessionId === sessionId).map(summarizeRun);
   };
 
-  const listByDirectory = async ({ directories }: { directories: string[] }) => {
+  const listByDirectory = async ({ directories }: { directories: string[] }): Promise<WorkflowRunSummary[]> => {
     const wanted = new Set(directories);
     const runs = await store.list();
     return runs.filter((run) => wanted.has(run.directory)).map(summarizeRun);
   };
 
-  const startSaved = async ({ directory, scriptDirectory, sessionId, name, args }: { directory: string; scriptDirectory?: string | undefined; sessionId?: string | null | undefined; name: string; args?: unknown }) => {
+  const startSaved = async ({ directory, scriptDirectory, sessionId, name, args }: WorkflowStartSavedInput) => {
     await assertEnabled();
     if (!directory) throw new OpenChamberControlError('directory is required', 400);
     if (!asNonEmptyString(name)) throw new OpenChamberControlError('name is required: a saved workflow', 400);
@@ -778,7 +920,7 @@ export const createWorkflowRuntime = ({
 
   let delivering: Promise<void> | null = null;
   let restored = Promise.resolve();
-  const deliverPending = () => {
+  const deliverPending = (): Promise<void> => {
     delivering ??= restored
       .then(() => store.list())
       .then(async (runs) => {
@@ -786,12 +928,15 @@ export const createWorkflowRuntime = ({
           if (run.report && !run.report.delivered && !active.has(run.id)) await deliverReport(run);
         }
       })
-      .catch((error) => console.warn('[workflows] delivering pending reports failed:', error?.message ?? error))
+      .catch((error) => {
+        const detail = hasErrorMessage(error) ? error.message : error;
+        console.warn('[workflows] delivering pending reports failed:', detail);
+      })
       .finally(() => { delivering = null; });
     return delivering;
   };
 
-  const start = () => {
+  const start = (): Promise<void> => {
     restored = (async () => {
       for (const run of await store.list()) {
         if (run.state !== 'running') continue;
@@ -819,7 +964,7 @@ export const createWorkflowRuntime = ({
     return restored;
   };
 
-  const shutdown = () => {
+  const shutdown = (): void => {
     for (const execution of active.values()) {
       execution.stopReason ??= 'OhPiChamber shut down while the workflow ran.';
       execution.sandbox?.terminate();

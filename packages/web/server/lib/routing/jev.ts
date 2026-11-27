@@ -123,7 +123,7 @@ export const createJevClient = ({
     const abort = new AbortController();
     const started = Date.now();
     const call = (async () => {
-      let response;
+      let response: Response;
       try {
         response = await fetchImpl(endpoint.url, {
           method: 'POST',
@@ -151,7 +151,7 @@ export const createJevClient = ({
     } finally {
       clearTimeout(timer);
     }
-    call.catch(() => {});
+    call.catch(() => { });
     const key = `${endpoint.url}\n${endpoint.model}`;
     if (lingering.has(key)) {
       abort.abort();
@@ -162,7 +162,7 @@ export const createJevClient = ({
       call.finally(() => {
         clearTimeout(cap);
         lingering.delete(key);
-      }).catch(() => {});
+      }).catch(() => { });
     }
     throw Object.assign(new Error(`Jev timed out after ${timeoutMs}ms`), { code: 'timeout' });
   },

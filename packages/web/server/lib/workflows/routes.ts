@@ -1,20 +1,31 @@
-export const isWorkflowFeatureAvailable = () => true;
 import express from 'express';
 import { z } from 'zod';
+import type fs from 'node:fs/promises';
+import type pathModule from 'node:path';
 
 import { asControlError } from '../openchamber-control/error.js';
+import type { Application } from '../shared/http-contracts.js';
 import { createWorkflowAgentSessions } from './agent-session.js';
+import type { WorkflowSessionService, WorkflowWorkspaceScope } from './agent-session.js';
+import type { WorkflowRuntimeOptions } from './contracts.js';
 import { createWorkflowRuntime } from './runtime.js';
+import type { WorkflowRuntime } from './runtime.js';
 import { createWorkflowRunStore } from './store.js';
 
-const ACTIONS = new Set(['approve', 'decline', 'stop', 'resume']);
+export const isWorkflowFeatureAvailable = (): boolean => true;
+
 type WorkflowAction = 'approve' | 'decline' | 'stop' | 'resume';
-const isWorkflowAction = (action: string): action is WorkflowAction => ACTIONS.has(action);
+
+const isWorkflowAction = (action: string): action is WorkflowAction =>
+  action === 'approve' || action === 'decline' || action === 'stop' || action === 'resume';
+
 const listQuerySchema = z.union([
   z.object({ sessionId: z.string().trim().min(1) }),
   z.object({ directory: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1)).min(1).max(100)]) }),
 ]);
+
 const directoryQuerySchema = z.object({ directory: z.string().trim().min(1) });
+
 const startBodySchema = z.object({
   directory: z.string().trim().min(1),
   scriptDirectory: z.string().trim().min(1).optional(),
@@ -23,14 +34,7 @@ const startBodySchema = z.object({
   args: z.json().optional(),
 });
 
-/**
- * The user's side of workflow runs: the runs of a session for the chat, the
- * work-status panel and the Workflows panel, one run's log, script and result
- * and one agent's prompt and answer for that panel, and the approve, decline,
- * stop and resume buttons.
- * Registered only in builds with workflows.
- */
-export const registerWorkflowRoutes = (app, runtime) => {
+export const registerWorkflowRoutes = (app: Application, runtime: WorkflowRuntime): void => {
   app.get('/api/openchamber/workflows', async (req, res) => {
     const query = listQuerySchema.safeParse(req.query);
     if (!query.success) return res.status(400).json({ error: 'sessionId or directory is required' });
@@ -106,12 +110,26 @@ export const registerWorkflowRoutes = (app, runtime) => {
   });
 };
 
-/**
- * The workflow runtime and its routes, built together because the agent tool
- * reaches the runtime through the control service. Absent entirely unless the
- * build flag is set: `OPENCHAMBER_WORKFLOWS_ENABLE`, unset in every build that
- * has not opted in.
- */
+export interface WorkflowsModuleOptions {
+  sessionService: WorkflowSessionService;
+  resolveWorkspaceScope: (workspaceId: string) => Promise<WorkflowWorkspaceScope | null | undefined>;
+  listWorkspaceScopes: () => Promise<{ items: { workspaceId: string }[] }>;
+  dataDir: string;
+  fsPromises: WorkflowRuntimeOptions['fsPromises'] & Pick<typeof fs, 'rename' | 'rm'>;
+  path: WorkflowRuntimeOptions['path'] & Pick<typeof pathModule, 'join'>;
+  broadcast?: WorkflowRuntimeOptions['broadcast'];
+  isEnabled?: () => Promise<boolean>;
+}
+
+export type WorkflowsModule =
+  | { available: false; workflowRuntime: null; register: (app: Application) => void }
+  | {
+    available: true;
+    workflowRuntime: WorkflowRuntime;
+    register: (app: Application) => void;
+    deliverPending: () => Promise<void>;
+  };
+
 export const createWorkflowsModule = ({
   sessionService,
   resolveWorkspaceScope,
@@ -121,11 +139,9 @@ export const createWorkflowsModule = ({
   path,
   broadcast,
   isEnabled = async () => isWorkflowFeatureAvailable(),
-}) => {
-  if (!isWorkflowFeatureAvailable()) return { available: false, workflowRuntime: null, register() {} };
-  // Canonical workspaces are registered per directory; a workflow's run names
-  // the session's folder, so its agents are created in the same workspace.
-  const resolveWorkspace = async (directory) => {
+}: WorkflowsModuleOptions): WorkflowsModule => {
+  if (!isWorkflowFeatureAvailable()) return { available: false, workflowRuntime: null, register() { } };
+  const resolveWorkspace = async (directory: string): Promise<WorkflowWorkspaceScope | null> => {
     const listed = await listWorkspaceScopes();
     for (const item of listed.items) {
       const scope = await resolveWorkspaceScope(item.workspaceId);
@@ -134,25 +150,26 @@ export const createWorkflowsModule = ({
     return null;
   };
   const agentSessions = createWorkflowAgentSessions({ sessionService, resolveWorkspace });
-  const workflowRuntime = createWorkflowRuntime({
+  const runtimeOptions: WorkflowRuntimeOptions = {
     store: createWorkflowRunStore({ fsPromises, path, dataDir }),
     agentSessions,
     postSynthetic: agentSessions.postSynthetic,
-    broadcast,
     isEnabled,
     fsPromises,
     path,
-  });
+  };
+  if (broadcast) runtimeOptions.broadcast = broadcast;
+  const workflowRuntime = createWorkflowRuntime(runtimeOptions);
   void workflowRuntime.start().catch((error) => {
-    console.warn('[workflows] failed to restore runs:', error?.message ?? error);
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn('[workflows] failed to restore runs:', detail);
   });
   return {
     available: true,
     workflowRuntime,
-    register(app) {
+    register(app: Application) {
       registerWorkflowRoutes(app, workflowRuntime);
     },
-    /** Sends every saved report once the Agent Service can take prompts. */
     deliverPending() {
       return workflowRuntime.deliverPending();
     },

@@ -9,21 +9,6 @@ import { linkFixtureNodeModules } from './fixture-node-modules.mjs';
 
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
 
-test('fork JavaScript exemptions are explicit and do not exempt neighboring new modules', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-server-fork-js-'));
-  try {
-    fs.mkdirSync(path.join(root, 'server/lib/message-queue'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'bin'));
-    fs.writeFileSync(path.join(root, 'server/lib/message-queue/sqlite-store.js'), 'export const retained = true;');
-    fs.writeFileSync(path.join(root, 'server/lib/message-queue/new-module.js'), 'export const added = true;');
-    expect(findServerJavaScript(root)).toEqual(['server/lib/message-queue/new-module.js']);
-    fs.unlinkSync(path.join(root, 'server/lib/message-queue/new-module.js'));
-    expect(findServerJavaScript(root)).toEqual([]);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
 test('the conversion gate rejects declaration twins in every server and CLI folder', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-server-pairs-'));
   try {

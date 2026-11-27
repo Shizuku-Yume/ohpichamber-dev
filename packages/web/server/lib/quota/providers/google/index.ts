@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { buildResult } from '../../utils/index.js';
 import { credentialAccessToken } from '../selected-credential.js';
 import {
@@ -10,16 +11,20 @@ import {
   fetchGoogleModels
 } from './api.js';
 import { refreshGoogleAccessToken } from './oauth.js';
-import type { JsonObject, JsonValue, ProviderUsage } from '../../utils/contracts.js';
-const isJsonContainer = (value: JsonValue): value is JsonObject | JsonValue[] => value !== null && typeof value === 'object';
+import type { CredentialJson } from '../../credentials/contracts.js';
+import type { JsonObject, JsonValue, ProviderUsage, QuotaResult } from '../../utils/contracts.js';
 
+const isJsonContainer = (value: JsonValue): value is JsonObject | JsonValue[] => value !== null && typeof value === 'object';
+const isCredentialObject = (value: CredentialJson | undefined): value is { [key: string]: CredentialJson | undefined } =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const stringSchema = z.string();
 
 export const providerId = 'google';
 export const providerName = 'Google';
 
-export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential));
-
-export const fetchGoogleQuota = async ({ credential } = {}) => {
+export const isConfigured = (credential?: CredentialJson): boolean =>
+  isCredentialObject(credential) && credential.type === 'oauth' && Boolean(credentialAccessToken(credential));
+export const fetchGoogleQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const authSources = resolveGoogleAuthSources(credential);
   if (!authSources.length) {
     return buildResult({
@@ -27,7 +32,7 @@ export const fetchGoogleQuota = async ({ credential } = {}) => {
       providerName,
       ok: false,
       configured: isConfigured(credential),
-      error: isConfigured(credential) ? 'Selected native Google OAuth credential lacks supported quota project metadata' : 'Not configured'
+      error: isConfigured(credential) ? 'Selected native Google OAuth credential lacks supported quota project metadata' : 'Not configured',
     });
   }
 
@@ -36,7 +41,7 @@ export const fetchGoogleQuota = async ({ credential } = {}) => {
 
   for (const source of authSources) {
     let accessToken = source.accessToken;
-    if (!accessToken || (typeof source.expires === 'number' && source.expires <= Date.now())) {
+    if (!accessToken || (source.expires !== null && source.expires <= Date.now())) {
       if (!source.refreshToken) {
         sourceErrors.push(`${source.sourceLabel}: Missing refresh token`);
         continue;
@@ -66,8 +71,14 @@ export const fetchGoogleQuota = async ({ credential } = {}) => {
 
     const payload = await fetchGoogleModels(accessToken, projectId);
     if (payload) {
-      const modelDataByName = isJsonContainer(payload) && 'models' in payload ? payload.models ?? {} : {};
-      for (const [modelName, modelData] of Object.entries(modelDataByName)) {
+      const modelDataByName = isJsonContainer(payload) && 'models' in payload ? payload.models : null;
+      const parsedString = stringSchema.safeParse(modelDataByName);
+      const modelEntries: Array<[string, JsonValue | undefined]> = parsedString.success
+        ? Object.entries(parsedString.data)
+        : (modelDataByName !== null && modelDataByName !== undefined && isJsonContainer(modelDataByName))
+          ? Object.entries(modelDataByName)
+          : [];
+      for (const [modelName, modelData] of modelEntries) {
         const transformed = transformModelData(modelName, modelData, source.sourceId);
         Object.assign(models, transformed);
         mergedAnyModel = true;

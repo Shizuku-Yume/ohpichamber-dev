@@ -47,10 +47,8 @@ import { injectGuestAssetTokens, parseGuestUrlToken } from './html-tokens.js';
 import { injectGuestDocumentStyles } from './html-styles.js';
 import { injectSvgRootColor } from '../appearance/project-icon-routes.js';
 
-// The background colours a provider logo is drawn on; `theme=light|dark` names one.
 const SVG_THEME_COLORS = new Map([['light', '#111111'], ['dark', '#f5f5f5']]);
 import { installGuest, installGuestFromZipBuffer, parseInstallRequest, uninstallGuest } from './install.js';
-import { enterpriseBlockedCapabilities } from './enterprise.js';
 import { guestUploadMaxBytes, readGuestUploadBody } from './upload.js';
 import { checkAllGuestUpdates, updateGuest, withGuestUpdate } from './updates.js';
 import { extensionsPersistPath, readExtensionStore, setCapabilityGrants } from './persist.js';
@@ -230,7 +228,7 @@ const declaredSettings = (guest: GuestRecord) => {
 };
 
 export type GuestDeactivation = { guestId: string; guestName: string; removed?: boolean; quotaDeclared?: boolean };
-export const settleGuestDeactivationListeners = (listeners: { name: string; listener: (event: GuestDeactivation) => void }[]) => async (event: GuestDeactivation) => {
+export const settleGuestDeactivationListeners = (listeners: { name: string; listener: (event: GuestDeactivation) => void | boolean | Promise<void | boolean> }[]) => async (event: GuestDeactivation) => {
   const results = await Promise.allSettled(listeners.map(async ({ listener }) => listener(event)));
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
@@ -241,33 +239,36 @@ export const settleGuestDeactivationListeners = (listeners: { name: string; list
 
 const PANEL_SERVICE_IDLE_MS = 10 * 60_000;
 
+const isWorkspaceResolver = (value: unknown): value is (id: string) => Promise<{ workspaceId: string; cwd: string } | null> => typeof value === 'function';
+
 export type GuestRoutesOptions = {
   openchamberDataDir: string;
-  openchamberVersion?: string;
-  resolveGitBinaryForSpawn: () => string;
-  resolveOptionalProjectDirectory: (req: Request) => Promise<{ directory: string | null }> | { directory: string | null };
-  getSmallModelService: () => Promise<{
+  openchamberVersion?: string | undefined;
+  resolveGitBinaryForSpawn?: () => string;
+  resolveOptionalProjectDirectory?: ((req: Request) => Promise<{ directory: string | null }> | { directory: string | null }) | undefined;
+  resolveWorkspaceScope?: ((id: string) => Promise<{ workspaceId: string; cwd: string } | null>) | undefined;
+  getSmallModelService?: () => Promise<{
     generateSmallModelText: (input: z.infer<typeof generateBodySchema> & {
       directory: string | undefined;
       preferredProviderID: string | undefined;
       preferredModelID: string | undefined;
     }) => Promise<{ text: string }>;
   }>;
-  onGuestDeactivated?: (event: GuestDeactivation) => void;
-  onGuestActivated?: (event: { guestId: string }) => void;
+  onGuestDeactivated?: (event: GuestDeactivation) => void | boolean | Promise<void | boolean>;
+  onGuestActivated?: (event: { guestId: string }) => void | Promise<void>;
   onGuestsChanged?: () => void;
+  watchFolderInstalls?: boolean;
   onQuotaProviderChanged?: (event: { providerId: string }) => void;
-  surfaceViewerHeaders?: (guestId: string, viewerId: string) => Record<string, string> | null;
+  surfaceViewerHeaders?: ((guestId: string, viewerId: string) => Record<string, string> | null) | undefined;
   trackers?: TrackerRegistry | null;
-
   marks?: typeof guestMarks;
 };
 
 export const registerGuestRoutes = (app: Application, {
   openchamberDataDir,
   openchamberVersion,
-  resolveGitBinaryForSpawn,
-  resolveOptionalProjectDirectory,
+  resolveGitBinaryForSpawn = () => 'git',
+  resolveOptionalProjectDirectory = () => ({ directory: null }),
   resolveWorkspaceScope = async (id) => ({ workspaceId: id, cwd: process.cwd() }),
   getSmallModelService,
   onGuestDeactivated = async () => false,
@@ -278,9 +279,8 @@ export const registerGuestRoutes = (app: Application, {
   surfaceViewerHeaders = () => null,
   trackers = null,
   marks = guestMarks,
-
-}) => {
-  if (typeof resolveWorkspaceScope !== 'function') throw new TypeError('Guest workspace scope resolver is required');
+}: GuestRoutesOptions) => {
+  if (!isWorkspaceResolver(resolveWorkspaceScope)) throw new TypeError('Guest workspace scope resolver is required');
   const persistPath = extensionsPersistPath(openchamberDataDir);
   const authPath = guestAuthPersistPath(openchamberDataDir);
   const frameGrants = createGuestFrameGrants();
@@ -900,9 +900,9 @@ export const registerGuestRoutes = (app: Application, {
         return res.status(404).json({ error: 'WORKSPACE_NOT_FOUND' });
       }
       const directory = workspace.cwd;
-      // The host names provider/model preferences; workspace scope authorizes the completion.
       const provider = providerHeaderSchema.safeParse(req.get('x-openchamber-provider'));
       const composerModel = providerHeaderSchema.safeParse(req.get('x-openchamber-model'));
+      if (!getSmallModelService) throw new TypeError('Small model service is unavailable');
       const { generateSmallModelText } = await getSmallModelService();
       let generated;
       try {
@@ -974,7 +974,7 @@ export const registerGuestRoutes = (app: Application, {
       }
       const requested = requestedGuestCapabilities(guest);
       const granted = parsed.data.granted;
-      if (guest.enterpriseBlocked?.some((capability) => granted.includes(capability))) {
+      if (guest.enterpriseBlocked?.some((capability) => granted.some((item) => item === capability))) {
         return res.status(403).json({ error: 'enterprise-mode', capabilities: guest.enterpriseBlocked });
       }
       const matchesRequest = granted.length === requested.length && requested.every((capability) => granted.includes(capability));
@@ -1059,8 +1059,7 @@ export const registerGuestRoutes = (app: Application, {
     } catch {
       return res.status(404).end();
     }
-    // Only `light` and `dark` name a background the logo must read on.
-    const logoThemeColor = contentType === 'image/svg+xml' ? SVG_THEME_COLORS.get(theme) : undefined;
+    const logoThemeColor = contentType === 'image/svg+xml' ? SVG_THEME_COLORS.get(isString(theme) ? theme : '') : undefined;
     const body = contentType.startsWith('text/html')
       ? injectGuestDocumentStyles(injectGuestAssetTokens(raw.toString('utf8'), token))
       : logoThemeColor ? injectSvgRootColor(raw.toString('utf8'), logoThemeColor) : raw;

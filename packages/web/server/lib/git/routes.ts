@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { registerGitStatusBatchRoute } from './status-batch.js';
-import { isPlainObject, isString } from '../shared/guards.js';
+import { isBoolean, isPlainObject, isString } from '../shared/guards.js';
 import { createGitRedactor, redactGitText } from './redaction.js';
 import { runAsUserAction } from '../environment/refresh-scope.js';
 import { isDiskPathRemoteUrl, redactRemoteUrl } from '../source-control/url-redaction.js';
@@ -14,7 +14,9 @@ import type { ContributorProvenance, createContributorProvenanceStore } from './
 import type { createManagedSshInventory } from './credentials.js';
 import type { createHttpsCredentialReference } from './credential-resolver.js';
 import type { createNetworkOperations } from './network-operations.js';
+import type * as gitIndex from './index.js';
 import type { subscribeWorktreeTopologyChanges } from './service.js';
+import type { WorktreeArchiveSessionService, WorktreeLeaseControl } from './service-contracts.js';
 import type { createWorktreeBootstrapStore } from './worktree-bootstrap-storage.js';
 
 
@@ -37,15 +39,11 @@ export interface GitRouteDependencies {
   errorRedactionSecrets?: NonNullable<Parameters<typeof createGitRedactor>[0]>['secrets'];
   worktreeBootstrapStore?: ReturnType<typeof createWorktreeBootstrapStore>;
   emitWorktreeChanged?: Parameters<typeof subscribeWorktreeTopologyChanges>[0];
-
-
+  worktreeLeaseControl?: WorktreeLeaseControl | undefined;
+  worktreeArchiveSessionService?: WorktreeArchiveSessionService | undefined;
   onBranchRewritten?: BindingRoutes['invalidateBranchStatus'];
 }
-type InstanceDisposerDependencies = {
-
-
-};
-type GitLibraries = typeof import('./index.js');
+type GitLibraries = typeof gitIndex;
 type WorktreeCreationErrorBody = { error: unknown; code: unknown; remoteName?: unknown };
 type UncheckedFields = {
   readonly operation?: unknown; readonly passphrase?: unknown; readonly candidateId?: unknown;
@@ -59,17 +57,17 @@ type UncheckedFields = {
   readonly path?: unknown; readonly scope?: unknown; readonly patch?: unknown; readonly action?: unknown;
   readonly refs?: unknown; readonly remote?: unknown; readonly expectedHead?: unknown; readonly onto?: unknown;
   readonly branch?: unknown; readonly message?: unknown; readonly addAll?: unknown; readonly files?: unknown;
-  readonly stageFiles?: unknown; readonly branches?: unknown; readonly name?: unknown; readonly startPoint?: unknown;
-  readonly force?: unknown; readonly oldName?: unknown; readonly newName?: unknown; readonly hash?: unknown;
-  readonly mode?: unknown; readonly deleteLocalBranch?: unknown; readonly teardownCommand?: unknown;
-  readonly ref?: unknown; readonly id?: unknown; readonly sessionIds?: unknown; readonly title?: unknown;
-  readonly deleteBranch?: unknown; readonly worktreeRoot?: unknown; readonly user?: unknown;
-  readonly login?: unknown; readonly username?: unknown;
+  readonly stageFiles?: unknown; readonly changeId?: unknown; readonly notes?: unknown; readonly branches?: unknown;
+  readonly name?: unknown; readonly startPoint?: unknown; readonly force?: unknown; readonly oldName?: unknown;
+  readonly newName?: unknown; readonly hash?: unknown; readonly mode?: unknown; readonly deleteLocalBranch?: unknown;
+  readonly teardownCommand?: unknown; readonly ref?: unknown; readonly id?: unknown; readonly sessionIds?: unknown;
+  readonly title?: unknown; readonly recovery?: unknown; readonly deleteBranch?: unknown; readonly worktreeRoot?: unknown;
+  readonly user?: unknown; readonly login?: unknown; readonly username?: unknown;
 };
 type ErrorFields = {
   readonly message?: unknown; readonly code?: unknown; readonly status?: unknown; readonly statusCode?: unknown;
   readonly reason?: unknown; readonly stderr?: unknown; readonly stdout?: unknown; readonly remoteName?: unknown;
-  readonly details?: unknown;
+  readonly details?: unknown; readonly commit?: unknown; readonly branch?: unknown; readonly extras?: unknown;
 };
 type RouteHandler = (req: Request, res: Response, next: NextFunction) => Promise<void | Response>;
 
@@ -136,10 +134,9 @@ export function registerGitRoutes(app: Application, {
   createHttpsCredentialReference, resolveSourceControlAccount, errorRedactionSecrets = [], worktreeBootstrapStore,
   worktreeLeaseControl, worktreeArchiveSessionService,
   emitWorktreeChanged, onBranchRewritten,
-
-} = {}) {
-  let gitLibraries = null;
-  const getGitLibraries = async () => {
+}: GitRouteDependencies = {}) {
+  let gitLibraries: GitLibraries | null = null;
+  const getGitLibraries = async (): Promise<GitLibraries> => {
     if (!gitLibraries) {
       gitLibraries = await import('./index.js');
       if (emitWorktreeChanged) {
@@ -728,8 +725,6 @@ export function registerGitRoutes(app: Application, {
     return readProjectBatch(req, res, async (directory) => {
       try {
         const worktrees = await enrichWorktreeProvenance(await getWorktrees(directory));
-        // A non-empty listing is one of the two ways the server notices a
-        // worktree added outside the app.
         if (worktrees.length > 0) void observeWorktreeTopology(directory);
         return { directory, worktrees };
       } catch (error) {
@@ -750,8 +745,9 @@ export function registerGitRoutes(app: Application, {
       return res.status(204).end();
     } catch (error) {
       console.error('Failed to initialize git repository:', error);
-      return res.status(Number.isInteger(error?.statusCode) ? error.statusCode : 500)
-        .json({ error: error?.message || 'Failed to initialize Git' });
+      const status = errorFields(error)?.statusCode;
+      return res.status(isInteger(status) ? status : 500)
+        .json({ error: messageOf(error) || 'Failed to initialize Git' });
     }
   }));
 
@@ -1410,13 +1406,13 @@ export function registerGitRoutes(app: Application, {
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
       const { addChangeIdToHead } = await import('../source-control/change-id.js');
-      const { sha, changeId, branch } = await addChangeIdToHead(directory, fieldsOf(req.body)?.expectedHead);
+      const { sha, changeId, branch } = await addChangeIdToHead(directory, textOf(fieldsOf(req.body)?.expectedHead) ?? '');
       onBranchRewritten?.({ directory, branch });
       return res.json({ sha, changeId });
     } catch (error) {
       const status = statusOf(error);
       if (status !== undefined && status < 500) return res.status(status).json({ error: messageOf(error), code: errorFields(error)?.code });
-      console.error('Failed to add a Change-Id:', messageOf(error));
+      console.error('Failed to add a Change-Id:', redactGitText(String(messageOf(error) ?? ''), { secrets: errorRedactionSecrets }));
       return res.status(500).json({ error: 'Failed to add a Change-Id', code: errorFields(error)?.code ?? 'CHANGE_ID_FAILED' });
     }
   }));
@@ -1535,28 +1531,6 @@ export function registerGitRoutes(app: Application, {
     }
   });
 
-  // A review host's preflight: gives the checked-out commit the Change-Id
-  // trailer its commit-msg hook would have added. `source-control/change-id.js`
-  // owns the amend and every refusal; this route only reports them.
-  app.post('/api/git/change-id', userAction(async (req, res) => {
-    const directory = resolveDirectoryQuery(req.query?.directory);
-    if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
-    try {
-      const { addChangeIdToHead } = await import('../source-control/change-id.js');
-      const { sha, changeId, branch } = await addChangeIdToHead(directory, req.body?.expectedHead);
-      // A cached branch status was read for the old tip. Invalidation is an
-      // in-memory removal, so a rewrite that already moved the ref has no
-      // failure step here.
-      onBranchRewritten?.({ directory, branch });
-      return res.json({ sha, changeId });
-    } catch (error) {
-      if (Number.isInteger(error?.status) && error.status < 500) {
-        return res.status(error.status).json({ error: error.message, code: error.code });
-      }
-      console.error('Failed to add a Change-Id:', redactGitText(error?.message, { secrets: errorRedactionSecrets }));
-      return res.status(500).json({ error: 'Failed to add a Change-Id', code: error?.code ?? 'CHANGE_ID_FAILED' });
-    }
-  }));
 
   app.post('/api/git/commit', userAction(async (req, res) => {
     const { commit } = await getGitLibraries();
@@ -1566,33 +1540,35 @@ export function registerGitRoutes(app: Application, {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const { message, addAll, files, stageFiles, changeId, notes } = req.body;
+      const bodyFields = fieldsOf(req.body);
+      const message = textOf(bodyFields?.message);
       if (!message) {
         return res.status(400).json({ error: 'message is required' });
       }
-      if ((changeId !== undefined && typeof changeId !== 'boolean') || (notes !== undefined && typeof notes !== 'boolean')) {
+      const changeId = bodyFields?.changeId;
+      const notes = bodyFields?.notes;
+      if ((changeId !== undefined && !isBoolean(changeId)) || (notes !== undefined && !isBoolean(notes))) {
         return res.status(400).json({ error: 'changeId and notes must be booleans when present', code: 'INVALID_REQUEST' });
       }
 
       const result = await commit(directory, message, {
-        addAll,
-        files,
-        stageFiles,
+        addAll: bodyFields?.addAll === true,
+        files: bodyFields?.files,
+        stageFiles: bodyFields?.stageFiles,
         changeId,
         notes,
         notesMessage: message,
       });
       res.json(result);
     } catch (error) {
-      if (error?.code === 'COMMIT_EXTRAS_FAILED') {
-        // The commit exists; report it and each requested extra that did not
-        // apply, so the client can tell the user what actually landed.
-        return res.status(error.status ?? 409).json({
-          error: error.message,
-          code: error.code,
-          commit: error.commit,
-          branch: error.branch,
-          extras: error.extras,
+      const errorInfo = errorFields(error);
+      if (errorInfo?.code === 'COMMIT_EXTRAS_FAILED') {
+        return res.status(isInteger(errorInfo.status) ? errorInfo.status : 409).json({
+          error: errorInfo.message,
+          code: errorInfo.code,
+          commit: errorInfo.commit,
+          branch: errorInfo.branch,
+          extras: errorInfo.extras,
         });
       }
       console.error('Failed to commit:', error);
@@ -1963,16 +1939,14 @@ export function registerGitRoutes(app: Application, {
         return res.status(501).json({ error: 'Worktree bootstrap storage is not available' });
       }
 
+      const removeOptions: Parameters<GitLibraries['removeWorktree']>[2] = { bootstrapStore: worktreeBootstrapStore };
+      if (worktreeLeaseControl) removeOptions.removalWorkers = worktreeLeaseControl;
       const result = await removeWorktree(directory, {
         directory: worktreeDirectory,
         deleteLocalBranch: fieldsOf(req.body)?.deleteLocalBranch === true,
         teardownCommand: z.string().safeParse(fieldsOf(req.body)?.teardownCommand).data,
         isContributorCheckout,
-
-      }, {
-        bootstrapStore: worktreeBootstrapStore,
-        ...(worktreeLeaseControl ? { removalWorkers: worktreeLeaseControl } : {}),
-      });
+      }, removeOptions);
       res.json({ success: Boolean(result) });
     } catch (error) {
       const status = statusOf(error);
@@ -2023,13 +1997,24 @@ export function registerGitRoutes(app: Application, {
     ['WORKTREE_ARCHIVE_PARTIAL', 409],
     ['WORKTREE_BOOTSTRAP_FAILED', 409],
   ]);
+  interface ArchiveErrorBody {
+    error: unknown;
+    code: unknown;
+    details?: unknown;
+  }
+  interface ArchiveSessionBindingView {
+    status: 'unbound' | 'ref-changed' | 'bound' | 'verified-empty';
+    phase?: string;
+    revision?: number;
+    recoveryHead?: string;
+  }
   const sendArchiveError = <Cause>(res: Response, error: Cause, fallback: string) => {
     const fields = errorFields(error);
     const status = ARCHIVE_ERROR_STATUS.get(fields?.code)
       ?? (isInteger(fields?.status) ? fields.status : isInteger(fields?.statusCode) ? fields.statusCode : 500);
     if (status === 500) console.error(`${fallback}:`, error);
-    const body = { error: messageOf(error) || fallback, code: fields?.code,
-      ...(fields?.details && typeof fields.details === 'object' ? { details: fields.details } : {}) };
+    const body: ArchiveErrorBody = { error: messageOf(error) || fallback, code: fields?.code };
+    if (fields?.details && isJsonContainer(fields.details)) body.details = fields.details;
     res.status(status).json(body);
   };
 
@@ -2039,21 +2024,24 @@ export function registerGitRoutes(app: Application, {
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
       const archives = await listWorktreeArchives(directory);
-      if (!worktreeArchiveSessionService?.prepareWorktreeArchiveDelete) return res.json({ archives });
+      const prepareWorktreeArchiveDelete = worktreeArchiveSessionService?.prepareWorktreeArchiveDelete;
+      if (!prepareWorktreeArchiveDelete) return res.json({ archives });
       const joined = await Promise.all(archives.map(async (archive) => {
-        const owner = await worktreeArchiveSessionService.prepareWorktreeArchiveDelete({ projectDirectory: directory, archiveId: archive.id });
+        const owner = await prepareWorktreeArchiveDelete({ projectDirectory: directory, archiveId: archive.id });
         const binding = owner?.binding;
-        const status = !binding ? 'unbound' : binding.archiveRef !== archive.ref || binding.snapshotCommit !== archive.commit
+        const status: ArchiveSessionBindingView['status'] = !binding ? 'unbound' : binding.archiveRef !== archive.ref || binding.snapshotCommit !== archive.commit
           ? 'ref-changed' : binding.sessions.length ? 'bound' : 'verified-empty';
-        return {
-          ...archive, sessionIds: [], sessionBinding: {
-            status, ...(binding ? {
-              phase: binding.phase, revision: binding.revision,
-              ...(binding.phase === 'restoring' && binding.targetWorkspaceId && binding.applyAttempted && !binding.sessions.some((item) => ['move_intent', 'restored'].includes(item.progress))
-                ? { recoveryHead: binding.preapplyHead } : {})
-            } : {})
+        const sessionBinding: ArchiveSessionBindingView = { status };
+        if (binding) {
+          sessionBinding.phase = binding.phase;
+          sessionBinding.revision = binding.revision;
+          if (binding.phase === 'restoring' && binding.targetWorkspaceId && binding.applyAttempted
+            && !binding.sessions.some((item) => !isString(item) && ['move_intent', 'restored'].includes(item.progress))
+            && isString(binding.preapplyHead)) {
+            sessionBinding.recoveryHead = binding.preapplyHead;
           }
-        };
+        }
+        return { ...archive, sessionIds: [], sessionBinding };
       }));
       res.json({ archives: joined });
     } catch (error) {
@@ -2075,12 +2063,12 @@ export function registerGitRoutes(app: Application, {
     const { archiveWorktree } = await getGitLibraries();
     try {
 
+      const bodyFields = fieldsOf(req.body);
       res.json(await archiveWorktree(directory, {
         directory: worktreeDirectory,
-        id: req.body?.id,
-        title: req.body?.title,
-        sessionIds: Array.isArray(req.body?.sessionIds) ? req.body.sessionIds : undefined,
-
+        id: bodyFields?.id,
+        title: bodyFields?.title,
+        sessionIds: Array.isArray(bodyFields?.sessionIds) ? bodyFields.sessionIds : undefined,
       }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl, archiveSessions: worktreeArchiveSessionService }));
     } catch (error) {
       sendArchiveError(res, error, 'Failed to archive worktree');
@@ -2092,7 +2080,8 @@ export function registerGitRoutes(app: Application, {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
-      res.json(await restoreWorktreeArchive(directory, { id: req.body?.id, recovery: req.body?.recovery }, { archiveSessions: worktreeArchiveSessionService }));
+      const bodyFields = fieldsOf(req.body);
+      res.json(await restoreWorktreeArchive(directory, { id: bodyFields?.id, recovery: bodyFields?.recovery }, { archiveSessions: worktreeArchiveSessionService }));
     } catch (error) {
       sendArchiveError(res, error, 'Failed to restore worktree archive');
     }
@@ -2103,7 +2092,8 @@ export function registerGitRoutes(app: Application, {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
-      res.json(await deleteWorktreeArchive(directory, { id: req.body?.id, deleteBranch: req.body?.deleteBranch === true }, { archiveSessions: worktreeArchiveSessionService }));
+      const bodyFields = fieldsOf(req.body);
+      res.json(await deleteWorktreeArchive(directory, { id: bodyFields?.id, deleteBranch: bodyFields?.deleteBranch === true }, { archiveSessions: worktreeArchiveSessionService }));
     } catch (error) {
       sendArchiveError(res, error, 'Failed to delete worktree archive');
     }

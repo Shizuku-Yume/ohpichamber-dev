@@ -1,23 +1,22 @@
 import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult, UsageWindow } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
   toNumber,
-  toTimestamp
+  toTimestamp,
 } from '../utils/index.js';
 
-interface NanoGptAuthFields {
-  key?: unknown;
-  token?: unknown;
+export interface NanoGptDependencies {
+  readAuth?: (() => CredentialJson | Promise<CredentialJson>) | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
-const hasAuthFields = (value: unknown): value is NanoGptAuthFields => value !== null && value !== undefined;
-const asAuthFields = z.custom<NanoGptAuthFields | null>(hasAuthFields).catch(null).parse;
-
-export interface NanoGptDependencies {
-  readAuth?: () => LegacyAuthFile | Promise<LegacyAuthFile>;
-  fetchImpl?: typeof fetch;
+export interface NanoGptFetchOptions {
+  credential?: CredentialJson | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 const nanoGptQuotaWindowSchema = z.object({
@@ -50,9 +49,9 @@ const NANO_GPT_DAILY_WINDOW_SECONDS = 86400;
 export const providerId = 'nano-gpt';
 export const providerName = 'NanoGPT';
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+export const fetchQuota = async ({ credential, fetchImpl = fetch }: NanoGptFetchOptions = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
@@ -142,7 +141,7 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
       configured: true,
       usage: { windows }
     });
-  } catch (error) {
+  } catch {
     return buildResult({
       providerId,
       providerName,

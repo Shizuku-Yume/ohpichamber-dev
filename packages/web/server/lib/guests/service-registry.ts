@@ -43,7 +43,7 @@ const windowsProcessSchema = z.object({
   executablePath: z.string().nullable(),
 });
 
-const digestToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const digestToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
 
 const sleep = (ms: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);
@@ -80,13 +80,13 @@ export const createGuestServiceRegistry = ({
       await fs.writeFile(tmp, JSON.stringify(record), { mode: 0o600 });
       await fs.rename(tmp, filePath);
     } catch (error) {
-      await fs.rm(tmp, { force: true }).catch(() => {});
+      await fs.rm(tmp, { force: true }).catch(() => { });
       console.warn(`[guests] could not record guest service pid ${pid} for crash recovery: ${(hasErrorCode(error) ? error.code : undefined) ?? (hasErrorMessage(error) ? error.message : undefined) ?? error}`);
     }
   };
 
   const releaseGuestService = async (dir: string, pid: number) => {
-    await fs.rm(path.join(dir, `${pid}.json`), { force: true }).catch(() => {});
+    await fs.rm(path.join(dir, `${pid}.json`), { force: true }).catch(() => { });
   };
 
   const readLinuxProcess = async (pid: number) => {
@@ -179,7 +179,7 @@ export const createGuestServiceRegistry = ({
     await Promise.all(entries.map(async (name) => {
       const writer = name.match(/\.json\.tmp-(\d+)-[0-9a-f]+$/);
       if (writer && !isPidAlive(Number.parseInt(writer[1] ?? '', 10))) {
-        await fs.rm(path.join(dir, name), { force: true }).catch(() => {});
+        await fs.rm(path.join(dir, name), { force: true }).catch(() => { });
       }
     }));
     const names = entries.filter((name) => name.endsWith('.json'));
@@ -202,7 +202,7 @@ export const createGuestServiceRegistry = ({
         await fs.rm(filePath, { force: true });
         return state === 'orphaned';
       } catch (error) {
-        if (error instanceof SyntaxError) await fs.rm(filePath, { force: true }).catch(() => {});
+        if (error instanceof SyntaxError) await fs.rm(filePath, { force: true }).catch(() => { });
         return false;
       }
     }));

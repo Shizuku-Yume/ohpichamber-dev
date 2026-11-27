@@ -1,14 +1,15 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult, UsageWindow } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
   toNumber,
   toTimestamp,
   formatMoney,
-  asNonEmptyString
+  asNonEmptyString,
 } from '../utils/index.js';
-import { z } from "zod";
-
 
 interface NeuralWattFields {
   key?: unknown;
@@ -46,8 +47,8 @@ const periodToWindowSeconds = (period: string) => {
   return null;
 };
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-export const fetchQuota = async ({ credential } = {}) => {
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
+export const fetchQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
   if (!apiKey) {
     return buildResult({
@@ -99,8 +100,8 @@ export const fetchQuota = async ({ credential } = {}) => {
       const usedPercent = inOverage
         ? 100
         : (kwhIncluded !== null && kwhIncluded > 0 && kwhUsed !== null
-            ? Math.max(0, Math.min(100, (kwhUsed / kwhIncluded) * 100))
-            : null);
+          ? Math.max(0, Math.min(100, (kwhUsed / kwhIncluded) * 100))
+          : null);
       const subResetAt = toTimestamp(subscription.kwh_reset_date) ?? toTimestamp(subscription.current_period_end);
       windows[subKey] = toUsageWindow({
         usedPercent,
@@ -121,8 +122,8 @@ export const fetchQuota = async ({ credential } = {}) => {
       const usedPercent = blocked
         ? 100
         : (spent !== null && effectiveLimit !== null && effectiveLimit > 0
-            ? Math.max(0, Math.min(100, (spent / effectiveLimit) * 100))
-            : null);
+          ? Math.max(0, Math.min(100, (spent / effectiveLimit) * 100))
+          : null);
       const periodKey = (period === 'daily' || period === 'weekly' || period === 'monthly' || period === 'month')
         ? (period === 'month' ? 'monthly' : period)
         : 'billing_cycle';

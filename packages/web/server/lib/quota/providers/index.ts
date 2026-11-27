@@ -1,11 +1,19 @@
-
+import { z } from 'zod';
 import { buildResult } from '../utils/index.js';
 import {
   requireSelectedCredential,
   SELECTED_CREDENTIAL_UNAVAILABLE,
 } from './selected-credential.js';
-import { createNativeQuotaProvider, NATIVE_QUOTA_PROVIDERS } from '../native.js';
+import {
+  createNativeQuotaProvider,
+  NATIVE_QUOTA_PROVIDERS,
+  type NativeQuotaProviderId,
+  type NativeResolvedCredential,
+} from '../native.js';
 import { attachZaiGiftResets, listZaiGiftResets } from './zai-gift-reset.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult } from '../utils/contracts.js';
+import type { ReadNativeReports } from '../native.js';
 
 import * as deepinfra from './deepinfra.js';
 import * as deepseek from './deepseek.js';
@@ -24,25 +32,33 @@ import * as zenmux from './zenmux.js';
 import * as ollamaCloud from './ollama-cloud.js';
 import * as wafer from './wafer.js';
 
-const enrichZaiGiftResets = async (result, options) => {
-  const { resolveCredential, workspaceId, agentDirectoryId, providerId, credentialRef } = options;
-  if (typeof resolveCredential !== 'function') return;
-  if (![workspaceId, agentDirectoryId, providerId, credentialRef].every((value) => typeof value === 'string' && value)) return;
-  const credential = await resolveCredential({ workspaceId, agentDirectoryId, providerId, credentialRef, purpose: 'quota' });
-  const list = await listZaiGiftResets({ credential });
-  if (list === null) return;
-  attachZaiGiftResets(result.usage.windows, list);
-};
+export interface QuotaProviderFetchOptions {
+  workspaceId?: string | undefined;
+  agentDirectoryId?: string | undefined;
+  providerId?: string | undefined;
+  credentialRef?: string | undefined;
+  resolveCredential?: ((input: {
+    workspaceId: string;
+    agentDirectoryId: string;
+    providerId: string;
+    credentialRef: string;
+    purpose: string;
+  }) => Promise<NativeResolvedCredential>) | undefined;
+  readNativeReports?: ReadNativeReports | undefined;
+  credential?: CredentialJson;
+  readAuth?: (() => CredentialJson | Promise<CredentialJson>) | undefined;
+  fetchImpl?: typeof fetch | undefined;
+}
 
-const nativeQuotaProvider = (logicalId) => {
-  const spec = NATIVE_QUOTA_PROVIDERS[logicalId];
-  return createNativeQuotaProvider({
-    providerId: logicalId,
-    providerName: NATIVE_PROVIDER_NAMES[logicalId],
-    nativeProviders: spec.providers,
-    enrich: logicalId === 'zai-coding-plan' ? enrichZaiGiftResets : undefined,
-  });
-};
+interface QuotaProviderEntry {
+  providerId: string;
+  providerName: string;
+  nativeProviders?: readonly string[];
+  isConfigured: (credential?: CredentialJson) => boolean;
+  fetchQuota: (options?: QuotaProviderFetchOptions) => Promise<QuotaResult<string, string, ProviderUsage>>;
+}
+const nonEmptyString = z.string().min(1);
+const unavailableErrorSchema = z.object({ code: z.literal(SELECTED_CREDENTIAL_UNAVAILABLE) });
 
 const NATIVE_PROVIDER_NAMES = {
   claude: 'Claude',
@@ -55,11 +71,63 @@ const NATIVE_PROVIDER_NAMES = {
   hyper: 'Charm Hyper',
   'zai-coding-plan': 'z.ai',
   'minimax-coding-plan': 'MiniMax Coding Plan (minimax.io)',
+} satisfies Record<NativeQuotaProviderId, string>;
+
+const enrichZaiGiftResets = async (result: QuotaResult<string, string, ProviderUsage>, options: QuotaProviderFetchOptions): Promise<void> => {
+  const { resolveCredential, workspaceId, agentDirectoryId, providerId, credentialRef } = options;
+  if (!resolveCredential || !z.function().safeParse(resolveCredential).success || !result.usage) return;
+  const resolve = resolveCredential;
+  const parsedWorkspace = nonEmptyString.safeParse(workspaceId);
+  const parsedAgentDir = nonEmptyString.safeParse(agentDirectoryId);
+  const parsedProvider = nonEmptyString.safeParse(providerId);
+  const parsedCredRef = nonEmptyString.safeParse(credentialRef);
+  if (!parsedWorkspace.success || !parsedAgentDir.success || !parsedProvider.success || !parsedCredRef.success) {
+    return;
+  }
+  const credential = await resolve({
+    workspaceId: parsedWorkspace.data,
+    agentDirectoryId: parsedAgentDir.data,
+    providerId: parsedProvider.data,
+    credentialRef: parsedCredRef.data,
+    purpose: 'quota',
+  });
+  const list = await listZaiGiftResets({ credential });
+  if (list === null) return;
+  attachZaiGiftResets(result.usage.windows, list);
+};
+
+const nativeQuotaProvider = (logicalId: NativeQuotaProviderId): QuotaProviderEntry => {
+  const spec = NATIVE_QUOTA_PROVIDERS[logicalId];
+  const providerConfig: Parameters<typeof createNativeQuotaProvider>[0] = {
+    providerId: logicalId,
+    providerName: NATIVE_PROVIDER_NAMES[logicalId],
+    nativeProviders: spec.providers,
+  };
+  if (logicalId === 'zai-coding-plan') {
+    providerConfig.enrich = enrichZaiGiftResets;
+  }
+  const provider = createNativeQuotaProvider(providerConfig);
+  return {
+    providerId: provider.providerId,
+    providerName: provider.providerName,
+    nativeProviders: provider.nativeProviders,
+    isConfigured: provider.isConfigured,
+    fetchQuota: (options: QuotaProviderFetchOptions = {}) => {
+      const nativeOptions: Parameters<typeof provider.fetchQuota>[0] = {};
+      if (options.readNativeReports !== undefined) nativeOptions.readNativeReports = options.readNativeReports;
+      if (options.workspaceId !== undefined) nativeOptions.workspaceId = options.workspaceId;
+      if (options.providerId !== undefined) nativeOptions.providerId = options.providerId;
+      if (options.agentDirectoryId !== undefined) nativeOptions.agentDirectoryId = options.agentDirectoryId;
+      if (options.credentialRef !== undefined) nativeOptions.credentialRef = options.credentialRef;
+      if (options.resolveCredential !== undefined) nativeOptions.resolveCredential = options.resolveCredential;
+      return provider.fetchQuota(nativeOptions);
+    },
+  };
 };
 
 const copilotAddon = nativeQuotaProvider('github-copilot-addon');
 
-const registry: QuotaProviderRegistry = {
+const registry = {
   claude: nativeQuotaProvider('claude'),
   'cline-pass': nativeQuotaProvider('cline-pass'),
   codex: nativeQuotaProvider('codex'),
@@ -160,33 +228,29 @@ const registry: QuotaProviderRegistry = {
     isConfigured: mistral.isConfigured,
     fetchQuota: mistral.fetchQuota
   }
-};
+} satisfies Record<string, QuotaProviderEntry>;
 
-const pendingFetches = new Map();
+const pendingFetches = new Map<string, Promise<QuotaResult<string, string, ProviderUsage>>>();
 
-export const listUsagePageProviders = () => Object.entries(registry)
+const lookupProvider = (providerId: string): QuotaProviderEntry | null =>
+  Object.entries(registry).find(([id]) => id === providerId)?.[1] ?? null;
+export const listUsagePageProviders = (): Array<{ providerId: string; providerName: string }> => Object.entries(registry)
   .filter(([id]) => id !== 'github-copilot-addon')
   .map(([providerId, provider]) => ({ providerId, providerName: provider.providerName }));
 
-
-/**
- * Provider selections are supplied by the Host's selected workspace catalog.
- * This registry never enumerates or reads a credential store itself.
- */
 export const listConfiguredQuotaProviders = async ({ selections = [] }: {
-  selections?: { quotaProviderId?: string; providerId?: string }[];
-} = {}) => {
-  const providerIds = new Set();
+  selections?: Array<{ quotaProviderId?: string | undefined; providerId?: string | undefined }>;
+} = {}): Promise<string[]> => {
+  const providerIds = new Set<string>();
   for (const selection of selections) {
     const providerId = selection?.quotaProviderId ?? selection?.providerId;
-    if (Object.hasOwn(registry, providerId)) providerIds.add(providerId);
+    if (providerId && Object.hasOwn(registry, providerId)) providerIds.add(providerId);
   }
   return [...providerIds];
 };
 
-/** A provider outside the registry is unsupported, not unconfigured. */
-export const buildUnconfiguredQuotaResult = (providerId) => {
-  const provider = registry[providerId];
+export const buildUnconfiguredQuotaResult = (providerId: string): QuotaResult<string, string, ProviderUsage> | null => {
+  const provider = lookupProvider(providerId);
   if (!provider) return null;
   return buildResult({
     providerId: provider.providerId,
@@ -196,8 +260,11 @@ export const buildUnconfiguredQuotaResult = (providerId) => {
   });
 };
 
-const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
-  const provider = registry[providerId];
+const fetchQuotaForProviderUncoalesced = async (
+  providerId: string,
+  options: QuotaProviderFetchOptions = {},
+): Promise<QuotaResult<string, string, ProviderUsage>> => {
+  const provider = lookupProvider(providerId);
   if (!provider) return buildResult({ providerId, providerName: providerId, ok: false, configured: false, error: 'Unsupported provider' });
   if (Array.isArray(provider.nativeProviders)) {
     try {
@@ -206,14 +273,18 @@ const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
       return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: true, error: 'Request failed' });
     }
   }
-  let credential;
+  let credential: CredentialJson;
   try {
-    credential = await requireSelectedCredential({ ...options, purpose: 'quota' });
+    credential = await requireSelectedCredential({
+      workspaceId: options.workspaceId,
+      agentDirectoryId: options.agentDirectoryId,
+      providerId: options.providerId,
+      credentialRef: options.credentialRef,
+      resolveCredential: options.resolveCredential,
+      purpose: 'quota',
+    });
   } catch (error) {
-    // No stored credential is an ordinary configuration state. Any other
-    // resolution failure belongs to a provider the catalog already reported
-    // as connected, so it must stay visible instead of looking unconfigured.
-    if (error?.code === SELECTED_CREDENTIAL_UNAVAILABLE) {
+    if (unavailableErrorSchema.safeParse(error).success) {
       return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: false });
     }
     return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: true, error: 'Selected credential unavailable' });
@@ -225,7 +296,10 @@ const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   }
 };
 
-export const fetchQuotaForProvider = (providerId, options = {}) => {
+export const fetchQuotaForProvider = (
+  providerId: string,
+  options: QuotaProviderFetchOptions = {},
+): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const requestKey = JSON.stringify([providerId, options.providerId, options.workspaceId, options.agentDirectoryId, options.credentialRef]);
   const existing = pendingFetches.get(requestKey);
   if (existing) return existing;

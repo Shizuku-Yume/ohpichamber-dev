@@ -89,13 +89,12 @@ const LINEAR_TOKEN_URL = 'https://api.linear.app/oauth/token';
 const LINEAR_REVOKE_URL = 'https://api.linear.app/oauth/revoke';
 const PENDING_AUTHORIZATION_TTL_MS = 10 * 60_000;
 
-/** The typed refusal when nothing can carry Linear's browser sign-in. */
 const LINEAR_BROKER_NOT_CONFIGURED = 'LINEAR_BROKER_NOT_CONFIGURED';
 const LINEAR_BROKER_NOT_CONFIGURED_MESSAGE =
   'Linear sign-in needs an OAuth broker. Set OPENCHAMBER_LINEAR_BROKER_URL, or settings.json linearBrokerUrl.';
 
-const pendingByState = new Map();
-const brokerPollsByState = new Map();
+const pendingByState = new Map<string, PendingAuthorization>();
+const brokerPollsByState = new Map<string, Promise<LinearAuthorization | null>>();
 
 class LinearOAuthError extends Error {
   declare code: string;

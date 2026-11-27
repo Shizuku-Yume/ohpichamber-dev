@@ -183,6 +183,15 @@ describe('Host-owned public catalog credential selections', () => {
       await expect(owner.resolveQuotaSelection(catalogRequest(), logicalId)).rejects.toMatchObject({ status: 422, code: 'CREDENTIAL_UNAVAILABLE' });
     }
   });
+  it('rejects malformed non-string selectors instead of silently dropping them', async () => {
+    const owner = catalogFixture([publicProvider('proxy')]);
+    for (const req of [catalogRequest({ providerId: 42 }), catalogRequest({ credentialRef: 42 }),
+    { query: { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1' }, body: { providerId: 42 } },
+    catalogRequest({ providerId: ['proxy'] })]) {
+      await expect(owner.listQuotaSelections(req)).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    }
+    expect(owner.paths).toHaveLength(0);
+  });
   it('never infers the quota implementation ID is a native SDK alias or reads sibling credentials', async () => {
     const owner = catalogFixture([publicProvider('codex', { method: 'oauth' }), publicProvider('openai', { method: 'oauth' }),
     publicProvider('openai-codex', { method: 'oauth' }), publicProvider('anthropic')]);

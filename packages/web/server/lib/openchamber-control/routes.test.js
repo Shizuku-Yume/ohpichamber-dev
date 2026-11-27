@@ -45,6 +45,38 @@ describe('OhPiChamber control route', () => {
     });
   });
 
+  it('keeps a valid action when a sibling body field is mistyped', async () => {
+    const execute = vi.fn(async () => ({ ok: true }));
+    // input as a string is malformed, but the action must survive: the service
+    // still receives 'projects.list' instead of the wiped-out empty string.
+    const response = await request(createApp(execute))
+      .post('/api/openchamber/control')
+      .send({ action: 'projects.list', input: 'not-an-object' })
+      .expect(200);
+    expect(response.body).toEqual({ ok: true });
+    expect(execute).toHaveBeenCalledWith('projects.list', {}, undefined, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  });
+
+  it('forwards a valid input object when the action is mistyped', async () => {
+    const execute = vi.fn(async () => ({ ok: true }));
+    const input = { projectId: 'prj_1' };
+    await request(createApp(execute))
+      .post('/api/openchamber/control')
+      .send({ action: 42, input })
+      .expect(200);
+    expect(execute).toHaveBeenCalledWith('', input, undefined, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  });
+
+  it('passes the page answer body through with every field intact', async () => {
+    const answerPage = vi.fn(() => ({ answered: true }));
+    const body = { sessionId: 'ses_1', callId: 'call_1', notDrawn: ['a layout crashed'], extra: 'kept' };
+    await request(createApp(vi.fn(), answerPage))
+      .post('/api/openchamber/render/answer')
+      .send(body)
+      .expect(200);
+    expect(answerPage).toHaveBeenCalledWith(body);
+  });
+
   it('keeps the status of a browser refusal instead of reporting 500', async () => {
     const execute = vi.fn(async () => {
       throw new BrowserControlError('The user is interacting with this page in the panel right now.', 409);

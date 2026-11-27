@@ -1,15 +1,6 @@
-/**
- * `metadata.openchamber.work`: whether a session is in work and what Jev
- * currently suggests about it; `metadata.openchamber.reviewOffer`: Jev's offer
- * to look over the last turn's changes, which does not depend on work. Every function returns a JSON merge patch for
- * the session metadata store, or null when nothing changes, so the store can
- * decide against the record as it is at write time.
- *
- * The rule the patches keep: Jev only ever opens, the user alone closes. Jev
- * may reopen a session the user closed, but only for a request sent after the
- * user closed it.
- */
 import { z } from 'zod';
+import { isRecord } from '../shared/guards.js';
+import type { JsonObject, JsonValue } from '../shared/json-values.js';
 
 const workSchema = z.object({
   state: z.enum(['open', 'done']),
@@ -19,44 +10,60 @@ const workSchema = z.object({
   suggestDoneAt: z.number().optional(),
 });
 
+export type SessionWorkRecord = z.infer<typeof workSchema>;
+
 const metadataSchema = z.object({ openchamber: z.object({ work: workSchema }) });
 const reviewOfferSchema = z.object({ openchamber: z.object({ reviewOffer: z.object({ at: z.number() }) }) });
 
-/** The session's work record, or null when it has none (or a malformed one). */
-export const readWork = (metadata) => metadataSchema.safeParse(metadata).data?.openchamber.work ?? null;
+export type SessionWorkPatch = {
+  openchamber: JsonObject;
+};
 
-const patchOf = (work) => ({ openchamber: { work } });
+export const readWork = (metadata: JsonValue | null | undefined): SessionWorkRecord | null => (
+  metadataSchema.safeParse(metadata).data?.openchamber.work ?? null
+);
 
-export const isPinnedMetadata = (metadata) => Boolean(metadata?.isPinned || metadata?.openchamber?.pinned);
+const patchOf = (work: JsonObject): SessionWorkPatch => ({ openchamber: { work } });
 
-export const userStatePatch = (metadata, { state, now }) => {
+export const isPinnedMetadata = (metadata: JsonValue | null | undefined): boolean => (
+  isRecord(metadata) && Boolean(metadata.isPinned || (isRecord(metadata.openchamber) && metadata.openchamber.pinned))
+);
+
+export const userStatePatch = (
+  metadata: JsonValue | null | undefined,
+  { state, now }: { state: 'open' | 'done'; now: number },
+): SessionWorkPatch | null => {
   if (readWork(metadata)?.state === state || (state === 'open' && isPinnedMetadata(metadata))) return null;
   return patchOf(state === 'open'
     ? { state: 'open', openedAt: now, openedBy: 'user', doneAt: null, suggestDoneAt: null }
     : { state: 'done', doneAt: now, suggestDoneAt: null });
 };
 
-/** Jev saw a request that starts work, sent at `requestAt`. */
-export const openByJevPatch = (metadata, { requestAt, now }) => {
+export const openByJevPatch = (
+  metadata: JsonValue | null | undefined,
+  { requestAt, now }: { requestAt: number; now: number },
+): SessionWorkPatch | null => {
   const work = readWork(metadata);
   if (work?.state === 'open') return null;
-  // Closed after this request was sent: the user's decision stands.
   if (work?.state === 'done' && Number.isFinite(requestAt) && (work.doneAt ?? 0) >= requestAt) return null;
   return patchOf({ state: 'open', openedAt: now, openedBy: 'jev', doneAt: null, suggestDoneAt: null });
 };
 
-/** The turn that just ended looks like the end of the work. */
-export const suggestDonePatch = (metadata, { now }) => {
+export const suggestDonePatch = (
+  metadata: JsonValue | null | undefined,
+  { now }: { now: number },
+): SessionWorkPatch | null => {
   if (readWork(metadata)?.state !== 'open') return null;
   return patchOf({ suggestDoneAt: now });
 };
 
-/** The turn that just ended handed over changes worth a look; any session. */
-export const offerReviewPatch = (_metadata, { now }) => ({ openchamber: { reviewOffer: { at: now } } });
+export const offerReviewPatch = (
+  _metadata: JsonValue | null | undefined,
+  { now }: { now: number },
+): SessionWorkPatch => ({ openchamber: { reviewOffer: { at: now } } });
 
-/** A new turn started: whatever Jev concluded about the last one no longer holds. */
-export const clearSuggestionPatch = (metadata) => {
-  const patch = {};
+export const clearSuggestionPatch = (metadata: JsonValue | null | undefined): SessionWorkPatch | null => {
+  const patch: JsonObject = {};
   if (readWork(metadata)?.suggestDoneAt !== undefined) patch.work = { suggestDoneAt: null };
   if (reviewOfferSchema.safeParse(metadata).success) patch.reviewOffer = null;
   return Object.keys(patch).length > 0 ? { openchamber: patch } : null;

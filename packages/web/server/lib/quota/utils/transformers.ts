@@ -1,19 +1,22 @@
 import fs from 'node:fs';
+import { z } from 'zod';
+import type { JsonValue, TokenWindowLimit } from './contracts.js';
 
-export const readJsonFile = (filePath: string): unknown => {
+export { asNonEmptyString } from '../../shared/object-guards.js';
+
+const jsonSchema = z.json();
+
+export const readJsonFile = (filePath: string): JsonValue | null => {
   if (!fs.existsSync(filePath)) return null;
   try {
     const raw = fs.readFileSync(filePath, 'utf8').trim();
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = jsonSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
 };
-
-import { z } from 'zod';
-import type { TokenWindowLimit } from './contracts.js';
-
-export { asNonEmptyString } from '../../shared/object-guards.js';
 
 const isObject = (value: unknown): value is object => value !== null && typeof value === 'object';
 const isNumber = (value: unknown): value is number => typeof value === 'number';
@@ -59,12 +62,12 @@ const ZAI_TOKEN_WINDOW_SECONDS: TokenWindowDurations = {
   6: 7 * 24 * 60 * 60
 };
 
-export const resolveWindowSeconds = (limit: TokenWindowLimit | null | undefined) => {
+export const resolveWindowSeconds = (limit: TokenWindowLimit | null | undefined): number | null => {
   if (!limit || !limit.number) return null;
   const unit = limit.unit;
   const unitSeconds = unit === undefined ? undefined : ZAI_TOKEN_WINDOW_SECONDS[isSymbol(unit) ? unit : String(unit)];
   if (!unitSeconds) return null;
-  return +unitSeconds * +limit.number;
+  return Number(unitSeconds) * Number(limit.number);
 };
 
 export const resolveWindowLabel = (windowSeconds: number | null | undefined) => {

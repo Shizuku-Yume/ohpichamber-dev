@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createMessageId, escapeAttribute } from '../dispatch-results/runtime.js';
 import { OpenChamberControlError, controlErrorFields } from './error.js';
 import { readPageAnswer } from './render-page.js';
+import { JsonValueSchema } from '../shared/json-values.js';
 import type { CanonicalEvent } from '@openchamber/agent-contract';
 import type { GlobalMessageStreamHub } from '../event-stream/global-hub.js';
 import type { SyntheticMessage } from '../workflows/contracts.js';
@@ -37,7 +38,7 @@ const pageSchema = z.object({
   answeredAt: z.number().finite().nonnegative().nullable(),
   messageID: z.string().nullable(),
 });
-const storedFileSchema = z.object({ revision: z.number().int().nonnegative().optional(), pages: z.array(z.unknown()) });
+const storedFileSchema = z.object({ revision: z.number().int().nonnegative().optional(), pages: z.array(JsonValueSchema) });
 
 type LaterPage = Omit<z.infer<typeof pageSchema>, 'answer'> & {
   answer: ReturnType<typeof readPageAnswer>['answer'] | z.infer<typeof answerSchema> | null;

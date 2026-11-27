@@ -856,7 +856,7 @@ const PLUMBING_FILES = new Set([
   'packages/web/server/lib/host/settings-helpers.js',
   'packages/web/server/lib/host/settings-helpers.test.js',
   'packages/web/server/lib/host/settings-runtime.js',
-  'packages/web/server/lib/host/settings-files.js',
+  'packages/web/server/lib/host/settings-files.ts',
   'packages/web/server/lib/opencode/settings-helpers.js',
   'packages/web/server/lib/opencode/settings-helpers.test.js',
   'packages/web/server/lib/opencode/settings-runtime.js',

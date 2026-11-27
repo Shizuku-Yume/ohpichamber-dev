@@ -1,60 +1,140 @@
 import { randomUUID } from 'node:crypto';
-import { translateWireEvent } from './translate-v2.js';
+import { z } from 'zod';
 import { CanonicalEventSchema, CursorSchema, EntityIdSchema, SessionSnapshotSchema, StreamInvalidatedSchema } from '@openchamber/agent-contract';
+import type { CanonicalEvent, SessionSnapshot } from '@openchamber/agent-contract';
+import { isString } from '../shared/object-guards.js';
+import type { JsonValue } from './contracts.js';
+import { translateWireEvent } from './translate-v2.js';
+import type { TranslatedWireEvent } from './translate-v2.js';
 import { markValidatedCanonicalEvent } from './validated-event.js';
 
 const REPLAY_LIMIT = 2048;
 const REPLAY_BYTES = 8 * 1024 * 1024;
 
+export interface HubSessionScope {
+  sessionId?: string;
+  hostProjectId?: string;
+  projectId: string;
+  workspaceId: string;
+  cwd: string;
+  projectDirectory?: string;
+  name?: string;
+  agentDirectoryId: string;
+  agentDirectory: string;
+  rootSessionId: string;
+}
+
+export interface HubServiceClient {
+  request: (pathname: string, init?: RequestInit) => Promise<globalThis.Response>;
+}
+
+export interface GlobalHubDependencies {
+  service: HubServiceClient;
+  resolveSessionScope: (sessionId: string) => Promise<HubSessionScope | null>;
+  now?: () => number;
+  replayLimit?: number;
+  replayByteLimit?: number;
+}
+
+export type StreamInvalidatedEvent = z.infer<typeof StreamInvalidatedSchema>;
+
+export type GlobalHubStatus =
+  | { type: 'connect'; sessionId: string; timestamp: number; wasReady: boolean; replayReset: boolean }
+  | { type: 'invalidated'; sessionId: string; timestamp: number; invalidation: StreamInvalidatedEvent }
+  | { type: 'error' | 'initial-error'; sessionId: string; timestamp: number; error: { code: string; status?: number | undefined } }
+  | { type: 'disconnect'; sessionId: string; timestamp: number };
+
+export interface GlobalHubFrame {
+  eventId: string;
+  serializedFrame: string;
+  event: CanonicalEvent;
+}
+
+export interface ReplayEntry {
+  eventId: string;
+  sessionId: string;
+  serializedFrame: string;
+  bytes: number;
+}
+
+export interface InjectedSpaceEvent {
+  payload: JsonValue;
+  directory: string;
+  spaceId: string | null;
+  translated: () => TranslatedWireEvent[];
+}
+
+export type CanonicalEventSubscriber = (event: CanonicalEvent, scope: HubSessionScope) => void | Promise<void>;
+export type SpaceEventSubscriber = (record: InjectedSpaceEvent) => void | Promise<void>;
+export type SnapshotSubscriber = (snapshot: SessionSnapshot, scope: HubSessionScope) => void | Promise<void>;
+export type FrameSubscriber = (frame: GlobalHubFrame) => void | Promise<void>;
+export type StatusSubscriber = (status: GlobalHubStatus) => void | Promise<void>;
+
+interface SessionEntry {
+  sessionId: string;
+  cursor: string | undefined;
+  controller: AbortController;
+  connected: boolean;
+  connectedOnce: boolean;
+  replayReset: boolean;
+  scope?: HubSessionScope;
+  ready?: Promise<void>;
+  finished?: Promise<void>;
+  reader?: ReadableStreamDefaultReader<Uint8Array> | null;
+}
+
+const hasHttpStatus = (value: unknown): value is { status?: number } => Boolean(value && typeof value === 'object');
+const isJsonRecord = (value: unknown): value is { type?: unknown } => Boolean(value && typeof value === 'object');
+const isCompleteScope = (scope: HubSessionScope | null | undefined): scope is HubSessionScope => Boolean(
+  scope
+  && [scope.projectId, scope.workspaceId, scope.cwd, scope.agentDirectoryId, scope.agentDirectory, scope.rootSessionId]
+    .every((value) => isString(value) && value.length > 0),
+);
+const isCallable = (value: unknown): value is (...args: never[]) => void => typeof value === 'function';
+
 export function createGlobalMessageStreamHub({
   service, resolveSessionScope, now = Date.now, replayLimit = REPLAY_LIMIT, replayByteLimit = REPLAY_BYTES,
-}) {
-  if (typeof service?.request !== 'function' || typeof resolveSessionScope !== 'function') {
+}: GlobalHubDependencies) {
+  if (!isCallable(service?.request) || !isCallable(resolveSessionScope)) {
     throw new TypeError('Agent Service and Host session scope resolver are required');
   }
   if (!Number.isSafeInteger(replayLimit) || replayLimit < 0 || !Number.isSafeInteger(replayByteLimit) || replayByteLimit < 0) {
     throw new RangeError('Replay limits must be nonnegative safe integers');
   }
-  const sessions = new Map();
-  const eventSubscribers = new Set();
-  const spaceEventSubscribers = new Set();
-  const snapshotSubscribers = new Set();
-  const frameSubscribers = new Set();
-  const statusSubscribers = new Set();
-  const replay = [];
-  const sessionLeases = new Map();
+  const sessions = new Map<string, SessionEntry>();
+  const eventSubscribers = new Set<CanonicalEventSubscriber>();
+  const spaceEventSubscribers = new Set<SpaceEventSubscriber>();
+  const snapshotSubscribers = new Set<SnapshotSubscriber>();
+  const frameSubscribers = new Set<FrameSubscriber>();
+  const statusSubscribers = new Set<StatusSubscriber>();
+  const replay: ReplayEntry[] = [];
+  const sessionLeases = new Map<string, Map<string, number>>();
   const prefix = `hub-${randomUUID()}-`;
   let sequence = 0n;
   let replayBytes = 0;
-  let latestEventId;
+  let latestEventId: string | undefined;
   let started = false;
   let everConnected = false;
-  let stopping = null;
+  let stopping: Promise<void> | null = null;
   let replayNeedsReset = false;
-  // All consumers see one committed order, including asynchronous handlers.
-  let delivery = Promise.resolve();
+  let delivery: Promise<void> = Promise.resolve();
 
-  const notify = async (subscribers, ...args) => {
+  const notify = async <Args extends unknown[]>(subscribers: Set<(...args: Args) => void | Promise<void>>, ...args: Args) => {
     for (const subscriber of [...subscribers]) {
       if (!subscribers.has(subscriber)) continue;
       try { await subscriber(...args); }
       catch { console.warn('Canonical event subscriber failed'); }
     }
   };
-  const status = (entry, type, extra = {}) => notify(statusSubscribers, {
-    type, sessionId: entry.sessionId, timestamp: now(), ...extra,
-  });
+  const emitStatus = (statusPayload: GlobalHubStatus) => notify(statusSubscribers, statusPayload);
   const clearReplay = () => { replay.length = 0; replayBytes = 0; latestEventId = undefined; };
-  const commit = (entry, event, rawData) => {
+  const commit = (entry: SessionEntry, event: CanonicalEvent, rawData?: string) => {
     const run = delivery.then(async () => {
       if (entry.controller.signal.aborted || sessions.get(entry.sessionId) !== entry) return;
+      if (!entry.scope) return;
       await notify(eventSubscribers, event, entry.scope);
       if (entry.controller.signal.aborted || sessions.get(entry.sessionId) !== entry) return;
       const eventId = `${prefix}${++sequence}`;
-      // The upstream SSE `data` line is the canonical event as compact JSON,
-      // so the fanout frame embeds those bytes verbatim instead of paying a
-      // second JSON.stringify of the parsed event. `rawData` can only be
-      // absent for injected events, which serialize the parsed payload.
       const serializedFrame = rawData === undefined
         ? JSON.stringify({ type: 'event', eventId, payload: event })
         : `{"type":"event","eventId":${JSON.stringify(eventId)},"payload":${rawData}}`;
@@ -65,15 +145,16 @@ export function createGlobalMessageStreamHub({
       } else {
         replay.push({ eventId, sessionId: event.sessionId, serializedFrame, bytes });
         replayBytes += bytes;
-        while (replay.length > replayLimit || replayBytes > replayByteLimit) replayBytes -= replay.shift().bytes;
+        while (replay.length > replayLimit || replayBytes > replayByteLimit) {
+          const shifted = replay.shift();
+          if (!shifted) break;
+          replayBytes -= shifted.bytes;
+        }
       }
-      // Replay insertion and synchronous transport fanout are one boundary:
-      // a client cannot replay an event whose live fanout is still pending.
       for (const subscriber of [...frameSubscribers]) {
         if (!frameSubscribers.has(subscriber)) continue;
         try {
-          const result = subscriber({ eventId, serializedFrame, event });
-          if (result?.catch) result.catch(() => console.warn('Canonical frame subscriber failed'));
+          void Promise.resolve(subscriber({ eventId, serializedFrame, event })).catch(() => console.warn('Canonical frame subscriber failed'));
         } catch { console.warn('Canonical frame subscriber failed'); }
       }
     });
@@ -81,8 +162,8 @@ export function createGlobalMessageStreamHub({
     return run;
   };
 
-  const injectEvent = ({ payload, directory, spaceId }) => {
-    const record = {
+  const injectEvent = ({ payload, directory, spaceId }: { payload: JsonValue; directory: string; spaceId: string | null }) => {
+    const record: InjectedSpaceEvent = {
       payload,
       directory,
       spaceId,
@@ -91,19 +172,18 @@ export function createGlobalMessageStreamHub({
         properties: { ...event.properties, directory: event.properties.directory || (directory === 'global' ? undefined : directory) },
       })),
     };
-    const subscribers = spaceId === null ? eventSubscribers : spaceEventSubscribers;
-    const run = delivery.then(() => notify(subscribers, record));
+    const run = delivery.then(() => notify(spaceEventSubscribers, record));
     delivery = run.catch(() => { });
     return run;
   };
 
-  const open = (entry) => {
+  const open = (entry: SessionEntry) => {
     entry.ready = (async () => {
-      entry.scope = await resolveSessionScope(entry.sessionId);
-      if (![entry.scope?.projectId, entry.scope?.workspaceId, entry.scope?.cwd, entry.scope?.agentDirectoryId,
-      entry.scope?.agentDirectory, entry.scope?.rootSessionId].every((value) => typeof value === 'string' && value.length > 0)) {
+      const scope = await resolveSessionScope(entry.sessionId);
+      if (!isCompleteScope(scope)) {
         throw new Error('HOST_SCOPE_UNAVAILABLE');
       }
+      entry.scope = scope;
       if (entry.controller.signal.aborted) return;
       const base = `/api/agent/v1/sessions/${encodeURIComponent(entry.sessionId)}`;
       if (!entry.cursor) {
@@ -122,7 +202,8 @@ export function createGlobalMessageStreamHub({
       const response = await service.request(`${base}/events`, {
         method: 'GET', headers: { Accept: 'text/event-stream', 'Last-Event-ID': entry.cursor }, signal: entry.controller.signal,
       });
-      if (!response.ok || !response.body || response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'text/event-stream') {
+      const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+      if (!response.ok || !response.body || contentType !== 'text/event-stream') {
         await response.body?.cancel().catch(() => { });
         throw Object.assign(new Error('STREAM_UNAVAILABLE'), { status: response.status });
       }
@@ -132,11 +213,15 @@ export function createGlobalMessageStreamHub({
       const wasReady = entry.connectedOnce === true;
       entry.connectedOnce = true;
       everConnected = true;
-      await status(entry, 'connect', { wasReady, replayReset: entry.replayReset === true });
+      await emitStatus({ type: 'connect', sessionId: entry.sessionId, timestamp: now(), wasReady, replayReset: entry.replayReset === true });
       entry.finished = consume(entry);
     })().catch(async (error) => {
-      if (!entry.controller.signal.aborted) await status(entry, everConnected ? 'error' : 'initial-error', {
-        error: { code: error?.status === 410 ? 'RESYNC_REQUIRED' : 'STREAM_UNAVAILABLE', status: error?.status },
+      const statusCode = hasHttpStatus(error) ? error.status : undefined;
+      if (!entry.controller.signal.aborted) await emitStatus({
+        type: everConnected ? 'error' : 'initial-error',
+        sessionId: entry.sessionId,
+        timestamp: now(),
+        error: { code: statusCode === 410 ? 'RESYNC_REQUIRED' : 'STREAM_UNAVAILABLE', status: statusCode },
       });
       entry.connected = false;
       throw new Error('Canonical session stream unavailable');
@@ -144,14 +229,18 @@ export function createGlobalMessageStreamHub({
     return entry.ready;
   };
 
-  const consume = async (entry) => {
+  const consume = async (entry: SessionEntry) => {
+    const reader = entry.reader;
+    if (!reader || !entry.cursor) return;
     const decoder = new TextDecoder();
     let buffer = '';
-    let lines = [];
-    let epoch = entry.cursor.slice(0, entry.cursor.lastIndexOf(':'));
+    let lines: string[] = [];
+    const epoch = entry.cursor.slice(0, entry.cursor.lastIndexOf(':'));
     let head = BigInt(entry.cursor.slice(entry.cursor.lastIndexOf(':') + 1));
     const frame = async () => {
-      let id; let name; const data = [];
+      let id: string | undefined;
+      let name: string | undefined;
+      const data: string[] = [];
       for (const line of lines) {
         if (line.startsWith(':')) continue;
         const colon = line.indexOf(':');
@@ -164,12 +253,12 @@ export function createGlobalMessageStreamHub({
       lines = [];
       if (data.length === 0) return true;
       const dataText = data.join('\n');
-      const raw = JSON.parse(dataText);
-      if (name === 'stream.invalidated' || raw?.type === 'stream.invalidated') {
+      const raw: unknown = JSON.parse(dataText);
+      if (name === 'stream.invalidated' || (isJsonRecord(raw) && raw.type === 'stream.invalidated')) {
         const invalidation = StreamInvalidatedSchema.parse(raw);
         if (invalidation.sessionId !== entry.sessionId || invalidation.epoch !== epoch) throw new Error('INVALID_STREAM_SCOPE');
         clearReplay();
-        await status(entry, 'invalidated', { invalidation });
+        await emitStatus({ type: 'invalidated', sessionId: entry.sessionId, timestamp: now(), invalidation });
         entry.cursor = undefined;
         return false;
       }
@@ -188,7 +277,7 @@ export function createGlobalMessageStreamHub({
     };
     try {
       while (!entry.controller.signal.aborted) {
-        const { done, value } = await entry.reader.read();
+        const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let newline;
@@ -200,22 +289,21 @@ export function createGlobalMessageStreamHub({
           if (entry.controller.signal.aborted) return;
         }
       }
-      // An incomplete final frame is not an authoritative event.
     } catch {
       if (!entry.controller.signal.aborted) {
         clearReplay();
-        await status(entry, 'error', { error: { code: 'STREAM_INTERRUPTED' } });
+        await emitStatus({ type: 'error', sessionId: entry.sessionId, timestamp: now(), error: { code: 'STREAM_INTERRUPTED' } });
       }
     } finally {
       entry.connected = false;
-      await entry.reader.cancel().catch(() => { });
-      entry.reader.releaseLock();
+      await reader.cancel().catch(() => { });
+      reader.releaseLock();
       entry.reader = null;
-      if (!entry.controller.signal.aborted) await status(entry, 'disconnect');
+      if (!entry.controller.signal.aborted) await emitStatus({ type: 'disconnect', sessionId: entry.sessionId, timestamp: now() });
     }
   };
 
-  const subscribeSession = async (sessionId, { cursor } = {}) => {
+  const subscribeSession = async (sessionId: string, { cursor }: { cursor?: string } = {}) => {
     EntityIdSchema.parse(sessionId);
     if (cursor !== undefined) CursorSchema.parse(cursor);
     if (stopping) await stopping;
@@ -225,15 +313,15 @@ export function createGlobalMessageStreamHub({
     const restarting = replayNeedsReset;
     if (replayNeedsReset) { clearReplay(); replayNeedsReset = false; }
     started = true;
-    const entry = {
+    const entry: SessionEntry = {
       sessionId, cursor: cursor ?? existing?.cursor, controller: new AbortController(), connected: false,
-      connectedOnce: existing?.connectedOnce === true || restarting, replayReset: restarting
+      connectedOnce: existing?.connectedOnce === true || restarting, replayReset: restarting,
     };
     sessions.set(sessionId, entry);
     try { await open(entry); }
     catch (error) { if (sessions.get(sessionId) === entry) sessions.delete(sessionId); throw error; }
   };
-  const unsubscribeSession = async (sessionId, { preserveLeases = false } = {}) => {
+  const unsubscribeSession = async (sessionId: string, { preserveLeases = false } = {}) => {
     if (!preserveLeases) sessionLeases.delete(sessionId);
     const entry = sessions.get(sessionId);
     if (!entry) return;
@@ -243,7 +331,7 @@ export function createGlobalMessageStreamHub({
     await entry.ready?.catch(() => { });
     await entry.finished;
   };
-  const retainSession = async (sessionId, leaseKey = 'default', options = {}) => {
+  const retainSession = async (sessionId: string, leaseKey = 'default', options: { cursor?: string } = {}) => {
     EntityIdSchema.parse(sessionId);
     let leases = sessionLeases.get(sessionId);
     if (!leases) {
@@ -269,7 +357,7 @@ export function createGlobalMessageStreamHub({
     };
     return { release };
   };
-  const releaseSession = async (sessionId, leaseKey = 'default') => {
+  const releaseSession = async (sessionId: string, leaseKey = 'default') => {
     const leases = sessionLeases.get(sessionId);
     if (!leases) return;
     const current = leases.get(leaseKey);
@@ -284,38 +372,48 @@ export function createGlobalMessageStreamHub({
       await unsubscribeSession(sessionId).catch(() => { });
     }
   };
-  const hasLeases = (sessionId) => (sessionLeases.get(sessionId)?.size ?? 0) > 0;
-  const subscribe = (set, subscriber) => {
-    if (typeof subscriber !== 'function') throw new TypeError('Subscriber must be a function');
+  const hasLeases = (sessionId: string) => (sessionLeases.get(sessionId)?.size ?? 0) > 0;
+  const addSubscriber = <Subscriber>(set: Set<Subscriber>, subscriber: Subscriber) => {
+    if (!isCallable(subscriber)) throw new TypeError('Subscriber must be a function');
     set.add(subscriber);
     return () => set.delete(subscriber);
   };
+  function subscribeEvent(subscriber: CanonicalEventSubscriber, options?: { spaces?: false }): () => boolean;
+  function subscribeEvent(subscriber: SpaceEventSubscriber, options: { spaces: true }): () => boolean;
+  function subscribeEvent(subscriber: CanonicalEventSubscriber | SpaceEventSubscriber, { spaces = false }: { spaces?: boolean } = {}) {
+    if (spaces) {
+      // SAFETY: the overload signature guarantees a SpaceEventSubscriber when spaces is true.
+      return addSubscriber(spaceEventSubscribers, subscriber as SpaceEventSubscriber);
+    }
+    // SAFETY: the overload signature guarantees a CanonicalEventSubscriber when spaces is omitted or false.
+    return addSubscriber(eventSubscribers, subscriber as CanonicalEventSubscriber);
+  }
   return {
-    async start(sessionIds = []) { started = true; await Promise.all(sessionIds.map((id) => subscribeSession(id))); },
+    async start(sessionIds: string[] = []) { started = true; await Promise.all(sessionIds.map((id) => subscribeSession(id))); },
     subscribeSession,
     unsubscribeSession,
     retainSession,
     releaseSession,
     hasLeases,
-    getSessionLeases: (sessionId) => Array.from(sessionLeases.get(sessionId)?.keys() ?? []),
+    getSessionLeases: (sessionId: string) => Array.from(sessionLeases.get(sessionId)?.keys() ?? []),
     injectEvent,
     stop() {
       if (stopping) return stopping;
       started = false;
       sessionLeases.clear();
       replayNeedsReset = everConnected;
-      stopping = Promise.all([...sessions.keys()].map(unsubscribeSession)).then(() => delivery).finally(() => { stopping = null; });
+      stopping = Promise.all([...sessions.keys()].map((id) => unsubscribeSession(id))).then(() => delivery).finally(() => { stopping = null; });
       return stopping;
     },
     isStarted: () => started,
     isConnected() { for (const entry of sessions.values()) if (entry.connected) return true; return false; },
-    isSessionConnected: (sessionId) => sessions.get(sessionId)?.connected === true,
+    isSessionConnected: (sessionId: string) => sessions.get(sessionId)?.connected === true,
     hasConnected: () => everConnected,
-    subscribeEvent: (subscriber, { spaces = false } = {}) => subscribe(spaces ? spaceEventSubscribers : eventSubscribers, subscriber),
-    subscribeSnapshot: (subscriber) => subscribe(snapshotSubscribers, subscriber),
-    subscribeFrame: (subscriber) => subscribe(frameSubscribers, subscriber),
-    subscribeStatus: (subscriber) => subscribe(statusSubscribers, subscriber),
-    replayAfter(eventId, { sessionId } = {}) {
+    subscribeEvent,
+    subscribeSnapshot: (subscriber: SnapshotSubscriber) => addSubscriber(snapshotSubscribers, subscriber),
+    subscribeFrame: (subscriber: FrameSubscriber) => addSubscriber(frameSubscribers, subscriber),
+    subscribeStatus: (subscriber: StatusSubscriber) => addSubscriber(statusSubscribers, subscriber),
+    replayAfter(eventId: string | undefined, { sessionId }: { sessionId?: string } = {}) {
       if (!eventId || eventId === latestEventId) return [];
       const index = replay.findIndex((entry) => entry.eventId === eventId);
       if (index === -1) return null;

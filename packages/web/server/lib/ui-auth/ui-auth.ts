@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Request, Response, NextFunction, RequestHandler } from '../shared/http-contracts.js';
+import type { JsonValue } from '../shared/json-values.js';
 import { rateLimitKey } from '../security/client-address.js';
 import { sourceControlProviderDescriptors } from '../source-control/provider-descriptors.js';
 import type { BearerRequest, ClientInput, CreatedClient, RemoteClient } from '../client-auth/contracts.js';
@@ -44,11 +45,12 @@ interface SessionCreated {
 }
 
 interface AuthInput extends ClientInput {
-  password?: unknown;
-  trustDevice?: unknown;
-  issueClientToken?: unknown;
-  clientLabel?: unknown;
-  scope?: unknown;
+  issueSessionToken?: JsonValue;
+  password?: JsonValue;
+  trustDevice?: JsonValue;
+  issueClientToken?: JsonValue;
+  clientLabel?: JsonValue;
+  scope?: JsonValue;
 }
 
 interface UrlAuthScope {
@@ -155,7 +157,7 @@ const checkRateLimit = async (req: Request): Promise<RateLimitResult> => {
   try {
     record = loginRateLimiter.get(key);
   } catch (err) {
-      console.error('[RateLimit] Failed to get record', { key, error: hasErrorDetails(err) ? err.message : undefined });
+    console.error('[RateLimit] Failed to get record', { key, error: hasErrorDetails(err) ? err.message : undefined });
     return {
       allowed: true,
       limit: maxAttempts,
@@ -368,11 +370,9 @@ const parseUrlAuthScope = (value: AuthInput['scope']): UrlAuthScope | null | und
   return match?.[1] !== undefined ? { kind: 'guest', id: match[1] } : undefined;
 };
 
-// Keep this in sync with the MIME types served by the guest package-file route.
-// API endpoints under the same guest prefix must never inherit the asset token.
 const GUEST_ASSET_EXTENSION = /\.(?:html|js|css|svg|json|png)$/i;
 
-const isGuestScopedAssetPath = (pathname, guestId) => {
+const isGuestScopedAssetPath = (pathname: string, guestId: string) => {
   const prefix = `/api/guests/${guestId}/`;
   return pathname.startsWith(prefix) && GUEST_ASSET_EXTENSION.test(pathname.slice(prefix.length));
 };
@@ -586,8 +586,8 @@ export const createUiAuth = ({
   });
 
   let jwtSecret = getOrCreateJwtSecret();
-  const resolveSessionTtlMs = (trustDevice) => (trustDevice ? trustedSessionTtlMs : sessionTtlMs);
-  const getTokenFromRequest = (req) => {
+  const resolveSessionTtlMs = (trustDevice: boolean) => (trustDevice ? trustedSessionTtlMs : sessionTtlMs);
+  const getTokenFromRequest = (req: AuthRequest): string | null => {
     const cookies = parseCookies(req.headers.cookie);
     const name = sessionCookieNameForRequest(req, cookieName);
     if (cookies[name]) {
@@ -596,7 +596,10 @@ export const createUiAuth = ({
     return null;
   };
 
-  const setSessionCookie = (req, res, token, ttlMs) => {
+  const setSessionCookie = (req: AuthRequest, res: CookieResponse, token: string, ttlMs: number) => {
+    if (res === null) {
+      throw new TypeError('setSessionCookie requires a response object');
+    }
     const secure = isSecureRequest(req);
     const maxAgeSeconds = Math.floor(ttlMs / 1000);
     const header = buildCookie({
@@ -608,7 +611,7 @@ export const createUiAuth = ({
     res.setHeader('Set-Cookie', header);
   };
 
-  const isSessionValid = async (token) => {
+  const isSessionValid = async (token: string | null) => {
     if (!token) {
       return false;
     }
@@ -621,7 +624,7 @@ export const createUiAuth = ({
     }
   };
 
-  const issueSession = async (req, res, { trustDevice = false } = {}) => {
+  const issueSession = async (req: AuthRequest, res: CookieResponse, { trustDevice = false } = {}) => {
     const ttlMs = resolveSessionTtlMs(trustDevice);
     const { SignJWT } = await loadJose();
     const token = await new SignJWT({ type: normalizedPassword ? 'ui-session' : 'ui-passwordless' })
@@ -634,10 +637,10 @@ export const createUiAuth = ({
   };
 
   if (!normalizedPassword) {
-    const passwordlessSessionToken = (req) => getBearerTokenFromRequest(req) || getTokenFromRequest(req);
-    const ensureSessionToken = async (req, res) => {
+    const passwordlessSessionToken = (req: AuthRequest) => getBearerTokenFromRequest(req) || getTokenFromRequest(req);
+    const ensureSessionToken = async (req: AuthRequest, res: CookieResponse): Promise<string> => {
       const token = passwordlessSessionToken(req);
-      if (!requireClientAuth && await isSessionValid(token)) {
+      if (!requireClientAuth && token && await isSessionValid(token)) {
         return token;
       }
       return issueSession(req, res);
@@ -667,9 +670,17 @@ export const createUiAuth = ({
       return res.status(401).json({ error: 'UI session authentication required', locked: true });
     };
 
-    const resolveAuthContext = async (req, res, { allowClientAuth = true, allowUrlToken = true, allowAnonymousSession = true } = {}) => {
+    const resolveAuthContext = async (
+      req: AuthRequest,
+      res: CookieResponse,
+      { allowClientAuth = true, allowUrlToken = true, allowAnonymousSession = true }: {
+        allowClientAuth?: boolean;
+        allowUrlToken?: boolean;
+        allowAnonymousSession?: boolean;
+      } = {},
+    ): Promise<AuthContext | null> => {
       const token = passwordlessSessionToken(req);
-      if (!requireClientAuth && await isSessionValid(token)) {
+      if (!requireClientAuth && token && await isSessionValid(token)) {
         return { type: 'session', token };
       }
       if (allowClientAuth) {
@@ -677,8 +688,8 @@ export const createUiAuth = ({
         if (clientAuth) return clientAuthContext(clientAuth);
       }
       if (allowAnonymousSession && !requireClientAuth) {
-        const token = await ensureSessionToken(req, res);
-        return { type: 'session', token };
+        const issued = await ensureSessionToken(req, res);
+        return { type: 'session', token: issued };
       }
       return null;
     };
@@ -708,10 +719,11 @@ export const createUiAuth = ({
         res.json({ authenticated: true, disabled: true });
       },
       handleSessionCreate: async (req: Request, res: Response) => {
-        if (requireClientAuth || req.body?.issueSessionToken !== true) {
+        const body = readBody(req);
+        if (requireClientAuth || body?.issueSessionToken !== true) {
           return res.status(400).json({ error: 'UI password not configured' });
         }
-        const sessionToken = await issueSession(req, res, { trustDevice: isTrustedDeviceRequest(req.body?.trustDevice) });
+        const sessionToken = await issueSession(req, res, { trustDevice: isTrustedDeviceRequest(body?.trustDevice) });
         res.setHeader('Cache-Control', 'no-store');
         return res.json({ authenticated: true, disabled: true, sessionToken });
       },
@@ -753,6 +765,9 @@ export const createUiAuth = ({
       handlePasskeyRevoke: (_req: Request, res: Response) => {
         res.status(400).json({ error: 'UI password not configured' });
       },
+      handlePasskeyRename: (_req: Request, res: Response) => {
+        res.status(400).json({ error: 'UI password not configured' });
+      },
       handleResetAuth: (_req: Request, res: Response) => {
         res.status(400).json({ error: 'UI password not configured' });
       },
@@ -792,7 +807,7 @@ export const createUiAuth = ({
     rebuildPasskeyController();
   };
 
-  const clearSessionCookie = (req, res) => {
+  const clearSessionCookie = (req: AuthRequest, res: Response) => {
     const secure = isSecureRequest(req);
     const header = buildCookie({
       name: sessionCookieNameForRequest(req, cookieName),
@@ -1131,6 +1146,7 @@ export const createUiAuth = ({
     handlePasskeyAuthenticationVerify,
     handlePasskeyList,
     handlePasskeyRevoke,
+    handlePasskeyRename,
     handleResetAuth,
     ensureSessionToken: (req: AuthRequest, _res: CookieResponse) => {
       const urlAuth = authenticateUrlAuthToken(req);

@@ -47,6 +47,7 @@ interface FsBody {
   gitIdentityId?: unknown;
   paths?: unknown;
   content?: unknown;
+  mustExist?: unknown;
   oldPath?: unknown;
   newPath?: unknown;
   commands?: unknown;
@@ -436,65 +437,52 @@ const resolveWorkspacePathFromWorktrees = async ({ targetPath, baseDirectory, pa
   return { ok: false, error: 'Path is outside of active workspace' };
 };
 
-const resolveChatsPathWithoutProject = async ({ targetPath, chatsRoots, path, os, fsPromises, normalizeDirectoryPath }: Omit<WorkspaceContextOptions, 'req' | 'resolveProjectDirectory' | 'managedRoots'>) => {
-  const resolveIn = (baseDirectory: string) => resolveWorkspacePath({ targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots: [] });
-  for (const root of chatsRoots) {
-    const lexical = resolveIn(root);
-    if (lexical.ok) return lexical;
-    if (lexical.error !== 'Path is outside of active workspace') return null;
-  }
-  for (const root of chatsRoots) {
-    try {
-      const canonical = resolveIn(await canonicalDirectoryPath(root, fsPromises, path));
-      if (canonical.ok) return canonical;
-    } catch (error) {
-      console.warn('Failed to resolve chats root:', error);
-    }
-  }
-  return null;
-};
-
-const resolveWorkspacePathFromContext = async ({ req, targetPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots, chatsRoots }) => {
- const resolvedProject = await resolveProjectDirectory(req);
- // Managed chats do not require a configured project. Each base is an
- // independently authorized root, not a fallback to the user's home.
- const bases = [resolvedProject.directory, ...managedRoots, resolvedProject.requestedDirectory];
- for (const baseDirectory of bases) {
-  if (!baseDirectory) continue;
-  const resolved = resolveWorkspacePath({
-   targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots: [],
-  });
-  if (resolved.ok || resolved.error !== 'Path is outside of active workspace') return resolved;
- }
-
- // Keep lexical aliases addressable, then check filesystem-confirmed roots.
- // Write routes retain their canonical-target containment checks.
- let resolutionError;
- for (const root of managedRoots) {
-  try {
-   const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
-   const resolvedPath = path.resolve(normalizeDirectoryPath(targetPath));
-   if (isPathWithinRoot(resolvedPath, canonicalRoot, path, os)) {
-    return { ok: true, base: canonicalRoot, resolved: resolvedPath };
-   }
-  } catch (error) {
-   resolutionError ??= error;
-  }
- }
- if (!resolvedProject.directory) {
-  if (resolutionError) throw resolutionError;
-  return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
- }
- const worktree = await resolveWorkspacePathFromWorktrees({
+const resolveWorkspacePathFromContext = async ({
+  req,
   targetPath,
-  baseDirectory: resolvedProject.directory,
+  resolveProjectDirectory,
   path,
   os,
+  fsPromises,
   normalizeDirectoryPath,
- });
- if (worktree.ok) return worktree;
- if (resolutionError) throw resolutionError;
- return worktree;
+  managedRoots,
+}: WorkspaceContextOptions): Promise<WorkspacePathResult> => {
+  const resolvedProject = await resolveProjectDirectory(req);
+  const bases = [resolvedProject.directory, ...managedRoots, resolvedProject.requestedDirectory];
+  for (const baseDirectory of bases) {
+    if (!baseDirectory) continue;
+    const resolved = resolveWorkspacePath({
+      targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots: [],
+    });
+    if (resolved.ok || resolved.error !== 'Path is outside of active workspace') return resolved;
+  }
+
+  let resolutionError: unknown;
+  for (const root of managedRoots) {
+    try {
+      const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
+      const resolvedPath = path.resolve(normalizeDirectoryPath(targetPath));
+      if (isPathWithinRoot(resolvedPath, canonicalRoot, path, os)) {
+        return { ok: true, base: canonicalRoot, resolved: resolvedPath };
+      }
+    } catch (error) {
+      resolutionError ??= error;
+    }
+  }
+  if (!resolvedProject.directory) {
+    if (resolutionError) throw resolutionError;
+    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
+  }
+  const worktree = await resolveWorkspacePathFromWorktrees({
+    targetPath,
+    baseDirectory: resolvedProject.directory,
+    path,
+    os,
+    normalizeDirectoryPath,
+  });
+  if (worktree.ok) return worktree;
+  if (resolutionError) throw resolutionError;
+  return worktree;
 };
 
 const GIT_DIRS_MAX_DEPTH = 3;
@@ -506,90 +494,84 @@ const GIT_DIRS_SKIP_LIST = new Set(['node_modules', 'dist', 'build', '.venv', 't
 const findGitDirectories = async ({ rootPath, fsPromises, path: pathModule, maxDepth, maxDirs }: {
   rootPath: string; fsPromises: typeof nodeFsPromises; path: typeof nodePath; maxDepth: number; maxDirs: number;
 }) => {
-const results: string[] = [];
+  const results: string[] = [];
 
-const walkedRealPaths = new Set<string>();
+  const walkedRealPaths = new Set<string>();
 
-const queue = [{ dir: rootPath, depth: 0 }];
+  const queue = [{ dir: rootPath, depth: 0 }];
 
-let visited = 0;
+  let visited = 0;
 
-const scanDirectory = async (dir, depth) => {
-  let realPath;
-  try {
-   realPath = await fsPromises.realpath(dir);
-  } catch (error) {
-   if (dir === rootPath) {
-    throw error;
-   }
-   return;
-  }
-  if (walkedRealPaths.has(realPath)) {
-   return;
-  }
-  walkedRealPaths.add(realPath);
-
-  let dirents;
-  try {
-   dirents = await fsPromises.readdir(dir, { withFileTypes: true });
-  } catch (error) {
-   // Unreadable subtree — skip it unless it is the root itself, which the
-   // route maps to 403/404/500 through the shared error handling.
-   if (dir === rootPath) {
-    throw error;
-   }
-   return;
-  }
-  visited += 1;
-
-  let isRepoBoundary = false;
-  const subdirectories = [];
-  for (const dirent of dirents) {
-   if (dirent.name === '.git') {
-    isRepoBoundary = true;
-    continue;
-   }
-   if (!dirent.isDirectory() && !dirent.isSymbolicLink()) {
-    continue;
-   }
-   if (GIT_DIRS_SKIP_LIST.has(dirent.name)) {
-    continue;
-   }
-   if (depth >= maxDepth) {
-    continue;
-   }
-   if (dirent.isSymbolicLink()) {
-    // A link to a file, or a dangling one, is not a place to look.
-    const target = await fsPromises.stat(pathModule.join(dir, dirent.name)).catch(() => null);
-    if (!target?.isDirectory()) {
-     continue;
+  const scanDirectory = async (dir: string, depth: number) => {
+    let realPath;
+    try {
+      realPath = await fsPromises.realpath(dir);
+    } catch (error) {
+      if (dir === rootPath) {
+        throw error;
+      }
+      return;
     }
-   }
-   subdirectories.push(dirent.name);
-  }
+    if (walkedRealPaths.has(realPath)) {
+      return;
+    }
+    walkedRealPaths.add(realPath);
 
-  if (isRepoBoundary) {
-   // A repository root is the repository, not a folder of them: the caller
-   // already has its checkout and listing nested ones under it reads as
-   // unrelated projects.
-   if (dir !== rootPath) results.push(dir);
-   return;
-  }
+    let dirents;
+    try {
+      dirents = await fsPromises.readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      if (dir === rootPath) {
+        throw error;
+      }
+      return;
+    }
+    visited += 1;
 
-  subdirectories.sort();
-  for (const name of subdirectories) {
-   queue.push({ dir: pathModule.join(dir, name), depth: depth + 1 });
-  }
- };
+    let isRepoBoundary = false;
+    const subdirectories = [];
+    for (const dirent of dirents) {
+      if (dirent.name === '.git') {
+        isRepoBoundary = true;
+        continue;
+      }
+      if (!dirent.isDirectory() && !dirent.isSymbolicLink()) {
+        continue;
+      }
+      if (GIT_DIRS_SKIP_LIST.has(dirent.name)) {
+        continue;
+      }
+      if (depth >= maxDepth) {
+        continue;
+      }
+      if (dirent.isSymbolicLink()) {
+        const target = await fsPromises.stat(pathModule.join(dir, dirent.name)).catch(() => null);
+        if (!target?.isDirectory()) {
+          continue;
+        }
+      }
+      subdirectories.push(dirent.name);
+    }
 
-for (let index = 0; index < queue.length && visited < maxDirs; index += 1) {
+    if (isRepoBoundary) {
+      if (dir !== rootPath) results.push(dir);
+      return;
+    }
+
+    subdirectories.sort();
+    for (const name of subdirectories) {
+      queue.push({ dir: pathModule.join(dir, name), depth: depth + 1 });
+    }
+  };
+
+  for (let index = 0; index < queue.length && visited < maxDirs; index += 1) {
     const entry = queue[index];
     if (!entry) break;
     const { dir, depth } = entry;
     await scanDirectory(dir, depth);
   }
 
-return results;
+  return results;
 };
 
 const deriveCloneDirectoryName = (remoteUrl: string) => {
@@ -698,7 +680,7 @@ const runCommandInDirectory = ({ shell, shellFlag, command, resolvedCwd, spawn, 
 };
 
 export const registerFsRoutes = (app: Application, dependencies: FsRouteDependencies) => {
-const {
+  const {
     os,
     path,
     fsPromises,
@@ -717,21 +699,21 @@ const {
     projectRealpath = fsPromises.realpath.bind(fsPromises),
   } = dependencies;
 
-const chatsRoot = managedChatsRoot && managedChatsRoot.trim()
+  const chatsRoot = managedChatsRoot && managedChatsRoot.trim()
     ? path.resolve(managedChatsRoot.trim())
     : path.join(openchamberUserConfigRoot, 'chats');
 
-const managedRoots = [path.resolve(openchamberUserConfigRoot), chatsRoot];
+  const managedRoots = [path.resolve(openchamberUserConfigRoot), chatsRoot];
 
-const chatsRoots = [...new Set([chatsRoot, path.join(openchamberUserConfigRoot, 'chats')])];
+  const chatsRoots = [...new Set([chatsRoot, path.join(openchamberUserConfigRoot, 'chats')])];
 
-const previewGrants = createPreviewGrants({ crypto });
+  const previewGrants = createPreviewGrants({ crypto });
 
-const realpathCache = createRealpathCache({
+  const realpathCache = createRealpathCache({
     realpath: fsPromises.realpath.bind(fsPromises),
   });
 
-const spawnDetached = (command: string, args: string[]) => new Promise<void>((resolve, reject) => {
+  const spawnDetached = (command: string, args: string[]) => new Promise<void>((resolve, reject) => {
     let child: ChildProcess;
     try {
       child = spawn(command, args, { windowsHide: true, stdio: 'ignore', detached: true });
@@ -752,19 +734,19 @@ const spawnDetached = (command: string, args: string[]) => new Promise<void>((re
     child.once('spawn', onSpawn);
   });
 
-const execJobs = new Map<string, ExecJob>();
+  const execJobs = new Map<string, ExecJob>();
 
-const commandTimeoutMs = createCommandTimeoutMs();
+  const commandTimeoutMs = createCommandTimeoutMs();
 
-const gitReadCacheTtlMs = createGitReadCacheTtlMs();
+  const gitReadCacheTtlMs = createGitReadCacheTtlMs();
 
-const gitCheckIgnoreTimeoutMs = createGitCheckIgnoreTimeoutMs();
+  const gitCheckIgnoreTimeoutMs = createGitCheckIgnoreTimeoutMs();
 
-const gitReadCache = new Map<string, { result: CommandResult; at: number }>();
+  const gitReadCache = new Map<string, { result: CommandResult; at: number }>();
 
-const inFlightGitReadCache = new Map<string, Promise<CommandResult>>();
+  const inFlightGitReadCache = new Map<string, Promise<CommandResult>>();
 
-const pruneExecJobs = () => {
+  const pruneExecJobs = () => {
     const now = Date.now();
     for (const [jobId, job] of execJobs.entries()) {
       const updatedAt = job.updatedAt;
@@ -774,7 +756,7 @@ const pruneExecJobs = () => {
     }
   };
 
-const pruneGitReadCache = () => {
+  const pruneGitReadCache = () => {
     if (gitReadCacheTtlMs <= 0) {
       return;
     }
@@ -786,7 +768,7 @@ const pruneGitReadCache = () => {
     }
   };
 
-const setGitReadCacheEntry = (key: string, result: CommandResult) => {
+  const setGitReadCacheEntry = (key: string, result: CommandResult) => {
     gitReadCache.delete(key);
     gitReadCache.set(key, { result, at: Date.now() });
 
@@ -807,7 +789,7 @@ const setGitReadCacheEntry = (key: string, result: CommandResult) => {
     }
   };
 
-const runCommandWithGitReadCache = async ({ shell, shellFlag, command, resolvedCwd }: CommandOptions) => {
+  const runCommandWithGitReadCache = async ({ shell, shellFlag, command, resolvedCwd }: CommandOptions) => {
     const cacheable = gitReadCacheTtlMs > 0 && isCacheableGitReadCommand(command);
     const cacheKey = cacheable ? `${resolvedCwd}${normalizeCommand(command)}` : null;
 
@@ -857,7 +839,7 @@ const runCommandWithGitReadCache = async ({ shell, shellFlag, command, resolvedC
     return runPromise;
   };
 
-const runExecJob = async (job: ExecJob) => {
+  const runExecJob = async (job: ExecJob) => {
     job.status = 'running';
     job.updatedAt = Date.now();
 
@@ -895,90 +877,92 @@ const runExecJob = async (job: ExecJob) => {
     job.updatedAt = Date.now();
   };
 
-app.get('/api/fs/home', async (_req, res) => {
-  try {
-   const home = os.homedir();
-   if (!home || typeof home !== 'string' || home.length === 0) {
-    return res.status(500).json({ error: 'Failed to resolve home directory' });
-   }
-   const [canonicalChatsRoot, canonicalLegacyChatsRoot] = await Promise.all([
-    canonicalDirectoryPath(chatsRoot, fsPromises, path),
-    canonicalDirectoryPath(path.join(home, '.config', 'ohpichamber', 'chats'), fsPromises, path).catch((error) => {
-     // A relocated root must remain usable if the old root is inaccessible.
-     // Omit only this optional alias; clients retain exact legacy matching.
-     console.warn('Failed to resolve legacy chats root:', error);
-     return undefined;
-    }),
-   ]);
-   return res.json({ home, chatsRoot, canonicalChatsRoot, canonicalLegacyChatsRoot });
-  } catch (error) {
-   console.error('Failed to resolve home directory:', error);
-   return res.status(500).json({ error: (error && error.message) || 'Failed to resolve home directory' });
-  }
- });
-
-app.post('/api/fs/mkdir', async (req, res) => {
-  try {
-   const { path: dirPath, allowOutsideWorkspace } = req.body ?? {};
-   if (typeof dirPath !== 'string' || !dirPath.trim()) {
-    return res.status(400).json({ error: 'Path is required' });
-   }
-
-   let resolvedPath = '';
-   if (allowOutsideWorkspace) {
-    console.warn('Rejected outside-workspace mkdir without trusted directory grant');
-    return res.status(403).json({ error: 'Outside workspace directory creation requires a grant' });
-   } else {
-    const resolved = await resolveWorkspacePathFromContext({
-     fsPromises,
-     req,
-     targetPath: dirPath,
-     resolveProjectDirectory,
-     path,
-     os,
-     normalizeDirectoryPath,
-     managedRoots,
-     chatsRoots,
-    });
-    if (!resolved.ok) {
-     return res.status(400).json({ error: resolved.error });
-    }
-    const canonicalTarget = await canonicalDirectoryPath(resolved.resolved, fsPromises, path);
-    let authorized = false;
-    let resolutionError;
-    for (const root of [resolved.base, ...managedRoots]) {
-     try {
-      const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
-      if (isPathWithinRoot(canonicalTarget, canonicalRoot, path, os)) {
-       authorized = true;
-       break;
+  app.get('/api/fs/home', async (_req, res) => {
+    try {
+      const home = os.homedir();
+      if (!home || !isStringInput(home) || home.length === 0) {
+        return res.status(500).json({ error: 'Failed to resolve home directory' });
       }
-     } catch (error) {
-      resolutionError ??= error;
-     }
+      const [canonicalChatsRoot, canonicalLegacyChatsRoot] = await Promise.all([
+        canonicalDirectoryPath(chatsRoot, fsPromises, path),
+        canonicalDirectoryPath(path.join(home, '.config', 'ohpichamber', 'chats'), fsPromises, path).catch((error) => {
+          console.warn('Failed to resolve legacy chats root:', error);
+          return undefined;
+        }),
+      ]);
+      return res.json({ home, chatsRoot, canonicalChatsRoot, canonicalLegacyChatsRoot });
+    } catch (error) {
+      console.error('Failed to resolve home directory:', error);
+      const message = errorFields(error)?.message;
+      return res.status(500).json({ error: (isStringInput(message) && message) || 'Failed to resolve home directory' });
     }
-    if (!authorized) {
-     if (resolutionError) throw resolutionError;
-     return res.status(400).json({ error: 'Path is outside of active workspace' });
+  });
+
+  app.post('/api/fs/mkdir', async (req, res) => {
+    try {
+      const { path: dirPath, allowOutsideWorkspace } = hasBodyFields(req.body) ? req.body : {};
+      if (!isStringInput(dirPath) || !dirPath.trim()) {
+        return res.status(400).json({ error: 'Path is required' });
+      }
+
+      let resolvedPath = '';
+      if (allowOutsideWorkspace) {
+        console.warn('Rejected outside-workspace mkdir without trusted directory grant');
+        return res.status(403).json({ error: 'Outside workspace directory creation requires a grant' });
+      } else {
+        const resolved = await resolveWorkspacePathFromContext({
+          fsPromises,
+          req,
+          targetPath: dirPath,
+          resolveProjectDirectory,
+          path,
+          os,
+          normalizeDirectoryPath,
+          managedRoots,
+          chatsRoots,
+        });
+        if (!resolved.ok) {
+          return res.status(400).json({ error: resolved.error });
+        }
+        const canonicalTarget = await canonicalDirectoryPath(resolved.resolved, fsPromises, path);
+        let authorized = false;
+        let resolutionError;
+        for (const root of [resolved.base, ...managedRoots]) {
+          try {
+            const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
+            if (isPathWithinRoot(canonicalTarget, canonicalRoot, path, os)) {
+              authorized = true;
+              break;
+            }
+          } catch (error) {
+            resolutionError ??= error;
+          }
+        }
+        if (!authorized) {
+          if (resolutionError) throw resolutionError;
+          return res.status(400).json({ error: 'Path is outside of active workspace' });
+        }
+        resolvedPath = canonicalTarget;
+      }
+
+      await fsPromises.mkdir(resolvedPath, { recursive: true });
+      return res.json({ success: true, path: resolvedPath });
+    } catch (error) {
+      if (isOsPermissionError(error)) {
+        return sendOsPermissionDenied(res, 'Access denied');
+      }
+      console.error('Failed to create directory:', error);
+      const message = errorFields(error)?.message;
+      return res.status(500).json({ error: (isStringInput(message) && message) || 'Failed to create directory' });
     }
-    resolvedPath = canonicalTarget;
-   }
+  });
 
-   await fsPromises.mkdir(resolvedPath, { recursive: true });
-   return res.json({ success: true, path: resolvedPath });
-  } catch (error) {
-   if (isOsPermissionError(error)) {
-    return sendOsPermissionDenied(res, 'Access denied');
-   }
-   console.error('Failed to create directory:', error);
-   return res.status(500).json({ error: error.message || 'Failed to create directory' });
-  }
- });
-
-app.post('/api/fs/clone', async (req, res) => {
+  app.post('/api/fs/clone', async (req, res) => {
     if (!hasBodyFields(req.body) || req.body.unverifiedConfirmed !== true) {
-      return res.status(409).json({ code: 'GIT_NETWORK_OPERATION_REQUIRED',
-        error: 'Use a planned clone with explicit transport selection, or explicitly confirm unverified System Git.' });
+      return res.status(409).json({
+        code: 'GIT_NETWORK_OPERATION_REQUIRED',
+        error: 'Use a planned clone with explicit transport selection, or explicitly confirm unverified System Git.'
+      });
     }
     try {
       const { remoteUrl, destinationPath, gitIdentityId } = req.body;
@@ -1048,9 +1032,11 @@ app.post('/api/fs/clone', async (req, res) => {
         unverifiedConfirmed: true,
       });
       if (result.state === 'partial' && result.completedSteps?.includes('checked-out')) {
-        return res.status(200).json({ success: false, state: 'partial', setupRequired: true,
+        return res.status(200).json({
+          success: false, state: 'partial', setupRequired: true,
           path: resolvedDestination, operationId: result.operationId,
-          error: 'Checkout retained. Open Git setup to finish; do not clone again.' });
+          error: 'Checkout retained. Open Git setup to finish; do not clone again.'
+        });
       }
       if (result.state !== 'succeeded') {
         const conflict = result.error?.code === 'CONFLICT';
@@ -1081,7 +1067,7 @@ app.post('/api/fs/clone', async (req, res) => {
     }
   });
 
-app.get('/api/fs/directory-stat', async (req, res) => {
+  app.get('/api/fs/directory-stat', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const paths = new URL(String(req.url), 'http://openchamber.local').searchParams.getAll('path');
     const directoryPath = paths.length === 1 ? paths[0]?.trim() : '';
@@ -1110,9 +1096,9 @@ app.get('/api/fs/directory-stat', async (req, res) => {
     }
   });
 
-const workspaceFileNames = createWorkspaceFileNameIndex({ spawn, resolveGitBinary: resolveGitBinaryForSpawn });
+  const workspaceFileNames = createWorkspaceFileNameIndex({ spawn, resolveGitBinary: resolveGitBinaryForSpawn });
 
-app.get('/api/fs/find-by-name', async (req, res) => {
+  app.get('/api/fs/find-by-name', async (req, res) => {
     const name = isStringInput(req.query.name) ? req.query.name.trim() : '';
     if (!name || name.length > 255 || name === '.' || name === '..' || /[/\\*?[\]:]/.test(name)) {
       return res.status(400).json({ error: 'A plain file name is required' });
@@ -1124,94 +1110,84 @@ app.get('/api/fs/find-by-name', async (req, res) => {
     return res.json({ paths: await workspaceFileNames.find(project.directory, name) });
   });
 
-const filesystemSearch = createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch: true });
+  const filesystemSearch = createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch: true });
 
-app.get('/api/fs/search', async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  const query = isString(req.query.query) ? String(req.query.query) : '';
-  const type = req.query.type === 'directory' ? 'directory' : 'file';
-  const requestedLimit = isString(req.query.limit) ? Number.parseInt(String(req.query.limit), 10) : Number.NaN;
-  const limit = Number.isInteger(requestedLimit)
-   ? Math.min(Math.max(1, requestedLimit), 500)
-   : 60;
-  const includeHidden = req.query.includeHidden === 'true';
-  const respectGitignore = req.query.respectGitignore !== 'false';
+  app.get('/api/fs/search', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const query = isString(req.query.query) ? String(req.query.query) : '';
+    const type = req.query.type === 'directory' ? 'directory' : 'file';
+    const requestedLimit = isString(req.query.limit) ? Number.parseInt(String(req.query.limit), 10) : Number.NaN;
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.min(Math.max(1, requestedLimit), 500)
+      : 60;
+    const includeHidden = req.query.includeHidden === 'true';
+    const respectGitignore = req.query.respectGitignore !== 'false';
 
-  const project = await resolveProjectDirectory(req);
-  const rawPath = typeof req.query.directory === 'string' && req.query.directory.trim().length > 0
-   ? req.query.directory.trim()
-   : project.requestedDirectory || project.directory;
-  if (!rawPath) {
-   return res.status(400).json({ error: project.error || 'Active workspace is required' });
-  }
+    const project = await resolveProjectDirectory(req);
+    const rawPath = isStringInput(req.query.directory) && req.query.directory.trim().length > 0
+      ? req.query.directory.trim()
+      : project.requestedDirectory || project.directory;
+    if (!rawPath) {
+      return res.status(400).json({ error: project.error || 'Active workspace is required' });
+    }
 
-  // A client that moved on (a new letter, a closed list) ends the walk and its
-  // Git reads instead of letting them finish for nobody.
-  const abort = new AbortController();
-  res.on('close', () => abort.abort());
-  // A client gone during the checks above has already closed the response.
-  if (res.destroyed) return undefined;
+    const abort = new AbortController();
+    res.on('close', () => abort.abort());
+    if (res.destroyed) return undefined;
 
-  try {
-   const requestedPath = path.resolve(normalizeDirectoryPath(rawPath));
-   const canonicalRoot = await realpathCache.resolve(requestedPath);
-   // Every search target is a workspace path: the walk enumerates directory
-   // contents, so an unauthorized root would leak entries outside the project
-   // and the managed roots. Containment is decided on canonical paths, which
-   // keeps a symlinked alias of the workspace valid while a link leaving it
-   // stays refused.
-   const candidateBases = [project.directory, project.requestedDirectory, ...managedRoots, ...chatsRoots];
-   // A repository worktree outside the project's own folder is a workspace
-   // too; the context resolver is the only place that knows its base.
-   try {
-    const context = await resolveWorkspacePathFromContext({
-     req, targetPath: rawPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots, chatsRoots,
-    });
-    if (context.ok) candidateBases.push(context.base);
-   } catch {
-    // Authorization below still fails closed on the canonical bases.
-   }
-   let authorized = false;
-   for (const base of candidateBases) {
-    if (!base) continue;
-    let canonicalBase;
     try {
-     canonicalBase = await fsPromises.realpath(path.resolve(normalizeDirectoryPath(base)));
+      const requestedPath = path.resolve(normalizeDirectoryPath(rawPath));
+      const canonicalRoot = await realpathCache.resolve(requestedPath);
+      const candidateBases = [project.directory, project.requestedDirectory, ...managedRoots, ...chatsRoots];
+      try {
+        const context = await resolveWorkspacePathFromContext({
+          req, targetPath: rawPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots, chatsRoots,
+        });
+        if (context.ok) candidateBases.push(context.base);
+      } catch {
+        void 0;
+      }
+      let authorized = false;
+      for (const base of candidateBases) {
+        if (!base) continue;
+        let canonicalBase;
+        try {
+          canonicalBase = await fsPromises.realpath(path.resolve(normalizeDirectoryPath(base)));
+        } catch (error) {
+          if (errorFields(error)?.code === 'ENOENT') continue;
+          throw error;
+        }
+        if (isPathWithinRoot(canonicalRoot, canonicalBase, path, os)) {
+          authorized = true;
+          break;
+        }
+      }
+      if (!authorized) return res.status(400).json({ error: 'Path is outside of active workspace' });
+      const stats = await fsPromises.stat(canonicalRoot);
+      if (!stats.isDirectory()) {
+        return res.status(400).json({ error: 'Specified path is not a directory', reason: 'not-directory' });
+      }
+      if (abort.signal.aborted) return undefined;
+      const hits = await filesystemSearch.searchFilesystemFiles(canonicalRoot, {
+        query, limit, type, includeHidden, respectGitignore, signal: abort.signal, strict: true,
+      });
+      if (abort.signal.aborted) return undefined;
+      return res.json(hits.map((hit) => ({ ...hit, path: path.join(requestedPath, hit.relativePath) })));
     } catch (error) {
-     if (error.code === 'ENOENT') continue;
-     throw error;
+      if (abort.signal.aborted) return undefined;
+      if (isOsPermissionError(error)) return sendOsPermissionDenied(res, 'Access to directory denied');
+      const errorCode = errorFields(error)?.code;
+      if (errorCode === 'ENOENT' || errorCode === 'ENOTDIR') {
+        return res.status(404).json({ error: 'Directory not found', reason: 'not-found' });
+      }
+      const message = errorFields(error)?.message;
+      return res.status(500).json({ error: (isStringInput(message) && message) || 'Failed to search files' });
     }
-    if (isPathWithinRoot(canonicalRoot, canonicalBase, path, os)) {
-     authorized = true;
-     break;
-    }
-   }
-   if (!authorized) return res.status(400).json({ error: 'Path is outside of active workspace' });
-   const stats = await fsPromises.stat(canonicalRoot);
-   if (!stats.isDirectory()) {
-    return res.status(400).json({ error: 'Specified path is not a directory', reason: 'not-directory' });
-   }
-   if (abort.signal.aborted) return undefined;
-   const hits = await filesystemSearch.searchFilesystemFiles(canonicalRoot, {
-    query, limit, type, includeHidden, respectGitignore, signal: abort.signal, strict: true,
-   });
-   if (abort.signal.aborted) return undefined;
-   // Hit paths stay in the caller's path space: the UI matches results
-   // against the logical directory it asked for, as the other fs routes do.
-   return res.json(hits.map((hit) => ({ ...hit, path: path.join(requestedPath, hit.relativePath) })));
-  } catch (error) {
-   if (abort.signal.aborted) return undefined;
-   if (isOsPermissionError(error)) return sendOsPermissionDenied(res, 'Access to directory denied');
-   if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
-    return res.status(404).json({ error: 'Directory not found', reason: 'not-found' });
-   }
-   return res.status(500).json({ error: (error && error.message) || 'Failed to search files' });
-  }
- });
+  });
 
-const contentSearch = createContentSearchRuntime({ spawn, path, resolveRipgrepBinary });
+  const contentSearch = createContentSearchRuntime({ spawn, path, resolveRipgrepBinary });
 
-app.get('/api/fs/find-in-files', async (req, res) => {
+  app.get('/api/fs/find-in-files', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const query = isString(req.query.query) ? String(req.query.query) : '';
     if (!query.trim() || query.length > CONTENT_SEARCH_MAX_QUERY_LENGTH) {
@@ -1251,15 +1227,15 @@ app.get('/api/fs/find-in-files', async (req, res) => {
     }
   });
 
-app.post('/api/fs/directory-stats', async (req, res) => {
+  app.post('/api/fs/directory-stats', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const paths = hasBodyFields(req.body) ? req.body.paths : undefined;
     const requested: unknown[] | null = Array.isArray(paths) ? paths : null;
     const directoryPaths = requested
       ? requested
-          .filter((value) => value !== null && value !== undefined)
-          .map((value) => String(value).trim())
-          .filter((value) => value.length > 0)
+        .filter((value) => value !== null && value !== undefined)
+        .map((value) => String(value).trim())
+        .filter((value) => value.length > 0)
       : [];
     if (directoryPaths.length === 0) {
       return res.status(400).json({ error: 'paths array is required' });
@@ -1293,7 +1269,7 @@ app.post('/api/fs/directory-stats', async (req, res) => {
     return res.json({ results });
   });
 
-app.get('/api/fs/stat', async (req, res) => {
+  app.get('/api/fs/stat', async (req, res) => {
     const filePath = isStringInput(req.query.path) ? req.query.path : '';
     const optional = req.query.optional === 'true';
     if (!filePath) {
@@ -1352,7 +1328,7 @@ app.get('/api/fs/stat', async (req, res) => {
     }
   });
 
-app.get('/api/fs/read', async (req, res) => {
+  app.get('/api/fs/read', async (req, res) => {
     const filePath = isStringInput(req.query.path) ? req.query.path : '';
     const optional = req.query.optional === 'true';
     if (!filePath) {
@@ -1414,7 +1390,7 @@ app.get('/api/fs/read', async (req, res) => {
     }
   });
 
-app.get('/api/fs/raw', async (req, res) => {
+  app.get('/api/fs/raw', async (req, res) => {
     const filePath = isStringInput(req.query.path) ? req.query.path : '';
     if (!filePath) {
       return res.status(400).json({ error: 'Path is required' });
@@ -1512,7 +1488,7 @@ app.get('/api/fs/raw', async (req, res) => {
     }
   });
 
-app.post('/api/fs/preview', async (req, res) => {
+  app.post('/api/fs/preview', async (req, res) => {
     try {
       const resolved = await resolveReadPathFromContext({
         req,
@@ -1550,7 +1526,7 @@ app.post('/api/fs/preview', async (req, res) => {
     }
   });
 
-app.get<unknown, { 0: string; 1: string }>(/^\/api\/fs\/preview\/([^/]+)\/(.+)$/, async (req, res) => {
+  app.get<unknown, { 0: string; 1: string }>(/^\/api\/fs\/preview\/([^/]+)\/(.+)$/, async (req, res) => {
     const grant = previewGrants.use(req.params[0]);
     if (!grant) {
       return res.status(403).json({ error: 'Preview grant is invalid or expired' });
@@ -1603,84 +1579,83 @@ app.get<unknown, { 0: string; 1: string }>(/^\/api\/fs\/preview\/([^/]+)\/(.+)$/
     }
   });
 
-app.post('/api/fs/write', async (req, res) => {
-  const { path: filePath, content, mustExist } = req.body || {};
-  if (!filePath || typeof filePath !== 'string') {
-   return res.status(400).json({ error: 'Path is required' });
-  }
-  if (typeof content !== 'string') {
-   return res.status(400).json({ error: 'Content is required' });
-  }
-
-  try {
-   const resolved = await resolveWorkspacePathFromContext({
-    fsPromises,
-    req,
-    targetPath: filePath,
-    resolveProjectDirectory,
-    path,
-    os,
-    normalizeDirectoryPath,
-    managedRoots,
-    chatsRoots,
-   });
-   if (!resolved.ok) {
-    return res.status(400).json({ error: resolved.error });
-   }
-
-   const missingMessage = `File no longer exists at ${filePath}. It may have been renamed or deleted outside the app.`;
-   const writePath = await containedWritePath(resolved, { fsPromises, path, os });
-   if (!writePath) {
-    return res.status(403).json({ error: 'Access denied' });
-   }
-   if (mustExist === true) {
-    const exists = await fsPromises.realpath(writePath).catch((error) => {
-     if (error && typeof error === 'object' && error.code === 'ENOENT') return null;
-     throw error;
-    });
-    if (!exists) return res.status(409).json({ error: missingMessage });
-   }
-
-   const existing = await fsPromises.readFile(writePath, 'utf8').catch(() => null);
-   if (existing === content) {
-    return res.json({ success: true, path: resolved.resolved });
-   }
-
-   await fsPromises.mkdir(path.dirname(writePath), { recursive: true });
-
-   // Atomic write: write to temp then rename to avoid concurrent readers
-   // seeing an empty file during the O_TRUNC window of direct writeFile.
-   const tmp = `${writePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-   try {
-    await fsPromises.writeFile(tmp, content, 'utf8');
-    if (mustExist === true) {
-     try {
-      await fsPromises.lstat(writePath);
-     } catch (error) {
-      if (error && typeof error === 'object' && error.code === 'ENOENT') {
-       await fsPromises.unlink(tmp);
-       return res.status(409).json({ error: missingMessage });
-      }
-      throw error;
-     }
+  app.post('/api/fs/write', async (req, res) => {
+    const bodyFields = hasBodyFields(req.body) ? req.body : {};
+    const filePath = bodyFields.path;
+    const content = bodyFields.content;
+    const mustExist = bodyFields.mustExist;
+    if (!filePath || !isStringInput(filePath)) {
+      return res.status(400).json({ error: 'Path is required' });
     }
-    await fsPromises.rename(tmp, writePath);
-   } catch (error) {
-    await fsPromises.unlink(tmp).catch(() => { });
-    throw error;
-   }
-   return res.json({ success: true, path: resolved.resolved });
-  } catch (error) {
-   const err = error;
-   if (isOsPermissionError(err)) {
-    return sendOsPermissionDenied(res, 'Access denied');
-   }
-   console.error('Failed to write file:', error);
-   return res.status(500).json({ error: (error && error.message) || 'Failed to write file' });
-  }
- });
+    if (!isStringInput(content)) {
+      return res.status(400).json({ error: 'Content is required' });
+    }
+    try {
+      const resolved = await resolveWorkspacePathFromContext({
+        fsPromises,
+        req,
+        targetPath: filePath,
+        resolveProjectDirectory,
+        path,
+        os,
+        normalizeDirectoryPath,
+        managedRoots,
+        chatsRoots,
+      });
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
 
-app.post('/api/fs/upload', async (req, res) => {
+      const missingMessage = `File no longer exists at ${filePath}. It may have been renamed or deleted outside the app.`;
+      const writePath = await containedWritePath(resolved, { fsPromises, path, os });
+      if (!writePath) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      if (mustExist === true) {
+        const exists = await fsPromises.realpath(writePath).catch((error) => {
+          if (errorFields(error)?.code === 'ENOENT') return null;
+          throw error;
+        });
+        if (!exists) return res.status(409).json({ error: missingMessage });
+      }
+
+      const existing = await fsPromises.readFile(writePath, 'utf8').catch(() => null);
+      if (existing === content) {
+        return res.json({ success: true, path: resolved.resolved });
+      }
+
+      await fsPromises.mkdir(path.dirname(writePath), { recursive: true });
+      const tmp = `${writePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      try {
+        await fsPromises.writeFile(tmp, content, 'utf8');
+        if (mustExist === true) {
+          try {
+            await fsPromises.lstat(writePath);
+          } catch (error) {
+            if (errorFields(error)?.code === 'ENOENT') {
+              await fsPromises.unlink(tmp);
+              return res.status(409).json({ error: missingMessage });
+            }
+            throw error;
+          }
+        }
+        await fsPromises.rename(tmp, writePath);
+      } catch (error) {
+        await fsPromises.unlink(tmp).catch(() => { });
+        throw error;
+      }
+      return res.json({ success: true, path: resolved.resolved });
+    } catch (error) {
+      if (isOsPermissionError(error)) {
+        return sendOsPermissionDenied(res, 'Access denied');
+      }
+      console.error('Failed to write file:', error);
+      const message = errorFields(error)?.message;
+      return res.status(500).json({ error: (isStringInput(message) && message) || 'Failed to write file' });
+    }
+  });
+
+  app.post('/api/fs/upload', async (req, res) => {
     const filePath = isStringInput(req.query?.path) ? req.query.path.trim() : '';
     const overwrite = req.query?.overwrite === 'true';
     if (!filePath) {
@@ -1768,12 +1743,12 @@ app.post('/api/fs/upload', async (req, res) => {
           await fsPromises.rename(tmp, writePath);
         } else {
           await fsPromises.link(tmp, writePath);
-          await fsPromises.unlink(tmp).catch(() => {});
+          await fsPromises.unlink(tmp).catch(() => { });
         }
         tempExists = false;
       } catch (error) {
         if (tempExists) {
-          await fsPromises.unlink(tmp).catch(() => {});
+          await fsPromises.unlink(tmp).catch(() => { });
         }
         throw error;
       }
@@ -1805,7 +1780,7 @@ app.post('/api/fs/upload', async (req, res) => {
     }
   });
 
-app.post('/api/fs/delete', async (req, res) => {
+  app.post('/api/fs/delete', async (req, res) => {
     const { path: targetPath } = hasBodyFields(req.body) ? req.body : {};
     if (!targetPath || !isStringInput(targetPath)) {
       return res.status(400).json({ error: 'Path is required' });
@@ -1844,7 +1819,7 @@ app.post('/api/fs/delete', async (req, res) => {
     }
   });
 
-app.post('/api/fs/rename', async (req, res) => {
+  app.post('/api/fs/rename', async (req, res) => {
     const { oldPath, newPath } = hasBodyFields(req.body) ? req.body : {};
     if (!oldPath || !isStringInput(oldPath)) {
       return res.status(400).json({ error: 'oldPath is required' });
@@ -1924,7 +1899,7 @@ app.post('/api/fs/rename', async (req, res) => {
     }
   });
 
-app.post('/api/fs/reveal', async (req, res) => {
+  app.post('/api/fs/reveal', async (req, res) => {
     const { path: targetPath } = hasBodyFields(req.body) ? req.body : {};
     if (!targetPath || !isStringInput(targetPath)) {
       return res.status(400).json({ error: 'Path is required' });
@@ -1981,7 +1956,7 @@ app.post('/api/fs/reveal', async (req, res) => {
     }
   });
 
-app.post('/api/fs/exec', async (req, res) => {
+  app.post('/api/fs/exec', async (req, res) => {
     const { commands, cwd, background } = hasBodyFields(req.body) ? req.body : {};
     if (!Array.isArray(commands) || commands.length === 0) {
       return res.status(400).json({ error: 'Commands array is required' });
@@ -2074,7 +2049,7 @@ app.post('/api/fs/exec', async (req, res) => {
     }
   });
 
-app.get('/api/fs/exec/:jobId', (req, res) => {
+  app.get('/api/fs/exec/:jobId', (req, res) => {
     const jobId = isStringInput(req.params?.jobId) ? req.params.jobId : '';
     if (!jobId) {
       return res.status(400).json({ error: 'Job id is required' });
@@ -2096,7 +2071,7 @@ app.get('/api/fs/exec/:jobId', (req, res) => {
     });
   });
 
-app.get('/api/fs/list', async (req, res) => {
+  app.get('/api/fs/list', async (req, res) => {
     const rawPath = isStringInput(req.query.path) && req.query.path.trim().length > 0
       ? req.query.path.trim()
       : os.homedir();
@@ -2229,7 +2204,7 @@ app.get('/api/fs/list', async (req, res) => {
     }
   });
 
-app.get('/api/fs/git-dirs', async (req, res) => {
+  app.get('/api/fs/git-dirs', async (req, res) => {
     const rawPath = isStringInput(req.query.path) && req.query.path.trim().length > 0
       ? req.query.path.trim()
       : '';

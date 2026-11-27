@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
-import { parseLoopDefinition, discoverLoops, discoverLoopFiles } from './loops.js';
+import { parseLoopDefinition, discoverLoops, discoverLoopFiles, setLoopFileEnabled } from './loops.js';
 
 const createProject = async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'oc-loops-'));
@@ -160,6 +160,63 @@ Prompt only.
       } finally {
         warn.mockRestore();
       }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('loads a valid loop when a sibling frontmatter field is mistyped', async () => {
+    const { projectPath, cleanup } = await createProject();
+    try {
+      const filePath = path.join(projectPath, 'loop.md');
+      await writeFile(filePath, `---
+name: quoted-enabled
+schedule: "*/30 * * * *"
+model: openai/gpt-5
+enabled: "true"
+---
+Run every half hour.
+`, 'utf8');
+
+      const definition = parseLoopDefinition(filePath);
+
+      // A quoted "true" is not a boolean, so the loop stays disabled, but the
+      // mistyped field must not wipe the valid sibling fields: the loop still
+      // loads instead of being skipped as malformed.
+      expect(definition).not.toBeNull();
+      expect(definition.name).toBe('quoted-enabled');
+      expect(definition.enabled).toBe(false);
+      expect(definition.schedule).toEqual({ kind: 'cron', cron: '*/30 * * * *' });
+      expect(definition.execution.prompt).toBe('Run every half hour.');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('preserves every frontmatter field when toggling enabled', async () => {
+    const { projectPath, cleanup } = await createProject();
+    try {
+      const filePath = path.join(projectPath, 'loop.md');
+      await writeFile(filePath, `---
+name: rich-loop
+schedule: "*/30 * * * *"
+model: openai/gpt-5
+agent: plan
+timezone: Europe/Kyiv
+enabled: "true"
+custom: keep-me
+---
+Run every half hour.
+`, 'utf8');
+
+      expect(setLoopFileEnabled(filePath, true)).toBe(true);
+
+      const { parseMdFile } = await import('../host/shared.js');
+      const written = parseMdFile(filePath);
+      expect(written.frontmatter.custom).toBe('keep-me');
+      expect(written.frontmatter.agent).toBe('plan');
+      expect(written.frontmatter.timezone).toBe('Europe/Kyiv');
+      expect(written.frontmatter.enabled).toBe(true);
     } finally {
       await cleanup();
     }

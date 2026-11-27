@@ -1,23 +1,66 @@
-import { miniMaxStatusError } from './minimax-status.js';
+import { z } from 'zod';
+import { miniMaxStatusError, type MiniMaxBaseResp } from './minimax-status.js';
 import { credentialAccessToken } from './selected-credential.js';
-import { buildResult,
-toUsageWindow,
-toNumber,
-toTimestamp, } from '../utils/index.js'
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult } from '../utils/contracts.js';
+import {
+  buildResult,
+  toUsageWindow,
+  toNumber,
+  toTimestamp,
+} from '../utils/index.js';
+import { lowerCaseLabel } from '../utils/labels.js';
+
+interface MiniMaxFields {
+  model_name?: unknown;
+  current_interval_total_count?: unknown;
+  current_interval_usage_count?: unknown;
+  start_time?: unknown;
+  end_time?: unknown;
+  remains_time?: unknown;
+  current_interval_remaining_percent?: unknown;
+  current_weekly_total_count?: unknown;
+  current_weekly_usage_count?: unknown;
+  weekly_start_time?: unknown;
+  weekly_end_time?: unknown;
+  weekly_remains_time?: unknown;
+  current_weekly_remaining_percent?: unknown;
+  current_weekly_status?: unknown;
+  model_remains?: unknown;
+  base_resp?: unknown;
+}
+
+export interface MiniMaxProviderConfig {
+  providerId: string;
+  providerName: string;
+  tokenPlanUrl: string;
+  codingPlanUrl: string;
+}
+
+export interface MiniMaxFetchOptions {
+  credential?: CredentialJson | undefined;
+  readAuth?: (() => CredentialJson | Promise<CredentialJson>) | undefined;
+  fetchImpl?: typeof fetch | undefined;
+}
+
 const fieldsOf = <Value>(value: Value) => (hasFields(value) ? value : undefined);
 
 const positive = (value: number | null) => value !== null && value > 0;
-
-import { lowerCaseLabel } from "../utils/labels.js";
 
 const isNumberValue = (value: unknown): value is number => typeof value === 'number';
 
 const isBaseResp = (value: unknown): value is MiniMaxBaseResp => value !== null && value !== undefined;
 
 const hasFields = (value: unknown): value is MiniMaxFields => value !== null && value !== undefined;
+const isAuthRecord = (value: CredentialJson | null | undefined): value is { [key: string]: CredentialJson | undefined } =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
-
+const authEntrySchema = z.object({
+  key: z.string().optional(),
+  token: z.string().optional(),
+});
 const WINDOW_STATUS_INACTIVE = 3;
+const stringSchema = z.string();
 
 const TEXT_MODELS = ['general', 'chat', 'text'];
 
@@ -48,7 +91,12 @@ const hasModelRemains = <Payload>(payload: Payload) => {
   return Array.isArray(rems) && rems.length > 0;
 };
 
-const fetchEndpoint = async (url, apiKey, fetchImpl = fetch) => {
+interface FetchEndpointResult {
+  payload?: MiniMaxFields;
+  statusError?: string;
+}
+
+const fetchEndpoint = async (url: string, apiKey: string, fetchImpl: typeof fetch = fetch): Promise<FetchEndpointResult> => {
   try {
     const response = await fetchImpl(url, {
       method: 'GET',
@@ -137,17 +185,26 @@ const calculateUsage = (model: MiniMaxFields, isTokenPlan: boolean) => {
   };
 };
 
-export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, tokenPlanUrl, codingPlanUrl }) => {
-  const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const createMiniMaxCodingPlanProvider = ({
+  providerId,
+  providerName,
+  tokenPlanUrl,
+  codingPlanUrl,
+}: MiniMaxProviderConfig) => {
+  const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 
-  const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {}) => {
-    let apiKey = credentialAccessToken(credential);
-    if (!apiKey && typeof readAuth === "function") {
+  const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch }: MiniMaxFetchOptions = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
+    let apiKey: string | null = credentialAccessToken(credential);
+    if (!apiKey && readAuth && z.function().safeParse(readAuth).success) {
       const auth = await Promise.resolve(readAuth()).catch(() => null);
-      const entry = auth?.[providerId] || auth?.["minimax"] || (auth && typeof auth === "object" ? Object.values(auth)[0] : null);
-      apiKey = entry?.key || entry?.token || (typeof entry === "string" ? entry : null);
+      const authRecord = isAuthRecord(auth) ? auth : null;
+      const entry = authRecord?.[providerId] ?? authRecord?.minimax ?? (authRecord ? Object.values(authRecord)[0] : null);
+      const parsedEntry = authEntrySchema.safeParse(entry);
+      const parsedString = stringSchema.safeParse(entry);
+      apiKey = (parsedEntry.success ? parsedEntry.data.key || parsedEntry.data.token : undefined)
+        || (parsedString.success ? parsedString.data : null)
+        || null;
     }
-
     if (!apiKey) {
       return buildResult({
         providerId,
@@ -236,7 +293,7 @@ export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, toke
         providerName,
         ok: false,
         configured: true,
-        error: error.message || 'Request failed',
+        error: error instanceof Error ? error.message : 'Request failed',
       });
     }
   };

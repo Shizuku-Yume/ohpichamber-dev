@@ -1,9 +1,12 @@
-// Version order for release notes: semver precedence, so a pre-release build
-// (2.5.4-rc.20261030.6) sorts after 2.5.3 and before 2.5.4, and pre-releases
-// of one release by day and run.
+import type { JsonValue } from './shared/json-values.js';
 
-function parseVersionForComparison(value) {
-  const normalized = String(value || '').replace(/^v/, '').split('+')[0];
+interface ParsedVersion {
+  parts: number[];
+  prerelease: string[] | null;
+}
+
+function parseVersionForComparison(value: JsonValue | undefined): ParsedVersion {
+  const normalized = String(value || '').replace(/^v/, '').split('+')[0] ?? '';
   const prereleaseIndex = normalized.indexOf('-');
   const core = prereleaseIndex >= 0 ? normalized.slice(0, prereleaseIndex) : normalized;
   const parts = core.split('.').map((part) => {
@@ -17,28 +20,28 @@ function parseVersionForComparison(value) {
   };
 }
 
-// Semver precedence of two pre-release tags: numeric identifiers compare as
-// numbers and before text, so 2.5.4-rc.20261031.7 follows 2.5.4-rc.20261030.6.
-function comparePrerelease(a, b) {
+function comparePrerelease(a: string[], b: string[]): number {
   const length = Math.max(a.length, b.length);
   for (let index = 0; index < length; index += 1) {
-    if (a[index] === undefined) return -1;
-    if (b[index] === undefined) return 1;
-    const aNumeric = /^\d+$/.test(a[index]);
-    const bNumeric = /^\d+$/.test(b[index]);
+    const leftPart = a[index];
+    const rightPart = b[index];
+    if (leftPart === undefined) return -1;
+    if (rightPart === undefined) return 1;
+    const aNumeric = /^\d+$/.test(leftPart);
+    const bNumeric = /^\d+$/.test(rightPart);
     if (aNumeric && bNumeric) {
-      const diff = Number(a[index]) - Number(b[index]);
+      const diff = Number(leftPart) - Number(rightPart);
       if (diff !== 0) return diff;
     } else if (aNumeric !== bNumeric) {
       return aNumeric ? -1 : 1;
-    } else if (a[index] !== b[index]) {
-      return a[index] < b[index] ? -1 : 1;
+    } else if (leftPart !== rightPart) {
+      return leftPart < rightPart ? -1 : 1;
     }
   }
   return 0;
 }
 
-export function compareVersions(left, right) {
+export function compareVersions(left: JsonValue | undefined, right: JsonValue | undefined): number {
   const a = parseVersionForComparison(left);
   const b = parseVersionForComparison(right);
   const length = Math.max(a.parts.length, b.parts.length);
@@ -55,3 +58,4 @@ export function compareVersions(left, right) {
 
   return comparePrerelease(a.prerelease, b.prerelease);
 }
+

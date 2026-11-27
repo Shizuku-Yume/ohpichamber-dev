@@ -9,8 +9,7 @@ import type { FileHandle } from 'node:fs/promises';
 import type { PlatformPath } from 'node:path';
 import type { JsonObject, JsonValue } from '../magic-prompts/runtime.js';
 import type { StorageSwitch } from '../project-context/contracts.js';
-import type { DiscoveredLoop, LoopDefinition } from '../scheduled-tasks/loops.js';
-import type { ScheduledTask, ScheduledTaskExecution, ScheduledTaskInput, ScheduledTaskSchedule, ScheduledTaskState, ScheduledTaskStatePatch, ScheduledTaskStatus, ScheduledWorktreeCleanup, SharedProjectDocument, SharedProjectRead } from './contracts.js';
+import type { DiscoveredLoop, LoopDefinition, ScheduledTask, ScheduledTaskExecution, ScheduledTaskInput, ScheduledTaskSchedule, ScheduledTaskState, ScheduledTaskStatePatch, ScheduledTaskStatus, ScheduledWorktreeCleanup, SharedProjectDocument, SharedProjectRead } from './contracts.js';
 
 import { projectConfigFileStemOf, projectPathFromId } from './project-id.js';
 import { MAX_TASK_NAME_LENGTH, MAX_TASK_PROMPT_LENGTH, assertTaskTextWithinLimits } from './task-text-limits.js';
@@ -50,7 +49,7 @@ const worktreeCleanupSchema = z.object({
 });
 
 export interface ProjectConfigDependencies {
-  fsPromises: Pick<typeof fsPromises, 'mkdir' | 'open' | 'readFile' | 'readdir' | 'rename' | 'rm' | 'rmdir' | 'stat' | 'unlink' | 'writeFile'>;
+  fsPromises: Pick<typeof fsPromises, 'lstat' | 'mkdir' | 'open' | 'readFile' | 'readdir' | 'realpath' | 'rename' | 'rm' | 'rmdir' | 'stat' | 'unlink' | 'writeFile'>;
   path: PlatformPath;
   projectsDirPath: string;
   createTaskID?: () => string;
@@ -574,7 +573,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
           const staleByPid = Number.isInteger(lockPid) && lockPid > 0 && !isProcessAlive(lockPid);
           const staleByAge = Number.isFinite(lockAt) && (Date.now() - lockAt) > PROJECT_FILE_LOCK_STALE_MS;
           if (staleByPid || staleByAge || !Number.isInteger(lockPid)) {
-            await fsPromises.unlink(lockPath).catch(() => {});
+            await fsPromises.unlink(lockPath).catch(() => { });
             continue;
           }
         } catch {
@@ -582,7 +581,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
             const stat = await fsPromises.stat(lockPath);
             const mtimeMs = Number(stat?.mtimeMs);
             if (Number.isFinite(mtimeMs) && (Date.now() - mtimeMs) > PROJECT_FILE_LOCK_STALE_MS) {
-              await fsPromises.unlink(lockPath).catch(() => {});
+              await fsPromises.unlink(lockPath).catch(() => { });
               continue;
             }
           } catch {
@@ -619,12 +618,12 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     const legacy = legacyPath ? await readJsonDocumentIfPresent(legacyPath, ['ENOENT', 'ENAMETOOLONG']) : null;
     return legacy ?? {};
   };
-  const migrateProjectScheduledTasks = async (projectID) => withProjectWriteLock(projectID, async () => {
+  const migrateProjectScheduledTasks = async (projectID: string | undefined) => withProjectWriteLock(projectID, async () => {
     const document = await readRawProjectConfigFromDisk(projectID);
-    if (!Array.isArray(document.scheduledTasks)) return 0;
+    if (!isJsonArray(document.scheduledTasks)) return 0;
     let changed = 0;
     const scheduledTasks = document.scheduledTasks.map((task) => {
-      if (!task || typeof task !== 'object' || !task.execution || typeof task.execution !== 'object' || task.execution.agent == null) return task;
+      if (!isJsonObject(task) || !isJsonObject(task.execution) || task.execution.agent == null) return task;
       changed += 1;
       return { ...task, execution: { ...task.execution, agent: null } };
     });
@@ -679,12 +678,12 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
       await fsPromises.writeFile(temporaryPath, JSON.stringify(document, null, 2), 'utf8');
       await fsPromises.rename(temporaryPath, filePath);
     } catch (error) {
-      await fsPromises.rm(temporaryPath, { force: true }).catch(() => {});
+      await fsPromises.rm(temporaryPath, { force: true }).catch(() => { });
       throw error;
     }
     const legacyPath = resolveLegacyProjectConfigPath(projectID);
     if (legacyPath) {
-      await fsPromises.rm(legacyPath, { force: true }).catch(() => {});
+      await fsPromises.rm(legacyPath, { force: true }).catch(() => { });
     }
   };
 
@@ -897,8 +896,8 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
       const tasks = current.scheduledTasks;
       const approvals = readLoopApprovals(await readRawProjectConfigFromDisk(projectID));
       const heldBack = new Map<string, NonNullable<ScheduledTask['loopApproval']>>();
-      loops = loops.map((loop) => {
-        if (loop?.scope !== 'project' || loop.definition?.enabled !== true || approvals[loop.filePath] === loop.fingerprint) {
+      loops = loops.map((loop): DiscoveredLoop => {
+        if (loop.scope !== 'project' || !hasLoopDefinition(loop) || loop.definition.enabled !== true || approvals[loop.filePath] === loop.fingerprint) {
           return loop;
         }
         heldBack.set(loop.filePath, approvals[loop.filePath] ? 'outdated' : 'required');
@@ -1015,19 +1014,15 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     projectPathFromId(projectID ?? '') || (isString(personalRaw.projectPath) ? personalRaw.projectPath.trim() : '')
   );
 
-  // The selected checkout itself may be a symlink, but entries inside it are
-  // repository-controlled. Reject symlinked parents and files before reading
-  // or mutating them. The checks do not make an unrelated concurrent namespace
-  // replacement atomic; the project lock only coordinates our own writers.
-  const checkedSharedProjectPath = async (projectPath, createParent = false) => {
+  const checkedSharedProjectPath = async (projectPath: string, createParent = false) => {
     const root = await fsPromises.realpath(projectPath);
     if (!(await fsPromises.stat(root)).isDirectory()) throw new Error('project checkout not found');
     const parent = path.join(root, '.openchamber');
     const file = path.join(parent, 'project.json');
-    const inspect = async (entry, directory) => {
+    const inspect = async (entry: string, directory: boolean) => {
       let info;
       try { info = await fsPromises.lstat(entry); }
-      catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
+      catch (error) { if (hasObjectErrorFields(error) && error.code === 'ENOENT') return false; throw error; }
       if (info.isSymbolicLink() || (directory ? !info.isDirectory() : !info.isFile())) {
         throw Object.assign(new Error('unsafe shared project configuration path'), { code: 'shared_config_invalid' });
       }
@@ -1041,7 +1036,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     let parentExists = await inspect(parent, true);
     if (!parentExists && createParent) {
       try { await fsPromises.mkdir(parent); }
-      catch (error) { if (error?.code !== 'EEXIST') throw error; }
+      catch (error) { if (!hasObjectErrorFields(error) || error.code !== 'EEXIST') throw error; }
       parentExists = await inspect(parent, true);
       if (!parentExists) throw new Error('shared project configuration directory unavailable');
     }
@@ -1049,8 +1044,8 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     return { parent, file, parentExists, fileExists };
   };
 
-  const readSharedProjectFile = async (projectPath) => {
-    let handle;
+  const readSharedProjectFile = async (projectPath: string): Promise<SharedProjectRead<JsonObject>> => {
+    let handle: FileHandle | undefined;
     try {
       const checked = await checkedSharedProjectPath(projectPath);
       if (!checked.fileExists) return { status: 'missing' };
@@ -1078,18 +1073,14 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     }
   };
 
-  // Replace the shared file through a unique temporary sibling, so a failed
-  // write or rename leaves the previous bytes in place and no temporary file.
-  // An empty result removes the file, and the `.openchamber` folder when that
-  // leaves it empty.
-  const writeSharedProjectFile = async (projectPath, text) => {
+  const writeSharedProjectFile = async (projectPath: string, text: string | null) => {
     const checked = await checkedSharedProjectPath(projectPath, text !== null);
     if (text === null) {
       if (checked.fileExists) {
         await checkedSharedProjectPath(projectPath);
         await fsPromises.rm(checked.file);
       }
-      if (checked.parentExists) await fsPromises.rmdir(checked.parent).catch(() => {});
+      if (checked.parentExists) await fsPromises.rmdir(checked.parent).catch(() => { });
       return;
     }
     const temporaryPath = `${checked.file}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1098,7 +1089,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
       await checkedSharedProjectPath(projectPath);
       await fsPromises.rename(temporaryPath, checked.file);
     } catch (error) {
-      await fsPromises.rm(temporaryPath, { force: true }).catch(() => {});
+      await fsPromises.rm(temporaryPath, { force: true }).catch(() => { });
       throw error;
     }
   };
@@ -1208,16 +1199,11 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
 
   const readProjectSetup = async (projectID: string | undefined) => mergedProjectSetupOf(projectID, await readRawProjectConfigFromDisk(projectID));
 
-  /**
-   * The personal `worktreeDirectory` override, or null when the project has
-   * none. Git reads this through Host composition; the value is resolved into
-   * an absolute folder by the Git module, which owns the path rule.
-   */
-  const readWorktreeDirectory = async (projectID) => (
+  const readWorktreeDirectory = async (projectID: string | undefined) => (
     worktreeDirectoryOf(await readRawProjectConfigFromDisk(projectID))
   );
 
-  const updateProjectSetup = async (projectID, patch) => {
+  const updateProjectSetup = async (projectID: string | undefined, patch: SharedProjectDocument) => {
     const stored = projectSetupPatchToStored(patch);
     return withProjectWriteLock(projectID, async () => {
       const existing = await readRawProjectConfigFromDisk(projectID);
@@ -1273,7 +1259,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
       const next = mutate(current);
       if (next === current) return current;
 
-      const nextDocument = {};
+      const nextDocument: SharedProjectDocument = {};
       for (const [entryKey, value] of Object.entries(document)) {
         if (entryKey !== key) defineOwnEntry(nextDocument, entryKey, value);
       }

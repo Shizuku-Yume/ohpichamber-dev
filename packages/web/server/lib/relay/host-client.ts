@@ -65,7 +65,7 @@ const parseRelayRetire = (raw: string) => {
 };
 
 const LOG_REASON_MAX_CHARS = 200;
-const sanitizeCloseReason = (raw) => Array.from(String(raw ?? ''), (char) => {
+const sanitizeCloseReason = (raw: string | Buffer | undefined) => Array.from(String(raw ?? ''), (char) => {
   const code = char.codePointAt(0) ?? 0;
   return code <= 0x1f || code === 0x7f ? ' ' : char;
 }).join('').replace(/\s+/g, ' ').trim().slice(0, LOG_REASON_MAX_CHARS);
@@ -95,7 +95,7 @@ const resolveBatchWindowMs = (option: number | undefined) => {
 export const describeRelayError = (cause: unknown) => redactSensitiveText(String(((hasErrorMessage(cause) ? cause.message : undefined) ?? cause) || ''));
 
 export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, onStatus, onShareState, logger = console, createSocket = (url) => new WebSocket(url), batchWindowMs, batch, flowControl }: RelayHostOptions) => {
-  const { version }: { version?: unknown } = createRequire(import.meta.url)(webPackagePaths.packageJson);
+  const { version } = z.object({ version: z.string().optional() }).parse(createRequire(import.meta.url)(webPackagePaths.packageJson));
   const platform = process.env.OPENCHAMBER_RUNTIME || 'web';
   const resolveLocalPort = getLocalPort ?? (() => localPort);
   const localBatch = batch !== false;

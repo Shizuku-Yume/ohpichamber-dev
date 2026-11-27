@@ -1,11 +1,11 @@
 import { safeParseCanonicalEvent } from '../event-stream/validated-event.js';
 import { postLinearSessionStatus } from './status.js';
-import type { TrackerRuntimeEvent, TrackerSessionStatusRuntime } from '../trackers/tracker-contract.js';
+import type { TrackerRuntimeEvent } from '../trackers/tracker-contract.js';
 
 export function createLinearSessionStatusRuntime() {
   let stopped = false;
 
-  const processCanonicalEvent = (payload) => {
+  const processCanonicalEvent = (payload: TrackerRuntimeEvent) => {
     if (stopped) return;
     const parsed = safeParseCanonicalEvent(payload);
     if (!parsed.success) return;

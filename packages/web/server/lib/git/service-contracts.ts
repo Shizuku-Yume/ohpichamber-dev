@@ -132,11 +132,12 @@ export interface WorktreeCandidate {
 }
 export interface WorktreeProjectContext {
   projectID: string;
-  requestedDirectory: string;
+  requestedDirectory?: string | undefined;
   sandbox: string;
   primaryWorktree: string;
   worktreeRoot: string;
-  legacyWorktreeRoot: string;
+  defaultWorktreeRoot: string;
+  legacyWorktreeRoot?: string | undefined;
 }
 export interface WorktreeCreateResult {
   head: string;
@@ -162,7 +163,7 @@ export interface UpstreamConfiguration {
 }
 export interface WorktreeBootstrapTask extends WorktreeServerOptions {
   directory: string;
-  projectDirectory: string;
+  projectDirectory?: string | undefined;
   primaryWorktree: string;
   localBranch: string;
   setUpstream: boolean;
@@ -263,7 +264,7 @@ export interface StartCommandResult {
 }
 export interface StartCommandOptions {
   timeoutMs?: number;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   env?: NodeJS.ProcessEnv;
 }
 export interface BranchStart {
@@ -319,4 +320,132 @@ export interface PostCheckoutHookAction {
   contentDigest: string;
   gitDir: string;
   workTree: string;
+}
+
+import type { JsonValue } from '../shared/json-values.js';
+
+export interface WorktreeLeaseControl {
+  acquire: (directory: string, leaseId: string) => Promise<JsonValue | void>;
+  release: (leaseId: string) => Promise<void>;
+}
+
+export interface WorktreeArchiveSessionEntry {
+  sessionId: string;
+  rootSessionId?: string;
+  workspaceId?: string;
+  progress: string;
+}
+
+export interface WorktreeArchiveBinding {
+  archiveRef: string;
+  snapshotCommit: string;
+  phase: string;
+  revision: number;
+  targetWorkspaceId?: string | null;
+  branchName?: string;
+  branchOid?: string | null;
+  applyAttempted?: boolean | number;
+  preapplyHead?: string | null;
+  preapplyFingerprint?: string | null;
+  expectedFingerprint?: string | null;
+  restoreCasStarted?: boolean | number;
+  restoreCasCompleted?: boolean | number;
+  deleteCasCompleted?: boolean | number;
+  deleteBranchRequested?: boolean | number;
+  sessions: Array<string | WorktreeArchiveSessionEntry>;
+}
+
+export interface WorktreeArchiveOwner {
+  key: { hostProjectId: string; archiveId: string };
+  claimId?: string;
+  revision?: number;
+  binding?: WorktreeArchiveBinding;
+  recovering?: boolean;
+  previousTargetDirectory?: string;
+}
+
+export interface WorktreeArchiveCapturedOwner {
+  key: { hostProjectId: string; archiveId: string };
+  claimId: string;
+  revision?: number;
+  binding?: WorktreeArchiveBinding;
+}
+
+export interface WorktreeArchiveBoundOwner {
+  key: { hostProjectId: string; archiveId: string };
+  claimId: string;
+  binding: WorktreeArchiveBinding;
+  recovering?: boolean;
+  previousTargetDirectory?: string | undefined;
+}
+
+export interface WorktreeArchiveBoundRestoreOwner extends WorktreeArchiveBoundOwner {
+  targetWorkspaceId: string;
+  recoveringRemoval: boolean;
+}
+
+export interface WorktreeArchivePendingDeleteOwner {
+  key: { hostProjectId: string; archiveId: string };
+  claimId?: string;
+  binding: WorktreeArchiveBinding;
+  recoveringRemoval: boolean;
+}
+
+export interface RestoreFingerprint {
+  head: string;
+  tree: string;
+  index: string;
+  unmerged: string;
+  status: string;
+  conflicts: boolean;
+}
+
+export interface WorktreeArchiveSessionService {
+  captureWorktreeArchive?: (input: {
+    projectDirectory: string;
+    worktreeDirectory: string;
+    archiveId: string;
+    archiveRef: string;
+    snapshotCommit: string;
+    claimId: string;
+    branchName: string;
+    branchOid: string | null;
+    archivedAt: number;
+  }) => Promise<WorktreeArchiveCapturedOwner>;
+  prepareWorktreeArchiveRemoval?: (owner: WorktreeArchiveCapturedOwner) => Promise<JsonValue | object | null | void>;
+  finishWorktreeArchive?: (owner: WorktreeArchiveCapturedOwner) => Promise<WorktreeArchiveBinding>;
+  rollbackWorktreeArchive?: (owner: WorktreeArchiveCapturedOwner, partial: boolean) => Promise<JsonValue | object | null | void>;
+  discardWorktreeArchive?: (owner: WorktreeArchiveCapturedOwner) => Promise<JsonValue | object | null | void>;
+  resolveWorktreeArchivePinnedTarget?: (input: {
+    projectDirectory: string;
+    archiveId: string;
+    revision: number;
+  }) => Promise<string>;
+  prepareWorktreeArchiveRestore?: (input: {
+    projectDirectory: string;
+    targetDirectory: string;
+    archiveId: string;
+    recovery: unknown;
+    expectedRevision: number | undefined;
+  }) => Promise<WorktreeArchiveBoundRestoreOwner | null>;
+  markWorktreeArchiveRestoreCasStarted?: (owner: WorktreeArchiveBoundOwner, revision: number) => Promise<WorktreeArchiveBinding>;
+  markWorktreeArchiveRestoreCasCompleted?: (owner: WorktreeArchiveBoundOwner, revision: number) => Promise<JsonValue | object | null | void>;
+  pinWorktreeArchiveRestore?: (owner: WorktreeArchiveBoundRestoreOwner, fingerprints: {
+    preapplyHead: string;
+    preapplyFingerprint: RestoreFingerprint;
+    expectedFingerprint: RestoreFingerprint;
+  }) => Promise<WorktreeArchiveBinding>;
+  markWorktreeArchiveRestoreAttempted?: (owner: WorktreeArchiveBoundOwner, revision: number) => Promise<WorktreeArchiveBinding>;
+  finishWorktreeArchiveRestore?: (owner: WorktreeArchiveBoundOwner) => Promise<WorktreeArchiveBinding>;
+  finalizeWorktreeArchiveRestore?: (owner: WorktreeArchiveBoundOwner, revision: number) => Promise<WorktreeArchiveBinding>;
+  releaseWorktreeArchiveRestore?: (owner: WorktreeArchiveBoundOwner) => Promise<JsonValue | object | null | void>;
+  cleanupWorktreeArchiveRestore?: (owner: WorktreeArchiveBoundOwner) => Promise<JsonValue | object | null | void>;
+  prepareWorktreeArchiveDelete?: (input: {
+    projectDirectory: string;
+    archiveId: string;
+  }) => Promise<WorktreeArchivePendingDeleteOwner | null>;
+  claimWorktreeArchiveDelete?: (owner: WorktreeArchivePendingDeleteOwner) => Promise<WorktreeArchiveBoundOwner>;
+  deleteWorktreeArchiveSessions?: (owner: WorktreeArchiveBoundOwner) => Promise<WorktreeArchiveBinding>;
+  finalizeWorktreeArchiveDelete?: (owner: WorktreeArchiveBoundOwner, revision: number, deleteBranch: boolean) => Promise<WorktreeArchiveBinding>;
+  markWorktreeArchiveDeleteCasCompleted?: (owner: WorktreeArchiveBoundOwner, revision: number) => Promise<JsonValue | object | null | void>;
 }

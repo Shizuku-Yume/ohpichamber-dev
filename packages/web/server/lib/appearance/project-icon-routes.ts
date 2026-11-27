@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type fs from 'node:fs/promises';
 import type nodePath from 'node:path';
 import type nodeCrypto from 'node:crypto';
@@ -33,10 +34,8 @@ export interface ProjectIconDependencies {
   resolveGitBinaryForSpawn: () => string;
 }
 
-interface IconUploadBody {
-  dataUrl?: unknown;
-  force?: unknown;
-}
+const iconUploadBodySchema = z.object({ dataUrl: z.string() });
+const iconDiscoverBodySchema = z.object({ force: z.boolean() });
 
 type ParsedProjectIcon =
   | { ok: false; error: string }
@@ -332,13 +331,14 @@ export const registerProjectIconRoutes = (app: Application, dependencies: Projec
     }
   });
 
-  app.put<IconUploadBody>('/api/projects/:projectId/icon', async (req, res) => {
+  app.put('/api/projects/:projectId/icon', async (req, res) => {
     const projectId = isString(req.params.projectId) ? req.params.projectId.trim() : '';
     if (!projectId) {
       return res.status(400).json({ error: 'projectId is required' });
     }
 
-    const parsed = parseProjectIconDataUrl(isString(req.body?.dataUrl) ? req.body.dataUrl : undefined);
+    const bodyResult = iconUploadBodySchema.safeParse(req.body);
+    const parsed = parseProjectIconDataUrl(bodyResult.success ? bodyResult.data.dataUrl : undefined);
     if (!parsed.ok) {
       return res.status(400).json({ error: parsed.error });
     }
@@ -405,7 +405,7 @@ export const registerProjectIconRoutes = (app: Application, dependencies: Projec
     }
   });
 
-  app.post<IconUploadBody>('/api/projects/:projectId/icon/discover', async (req, res) => {
+  app.post('/api/projects/:projectId/icon/discover', async (req, res) => {
     const projectId = isString(req.params.projectId) ? req.params.projectId.trim() : '';
     if (!projectId) {
       return res.status(400).json({ error: 'projectId is required' });
@@ -418,7 +418,8 @@ export const registerProjectIconRoutes = (app: Application, dependencies: Projec
         return res.status(404).json({ error: 'Project not found' });
       }
 
-      const force = req.body?.force === true;
+      const bodyResult = iconDiscoverBodySchema.safeParse(req.body);
+      const force = bodyResult.success && bodyResult.data.force;
       if (project.iconImage?.source === 'custom' && !force) {
         return res.json({
           project,

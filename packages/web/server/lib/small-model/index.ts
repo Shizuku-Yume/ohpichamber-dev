@@ -1,19 +1,102 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { parseModelSelector, resolveRoleSelector, thinkingLevelToReasoningEffort, modelRefKey, isRoleConfigured } from '@openchamber/agent-contract';
+import {
+  parseModelSelector,
+  resolveRoleSelector,
+  thinkingLevelToReasoningEffort,
+  modelRefKey,
+  isRoleConfigured,
+  type CompletionRequest,
+  type CompletionResult,
+  type ConfiguredThinkingLevel,
+  type JsonObject,
+  type Model,
+} from '@openchamber/agent-contract';
 import {
   completeSmallModel,
   findModelInfo,
   getAgentService,
   getModelRoles,
   listModelInfos,
+  type SmallModelAgentService,
 } from './client.js';
+
+export type SmallModelSource =
+  | 'request'
+  | 'modelRoles'
+  | 'session-provider-small'
+  | 'session-model'
+  | 'catalog-small';
+
+export interface ResolvedSmallModel {
+  providerID: string;
+  modelID: string;
+  source: SmallModelSource;
+  thinkingLevel?: ConfiguredThinkingLevel | undefined;
+  variant?: string | null | undefined;
+}
+
+export interface GenerateSmallModelTextOptions {
+  prompt: string;
+  system?: string | undefined;
+  maxOutputTokens?: number | undefined;
+  model?: string | undefined;
+  workspaceId: string;
+  preferredProviderID?: string | undefined;
+  preferredModelID?: string | undefined;
+  responseSchema?: JsonObject | undefined;
+  timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
+  onOverflow?: 'truncate' | 'error' | undefined;
+  role?: string | undefined;
+}
+
+export interface GeneratedSmallModelText {
+  text: string;
+  providerID: string;
+  modelID: string;
+  source: SmallModelSource;
+  inputTruncated?: boolean | undefined;
+}
+
+export interface OutputReserveLimits {
+  contextTokens: number;
+  outputTokenLimit: number | null;
+}
+
+export type OutputReserveTokens =
+  | number
+  | ((limits: OutputReserveLimits) => number | undefined)
+  | undefined;
+
+export interface DescribeSmallModelOptions {
+  workspaceId?: string | undefined;
+  preferredProviderID?: string | undefined;
+  preferredModelID?: string | undefined;
+  outputReserveTokens?: OutputReserveTokens;
+  overrideModel?: string | undefined;
+  role?: string | undefined;
+}
+
+export interface SmallModelDescription extends ResolvedSmallModel {
+  inputCharBudget: number;
+  contextTokens: number;
+  contextKnown: boolean;
+  outputTokens: number | null;
+  outputTokenLimit: number | null;
+}
+
+interface ParsedSelection {
+  providerID: string;
+  modelID: string;
+  thinkingLevel: ConfiguredThinkingLevel | undefined;
+  variant: string | null;
+}
 
 const nonEmptyTextSchema = z.string().refine((value) => value.trim().length > 0);
 
-/** `provider/model[:thinkingLevel]`, read by the one selector grammar. */
-const parseSelection = (value) => {
-  if (!nonEmptyTextSchema.safeParse(value).success) return null;
+const parseSelection = (value: string | undefined): ParsedSelection | null => {
+  if (!nonEmptyTextSchema.safeParse(value).success || value === undefined) return null;
   const parsed = parseModelSelector(value.trim());
   return parsed ? {
     providerID: parsed.providerId,
@@ -23,16 +106,16 @@ const parseSelection = (value) => {
   } : null;
 };
 
-// Conservative estimate for Host input budgeting against canonical limits.
 const DEFAULT_CONTEXT_TOKENS = 64_000;
 const OUTPUT_RESERVE_TOKENS = 4_000;
 
-/**
- * Input budget in characters, given how much of the context the caller intends
- * to leave for the answer. The reserve must match the output budget the caller
- * will actually request, or the two disagree and the model overruns its context.
- */
-const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
+const getModelInputCharBudget = ({
+  modelInfo,
+  outputReserveTokens,
+}: {
+  modelInfo: Model | null;
+  outputReserveTokens?: number | undefined;
+}) => {
   const context = Number(modelInfo?.contextWindow);
   const known = context > 0;
   const contextTokens = known ? context : DEFAULT_CONTEXT_TOKENS;
@@ -41,23 +124,34 @@ const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
   return { maxChars: inputBudgetTokens * 4, contextTokens, contextKnown: known };
 };
 
-/**
- * The output budget to actually request: what the caller asked for, capped by
- * what the model admits it can emit.
- *
- * The canonical completion receives this same budget as maxOutputTokens.
- */
-const resolveOutputTokens = ({ modelInfo, maxOutputTokens }) => {
+const resolveOutputTokens = ({
+  modelInfo,
+  maxOutputTokens,
+}: {
+  modelInfo: Model | null;
+  maxOutputTokens?: number | undefined;
+}): number | undefined => {
   const requested = Number(maxOutputTokens) > 0 ? Number(maxOutputTokens) : 0;
   if (!requested) return undefined;
   const limit = Number(modelInfo?.maxOutputTokens);
   return limit > 0 ? Math.min(requested, limit) : requested;
 };
 
-// `truncate` keeps the historical behavior for callers whose prompt losing its
-// tail is survivable (summaries, commit messages). `error` is for callers whose
-// output would be quietly wrong on a clipped input — they need the failure.
-const clampPromptToModelLimit = ({ prompt, modelInfo, providerID, modelID, onOverflow, outputReserveTokens }) => {
+const clampPromptToModelLimit = ({
+  prompt,
+  modelInfo,
+  providerID,
+  modelID,
+  onOverflow,
+  outputReserveTokens,
+}: {
+  prompt: string;
+  modelInfo: Model | null;
+  providerID: string;
+  modelID: string;
+  onOverflow: 'truncate' | 'error';
+  outputReserveTokens: number | undefined;
+}) => {
   const { maxChars } = getModelInputCharBudget({ modelInfo, outputReserveTokens });
   if (prompt.length <= maxChars) {
     return { prompt, truncated: false };
@@ -71,13 +165,10 @@ const clampPromptToModelLimit = ({ prompt, modelInfo, providerID, modelID, onOve
   return { prompt: `${prompt.slice(0, maxChars)}…`, truncated: true };
 };
 
+const SMALL_MODEL_FAMILY_PRIORITY = ['gpt-luna', 'gemini-flash-lite', 'gemini-flash', 'claude-haiku'] as const;
 
-/** Product family preference used only within the caller's chosen provider. */
-const SMALL_MODEL_FAMILY_PRIORITY = ['gpt-luna', 'gemini-flash-lite', 'gemini-flash', 'claude-haiku'];
-
-/** Canonical model IDs supply the family used for utility preference. */
-const familyOf = (model) => {
-  const id = String(model?.modelId ?? '').toLowerCase();
+const familyOf = (model: Model): (typeof SMALL_MODEL_FAMILY_PRIORITY)[number] | null => {
+  const id = String(model.modelId ?? '').toLowerCase();
   if (id.includes('luna')) return 'gpt-luna';
   if (id.includes('flash-lite') || id.includes('flash_lite')) return 'gemini-flash-lite';
   if (id.includes('flash')) return 'gemini-flash';
@@ -85,10 +176,9 @@ const familyOf = (model) => {
   return null;
 };
 
-
-const pickSmallModel = (models, accept) => {
+const pickSmallModel = (models: readonly Model[], accept: (model: Model) => boolean): { providerID: string; modelID: string } | null => {
   const candidates = models
-    .filter((model) => model && accept(model)
+    .filter((model) => Boolean(model) && accept(model)
       && model.enabled !== false
       && (model.status === undefined || ['active', 'alpha', 'beta'].includes(model.status))
       && model.modalities.includes('text'));
@@ -99,9 +189,23 @@ const pickSmallModel = (models, accept) => {
   return null;
 };
 
-const usableModel = (model) => Boolean(model && model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text'));
-/** Resolve only from explicit intent and the authorized workspace catalog. */
-const resolveSmallModel = async ({ client, workspaceId, model, preferredProviderID, preferredModelID, role = 'smol' }) => {
+const usableModel = (model: Model | null): boolean => Boolean(model && model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text'));
+
+const resolveSmallModel = async ({
+  client,
+  workspaceId,
+  model,
+  preferredProviderID,
+  preferredModelID,
+  role = 'smol',
+}: {
+  client: SmallModelAgentService;
+  workspaceId: string;
+  model?: string | undefined;
+  preferredProviderID?: string | undefined;
+  preferredModelID?: string | undefined;
+  role?: string | undefined;
+}): Promise<ResolvedSmallModel | null> => {
   const models = await listModelInfos(client, workspaceId);
   const explicit = parseSelection(model);
   if (nonEmptyTextSchema.safeParse(model).success && !explicit) throw Object.assign(new Error('Invalid background model selection'), { statusCode: 400, code: 'INVALID_REQUEST' });
@@ -109,12 +213,8 @@ const resolveSmallModel = async ({ client, workspaceId, model, preferredProvider
 
   const modelRoles = await getModelRoles(client, workspaceId).catch(() => ({}));
   const targetRole = role || 'smol';
-  // A role may name another role (`@tiny`); expansion follows OMP's chain and
-  // its `default` fallback before the selector is read.
   const roleSelector = resolveRoleSelector(targetRole, modelRoles);
   const fromRoles = parseSelection(roleSelector);
-  // A configured role that cannot resolve (a cycle, a non-selector value) is a
-  // failure, never a reason to pick some other model from the catalog.
   if (!fromRoles && (isRoleConfigured(targetRole, modelRoles) || isRoleConfigured('default', modelRoles))) return null;
   if (fromRoles) {
     const info = findModelInfo(models, fromRoles.providerID, fromRoles.modelID);
@@ -134,36 +234,46 @@ const resolveSmallModel = async ({ client, workspaceId, model, preferredProvider
   return fallback ? { ...fallback, source: 'catalog-small' } : null;
 };
 
-
-
-/**
- * The effort a role's `:thinkingLevel` asks for, limited to what the model
- * advertises. A level it cannot serve keeps its nearest advertised one, and a
- * non-reasoning model keeps `null` rather than inventing support.
- */
-const resolveReasoningEffort = (modelInfo, thinkingLevel) => {
+const resolveReasoningEffort = (modelInfo: Model | null, thinkingLevel: ConfiguredThinkingLevel | undefined): string | null => {
   const wanted = thinkingLevelToReasoningEffort(thinkingLevel);
   if (!wanted || !modelInfo?.reasoningEffortSupported) return null;
   const efforts = (modelInfo.reasoningOptions ?? []).map((option) => option.reasoningEffort).filter((effort) => effort !== 'off');
   if (efforts.length === 0) return null;
-  return efforts.includes(wanted) ? wanted : efforts[0];
+  return efforts.includes(wanted) ? wanted : (efforts[0] ?? null);
 };
 
-const completionError = (result, resolved) => {
-  const detail = result.error?.detail || 'Small-model completion failed';
-  const statusCode = result.error?.code === 'CONTEXT_LIMIT' ? 413
-    : result.error?.code === 'STRUCTURED_OUTPUT_INVALID' ? 422
-      : result.error?.code === 'MODEL_UNAVAILABLE' ? 404 : 502;
+const completionError = (result: Extract<CompletionResult, { status: 'failed' }>, resolved: ResolvedSmallModel): Error & {
+  statusCode: number;
+  code: string;
+  providerID: string;
+  modelID: string;
+} => {
+  const detail = result.error.detail || 'Small-model completion failed';
+  const statusCode = result.error.code === 'CONTEXT_LIMIT' ? 413
+    : result.error.code === 'STRUCTURED_OUTPUT_INVALID' ? 422
+      : result.error.code === 'MODEL_UNAVAILABLE' ? 404 : 502;
   return Object.assign(new Error(detail), {
     statusCode,
-    code: result.error?.code?.toLowerCase().replaceAll('_', '-'),
+    code: result.error.code.toLowerCase().replaceAll('_', '-'),
     providerID: resolved.providerID,
     modelID: resolved.modelID,
   });
 };
 
-/** Generate through the canonical stateless completion route. */
-export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate', role = 'smol' }) {
+export async function generateSmallModelText({
+  prompt,
+  system,
+  maxOutputTokens,
+  model,
+  workspaceId,
+  preferredProviderID,
+  preferredModelID,
+  responseSchema,
+  timeoutMs,
+  signal,
+  onOverflow = 'truncate',
+  role = 'smol',
+}: GenerateSmallModelTextOptions): Promise<GeneratedSmallModelText> {
   if (!nonEmptyTextSchema.safeParse(prompt).success) throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
   if (!nonEmptyTextSchema.safeParse(workspaceId).success) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400 });
   const client = getAgentService();
@@ -176,13 +286,14 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
   const outputTokens = resolveOutputTokens({ modelInfo, maxOutputTokens });
   const clamped = clampPromptToModelLimit({ prompt: prompt.trim(), modelInfo, providerID: resolved.providerID, modelID: resolved.modelID, onOverflow, outputReserveTokens: outputTokens });
-  const request = {
-    completionId: randomUUID(), workspaceId,
+  const request: CompletionRequest = {
+    completionId: randomUUID(),
+    workspaceId,
     selection: { providerId: resolved.providerID, modelId: resolved.modelID },
-    prompt: clamped.prompt, format: responseSchema ? { kind: 'json', schema: responseSchema } : { kind: 'text' },
-    overflow: onOverflow === 'error' ? 'reject' : 'truncate', variant: resolved.variant ?? null,
-    // The selected role's `:thinkingLevel` is a reasoning request; only a level
-    // the model advertises is asked for, so the completion is never refused.
+    prompt: clamped.prompt,
+    format: responseSchema ? { kind: 'json', schema: responseSchema } : { kind: 'text' },
+    overflow: onOverflow === 'error' ? 'reject' : 'truncate',
+    variant: resolved.variant ?? null,
     reasoningEffort: resolveReasoningEffort(modelInfo, resolved.thinkingLevel),
     timeoutMs: Number(timeoutMs) > 0 ? Number(timeoutMs) : 60_000,
   };
@@ -193,35 +304,30 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
   if (result.status === 'cancelled') throw Object.assign(new Error(`Small-model completion ${result.reason}`), { statusCode: 499, code: `completion-${result.reason}` });
   if (result.status === 'failed') throw completionError(result, resolved);
   const text = result.output.kind === 'json' ? JSON.stringify(result.output.value) : result.output.text;
-  const output = { text: text.trim(), providerID: resolved.providerID, modelID: resolved.modelID, source: resolved.source };
+  const output: GeneratedSmallModelText = { text: text.trim(), providerID: resolved.providerID, modelID: resolved.modelID, source: resolved.source };
   if (clamped.truncated) output.inputTruncated = true;
   return output;
 }
 
-/**
- * The reserve, resolved against the model that was actually picked.
- *
- * A caller that wants "as much answer room as this model allows" cannot state a
- * number up front — it does not know which model it will get. Passing a
- * function lets it decide once the limits are known, and keeps the reserve and
- * the eventual request the same number by construction.
- */
-const resolveReserveTokens = (outputReserveTokens, limits) => (
+const resolveReserveTokens = (outputReserveTokens: OutputReserveTokens, limits: OutputReserveLimits): number | undefined => (
   outputReserveTokens instanceof Function ? outputReserveTokens(limits) : outputReserveTokens
 );
 
-/**
- * Reports which model would be used, without calling it.
- *
- */
-export async function describeSmallModel({ workspaceId, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel, role = 'smol' } = {}) {
+export async function describeSmallModel({
+  workspaceId = '',
+  preferredProviderID,
+  preferredModelID,
+  outputReserveTokens,
+  overrideModel,
+  role = 'smol',
+}: DescribeSmallModelOptions = {}): Promise<SmallModelDescription | null> {
   const client = getAgentService();
   if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
   const resolved = await resolveSmallModel({ client, workspaceId, model: overrideModel, preferredProviderID, preferredModelID, role });
   if (!resolved) return null;
   const models = await listModelInfos(client, workspaceId);
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
-  const outputTokenLimit = Number(modelInfo?.maxOutputTokens) > 0 ? Number(modelInfo.maxOutputTokens) : null;
+  const outputTokenLimit = Number(modelInfo?.maxOutputTokens) > 0 ? Number(modelInfo?.maxOutputTokens) : null;
   const { contextTokens, contextKnown } = getModelInputCharBudget({ modelInfo });
   const reserveTokens = resolveReserveTokens(outputReserveTokens, { contextTokens, outputTokenLimit });
   const { maxChars } = getModelInputCharBudget({ modelInfo, outputReserveTokens: reserveTokens });

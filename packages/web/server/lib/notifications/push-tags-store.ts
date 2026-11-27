@@ -6,7 +6,7 @@ import { z } from 'zod';
 const tagSchema = z.object({ tag: z.string().min(1).max(512), nativeTag: z.string().min(1).max(512), sessionId: z.string().max(128).nullable(), at: z.number().finite() });
 type PushTag = z.infer<typeof tagSchema>;
 interface PushTagsState { version: 1; tags: PushTag[]; }
-interface PushTagsStore { read(): Promise<PushTagsState>; write(state: PushTagsState): Promise<void>; }
+export interface PushTagsStore { read(): Promise<PushTagsState>; write(state: PushTagsState): Promise<void>; }
 const MAX_TAGS = 500;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -77,7 +77,7 @@ export function createPushTagTracker({ store = null, now = Date.now, logger = co
       }
       return value;
     });
-    queue = result.then(() => {}, () => {});
+    queue = result.then(() => { }, () => { });
     return result;
   };
   return {

@@ -8,7 +8,7 @@ import type { summarizeRun } from './runtime.js';
 import type { runWorkflowSandbox } from './sandbox.js';
 import type { WorkflowRunStore, WorkflowRun, WorkflowAgent } from './store.js';
 
-interface WorkflowAgentSessions {
+export interface WorkflowAgentSessions {
   start: (input: {
     directory: string;
     parentSessionId: string;
@@ -26,7 +26,8 @@ interface WorkflowAgentSessions {
     model: string | null;
     usage: NonNullable<WorkflowAgent['usage']>;
   } | null>;
-  createSession: (input: { directory: string; title: string }) => Promise<string>;
+  createSession: (input: { directory: string; title: string; signal?: AbortSignal | undefined }) => Promise<string>;
+  unloadWorker?: (sessionId: string) => Promise<void>;
 }
 
 export type WorkflowText = Pick<string, 'length' | 'slice'>;

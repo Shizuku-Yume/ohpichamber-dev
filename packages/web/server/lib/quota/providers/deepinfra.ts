@@ -1,12 +1,13 @@
+import { z } from 'zod';
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult } from '../utils/contracts.js';
 import {
   buildResult,
   toUsageWindow,
   toNumber,
-  formatMoney
+  formatMoney,
 } from '../utils/index.js';
-import { z } from "zod";
-
 
 interface DeepInfraFields {
   key?: unknown;
@@ -19,7 +20,7 @@ const hasFields = (value: unknown): value is DeepInfraFields => value !== null &
 const asFields = z.custom<DeepInfraFields | null>(hasFields).catch(null).parse;
 
 export interface DeepInfraDependencies {
-  readCredentials?: () => LegacyAuthFile | Promise<LegacyAuthFile>;
+  readCredentials?: () => CredentialJson | Promise<CredentialJson>;
 }
 
 export const providerId = 'deepinfra';
@@ -27,9 +28,9 @@ export const providerName = 'DeepInfra';
 
 const DEEPINFRA_ME_URL = 'https://api.deepinfra.com/v1/me?checklist=true';
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ credential } = {}) => {
+export const fetchQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {

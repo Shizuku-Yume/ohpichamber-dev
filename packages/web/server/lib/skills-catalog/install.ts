@@ -4,6 +4,38 @@ import path from 'path';
 
 import { assertGitAvailable, looksLikeAuthError, runGit } from './git.js';
 import { parseSkillRepoSource } from './source.js';
+import type { CatalogGitOptions, GitResult } from './git.js';
+import type { JsonValue } from '../shared/json-values.js';
+
+interface CatalogCloneOptions extends Pick<CatalogGitOptions, 'identity' | 'credentialResolver'> {
+  cloneUrl: string;
+  tempDir: string;
+  ref?: string | null;
+}
+
+type CatalogCloneResult = { ok: true } | { ok: false; error: GitResult };
+
+export interface SkillSelection {
+  skillDir: string;
+}
+
+export interface PreparedSkillDirectory {
+  name: string;
+  stagingDirectory: string;
+}
+
+export interface PrepareSkillsFromRepositoryInput extends Pick<CatalogGitOptions, 'identity' | 'credentialResolver'> {
+  source: JsonValue | undefined;
+  subpath?: JsonValue | undefined;
+  selections: readonly SkillSelection[];
+}
+
+export type PrepareSkillsErrorKind = 'gitUnavailable' | 'invalidSource' | 'authRequired' | 'networkError' | 'unknown';
+
+export interface PrepareSkillsFailure {
+  ok: false;
+  error: { kind: PrepareSkillsErrorKind; message: string };
+}
 import { removeDirectory, removeStaleCatalogFolders } from './remove-directory.js';
 
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
@@ -14,7 +46,7 @@ function validateSkillName(skillName: string) {
   return SKILL_NAME_PATTERN.test(skillName);
 }
 
-function toFsPath(repoDir, repoRelPosixPath) {
+function toFsPath(repoDir: string, repoRelPosixPath: string) {
   return path.join(repoDir, ...repoRelPosixPath.split('/'));
 }
 
@@ -85,8 +117,10 @@ async function cloneRepo({ cloneUrl, identity, credentialResolver, tempDir, ref 
   };
 }
 
-/** Prepare untrusted repository files; only the Host source owner may commit them. */
-export async function prepareSkillsFromRepository({ source, subpath, identity, credentialResolver, selections }, consume) {
+export async function prepareSkillsFromRepository<Result>(
+  { source, subpath, identity, credentialResolver, selections }: PrepareSkillsFromRepositoryInput,
+  consume: (installations: PreparedSkillDirectory[]) => Promise<Result>,
+): Promise<Result | PrepareSkillsFailure> {
   const gitCheck = await assertGitAvailable();
   if (!gitCheck.ok) return { ok: false, error: gitCheck.error };
   const parsed = parseSkillRepoSource(source, { subpath });
@@ -129,7 +163,7 @@ export async function prepareSkillsFromRepository({ source, subpath, identity, c
 
     const stagingRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'openchamber-skills-stage-'));
     try {
-      const installations = [];
+      const installations: PreparedSkillDirectory[] = [];
       for (const plan of skillPlans) {
         const srcDir = toFsPath(tempBase, plan.skillDirPosix);
         let component = tempBase;

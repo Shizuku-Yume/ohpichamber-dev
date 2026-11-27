@@ -4,95 +4,63 @@ import path from 'node:path';
 import { z } from 'zod';
 
 export interface EnterprisePolicyOptions {
- env?: NodeJS.ProcessEnv;
- platform?: NodeJS.Platform;
- readFile?: (filePath: string) => string;
+ env?: NodeJS.ProcessEnv | undefined;
+ platform?: NodeJS.Platform | undefined;
+ readFile?: ((filePath: string) => string) | undefined;
 }
 
-/**
- * Enterprise mode: an administrator's promise that conversation content goes
- * only to the model providers configured in the native OMP Host. Two sources
- * turn it on, and either one is enough:
- * - the machine policy file (`policyFilePaths`), which only an administrator
- *   can write and a device manager can roll out; nothing a user sets can
- *   turn off what it turns on;
- * - `OPENCHAMBER_ENTERPRISE_MODE=1` (or `true`) in the server's environment,
- *   which includes the login-shell snapshot. Meant for servers and containers,
- *   where the administrator owns the environment.
- * Read at every use, so a changed file applies without a restart.
- *
- * The policy file also pins the self-hosted relay and the Jev endpoint, and
- * can allow network access. Who decides those follows who turned the mode on:
- * - the file turned it on: only the file's values count. The environment is
- *   the user's to edit, so a variable there must not reopen what the
- *   administrator left closed (point Jev at an endpoint of their own, say);
- * - otherwise (the environment turned it on, or the mode is off): a value in
- *   the file wins over its variable, and the variable fills the gap.
- * A file that exists but cannot be read or parsed turns enterprise mode on,
- * pins nothing and allows nothing: a broken policy must not quietly lift the
- * protection it was meant to give.
- *
- * Each feature that could send conversation content anywhere else checks it
- * at its own server boundary:
- * - Native OMP provider operations use the Canonical API. Enterprise mode
- *   refuses selected credential handoff and native search credential writes
- *   at their Host boundaries; the Agent Service checks search execution. These
- *   checks do not read or expose credentials.
- * - Native OMP plugin package installation, update and removal, and marketplace
- *   fetches are refused (`host/canonical-routes.js`): package-manager commands
- *   can access external registries. Catalog reads, settings, enable/disable and
- *   confined workspace extension source authoring remain local and available.
- * - Provider model-info auto-fill does not reach OpenRouter's public model list
- *   (`host/openrouter-model-info.js`): the request carries model ids only, and
- *   the Host still refuses it, so auto-fill answers from the bundled catalog.
- *   Provider entry above is a different operation; this gate is only about the
- *   lookup request.
- * - MCP sign-in is refused: starting an OAuth flow (`host/canonical-routes.js`
- *   and the worker `mcp-oauth` authorization branch), and the public browser
- *   callback that finishes it (`host/mcp-oauth-callback.js`). Servers that need
- *   no sign-in still connect.
- * - Jev classification is off, unless the administrator pinned their own
- *   endpoint (`routing/runtime.js`).
- * - External tunnels are refused: Cloudflare and ngrok see plain text
- *   (`tunnels`).
- * - The private relay runs only on a pinned self-hosted endpoint
- *   (`relay/service.js`).
- * - Speech and transcription go only to servers on this machine (`tts`,
- *   `dictation`).
- * - Push notifications carry no message text or session name (`notifications`).
- * - The draw.io diagram editor, diagrams.net's own page in a frame, is not
- *   loaded; a .drawio file opens as its XML (`packages/ui` FilesView). The
- *   crossing happens in the browser, so the UI is where it is held back.
- * - Web fonts that load from a public CDN fall back to the system fonts
- *   (`packages/ui` useFontPreferences); the stored choice is kept.
- * - The server listens only on this machine unless network access is allowed
- *   (`allowNetworkAccess` / `OPENCHAMBER_ALLOW_NETWORK_ACCESS`): it refuses
- *   to start on a network address and drops connections from other machines
- *   (`../index.js`); the desktop shell binds loopback (`packages/electron`).
- *   Pairing a device then goes through a pinned relay only.
- * - Extensions that could send what they see elsewhere (`network`, `origins`,
- *   `service`) install and run only from a Git repository the administrator
- *   listed (`allowedExtensions` / `OPENCHAMBER_ALLOWED_EXTENSIONS`), or from a
- *   local folder where `allowLocalExtensions` /
- *   `OPENCHAMBER_ALLOW_LOCAL_EXTENSIONS` allows it; see `guests/enterprise.js`.
- *
- * The file can also hide the skills catalogs OpenChamber ships with
- * (`hideBuiltinSkillCatalogs`), with or without enterprise mode, so the only
- * catalogs on offer are the ones the organization added
- * (`skills-catalog/curated-sources.js`).
- *
- */
+export interface JevPolicy {
+ url: string;
+ model: string | null;
+ apiKey: string | null;
+}
+
+export interface EnterprisePolicy {
+ enterpriseMode: boolean;
+ source: 'policy-file' | 'environment' | null;
+ organization: string | null;
+ policyError: string | null;
+ relayUrl: string | null;
+ jev: JevPolicy | null;
+ allowNetworkAccess: boolean;
+ allowedExtensions: string[];
+ allowLocalExtensions: boolean;
+ hideBuiltinSkillCatalogs: boolean;
+}
+
+export interface PublicEnterprisePolicy {
+ enterpriseMode: boolean;
+ source: 'policy-file' | 'environment' | null;
+ organization: string | null;
+ policyError: string | null;
+ networkAccessBlocked: boolean;
+}
+
+interface ParsedPolicyFile {
+ enterpriseMode: boolean;
+ organization: string | null;
+ relayUrl: string | undefined;
+ allowNetworkAccess: boolean | undefined;
+ allowedExtensions: string[] | undefined;
+ allowLocalExtensions: boolean | undefined;
+ jev: JevPolicy | undefined;
+ hideBuiltinSkillCatalogs: boolean;
+}
+
+type PolicyFileReadResult =
+ | { status: 'absent' }
+ | { status: 'ok'; path: string; policy: ParsedPolicyFile }
+ | { status: 'invalid'; path: string; error: string };
+
+export interface WatchEnterprisePolicyOptions<Policy = EnterprisePolicy> {
+ onChange: () => void;
+ intervalMs?: number | undefined;
+ read?: (() => Policy) | undefined;
+}
 
 const WINDOWS_PROGRAM_DATA = 'C:\\ProgramData';
 
-/**
- * Where the machine policy may live, most authoritative first. The paths are
- * fixed on purpose: a location a user could redirect (an environment variable,
- * a setting) would let them point it at an empty file. On Windows the
- * `ProgramData` variable is consulted only after the fixed location, so
- * redirecting it cannot hide a policy the administrator placed there.
- */
-export const policyFilePaths = ({ platform = process.platform, env = process.env } = {}) => {
+export const policyFilePaths = ({ platform = process.platform, env = process.env }: Pick<EnterprisePolicyOptions, 'platform' | 'env'> = {}): string[] => {
  if (platform === 'darwin') return ['/Library/Application Support/OhPiChamber/policy.json'];
  if (platform === 'win32') {
   const fixed = path.win32.join(WINDOWS_PROGRAM_DATA, 'OhPiChamber', 'policy.json');
@@ -103,7 +71,6 @@ export const policyFilePaths = ({ platform = process.platform, env = process.env
  return ['/etc/openchamber/policy.json'];
 };
 
-// A blank string counts as unset, so a template with empty fields pins nothing.
 const optionalText = z.string().trim().transform((value) => value || undefined).optional();
 
 const policyFileSchema = z.object({
@@ -111,8 +78,6 @@ const policyFileSchema = z.object({
  organization: optionalText,
  relayUrl: optionalText,
  allowNetworkAccess: z.boolean().optional(),
- // Git repository URLs, not package ids: a package names its own id, so a
- // user could ship any code under an allowed one.
  allowedExtensions: z.array(z.string().trim().min(1)).max(200).optional(),
  allowLocalExtensions: z.boolean().optional(),
  jev: z.object({ url: optionalText, model: optionalText, apiKey: optionalText }).optional(),
@@ -121,19 +86,20 @@ const policyFileSchema = z.object({
  message: '"jev" needs a "url"',
  path: ['jev'],
 });
+const jsonSchema = z.json();
 
-/** The file's content; throws an Error saying what is wrong with it. */
-const parsePolicyFile = (text) => {
- let raw;
+const parsePolicyFile = (text: string): ParsedPolicyFile => {
+ let raw: z.infer<typeof jsonSchema>;
  try {
-  // Windows PowerShell 5 writes UTF-8 with a byte-order mark.
-  raw = JSON.parse(text.replace(/^\uFEFF/, ''));
+  raw = jsonSchema.parse(JSON.parse(text.replace(/^\uFEFF/, '')));
  } catch (error) {
-  throw new Error(`not valid JSON (${error.message})`);
+  const message = error instanceof Error ? error.message : String(error);
+  throw new Error(`not valid JSON (${message})`);
  }
  const parsed = policyFileSchema.safeParse(raw);
  if (!parsed.success) {
   const issue = parsed.error.issues[0];
+  if (!issue) throw new Error('invalid policy');
   const field = issue.path.length > 0 ? `"${issue.path.join('.')}": ` : '';
   throw new Error(`${field}${issue.message}`);
  }
@@ -150,35 +116,39 @@ const parsePolicyFile = (text) => {
  };
 };
 
-const defaultReadFile = (filePath) => fs.readFileSync(filePath, 'utf8');
+const defaultReadFile = (filePath: string): string => fs.readFileSync(filePath, 'utf8');
 
-let lastWarning = null;
-const warnOnce = (message) => {
+let lastWarning: string | null = null;
+const warnOnce = (message: string): void => {
  if (message === lastWarning) return;
  lastWarning = message;
  console.warn(`[enterprise] ${message}`);
 };
 
-/**
- * The machine policy file: `{ status: 'absent' }`, `{ status: 'ok', path,
- * policy }`, or `{ status: 'invalid', path, error }` when it exists but cannot
- * be used.
- */
-const readPolicyFile = ({ platform = process.platform, env = process.env, readFile = defaultReadFile } = {}) => {
+const fsErrorSchema = z.object({
+ code: z.string().optional(),
+ message: z.string().optional(),
+});
+
+const readPolicyFile = ({ platform = process.platform, env = process.env, readFile = defaultReadFile }: EnterprisePolicyOptions = {}): PolicyFileReadResult => {
  for (const filePath of policyFilePaths({ platform, env })) {
-  let text;
+  let text: string;
   try {
    text = readFile(filePath);
   } catch (error) {
-   if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') continue;
-   const message = `cannot read ${filePath}: ${error?.message || error}`;
+   const parsedError = fsErrorSchema.safeParse(error);
+   const code = parsedError.success ? parsedError.data.code : undefined;
+   if (code === 'ENOENT' || code === 'ENOTDIR') continue;
+   const detail = (parsedError.success ? parsedError.data.message : undefined) || (error instanceof Error ? error.message : String(error));
+   const message = `cannot read ${filePath}: ${detail}`;
    warnOnce(`${message}; enterprise mode stays on`);
    return { status: 'invalid', path: filePath, error: message };
   }
   try {
    return { status: 'ok', path: filePath, policy: parsePolicyFile(text) };
   } catch (error) {
-   const message = `${filePath}: ${error.message}`;
+   const detail = error instanceof Error ? error.message : String(error);
+   const message = `${filePath}: ${detail}`;
    warnOnce(`${message}; enterprise mode stays on`);
    return { status: 'invalid', path: filePath, error: message };
   }
@@ -186,24 +156,20 @@ const readPolicyFile = ({ platform = process.platform, env = process.env, readFi
  return { status: 'absent' };
 };
 
-const envFlag = (env, name) => {
+const envFlag = (env: NodeJS.ProcessEnv, name: string): boolean => {
  const value = (env[name] ?? '').trim().toLowerCase();
  return value === '1' || value === 'true';
 };
 
-const envString = (env, name) => (env[name] ?? '').trim() || null;
+const envString = (env: NodeJS.ProcessEnv, name: string): string | null => (env[name] ?? '').trim() || null;
 
-const envList = (env, name) => (env[name] ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
+const envList = (env: NodeJS.ProcessEnv, name: string): string[] => (env[name] ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
 
-/**
- * Calls `onChange` whenever the policy in effect differs from the last one
- * seen, and never for a poll that found nothing new. The watcher owns only the
- * polling: its caller decides what a changed policy means. `read` is for tests.
- */
-export const watchEnterprisePolicy = ({ onChange, intervalMs = 15_000, read = readEnterprisePolicy }) => {
- let last = JSON.stringify(read());
+export const watchEnterprisePolicy = <Policy = EnterprisePolicy>({ onChange, intervalMs = 15_000, read }: WatchEnterprisePolicyOptions<Policy>): (() => void) => {
+ const readPolicy = read ?? (() => readEnterprisePolicy());
+ let last = JSON.stringify(readPolicy());
  const timer = setInterval(() => {
-  const next = JSON.stringify(read());
+  const next = JSON.stringify(readPolicy());
   if (next === last) return;
   last = next;
   onChange();
@@ -212,13 +178,7 @@ export const watchEnterprisePolicy = ({ onChange, intervalMs = 15_000, read = re
  return () => clearInterval(timer);
 };
 
-/**
- * The policy in effect, from the file and the environment together.
- * `relayUrl` and `jev` are the raw pinned values; their consumers validate
- * them and treat an invalid one as unset. `source` says where enterprise mode
- * came from, for the UI and the logs.
- */
-export const readEnterprisePolicy = (options: EnterprisePolicyOptions = {}) => {
+export const readEnterprisePolicy = (options: EnterprisePolicyOptions = {}): EnterprisePolicy => {
  const env = options.env ?? process.env;
  const file = readPolicyFile(options);
 
@@ -233,7 +193,6 @@ export const readEnterprisePolicy = (options: EnterprisePolicyOptions = {}) => {
    allowNetworkAccess: false,
    allowedExtensions: [],
    allowLocalExtensions: false,
-   // Fails closed like the rest: a broken policy offers no catalog it might have hidden.
    hideBuiltinSkillCatalogs: true,
   };
  }
@@ -242,7 +201,6 @@ export const readEnterprisePolicy = (options: EnterprisePolicyOptions = {}) => {
  const fileGoverns = fromFile?.enterpriseMode === true;
  const enterpriseMode = fileGoverns || envFlag(env, 'OPENCHAMBER_ENTERPRISE_MODE');
 
- // With the file in charge the environment adds nothing (see above).
  const envJevUrl = fileGoverns ? null : envString(env, 'OPENCHAMBER_JEV_URL');
  const jev = fromFile?.jev
   ?? (envJevUrl
@@ -266,15 +224,13 @@ export const readEnterprisePolicy = (options: EnterprisePolicyOptions = {}) => {
   allowNetworkAccess,
   allowedExtensions,
   allowLocalExtensions,
-  // File only, in or out of enterprise mode: the environment is the user's to edit.
   hideBuiltinSkillCatalogs: fromFile?.hideBuiltinSkillCatalogs === true,
  };
 };
 
-export const isEnterpriseMode = (options: EnterprisePolicyOptions = {}) => readEnterprisePolicy(options).enterpriseMode;
+export const isEnterpriseMode = (options: EnterprisePolicyOptions = {}): boolean => readEnterprisePolicy(options).enterpriseMode;
 
-/** Whether enterprise mode keeps this server off the network (loopback only). */
-export const isNetworkAccessBlocked = (options: EnterprisePolicyOptions = {}) => {
+export const isNetworkAccessBlocked = (options: EnterprisePolicyOptions = {}): boolean => {
  const policy = readEnterprisePolicy(options);
  return policy.enterpriseMode && !policy.allowNetworkAccess;
 };
@@ -284,8 +240,7 @@ export const ENTERPRISE_MODE_ERROR = 'Not available in enterprise mode: this ope
 export const NETWORK_ACCESS_BLOCKED_ERROR = 'Enterprise mode keeps OhPiChamber on this machine: it does not listen on a network address. '
  + 'An administrator can allow it with "allowNetworkAccess": true in the policy file, or OPENCHAMBER_ALLOW_NETWORK_ACCESS=1 where the environment turns enterprise mode on.';
 
-/** What a client may know about the policy; pinned endpoints and keys stay on the server. */
-export const publicEnterprisePolicy = (options: EnterprisePolicyOptions = {}) => {
+export const publicEnterprisePolicy = (options: EnterprisePolicyOptions = {}): PublicEnterprisePolicy => {
  const { enterpriseMode, source, organization, policyError, allowNetworkAccess } = readEnterprisePolicy(options);
  return { enterpriseMode, source, organization, policyError, networkAccessBlocked: enterpriseMode && !allowNetworkAccess };
 };

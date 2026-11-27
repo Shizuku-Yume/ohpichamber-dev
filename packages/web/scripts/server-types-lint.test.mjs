@@ -53,10 +53,11 @@ test('server TypeScript lint rejects unsafe syntax and undocumented suppression'
     `);
     const documented = run();
     expect(documented.status, documented.stdout + documented.stderr).toBe(0);
-    const carried = path.join(root, 'packages/web/server/runtime.ts');
-    fs.writeFileSync(carried, "export const required = ['value'][0]!;\n");
-    const legacy = run(carried);
-    expect(legacy.status, legacy.stdout + legacy.stderr).toBe(0);
+    const runtimeFile = path.join(root, 'packages/web/server/runtime.ts');
+    fs.writeFileSync(runtimeFile, "export const required = ['value'][0]!;\n");
+    const runtimeResult = run(runtimeFile);
+    expect(runtimeResult.status, runtimeResult.stderr).not.toBe(0);
+    expect(JSON.parse(runtimeResult.stdout).diagnostics.filter(({ code }) => code === 'typescript(no-non-null-assertion)')).toHaveLength(1);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

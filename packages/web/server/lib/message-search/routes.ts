@@ -5,9 +5,10 @@ import type { Response } from '../shared/http-contracts.js';
 type MessageResult = NonNullable<Awaited<ReturnType<MessageSearchRouteRuntime['search']>>>;
 type SessionResult = NonNullable<Awaited<ReturnType<MessageSearchRouteRuntime['searchSessions']>>>;
 type RouteBody = Awaited<ReturnType<MessageSearchRouteRuntime['status']>>
+  | MessageResult
   | SessionResult
-  | (Omit<MessageResult, 'next'> & { next: string | null })
-  | (Omit<SessionResult, 'next'> & { next: string | null })
+  | (Omit<Extract<MessageResult, { status: 'ok' }>, 'next'> & { next: string | null })
+  | (Omit<Extract<SessionResult, { status: 'ok' }>, 'next'> & { next: string | null })
   | { error: unknown };
 
 type RouteResponse = Response<RouteBody>;
@@ -100,6 +101,7 @@ export const registerMessageSearchRoutes = (app: MessageSearchApp, { messageSear
         order: query.order,
       });
       if (!result) return res.status(503).json({ error: 'Message search is off on this server' });
+      if (result.status === 'query-too-short') return res.json(result);
       return res.json({
         ...result,
         next: result.next ? `${result.next.createdAt}:${result.next.id}` : null,

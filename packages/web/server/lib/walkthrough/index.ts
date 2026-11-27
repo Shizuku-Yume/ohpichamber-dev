@@ -15,12 +15,19 @@ import {
   writeCachedWalkthrough,
   writePointer,
 } from './store.js';
-import { loadSourceSections, parseSource, sourceKey, WalkthroughSourceError } from './sources.js';
+import { loadSourceSections, parseSource, sourceKey } from './sources.js';
 import { supportsChangeRequestPatch } from './pull-request.js';
 import { formatModelRef, modelRefKey } from '@openchamber/agent-contract';
+import type { ReadContext, WalkthroughSource } from './contracts.js';
+import type { DigestFile } from './digest.js';
+import type { Language } from './languages.js';
+import type { ModelJson, ModelJsonObject } from './schema.js';
+import type { WalkthroughRouteService } from './routes.js';
+import type { GenerateSmallModelTextOptions, OutputReserveLimits, SmallModelDescription } from '../small-model/index.js';
 
 export interface WalkthroughInput {
   directory: string;
+  workspaceId?: string | undefined;
   source: Parameters<typeof parseSource>[0];
   model?: string | undefined;
   providerID?: string | undefined;
@@ -35,13 +42,17 @@ export interface WalkthroughDependencies {
   readWalkthroughInstructions?: WalkthroughRouteService['readWalkthroughInstructions'] | undefined;
 }
 
-type Model = NonNullable<Awaited<ReturnType<typeof describeSmallModel>>>;
+type Model = SmallModelDescription & {
+  hasLogin?: boolean | undefined;
+  structuredOutput?: boolean | null | undefined;
+};
 type BuiltDiff = ReturnType<typeof buildDigest>;
 type Stage = 'collecting' | 'asking' | 'retrying' | 'assembling';
 type CachedWalkthrough = NonNullable<ReturnType<typeof readCachedWalkthrough>>['walkthrough'];
 
 interface GenerationInput {
   directory: string;
+  workspaceId: string | undefined;
   source: WalkthroughSource;
   repoRoot: string;
   key: string;
@@ -62,7 +73,7 @@ interface GenerationFailure {
   availableChars?: unknown;
 }
 
-interface FailureDetails {
+interface FailureExtras {
   code?: string;
   model?: Model;
   requiredChars?: GenerationFailure['requiredChars'];
@@ -72,12 +83,10 @@ interface FailureDetails {
 
 const hasFailureFields = (value: unknown): value is GenerationFailure => value !== null && value !== undefined;
 const isFalse = (value: boolean | null): value is false => value === false;
-const isSymbolMessage = (value: unknown): value is symbol => typeof value === 'symbol';
 
 setTimeout(() => {
-  void pruneMissingRepositories().catch(() => {});
+  void pruneMissingRepositories().catch(() => { });
 }, 0).unref?.();
-
 const GENERATION_TIMEOUT_BASE_MS = 120_000;
 const GENERATION_TIMEOUT_PER_HUNK_MS = 1_000;
 const GENERATION_TIMEOUT_MAX_MS = 900_000;
@@ -90,7 +99,7 @@ const MIN_OUTPUT_TOKENS = 24_000;
 const MAX_OUTPUT_TOKENS = 96_000;
 const OUTPUT_CONTEXT_SHARE = 0.25;
 
-const walkthroughOutputTokens = ({ contextTokens, outputTokenLimit }: ModelLimits) => {
+const walkthroughOutputTokens = ({ contextTokens, outputTokenLimit }: OutputReserveLimits) => {
   const wanted = Math.min(
     MAX_OUTPUT_TOKENS,
     Math.max(MIN_OUTPUT_TOKENS, Math.floor((Number(contextTokens) || 0) * OUTPUT_CONTEXT_SHARE)),
@@ -107,33 +116,18 @@ async function readInstructions(directory: string, deps: WalkthroughDependencies
   }
 }
 
-const fail = (message, statusCode, extra = {}) =>
+const fail = (message: string, statusCode: number, extra: FailureExtras = {}) =>
   Object.assign(new Error(message), { statusCode, ...extra });
 
-// Generation outlives the request that started it.
-//
-// A dropped connection and a deliberate cancel look identical at the socket, so
-// tying the work to the request lifetime meant an accidental refresh threw away
-// a minute of paid-for work. Jobs are keyed by repository + source, so a client
-// that comes back attaches to the running job instead of starting a second one,
-// and cancelling is an explicit request rather than a side effect of leaving.
 const jobs = new Map<string, { controller: AbortController; promise: ReturnType<typeof runGeneration>; stage: Stage }>();
 
-// Providers that answered a schema request with a 4xx. Retrying the schema on
-// every generation means paying for a call we already know will fail, so the
-// refusal is remembered and the fallback goes first next time.
-//
-// Process-lifetime only, on purpose: a provider that gains structured-output
-// support should not need a settings change to be tried again — a restart is
-// enough, and the cost of one wasted first attempt after that is small.
 const schemaRefusedBy = new Set<string>();
 
-const modelKey = (model) => modelRefKey(model.providerID, model.modelID);
-const addReadContext = (result, readContext) => {
-  if (readContext) result.readContext = readContext;
-  return result;
+const modelKey = (model: Pick<Model, 'providerID' | 'modelID'>) => modelRefKey(model.providerID, model.modelID);
+const addReadContext = <T extends object>(result: T, readContext: ReadContext | undefined): T & { readContext?: ReadContext } => {
+  if (!readContext) return result;
+  return { ...result, readContext };
 };
-
 const jobKey = (repoRoot: string, sourceKeyValue: string, readContext: ReadContext | undefined) => readContext
   ? JSON.stringify({
     repoRoot,
@@ -173,15 +167,8 @@ export function isGenerating(repoRoot: string, sourceKeyValue: string, readConte
   return jobs.has(jobKey(repoRoot, sourceKeyValue, readContext));
 }
 
-// A walkthrough is keyed by the repository it documents. A directory outside
-// any repository is a caller-visible precondition (the client asked about a
-// folder that is not a repository), not a fault in this module: the routes
-// answer 422 with the same code the source-control binding routes use instead
-// of a 500. The classification asks Git's exit status and the filesystem, not
-// its message: Git translates and rewords that diagnostic, so a regex over it
-// would turn a localized refusal into a 500.
 const UNSUPPORTED_REPOSITORY_MESSAGE = 'Directory is not a supported Git repository';
-const resolveRepositoryRoot = async (directory) => {
+const resolveRepositoryRoot = async (directory: string) => {
   try {
     return await getRepositoryRoot(directory);
   } catch (error) {
@@ -193,17 +180,15 @@ const resolveRepositoryRoot = async (directory) => {
   }
 };
 
-/**
- * Resolve the pair the job registry is keyed by, for callers that need to look
- * a job up without doing any diff work.
- */
-/** @public */
-export async function getRepositoryRootFor(directory, rawSource, rawReadContext) {
+export async function getRepositoryRootFor(
+  directory: string,
+  rawSource: Parameters<typeof parseSource>[0],
+  rawReadContext?: ReadContext,
+) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
   return { repoRoot: await resolveRepositoryRoot(directory), sourceKey: sourceKey(source), readContext };
 }
-
 export async function cancelWalkthroughGeneration({ directory, source: rawSource, readContext: rawReadContext }: WalkthroughInput) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
@@ -214,32 +199,21 @@ export async function cancelWalkthroughGeneration({ directory, source: rawSource
   return addReadContext({ cancelled: true }, readContext);
 }
 
-const modelLabel = (model) => formatModelRef({ providerId: model.providerID, modelId: model.modelID });
+const modelLabel = (model: Pick<Model, 'providerID' | 'modelID'>) => formatModelRef({ providerId: model.providerID, modelId: model.modelID });
 
-/**
- * Resolve the model for this feature: an explicit per-review choice outranks the
- * walkthrough's native `slow` role, which is what the user picks in Settings.
- *
- * `providerID` / `modelID` are the user's composer: without a model of its own
- * choosing, the walkthrough stays on that provider rather than on whichever
- * provider happens to be connected, and on that model when the provider has no
- * small one.
- * A free zen model without a login counts as unset here, and the small-model
- * chain decides (`../small-model/DOCUMENTATION.md`, *Free tier and the
- * session fallback*).
- */
-const resolveModel = (workspaceId, explicitModel, providerID, modelID) => describeSmallModel({
+const resolveModel = (
+  workspaceId: string | undefined,
+  explicitModel: string | undefined,
+  providerID: string | undefined,
+  modelID: string | undefined,
+): Promise<Model | null> => describeSmallModel({
   workspaceId,
   outputReserveTokens: walkthroughOutputTokens,
-  // An explicit per-review pick outranks the role; otherwise the walkthrough
-  // uses the native `slow` role, which the resolver falls back to the default
-  // role for.
   overrideModel: explicitModel,
   preferredProviderID: providerID || undefined,
   preferredModelID: modelID || undefined,
   role: 'slow',
 });
-
 export const __testing = { generationTimeoutMs, walkthroughOutputTokens };
 
 async function loadCurrentDiff(directory: string, source: WalkthroughSource, deps: WalkthroughDependencies, readContext: ReadContext | undefined) {
@@ -307,11 +281,10 @@ const serializeHunks = (files: DigestFile[]) => files.flatMap((file) => file.hun
   patch: hunk.patch,
 })));
 
-/**
- * Read the last walkthrough for a source, resolved against the current diff.
- * Never generates and never spends tokens.
- */
-export async function getWalkthrough({ directory, workspaceId, source: rawSource, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
+export async function getWalkthrough(
+  { directory, workspaceId, source: rawSource, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }: WalkthroughInput,
+  deps: WalkthroughDependencies = {},
+) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await resolveRepositoryRoot(directory);
@@ -322,8 +295,6 @@ export async function getWalkthrough({ directory, workspaceId, source: rawSource
   const [built, model, instructions] = await Promise.all([
     loadCurrentDiff(directory, source, deps, readContext),
     resolveModel(workspaceId, explicitModel, providerID, modelID).catch(() => null),
-    // Readiness only measures the prompt; an unreadable preference fails the
-    // generation that would send it, not the read.
     readInstructions(directory, deps).catch(() => ''),
   ]);
   const { files } = built;
@@ -390,7 +361,7 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
   const { prompt, system } = buildPrompt({ digest, fileCount, hunkCount, source, language, instructions });
   const requiredChars = prompt.length + system.length;
 
-  if (isFalse(model.structuredOutput)) {
+  if (isFalse(model.structuredOutput ?? null)) {
     return { ready: false, reason: 'structured-output-unsupported', model, requiredChars };
   }
 
@@ -407,14 +378,10 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
   return { ready: true, model, requiredChars, availableChars: model.inputCharBudget, hunkCount, fileCount };
 }
 
-/**
- * Generate a walkthrough for a source.
- *
- * Returns the cached entry when the diff, model, and prompt are all unchanged —
- * which also means returning to a previous state of the working tree costs
- * nothing.
- */
-export async function generateWalkthrough({ directory, workspaceId, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
+export async function generateWalkthrough(
+  { directory, workspaceId, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }: WalkthroughInput,
+  deps: WalkthroughDependencies = {},
+) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await resolveRepositoryRoot(directory);
@@ -436,8 +403,10 @@ export async function generateWalkthrough({ directory, workspaceId, source: rawS
   return promise;
 }
 
-async function runGeneration({ directory, workspaceId, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }, deps) {
-
+async function runGeneration(
+  { directory, workspaceId, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }: GenerationInput,
+  deps: WalkthroughDependencies,
+) {
   const model = await resolveModel(workspaceId, explicitModel, providerID, modelID);
   if (!model) {
     throw fail('No model is available — sign in to a provider first', 404, { code: 'no-model' });
@@ -512,7 +481,7 @@ async function runGeneration({ directory, workspaceId, source, repoRoot, key, fo
   const instructions = await readInstructions(directory, deps);
   const { prompt, system } = buildPrompt({ digest, fileCount, hunkCount, source, previousWalkthrough, language, instructions });
 
-  if (isFalse(model.structuredOutput)) {
+  if (isFalse(model.structuredOutput ?? null)) {
     throw fail(
       `${modelLabel(model)} cannot produce structured output — choose a different small model`,
       409,
@@ -520,12 +489,11 @@ async function runGeneration({ directory, workspaceId, source, repoRoot, key, fo
     );
   }
 
-  const run = (options: Pick<GenerationOptions, 'prompt' | 'system' | 'responseSchema'>) => generateSmallModelText({
+  const run = (options: Pick<GenerateSmallModelTextOptions, 'prompt' | 'system' | 'responseSchema'>) => generateSmallModelText({
     prompt: options.prompt,
     system: options.system,
-    workspaceId,
+    workspaceId: workspaceId ?? '',
     model: formatModelRef({ providerId: model.providerID, modelId: model.modelID }),
-    variant: model.variant,
     responseSchema: options.responseSchema,
     onOverflow: 'error',
     timeoutMs: generationTimeoutMs(hunkCount),
@@ -542,8 +510,9 @@ async function runGeneration({ directory, workspaceId, source, repoRoot, key, fo
 
   const asRequestFailure = (cause: unknown) => {
     const error = hasFailureFields(cause) ? cause : undefined;
+    const message = isString(error?.message) ? error.message : '';
     if (error?.code === 'context-too-small') {
-      return fail(error.message, 409, {
+      return fail(message, 409, {
         code: 'context-too-small',
         model,
         requiredChars: error.requiredChars,
@@ -551,10 +520,10 @@ async function runGeneration({ directory, workspaceId, source, repoRoot, key, fo
       });
     }
     if (error?.code === 'output-exhausted') {
-      return fail(error.message, 409, { code: 'output-exhausted', model });
+      return fail(message, 409, { code: 'output-exhausted', model });
     }
     if (error?.code === 'no-provider-login') {
-      return fail(error.message, 401, { code: 'no-provider-login', model });
+      return fail(message, 401, { code: 'no-provider-login', model });
     }
     return null;
   };

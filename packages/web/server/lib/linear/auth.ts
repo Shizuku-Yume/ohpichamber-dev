@@ -473,16 +473,11 @@ export function getLinearScopes() {
   return DEFAULT_LINEAR_SCOPES;
 }
 
-const trimTrailingSlashes = (value) => value.replace(/\/+$/, '');
+const trimTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
 
-/** The setting names the UI shows when Linear's browser sign-in cannot start. */
 export const LINEAR_SIGN_IN_SETTING = 'OPENCHAMBER_LINEAR_BROKER_URL';
 export const LINEAR_SIGN_IN_SETTINGS_KEY = 'linearBrokerUrl';
 
-/**
- * The OAuth broker this server talks to. There is no built-in broker: unset
- * here means Linear's browser sign-in is unavailable, and nothing dials out.
- */
 export function getLinearBrokerUrl() {
   const fromEnv = readEnv('OPENCHAMBER_LINEAR_BROKER_URL');
   if (fromEnv) return trimTrailingSlashes(fromEnv);
@@ -491,7 +486,6 @@ export function getLinearBrokerUrl() {
   return '';
 }
 
-/** An explicitly configured callback, for a custom Linear OAuth app. */
 function getExplicitLinearRedirectUri() {
   const fromEnv = readEnv('OPENCHAMBER_LINEAR_REDIRECT_URI');
   if (fromEnv) return fromEnv;
@@ -500,10 +494,6 @@ function getExplicitLinearRedirectUri() {
   return '';
 }
 
-/**
- * The registered callback: the explicit one, else the broker's. Empty when
- * neither is configured — never an invented upstream address.
- */
 export function getLinearRedirectUri() {
   const explicit = getExplicitLinearRedirectUri();
   if (explicit) return explicit;
@@ -511,7 +501,6 @@ export function getLinearRedirectUri() {
   return brokerUrl ? `${brokerUrl}/callback` : '';
 }
 
-/** Whether this server can start Linear's browser sign-in at all. */
 export function isLinearSignInConfigured() {
   return Boolean(getLinearRedirectUri());
 }

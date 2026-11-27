@@ -2,8 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
-/** Custom transcription keys only. Speech credentials remain SDK-owned. */
-const VOICE_KEY_KINDS = ['stt'];
+
+const VOICE_KEY_KINDS = ['stt'] as const;
+export type VoiceKeyKind = (typeof VOICE_KEY_KINDS)[number];
+export interface VoiceKeysDescription {
+  stt: boolean;
+}
 
 const storedKey = z.string().trim().min(1).max(1024);
 const storedKeysSchema = z.object({
@@ -17,40 +21,41 @@ export const voiceKeysPatchSchema = patchSchema;
 
 export type VoiceKeysPatch = z.input<typeof voiceKeysPatchSchema>;
 
-const resolveDataDir = () => (process.env.OPENCHAMBER_DATA_DIR
+const resolveDataDir = (): string => (process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
   : path.join(os.homedir(), '.config', 'ohpichamber'));
 
-const voiceKeysPath = () => path.join(resolveDataDir(), 'voice-keys.json');
+const voiceKeysPath = (): string => path.join(resolveDataDir(), 'voice-keys.json');
 
-const errorDetails = z.object({ code: z.unknown().optional(), message: z.unknown().optional() });
+const errorDetails = z.object({ code: z.string().optional(), message: z.string().optional() });
 
 const readStoredKeys = (): z.infer<typeof storedKeysSchema> => {
-  let raw;
+  let raw: string;
   try {
     raw = fs.readFileSync(voiceKeysPath(), 'utf8');
   } catch (error) {
-    if (error?.code !== 'ENOENT') {
+    const parsedError = errorDetails.safeParse(error);
+    if (!parsedError.success || parsedError.data.code !== 'ENOENT') {
       console.warn('[voice] transcription key file is unreadable');
     }
     return {};
   }
   try {
     return storedKeysSchema.parse(JSON.parse(raw));
-  } catch (error) {
+  } catch {
     console.warn('[voice] transcription key file is malformed');
     return {};
   }
 };
 
-export const readVoiceKey = (kind: VoiceKeyKind) => readStoredKeys()[kind];
+export const readVoiceKey = (kind: VoiceKeyKind): string | undefined => readStoredKeys()[kind];
 
-export const describeVoiceKeys = () => {
+export const describeVoiceKeys = (): VoiceKeysDescription => {
   const keys = readStoredKeys();
-  return Object.fromEntries(VOICE_KEY_KINDS.map((kind) => [kind, Boolean(keys[kind])]));
+  return { stt: Boolean(keys.stt) };
 };
 
-export const updateVoiceKeys = (body: VoiceKeysPatch) => {
+export const updateVoiceKeys = (body: VoiceKeysPatch): VoiceKeysDescription => {
   const patch = voiceKeysPatchSchema.parse(body);
   const next = { ...readStoredKeys() };
   for (const kind of VOICE_KEY_KINDS) {

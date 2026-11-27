@@ -1,9 +1,24 @@
 import pathDefault from 'node:path';
 import fsDefault from 'node:fs';
 import { z } from 'zod';
-import { isRecord as isObjectRecord } from '../shared/guards.js';
+import { isRecord as isObjectRecord, isString } from '../shared/guards.js';
 import { createLegacyMetadataConversion } from '../host/metadata-conversion.js';
+import { controlErrorFields } from '../openchamber-control/error.js';
 import { applyFolderChanges, folderChangesBodySchema } from './folder-changes.js';
+import type {
+  FolderChange,
+  FolderConversionStatus,
+  FolderSnapshot,
+  FolderTombstones,
+  SessionFolder,
+  SessionFoldersApp,
+  SessionFoldersDependencies,
+  SessionFoldersMap,
+  SessionFoldersState,
+  SessionFoldersStore,
+  StoredFolderSnapshot,
+  WrittenFolderSnapshot,
+} from './contracts.js';
 import {
   MetadataCorruptError,
   MetadataReadError,
@@ -18,7 +33,7 @@ import {
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const LEGACY_FILE_NAME = 'sessions-directories.json';
 const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const EMPTY_SNAPSHOT = { version: 1, foldersMap: {}, collapsedFolderIds: [] };
+const EMPTY_SNAPSHOT: StoredFolderSnapshot = { version: 1, foldersMap: {}, collapsedFolderIds: [] };
 const FolderSchema = z.looseObject({
   id: z.string(), name: z.string(), sessionIds: z.array(z.string()), createdAt: z.number(),
   parentId: z.string().nullable().optional(),
@@ -33,8 +48,22 @@ const HeaderSchema = SnapshotSchema.omit({ foldersMap: true });
 const LegacySnapshotSchema = HeaderSchema.extend({ foldersMap: z.record(z.string(), z.unknown()) });
 const RevisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
-const mergeTombstones = (current, incoming, now) => {
-  const merged = {};
+const errorMessageOf = (cause: Parameters<typeof controlErrorFields>[0]): string | undefined => {
+  const message = controlErrorFields(cause)?.message;
+  return isString(message) ? message : undefined;
+};
+
+const errorCodeOf = (cause: Parameters<typeof controlErrorFields>[0]): string | undefined => {
+  const code = controlErrorFields(cause)?.code;
+  return isString(code) ? code : undefined;
+};
+
+const mergeTombstones = (
+  current: FolderTombstones | undefined,
+  incoming: FolderTombstones | undefined,
+  now: number,
+): FolderTombstones => {
+  const merged: FolderTombstones = {};
   for (const source of [current, incoming]) {
     if (!isObjectRecord(source)) continue;
     for (const [id, deletedAt] of Object.entries(source)) {
@@ -45,11 +74,15 @@ const mergeTombstones = (current, incoming, now) => {
   return merged;
 };
 
-const mergeFolderSnapshots = (current, incoming, now) => {
+const mergeFolderSnapshots = (
+  current: StoredFolderSnapshot,
+  incoming: StoredFolderSnapshot,
+  now: number,
+): FolderSnapshot => {
   const deletedFolderIds = mergeTombstones(current.deletedFolderIds, incoming.deletedFolderIds, now);
   const currentMap = isObjectRecord(current.foldersMap) ? current.foldersMap : {};
   const incomingMap = isObjectRecord(incoming.foldersMap) ? incoming.foldersMap : {};
-  const mergedScopes = {};
+  const mergedScopes: SessionFoldersMap = {};
   for (const scope of new Set([...Object.keys(currentMap), ...Object.keys(incomingMap)])) {
     const currentFolders = currentMap[scope];
     const incomingFolders = incomingMap[scope];
@@ -58,12 +91,12 @@ const mergeFolderSnapshots = (current, incoming, now) => {
       continue;
     }
     if (!Array.isArray(currentFolders) || currentFolders.length === 0) { mergedScopes[scope] = incomingFolders; continue; }
-    const foldersById = new Map(currentFolders.map((folder) => [folder.id, folder]));
-    const idByName = new Map(currentFolders.map((folder) => [folder.name.toLowerCase(), folder.id]));
+    const foldersById = new Map<string, SessionFolder>(currentFolders.map((folder) => [folder.id, folder]));
+    const idByName = new Map<string, string>(currentFolders.map((folder) => [folder.name.toLowerCase(), folder.id]));
     for (const folder of incomingFolders) {
       const twinId = idByName.get(folder.name.toLowerCase());
-      if (twinId !== undefined && twinId !== folder.id && foldersById.has(twinId)) {
-        const twin = foldersById.get(twinId);
+      const twin = twinId !== undefined && twinId !== folder.id ? foldersById.get(twinId) : undefined;
+      if (twin && twinId !== undefined) {
         foldersById.delete(twinId);
         foldersById.set(folder.id, { ...folder, sessionIds: [...new Set([...twin.sessionIds, ...folder.sessionIds])] });
       } else foldersById.set(folder.id, folder);
@@ -80,34 +113,75 @@ const mergeFolderSnapshots = (current, incoming, now) => {
     ...(Array.isArray(incoming.collapsedFolderIds) ? incoming.collapsedFolderIds : []),
     ...(Array.isArray(current.collapsedFolderIds) ? current.collapsedFolderIds.filter((id) => !incomingFolderIds.has(id)) : []),
   ])].filter((id) => deletedFolderIds[id] === undefined);
+  const currentUpdatedAt = current.updatedAt !== undefined && Number.isFinite(current.updatedAt) ? current.updatedAt : 0;
+  const incomingUpdatedAt = incoming.updatedAt !== undefined && Number.isFinite(incoming.updatedAt) ? incoming.updatedAt : 0;
   return {
     version: 1,
     foldersMap: mergedScopes,
     collapsedFolderIds,
     deletedFolderIds,
-    updatedAt: Math.max(Number.isFinite(current.updatedAt) ? current.updatedAt : 0, Number.isFinite(incoming.updatedAt) ? incoming.updatedAt : 0),
+    updatedAt: Math.max(currentUpdatedAt, incomingUpdatedAt),
   };
 };
 
-const classifyRead = (error, label) => error instanceof MetadataCorruptError || error instanceof MetadataReadError
-  ? error : new MetadataReadError(`${label}: ${error?.message ?? error}`, error);
-const classifyWrite = (error, label) => error instanceof MetadataWriteError || error instanceof MetadataCorruptError
-  ? error : new MetadataWriteError(`${label}: ${error?.message ?? error}`, error);
+const classifyRead = (error: Parameters<typeof controlErrorFields>[0], label: string): Error => error instanceof MetadataCorruptError || error instanceof MetadataReadError
+  ? error : new MetadataReadError(`${label}: ${errorMessageOf(error) ?? error}`, error);
+const classifyWrite = (error: Parameters<typeof controlErrorFields>[0], label: string): Error => error instanceof MetadataWriteError || error instanceof MetadataCorruptError
+  ? error : new MetadataWriteError(`${label}: ${errorMessageOf(error) ?? error}`, error);
 
-export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsDefault.promises, path = pathDefault, now = Date.now, database = null, closeDatabase = database === null } = {}) => {
+interface StoredSnapshotRecord {
+  snapshot: FolderSnapshot;
+  revision: string;
+  errors: Record<string, string>;
+}
+
+export const createSessionFoldersStore = ({
+  openchamberDataDir,
+  fsPromises = fsDefault.promises,
+  path = pathDefault,
+  now = Date.now,
+  database = null,
+  closeDatabase = database === null,
+}: SessionFoldersDependencies): SessionFoldersStore => {
   const opened = database ? { db: database, filePath: path.join(openchamberDataDir, 'host-metadata.sqlite') } : openHostMetadataDatabase({ dataDir: openchamberDataDir, path });
   if (database) ensureHostMetadataSchema(database);
   const { db, filePath } = opened;
   const lifecycle = createMetadataLifecycle(db, closeDatabase);
-  let saveChain = Promise.resolve();
-  const runExclusive = (work) => { const next = saveChain.then(work, work); saveChain = next.then(() => undefined, () => undefined); return next; };
+  let saveChain: Promise<void> = Promise.resolve();
+  const runExclusive = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = saveChain.then(work, work);
+    saveChain = next.then(() => undefined, () => undefined);
+    return next;
+  };
+  const readStored = (): StoredSnapshotRecord | null => {
+    try {
+      const headerRow = db.prepare('SELECT revision, payload FROM session_folders WHERE singleton = 1').get();
+      if (!headerRow) return null;
+      if (!isString(headerRow.payload)) throw new MetadataCorruptError('Stored folder header is corrupt');
+      const parsedHeader = HeaderSchema.safeParse(readJsonObject(headerRow.payload, 'Stored folder header'));
+      if (!parsedHeader.success || !RevisionSchema.safeParse(headerRow.revision).success) throw new MetadataCorruptError('Stored folder header is corrupt');
+      const header = parsedHeader.data;
+      const foldersMap: SessionFoldersMap = {};
+      const errors: Record<string, string> = {};
+      for (const row of db.prepare('SELECT scope, payload FROM session_folder_scopes').all()) {
+        if (!isString(row.scope)) continue;
+        try {
+          if (!isString(row.payload)) throw new MetadataCorruptError('Stored folder scope is corrupt');
+          const folders = FolderListSchema.safeParse(JSON.parse(row.payload));
+          if (!folders.success) throw new MetadataCorruptError('Stored folder scope is corrupt');
+          foldersMap[row.scope] = folders.data;
+        } catch { errors[row.scope] = 'METADATA_CORRUPT'; }
+      }
+      return { snapshot: { ...header, foldersMap }, revision: String(headerRow.revision), errors };
+    } catch (error) { throw classifyRead(error, 'Could not read session folders'); }
+  };
   const conversion = createLegacyMetadataConversion({
     db, dataDir: openchamberDataDir, fsPromises, nodePath: path, fileName: LEGACY_FILE_NAME,
-    parse: (parsed) => {
+    parse: (parsed: Parameters<typeof LegacySnapshotSchema.safeParse>[0]) => {
       const legacy = LegacySnapshotSchema.safeParse(parsed);
       if (!legacy.success) throw new MetadataCorruptError('Legacy folder header is corrupt');
-      const foldersMap = {};
-      const errors = {};
+      const foldersMap: SessionFoldersMap = {};
+      const errors: Record<string, string> = {};
       for (const [scope, value] of Object.entries(legacy.data.foldersMap)) {
         const folders = FolderListSchema.safeParse(value);
         if (!folders.success) errors[scope] = 'METADATA_CORRUPT';
@@ -115,9 +189,9 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
       }
       return { entries: { ...legacy.data, foldersMap }, errors };
     },
-    insert: (snapshot) => {
+    insert: (snapshot: FolderSnapshot) => {
       const current = readStored();
-      const pendingScopes = {};
+      const pendingScopes: SessionFoldersMap = {};
       const receipt = db.prepare('INSERT OR IGNORE INTO metadata_conversion (source, completed) VALUES (?, 1)');
       for (const [scope, folders] of Object.entries(snapshot.foldersMap)) {
         const key = JSON.stringify(['folder-scope', scope]);
@@ -126,8 +200,11 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
         receipt.run(key);
       }
       const pendingIds = new Set(Object.values(pendingScopes).flatMap((folders) => folders.map((folder) => folder.id)));
-      const incoming = { ...snapshot, foldersMap: pendingScopes,
-        collapsedFolderIds: snapshot.collapsedFolderIds.filter((id) => !current || pendingIds.has(id)) };
+      const incoming: FolderSnapshot = {
+        ...snapshot,
+        foldersMap: pendingScopes,
+        collapsedFolderIds: snapshot.collapsedFolderIds.filter((id) => !current || pendingIds.has(id)),
+      };
       const outgoing = mergeFolderSnapshots(current?.snapshot ?? EMPTY_SNAPSHOT, incoming, now());
       const { foldersMap, ...header } = outgoing;
       const revision = Number(current?.revision ?? 0) + 1;
@@ -137,26 +214,7 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
       for (const [scope, folders] of Object.entries(foldersMap)) insert.run(scope, JSON.stringify(folders));
     },
   });
-  const readStored = () => {
-    try {
-      const headerRow = db.prepare('SELECT revision, payload FROM session_folders WHERE singleton = 1').get();
-      if (!headerRow) return null;
-      const parsedHeader = HeaderSchema.safeParse(readJsonObject(headerRow.payload, 'Stored folder header'));
-      if (!parsedHeader.success || !RevisionSchema.safeParse(headerRow.revision).success) throw new MetadataCorruptError('Stored folder header is corrupt');
-      const header = parsedHeader.data;
-      const foldersMap = {};
-      const errors = {};
-      for (const row of db.prepare('SELECT scope, payload FROM session_folder_scopes').all()) {
-        try {
-          const folders = FolderListSchema.safeParse(JSON.parse(row.payload));
-          if (!folders.success) throw new MetadataCorruptError('Stored folder scope is corrupt');
-          foldersMap[row.scope] = folders.data;
-        } catch { errors[row.scope] = 'METADATA_CORRUPT'; }
-      }
-      return { snapshot: { ...header, foldersMap }, revision: String(headerRow.revision), errors };
-    } catch (error) { throw classifyRead(error, 'Could not read session folders'); }
-  };
-  const get = () => lifecycle.run(async () => {
+  const get = (): Promise<SessionFoldersState | null> => lifecycle.run(async () => {
     const converted = await conversion.convert();
     const state = readStored();
     if (!state) { if (converted.error) throw converted.error; return null; }
@@ -172,13 +230,15 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
         }
       } catch (error) { throw classifyRead(error, 'Could not read session folder conversion receipts'); }
     }
-    const status = { status: converted.status };
+    const status: FolderConversionStatus = { status: converted.status };
     if (converted.error) status.code = converted.error.code;
     return { ...state, errors, conversion: status };
   });
-  // The whole state after a write: one header row plus each scope's folders.
-  // Runs inside the caller's transaction, so a revision never lands alone.
-  const writeSnapshot = (outgoing, current, acknowledgedScopes = []) => {
+  const writeSnapshot = (
+    outgoing: StoredFolderSnapshot,
+    current: StoredSnapshotRecord | null,
+    acknowledgedScopes: string[] = [],
+  ): WrittenFolderSnapshot => {
     const { foldersMap, ...header } = outgoing;
     const revision = Number(current?.revision ?? 0) + 1;
     if (!RevisionSchema.safeParse(revision).success) throw new MetadataWriteError('Folder revision exhausted');
@@ -196,7 +256,7 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
     }
     return { snapshot: outgoing, revision: String(revision) };
   };
-  const save = (incoming) => {
+  const save = (incoming: FolderSnapshot): Promise<WrittenFolderSnapshot> => {
     const parsed = SnapshotSchema.safeParse(incoming);
     if (!parsed.success) return Promise.reject(new MetadataWriteError('Invalid session folders payload'));
     return lifecycle.run(() => runExclusive(async () => {
@@ -211,32 +271,36 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
       } catch (error) { throw classifyWrite(error, 'Could not write session folders'); }
     }));
   };
-  /**
-   * Apply one client's changes to the stored state. The client sends intent,
-   * never a copy of the map, so a stale tab cannot undo another client. The
-   * answer is the stored state after the changes, which the writer shows.
-   */
-  const applyChanges = (changes) => lifecycle.run(() => runExclusive(async () => {
-    const converted = await conversion.convert();
-    try {
-      return withTransaction(db, () => {
-        const current = readStored();
-        if (!current && converted.error) throw converted.error;
-        const { snapshot, changed } = applyFolderChanges(current?.snapshot ?? EMPTY_SNAPSHOT, changes, now());
-        if (!changed) return { snapshot: current?.snapshot ?? EMPTY_SNAPSHOT, revision: current?.revision ?? '0' };
-        if (Buffer.byteLength(JSON.stringify(snapshot), 'utf8') > MAX_BODY_BYTES) {
-          throw new MetadataWriteError('Session folders too large');
-        }
-        return writeSnapshot(snapshot, current);
-      });
-    } catch (error) { throw classifyWrite(error, 'Could not write session folders'); }
-  }));
+  const applyChanges = (changes: FolderChange[]): Promise<WrittenFolderSnapshot> =>
+    lifecycle.run(() => runExclusive(async () => {
+      const converted = await conversion.convert();
+      try {
+        return withTransaction(db, () => {
+          const current = readStored();
+          if (!current && converted.error) throw converted.error;
+          const { snapshot, changed } = applyFolderChanges(current?.snapshot ?? EMPTY_SNAPSHOT, changes, now());
+          if (!changed) return { snapshot: current?.snapshot ?? EMPTY_SNAPSHOT, revision: current?.revision ?? '0' };
+          if (Buffer.byteLength(JSON.stringify(snapshot), 'utf8') > MAX_BODY_BYTES) {
+            throw new MetadataWriteError('Session folders too large');
+          }
+          return writeSnapshot(snapshot, current);
+        });
+      } catch (error) { throw classifyWrite(error, 'Could not write session folders'); }
+    }));
   return {
     get, save, applyChanges, convertLegacy: () => lifecycle.run(conversion.convert), flush: lifecycle.flush, close: lifecycle.close, databasePath: filePath,
   };
 };
 
-export const registerSessionFoldersRoutes = (app, dependencies) => {
+export interface SessionFoldersRouteDependencies {
+  sessionFoldersStore: SessionFoldersStore;
+  openchamberDataDir?: string;
+}
+
+export const registerSessionFoldersRoutes = (
+  app: SessionFoldersApp,
+  dependencies: SessionFoldersRouteDependencies,
+): SessionFoldersStore => {
   const store = dependencies.sessionFoldersStore;
   if (!store) throw new Error('Folder routes require the Host-owned sessionFoldersStore');
   app.get('/api/session-folders', async (_req, res) => {
@@ -244,7 +308,7 @@ export const registerSessionFoldersRoutes = (app, dependencies) => {
       const state = await store.get();
       if (!state) return res.json({ ...EMPTY_SNAPSHOT, exists: false });
       return res.json({ ...state.snapshot, revision: state.revision, exists: true, errors: state.errors, conversion: state.conversion });
-    } catch (error) { return res.status(500).json({ error: error?.message ?? 'Failed to read session folders', code: error?.code }); }
+    } catch (error) { return res.status(500).json({ error: errorMessageOf(error) ?? 'Failed to read session folders', code: errorCodeOf(error) }); }
   });
   app.patch('/api/session-folders', async (req, res) => {
     const request = folderChangesBodySchema.safeParse(req.body);
@@ -254,7 +318,7 @@ export const registerSessionFoldersRoutes = (app, dependencies) => {
     try {
       const state = await store.applyChanges(request.data.changes);
       return res.json({ ...state.snapshot, revision: state.revision, exists: true });
-    } catch (error) { return res.status(500).json({ error: error?.message ?? 'Failed to write session folders', code: error?.code }); }
+    } catch (error) { return res.status(500).json({ error: errorMessageOf(error) ?? 'Failed to write session folders', code: errorCodeOf(error) }); }
   });
   app.post('/api/session-folders', async (req, res) => {
     const request = SnapshotRequestSchema.safeParse(req.body);
@@ -264,7 +328,7 @@ export const registerSessionFoldersRoutes = (app, dependencies) => {
     const snapshot = SnapshotSchema.safeParse(request.data);
     if (!snapshot.success) return res.status(400).json({ error: 'updatedAt must be a positive finite number' });
     try { const state = await store.save(snapshot.data); return res.json({ success: true, revision: state.revision }); }
-    catch (error) { return res.status(500).json({ error: error?.message ?? 'Failed to write session folders', code: error?.code }); }
+    catch (error) { return res.status(500).json({ error: errorMessageOf(error) ?? 'Failed to write session folders', code: errorCodeOf(error) }); }
   });
   return store;
 };

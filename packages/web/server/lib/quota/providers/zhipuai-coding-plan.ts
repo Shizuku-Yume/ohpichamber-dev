@@ -1,22 +1,6 @@
-/**
- * Zhipu AI Coding Plan quota fetch
- *
- * API: https://open.bigmodel.cn/api/monitor/usage/quota/limit
- *
- * bigmodel.cn reports business failures inside HTTP 200 bodies
- * (`{code, msg, success: false}`), so the envelope must be validated before
- * `data.limits` is parsed. A missing envelope is treated as legacy success.
- *
- * Response limits:
- * - TOKENS_LIMIT / CREDIT_LIMIT: token/credit usage windows (5-hour and weekly).
- *   The API renamed TOKENS_LIMIT to CREDIT_LIMIT; CREDIT_LIMIT entries
- *   additionally carry `usage` (total), `currentValue` (consumed), `remaining`,
- *   and `percentage` (used percent, derived from currentValue/usage when absent).
- * - TIME_LIMIT: MCP tools usage (monthly window)
- *
- * `data.level` is the plan tier (for example "lite") and becomes `planLabel`.
- */
 import { credentialAccessToken } from './selected-credential.js';
+import type { CredentialJson } from '../credentials/contracts.js';
+import type { ProviderUsage, QuotaResult, TokenWindowLimit, UsageWindow } from '../utils/contracts.js';
 import {
   asNonEmptyString,
   buildResult,
@@ -24,9 +8,8 @@ import {
   toNumber,
   resolveWindowSeconds,
   resolveWindowLabel,
-  normalizeTimestamp
+  normalizeTimestamp,
 } from '../utils/index.js';
-
 export const providerId = 'zhipuai-coding-plan';
 export const providerName = 'Zhipu AI Coding Plan';
 
@@ -54,10 +37,6 @@ export const isCreditLimit = (value: unknown): value is CodingPlanLimitFields =>
   hasLimitFields(value) && (value.type === 'TOKENS_LIMIT' || value.type === 'CREDIT_LIMIT');
 export const isTimeLimit = (value: unknown): value is CodingPlanLimitFields =>
   hasLimitFields(value) && value.type === 'TIME_LIMIT';
-const hasAuthFields = (value: unknown): value is { key?: unknown; token?: unknown } => value != null;
-const hasProviderAliases = (value: unknown): value is Partial<Record<typeof aliases[number], unknown>> => value != null;
-const hasProviderOptions = (value: unknown): value is { options?: unknown } => value != null;
-const hasApiKey = (value: unknown): value is { apiKey?: unknown } => value != null;
 
 const formatCreditAmount = (value: number) => {
   if (value < 1000) return value.toLocaleString('en-US');
@@ -91,9 +70,9 @@ export const envelopeError = (payload: EnvelopeFields | null | undefined) => {
 };
 
 
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const isConfigured = (credential?: CredentialJson): boolean => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ credential } = {}) => {
+export const fetchQuota = async ({ credential }: { credential?: CredentialJson } = {}): Promise<QuotaResult<string, string, ProviderUsage>> => {
   const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
@@ -178,7 +157,7 @@ export const fetchQuota = async ({ credential } = {}) => {
       usage: { windows },
       planLabel: asNonEmptyString(data?.level)
     });
-  } catch (error) {
+  } catch {
     return buildResult({
       providerId,
       providerName,

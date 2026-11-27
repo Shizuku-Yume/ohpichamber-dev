@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Application, Request, Response } from '../shared/http-contracts.js';
 import type { JsonValue } from '../shared/json-values.js';
 import type { ProjectDirectoryRequest, ProjectDirectoryResolution } from '../projects/project-directory-runtime.js';
@@ -5,11 +6,28 @@ import type { ProjectDirectoryRequest, ProjectDirectoryResolution } from '../pro
 export interface PwaSettings { pwaAppName?: JsonValue; pwaOrientation?: JsonValue; }
 export interface PwaManifestDependencies {
   resolveProjectDirectory: (request: ProjectDirectoryRequest) => Promise<ProjectDirectoryResolution>;
-  listSessions: (directory: string | null) => Promise<{ items?: { sessionId?: string; title?: string; updatedAt?: number }[] }>;
+  listSessions: (directory: string | null) => Promise<{ items?: { sessionId?: string | undefined; title?: string | undefined; updatedAt?: number | undefined }[] }>;
   readSettingsFromDiskMigrated: () => Promise<PwaSettings>;
   normalizePwaAppName: (value: JsonValue | undefined, fallback: string) => string;
   normalizePwaOrientation: (value: JsonValue | undefined, fallback: string) => string;
   isRequestAuthorized: (req: Request, res: Response) => Promise<boolean>;
+}
+interface PwaManifest {
+  name: string;
+  short_name: string;
+  description: string;
+  id: string;
+  start_url: string;
+  scope: string;
+  display: string;
+  display_override: string[];
+  background_color: string;
+  theme_color: string;
+  orientation?: string;
+  icons: { src: string; sizes: string; type: string; purpose?: string }[];
+  shortcuts: PwaShortcut[];
+  categories: string[];
+  lang: string;
 }
 interface PwaShortcut { name: string; short_name: string; description: string; url: string; icons: { src: string; sizes: string; type: string }[]; }
 
@@ -42,14 +60,8 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
 
   const getRecentPwaSessionShortcuts = async () => {
     const now = Date.now();
-
-    // The manifest is served without API auth, so the caller cannot pick the
-    // directory: an empty request resolves to the directory the UI last used.
     const resolvedDirectoryResult = await resolveProjectDirectory({}).catch(() => ({ directory: null }));
-    const preferredDirectory = typeof resolvedDirectoryResult?.directory === 'string'
-      ? resolvedDirectoryResult.directory
-      : null;
-
+    const preferredDirectory = resolvedDirectoryResult?.directory ?? null;
     const cacheKey = preferredDirectory ? `dir:${preferredDirectory}` : 'global';
     const cached = recentPwaSessionsCache.get(cacheKey);
     if (cached && now - cached.at < 5000) {
@@ -59,8 +71,6 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
     const normalizeShortcutTitle = (value: JsonValue | undefined, fallback: string) => normalizePwaAppName(value, fallback).slice(0, 48);
 
     try {
-      // Recent sessions come from the canonical Host service, scoped to the
-      // directory the UI last used. No legacy session API or client path admission.
       const listed = await listSessions(preferredDirectory);
       const payload = Array.isArray(listed?.items) ? listed.items : [];
       const seen = new Set();
@@ -76,7 +86,7 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
         rows.push({
           id,
           title: normalizeShortcutTitle(item.title, `Session ${rows.length + 1}`),
-          updatedAt: typeof item.updatedAt === 'number' && Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
+          updatedAt: item.updatedAt !== undefined && Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
         });
       }
 
@@ -98,25 +108,26 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
     }
   };
 
-  app.get('/manifest.webmanifest', async (req, res) => {
-    const hasQueryOverride =
-      typeof req.query?.pwa_name === 'string'
-      || typeof req.query?.app_name === 'string'
-      || typeof req.query?.appName === 'string';
+  const manifestQuerySchema = z.object({
+    pwa_name: z.string().optional(),
+    app_name: z.string().optional(),
+    appName: z.string().optional(),
+    orientation: z.string().optional(),
+  });
 
-    let queryValueRaw = '';
-    if (typeof req.query?.pwa_name === 'string') {
-      queryValueRaw = req.query.pwa_name;
-    } else if (typeof req.query?.app_name === 'string') {
-      queryValueRaw = req.query.app_name;
-    } else if (typeof req.query?.appName === 'string') {
-      queryValueRaw = req.query.appName;
-    }
+  app.get('/manifest.webmanifest', async (req, res) => {
+    const parsedQuery = manifestQuerySchema.safeParse(req.query);
+    const query = parsedQuery.success ? parsedQuery.data : {};
+    const hasQueryOverride =
+      query.pwa_name !== undefined
+      || query.app_name !== undefined
+      || query.appName !== undefined;
+
+    const queryValueRaw = query.pwa_name ?? query.app_name ?? query.appName ?? '';
 
     const queryOverrideName = normalizePwaAppName(queryValueRaw, '');
-    const hasOrientationOverride = typeof req.query?.orientation === 'string';
-    const queryOverrideOrientation = normalizePwaOrientation(req.query?.orientation, 'system');
-
+    const hasOrientationOverride = query.orientation !== undefined;
+    const queryOverrideOrientation = normalizePwaOrientation(query.orientation, 'system');
     let storedName = '';
     let storedOrientation = 'system';
     try {
@@ -136,12 +147,11 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
     );
 
     const shortName = appName.length > 30 ? appName.slice(0, 30) : appName;
-    // Session titles are private: only a caller /api would accept gets them.
     const recentSessionShortcuts = await isRequestAuthorized(req, res).catch(() => false)
       ? await getRecentPwaSessionShortcuts()
       : [];
 
-    const manifest = {
+    const manifest: PwaManifest = {
       name: appName,
       short_name: shortName,
       description: 'Web interface for the OhPiChamber native agent',
@@ -152,7 +162,6 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
       display_override: ['window-controls-overlay'],
       background_color: '#151313',
       theme_color: '#edb449',
-      ...(manifestOrientation ? { orientation: manifestOrientation } : {}),
       icons: [
         { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
         { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -176,6 +185,9 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
       categories: ['developer', 'tools', 'productivity'],
       lang: 'en',
     };
+    if (manifestOrientation) {
+      manifest.orientation = manifestOrientation;
+    }
 
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.type('application/manifest+json');

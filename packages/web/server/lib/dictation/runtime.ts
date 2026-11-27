@@ -23,7 +23,7 @@ export interface DictationRuntimeDependencies {
   app: Application;
   server: Server;
   express: ExpressFactory;
-  uiAuthController?: ReturnType<typeof createUiAuth> | null;
+  uiAuthController?: ReturnType<typeof createUiAuth> | null | undefined;
   isRequestOriginAllowed: RequestOriginChecker;
   rejectWebSocketUpgrade: (socket: Duplex, statusCode: number, reason: string) => void;
   modelsDir: string;

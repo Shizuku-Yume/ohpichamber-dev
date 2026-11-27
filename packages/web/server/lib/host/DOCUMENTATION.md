@@ -6,40 +6,40 @@
 
 ## Modules
 
-- `settings-runtime.js`, `settings-files.js`, `settings-helpers.js`, `settings-normalization-runtime.js`, `settings-registry.json`, and `input-history-scope.js` implement the four-tier Host settings document, normalization, persistence, and input-history policy. `settings-routes.js` registers `GET`/`PUT /api/config/settings`; Host composition owns that registration so the route does not depend on the OpenCode integration directory.
+- `settings-runtime.js`, `settings-files.ts`, `settings-helpers.js`, `settings-normalization-runtime.js`, `settings-registry.json`, and `input-history-scope.js` implement the four-tier Host settings document, normalization, persistence, and input-history policy. `settings-routes.ts` registers `GET`/`PUT /api/config/settings`; Host composition owns that registration so the route does not depend on the OpenCode integration directory.
 - `theme-runtime.js`, `theme-catalog.js`, and `theme-archive.js` validate custom themes, discover remote theme packages, and import selected VS Code palette data from bounded `.vsix` archives. Theme import consumes data only; it never executes extension code.
 - `tunnel-auth.js` and `tunnel-wiring-runtime.js` protect and compose retained development-tunnel and relay routes.
 - `pwa-manifest-routes.js` generates the dynamic install manifest. Recent-session shortcuts are read only for authorized callers from `openChamberSessionService.list()`, scoped by the preferred directory to registered Host workspace scope IDs (exact or descendant); titles never appear in an unauthorized manifest and failures leave only the fixed shortcuts.
 - `project-directory-runtime.js` resolves and validates workspace roots; `project-icon-routes.js` owns project icon upload, discovery, and serving. Discovery treats a project with no favicon as a successful empty result (`200 { skipped: true, reason: 'no-favicon-found' }`), so adding a project never surfaces a console error for the ordinary case; an unknown project and a failed favicon read stay 404/500.
-- `path-utils.js` owns shared PATH heuristics and merge utilities used by Electron's login-shell environment setup and Host command environment resolution. It is Host infrastructure, not an OpenCode lifecycle owner.
-- `executable.js` checks that a path names a regular executable file. The retained terminal shell resolver uses this Host-owned probe without importing legacy OpenCode environment utilities.
-- `sse-stream.js` owns response backpressure for Host event streams. The allowlisted session-list projection was deleted with the removed proxy and space session merge.
+- `path-utils.ts` owns shared PATH heuristics and merge utilities used by Electron's login-shell environment setup and Host command environment resolution. It is Host infrastructure, not an OpenCode lifecycle owner.
+- `executable.ts` checks that a path names a regular executable file. The retained terminal shell resolver uses this Host-owned probe without importing legacy OpenCode environment utilities.
+- `sse-stream.ts` owns response backpressure for Host event streams. The allowlisted session-list projection was deleted with the removed proxy and space session merge.
 - `server-startup-runtime.js`, `startup-pipeline-runtime.js`, and `static-routes-runtime.js` own Host HTTP startup, static assets, SPA fallback, and manifest wiring.
-- `agent-service-supervisor.js` and `agent-service-supervisor.d.ts` start the separate Bun service, discover its loopback endpoint, supervise lifecycle, verify Linux process birth identity, handle worker operation authorization, route native approval policy IPC, and answer the service's private spawn-IPC request for the internal token (never via the environment).
-- `agent-runtime.js` integrates the supervisor, scope runtime, approval policy store, and worker operation authorizer, resolving authorized workspace and session scopes for Host operations.
-- `agent-scope-store.js` and `agent-scope-runtime.js` manage project, directory, workspace, and session containment in Host SQLite, validating roots against configured projects, Git worktrees, and managed chats.
-- `session-state.js` opens `host-metadata.sqlite` and returns `sessionMetadataStore`, `archiveStore`, `sessionFoldersStore`, `agentScopeStore`, `attachmentStore`, `initialize()`, `flush()`, `close()`, and `databasePath`.
-- `metadata-sqlite.js` supplies the SQLite schema, typed errors, transactions, table management (`session_metadata`, `session_archive`, `session_folders`, `session_folder_scopes`, `host_agent_projects`, `host_agent_directories`, `host_agent_workspaces`, `host_agent_sessions`, `host_attachments`, `metadata_conversion`), and lifecycle admissions.
-- `attachment-store.js` and `attachment-routes.js` store attachment binaries (`0600`) and metadata in SQLite, providing scoped upload, validation, retrieval, and prompt-delivery resolution.
-- `private-credential.js` implements explicit selected credential handoff to Bun `AuthStorage` and private credential resolution for quota, TTS, and routing consumers.
-- `approval-policy-store.js` owns `host-approval-policies.sqlite` for persistent tool-input allow and deny decisions.
-- `worker-operation-authorizer.js` and `worker-authorization-channel.js` authorize worker operations against Host workspace policies and approval store records.
+- `agent-service-supervisor.ts` starts the separate Bun service, discover its loopback endpoint, supervise lifecycle, verify Linux process birth identity, handle worker operation authorization, route native approval policy IPC, and answer the service's private spawn-IPC request for the internal token (never via the environment).
+- `agent-runtime.ts` integrates the supervisor, scope runtime, approval policy store, and worker operation authorizer, resolving authorized workspace and session scopes for Host operations.
+- `agent-scope-store.ts` and `agent-scope-runtime.ts` manage project, directory, workspace, and session containment in Host SQLite, validating roots against configured projects, Git worktrees, and managed chats.
+- `session-state.ts` opens `host-metadata.sqlite` and returns `sessionMetadataStore`, `archiveStore`, `sessionFoldersStore`, `agentScopeStore`, `attachmentStore`, `initialize()`, `flush()`, `close()`, and `databasePath`.
+- `metadata-sqlite.ts` supplies the SQLite schema, typed errors, transactions, table management (`session_metadata`, `session_archive`, `session_folders`, `session_folder_scopes`, `host_agent_projects`, `host_agent_directories`, `host_agent_workspaces`, `host_agent_sessions`, `host_attachments`, `metadata_conversion`), and lifecycle admissions.
+- `attachment-store.ts` and `attachment-routes.ts` store attachment binaries (`0600`) and metadata in SQLite, providing scoped upload, validation, retrieval, and prompt-delivery resolution.
+- `private-credential.ts` implements explicit selected credential handoff to Bun `AuthStorage` and private credential resolution for quota, TTS, and routing consumers.
+- `approval-policy-store.ts` owns `host-approval-policies.sqlite` for persistent tool-input allow and deny decisions.
+- `worker-operation-authorizer.ts` and `worker-authorization-channel.ts` authorize worker operations against Host workspace policies and approval store records.
   - Both IPC ends share `hostActionTimeoutMs` from the private protocol. Only interactive `secret.run` omits the two-minute transport deadline: user entry is cancellation-bound and command execution keeps its own five-minute maximum. Cancellation, child disconnect and shutdown still abort the action; other action and authorization deadlines are unchanged.
-- `canonical-routes.js` registers `/api/agent/v1` routes: status, ready, capabilities, projects, workspaces, queue, sessions, attachments, credentials preflight, and proxied agent routes with strict schema validation and scope authorization. Non-stream proxied calls arm a 60 s request timeout that aborts the service fetch; a `timedOut` flag distinguishes it from a client disconnect so the error path still returns 503 instead of silently dropping the reply.
-- `mcp-oauth-callback.js` owns the public `GET /api/agent/v1/mcp/oauth/callback` page a browser returns to when a remote or mobile session signs in to an MCP server. The Host records the pending flow's `state` (read from the `start` response's authorization URL) in a bounded in-memory map; the callback consumes that entry and hands the rebuilt callback URL to the same endpoint's `complete` action. Unknown, expired and replayed states render a readable error page and never reach the Agent Service. Enterprise mode refuses the page with `403 enterprise_mode`. The map is process memory: a Host restart ends in-flight remote sign-ins, which the UI reports as a failed flow.
-- Native plugin routes in `canonical-routes.js` keep package managers, marketplace fetches and extension source operations behind production Host authentication, origin checks, workspace authorization and canonical request/response schemas. The Bun service alone owns native SDK instances. Enterprise authority is read for every package install/update/removal and marketplace fetch; refusals are HTTP 403 `enterprise_mode`. Catalog reads, enable/disable, settings and workspace-confined local extension authoring remain available. Web/PWA, Electron, hosted mobile and Capacitor share this gateway; no native plugin execution is added to Node or the UI. Legacy `/api/config/plugins` route registration is retired; unrelated provider/MCP `/api/integration` callers are unchanged.
+- `canonical-routes.ts` registers `/api/agent/v1` routes: status, ready, capabilities, projects, workspaces, queue, sessions, attachments, credentials preflight, and proxied agent routes with strict schema validation and scope authorization. Non-stream proxied calls arm a 60 s request timeout that aborts the service fetch; a `timedOut` flag distinguishes it from a client disconnect so the error path still returns 503 instead of silently dropping the reply.
+- `mcp-oauth-callback.ts` owns the public `GET /api/agent/v1/mcp/oauth/callback` page a browser returns to when a remote or mobile session signs in to an MCP server. The Host records the pending flow's `state` (read from the `start` response's authorization URL) in a bounded in-memory map; the callback consumes that entry and hands the rebuilt callback URL to the same endpoint's `complete` action. Unknown, expired and replayed states render a readable error page and never reach the Agent Service. Enterprise mode refuses the page with `403 enterprise_mode`. The map is process memory: a Host restart ends in-flight remote sign-ins, which the UI reports as a failed flow.
+- Native plugin routes in `canonical-routes.ts` keep package managers, marketplace fetches and extension source operations behind production Host authentication, origin checks, workspace authorization and canonical request/response schemas. The Bun service alone owns native SDK instances. Enterprise authority is read for every package install/update/removal and marketplace fetch; refusals are HTTP 403 `enterprise_mode`. Catalog reads, enable/disable, settings and workspace-confined local extension authoring remain available. Web/PWA, Electron, hosted mobile and Capacitor share this gateway; no native plugin execution is added to Node or the UI. Legacy `/api/config/plugins` route registration is retired; unrelated provider/MCP `/api/integration` callers are unchanged.
 - Explicit `POST /workspaces/:workspaceId/plugins/apply` uses the same canonical gateway schema, origin and workspace gates and remains available in enterprise mode. It requests a deliberate restart of idle native sessions at the existing persisted revision; the Bun supervisor rejects busy or pending selected roots before retiring any worker and reports actual new generations or individual failures. Mutations alone never trigger session restarts.
 - `bootstrap-runtime.js`: Composes base Host routes, UI authentication, canonical agent endpoints, notification channels, TTS, and OpenChamber management routes.
 - `cli-options.js`: Parses command-line flags and environment variables for server startup.
 - `cli-entry-runtime.js`: Detects direct CLI entry execution and starts the server runtime with parsed arguments.
 - `core-routes.js`: Registers server status and system endpoints, browser session authentication, WebAuthn passkeys, device pairing, theme endpoints, and common request body parsing middleware.
 - `feature-routes-runtime.js`: Registers Host feature route domains (filesystems, environments, quotas, walkthroughs, git, dev servers, session folders, project context, scheduled tasks, tracked items).
-- `models-metadata.js`: In-process cache and client projection helper for the `models.dev` catalog.
-- `openrouter-model-info.js`: In-process cache and local id matching for OpenRouter's public model list, behind `POST /api/openchamber/openrouter/model-info` for Models-dialog auto-fill; refused in enterprise mode before any request.
-- `openchamber-routes.js`: Registers OpenChamber update checks, update installations, enterprise policy, and model catalog endpoints.
-- `server-utils-runtime.js`: Utility helpers for PATH augmentation, executable resolution, and SSE data payload parsing.
-- `session-runtime.js`: In-memory state machine for session activity phases, attention status, and blocking requests, driven by Canonical `/api/agent/v1` events and snapshots.
-- `shared.js`: File and path utility helpers for Markdown/YAML frontmatter operations and Git ancestor/worktree resolution.
+- `models-metadata.ts`: In-process cache and client projection helper for the `models.dev` catalog.
+- `openrouter-model-info.ts`: In-process cache and local id matching for OpenRouter's public model list, behind `POST /api/openchamber/openrouter/model-info` for Models-dialog auto-fill; refused in enterprise mode before any request.
+- `openchamber-routes.ts`: Registers OpenChamber update checks, update installations, enterprise policy, and model catalog endpoints.
+- `server-utils-runtime.ts`: Utility helpers for PATH augmentation, executable resolution, and SSE data payload parsing.
+- `session-runtime.ts`: In-memory state machine for session activity phases, attention status, and blocking requests, driven by Canonical `/api/agent/v1` events and snapshots.
+- `shared.ts`: File and path utility helpers for Markdown/YAML frontmatter operations and Git ancestor/worktree resolution.
 - `shutdown-runtime.js`: Coordinates graceful shutdown across Host services, HTTP connections, the Bun Agent Service runtime, and SQLite stores.
 
 ## Ownership boundary
@@ -48,7 +48,7 @@ The Host modules do not own OpenCode lifecycle, proxying, SSE watching, snippets
 
 ## Retained behavior
 
-Settings are persisted atomically with profile/device/surface scope handling. `GET`/`PUT /api/config/settings` are registered by Host composition through `settings-routes.js`, before the OpenCode integration's feature routes; `feature-routes-runtime.js` no longer registers them. The routes read and persist through the injected Host settings owner and keep their existing query/header surface selection, response shape, and 500 error payloads. Theme imports validate package identity, checksums, archive bounds, and authored palette data. Project and network routes preserve path validation and rebinding protections. Startup continues to publish the listener before managed lifecycle work, serves static/PWA routes, and records the same diagnostic phases. Managed-process cleanup remains asynchronous and verifies process identity before reaping.
+Settings are persisted atomically with profile/device/surface scope handling. `GET`/`PUT /api/config/settings` are registered by Host composition through `settings-routes.ts`, before the OpenCode integration's feature routes; `feature-routes-runtime.js` no longer registers them. The routes read and persist through the injected Host settings owner and keep their existing query/header surface selection, response shape, and 500 error payloads. Theme imports validate package identity, checksums, archive bounds, and authored palette data. Project and network routes preserve path validation and rebinding protections. Startup continues to publish the listener before managed lifecycle work, serves static/PWA routes, and records the same diagnostic phases. Managed-process cleanup remains asynchronous and verifies process identity before reaping.
 
 The production startup pipeline starts only the canonical Agent Service after publishing the Host listener, publishing Git's credential-helper endpoint and attaching process handlers. Web and Electron share this pipeline; Electron still embeds the Node Host in its main process. Terminal, dictation, message-stream and static/FS routes remain registered before the listener. The supervisor marks service readiness only after an internal-secret-authenticated `/api/agent/v1/ready` response validates against the canonical schema. Service startup failure is reported and leaves canonical operations unavailable rather than redirecting them to OpenCode. Production startup no longer bootstraps or detects an OpenCode server; legacy lifecycle controls remain reachable only through unmigrated explicit callers.
 
@@ -211,11 +211,11 @@ Shell observation - `GET /shell/jobs` at session, workspace, project and global 
 
 The Guest Host bridge bounds `readShellOutput` and `stopShell` below the Guest request deadline, aborts that canonical work when the frame, pane or runtime goes away, and answers `HOST_TIMEOUT` rather than letting the Guest timer expire silently. A completed reply is posted to the captured port while it is still current; a replaced port, endpoint switch or disposed frame never receives it.
 
-Native file-resource gateway projections live in `file-resource-agent-routes.js`. Commands, prompt templates, native skill discovery and expansion execute only in Bun workers; the Host never imports the native SDK. UI-visible expansion is submitted through the ordinary canonical delivery owner.
+Native file-resource gateway projections live in `file-resource-agent-routes.ts`. Commands, prompt templates, native skill discovery and expansion execute only in Bun workers; the Host never imports the native SDK. UI-visible expansion is submitted through the ordinary canonical delivery owner.
 
-`skill-file-owner.js` is the authoritative authored-skill source owner. Workspace writes stay under `.omp/skills/`; agent writes stay under the selected agent directory's `skills/`. Relative names reject traversal and every managed path component rejects symbolic links. External discovery roots remain read-only. Raw Markdown and supporting files are preserved without interpreting legacy tool policies.
+`skill-file-owner.ts` is the authoritative authored-skill source owner. Workspace writes stay under `.omp/skills/`; agent writes stay under the selected agent directory's `skills/`. Relative names reject traversal and every managed path component rejects symbolic links. External discovery roots remain read-only. Raw Markdown and supporting files are preserved without interpreting legacy tool policies.
 
-`skill-file-routes.js` exposes workspace `/skills/files` list/detail, file PUT/DELETE, skill DELETE, rename, and explicit apply. Mutations compare the selected source's decimal revision before committing. One opaque Host operation ID binds the authorized workspace, selected agent directory, source scope and expected revision; no filesystem paths cross the private source IPC. Under its existing catalog serialization boundary, the supervisor invokes a trusted `host.skill-source` callback, publishes the returned committed source revision, and runs its existing captured-generation fanout. Only the Host callback writes source bytes and its durable journal. It never re-enters service publication or invokes an SDK.
+`skill-file-routes.ts` exposes workspace `/skills/files` list/detail, file PUT/DELETE, skill DELETE, rename, and explicit apply. Mutations compare the selected source's decimal revision before committing. One opaque Host operation ID binds the authorized workspace, selected agent directory, source scope and expected revision; no filesystem paths cross the private source IPC. Under its existing catalog serialization boundary, the supervisor invokes a trusted `host.skill-source` callback, publishes the returned committed source revision, and runs its existing captured-generation fanout. Only the Host callback writes source bytes and its durable journal. It never re-enters service publication or invokes an SDK.
 
 Before source capture or new root admission, a supervisor-serialized reconciliation callback completes any durable Host source intent and returns the authoritative workspace/agent revision pair. A Host source read requests that same reconciliation before reading a complete source snapshot. Reopening and service-only restart therefore cannot label new files with an old source pair. Reconciliation never retries worker application: committed sources, active applied revisions and partial failures remain separate.
 
@@ -235,7 +235,7 @@ Regression tests in `../ui-auth/canonical-host-routes.test.js` preserve historic
 
 ## Approval policies
 
-`approval-policy-store.js` owns `host-approval-policies.sqlite`. It persists exact native tool-input targets with stable opaque IDs and monotonic decimal revisions. The Node supervisor captures root, project, and workspace scope from Host session bootstrap before forwarding, rejecting scope changes.
+`approval-policy-store.ts` owns `host-approval-policies.sqlite`. It persists exact native tool-input targets with stable opaque IDs and monotonic decimal revisions. The Node supervisor captures root, project, and workspace scope from Host session bootstrap before forwarding, rejecting scope changes.
 
 Child IPC uses `approval.policy.commit` and `approval.policy.list`. The service reserves request CAS, awaits a committed revision, and resolves the worker handle. Failed writes return `APPROVAL_POLICY_WRITE_FAILED`, leaving requests pending. Policies load before reopening a session and apply to future exact native targets, with workspace denial taking precedence over session allowance.
 
@@ -247,7 +247,7 @@ Native Bash descriptors include their working directory as a source path. The Ho
 
 ### Worker operation authorization and native questions
 
-`worker-operation-authorizer.js` authorizes native worker operations against Host workspace scopes, path containment rules, and approval policies by capability tier without relying on external permission state machines. After evaluating scope, path containment, agent profile, and explicit policy denials, the authorizer evaluates tool calls by tier:
+`worker-operation-authorizer.ts` authorizes native worker operations against Host workspace scopes, path containment rules, and approval policies by capability tier without relying on external permission state machines. After evaluating scope, path containment, agent profile, and explicit policy denials, the authorizer evaluates tool calls by tier:
 - **Read tier** (`read`, `grep`, `glob`, `find`, `ast_grep`, `checkpoint`, `rewind`, `think`, `recall`, `reflect`, `memory_edit`, plus read-only `context_notes`, `retain`, `learn`, and read-only sub-actions of `debug`, `ida`, and `github`): allowed after the path check, requiring `policy.fileTools` read permission. A read targeting an outside workspace path returns `approvalRequired` (becoming an approval card auto-answered under `auto` mode, and allowed when approved with a matching approval grant).
 - **Write tier** (`write`, `edit`, `ast_edit`, `new_context`, `manage_skill`, plus text-bearing `context_notes`, global `retain`/`learn`, and LSP mutations): requires `policy.fileTools` write permission and workspace containment. Writes and edits outside the workspace stay hard-denied regardless of mode or grants. The one internal-target exception is a `write` whose descriptor names `local://` plan-artifact URLs in `internalWriteUrls` instead of `destinationPaths`: those are admitted under the same write grant, every other tool and every other internal scheme stays denied, and a `write` naming neither a destination nor such a URL remains refused.
 - **Exec tier** (`bash`, `eval`, `debug`, `ida`, `github`, `security_scan`): returns `approvalRequired` unless an authoritative approval grant matches the root session, worker generation, approval ID, and tool call ID. `bash` also checks policy shell commands and exact persistent approval policies.
@@ -259,12 +259,12 @@ Native LSP operations require an action-specific descriptor. Read-only query met
 
 ### Permission mode IPC channel and the supervisor bridge
 
-`agent-service-supervisor.js` answers two permission families on the child's private IPC channel. Both are flat on the wire (`{ type, requestId, sessionId, ... }`), parsed with `HostPermissionModeLoadRequestSchema` / `HostPermissionEvaluateRequestSchema`; a nested envelope fails the parse and is treated as unauthorized.
+`agent-service-supervisor.ts` answers two permission families on the child's private IPC channel. Both are flat on the wire (`{ type, requestId, sessionId, ... }`), parsed with `HostPermissionModeLoadRequestSchema` / `HostPermissionEvaluateRequestSchema`; a nested envelope fails the parse and is treated as unauthorized.
 
 - `permission.mode.load`: requires `child === launched` and an admitted captured scope whose `rootSessionId` is the requested session (the service always asks about the worker's root session), then replies `HostPermissionModeReplySchema`. Unadmitted sessions, parse failures, timeouts and errors all reply `mode: 'ask'`.
 - `permission.evaluate`: same scope check, then the `ApprovalRequest` goes to the Host policy, which replies `HostPermissionVerdictSchema`. Missing classifier, timeout, malformed reply and thrown errors all reply `verdict: 'unavailable'`, so the card stays.
 
-The supervisor reaches the policy through `packages/web/server/lib/permission-auto-accept/host-channel.js` because it is constructed before the policy runtime exists. `index.js` registers the runtime there after construction; until that happens every query fails closed to `ask`/`unavailable`, never to an accept.
+The supervisor reaches the policy through `packages/web/server/lib/permission-auto-accept/host-channel.ts` because it is constructed before the policy runtime exists. `index.js` registers the runtime there after construction; until that happens every query fails closed to `ask`/`unavailable`, never to an accept.
 
 The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/permission-mode` carrying `{ mode }`, which makes the service reconsider approvals already waiting in that session.
 
@@ -323,32 +323,32 @@ The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/pe
 ### feature-routes-runtime.js
 - `createFeatureRoutesRuntime()`: Composes feature route modules.
 - Returned API:
-  - `registerRoutes(app, routeDependencies)`: Wires filesystem, environment, quota, walkthrough, source control, linear, guest plugins, git, dev server, magic prompts, session folders, project context, agent memory, session knowledge, message search, permission auto-accept, message queue, routing, themes, project icons, scheduled tasks, tracked items, and markdown image grant routes. Host settings routes are not registered here; Host composition registers `GET`/`PUT /api/config/settings` from `lib/host/settings-routes.js` before this method runs.
+  - `registerRoutes(app, routeDependencies)`: Wires filesystem, environment, quota, walkthrough, source control, linear, guest plugins, git, dev server, magic prompts, session folders, project context, agent memory, session knowledge, message search, permission auto-accept, message queue, routing, themes, project icons, scheduled tasks, tracked items, and markdown image grant routes. Host settings routes are not registered here; Host composition registers `GET`/`PUT /api/config/settings` from `lib/host/settings-routes.ts` before this method runs.
   - `getSkillRepositoryDependencies()`: Provides Git credential helper dependencies for skill repository operations.
   - `publishRepositoryCredentialEndpoint()`: Publishes Git credential helper IPC endpoint.
 
-### models-metadata.js
+### models-metadata.ts
 - `getModelsMetadata({ url, ttlMs, timeoutMs } = {})`: Fetches and caches the `models.dev` model catalog in memory (default 10-minute TTL), with fallback to stale cache on network failures.
 - `toClientModelsMetadata(metadata)`: Projects the raw catalog to provider IDs and client-needed model capabilities (`id`, `name`, `tool_call`, `reasoning`, `temperature`, `attachment`, `structured_output`, `modalities`, `cost`, `limit`, `knowledge`, `release_date`, `last_updated`).
 
-### openrouter-model-info.js
+### openrouter-model-info.ts
 - `registerOpenRouterModelInfoRoute(app, { fetchImpl, enterprisePolicyOptions, url, ttlMs, timeoutMs, now } = {})`: Registers `POST /api/openchamber/openrouter/model-info` for the Models dialog's auto-fill. The body is `{ modelIds }` (1–200 trimmed ids, ≤256 characters, strict schema). The route fetches OpenRouter's public model list with `fetchImpl` (a bare `GET https://openrouter.ai/api/v1/models`, no body, no auth, no cookies, 8 s timeout, 8 MiB cap) and matches ids locally — exact id first, then a base id that only one publisher owns (the segment after the last `/`, lowercased, with `:` read as `-` and a `free`/`cloud` variant suffix dropped; two publishers sharing a basename get no bare-name match). The response lists only known ids as `{ models: [{ modelId, catalog }] }`, where `catalog` is `{ source: 'openrouter', input, contextWindow, maxTokens, cost: { input, output, cacheRead, cacheWrite }, reasoning, toolsSupported }` and `cost` uses the catalog's USD-per-million-token unit, rounded to six decimals, with 0 for a cache price the public list omits. Models without a positive context window, a positive `max_completion_tokens`, a usable input modality or usable input/output prices are omitted rather than invented. Every refusal is an `application/problem+json` document: 400 `INVALID_REQUEST` (also for a malformed or oversized body), 403 `enterprise_mode` before any outbound request, and 502 `PROVIDER_UNAVAILABLE` when the upstream fetch fails, times out or returns an oversized payload — never an empty success.
 - `createOpenRouterModelCatalog({ fetchImpl, url, ttlMs, timeoutMs, now } = {})`: Internal (not exported) in-memory cache behind the route (default 10-minute TTL). Its `lookup(modelIds)` returns the same matched projections; failures are not cached. The route is the only caller, so the cache is exercised through `registerOpenRouterModelInfoRoute`.
 
-### openchamber-routes.js
+### openchamber-routes.ts
 - `registerOpenChamberRoutes(app, dependencies)`:
   - `GET /api/openchamber/enterprise-policy`: Returns public enterprise mode policy.
   - `GET /api/openchamber/release-notes`: Returns the bundled changelog's release notes for `version`, or for the range since `since`. Nothing is fetched; a missing bundle answers 503.
   - `GET /api/openchamber/models-metadata`: Returns projected `models.dev` metadata.
-  - `POST /api/openchamber/openrouter/model-info`: Registers through `openrouter-model-info.js`; see that module.
+  - `POST /api/openchamber/openrouter/model-info`: Registers through `openrouter-model-info.ts`; see that module.
 
-### server-utils-runtime.js
+### server-utils-runtime.ts
 - `createServerUtilsRuntime({ os, path, process, getLoginShellPath? })`:
   - `buildAugmentedPath()`: Merges process `PATH` and login shell `PATH`, prioritizing user-configured directories.
   - `searchPathFor(binaryName, searchPath?)`: Locates an executable file on the PATH.
   - `isExecutable(filePath)`: Verifies file existence and executable permissions.
 
-### session-runtime.js
+### session-runtime.ts
 - `createSessionRuntime({ broadcastEvent, now = Date.now })`: Maintains session activity and attention state.
 - Returned API:
   - `applySnapshot(snapshot)`: Ingests canonical session snapshot from the Bun Agent Service, updating session status, active run ID, and blocking approval/question entries.
@@ -366,7 +366,7 @@ The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/pe
   - `interruptBusySessionsAfterRestart()`: Transitions live sessions to `unavailable` with reason `agent-service-restart`, clears pending requests, settles cooldowns, and broadcasts `openchamber:session-interrupted`.
   - `dispose()`: Clears state maps and cleanup interval timer.
 
-### shared.js
+### shared.ts
 - `parseMdFile(filePath)`: Reads and parses Markdown files with YAML frontmatter, handling BOM and lenient colon parsing.
 - `writeMdFile(filePath, frontmatter, body, { flag = 'w' } = {})`: Serializes frontmatter YAML and body, writing to disk.
 - `getAncestors(startDir, stopDir)`: Returns array of directory paths from `startDir` ascending to `stopDir` or filesystem root.

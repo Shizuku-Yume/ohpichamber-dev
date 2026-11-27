@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { pathToFileURL } from 'url';
 import { spawn } from 'child_process';
+import { z } from 'zod';
 import { EXIT_CODE, TunnelCliError } from './cli-errors.js';
 import { buildLocalUrl, resolveServeHost, assertSafeBrowserPort, resolveServeUiPassword, assertAuthenticatedNetworkExposure } from './cli-network.js';
 import { fetchSystemInfoFromPort } from './cli-http.js';
@@ -8,9 +9,11 @@ import { isPortAvailable, resolveAvailablePort } from './cli-ports.js';
 import { ensureLogsDir, getLogFilePath } from './cli-paths.js';
 import { rotateLogFile } from './cli-log-files.js';
 import { discoverOpenChamberInstanceOnPort, isDesktopRuntimeForPort } from './cli-lifecycle.js';
-import { getPidFilePath, getInstanceFilePath, writePidFile, writeInstanceOptions, removePidFile, removeInstanceFile, isProcessRunning, terminateProcessTree } from './cli-process.js';
+import { getPidFilePath, getInstanceFilePath, writePidFile, writeInstanceOptions, removePidFile, removeInstanceFile, isProcessRunning, terminateProcessTree, type CliNotice } from './cli-process.js';
 import { isNetworkExposedBindHost } from '../../server/lib/security/bind-host.js';
 import { assignInjectedEnv, injectedEnvKeys, withoutInjectedEnv } from '../../server/lib/injected-env.js';
+import { isString } from '../../server/lib/shared/object-guards.js';
+import type { JsonValue } from '../../server/lib/shared/json-values.js';
 import {
   intro as clackIntro,
   outro as clackOutro,
@@ -24,15 +27,53 @@ import {
 import type { CliOptions } from './cli-args.js';
 
 export interface ServeOptions extends Partial<Omit<CliOptions, 'port' | 'host' | 'uiPassword' | 'apiOnly'>> {
-  port?: unknown;
-  host?: unknown;
-  uiPassword?: unknown;
+  port?: number | undefined;
+  host?: JsonValue | undefined;
+  uiPassword?: JsonValue | undefined;
   apiOnly?: boolean | undefined;
   suppressUnsafePortWarning?: boolean;
   suppressUiPasswordWarning?: boolean;
   suppressStartupSummary?: boolean;
   suppressQuietOutput?: boolean;
 }
+
+export interface ServeCommandDependencies {
+  serverPath: string;
+  getServerRuntimeBinary: () => string;
+  setForegroundServerActive: (value: boolean) => void;
+  setForegroundShutdown: (handler: ((signal?: string) => Promise<void>) | null) => void;
+}
+
+interface WebUiServerController {
+  getPort: () => number;
+  stop: (options?: { exitProcess?: boolean }) => Promise<void>;
+}
+
+interface WebUiServerModule {
+  startWebUiServer: (options: {
+    port: number;
+    host: string;
+    uiPassword: string | undefined;
+    apiOnly: boolean;
+    attachSignals: boolean;
+    exitOnShutdown: boolean;
+  }) => Promise<WebUiServerController>;
+}
+
+type ServeJsonPayload = {
+  port: number;
+  pid: number | null;
+  url: string;
+  logs: string;
+  launchMode: string;
+  messages: { level: 'error' | 'warning' | 'info'; code?: string | undefined; message: string }[];
+  password?: string | undefined;
+};
+
+const daemonReadyMessageSchema = z.object({
+  type: z.literal('openchamber:ready'),
+  port: z.number(),
+});
 
 const DAEMON_READY_TIMEOUT_MS = 30000;
 
@@ -41,12 +82,11 @@ function createServeCommand({
   getServerRuntimeBinary,
   setForegroundServerActive,
   setForegroundShutdown,
-}) {
-async function serveCommand(options: ServeOptions) {
+}: ServeCommandDependencies) {
+  async function serveCommand(options: ServeOptions): Promise<number> {
     const showOutput = shouldRenderHumanOutput(options);
-    const jsonMessages = [];
-    const emitNotice = (notice) => {
-      if (!notice || typeof notice !== 'object' || typeof notice.message !== 'string') return;
+    const jsonMessages: { level: 'error' | 'warning' | 'info'; code?: string | undefined; message: string }[] = [];
+    const emitNotice = (notice: CliNotice) => {
       const level = notice.level === 'error' ? 'error' : (notice.level === 'warning' ? 'warning' : 'info');
 
       if (isJsonMode(options)) {
@@ -74,7 +114,7 @@ async function serveCommand(options: ServeOptions) {
       }
     };
     const explicitPort = options.explicitPort === true;
-    const effectiveHost = resolveServeHost(options.host);
+    const effectiveHost = resolveServeHost(isString(options.host) ? options.host : undefined);
     const targetPort = await resolveAvailablePort(options.port, explicitPort, emitNotice);
 
     if (targetPort !== 0 && !options.suppressUnsafePortWarning) {
@@ -119,10 +159,6 @@ async function serveCommand(options: ServeOptions) {
     rotateLogFile(initialLogPath);
     const logFd = fs.openSync(initialLogPath, 'a');
 
-    // Resolve the effective UI password before either launch path so a
-    // password generated for `--ui-password` (no value) is set in the
-    // daemon/foreground environment before spawning and persisted in the
-    // instance state file the server and restart/status flows read.
     const resolvedUiPassword = resolveServeUiPassword(options);
     const effectiveUiPassword = resolvedUiPassword.password;
     const autoGeneratedUiPassword = resolvedUiPassword.generated === true;
@@ -136,7 +172,7 @@ async function serveCommand(options: ServeOptions) {
       const warningLine = 'OPENCHAMBER_UI_PASSWORD is not set';
       const warningDetail = networkExposed
         ? `server is bound to ${bindHost} and reachable on your network with no UI auth. `
-          + 'Set --ui-password or OPENCHAMBER_UI_PASSWORD before exposing it over LAN.'
+        + 'Set --ui-password or OPENCHAMBER_UI_PASSWORD before exposing it over LAN.'
         : 'browser UI is unsecured. Use --ui-password or OPENCHAMBER_UI_PASSWORD.';
       if (showOutput) {
         logStatus('warning', warningLine, warningDetail);
@@ -150,11 +186,6 @@ async function serveCommand(options: ServeOptions) {
         console.warn(`Warning: ${warningLine}; ${warningDetail}`);
       }
     }
-    // Foreground mode: run server inline so the CLI process is the server process.
-    // Required for process managers like systemd (Type=simple) that track the
-    // direct child rather than a detached grandchild.
-    // IMPORTANT: foreground MUST remain inline (in-process). Do not convert to
-    // child-process orchestration — that causes shell job-control suspension.
     if (options.foreground) {
       if (isJsonMode(options)) {
         throw new TunnelCliError(
@@ -163,8 +194,6 @@ async function serveCommand(options: ServeOptions) {
         );
       }
 
-      // Started from a shell OpenChamber opened, this is a server of its own:
-      // the other instance's web assets and runtime go.
       for (const key of injectedEnvKeys(process.env)) delete process.env[key];
       assignInjectedEnv(process.env, {
         OPENCHAMBER_UI_PASSWORD: effectiveUiPassword || undefined,
@@ -172,28 +201,18 @@ async function serveCommand(options: ServeOptions) {
         OPENCHAMBER_RUNTIME: 'web',
       });
 
-      // In --quiet mode, redirect stdout/stderr to the log file so that
-      // server runtime output (console.log calls) does not pollute the
-      // deterministic CLI output contract.  In plain human mode, close the
-      // log fd and let output go to the inherited terminal as before.
       const suppressServerOutput = isQuietMode(options);
-      // Keep a reference to the real stdout.write so CLI output (port, JSON)
-      // can bypass the log-file redirect.
       const realStdoutWrite = process.stdout.write.bind(process.stdout);
       if (suppressServerOutput) {
         const logStream = fs.createWriteStream(null, { fd: logFd });
-        process.stdout.write = (chunk, encoding, callback) => {
-          return logStream.write(chunk, encoding, callback);
-        };
-        process.stderr.write = (chunk, encoding, callback) => {
-          return logStream.write(chunk, encoding, callback);
-        };
+        const writeToLog = logStream.write.bind(logStream);
+        process.stdout.write = writeToLog;
+        process.stderr.write = writeToLog;
       } else {
-        // Close the log fd – in foreground human mode stdout/stderr are
-        // inherited from the parent (e.g. journald/terminal).
         try {
           fs.closeSync(logFd);
         } catch {
+          void 0;
         }
       }
 
@@ -201,8 +220,8 @@ async function serveCommand(options: ServeOptions) {
         console.log(`Starting OhPiChamber on port ${targetPort === 0 ? 'auto' : targetPort} (foreground)`);
       }
 
-      const { startWebUiServer } = await import(pathToFileURL(serverPath).href);
-      const controller = await startWebUiServer({
+      const serverModule: WebUiServerModule = await import(pathToFileURL(serverPath).href);
+      const controller = await serverModule.startWebUiServer({
         port: targetPort,
         host: effectiveHost,
         uiPassword: effectiveUiPassword,
@@ -213,8 +232,6 @@ async function serveCommand(options: ServeOptions) {
 
       const resolvedPort = controller.getPort();
 
-      // Write PID / instance files so status, stop, and restart can discover
-      // this foreground instance the same way they discover daemon instances.
       const fgPidFilePath = await getPidFilePath(resolvedPort);
       const fgInstanceFilePath = await getInstanceFilePath(resolvedPort);
       writePidFile(fgPidFilePath, process.pid, emitNotice);
@@ -239,7 +256,6 @@ async function serveCommand(options: ServeOptions) {
         console.log('Save this password — it is not shown again.');
       }
 
-      // Clean up PID / instance files.
       const cleanupFiles = () => {
         removePidFile(fgPidFilePath);
         removeInstanceFile(fgInstanceFilePath);
@@ -247,7 +263,6 @@ async function serveCommand(options: ServeOptions) {
 
       process.on('exit', cleanupFiles);
 
-      // Idempotent graceful shutdown with deterministic exit codes.
       let shutdownInProgress = false;
       const shutdownForegroundServer = async (signal = 'SIGTERM') => {
         if (shutdownInProgress) return;
@@ -255,6 +270,7 @@ async function serveCommand(options: ServeOptions) {
         try {
           await controller.stop({ exitProcess: false });
         } catch {
+          void 0;
         }
         cleanupFiles();
         setForegroundServerActive(false);
@@ -263,17 +279,14 @@ async function serveCommand(options: ServeOptions) {
         process.exit(exitCode);
       };
 
-      // Expose shutdown to the global SIGINT handler.
       setForegroundShutdown(shutdownForegroundServer);
       setForegroundServerActive(true);
 
-      // Register signal handlers (additive, no removeAllListeners).
       process.on('SIGINT', () => { void shutdownForegroundServer('SIGINT'); });
       process.on('SIGTERM', () => { void shutdownForegroundServer('SIGTERM'); });
       process.on('SIGQUIT', () => { void shutdownForegroundServer('SIGQUIT'); });
 
-      // Block forever – the process stays alive until signalled.
-      await new Promise(() => {});
+      await new Promise(() => { });
     }
 
     const serverArgs = [serverPath, '--port', String(targetPort)];
@@ -288,7 +301,6 @@ async function serveCommand(options: ServeOptions) {
       detached: true,
       windowsHide: true,
       stdio: ['ignore', logFd, logFd, 'ipc'],
-      // Record injected Host settings while dropping previous instance injections.
       env: assignInjectedEnv({ ...withoutInjectedEnv(process.env) }, {
         OPENCHAMBER_PORT: String(targetPort),
         OPENCHAMBER_RUNTIME: 'web',
@@ -301,7 +313,7 @@ async function serveCommand(options: ServeOptions) {
     child.unref();
     serveSpin?.start(`Starting OhPiChamber on port ${targetPort === 0 ? 'auto' : targetPort}...`);
 
-    let resolvedPort;
+    let resolvedPort: number;
     try {
       resolvedPort = await new Promise<number>((resolve, reject) => {
         let settled = false;
@@ -313,10 +325,11 @@ async function serveCommand(options: ServeOptions) {
 
         child.on('message', (msg) => {
           if (settled) return;
-          if (msg && msg.type === 'openchamber:ready' && typeof msg.port === 'number') {
+          const parsed = daemonReadyMessageSchema.safeParse(msg);
+          if (parsed.success) {
             settled = true;
             clearTimeout(timeout);
-            resolve(msg.port);
+            resolve(parsed.data.port);
           }
         });
 
@@ -340,15 +353,17 @@ async function serveCommand(options: ServeOptions) {
     }
 
     try {
-      if (typeof child.disconnect === 'function' && child.connected) {
+      if (child.connected) {
         child.disconnect();
       }
     } catch {
+      void 0;
     }
 
     try {
       fs.closeSync(logFd);
     } catch {
+      void 0;
     }
 
     const resolvedLogPath = getLogFilePath(resolvedPort);
@@ -356,17 +371,19 @@ async function serveCommand(options: ServeOptions) {
       try {
         fs.renameSync(initialLogPath, resolvedLogPath);
       } catch {
+        void 0;
       }
     }
 
-    if (!isProcessRunning(child.pid)) {
+    const childPid = child.pid;
+    if (!isProcessRunning(childPid)) {
       serveSpin?.error('Failed to start OhPiChamber');
       throw new Error('Failed to start server in daemon mode');
     }
 
     const pidFilePath = await getPidFilePath(resolvedPort);
     const instanceFilePath = await getInstanceFilePath(resolvedPort);
-    writePidFile(pidFilePath, child.pid, emitNotice);
+    writePidFile(pidFilePath, childPid, emitNotice);
     writeInstanceOptions(instanceFilePath, {
       port: resolvedPort,
       host: effectiveHost,
@@ -377,18 +394,19 @@ async function serveCommand(options: ServeOptions) {
 
     const serveResult = {
       port: resolvedPort,
-      pid: child.pid,
+      pid: childPid ?? null,
       url: buildLocalUrl(resolvedPort, '/'),
       logs: `ohpichamber logs -p ${resolvedPort}`,
       launchMode: 'daemon',
     };
 
     if (isJsonMode(options)) {
-      printJson({
+      const jsonPayload: ServeJsonPayload = {
         ...serveResult,
         messages: jsonMessages,
-        ...(autoGeneratedUiPassword ? { password: effectiveUiPassword } : {}),
-      });
+      };
+      if (autoGeneratedUiPassword) jsonPayload.password = effectiveUiPassword;
+      printJson(jsonPayload);
       return resolvedPort;
     }
 
@@ -396,9 +414,6 @@ async function serveCommand(options: ServeOptions) {
       if (options.suppressQuietOutput) {
         return resolvedPort;
       }
-      // A generated password is essential result data for scripts: include it
-      // in the same compact `pass:` token form `ohpichamber status --quiet`
-      // already emits. Configured passwords are never echoed.
       process.stdout.write(
         autoGeneratedUiPassword
           ? `${resolvedPort} pass:${effectiveUiPassword}\n`
@@ -422,7 +437,7 @@ async function serveCommand(options: ServeOptions) {
     }
 
     return resolvedPort;
-}
+  }
 
   return serveCommand;
 }

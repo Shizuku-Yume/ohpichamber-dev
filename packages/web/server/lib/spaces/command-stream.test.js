@@ -1,4 +1,4 @@
-// `openCommandStream` of run-command.js, and the bridge of `connect` from layout.js, run on the
+// `openCommandStream` of run-command.ts, and the bridge of `connect` from layout.js, run on the
 // host with this Node: the stream that the dispatcher's agent uses as a socket.
 
 import crypto from 'node:crypto';
@@ -101,7 +101,7 @@ describe('openCommandStream', () => {
     // stream carries; left on, the listeners pile up across the stream's life.
     const stream = open(node, ['-e', ECHO]);
     stream.resume();
-    const listener = () => {};
+    const listener = () => { };
     for (let round = 0; round < 12; round += 1) {
       stream.setTimeout(1_000, listener);
       stream.setTimeout(0, listener);

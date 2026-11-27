@@ -1,3 +1,4 @@
+import { isString } from '../../server/lib/shared/object-guards.js';
 import { TunnelCliError, EXIT_CODE } from './cli-errors.js';
 import { injectedEnvKeys } from '../../server/lib/injected-env.js';
 
@@ -72,16 +73,16 @@ export interface CliOptions {
   relay?: boolean;
 }
 
-function levenshteinDistance(a: string, b: string) {
+function levenshteinDistance(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
   const dp = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
-  const row = (index: number) => {
+  const row = (index: number): number[] => {
     const value = dp[index];
     if (value === undefined) throw new Error('Missing edit-distance row');
     return value;
   };
-  const cell = (i: number, j: number) => {
+  const cell = (i: number, j: number): number => {
     const value = row(i)[j];
     if (value === undefined) throw new Error('Missing edit-distance cell');
     return value;
@@ -98,16 +99,12 @@ function levenshteinDistance(a: string, b: string) {
   return cell(m, n);
 }
 
-function isCliText(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
-function findClosestMatch(input: string | null | undefined, candidates: string[], maxDistance = 3) {
-  if (!isCliText(input) || input.length === 0 || !Array.isArray(candidates)) {
+function findClosestMatch(input: string | null | undefined, candidates: string[], maxDistance = 3): string | null {
+  if (!isString(input) || input.length === 0 || !Array.isArray(candidates)) {
     return null;
   }
   const normalized = input.toLowerCase();
-  let bestCandidate = null;
+  let bestCandidate: string | null = null;
   let bestDistance = maxDistance + 1;
   for (const candidate of candidates) {
     const distance = levenshteinDistance(normalized, candidate.toLowerCase());
@@ -119,7 +116,7 @@ function findClosestMatch(input: string | null | undefined, candidates: string[]
   return bestDistance <= maxDistance ? bestCandidate : null;
 }
 
-function splitOptionToken(arg: string) {
+function splitOptionToken(arg: string): { name: string; inlineValue: string | undefined; long: boolean } | null {
   if (!arg.startsWith('-')) return null;
   if (arg.startsWith('--')) {
     const eqIndex = arg.indexOf('=');
@@ -163,7 +160,21 @@ const SCHEDULE_UPDATE_VALUE_FLAGS: [string, keyof CliOptions][] = [
   ['timezone', 'timezone'], ['goal-token-budget', 'goalTokenBudget'],
 ];
 
-function parseArgs(argv: string[] = process.argv.slice(2)) {
+export interface ParsedCliArgs {
+  command: string;
+  subcommand: string | null;
+  tunnelAction: string | null;
+  startupAction: string | null;
+  scheduleAction: string | null;
+  sessionAction: string | null;
+  controlAction: string | null;
+  options: CliOptions;
+  removedFlagErrors: string[];
+  helpRequested: boolean;
+  versionRequested: boolean;
+}
+
+function parseArgs(argv: string[] = process.argv.slice(2)): ParsedCliArgs {
   const args = Array.isArray(argv) ? [...argv] : [];
   const options: CliOptions = {
     port: DEFAULT_PORT,
@@ -230,9 +241,9 @@ function parseArgs(argv: string[] = process.argv.slice(2)) {
     withStatus: false,
   };
 
-  const removedFlagErrors = [];
-  const seenLongFlags = [];
-  const positional = [];
+  const removedFlagErrors: string[] = [];
+  const seenLongFlags: string[] = [];
+  const positional: string[] = [];
   let helpRequested = false;
   let versionRequested = false;
 
@@ -711,7 +722,7 @@ function parseArgs(argv: string[] = process.argv.slice(2)) {
   };
 }
 
-function showHelp() {
+function showHelp(): void {
   console.log(`
  OhPiChamber - Host Gateway and web interface for the OMP Agent Service
 
@@ -770,7 +781,7 @@ EXAMPLES:
 `);
 }
 
-function showControlHelp() {
+function showControlHelp(): void {
   console.log(`
  OhPiChamber Control Commands
 
@@ -809,7 +820,7 @@ EXAMPLES:
 `);
 }
 
-function showStartupHelp() {
+function showStartupHelp(): void {
   console.log(`
  OhPiChamber Startup Commands
 
@@ -838,7 +849,7 @@ EXAMPLES:
 `);
 }
 
-function showConnectUrlHelp() {
+function showConnectUrlHelp(): void {
   console.log(`
  OhPiChamber Connect URL
 
@@ -877,7 +888,7 @@ EXAMPLES:
 `);
 }
 
-function showTunnelHelp() {
+function showTunnelHelp(): void {
   console.log(`
  Tunnel Lifecycle Commands
 
@@ -959,8 +970,8 @@ EXAMPLES:
 `);
 }
 
-function generateCompletionScript(shell: string | null | undefined) {
-  const normalized = isCliText(shell) ? shell.trim().toLowerCase() : '';
+function generateCompletionScript(shell: string | null | undefined): string | null {
+  const normalized = isString(shell) ? shell.trim().toLowerCase() : '';
 
   if (normalized === 'bash') {
     return `# Bash completion for ohpichamber tunnel
@@ -1117,7 +1128,6 @@ complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_
 
   return null;
 }
-
 
 export {
   DEFAULT_PORT,

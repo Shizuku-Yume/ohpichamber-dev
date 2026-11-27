@@ -101,7 +101,6 @@ export const createEnvironmentRuntime = ({
   listProjects,
   spawn,
   commandBaseEnv,
-  isEnterpriseMode,
   readFile = fsPromises.readFile,
   stat = fsPromises.stat,
   now = Date.now,

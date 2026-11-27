@@ -33,7 +33,7 @@ export const runGit: GitCommand = (directory, args, { input = '', env = {} } = {
     maxBuffer: 8 * 1024 * 1024,
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_NO_REPLACE_OBJECTS: '1', ...env },
   }, (error, stdout) => (error ? reject(error) : resolve(String(stdout))));
-  child.stdin?.on('error', () => {});
+  child.stdin?.on('error', () => { });
   child.stdin?.end(input);
 });
 
@@ -101,18 +101,12 @@ export async function readBranchChangeIds(directory: string, branch: string, bas
 
 const refused = (message: string, code: string, status = 409) => Object.assign(new Error(message), { code, status });
 
-/**
- * The last valid `Change-Id` trailer of one commit, or null. The commit path
- * reads this for the commit it just wrote, so a message that already carries
- * the trailer is answered instead of amended a second time.
- */
-export async function readCommitChangeId(directory, sha, { git = runGit } = {}) {
+export async function readCommitChangeId(directory: string, sha: string, { git = runGit }: { git?: GitCommand } = {}) {
   const text = isString(sha) ? sha.trim() : '';
   if (!SHA_RE.test(text)) throw invalidInput('sha must be a full commit SHA');
   return changeIdOfMessage(directory, await git(directory, ['log', '-1', '--format=%B', text]), git);
 }
 
-// Left behind while a cherry-pick, revert, rebase or `git am` is stopped.
 const SEQUENCE_STATE = ['CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply'];
 
 const sequenceInProgress = async (directory: string, git: GitCommand) => {
@@ -122,29 +116,11 @@ const sequenceInProgress = async (directory: string, git: GitCommand) => {
   return paths.some((statePath) => fs.existsSync(path.resolve(directory, statePath)));
 };
 
-/**
- * Gives the checked-out commit a `Change-Id` trailer, the way a review host's
- * commit-msg hook would have: `I` plus the SHA-1 Git computes for a blob of
- * the commit's tree, parents, author, committer and message. Nothing is
- * downloaded from the host.
- *
- * Refused (409) unless HEAD is a branch at `expectedHead`, the working tree
- * and index have no tracked changes, no merge, cherry-pick, revert, rebase or
- * `git am` is in progress (each can stop with HEAD on the branch and a clean
- * tree, and would then carry on from a tip that is gone), and HEAD has no
- * Change-Id yet. The commit is rebuilt with its tree, parents and author
- * (`git commit-tree`) and the branch moves only if it still points at
- * `expectedHead` (`git update-ref` compare-and-swap), so a commit made in
- * between is never lost. As with `git commit --amend`, the committer becomes
- * the current user; unlike it, a GPG signature on the old commit is dropped
- * (the new one is signed only when `commit.gpgSign` says so). Answers
- * `{ sha, changeId, branch }`.
- *
- * `requireClean: false` is for the commit path that just wrote the commit it
- * amends: other unstaged files are the normal state there, and the amend reads
- * only the commit object. Every other refusal still applies.
- */
-export async function addChangeIdToHead(directory, expectedHead, { git = runGit, requireClean = true } = {}) {
+export async function addChangeIdToHead(
+  directory: string,
+  expectedHead: string,
+  { git = runGit, requireClean = true }: { git?: GitCommand; requireClean?: boolean } = {},
+) {
   const expected = isString(expectedHead) ? expectedHead.trim().toLowerCase() : '';
   if (!/^[0-9a-f]{40}$/.test(expected)) throw refused('expectedHead must be a full commit SHA', 'INVALID_REQUEST', 400);
   let branchRef;

@@ -12,7 +12,7 @@ OhPiChamber state is divided between the **Host Gateway data directory** and the
 Default location: `~/.config/ohpichamber` (or the directory specified by `OPENCHAMBER_DATA_DIR`).
 
 - **`host-metadata.sqlite`** (plus `-wal` and `-shm` sidecars):
-  - Schema: Managed by `packages/web/server/lib/host/metadata-sqlite.js` with `PRAGMA user_version = 1`.
+  - Schema: Managed by `packages/web/server/lib/host/metadata-sqlite.ts` with `PRAGMA user_version = 1`.
   - Contents: Project registrations, workspace bindings, session operational metadata, folder hierarchies, attachment metadata, direct command claims, and durable prompt queues (`prompt_queue_*` tables).
 - **`host-approval-policies.sqlite`** (plus `-wal` and `-shm` sidecars):
   - Schema: Managed by `packages/web/server/lib/host/approval-policy-store.js` with `PRAGMA user_version = 1`.

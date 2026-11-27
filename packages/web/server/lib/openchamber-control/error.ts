@@ -1,3 +1,15 @@
+import type { JsonObject, JsonValue } from '../shared/json-values.js';
+
+export interface WorktreeArchiveOwnerKey {
+  hostProjectId: string;
+  archiveId: string;
+}
+
+export interface WorktreeArchiveOwner {
+  key: WorktreeArchiveOwnerKey;
+  claimId: string;
+}
+
 export interface ControlErrorStash {
   ref: string;
   hash: string;
@@ -6,14 +18,19 @@ export interface ControlErrorStash {
 
 export interface ControlErrorDetails {
   partial?: unknown;
-  partialAction?: unknown;
-  sessionId?: unknown;
-  directory?: unknown;
+  partialAction?: JsonValue;
+  sessionId?: JsonValue;
+  directory?: JsonValue;
   goalConfigured?: unknown;
   code?: unknown;
   task?: unknown;
   busy?: 'queued' | 'running';
   stash?: ControlErrorStash;
+  refusalVerified?: boolean;
+  retryable?: boolean;
+  details?: JsonObject;
+  cause?: unknown;
+  worktreeArchiveOwner?: WorktreeArchiveOwner;
 }
 
 export interface ControlErrorFields extends ControlErrorDetails {
@@ -28,16 +45,20 @@ export const controlErrorFields = (cause: unknown): ControlErrorFields | undefin
 export class OpenChamberControlError extends Error {
   statusCode: ControlErrorFields['statusCode'];
   declare partial?: unknown;
-  declare partialAction?: unknown;
-  declare sessionId?: unknown;
-  declare directory?: unknown;
+  declare partialAction?: JsonValue;
+  declare sessionId?: JsonValue;
+  declare directory?: JsonValue;
   declare goalConfigured?: unknown;
   declare code?: unknown;
   declare task?: unknown;
   declare busy?: 'queued' | 'running';
   declare stash?: ControlErrorStash;
+  declare refusalVerified?: boolean;
+  declare retryable?: boolean;
+  declare details?: JsonObject;
+  declare worktreeArchiveOwner?: WorktreeArchiveOwner;
 
-  constructor(message: ControlErrorFields['message'], statusCode: ControlErrorFields['statusCode'] = 500, details: ControlErrorDetails = {}) {
+  constructor(message: string, statusCode: ControlErrorFields['statusCode'] = 500, details: ControlErrorDetails = {}) {
     super(message);
     this.name = 'OpenChamberControlError';
     this.statusCode = statusCode;

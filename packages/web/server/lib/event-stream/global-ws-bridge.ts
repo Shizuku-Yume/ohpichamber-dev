@@ -1,17 +1,28 @@
+import type { StreamSocket } from './contracts.js';
+import type { GlobalMessageStreamHub } from './global-hub.js';
 import { sendMessageStreamWsFrame, sendSerializedMessageStreamWsFrame } from './protocol.js';
 
-export function createGlobalMessageStreamWsBridge({ globalHub, wsClients, heartbeatIntervalMs }) {
-  const clients = new Set();
-  const ready = new Set();
-  const cursors = new Map();
-  const heartbeats = new Map();
-  const remove = (socket) => {
+export interface GlobalMessageStreamWsBridgeOptions {
+  globalHub: Pick<GlobalMessageStreamHub, 'replayAfter' | 'subscribeFrame' | 'subscribeStatus' | 'isConnected'>;
+  wsClients: Set<StreamSocket>;
+  heartbeatIntervalMs: number;
+}
+
+export function createGlobalMessageStreamWsBridge({ globalHub, wsClients, heartbeatIntervalMs }: GlobalMessageStreamWsBridgeOptions) {
+  const clients = new Set<StreamSocket>();
+  const ready = new Set<StreamSocket>();
+  const cursors = new Map<StreamSocket, string>();
+  const heartbeats = new Map<StreamSocket, ReturnType<typeof setInterval>>();
+  const remove = (socket: StreamSocket) => {
     clearInterval(heartbeats.get(socket)); heartbeats.delete(socket);
     clients.delete(socket); ready.delete(socket); cursors.delete(socket); wsClients.delete(socket);
   };
-  const markReady = (socket, cursor) => {
+  const markReady = (socket: StreamSocket, cursor: string | undefined) => {
     const replay = globalHub.replayAfter(cursor);
-    if (!sendMessageStreamWsFrame(socket, { type: 'ready', scope: 'global', ...(replay === null ? { replayReset: true } : {}) })) { remove(socket); return; }
+    const readyFrame = replay === null
+      ? { type: 'ready' as const, scope: 'global' as const, replayReset: true }
+      : { type: 'ready' as const, scope: 'global' as const };
+    if (!sendMessageStreamWsFrame(socket, readyFrame)) { remove(socket); return; }
     ready.add(socket); wsClients.add(socket);
     if (replay) for (const entry of replay) {
       if (!sendSerializedMessageStreamWsFrame(socket, entry.serializedFrame)) { remove(socket); break; }
@@ -24,7 +35,12 @@ export function createGlobalMessageStreamWsBridge({ globalHub, wsClients, heartb
     if (status.type === 'connect') {
       for (const socket of clients) {
         if (!ready.has(socket)) markReady(socket, cursors.get(socket));
-        else if (status.wasReady) sendMessageStreamWsFrame(socket, { type: 'ready', scope: 'global', ...(status.replayReset ? { replayReset: true } : {}) });
+        else if (status.wasReady) {
+          const readyFrame = status.replayReset
+            ? { type: 'ready' as const, scope: 'global' as const, replayReset: true }
+            : { type: 'ready' as const, scope: 'global' as const };
+          sendMessageStreamWsFrame(socket, readyFrame);
+        }
       }
     } else if (status.type === 'invalidated') {
       for (const socket of ready) sendMessageStreamWsFrame(socket, status.invalidation);
@@ -33,7 +49,7 @@ export function createGlobalMessageStreamWsBridge({ globalHub, wsClients, heartb
     }
   });
   return {
-    accept(socket, { requestedLastEventId = '' } = {}) {
+    accept(socket: StreamSocket, { requestedLastEventId = '' }: { requestedLastEventId?: string } = {}) {
       clients.add(socket); cursors.set(socket, requestedLastEventId);
       const heartbeat = setInterval(() => {
         if (socket.readyState !== 1 || !globalHub.isConnected()) return;

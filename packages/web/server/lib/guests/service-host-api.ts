@@ -8,7 +8,7 @@ import type { GuestCapability } from 'ohpichamber-sdk';
 import type { z } from 'zod';
 import type { GuestRecord } from './contracts.js';
 import type { HostCallbackRoute } from './host-callback.js';
-import type { SessionControlExecute, SessionReadAction } from '../openchamber-control/contracts.js';
+import type { SessionControlExecute, SessionReadAction, TextMessage } from '../openchamber-control/contracts.js';
 import type { createGuestInstructions } from './instructions.js';
 import type { createGuestMarks } from './marks.js';
 import { hasErrorMessage } from './input-guards.js';
@@ -60,9 +60,11 @@ const readSession = async <Action extends SessionReadAction>(control: ServiceHos
 
 const LAST_PROMPT_WINDOW = 20;
 
+const isAttachedMessage = (message: TextMessage & { attached?: boolean }): boolean => Boolean(message.attached);
+
 const lastUserPrompt = async (control: ServiceHostControl, sessionId: string) => {
   const { messages } = await readSession(control, 'session.messages', { sessionId, role: 'user', limit: LAST_PROMPT_WINDOW });
-  return messages?.findLast((message) => !message.attached)?.text ?? null;
+  return messages?.findLast((message) => !isAttachedMessage(message))?.text ?? null;
 };
 
 const SERVICE_EVENT_CHARS_PER_SECOND = 256_000;

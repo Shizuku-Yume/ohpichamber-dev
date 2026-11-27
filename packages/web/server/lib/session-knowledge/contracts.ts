@@ -1,7 +1,10 @@
+import type { JsonObject, JsonValue } from '../shared/json-values.js';
+
 export interface KnowledgeNote {
   id: string;
   body: string;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface KnowledgePlan {
@@ -70,7 +73,7 @@ export interface KnowledgeEntries {
 export interface KnowledgeSummary {
   notes: Pick<KnowledgeNote, 'id' | 'body'>[];
   plans: Pick<KnowledgePlan, 'id' | 'title'>[];
-  memory: { global: number; project: number };
+  memory?: { global: number; project: number };
 }
 
 export interface GuidanceOptions {
@@ -87,9 +90,9 @@ export interface SessionKnowledgeDependencies {
       notes: KnowledgeNote[];
       plans: Pick<KnowledgePlan, 'id' | 'title'>[];
     }>;
-    readPlan: (projectId: string, planId: string) => Promise<{ body: string } | null>;
+    readPlan?: (projectId: string, planId: string) => Promise<{ body: string } | null>;
   };
-  agentMemoryRuntime: {
+  agentMemoryRuntime?: {
     readAll: (projectId: string | null) => Promise<{
       global: MemoryTitle[];
       project: MemoryTitle[];
@@ -109,11 +112,10 @@ export interface SessionKnowledgeDependencies {
   isWorkflowAvailable?: () => boolean | Promise<boolean>;
   readExtensionInstructions?: (directory: string) => Promise<string | null>;
   readLeadBrief?: ((sessionId: string) => Promise<string | null>) | null;
-  readSessionMetadata?: ((sessionId: string) => Promise<SessionMetadata | undefined>) | null;
-  persistSessionMetadata?: ((sessionId: string, directory: string, patch: {
-    openchamber: { project_context_pins: SessionPins };
-  }) => Promise<SessionMetadata>) | null;
+  readSessionMetadata?: ((sessionId: string) => Promise<JsonValue | null | undefined>) | null;
+  persistSessionMetadata?: ((sessionId: string, directory: string, patch: { openchamber: JsonObject }) => Promise<JsonValue | void>) | null;
 }
+
 export interface SessionMetadata {
   openchamber?: unknown;
 }

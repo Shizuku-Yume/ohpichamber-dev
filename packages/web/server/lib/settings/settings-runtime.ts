@@ -1,38 +1,97 @@
+import type * as nodeCrypto from 'node:crypto';
+import type * as nodeFsPromises from 'node:fs/promises';
+import type * as nodePath from 'node:path';
 import { createProjectIdFromPath, projectConfigFileStemOf } from '../projects/project-id.js';
-import { createSettingsWriteQueue } from './settings-write-queue.js';
+import type { createProjectDirectoryRuntime } from '../projects/project-directory-runtime.js';
+import { isBoolean, isString } from '../shared/object-guards.js';
+import type { createManagedTunnelConfigRuntime } from '../tunnels/managed-config.js';
 import {
   buildPreferencesFields,
   flattenPreferences,
   instancePartOf,
-  legacySettingsDocumentOf,
-  profilePartOf,
   isDeviceSettingsKey,
   isProfileSettingsKey,
+  legacySettingsDocumentOf,
   normalizeSettingsSurface,
   parsePreferencesDocument,
   preferencesFilePathFor,
+  profilePartOf,
   seedPreferencesFrom,
   serializePreferencesDocument,
 } from './settings-files.js';
+import type { PreferenceFields } from './settings-files.js';
+import type { SettingsDocument, createSettingsHelpers } from './settings-helpers.js';
+import type { ManagedRemoteTunnelPreset, NormalizedProject, createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
+import { createSettingsWriteQueue } from './settings-write-queue.js';
 
+type SettingsHelpers = ReturnType<typeof createSettingsHelpers>;
+type SettingsNormalization = ReturnType<typeof createSettingsNormalizationRuntime>;
+type ManagedTunnelConfig = ReturnType<typeof createManagedTunnelConfigRuntime>;
+type ProjectDirectory = ReturnType<typeof createProjectDirectoryRuntime>;
+
+export interface SettingsRuntimeDependencies {
+  fsPromises: Pick<typeof nodeFsPromises, 'access' | 'chmod' | 'copyFile' | 'mkdir' | 'readFile' | 'readdir' | 'realpath' | 'rename' | 'rm' | 'stat' | 'writeFile'>;
+  path: Pick<typeof nodePath, 'basename' | 'dirname' | 'isAbsolute' | 'join' | 'relative' | 'sep'>;
+  crypto: Pick<typeof nodeCrypto, 'createHash'>;
+  SETTINGS_FILE_PATH: string;
+  sanitizeProjects: SettingsNormalization['sanitizeProjects'];
+  sanitizeSettingsUpdate: SettingsHelpers['sanitizeSettingsUpdate'];
+  mergePersistedSettings: SettingsHelpers['mergePersistedSettings'];
+  normalizeSettingsPaths: SettingsNormalization['normalizeSettingsPaths'];
+  normalizeStringArray: SettingsNormalization['normalizeStringArray'];
+  formatSettingsResponse: SettingsHelpers['formatSettingsResponse'];
+  resolveDirectoryCandidate: ProjectDirectory['resolveDirectoryCandidate'];
+  managedChatsRoot?: string | null;
+  normalizeManagedRemoteTunnelHostname: SettingsNormalization['normalizeManagedRemoteTunnelHostname'];
+  normalizeManagedRemoteTunnelPresets: SettingsNormalization['normalizeManagedRemoteTunnelPresets'];
+  normalizeManagedRemoteTunnelPresetTokens: SettingsNormalization['normalizeManagedRemoteTunnelPresetTokens'];
+  syncManagedRemoteTunnelConfigWithPresets: ManagedTunnelConfig['syncManagedRemoteTunnelConfigWithPresets'];
+  upsertManagedRemoteTunnelToken: ManagedTunnelConfig['upsertManagedRemoteTunnelToken'];
+  onMessageSearchEnabledChanged?: (enabled: boolean) => void;
+  onMessageSearchReasoningChanged?: (enabled: boolean) => void;
+}
+
+interface NotificationTemplateEntry {
+  title: string;
+  message: string;
+}
+
+type NotificationEventKey = 'completion' | 'error' | 'question' | 'subtask';
+
+interface OrphanProjectFile {
+  orphanId: string;
+  filePath: string;
+  content: SettingsDocument;
+}
+
+type PreferenceReadResult =
+  | { status: 'missing' }
+  | { status: 'failed' }
+  | { status: 'ok'; fields: PreferenceFields };
+
+const NOTIFICATION_EVENT_KEYS = ['completion', 'error', 'question', 'subtask'] as const;
 const DEFAULT_NOTIFICATION_TEMPLATES = {
   completion: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
   error: { title: 'Tool error', message: '{last_message}' },
   question: { title: 'Input needed', message: '{last_message}' },
   subtask: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
-};
+} satisfies Record<NotificationEventKey, NotificationTemplateEntry>;
 
-const ensureNotificationTemplateShape = (templates) => {
-  const input = templates && typeof templates === 'object' ? templates : {};
+const isObjectLike = (value: unknown): value is SettingsDocument => Boolean(value && typeof value === 'object');
+const hasErrorCode = (value: unknown): value is { code?: unknown } => Boolean(value && typeof value === 'object');
+const isCallable = (value: unknown): value is (current: SettingsDocument) => SettingsDocument => typeof value === 'function';
+
+const normalizeNotificationTemplates = (templates: SettingsDocument[string]) => {
+  const input: SettingsDocument = isObjectLike(templates) ? templates : {};
   let changed = false;
-  const next = {};
+  const next: Partial<Record<NotificationEventKey, NotificationTemplateEntry>> = {};
 
-  for (const event of Object.keys(DEFAULT_NOTIFICATION_TEMPLATES)) {
-    const currentEntry = input[event];
+  for (const event of NOTIFICATION_EVENT_KEYS) {
+    const currentEntry = isObjectLike(input[event]) ? input[event] : null;
     const base = DEFAULT_NOTIFICATION_TEMPLATES[event];
-    const currentTitle = typeof currentEntry?.title === 'string' ? currentEntry.title : base.title;
-    const currentMessage = typeof currentEntry?.message === 'string' ? currentEntry.message : base.message;
-    if (!currentEntry || typeof currentEntry.title !== 'string' || typeof currentEntry.message !== 'string') {
+    const currentTitle = currentEntry && isString(currentEntry.title) ? currentEntry.title : base.title;
+    const currentMessage = currentEntry && isString(currentEntry.message) ? currentEntry.message : base.message;
+    if (!currentEntry || !isString(currentEntry.title) || !isString(currentEntry.message)) {
       changed = true;
     }
     next[event] = { title: currentTitle, message: currentMessage };
@@ -41,7 +100,7 @@ const ensureNotificationTemplateShape = (templates) => {
   return { templates: next, changed };
 };
 
-export const createSettingsRuntime = (deps) => {
+export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
   const {
     fsPromises,
     path,
@@ -64,29 +123,18 @@ export const createSettingsRuntime = (deps) => {
     onMessageSearchReasoningChanged = () => { },
   } = deps;
 
-
   const PREFERENCES_FILE_PATH = preferencesFilePathFor(SETTINGS_FILE_PATH, path);
-  // True while preferences.json exists but cannot be read. Profile writes are
-  // refused meanwhile so a corrupt file is never overwritten with a seed or a
-  // partial document; clients keep the values they hold.
   let preferencesUnavailable = false;
   let preferencesFailureLogged = false;
-
-  // Orphan recovery is a one-shot best-effort scan: when orphans can't be
-  // matched on first pass they stay on disk and every subsequent settings
-  // read would re-scan them. In-process (Electron) this runs in the main
-  // event loop, so hitting it 3+ times/second from fs/list, path, etc.
-  // turns into perceptible UI jank for ~10-15 seconds after launch.
-  // Cache the outcome for this process lifetime.
   let orphanRecoveryDone = false;
 
   const PROJECTS_ROOT_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'projects');
   const PROJECT_ICONS_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'project-icons');
 
-  const isManagedChatDirectory = async (candidate) => {
+  const isManagedChatDirectory = async (candidate: string) => {
     if (!managedChatsRoot) return false;
     const root = await fsPromises.realpath(managedChatsRoot).catch((error) => {
-      if (error?.code === 'ENOENT') return null;
+      if (hasErrorCode(error) && error.code === 'ENOENT') return null;
       throw error;
     });
     if (!root) return false;
@@ -95,35 +143,40 @@ export const createSettingsRuntime = (deps) => {
     return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
   };
 
-  const sha1Hex = (value) => crypto.createHash('sha1').update(value).digest('hex');
-  const projectIconBaseName = (projectId) => `project-${sha1Hex(projectId)}`;
+  const sha1Hex = (value: string) => crypto.createHash('sha1').update(value).digest('hex');
+  const projectIconBaseName = (projectId: string) => `project-${sha1Hex(projectId)}`;
   const PROJECT_ICON_EXTENSIONS = ['png', 'jpg', 'svg', 'webp', 'ico'];
 
-  const readJsonFile = async (filePath) => {
+  const readJsonFile = async (filePath: string): Promise<SettingsDocument | null> => {
     try {
       const raw = await fsPromises.readFile(filePath, 'utf8');
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : null;
+      const parsed: unknown = JSON.parse(raw);
+      return isObjectLike(parsed) ? parsed : null;
     } catch (error) {
-      if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      if (hasErrorCode(error) && error.code === 'ENOENT') {
         return null;
       }
       throw error;
     }
   };
 
-  const writeJsonFile = async (filePath, value) => {
+  const writeJsonFile = async (filePath: string, value: SettingsDocument) => {
     await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
     await fsPromises.writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
   };
 
-  const uniqueStrings = (values) => Array.from(new Set(values.filter((value) => typeof value === 'string' && value.trim().length > 0)));
+  const uniqueStrings = (values: SettingsDocument[string][]) =>
+    Array.from(new Set(values.filter((value): value is string => isString(value) && value.trim().length > 0)));
 
-  const mergeByKey = (oldItems, newItems, getKey) => {
-    const result = [];
-    const seen = new Set();
-    for (const item of [...(Array.isArray(newItems) ? newItems : []), ...(Array.isArray(oldItems) ? oldItems : [])]) {
-      if (!item || typeof item !== 'object') continue;
+  const mergeByKey = (oldItems: SettingsDocument[string], newItems: SettingsDocument[string], getKey: (item: SettingsDocument) => string | undefined): SettingsDocument[] => {
+    const result: SettingsDocument[] = [];
+    const seen = new Set<string>();
+    const candidates = [
+      ...(Array.isArray(newItems) ? newItems : []),
+      ...(Array.isArray(oldItems) ? oldItems : []),
+    ];
+    for (const item of candidates) {
+      if (!isObjectLike(item)) continue;
       const key = getKey(item);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -132,12 +185,12 @@ export const createSettingsRuntime = (deps) => {
     return result;
   };
 
-  const remapPlanPaths = (entries, fromDir, toDir) => {
+  const remapPlanPaths = (entries: SettingsDocument[string], fromDir: string, toDir: string): SettingsDocument[string][] => {
     if (!Array.isArray(entries) || !fromDir || !toDir || fromDir === toDir) {
       return Array.isArray(entries) ? entries : [];
     }
     return entries.map((entry) => {
-      if (!entry || typeof entry !== 'object' || typeof entry.path !== 'string') {
+      if (!isObjectLike(entry) || !isString(entry.path)) {
         return entry;
       }
       const trimmedPath = entry.path.trim();
@@ -152,43 +205,66 @@ export const createSettingsRuntime = (deps) => {
     });
   };
 
-  const mergeProjectConfigData = ({ oldConfig, newConfig, oldStorageDir, newStorageDir, projectPath }) => {
-    const oldValue = oldConfig && typeof oldConfig === 'object' ? oldConfig : {};
-    const newValue = newConfig && typeof newConfig === 'object' ? newConfig : {};
+  const mergeProjectConfigData = ({ oldConfig, newConfig, oldStorageDir, newStorageDir, projectPath }: {
+    oldConfig: SettingsDocument | null;
+    newConfig: SettingsDocument | null;
+    oldStorageDir: string;
+    newStorageDir: string;
+    projectPath: string;
+  }): SettingsDocument => {
+    const oldValue: SettingsDocument = isObjectLike(oldConfig) ? oldConfig : {};
+    const newValue: SettingsDocument = isObjectLike(newConfig) ? newConfig : {};
     const oldPlanFiles = remapPlanPaths(oldValue.projectPlanFiles, oldStorageDir, newStorageDir);
     const newPlanFiles = remapPlanPaths(newValue.projectPlanFiles, oldStorageDir, newStorageDir);
-    const oldNotes = typeof oldValue.projectNotes === 'string' ? oldValue.projectNotes : '';
-    const newNotes = typeof newValue.projectNotes === 'string' ? newValue.projectNotes : '';
+    const oldNotes = isString(oldValue.projectNotes) ? oldValue.projectNotes : '';
+    const newNotes = isString(newValue.projectNotes) ? newValue.projectNotes : '';
 
-    return {
+    const merged: SettingsDocument = {
       ...oldValue,
       ...newValue,
-      ...(typeof projectPath === 'string' && projectPath.trim().length > 0 ? { projectPath } : {}),
-      ...(uniqueStrings([...(Array.isArray(oldValue['setup-worktree']) ? oldValue['setup-worktree'] : []), ...(Array.isArray(newValue['setup-worktree']) ? newValue['setup-worktree'] : [])]).length > 0
-        ? { 'setup-worktree': uniqueStrings([...(Array.isArray(oldValue['setup-worktree']) ? oldValue['setup-worktree'] : []), ...(Array.isArray(newValue['setup-worktree']) ? newValue['setup-worktree'] : [])]) }
-        : {}),
-      ...(oldNotes || newNotes ? { projectNotes: newNotes || oldNotes } : {}),
-      ...(mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id).length > 0
-        ? { projectTodos: mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id) }
-        : {}),
-      ...(mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id).length > 0
-        ? { projectActions: mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id) }
-        : {}),
-      ...(mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id).length > 0
-        ? { scheduledTasks: mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id) }
-        : {}),
-      ...(mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path).length > 0
-        ? { projectPlanFiles: mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path) }
-        : {}),
-      ...(typeof newValue.projectActionsPrimaryId === 'string' && newValue.projectActionsPrimaryId.trim().length > 0
-        ? { projectActionsPrimaryId: newValue.projectActionsPrimaryId }
-        : typeof oldValue.projectActionsPrimaryId === 'string' && oldValue.projectActionsPrimaryId.trim().length > 0
-          ? { projectActionsPrimaryId: oldValue.projectActionsPrimaryId }
-          : {}),
     };
+    if (isString(projectPath) && projectPath.trim().length > 0) {
+      merged.projectPath = projectPath;
+    }
+    const setupWorktree = uniqueStrings([
+      ...(Array.isArray(oldValue['setup-worktree']) ? oldValue['setup-worktree'] : []),
+      ...(Array.isArray(newValue['setup-worktree']) ? newValue['setup-worktree'] : []),
+    ]);
+    if (setupWorktree.length > 0) {
+      merged['setup-worktree'] = setupWorktree;
+    }
+    if (oldNotes || newNotes) {
+      merged.projectNotes = newNotes || oldNotes;
+    }
+    const projectTodos = mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => (isString(item.id) ? item.id : undefined));
+    if (projectTodos.length > 0) {
+      merged.projectTodos = projectTodos;
+    }
+    const projectActions = mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => (isString(item.id) ? item.id : undefined));
+    if (projectActions.length > 0) {
+      merged.projectActions = projectActions;
+    }
+    const scheduledTasks = mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => (isString(item.id) ? item.id : undefined));
+    if (scheduledTasks.length > 0) {
+      merged.scheduledTasks = scheduledTasks;
+    }
+    const planFiles = mergeByKey(
+      oldPlanFiles,
+      newPlanFiles,
+      (item) => (isString(item.id) && item.id ? item.id : (isString(item.path) ? item.path : undefined)),
+    );
+    if (planFiles.length > 0) {
+      merged.projectPlanFiles = planFiles;
+    }
+    if (isString(newValue.projectActionsPrimaryId) && newValue.projectActionsPrimaryId.trim().length > 0) {
+      merged.projectActionsPrimaryId = newValue.projectActionsPrimaryId;
+    } else if (isString(oldValue.projectActionsPrimaryId) && oldValue.projectActionsPrimaryId.trim().length > 0) {
+      merged.projectActionsPrimaryId = oldValue.projectActionsPrimaryId;
+    }
+    return merged;
   };
 
-  const moveDirectoryContents = async (fromDir, toDir) => {
+  const moveDirectoryContents = async (fromDir: string, toDir: string) => {
     try {
       const entries = await fsPromises.readdir(fromDir, { withFileTypes: true });
       await fsPromises.mkdir(toDir, { recursive: true });
@@ -209,13 +285,13 @@ export const createSettingsRuntime = (deps) => {
 
       await fsPromises.rm(fromDir, { recursive: true, force: true });
     } catch (error) {
-      if (!(error && typeof error === 'object' && error.code === 'ENOENT')) {
+      if (!(hasErrorCode(error) && error.code === 'ENOENT')) {
         throw error;
       }
     }
   };
 
-  const migrateProjectIconFiles = async ({ oldId, newId }) => {
+  const migrateProjectIconFiles = async ({ oldId, newId }: { oldId: string; newId: string }) => {
     if (!oldId || !newId || oldId === newId) {
       return;
     }
@@ -231,7 +307,7 @@ export const createSettingsRuntime = (deps) => {
       try {
         await fsPromises.access(oldPath);
       } catch (error) {
-        if (error && typeof error === 'object' && error.code === 'ENOENT') {
+        if (hasErrorCode(error) && error.code === 'ENOENT') {
           continue;
         }
         throw error;
@@ -248,20 +324,7 @@ export const createSettingsRuntime = (deps) => {
     }
   };
 
-  /**
-   * Merge the server-owned `context.json` (notes/todos/plans) across a project
-   * id change.
-   *
-   * `moveDirectoryContents` only renames a file when the destination is free,
-   * so without this step an existing `<newId>/context.json` would silently
-   * discard everything stored under `<oldId>`. Every list is merged by identity
-   * so neither side loses entries.
-   *
-   * A version 1 context stored notes as a single string. It is left untouched
-   * here: `project-context` converts it on read, and converting in two places
-   * would mean two definitions of the same migration.
-   */
-  const mergeProjectContextFiles = async (oldStorageDir, newStorageDir) => {
+  const mergeProjectContextFiles = async (oldStorageDir: string, newStorageDir: string) => {
     const oldContextPath = path.join(oldStorageDir, 'context.json');
     const newContextPath = path.join(newStorageDir, 'context.json');
 
@@ -271,17 +334,14 @@ export const createSettingsRuntime = (deps) => {
     ]);
 
     if (!oldContext || !newContext) {
-      // Nothing to reconcile: the plain directory move handles a single side.
       return;
     }
 
     const mergeNotes = () => {
-      // One side may still be a version 1 string; keep whichever is a list, and
-      // prefer the destination when both are strings.
       const oldIsList = Array.isArray(oldContext.notes);
       const newIsList = Array.isArray(newContext.notes);
       if (oldIsList && newIsList) {
-        return mergeByKey(oldContext.notes, newContext.notes, (item) => item.id);
+        return mergeByKey(oldContext.notes, newContext.notes, (item) => (isString(item.id) ? item.id : undefined));
       }
       if (newIsList) return newContext.notes;
       if (oldIsList) return oldContext.notes;
@@ -292,13 +352,17 @@ export const createSettingsRuntime = (deps) => {
       ...oldContext,
       ...newContext,
       notes: mergeNotes(),
-      todos: mergeByKey(oldContext.todos, newContext.todos, (item) => item.id),
-      plans: mergeByKey(oldContext.plans, newContext.plans, (item) => item.id || item.file),
+      todos: mergeByKey(oldContext.todos, newContext.todos, (item) => (isString(item.id) ? item.id : undefined)),
+      plans: mergeByKey(
+        oldContext.plans,
+        newContext.plans,
+        (item) => (isString(item.id) && item.id ? item.id : (isString(item.file) ? item.file : undefined)),
+      ),
     });
     await fsPromises.rm(oldContextPath, { force: true });
   };
 
-  const migrateProjectScopedStorage = async ({ oldId, newId, projectPath }) => {
+  const migrateProjectScopedStorage = async ({ oldId, newId, projectPath }: { oldId: string; newId: string; projectPath: string }) => {
     if (!oldId || !newId || oldId === newId) {
       return;
     }
@@ -323,21 +387,14 @@ export const createSettingsRuntime = (deps) => {
     await fsPromises.rm(oldConfigPath, { force: true });
   };
 
-  /**
-   * A build before the bounded folder name created `<projectId>/` for an id
-   * the filesystem still accepted (201 to 255 characters; longer ids never
-   * got a folder). Only the bounded folder is read now, so that folder's
-   * notes, plans, and memory are moved over once. A raw name the filesystem
-   * cannot hold (ENAMETOOLONG) means no such folder ever existed.
-   */
-  const migrateRawIdStorageFolder = async (projectId) => {
+  const migrateRawIdStorageFolder = async (projectId: string) => {
     const stem = projectConfigFileStemOf(projectId);
     if (stem === projectId) return;
     const rawStorageDir = path.join(PROJECTS_ROOT_DIR, projectId);
     try {
       await fsPromises.stat(rawStorageDir);
     } catch (error) {
-      if (error?.code === 'ENOENT' || error?.code === 'ENAMETOOLONG') return;
+      if (hasErrorCode(error) && (error.code === 'ENOENT' || error.code === 'ENAMETOOLONG')) return;
       throw error;
     }
     const boundedStorageDir = path.join(PROJECTS_ROOT_DIR, stem);
@@ -345,67 +402,12 @@ export const createSettingsRuntime = (deps) => {
     await moveDirectoryContents(rawStorageDir, boundedStorageDir);
   };
 
-  const migrateSettingsToDeterministicProjectIds = async (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
-    const projects = sanitizeProjects(settings.projects) || [];
-    if (projects.length === 0) {
-      return { settings, changed: false };
-    }
-
-    let changed = false;
-    const projectIdMap = new Map();
-    const nextProjects = [];
-
-    for (const project of projects) {
-      const canonicalId = createProjectIdFromPath(project.path);
-      const nextId = canonicalId || project.id;
-      projectIdMap.set(project.id, nextId);
-      if (nextId !== project.id) {
-        changed = true;
-        await migrateProjectScopedStorage({ oldId: project.id, newId: nextId, projectPath: project.path });
-        await migrateProjectIconFiles({ oldId: project.id, newId: nextId });
-      }
-      await migrateRawIdStorageFolder(nextId);
-      nextProjects.push({ ...project, id: nextId });
-    }
-
-    if (!orphanRecoveryDone) {
-      orphanRecoveryDone = true; // set before await to close races under concurrent settings reads
-      try {
-        await recoverOrphanProjectFiles(nextProjects);
-      } catch (error) {
-        console.warn('[projects] Orphan recovery failed, continuing startup:', error);
-      }
-    }
-
-    if (!changed) {
-      return { settings, changed: false };
-    }
-
-    const currentActiveId = typeof settings.activeProjectId === 'string' ? settings.activeProjectId : '';
-    const nextActiveProjectId = projectIdMap.get(currentActiveId) || currentActiveId || nextProjects[0]?.id;
-
-    return {
-      settings: {
-        ...settings,
-        projects: nextProjects,
-        ...(nextActiveProjectId ? { activeProjectId: nextActiveProjectId } : {}),
-      },
-      changed: true,
-    };
-  };
-
-  // Orphan files are project jsons left behind from earlier random-UUID project
-  // ids (they have no projectPath field and are not referenced by settings).
-  // For each canonical project whose current config is empty (lost during the
-  // earlier id churn), try to find a single orphan whose setup-worktree command
-  // patterns uniquely match the project's basename and merge it in.
-  const recoverOrphanProjectFiles = async (canonicalProjects) => {
+  const recoverOrphanProjectFiles = async (canonicalProjects: NormalizedProject[]) => {
     let entries;
     try {
       entries = await fsPromises.readdir(PROJECTS_ROOT_DIR, { withFileTypes: true });
     } catch (error) {
-      if (error && typeof error === 'object' && error.code === 'ENOENT') return;
+      if (hasErrorCode(error) && error.code === 'ENOENT') return;
       throw error;
     }
 
@@ -419,13 +421,13 @@ export const createSettingsRuntime = (deps) => {
 
     console.warn(`[projects] Found ${orphanFiles.length} orphan project config(s) without projectPath.`);
 
-    const orphans = [];
+    const orphans: OrphanProjectFile[] = [];
     for (const orphanId of orphanFiles) {
       const filePath = path.join(PROJECTS_ROOT_DIR, `${orphanId}.json`);
       const content = await readJsonFile(filePath);
       if (!content) continue;
       const hasContent = [
-        typeof content.projectNotes === 'string' && content.projectNotes.trim().length > 0,
+        isString(content.projectNotes) && content.projectNotes.trim().length > 0,
         Array.isArray(content.projectTodos) && content.projectTodos.length > 0,
         Array.isArray(content.projectActions) && content.projectActions.length > 0,
         Array.isArray(content['setup-worktree']) && content['setup-worktree'].length > 0,
@@ -437,30 +439,31 @@ export const createSettingsRuntime = (deps) => {
 
     if (orphans.length === 0) return;
 
-    const basenameOf = (projectPath) => {
-      if (typeof projectPath !== 'string') return '';
+    const basenameOf = (projectPath: string) => {
+      if (!isString(projectPath)) return '';
       const normalized = projectPath.replace(/\\/g, '/').replace(/\/+$/g, '');
       const idx = normalized.lastIndexOf('/');
       return (idx >= 0 ? normalized.slice(idx + 1) : normalized).toLowerCase();
     };
 
-    const extractRootRelPaths = (orphan) => {
-      const commands = [
-        ...(Array.isArray(orphan.content['setup-worktree']) ? orphan.content['setup-worktree'] : []),
-        ...(Array.isArray(orphan.content.projectActions) ? orphan.content.projectActions.map((a) => typeof a?.command === 'string' ? a.command : '') : []),
-      ].filter((s) => typeof s === 'string');
-      const results = new Set();
+    const extractRootRelPaths = (orphan: OrphanProjectFile) => {
+      const setupCommands = Array.isArray(orphan.content['setup-worktree']) ? orphan.content['setup-worktree'] : [];
+      const actionCommands = Array.isArray(orphan.content.projectActions)
+        ? orphan.content.projectActions.map((a) => (isObjectLike(a) && isString(a.command) ? a.command : ''))
+        : [];
+      const commands = [...setupCommands, ...actionCommands].filter((s): s is string => isString(s));
+      const results = new Set<string>();
       const re = /\$(?:\{)?ROOT_(?:PROJECT|WORKTREE)_PATH\}?\/([A-Za-z0-9._/-]+)/g;
       for (const cmd of commands) {
-        let match;
+        let match: RegExpExecArray | null;
         while ((match = re.exec(cmd)) !== null) {
-          results.add(match[1]);
+          if (match[1]) results.add(match[1]);
         }
       }
       return Array.from(results);
     };
 
-    const fileExistsInProject = async (projectPath, relPath) => {
+    const fileExistsInProject = async (projectPath: string, relPath: string) => {
       try {
         await fsPromises.access(path.join(projectPath, relPath));
         return true;
@@ -469,8 +472,8 @@ export const createSettingsRuntime = (deps) => {
       }
     };
 
-    const orphanMatchesProject = async (orphan, project) => {
-      if (typeof project.path !== 'string' || !project.path.trim()) return false;
+    const orphanMatchesProject = async (orphan: OrphanProjectFile, project: NormalizedProject) => {
+      if (!isString(project.path) || !project.path.trim()) return false;
       const rels = extractRootRelPaths(orphan);
       for (const rel of rels) {
         if (await fileExistsInProject(project.path, rel)) {
@@ -479,16 +482,17 @@ export const createSettingsRuntime = (deps) => {
       }
       const name = basenameOf(project.path);
       if (!name) return false;
-      const haystacks = [
-        ...(Array.isArray(orphan.content['setup-worktree']) ? orphan.content['setup-worktree'] : []),
-        ...(Array.isArray(orphan.content.projectActions) ? orphan.content.projectActions.map((a) => `${a?.name || ''} ${a?.command || ''}`) : []),
-      ].join(' ').toLowerCase();
+      const setupLines = Array.isArray(orphan.content['setup-worktree']) ? orphan.content['setup-worktree'] : [];
+      const actionLines = Array.isArray(orphan.content.projectActions)
+        ? orphan.content.projectActions.map((a) => (isObjectLike(a) ? `${isString(a.name) ? a.name : ''} ${isString(a.command) ? a.command : ''}` : ''))
+        : [];
+      const haystacks = [...setupLines, ...actionLines].join(' ').toLowerCase();
       return haystacks.includes(name);
     };
 
-    const matches = new Map();
+    const matches = new Map<string, OrphanProjectFile[]>();
     for (const orphan of orphans) {
-      const matchedProjects = [];
+      const matchedProjects: NormalizedProject[] = [];
       for (const project of canonicalProjects) {
         if (await orphanMatchesProject(orphan, project)) {
           matchedProjects.push(project);
@@ -496,13 +500,15 @@ export const createSettingsRuntime = (deps) => {
       }
       if (matchedProjects.length === 1) {
         const project = matchedProjects[0];
-        const list = matches.get(project.id) || [];
-        list.push(orphan);
-        matches.set(project.id, list);
+        if (project) {
+          const list = matches.get(project.id) || [];
+          list.push(orphan);
+          matches.set(project.id, list);
+        }
       }
     }
 
-    const orphansConsumed = new Set();
+    const orphansConsumed = new Set<string>();
     for (const [projectId, orphansForProject] of matches.entries()) {
       const project = canonicalProjects.find((p) => p.id === projectId);
       if (!project) continue;
@@ -512,7 +518,6 @@ export const createSettingsRuntime = (deps) => {
 
       for (const orphan of orphansForProject) {
         const targetExisting = (await readJsonFile(targetPath)) || {};
-        // An orphan is named by the file found on disk, so its folder is the raw name.
         const orphanStorageDir = path.join(PROJECTS_ROOT_DIR, orphan.orphanId);
         const merged = mergeProjectConfigData({
           oldConfig: orphan.content,
@@ -535,16 +540,69 @@ export const createSettingsRuntime = (deps) => {
     }
   };
 
-  const readInstanceSettingsFromDisk = async () => {
+  const migrateSettingsToDeterministicProjectIds = async (current: SettingsDocument) => {
+    const settings: SettingsDocument = isObjectLike(current) ? current : {};
+    const projects = sanitizeProjects(settings.projects) || [];
+    if (projects.length === 0) {
+      return { settings, changed: false };
+    }
+
+    let changed = false;
+    const projectIdMap = new Map<string, string>();
+    const nextProjects: NormalizedProject[] = [];
+
+    for (const project of projects) {
+      const canonicalId = createProjectIdFromPath(project.path);
+      const nextId = canonicalId || project.id;
+      projectIdMap.set(project.id, nextId);
+      if (nextId !== project.id) {
+        changed = true;
+        await migrateProjectScopedStorage({ oldId: project.id, newId: nextId, projectPath: project.path });
+        await migrateProjectIconFiles({ oldId: project.id, newId: nextId });
+      }
+      await migrateRawIdStorageFolder(nextId);
+      nextProjects.push({ ...project, id: nextId });
+    }
+
+    if (!orphanRecoveryDone) {
+      orphanRecoveryDone = true;
+      try {
+        await recoverOrphanProjectFiles(nextProjects);
+      } catch (error) {
+        console.warn('[projects] Orphan recovery failed, continuing startup:', error);
+      }
+    }
+
+    if (!changed) {
+      return { settings, changed: false };
+    }
+
+    const currentActiveId = isString(settings.activeProjectId) ? settings.activeProjectId : '';
+    const nextActiveProjectId = projectIdMap.get(currentActiveId) || currentActiveId || nextProjects[0]?.id;
+    const nextSettings: SettingsDocument = {
+      ...settings,
+      projects: nextProjects,
+    };
+    if (nextActiveProjectId) {
+      nextSettings.activeProjectId = nextActiveProjectId;
+    }
+
+    return {
+      settings: nextSettings,
+      changed: true,
+    };
+  };
+
+  const readInstanceSettingsFromDisk = async (): Promise<SettingsDocument> => {
     try {
       const raw = await fsPromises.readFile(SETTINGS_FILE_PATH, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
+      const parsed: unknown = JSON.parse(raw);
+      if (isObjectLike(parsed)) {
         return parsed;
       }
       return {};
     } catch (error) {
-      if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      if (hasErrorCode(error) && error.code === 'ENOENT') {
         return {};
       }
       console.warn('Failed to read settings file:', error);
@@ -552,17 +610,12 @@ export const createSettingsRuntime = (deps) => {
     }
   };
 
-  /**
-   * `{ status: 'missing' }` when the file does not exist, `{ status: 'ok',
-   * fields }` when it parsed, `{ status: 'failed' }` for anything else. Only
-   * "missing" may be seeded; "failed" must leave the file alone.
-   */
-  const readPreferenceFields = async () => {
-    let raw;
+  const readPreferenceFields = async (): Promise<PreferenceReadResult> => {
+    let raw: string;
     try {
       raw = await fsPromises.readFile(PREFERENCES_FILE_PATH, 'utf8');
     } catch (error) {
-      if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      if (hasErrorCode(error) && error.code === 'ENOENT') {
         return { status: 'missing' };
       }
       if (!preferencesFailureLogged) {
@@ -583,17 +636,73 @@ export const createSettingsRuntime = (deps) => {
     return { status: 'ok', fields: parsed.fields };
   };
 
-  const writePreferencesToDisk = async (fields) => {
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const isTransientWindowsReplaceError = (error: unknown): error is { code: 'EPERM' | 'EACCES' | 'EBUSY' } => {
+    if (process.platform !== 'win32' || !hasErrorCode(error)) {
+      return false;
+    }
+    return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY';
+  };
+
+  const replaceFile = async (tmp: string, target: string) => {
+    const maxAttempts = process.platform === 'win32' ? 6 : 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        await fsPromises.rename(tmp, target);
+        return;
+      } catch (error) {
+        if (!isTransientWindowsReplaceError(error)) {
+          throw error;
+        }
+        if (attempt === maxAttempts) {
+          break;
+        }
+        await sleep(25 * attempt);
+      }
+    }
+    try {
+      await fsPromises.copyFile(tmp, target);
+    } finally {
+      await fsPromises.rm(tmp, { force: true }).catch(() => { });
+    }
+  };
+
+  const cleanupOrphanedSettingsTempFiles = async (directory: string) => {
+    try {
+      const entries = await fsPromises.readdir(directory, { withFileTypes: true });
+      const cleanupTasks = entries
+        .filter((entry) => entry.isFile() && (entry.name.startsWith('settings.json.tmp-') || entry.name.startsWith('preferences.json.tmp-')))
+        .map((entry) => fsPromises.rm(path.join(directory, entry.name), { force: true }).catch(() => { }));
+      await Promise.all(cleanupTasks);
+    } catch {
+      void 0;
+    }
+  };
+
+  const writeJsonFileAtomic = async (filePath: string, text: string) => {
+    const directory = path.dirname(filePath);
+    const created = await fsPromises.mkdir(directory, { recursive: true, mode: 0o700 });
+    if (created && process.platform !== 'win32') await fsPromises.chmod(directory, 0o700);
+    const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      await fsPromises.writeFile(tmp, text, { encoding: 'utf8', mode: 0o600 });
+      if (process.platform !== 'win32') await fsPromises.chmod(tmp, 0o600);
+      await replaceFile(tmp, filePath);
+      if (process.platform !== 'win32') await fsPromises.chmod(filePath, 0o600);
+    } catch (error) {
+      await fsPromises.rm(tmp, { force: true }).catch(() => { });
+      console.warn(`Failed to write ${path.basename(filePath)}:`, error);
+      throw error;
+    }
+  };
+
+  const writePreferencesToDisk = async (fields: PreferenceFields) => {
     await writeJsonFileAtomic(PREFERENCES_FILE_PATH, serializePreferencesDocument(fields));
   };
 
-  // The merged document every consumer sees: instance facts from settings.json
-  // plus the profile from preferences.json. On the first read of an install
-  // that predates the split, the profile keys still sitting in settings.json
-  // seed preferences.json. settings.json keeps a copy of the profile's base
-  // values on every write too, so an older build (which reads only that file)
-  // still finds everything where it used to be.
-  const readSettingsFromDisk = async ({ surface = null } = {}) => {
+  const readSettingsFromDisk = async ({ surface = null }: { surface?: SettingsDocument[string] } = {}): Promise<SettingsDocument> => {
     const instance = await readInstanceSettingsFromDisk();
     const preferences = await readPreferenceFields();
     if (preferences.status === 'failed') {
@@ -613,116 +722,29 @@ export const createSettingsRuntime = (deps) => {
     return { ...instance, ...flattenPreferences(preferences.fields, normalizeSettingsSurface(surface)) };
   };
 
-  // Strict variant for callers that REGENERATE persisted identity when a key is
-  // absent (relay signing/encryption keys). The lenient reader above maps every
-  // failure — corrupt JSON, EACCES, transient I/O — to `{}`, which such callers
-  // cannot distinguish from "first run": they would mint a NEW identity, orphan
-  // every paired device and push binding, and overwrite the settings file with
-  // the empty spread. Here only a genuinely missing file means "no settings";
-  // any other failure (including a non-object payload) throws.
-  const readSettingsFromDiskStrict = async () => {
-    let raw;
+  const readSettingsFromDiskStrict = async (): Promise<SettingsDocument> => {
+    let raw: string;
     try {
       raw = await fsPromises.readFile(SETTINGS_FILE_PATH, 'utf8');
     } catch (error) {
-      if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      if (hasErrorCode(error) && error.code === 'ENOENT') {
         return {};
       }
       throw error;
     }
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isObjectLike(parsed)) {
       throw new Error('Settings file is malformed (non-object payload)');
     }
     return parsed;
   };
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const isTransientWindowsReplaceError = (error) => {
-    if (process.platform !== 'win32' || !error || typeof error !== 'object') {
-      return false;
-    }
-    return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY';
-  };
-
-  const replaceFile = async (tmp, target) => {
-    const maxAttempts = process.platform === 'win32' ? 6 : 1;
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      try {
-        await fsPromises.rename(tmp, target);
-        return;
-      } catch (error) {
-        lastError = error;
-        if (!isTransientWindowsReplaceError(error) || attempt === maxAttempts) {
-          break;
-        }
-        await sleep(25 * attempt);
-      }
-    }
-
-    if (!isTransientWindowsReplaceError(lastError)) {
-      throw lastError;
-    }
-
-    // Windows can transiently reject atomic replacement when another process
-    // briefly opens the target file. Preserve atomic rename everywhere it works,
-    // but fall back to a direct replacement so settings persistence does not
-    // get permanently wedged on Windows desktop installs.
-    try {
-      await fsPromises.copyFile(tmp, target);
-    } finally {
-      await fsPromises.rm(tmp, { force: true }).catch(() => { });
-    }
-  };
-
-  const cleanupOrphanedSettingsTempFiles = async (directory) => {
-    try {
-      const entries = await fsPromises.readdir(directory, { withFileTypes: true });
-      const cleanupTasks = entries
-        .filter((entry) => entry.isFile() && (entry.name.startsWith('settings.json.tmp-') || entry.name.startsWith('preferences.json.tmp-')))
-        .map((entry) => fsPromises.rm(path.join(directory, entry.name), { force: true }).catch(() => { }));
-      await Promise.all(cleanupTasks);
-    } catch {
-      // Best-effort cleanup: errors reading directory must not fail settings operations
-    }
-  };
-
-  const writeJsonFileAtomic = async (filePath, text) => {
-    const directory = path.dirname(filePath);
-    // Tighten only a directory this write created (mkdir's mode is umasked):
-    // an existing one keeps the permissions and ACLs an administrator gave it.
-    const created = await fsPromises.mkdir(directory, { recursive: true, mode: 0o700 });
-    if (created && process.platform !== 'win32') await fsPromises.chmod(directory, 0o700);
-    // Atomic write: Electron main and ssh-manager read these files via plain
-    // readFile + JSON.parse and silently coerce parse errors to {}. A
-    // partial read during a non-atomic writeFile would make their next
-    // read-modify-write wipe the file.
-    const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    try {
-      await fsPromises.writeFile(tmp, text, { encoding: 'utf8', mode: 0o600 });
-      if (process.platform !== 'win32') await fsPromises.chmod(tmp, 0o600);
-      await replaceFile(tmp, filePath);
-      if (process.platform !== 'win32') await fsPromises.chmod(filePath, 0o600);
-    } catch (error) {
-      await fsPromises.rm(tmp, { force: true }).catch(() => { });
-      console.warn(`Failed to write ${path.basename(filePath)}:`, error);
-      throw error;
-    }
-  };
-
-  /**
-   * Persist a merged document: profile keys go to preferences.json (stamped
-   * when their value changed), everything else to settings.json. While
-   * preferences.json is unreadable its part is skipped rather than replaced.
-   */
-  const writeSettingsToDisk = async (settings, { surface = null, changedKeys = null } = {}) => {
-    const current = preferencesUnavailable ? { status: 'failed' } : await readPreferenceFields();
+  const writeSettingsToDisk = async (
+    settings: SettingsDocument,
+    { surface = null, changedKeys = null }: { surface?: SettingsDocument[string]; changedKeys?: Iterable<string> | null } = {},
+  ) => {
+    const current = preferencesUnavailable ? { status: 'failed' as const } : await readPreferenceFields();
     if (current.status === 'failed') {
-      // The profile part is not saved; settings.json keeps whatever legacy
-      // profile copy it already holds rather than losing it too.
       preferencesUnavailable = true;
       const onDisk = await readInstanceSettingsFromDisk();
       await writeJsonFileAtomic(SETTINGS_FILE_PATH, JSON.stringify({
@@ -740,13 +762,13 @@ export const createSettingsRuntime = (deps) => {
     await writePreferencesToDisk(nextFields);
   };
 
-  const validateProjectEntries = async (projects) => {
+  const validateProjectEntries = async (projects: SettingsDocument[string][]): Promise<SettingsDocument[string][]> => {
     if (!Array.isArray(projects)) {
       return [];
     }
 
     const validations = projects.map(async (project) => {
-      if (!project || typeof project.path !== 'string' || project.path.length === 0) {
+      if (!isObjectLike(project) || !isString(project.path) || project.path.length === 0) {
         console.warn('[validateProjectEntries] Dropping project entry with missing or empty path');
         return null;
       }
@@ -758,12 +780,10 @@ export const createSettingsRuntime = (deps) => {
         }
         return project;
       } catch (error) {
-        if (error && typeof error === 'object' && error.code === 'ENOENT') {
+        if (hasErrorCode(error) && error.code === 'ENOENT') {
           console.warn(`[validateProjectEntries] Dropping project — directory no longer exists: ${project.path}`);
           return null;
         }
-        // Permission or transient fs error — keep the project rather than
-        // silently losing it from the user's list.
         return project;
       }
     });
@@ -771,25 +791,22 @@ export const createSettingsRuntime = (deps) => {
     return (await Promise.all(validations)).filter((p) => p !== null);
   };
 
-  const migrateSettingsFromLegacyLastDirectory = async (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
+  const migrateSettingsFromLegacyLastDirectory = async (current: SettingsDocument) => {
+    const settings: SettingsDocument = isObjectLike(current) ? current : {};
     const now = Date.now();
 
     const sanitizedProjects = sanitizeProjects(settings.projects) || [];
     let nextProjects = sanitizedProjects;
-    let nextActiveProjectId =
-      typeof settings.activeProjectId === 'string' ? settings.activeProjectId : undefined;
-
+    let nextActiveProjectId = isString(settings.activeProjectId) ? settings.activeProjectId : undefined;
     let changed = false;
 
     if (nextProjects.length === 0) {
-      const legacy = typeof settings.lastDirectory === 'string' ? settings.lastDirectory.trim() : '';
+      const legacy = isString(settings.lastDirectory) ? settings.lastDirectory.trim() : '';
       const candidate = legacy ? resolveDirectoryCandidate(legacy) : null;
 
       if (candidate) {
         try {
           const stats = await fsPromises.stat(candidate);
-          // Automatic legacy promotion must not reassign the managed namespace.
           if (stats.isDirectory() && !await isManagedChatDirectory(candidate)) {
             const id = createProjectIdFromPath(candidate);
             nextProjects = [
@@ -804,7 +821,7 @@ export const createSettingsRuntime = (deps) => {
             changed = true;
           }
         } catch {
-          // ignore invalid lastDirectory
+          void 0;
         }
       }
     }
@@ -812,7 +829,7 @@ export const createSettingsRuntime = (deps) => {
     if (nextProjects.length > 0) {
       const active = nextProjects.find((project) => project.id === nextActiveProjectId) || null;
       if (!active) {
-        nextActiveProjectId = nextProjects[0].id;
+        nextActiveProjectId = nextProjects[0]?.id;
         changed = true;
       }
     } else if (nextActiveProjectId) {
@@ -824,23 +841,24 @@ export const createSettingsRuntime = (deps) => {
       return { settings, changed: false };
     }
 
-    const merged = mergePersistedSettings(settings, {
+    const nextSettings: SettingsDocument = {
       ...settings,
       projects: nextProjects,
-      ...(nextActiveProjectId ? { activeProjectId: nextActiveProjectId } : { activeProjectId: undefined }),
-    });
+      activeProjectId: nextActiveProjectId ?? undefined,
+    };
+    const merged = mergePersistedSettings(settings, nextSettings);
 
     return { settings: merged, changed: true };
   };
 
-  const migrateSettingsFromLegacyThemePreferences = async (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
+  const migrateSettingsFromLegacyThemePreferences = async (current: SettingsDocument) => {
+    const settings: SettingsDocument = isObjectLike(current) ? current : {};
 
-    const themeId = typeof settings.themeId === 'string' ? settings.themeId.trim() : '';
-    const themeVariant = typeof settings.themeVariant === 'string' ? settings.themeVariant.trim() : '';
+    const themeId = isString(settings.themeId) ? settings.themeId.trim() : '';
+    const themeVariant = isString(settings.themeVariant) ? settings.themeVariant.trim() : '';
 
-    const hasLight = typeof settings.lightThemeId === 'string' && settings.lightThemeId.trim().length > 0;
-    const hasDark = typeof settings.darkThemeId === 'string' && settings.darkThemeId.trim().length > 0;
+    const hasLight = isString(settings.lightThemeId) && settings.lightThemeId.trim().length > 0;
+    const hasDark = isString(settings.darkThemeId) && settings.darkThemeId.trim().length > 0;
 
     if (hasLight && hasDark) {
       return { settings, changed: false };
@@ -849,36 +867,27 @@ export const createSettingsRuntime = (deps) => {
     const defaultLight = 'openchamber-light';
     const defaultDark = 'openchamber-dark';
 
-    let nextLightThemeId = hasLight ? settings.lightThemeId : undefined;
-    let nextDarkThemeId = hasDark ? settings.darkThemeId : undefined;
+    let nextLightThemeId = hasLight && isString(settings.lightThemeId) ? settings.lightThemeId : undefined;
+    let nextDarkThemeId = hasDark && isString(settings.darkThemeId) ? settings.darkThemeId : undefined;
 
     if (!hasLight) {
-      if (themeId && themeVariant === 'light') {
-        nextLightThemeId = themeId;
-      } else {
-        nextLightThemeId = defaultLight;
-      }
+      nextLightThemeId = themeId && themeVariant === 'light' ? themeId : defaultLight;
     }
 
     if (!hasDark) {
-      if (themeId && themeVariant === 'dark') {
-        nextDarkThemeId = themeId;
-      } else {
-        nextDarkThemeId = defaultDark;
-      }
+      nextDarkThemeId = themeId && themeVariant === 'dark' ? themeId : defaultDark;
     }
 
-    const merged = mergePersistedSettings(settings, {
-      ...settings,
-      ...(nextLightThemeId ? { lightThemeId: nextLightThemeId } : {}),
-      ...(nextDarkThemeId ? { darkThemeId: nextDarkThemeId } : {}),
-    });
+    const patch: SettingsDocument = { ...settings };
+    if (nextLightThemeId) patch.lightThemeId = nextLightThemeId;
+    if (nextDarkThemeId) patch.darkThemeId = nextDarkThemeId;
+    const merged = mergePersistedSettings(settings, patch);
 
     return { settings: merged, changed: true };
   };
 
-  const migrateSettingsFromLegacyCollapsedProjects = async (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
+  const migrateSettingsFromLegacyCollapsedProjects = async (current: SettingsDocument) => {
+    const settings: SettingsDocument = isObjectLike(current) ? current : {};
     const collapsed = Array.isArray(settings.collapsedProjects)
       ? normalizeStringArray(settings.collapsedProjects)
       : [];
@@ -914,35 +923,35 @@ export const createSettingsRuntime = (deps) => {
       return { settings, changed: false };
     }
 
-    const next = { ...settings, projects: nextProjects };
+    const next: SettingsDocument = { ...settings, projects: nextProjects };
     delete next.collapsedProjects;
     return { settings: next, changed: true };
   };
 
-  const migrateSettingsNotificationDefaults = async (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
+  const migrateSettingsNotificationDefaults = async (current: SettingsDocument) => {
+    const settings: SettingsDocument = isObjectLike(current) ? current : {};
     let changed = false;
-    const next = { ...settings };
+    const next: SettingsDocument = { ...settings };
 
-    if (typeof settings.notifyOnSubtasks !== 'boolean') {
+    if (!isBoolean(settings.notifyOnSubtasks)) {
       next.notifyOnSubtasks = true;
       changed = true;
     }
-    if (typeof settings.notifyOnCompletion !== 'boolean') {
+    if (!isBoolean(settings.notifyOnCompletion)) {
       next.notifyOnCompletion = true;
       changed = true;
     }
-    if (typeof settings.notifyOnError !== 'boolean') {
+    if (!isBoolean(settings.notifyOnError)) {
       next.notifyOnError = true;
       changed = true;
     }
-    if (typeof settings.notifyOnQuestion !== 'boolean') {
+    if (!isBoolean(settings.notifyOnQuestion)) {
       next.notifyOnQuestion = true;
       changed = true;
     }
 
-    const { templates, changed: templatesChanged } = ensureNotificationTemplateShape(settings.notificationTemplates);
-    if (templatesChanged || !settings.notificationTemplates || typeof settings.notificationTemplates !== 'object') {
+    const { templates, changed: templatesChanged } = normalizeNotificationTemplates(settings.notificationTemplates);
+    if (templatesChanged || !isObjectLike(settings.notificationTemplates)) {
       next.notificationTemplates = templates;
       changed = true;
     }
@@ -950,9 +959,9 @@ export const createSettingsRuntime = (deps) => {
     return { settings: changed ? next : settings, changed };
   };
 
-  const migrateSettingsFromLegacyNamedTunnelKeys = async (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
-    const next = { ...settings };
+  const migrateSettingsFromLegacyNamedTunnelKeys = async (current: SettingsDocument) => {
+    const settings: SettingsDocument = isObjectLike(current) ? current : {};
+    const next: SettingsDocument = { ...settings };
     let changed = false;
 
     if (!Object.prototype.hasOwnProperty.call(next, 'managedRemoteTunnelHostname')
@@ -965,7 +974,7 @@ export const createSettingsRuntime = (deps) => {
       && Object.prototype.hasOwnProperty.call(next, 'namedTunnelToken')) {
       if (next.namedTunnelToken === null) {
         next.managedRemoteTunnelToken = null;
-      } else if (typeof next.namedTunnelToken === 'string') {
+      } else if (isString(next.namedTunnelToken)) {
         next.managedRemoteTunnelToken = next.namedTunnelToken.trim();
       }
       changed = true;
@@ -1000,11 +1009,8 @@ export const createSettingsRuntime = (deps) => {
     return { settings: changed ? next : settings, changed };
   };
 
-  // `approvedDirectories` was a write-only registry: every project path and
-  // visited directory was appended forever, but nothing ever read it. Strip
-  // the stale key from persisted settings on upgrade.
-  const migrateSettingsRemoveApprovedDirectories = (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
+  const migrateSettingsRemoveApprovedDirectories = (current: SettingsDocument) => {
+    const settings: SettingsDocument = isObjectLike(current) ? current : {};
     if (!Object.prototype.hasOwnProperty.call(settings, 'approvedDirectories')) {
       return { settings, changed: false };
     }
@@ -1015,7 +1021,7 @@ export const createSettingsRuntime = (deps) => {
 
   let hasCleanedOrphanedTempFiles = false;
 
-  const readSettingsFromDiskMigrated = async ({ surface = null } = {}) => {
+  const readSettingsFromDiskMigrated = async ({ surface = null }: { surface?: SettingsDocument[string] } = {}): Promise<SettingsDocument> => {
     if (!hasCleanedOrphanedTempFiles) {
       hasCleanedOrphanedTempFiles = true;
       await cleanupOrphanedSettingsTempFiles(path.dirname(SETTINGS_FILE_PATH));
@@ -1032,35 +1038,33 @@ export const createSettingsRuntime = (deps) => {
     if (migration1.changed || migration2.changed || migration3.changed || migration4.changed || migration5.changed || migration6.changed || migration7.changed || migration8.changed) {
       await writeSettingsToDisk(migration8.settings);
     }
-    // Migrations run on the base view; a surface asks for its own resolution
-    // of the per-surface keys on top of the migrated files.
     return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration8.settings;
   };
 
   const { enqueue, updateSettingsFromDisk } = createSettingsWriteQueue(readSettingsFromDiskMigrated, writeSettingsToDisk);
-  const persistResolvedSettings = async (resolveChanges, { surface = null, preserveProjectIcons = false } = {}) => {
+
+  const persistResolvedSettings = async (
+    resolveChanges: SettingsDocument | ((current: SettingsDocument) => SettingsDocument),
+    { surface = null, preserveProjectIcons = false }: { surface?: SettingsDocument[string]; preserveProjectIcons?: boolean } = {},
+  ) => {
     return enqueue(async () => {
       const current = await readSettingsFromDisk({ surface });
-      const changes = typeof resolveChanges === 'function' ? resolveChanges(current) : resolveChanges;
-      // Log field names only — changes can carry credentials (UI password,
-      // client tokens, tunnel tokens) that must never reach the log file.
+      const changes = isCallable(resolveChanges) ? resolveChanges(current) : resolveChanges;
       console.log('[persistSettings] Updating fields:', Object.keys(changes || {}).join(', ') || '(none)');
       const sanitized = sanitizeSettingsUpdate(changes);
       if (preserveProjectIcons && Array.isArray(sanitized.projects)) {
-        const iconsByPath = new Map(sanitizeProjects(current.projects)?.map(({ path, iconImage }) => [path, iconImage]));
+        const iconsByPath = new Map(sanitizeProjects(current.projects)?.map((project) => [project.path, project.iconImage]));
         sanitized.projects = sanitized.projects.map(({ iconImage: _clientIcon, ...project }) => {
           const iconImage = iconsByPath.get(project.path);
           return iconImage === undefined ? project : { ...project, iconImage };
         });
       }
       for (const key of Object.keys(sanitized)) {
-        // Device state belongs to the install in front of the user, never to
-        // the instance; a client that still sends it is simply ignored.
         if (isDeviceSettingsKey(key)) {
-          delete sanitized[key];
+          Reflect.deleteProperty(sanitized, key);
         } else if (preferencesUnavailable && isProfileSettingsKey(key)) {
           console.warn(`[persistSettings] Dropping ${key}: preferences file is unreadable`);
-          delete sanitized[key];
+          Reflect.deleteProperty(sanitized, key);
         }
       }
       let next = mergePersistedSettings(current, sanitized);
@@ -1080,20 +1084,19 @@ export const createSettingsRuntime = (deps) => {
         next = approvedDirectoriesMigration.settings;
       }
 
-      // Validating project paths hits the filesystem for every entry, so only
-      // do it when the incoming update actually touches the projects list —
-      // not on every theme/window-state/etc. save.
       if (Object.prototype.hasOwnProperty.call(sanitized, 'projects') && Array.isArray(next.projects)) {
         const validated = await validateProjectEntries(next.projects);
         next = { ...next, projects: validated };
       }
 
       if (Array.isArray(next.projects) && next.projects.length > 0) {
-        const activeId = typeof next.activeProjectId === 'string' ? next.activeProjectId : '';
+        const activeId = isString(next.activeProjectId) ? next.activeProjectId : '';
         const active = next.projects.find((project) => project.id === activeId) || null;
-        if (!active) {
-          console.log(`[persistSettings] Active project ID ${activeId} not found, switching to ${next.projects[0].id}`);
-          next = { ...next, activeProjectId: next.projects[0].id };
+        const firstProject = isObjectLike(next.projects[0]) ? next.projects[0] : null;
+        const firstProjectId = firstProject && isString(firstProject.id) ? firstProject.id : undefined;
+        if (!active && firstProjectId) {
+          console.log(`[persistSettings] Active project ID ${activeId} not found, switching to ${firstProjectId}`);
+          next = { ...next, activeProjectId: firstProjectId };
         }
       } else if (next.activeProjectId) {
         console.log(`[persistSettings] No projects found, clearing activeProjectId ${next.activeProjectId}`);
@@ -1105,21 +1108,25 @@ export const createSettingsRuntime = (deps) => {
       }
 
       if (Object.prototype.hasOwnProperty.call(sanitized, 'managedRemoteTunnelPresetTokens') && sanitized.managedRemoteTunnelPresetTokens) {
-        const presetsById = new Map((next.managedRemoteTunnelPresets || []).map((entry) => [entry.id, entry]));
-        const updates = Object.entries(sanitized.managedRemoteTunnelPresetTokens)
-          .map(([presetId, token]) => {
-            const preset = presetsById.get(presetId);
-            if (!preset || typeof token !== 'string' || token.trim().length === 0) {
-              return null;
-            }
-            return {
-              id: preset.id,
-              name: preset.name,
-              hostname: preset.hostname,
-              token: token.trim(),
-            };
-          })
-          .filter(Boolean);
+        const currentPresets = Array.isArray(next.managedRemoteTunnelPresets) ? next.managedRemoteTunnelPresets : [];
+        const presetsById = new Map(
+          currentPresets
+            .filter((entry): entry is ManagedRemoteTunnelPreset => isObjectLike(entry) && isString(entry.id) && isString(entry.name) && isString(entry.hostname))
+            .map((entry) => [entry.id, entry]),
+        );
+        const updates: Array<{ id: string; name: string; hostname: string; token: string }> = [];
+        for (const [presetId, token] of Object.entries(sanitized.managedRemoteTunnelPresetTokens)) {
+          const preset = presetsById.get(presetId);
+          if (!preset || !isString(token) || token.trim().length === 0) {
+            continue;
+          }
+          updates.push({
+            id: preset.id,
+            name: preset.name,
+            hostname: preset.hostname,
+            token: token.trim(),
+          });
+        }
 
         for (const update of updates) {
           await upsertManagedRemoteTunnelToken(update);
@@ -1128,7 +1135,6 @@ export const createSettingsRuntime = (deps) => {
 
       const changedKeys = Object.keys(sanitized);
       await writeSettingsToDisk(next, { surface, changedKeys });
-      // The search index starts or stops in the background; the save does not wait for it.
       if (changedKeys.includes('messageSearchEnabled')) {
         onMessageSearchEnabledChanged(next.messageSearchEnabled === true);
       }
@@ -1139,7 +1145,10 @@ export const createSettingsRuntime = (deps) => {
     });
   };
 
-  const persistSettings = (changes, options) => persistResolvedSettings(() => changes, options);
+  const persistSettings = (
+    changes: SettingsDocument,
+    options?: { surface?: SettingsDocument[string]; preserveProjectIcons?: boolean },
+  ) => persistResolvedSettings(() => changes, options);
 
   return {
     readSettingsFromDisk,

@@ -37,7 +37,6 @@ type ServiceRuntime = {
   status: 'starting' | 'ready' | 'failed' | 'stopped';
   packageRoot: string;
   entry: string;
-  released: Promise<void>;
 };
 type HostLifecycle = {
   accepting: boolean;
@@ -73,8 +72,6 @@ const runtimes = new Map<string, ServiceRuntime>();
 const startingByGuest = new Map<string, Promise<ServiceRuntime>>();
 const stoppingByGuest = new Map<string, Promise<void>>();
 
-// Requests retain their lifecycle object across awaits. A later host start
-// cannot reopen admission for work that belonged to the previous host.
 let hostLifecycle: HostLifecycle = { accepting: true };
 
 export const beginGuestServiceHost = () => {
@@ -366,8 +363,6 @@ const startGuestService = async ({
   lifecycle,
 }: ServiceStart) => {
   assertGuestHostActive(lifecycle);
-  // A replacement must not occupy the same guest slot while its previous
-  // child is still stopping; host shutdown must be able to drain both.
   const previousStop = stoppingByGuest.get(guestId);
   if (previousStop) await previousStop;
   assertGuestHostActive(lifecycle);

@@ -1,13 +1,13 @@
-/**
- * Two capabilities, two tools.
- *
- * Controlling sessions and driving a page are different intents, and a single
- * tool description covering both is vaguer than either — which is how a model
- * ends up calling the wrong one. Separate tools also mean turning one off
- * removes it entirely, parameters included, rather than leaving its inputs
- * visible in a shared schema.
- */
-const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
+import { isString } from '../shared/guards.js';
+
+interface ControlActionDefinition {
+  readonly action: string;
+  readonly title: string;
+  readonly description: string;
+  readonly agentExposed?: false;
+}
+
+const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'terminal.list', title: 'List terminal panels', description: 'List terminal panels in the captured workspace; requires the user to enable terminal reading in Settings' },
   { action: 'terminal.read', title: 'Read terminal panel output', description: 'Read output from a terminal sessionId listed in this workspace; optional maxBytes; requires terminal reading enabled in Settings' },
   { action: 'projects.list', title: 'List configured projects', description: 'List configured projects; no parameters' },
@@ -38,14 +38,14 @@ const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'file.open', title: 'Show a file to the user', description: 'Open path in the user\'s file panel, in front of whatever they had open, so they can look at a result you produced: a screenshot, report, CSV, recording, or generated page. Relative to the session directory. Use it only when seeing the file moves the work forward, not for every file you touch' },
 ]);
 
-const OPENCHAMBER_CONTROL_ACTIONS = Object.freeze(
+const OPENCHAMBER_CONTROL_ACTIONS: readonly string[] = Object.freeze(
   OPENCHAMBER_CONTROL_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-const AGENT_EXPOSED_CONTROL_ACTION_DEFINITIONS = OPENCHAMBER_CONTROL_ACTION_DEFINITIONS
+const AGENT_EXPOSED_CONTROL_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = OPENCHAMBER_CONTROL_ACTION_DEFINITIONS
   .filter(({ agentExposed }) => agentExposed !== false);
 
-const OPENCHAMBER_WEB_ACTION_DEFINITIONS = Object.freeze([
+const OPENCHAMBER_WEB_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'browser.open', title: 'Open a page in the browser panel', description: 'Open url in the in-app browser panel; use it to look at the running app. Without tabId it opens a new background tab and answers with its tabId: pass that tabId to the following actions to keep working there. With tabId it loads url in that tab. Set viewport to mobile, tablet or desktop to lay the page out at that size. The result says whether this client can drive the page: drivable false means display-only, so later browser actions cannot run there' },
   { action: 'browser.snapshot', title: 'Read the open page', description: 'Read the open page: url, title, visible text, and interactive elements with the selectors the other browser actions accept. Pass selector to read only that part of a long page. Reports any errors the page logged, and lists the open tabs with the ids tabId accepts and who opened each: you, the user, or another session' },
   { action: 'browser.click', title: 'Click on the open page', description: 'Click an element; give selector, or text to match a link or button by its visible label' },
@@ -61,65 +61,48 @@ const OPENCHAMBER_WEB_ACTION_DEFINITIONS = Object.freeze([
   { action: 'browser.close', title: 'Close a browser tab', description: 'Close a tab this session opened; without tabId, its most recent one. Never a tab the user opened' },
 ]);
 
-export const OPENCHAMBER_WEB_ACTIONS = Object.freeze(
+export const OPENCHAMBER_WEB_ACTIONS: readonly string[] = Object.freeze(
   OPENCHAMBER_WEB_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-
-/**
- * Project knowledge: keeping the Notes, Todos and Plans the user sees in the
- * panel is a distinct intent from running sessions. One small vocabulary with
- * `kind` keeps the bare verbs unambiguous, the way memory's are. Plans are
- * markdown files, so reading one and small edits use the agent's own file
- * tools on the path list gives.
- */
-const OPENCHAMBER_KNOWLEDGE_ACTION_DEFINITIONS = Object.freeze([
+const OPENCHAMBER_KNOWLEDGE_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'knowledge.list', title: 'List project knowledge', description: 'Notes with text, todos with state and links, plans with their file paths and session. Optional planId and ready filters. List before adding, to avoid duplicates' },
   { action: 'knowledge.save', title: 'Save project knowledge', description: 'Requires kind and body; with id it replaces. A plan body is the whole markdown, and the answer gives its path. An update may send only the fields it changes: completed, planId or dependsOn; sessionId on a plan, without body' },
   { action: 'knowledge.delete', title: 'Delete project knowledge', description: 'Requires kind and id' },
   { action: 'knowledge.show', title: 'Show a plan to the user', description: 'Open a plan for the user to read, comment on and send to a session; requires kind plan and id' },
 ]);
 
-export const OPENCHAMBER_KNOWLEDGE_ACTIONS = Object.freeze(
+export const OPENCHAMBER_KNOWLEDGE_ACTIONS: readonly string[] = Object.freeze(
   OPENCHAMBER_KNOWLEDGE_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-/**
- * Notify is its own tool so it can stay off by default and disappear
- * completely: an agent that can page the user is a choice the user makes.
- */
-const OPENCHAMBER_NOTIFY_ACTION_DEFINITIONS = Object.freeze([
+const OPENCHAMBER_NOTIFY_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'notify.send', title: 'Notify the user', description: 'Send the user a notification; requires title, body is optional. By default it appears only while the user is away from OhPiChamber; set showWhenFocused only when it cannot wait' },
 ]);
 
-export const OPENCHAMBER_NOTIFY_ACTIONS = Object.freeze(
+export const OPENCHAMBER_NOTIFY_ACTIONS: readonly string[] = Object.freeze(
   OPENCHAMBER_NOTIFY_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-/**
- * Render draws a page into the chat. The page itself travels in the call's
- * input, which the chat already stores and syncs, so the action only checks it.
- */
-const OPENCHAMBER_RENDER_ACTION_DEFINITIONS = Object.freeze([
+const OPENCHAMBER_RENDER_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'render.page', title: 'Show a page', description: 'Requires html and title' },
 ]);
 
-export const OPENCHAMBER_RENDER_ACTIONS = Object.freeze(
+export const OPENCHAMBER_RENDER_ACTIONS: readonly string[] = Object.freeze(
   OPENCHAMBER_RENDER_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-export const OPENCHAMBER_SECRET_ACTIONS = Object.freeze(['secret.run', 'secret.forget', 'secret.request']);
+export const OPENCHAMBER_SECRET_ACTIONS: readonly string[] = Object.freeze(['secret.run', 'secret.forget', 'secret.request']);
 
-export const OPENCHAMBER_USAGE_ACTION_DEFINITIONS = Object.freeze([
+export const OPENCHAMBER_USAGE_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'usage.read', title: 'Read usage limits', description: 'Usage windows, percentages and resets for configured providers in this workspace; providerId reads one' },
 ]);
-export const OPENCHAMBER_USAGE_ACTIONS = Object.freeze(OPENCHAMBER_USAGE_ACTION_DEFINITIONS.map(({ action }) => action));
 
-/**
- * Workflows fan a large task out to many agents. They ship dark behind
- * OPENCHAMBER_WORKFLOWS_ENABLE; a build without the runtime answers 503.
- */
-const OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS = Object.freeze([
+export const OPENCHAMBER_USAGE_ACTIONS: readonly string[] = Object.freeze(
+  OPENCHAMBER_USAGE_ACTION_DEFINITIONS.map(({ action }) => action),
+);
+
+const OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'workflow.check', title: 'Check a workflow', description: 'Compile script, or a saved workflow by name, without running it: its name, description and phases' },
   { action: 'workflow.run', title: 'Propose a workflow run', description: 'script, or name of a saved workflow, with optional args. The user approves the plan in the chat; the report arrives here as a message when the run ends. Returns runId at once' },
   { action: 'workflow.status', title: 'Check a workflow run', description: 'Phases, agents with their state, key and session id, recent log lines and a result preview of runId' },
@@ -130,115 +113,31 @@ const OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS = Object.freeze([
   { action: 'workflow.list', title: 'List workflows', description: "This project's saved workflows and this session's runs" },
 ]);
 
-
-/**
- * How a workflow agent asked for a schema answer hands it over. A tool of its
- * own: the managed config denies it in every session
- * (`../agent-tool/runtime.js`, `managedPermissionRules`) and the session of a
- * workflow agent asked for one allows it (`../workflows/agent-session.js`), so
- * no other session carries its declaration.
- */
 export const WORKFLOW_ANSWER_TOOL = 'openchamber_workflow_answer';
 
-const OPENCHAMBER_WORKFLOW_ANSWER_ACTION_DEFINITIONS = Object.freeze([
+const OPENCHAMBER_WORKFLOW_ANSWER_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   { action: 'workflow.answer', title: 'Submit a workflow answer', description: 'Only for a workflow agent whose prompt asks for it: answer, a JSON value matching the schema in that prompt. Checked on the spot; a mismatch says what to fix' },
 ]);
 
-const OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS = Object.freeze(
+const OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS: readonly string[] = Object.freeze(
   OPENCHAMBER_WORKFLOW_ANSWER_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-export const OPENCHAMBER_WORKFLOW_ACTIONS = Object.freeze([
+export const OPENCHAMBER_WORKFLOW_ACTIONS: readonly string[] = Object.freeze([
   ...OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS.map(({ action }) => action),
   ...OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS,
 ]);
 
-/**
- * What the managed `openchamber` tool may ask for. Scheduling stays in this
- * tool: the Host declares one control tool and moving schedule actions to a
- * second name would leave them unreachable. Workflow actions join it because
- * an agent without the separate `openchamber_workflow` tool still proposes,
- * follows and answers a run through the control tool it already carries;
- * knowledge has its own tool (`openchamber_knowledge`), so its verbs stay out
- * and a bare `delete` keeps meaning schedule.delete here.
- */
-const OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS = Object.freeze([
+const OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS: readonly ControlActionDefinition[] = Object.freeze([
   ...AGENT_EXPOSED_CONTROL_ACTION_DEFINITIONS,
-  // Workflow actions ride this one tool too: the separate `openchamber_workflow`
-  // tool can be switched off in Settings while session control stays on, and an
-  // agent then still needs these verbs to propose, follow or answer a run. The
-  // runtime answers 503 when the feature is off.
   ...OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS,
 ]);
 
-export const OPENCHAMBER_AGENT_TOOL_ACTIONS = Object.freeze(
+export const OPENCHAMBER_AGENT_TOOL_ACTIONS: readonly string[] = Object.freeze(
   OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-/**
- * Which actions each managed tool may ask for.
- *
- * The callback needs this because models routinely drop the namespace: asked
- * for `memory.read` from a tool already called `openchamber_memory`, they send
- * `read`, since the tool's own name appears to have said "memory" already. The
- * name is unambiguous inside one tool's action set even when it is not across
- * all of them (`delete` belongs to both schedule and memory), so resolution
- * starts from the tool that asked.
- */
-const ACTIONS_BY_TOOL = Object.freeze({
-  openchamber_usage: OPENCHAMBER_USAGE_ACTIONS,
-  openchamber: OPENCHAMBER_AGENT_TOOL_ACTIONS,
-  web: OPENCHAMBER_WEB_ACTIONS,
-  openchamber_knowledge: OPENCHAMBER_KNOWLEDGE_ACTIONS,
-  notify: OPENCHAMBER_NOTIFY_ACTIONS,
-  openchamber_render: OPENCHAMBER_RENDER_ACTIONS,
-  openchamber_secret: OPENCHAMBER_SECRET_ACTIONS,
-  openchamber_workflow: OPENCHAMBER_WORKFLOW_ACTIONS,
-  [WORKFLOW_ANSWER_TOOL]: OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS,
-});
-
-const bareName = (action) => {
-  const separator = action.indexOf('.');
-  return separator === -1 ? action : action.slice(separator + 1);
-};
-
-const uniqueMatch = (candidates, requested) => {
-  const matches = candidates.filter((candidate) => bareName(candidate) === requested);
-  return matches.length === 1 ? matches[0] : null;
-};
-
-/**
- * The canonical action for what a tool asked, or the reason it could not be
- * resolved. The reason lists what the tool can actually do: an error that only
- * says "unsupported" leaves the model to guess again, which is how one wrong
- * name becomes three.
- */
-export const resolveAgentToolAction = (requested, toolName) => {
-  const value = typeof requested === 'string' ? requested.trim() : '';
-  const scoped = ACTIONS_BY_TOOL[toolName] ?? null;
-  const known = scoped ?? OPENCHAMBER_ALL_ACTIONS;
-
-  if (value && known.includes(value)) {
-    return { action: value };
-  }
-  if (value) {
-    const resolved = uniqueMatch(known, value)
-      // A tool that did not identify itself still gets the benefit when the
-      // bare name means only one thing across every action.
-      ?? (scoped ? null : uniqueMatch(OPENCHAMBER_ALL_ACTIONS, value));
-    if (resolved) {
-      return { action: resolved };
-    }
-  }
-
-  return {
-    error: `Unsupported OhPiChamber action: ${value || 'missing'}. Use one of: ${known.join(', ')}`,
-  };
-};
-
-/** Everything the callback route will dispatch, whichever tool asked. */
-
-export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
+export const OPENCHAMBER_ALL_ACTIONS: readonly string[] = Object.freeze([
   ...OPENCHAMBER_USAGE_ACTIONS,
   ...OPENCHAMBER_CONTROL_ACTIONS,
   ...OPENCHAMBER_WEB_ACTIONS,
@@ -249,3 +148,51 @@ export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
   ...OPENCHAMBER_WORKFLOW_ACTIONS,
   ...OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS,
 ]);
+
+const ACTIONS_BY_TOOL = new Map<string, readonly string[]>([
+  ['openchamber_usage', OPENCHAMBER_USAGE_ACTIONS],
+  ['openchamber', OPENCHAMBER_AGENT_TOOL_ACTIONS],
+  ['web', OPENCHAMBER_WEB_ACTIONS],
+  ['openchamber_knowledge', OPENCHAMBER_KNOWLEDGE_ACTIONS],
+  ['notify', OPENCHAMBER_NOTIFY_ACTIONS],
+  ['openchamber_render', OPENCHAMBER_RENDER_ACTIONS],
+  ['openchamber_secret', OPENCHAMBER_SECRET_ACTIONS],
+  ['openchamber_workflow', OPENCHAMBER_WORKFLOW_ACTIONS],
+  [WORKFLOW_ANSWER_TOOL, OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS],
+]);
+
+const bareName = (action: string): string => {
+  const separator = action.indexOf('.');
+  return separator === -1 ? action : action.slice(separator + 1);
+};
+
+const uniqueMatch = (candidates: readonly string[], requested: string): string | null => {
+  const matches = candidates.filter((candidate) => bareName(candidate) === requested);
+  return matches.length === 1 ? (matches[0] ?? null) : null;
+};
+
+export type ResolvedAgentToolAction = { action: string; error?: never } | { error: string; action?: never };
+
+export const resolveAgentToolAction = (
+  requested: string | null | undefined,
+  toolName?: string | null | undefined,
+): ResolvedAgentToolAction => {
+  const value = isString(requested) ? requested.trim() : '';
+  const scoped = toolName ? (ACTIONS_BY_TOOL.get(toolName) ?? null) : null;
+  const known = scoped ?? OPENCHAMBER_ALL_ACTIONS;
+
+  if (value && known.includes(value)) {
+    return { action: value };
+  }
+  if (value) {
+    const resolved = uniqueMatch(known, value)
+      ?? (scoped ? null : uniqueMatch(OPENCHAMBER_ALL_ACTIONS, value));
+    if (resolved) {
+      return { action: resolved };
+    }
+  }
+
+  return {
+    error: `Unsupported OhPiChamber action: ${value || 'missing'}. Use one of: ${known.join(', ')}`,
+  };
+};

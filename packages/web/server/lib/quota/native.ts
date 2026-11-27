@@ -1,3 +1,4 @@
+import type { JsonValue } from '../shared/json-values.js';
 import { z } from 'zod';
 import { UsageStatsSchema, UsageQuerySchema } from '@openchamber/agent-contract';
 import type { UsageAuthReport, UsageAuthLimit } from '@openchamber/agent-contract';
@@ -141,7 +142,7 @@ interface WorkspaceScopeReader {
 interface NativeUsageReaderDependencies {
   service: {
     getState: () => { phase: string };
-    request: (path: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json: () => Promise<never> }>;
+    request: (path: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json: () => Promise<JsonValue> }>;
   };
   resolveWorkspaceScope: WorkspaceScopeReader;
 }
