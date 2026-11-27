@@ -32,6 +32,7 @@ Los dispositivos vinculados mediante [Conectar un dispositivo](/es/connect-devic
 ## Antes de exponerlo
 
 - De forma predeterminada, OhPiChamber solo escucha en tu propia máquina (`127.0.0.1`). Hace falta un cambio deliberado para escuchar más ampliamente, y deberías definir una contraseña primero.
+- Lo mismo vale para el endpoint de apagado: sin contraseña, cualquier cosa que pueda alcanzar el listener puede detener el servidor, no solo leerlo.
 - Para tus propios dispositivos, prefiere la [vinculación](/es/connect-devices/) con el [Private Relay](/es/private-relay/): no se expone nada públicamente.
 - Si necesitas una URL pública, prefiere un [túnel](/es/tunnels/) o una red privada (como una VPN) antes que abrir un puerto a internet.
 - Si pones OhPiChamber detrás de tu propio servidor HTTPS, consulta [Proxy inverso](/es/reverse-proxy/).

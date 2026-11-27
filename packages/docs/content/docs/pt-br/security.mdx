@@ -32,6 +32,7 @@ Os dispositivos pareados por [Conectar um Dispositivo](/pt-br/connect-devices/) 
 ## Antes de expô-lo
 
 - Por padrão, o OhPiChamber só escuta na sua própria máquina (`127.0.0.1`). É preciso uma mudança deliberada para escutar mais amplamente, e você deve definir uma senha primeiro.
+- O mesmo vale para o endpoint de desligamento: sem senha, qualquer coisa que possa alcançar o listener pode parar o servidor, não apenas lê-lo.
 - Para os seus próprios dispositivos, prefira o [pareamento](/pt-br/connect-devices/) com o [Private Relay](/pt-br/private-relay/) — nada fica exposto publicamente.
 - Se você precisa de uma URL pública, prefira um [túnel](/pt-br/tunnels/) ou uma rede privada (como uma VPN) a abrir uma porta para a internet.
 - Se você colocar o OhPiChamber atrás do seu próprio servidor HTTPS, veja [Reverse Proxy](/pt-br/reverse-proxy/).

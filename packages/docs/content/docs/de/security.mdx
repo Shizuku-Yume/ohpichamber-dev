@@ -32,6 +32,7 @@ Geräte, die über [Ein Gerät verbinden](/de/connect-devices/) gekoppelt werden
 ## Bevor Sie es freigeben
 
 - Standardmäßig lauscht OhPiChamber nur auf Ihrem eigenen Rechner (`127.0.0.1`). Es braucht eine bewusste Änderung, um breiter zu lauschen, und Sie sollten vorher ein Passwort setzen.
+- Das gilt auch für den Shutdown-Endpunkt: Ohne Passwort kann alles, was den Listener erreicht, den Server stoppen — nicht nur lesen.
 - Für Ihre eigenen Geräte bevorzugen Sie [Pairing](/de/connect-devices/) mit dem [Private Relay](/de/private-relay/) — dabei wird überhaupt nichts öffentlich freigegeben.
 - Wenn Sie eine öffentliche URL brauchen, verwenden Sie lieber einen [Tunnel](/de/tunnels/) oder ein privates Netzwerk (z. B. VPN), statt einen Port ins Internet zu öffnen.
 - Wenn Sie OhPiChamber hinter Ihrem eigenen HTTPS-Server betreiben, sehen Sie sich [Reverse Proxy](/de/reverse-proxy/) an.

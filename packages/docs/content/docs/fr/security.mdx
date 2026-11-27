@@ -32,6 +32,7 @@ Les appareils associés via [Connecter un appareil](/fr/connect-devices/) s’au
 ## Avant de l’exposer
 
 - Par défaut, OhPiChamber n’écoute que sur votre propre machine (`127.0.0.1`). Écouter plus largement demande un changement volontaire, et vous devriez définir un mot de passe d’abord.
+- Même chose pour l’endpoint d’arrêt : sans mot de passe, tout ce qui peut atteindre le listener peut arrêter le serveur, pas seulement le lire.
 - Pour vos propres appareils, préférez l’[association](/fr/connect-devices/) avec le [Relais privé](/fr/private-relay/) — rien n’est exposé publiquement du tout.
 - S’il vous faut une URL publique, préférez un [tunnel](/fr/tunnels/) ou un réseau privé (comme un VPN) plutôt que d’ouvrir un port sur internet.
 - Si vous placez OhPiChamber derrière votre propre serveur HTTPS, consultez [Reverse proxy](/fr/reverse-proxy/).

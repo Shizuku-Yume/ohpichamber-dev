@@ -32,6 +32,7 @@ Apparaten die via [Een apparaat verbinden](/nl/connect-devices/) zijn gekoppeld,
 ## Voordat u netwerktoegang geeft
 
 - Standaard luistert OhPiChamber alleen op uw eigen computer, op `127.0.0.1`. Breder luisteren vereist een bewuste wijziging. Stel eerst een wachtwoord in.
+- Hetzelfde geldt voor het shutdown-endpoint: zonder wachtwoord kan alles wat de listener bereikt de server stoppen, niet alleen lezen.
 - Gebruik voor eigen apparaten bij voorkeur [koppeling](/nl/connect-devices/) met de [Privérelay](/nl/private-relay/). Daarmee wordt niets openbaar bereikbaar.
 - Hebt u een openbare URL nodig, kies dan liever een [tunnel](/nl/tunnels/) of een privénetwerk zoals een VPN dan een rechtstreeks geopende internetpoort.
 - Gebruikt u een eigen HTTPS-server vóór OhPiChamber, zie [Reverse proxy](/nl/reverse-proxy/).
