@@ -64,13 +64,15 @@ test('re-reads the tracker list and every status when the server announces a cha
 
     // An extension's tracker attached: the list and the statuses are read again.
     served = [linearLikeTrackerDescriptor(), acmeTrackerDescriptor({ id: 'ext-acme' })];
-    await act(async () => source.emit('openchamber:guests-changed'));
+    await act(async () => source.emit('openchamber:tracker-providers-changed'));
     expect(reads).toBe(2);
     expect(ids()).toEqual(['linear', 'ext-acme']);
     expect(statusReads).toContain('ext-acme');
 
-    // A reconnect reads again too; an unrelated event does not.
-    await act(async () => source.emit('openchamber:source-control-providers-changed'));
+    // A reconnect reads again too; an unrelated event — even the extension
+    // catalog's own, which carries tracker changes the registry already
+    // announced — does not.
+    await act(async () => source.emit('openchamber:guests-changed'));
     expect(reads).toBe(2);
     await act(async () => source.emit('openchamber:event-stream-ready'));
     expect(reads).toBe(3);

@@ -94,6 +94,8 @@ type BrowserProviderResetEvent = { type: 'browser-provider-reset' } & z.infer<ty
 
 type SourceControlProvidersChangedEvent = { type: 'source-control-providers-changed' };
 
+type TrackerProvidersChangedEvent = { type: 'tracker-providers-changed' };
+
 /**
  * A usage limit stopped a session and the server moved on: the provider to
  * its next account (for every session), or this session to the fallback model.
@@ -238,6 +240,7 @@ type OpenChamberEvent =
  | PlanOpenRequestEvent
  | BrowserProviderResetEvent
  | SourceControlProvidersChangedEvent
+ | TrackerProvidersChangedEvent
  | LimitFailoverEvent
  | ProjectContextChangedEvent
  | SessionFoldersChangedEvent
@@ -633,6 +636,11 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
 
  if (envelope.type === 'openchamber:source-control-providers-changed') {
   for (const listener of listeners) listener({ type: 'source-control-providers-changed' });
+  return;
+ }
+
+ if (envelope.type === 'openchamber:tracker-providers-changed') {
+  for (const listener of listeners) listener({ type: 'tracker-providers-changed' });
   return;
  }
 

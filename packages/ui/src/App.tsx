@@ -593,7 +593,7 @@ function App({ apis }: AppProps) {
   useGuestCatalogSync();
   useGuestInstallLinks();
   useProviderSyncs(apis.sourceControl);
-  useHostInvalidationSync();
+  useHostInvalidationSync({ trackers: apis.trackers });
   useRoutingSync();
   useEnterprisePolicySync();
   // Desktop windows on a relay host; the phone has its own handling in MobileApp.

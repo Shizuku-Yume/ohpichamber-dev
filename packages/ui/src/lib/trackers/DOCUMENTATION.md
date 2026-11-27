@@ -67,12 +67,17 @@ on the source-control side (`lib/source-control/`).
   serves a tracker is approved, paused, removed, or connects its first server
   (which fixes its link patterns). The server announces each with
   `openchamber:tracker-providers-changed` on the event stream, and
-  `useTrackerProviderSync` (mounted once in `App` and `MobileApp`) answers it,
-  and the stream's reconnect, with `refreshTrackers`, so the registry and every
-  auth status follow. A tracker that leaves the list reads as
-  `unknownTrackerDescriptor` wherever an item still names it: its items stay in
-  the session's linked items and the tracked list, unavailable until the
-  extension is back. VS Code mounts no sync and serves no trackers.
+  `useTrackerProviderSync` (mounted once per surface through
+  `useHostInvalidationSync` in `App` and `MobileApp`) answers it, and the
+  stream's reconnect, with `refreshTrackers`, so the registry and every
+  auth status follow. The extension catalog's own `guests-changed` is not an
+  answer here: the reconcile behind the registry keys everything the registry
+  serves, so the tracker announcement already covers every change exactly
+  once, and a catalog-only read would add a redundant refresh. A tracker that
+  leaves the list reads as `unknownTrackerDescriptor` wherever an item still
+  names it: its items stay in the session's linked items and the tracked
+  list, unavailable until the extension is back. VS Code mounts no sync and
+  serves no trackers.
 - An extension's tracker is a tracker like any other to every surface: nothing
   reads `isExtensionTrackerId` to change behavior except the Integrations page,
   which draws the card under Extension accounts (`components/sections/`), and
