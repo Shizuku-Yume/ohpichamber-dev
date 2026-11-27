@@ -368,7 +368,7 @@ Une partie dont la valeur n'est pas dans la sortie est omise. Si rien de ce que 
 
 Le lien n'ouvre qu'une adresse `https`. `"{output.url}"` reprend l'adresse de la sortie telle quelle. Vous pouvez aussi écrire l'adresse vous-même autour de valeurs, comme `"https://tracker.example.com/browse/{output.key}"`. Chaque valeur est alors encodée en pourcent, elle ne peut donc pas changer l'hôte ni le chemin que vous avez écrits. Une extension avec des `settings` d'intégration (voir Comptes et réseau plus haut) peut aussi lire un paramètre qui n'est pas secret : `"https://{settings.site}/browse/{output.key}"`, où l'utilisateur a enregistré un nom d'hôte comme `acme.atlassian.net` sous `site`. Un paramètre qui contient une adresse complète, un port ou un chemin ne donne aucun lien, et une valeur manquante non plus.
 
-`card` demande une version d'OhPiChamber plus récente que la 2.7.0. Une version plus ancienne refuse l'extension comme invalide, et `engines.openchamber` n'y change rien.
+`card` existe depuis OhPiChamber 1.0.0, la première version du fork ; déclarez `engines.openchamber` `>=1.0.0` quand vous l'utilisez. Un hôte amont antérieur à cette capacité refuse l'extension comme invalide, et `engines.openchamber` n'y change rien.
 
 ## Le logo de votre fournisseur
 

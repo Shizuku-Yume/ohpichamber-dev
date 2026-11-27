@@ -404,7 +404,6 @@ describe('a service-owned source-control login through the running host', () => 
     const packageRoot = path.join(dataDir, 'service-login-fixture');
     fs.mkdirSync(packageRoot);
     const manifest = JSON.parse(fs.readFileSync(path.join(exampleDir, 'package.json'), 'utf8'));
-    manifest.openchamber.engines.openchamber = '>=2.7.0';
     manifest.openchamber.contributes.panel.id = guestId;
     manifest.openchamber.contributes.service.entry = 'main.js';
     const contribution = manifest.openchamber.contributes.sourceControl;

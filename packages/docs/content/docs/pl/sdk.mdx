@@ -368,7 +368,7 @@ Część, której wartości nie ma w wyniku, jest pomijana. Jeśli w wyniku nie 
 
 Link otwiera tylko adres `https`. `"{output.url}"` bierze adres z wyniku bez zmian. Możesz też napisać adres samodzielnie, wokół wartości, na przykład `"https://tracker.example.com/browse/{output.key}"`. Każda wartość jest wtedy kodowana procentowo, więc nie może zmienić hosta ani ścieżki, które wpisujesz. Rozszerzenie z `settings` integracji (zobacz Konta i sieć wyżej) może też odczytać ustawienie, które nie jest tajne: `"https://{settings.site}/browse/{output.key}"`, gdzie użytkownik zapisał jako `site` nazwę hosta, na przykład `acme.atlassian.net`. Ustawienie, które zawiera pełny adres, port albo ścieżkę, nie daje linku, tak samo jak wartość, której brakuje.
 
-`card` wymaga wersji OhPiChamber nowszej niż 2.7.0. Starsza odrzuca rozszerzenie jako nieprawidłowe, a `engines.openchamber` tego nie zmienia.
+`card` istnieje od OhPiChamber 1.0.0, pierwszego wydania forka; przy użyciu zadeklaruj `engines.openchamber` `>=1.0.0`. Starszy host z repozytorium macierzystego odrzuca rozszerzenie jako nieprawidłowe, a `engines.openchamber` tego nie zmienia.
 
 ## Logo Twojego dostawcy
 

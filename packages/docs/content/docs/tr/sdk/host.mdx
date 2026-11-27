@@ -289,7 +289,7 @@ await host.setMark({ sessionId }, null);
 
 Bir hedefi yeniden ayarlamak işaretini değiştirir, `null` ise kaldırır. Bir satır en fazla iki işaret çizer, uzantı başına bir tane, ve hepsini kendi ipucunda listeler. Tek satırlık bir satırda, işaretçi üzerindeyken satırın düğmeleri işaretleri örter; bu yüzden tıklama bir işarete iki satırlık satırlarda ve dokunmatik ekranlarda ulaşır.
 
-Bir işaret, servis süreciniz yaşadığı sürece yaşar; bu yüzden `service.keepRunning` tanımlayın ve servis başladığında işaretleri yeniden ayarlayın. Bir servis en fazla 200 işaret tutar ve bunları dakikada en fazla 60 kez değiştirir. İşaretler 2.7.0'dan yeni bir OhPiChamber sürümü gerektirir: daha eski bir sürüm anahtarı yok sayar ve çağrıyı reddeder.
+Bir işaret, servis süreciniz yaşadığı sürece yaşar; bu yüzden `service.keepRunning` tanımlayın ve servis başladığında işaretleri yeniden ayarlayın. Bir servis en fazla 200 işaret tutar ve bunları dakikada en fazla 60 kez değiştirir. İşaretler, fork'un ilk sürümü olan OhPiChamber 1.0.0'dan beri var: kullanırken `engines.openchamber` `>=1.0.0` bildirin. Bu özellikten eski bir upstream sürümü anahtarı yok sayar ve çağrıyı reddeder.
 
 ## @ menüsündeki satırlar
 

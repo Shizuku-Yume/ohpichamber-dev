@@ -235,7 +235,7 @@ A mark lives as long as your process. When the service stops, for any reason, it
 
 You hold at most `SERVICE_MARKS_MAX` (200) marks; one more answers 409 `TOO_MANY_MARKS` until you remove one. Setting a mark to what it already is costs nothing and counts against no limit, so a service can set its marks on every check without comparing first.
 
-VS Code, mobile and the rows of an isolated space show no marks. Marks ship in the first OpenChamber release after 2.7.0; an older host ignores the manifest key and refuses the call, so declare an `engines.openchamber` floor above 2.7.0.
+VS Code, mobile and the rows of an isolated space show no marks. Marks ship in OhPiChamber 1.0.0, the fork's first release, so declare an `engines.openchamber` floor of `>=1.0.0`; an upstream host that predates them ignores the manifest key and refuses the call.
 
 ## Running with nobody asking
 
@@ -367,7 +367,7 @@ Declared in the manifest, not answered by the service: OpenChamber reads it to d
 
 ### Change-based hosts
 
-A host that reviews one change at a time, with numbered revisions and per-label votes (Gerrit is the model), declares the fields below. Each is optional, and a manifest without them parses, installs and publishes exactly as before. Hosts older than these fields refuse a manifest that uses them as `invalid-service`, because every object is strict. Declare an `engines.openchamber` floor of the first release that has them, newer than 2.5.0.
+A host that reviews one change at a time, with numbered revisions and per-label votes (Gerrit is the model), declares the fields below. Each is optional, and a manifest without them parses, installs and publishes exactly as before. Hosts older than these fields refuse a manifest that uses them as `invalid-service`, because every object is strict. Declare an `engines.openchamber` floor of the first release that has them; in OhPiChamber that is the fork's first release, so `>=1.0.0`.
 
 | Field | Effect |
 |---|---|
@@ -396,7 +396,7 @@ Every resource call carries the verified `session.user`. Check the CLI identity 
 
 The account's handles cannot reach the forge proxy. Read through the service's CLI and leave clone, fetch and push on system Git, `mode: 'system'`. OpenChamber never extracts a CLI credential or supplies this account as a managed HTTPS credential. A failed CLI mutation whose service was reached has an unknown outcome, because the proxy cannot observe its writes.
 
-`login` and string IDs need OpenChamber 2.7.1 or newer: declare `engines.openchamber: ">=2.7.1"`. Older hosts reject the unknown `login` field.
+`login` and string IDs ship in OhPiChamber 1.0.0, the fork's first release: declare `engines.openchamber: ">=1.0.0"`. An upstream host that predates them rejects the unknown `login` field.
 
 ### Lifecycle
 
@@ -711,7 +711,7 @@ A service can offer agents things to wait on without holding a turn open: a depl
 | `params` | Up to 8 flat arguments, each `{ type: "string" \| "number" \| "boolean", description?, required?: true }`. OpenChamber checks the agent's arguments against them before your service sees a request |
 | `interval` | Milliseconds between two checks, 10 000 to 3 600 000; default 30 000 |
 
-`waits` needs `contributes.service` (`invalid-waits` otherwise) and, like session events, lets the service go without a panel or background entry. Declaring any asks for the `wake` capability, shown as a line of its own with the wait titles under it. Its grant scope is the sorted list of wait ids, so a version that adds a wait is unapproved until the user approves again. Hosts up to 2.7.0 drop the key at parse, so a service with nothing else to start it fails there as `invalid-panel`; declare `engines.openchamber: ">=2.7.1"`.
+`waits` needs `contributes.service` (`invalid-waits` otherwise) and, like session events, lets the service go without a panel or background entry. Declaring any asks for the `wake` capability, shown as a line of its own with the wait titles under it. Its grant scope is the sorted list of wait ids, so a version that adds a wait is unapproved until the user approves again. `waits` ship in OhPiChamber 1.0.0, the fork's first release, so declare `engines.openchamber: ">=1.0.0"`; an upstream host that predates them drops the key at parse, and a service with nothing else to start it fails there as `invalid-panel`.
 
 ### Wire
 

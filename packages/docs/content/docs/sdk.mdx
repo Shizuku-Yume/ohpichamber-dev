@@ -372,7 +372,7 @@ A part whose value is not in the output is left out. If nothing you named is the
 
 The link opens only an `https` address. `"{output.url}"` takes the address from the output as it is. You can also write the address yourself around values, as `"https://tracker.example.com/browse/{output.key}"`. Each value is then percent-encoded, so it cannot change the host or the path you wrote. An extension with integration `settings` (see Accounts and network above) can read a setting that is not secret too: `"https://{settings.site}/browse/{output.key}"`, where the user saved a host name like `acme.atlassian.net` as `site`. A setting that holds a full address, a port or a path gives no link, and neither does a value that is missing.
 
-`card` needs an OhPiChamber release newer than 2.7.0. An older one refuses the extension as invalid, and `engines.openchamber` does not change that.
+`card` ships in OhPiChamber 1.0.0, the fork's first release; declare `engines.openchamber` `>=1.0.0` when you use it. An upstream host that predates the capability refuses the extension as invalid, and `engines.openchamber` does not change that.
 
 ## Your provider's logo
 

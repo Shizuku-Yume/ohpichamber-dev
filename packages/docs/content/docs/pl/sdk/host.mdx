@@ -280,7 +280,7 @@ await host.setMark({ sessionId }, null);
 
 Ponowne ustawienie celu zastępuje jego znacznik, a `null` go usuwa. Wiersz rysuje najwyżej dwa znaczniki, po jednym na rozszerzenie, i wymienia wszystkie w swojej podpowiedzi. W wierszu jednoliniowym przyciski wiersza zasłaniają znaczniki, gdy wskaźnik jest nad nim, więc kliknięcie trafia w znacznik w wierszach dwuliniowych i na ekranach dotykowych.
 
-Znacznik żyje tak długo, jak proces Twojej usługi, więc zadeklaruj `service.keepRunning` i ustaw znaczniki ponownie, gdy usługa startuje. Usługa trzyma do 200 znaczników i zmienia je do 60 razy na minutę. Znaczniki wymagają wersji OhPiChamber nowszej niż 2.7.0: starsza ignoruje klucz i odrzuca wywołanie.
+Znacznik żyje tak długo, jak proces Twojej usługi, więc zadeklaruj `service.keepRunning` i ustaw znaczniki ponownie, gdy usługa startuje. Usługa trzyma do 200 znaczników i zmienia je do 60 razy na minutę. Znaczniki istnieją od OhPiChamber 1.0.0, pierwszego wydania forka: przy użyciu zadeklaruj `engines.openchamber` `>=1.0.0`. Starszy host z repozytorium macierzystego ignoruje klucz i odrzuca wywołanie.
 
 ## Wiersze w menu @
 

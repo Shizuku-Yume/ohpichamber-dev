@@ -368,7 +368,7 @@ Uma parte cujo valor não está na saída fica de fora. Se nada do que você ind
 
 O link só abre um endereço `https`. `"{output.url}"` usa o endereço da saída como ele está. Você também pode escrever o endereço por conta própria em volta dos valores, como `"https://tracker.example.com/browse/{output.key}"`. Nesse caso cada valor passa por percent-encoding, então não consegue mudar o host nem o caminho que você escreveu. Uma extensão com `settings` de integração (veja Contas e rede acima) também pode ler uma configuração que não é secreta: `"https://{settings.site}/browse/{output.key}"`, em que o usuário salvou um nome de host como `acme.atlassian.net` em `site`. Uma configuração que contém um endereço completo, uma porta ou um caminho não gera link, e um valor ausente também não.
 
-`card` precisa de uma versão do OhPiChamber mais nova que a 2.7.0. Uma versão mais antiga recusa a extensão como inválida, e `engines.openchamber` não muda isso.
+`card` existe desde o OhPiChamber 1.0.0, a primeira versão do fork; declare `engines.openchamber` `>=1.0.0` ao usá-lo. Um host upstream anterior a esse recurso recusa a extensão como inválida, e `engines.openchamber` não muda isso.
 
 ## O logo do seu provedor
 

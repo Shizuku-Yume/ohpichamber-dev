@@ -368,7 +368,7 @@ Een deel waarvan de waarde niet in de uitvoer staat, wordt weggelaten. Staat er 
 
 De link opent alleen een `https`-adres. `"{output.url}"` neemt het adres ongewijzigd over uit de uitvoer. U kunt het adres ook zelf rond waarden schrijven, zoals `"https://tracker.example.com/browse/{output.key}"`. Elke waarde wordt dan procentgecodeerd en kan de host of het pad dat u hebt geschreven dus niet veranderen. Een extensie met `settings` van een integratie (zie Accounts en netwerk hierboven) kan ook een instelling lezen die niet geheim is: `"https://{settings.site}/browse/{output.key}"`, waarbij de gebruiker een hostnaam zoals `acme.atlassian.net` heeft opgeslagen als `site`. Een instelling met een volledig adres, een poort of een pad levert geen link op, en een ontbrekende waarde ook niet.
 
-`card` vereist een OhPiChamber-versie die nieuwer is dan 2.7.0. Een oudere versie weigert de extensie als ongeldig, en `engines.openchamber` verandert daar niets aan.
+`card` bestaat sinds OhPiChamber 1.0.0, de eerste versie van de fork; declareer `engines.openchamber` `>=1.0.0` wanneer je het gebruikt. Een upstream-host die ouder is dan deze functie weigert de extensie als ongeldig, en `engines.openchamber` verandert daar niets aan.
 
 ## Het logo van uw provider
 

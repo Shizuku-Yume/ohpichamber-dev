@@ -280,7 +280,7 @@ await host.setMark({ sessionId }, null);
 
 Setzt du ein Ziel erneut, ersetzt das seine Markierung, und `null` entfernt sie. Eine Zeile zeichnet höchstens zwei Markierungen, eine pro Erweiterung, und listet alle in ihrem Tooltip auf. In einer einzeiligen Zeile verdecken die Schaltflächen der Zeile die Markierungen, solange der Zeiger darüber steht. Ein Klick erreicht eine Markierung daher in zweizeiligen Zeilen und auf Touchscreens.
 
-Eine Markierung lebt so lange wie dein Dienstprozess. Deklariere deshalb `service.keepRunning` und setze die Markierungen beim Start des Dienstes erneut. Ein Dienst hält bis zu 200 Markierungen und ändert sie bis zu 60 Mal pro Minute. Markierungen brauchen eine OhPiChamber-Version, die neuer als 2.7.0 ist: Eine ältere ignoriert den Schlüssel und lehnt den Aufruf ab.
+Eine Markierung lebt so lange wie dein Dienstprozess. Deklariere deshalb `service.keepRunning` und setze die Markierungen beim Start des Dienstes erneut. Ein Dienst hält bis zu 200 Markierungen und ändert sie bis zu 60 Mal pro Minute. Markierungen gibt es seit OhPiChamber 1.0.0, der ersten Version des Forks: Deklariere bei Nutzung `engines.openchamber` `>=1.0.0`. Ein Upstream-Host, der älter ist als diese Fähigkeit, ignoriert den Schlüssel und lehnt den Aufruf ab.
 
 ## Zeilen im @-Menü
 

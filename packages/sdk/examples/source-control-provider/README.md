@@ -45,11 +45,12 @@ This is least exposure, not a sandbox: an approved service runs as the user.
 
 ## Version floor
 
-`engines.openchamber` is `>=2.5.1`, the first release that ships the role. A
-2.5.0 host refuses the manifest as `invalid-service`, since it does not know
-the role; from 2.5.1 on, an older host refuses it as `host-too-old`. A
-development build reports the version of this repository, so the example
-installs there once `package.json` says 2.5.1 or newer.
+`engines.openchamber` is `>=1.0.0`: a floor names the first app release that
+ships the capability, and in OhPiChamber the role ships in the fork's first
+release. An upstream host that predates the role refuses the manifest as
+`invalid-service`, since it does not know the role; one that knows the role but
+is older than the floor refuses it as `host-too-old`. A development build
+reports the version of this repository, so the example installs there.
 
 ## Try it
 
@@ -76,9 +77,8 @@ the following contribution and implements `auth.status`. It can also keep
 }
 ```
 
-`login` needs OhPiChamber 2.7.1 or newer, so declare
-`engines.openchamber: ">=2.7.1"`. The token-only example keeps its existing
-floor.
+`login` ships in OhPiChamber 1.0.0, the fork's first release, so its floor is
+the same `>=1.0.0` the token-only example carries.
 
 `auth.status` receives `session.instance`, an empty `input` and no candidate
 token. Return `{ user: null }` for an origin the CLI is not signed in to;

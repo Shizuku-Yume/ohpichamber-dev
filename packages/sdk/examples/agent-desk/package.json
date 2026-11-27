@@ -6,7 +6,7 @@
   "openchamber": {
     "apiVersion": 1,
     "engines": {
-      "openchamber": ">=2.7.1"
+      "openchamber": ">=1.0.0"
     },
     "id": "agent-desk",
     "name": "Agent Desk",

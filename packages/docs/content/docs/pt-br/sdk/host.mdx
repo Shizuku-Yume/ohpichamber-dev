@@ -280,7 +280,7 @@ await host.setMark({ sessionId }, null);
 
 Definir um destino de novo substitui a marca dele, e `null` a remove. Uma linha desenha no máximo duas marcas, uma por extensão, e lista todas na dica dela. Em uma linha de uma só linha de texto, os botões da linha cobrem as marcas enquanto o ponteiro está sobre ela, então um clique alcança uma marca nas linhas de duas linhas de texto e em telas sensíveis ao toque.
 
-Uma marca vive enquanto o processo do seu serviço viver, então declare `service.keepRunning` e defina as marcas de novo quando o serviço iniciar. Um serviço mantém até 200 marcas e as altera até 60 vezes por minuto. As marcas precisam de uma versão do OhPiChamber mais nova que a 2.7.0: uma mais antiga ignora a chave e recusa a chamada.
+Uma marca vive enquanto o processo do seu serviço viver, então declare `service.keepRunning` e defina as marcas de novo quando o serviço iniciar. Um serviço mantém até 200 marcas e as altera até 60 vezes por minuto. As marcas existem desde o OhPiChamber 1.0.0, a primeira versão do fork: declare `engines.openchamber` `>=1.0.0` ao usá-las. Um host upstream anterior a esse recurso ignora a chave e recusa a chamada.
 
 ## Linhas no menu @
 

@@ -280,7 +280,7 @@ await host.setMark({ sessionId }, null);
 
 Définir à nouveau une cible remplace sa marque, et `null` la retire. Une ligne dessine deux marques au plus, une par extension, et les liste toutes dans son infobulle. Sur une ligne à une seule ligne de texte, les boutons de la ligne recouvrent les marques tant que le pointeur est dessus. Un clic atteint donc une marque sur les lignes à deux lignes de texte et sur les écrans tactiles.
 
-Une marque vit aussi longtemps que le processus de votre service. Déclarez donc `service.keepRunning` et posez à nouveau les marques au démarrage du service. Un service détient jusqu'à 200 marques et les modifie jusqu'à 60 fois par minute. Les marques nécessitent une version d'OhPiChamber plus récente que la 2.7.0 : une version plus ancienne ignore la clé et refuse l'appel.
+Une marque vit aussi longtemps que le processus de votre service. Déclarez donc `service.keepRunning` et posez à nouveau les marques au démarrage du service. Un service détient jusqu'à 200 marques et les modifie jusqu'à 60 fois par minute. Les marques existent depuis OhPiChamber 1.0.0, la première version du fork : déclarez `engines.openchamber` `>=1.0.0` quand vous les utilisez. Un hôte amont antérieur à cette capacité ignore la clé et refuse l'appel.
 
 ## Lignes dans le menu @
 

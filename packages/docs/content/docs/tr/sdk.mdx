@@ -368,7 +368,7 @@ Değeri çıktıda bulunmayan bir kısım atlanır. Adını verdiğiniz hiçbir 
 
 Bağlantı yalnızca bir `https` adresini açar. `"{output.url}"`, adresi çıktıdan olduğu gibi alır. Adresi değerlerin çevresine kendiniz de yazabilirsiniz, örneğin `"https://tracker.example.com/browse/{output.key}"`. O zaman her değer yüzde kodlamasından geçer, bu yüzden yazdığınız ana makineyi veya yolu değiştiremez. Entegrasyon `settings` alanları olan bir eklenti (yukarıdaki Hesaplar ve ağ bölümüne bakın) gizli olmayan bir ayarı da okuyabilir: `"https://{settings.site}/browse/{output.key}"`. Burada kullanıcı `acme.atlassian.net` gibi bir ana makine adını `site` olarak kaydetmiştir. Tam bir adres, bir port veya bir yol içeren bir ayar bağlantı vermez; eksik bir değer de vermez.
 
-`card`, 2.7.0'dan yeni bir OhPiChamber sürümü gerektirir. Daha eski bir sürüm eklentiyi geçersiz sayıp reddeder ve `engines.openchamber` bunu değiştirmez.
+`card`, fork'un ilk sürümü olan OhPiChamber 1.0.0'dan beri var; kullanırken `engines.openchamber` `>=1.0.0` bildirin. Bu özellikten eski bir upstream sunucusu eklentiyi geçersiz sayıp reddeder ve `engines.openchamber` bunu değiştirmez.
 
 ## Sağlayıcınızın logosu
 

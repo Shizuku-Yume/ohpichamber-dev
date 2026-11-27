@@ -304,7 +304,7 @@ await host.setMark({ sessionId }, null);
 
 Een doel opnieuw instellen vervangt de markering, en `null` verwijdert haar. Een rij tekent hoogstens twee markeringen, één per extensie, en toont ze allemaal in zijn tooltip. Op een rij van één regel bedekken de knoppen van de rij de markeringen zolang de aanwijzer erboven staat, dus een klik bereikt een markering op rijen van twee regels en op aanraakschermen.
 
-Een markering leeft zo lang als uw serviceproces. Declareer daarom `service.keepRunning` en zet de markeringen opnieuw wanneer de service start. Een service houdt maximaal 200 markeringen vast en wijzigt ze maximaal 60 keer per minuut. Markeringen vereisen een OhPiChamber-versie die nieuwer is dan 2.7.0: een oudere negeert de sleutel en weigert de aanroep.
+Een markering leeft zo lang als uw serviceproces. Declareer daarom `service.keepRunning` en zet de markeringen opnieuw wanneer de service start. Een service houdt maximaal 200 markeringen vast en wijzigt ze maximaal 60 keer per minuut. Markeringen bestaan sinds OhPiChamber 1.0.0, de eerste versie van de fork: declareer `engines.openchamber` `>=1.0.0` wanneer u ze gebruikt. Een upstream-host die ouder is dan deze functie negeert de sleutel en weigert de aanroep.
 
 ## Rijen in het @-menu
 
