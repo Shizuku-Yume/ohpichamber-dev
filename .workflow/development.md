@@ -65,7 +65,10 @@ project overrides and explicit resets are readable but cannot replace the shared
 config. Rule updates compare against the current on-disk map before writing.
 Saving or enabling token-based rules requires acknowledging potential
 extended-context pricing.
-The remaining model-role hub, ordered fallback, and preset work is separate.
+Model roles, ordered retry fallback chains, and `modelPresets` Settings
+management are landed: OMP's `/modelpreset` and the TUI hub's Roles view map to
+the Model presets section on the Model roles page, and model pickers do not list
+presets because OMP does not.
 
 Queued messages can be edited or sent right away through the Host's atomic
 take: every append carries the original public draft (typed text, delivery text,

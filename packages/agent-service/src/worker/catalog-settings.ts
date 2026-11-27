@@ -21,6 +21,9 @@ import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } fr
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
+import { isValidModelPresetName } from '@oh-my-pi/pi-coding-agent/config/model-presets';
+import { parseConfiguredThinkingLevel } from '@oh-my-pi/pi-tui/thinking';
+import { THINKING_EFFORTS } from '@oh-my-pi/pi-catalog/effort';
 import { z } from 'zod';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
@@ -90,19 +93,51 @@ function inactiveWriteCondition(setting: AnySetting, settings: Settings) {
   return undefined;
 }
 
-/**
- * Record settings whose project-layer keys shadow the shared record, so the
- * route writes the shared layer (`modelRoles`, `modelTags`). A key shadows
- * when the project entry is an active value — a string or string list for
- * `modelRoles`, a metadata object for `modelTags` — because a cleared `null`
- * entry falls back to the shared one.
- */
 const ROLE_ENTRY = z.union([z.string(), z.array(z.string())]);
 
-function projectRecordKeys(settings: Settings, id: 'modelRoles' | 'modelTags'): string[] {
+type ShadowedRecordId = 'modelRoles' | 'modelTags' | 'modelPresets';
+
+function projectRecordKeys(settings: Settings, id: ShadowedRecordId): string[] {
   const project = rolesRecord(settings.getProjectSettings()[id]);
-  return Object.keys(project).filter(key =>
-    id === 'modelRoles' ? ROLE_ENTRY.safeParse(project[key]).success : JsonObjectSchema.safeParse(project[key]).success);
+  return Object.keys(project).filter((key) => {
+    if (id === 'modelRoles') return ROLE_ENTRY.safeParse(project[key]).success;
+    if (id === 'modelPresets') return project[key] !== undefined && project[key] !== null;
+    return JsonObjectSchema.safeParse(project[key]).success;
+  });
+}
+
+const ModelPresetEntrySchema = z.strictObject({
+  modelRoles: z.record(z.string(), z.string().min(1)),
+  defaultThinkingLevel: z.string().optional(),
+});
+
+function invalidPreset(reason: string): ProjectionError {
+  return new ProjectionError(400, 'INVALID_REQUEST', `Invalid model preset: ${reason}`);
+}
+
+function assertModelPresetsWritable(value: JsonValue, settings: Settings): void {
+  const parsedRecord = JsonObjectSchema.safeParse(value);
+  if (!parsedRecord.success) throw invalidPreset('the record is not a mapping');
+  const stored = rolesRecord(settings.getGlobalSettings().modelPresets);
+  for (const [name, entry] of Object.entries(parsedRecord.data)) {
+    if (Object.hasOwn(stored, name) && isDeepStrictEqual(stored[name], entry)) continue;
+    if (!isValidModelPresetName(name)) {
+      throw invalidPreset(`\`${name}\` is not a valid preset name (a letter, then letters, digits, - or _)`);
+    }
+    const parsedEntry = ModelPresetEntrySchema.safeParse(entry);
+    if (!parsedEntry.success) {
+      throw invalidPreset(`\`${name}\` needs a \`modelRoles\` mapping of roles to non-empty model selectors`);
+    }
+    for (const [role, selector] of Object.entries(parsedEntry.data.modelRoles)) {
+      if (selector.trim() === '') throw invalidPreset(`\`${name}\` role \`${role}\` is not a model selector`);
+    }
+    const level = parsedEntry.data.defaultThinkingLevel;
+    if (level !== undefined) {
+      const parsedLevel = parseConfiguredThinkingLevel(level);
+      const valid = parsedLevel !== undefined && (parsedLevel === 'auto' || THINKING_EFFORTS.some(effort => effort === parsedLevel));
+      if (!valid) throw invalidPreset(`\`${name}\` \`defaultThinkingLevel\` is not a thinking level`);
+    }
+  }
 }
 
 /**
@@ -112,7 +147,7 @@ function projectRecordKeys(settings: Settings, id: 'modelRoles' | 'modelTags'): 
  * this project would read it. Removing a shared key persists: the projected
  * write keeps only entries the shared layer may hold.
  */
-function sharedRecordValue(settings: Settings, id: 'modelRoles' | 'modelTags', value: JsonValue): JsonValue {
+function sharedRecordValue(settings: Settings, id: ShadowedRecordId, value: JsonValue): JsonValue {
   const parsed = JsonObjectSchema.safeParse(value);
   if (!parsed.success) return value;
   const next = { ...parsed.data };
@@ -238,7 +273,7 @@ export class NativeSettings {
       }
     }
     const changes = request.changes.map(change =>
-      (change.id === 'modelRoles' || change.id === 'modelTags') && change.value !== null
+      (change.id === 'modelRoles' || change.id === 'modelTags' || change.id === 'modelPresets') && change.value !== null
         ? { ...change, value: sharedRecordValue(this.settings, change.id, change.value) }
         : change);
     // Validate every value against the pinned definition before changing any
@@ -269,6 +304,7 @@ export class NativeSettings {
         catch (error) {
           throw new ProjectionError(400, 'INVALID_REQUEST', error instanceof Error ? error.message : `Invalid value for ${change.id}`);
         }
+        if (change.id === 'modelPresets') assertModelPresetsWritable(change.value, this.settings);
       }
       if (isRetryChains) retryUpdates = retryChainUpdates(current, change.value);
     }

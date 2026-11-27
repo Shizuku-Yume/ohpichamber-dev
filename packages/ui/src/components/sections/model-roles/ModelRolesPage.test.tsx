@@ -22,6 +22,7 @@ const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
+const { useConfigStore } = await import('@/stores/useConfigStore');
 const directory = await import('@/hooks/useSettingsDirectory');
 const models = await import('@/hooks/useSettingsModels');
 const { toast } = await import('@/components/ui');
@@ -296,5 +297,367 @@ describe('Model roles page', () => {
     expect(toastError).toHaveBeenCalledWith(
       "This project's .omp/config.yml overrides this setting or another change conflicted. Refresh or update the project config.",
     );
+  });
+
+  test('renders Presets section empty state, validates names, and creates a preset using ModelSelector in a CAS save', async () => {
+    const chatModels: Model[] = [{
+      modelId: 'fast-chat',
+      provider: 'provider',
+      name: 'Fast Chat',
+      modalities: ['text'],
+      contextWindow: 128000,
+      maxOutputTokens: 8192,
+      reasoningEffortSupported: false,
+      reasoningOptions: [],
+      variants: [],
+      pricing: null,
+    }];
+    const modelSpy = spyOn(models, 'useSettingsModels').mockReturnValue(chatModels);
+    restore.push(() => modelSpy.mockRestore());
+    const prevProviders = useConfigStore.getState().providers;
+    const prevProvidersLoaded = useConfigStore.getState().providersLoaded;
+    useConfigStore.setState({
+      providersLoaded: true,
+      providers: [{
+        providerId: 'provider',
+        name: 'Provider',
+        endpoint: null,
+        protocol: null,
+        authMethods: ['api-key'],
+        auth: { status: 'missing' },
+        models: chatModels,
+      }],
+    });
+    restore.push(() => useConfigStore.setState({ providers: prevProviders, providersLoaded: prevProvidersLoaded }));
+
+    const presetState: OmpSettingsState = {
+      workspaceId: 'workspace_1',
+      revision: '1',
+      totalCount: 3,
+      settings: [
+        {
+          ...modelRoles,
+          value: { smol: 'provider/small' },
+        },
+        {
+          id: 'defaultThinkingLevel',
+          type: 'enum',
+          default: 'high',
+          configured: true,
+          value: 'medium',
+          placement: { type: 'owned-by', owner: 'sessions.default-thinking' },
+        },
+        {
+          id: 'modelPresets',
+          type: 'record',
+          default: {},
+          configured: false,
+          value: { existing: { modelRoles: { default: 'provider/other' } } },
+          placement: { type: 'owned-by', owner: 'model-roles.section.presets' },
+        },
+      ],
+    };
+    const presetChanges: OmpSettingsChange[] = [];
+    const presetOmp = spyOn(omp, 'useOmpPageSettings').mockReturnValue({
+      state: presetState, form: {}, loading: false, saving: false, pageSettings: [], getSectionSettings: () => [],
+      updateSetting: async () => { },
+      updateSettings: async (build) => { presetChanges.push(...build(presetState)); return true; },
+    });
+    restore.push(() => presetOmp.mockRestore());
+
+    await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
+    const presetSection = host.querySelector('[data-settings-item="model-roles.section.presets"]');
+    expect(presetSection).not.toBeNull();
+    expect(presetSection?.textContent).toContain('existing');
+
+    const addButton = Array.from(presetSection?.querySelectorAll('button') ?? [])
+      .find((button) => button.textContent?.includes('Add preset'));
+    expect(addButton).toBeDefined();
+    await act(async () => addButton?.click());
+
+    const nameInput = document.body.querySelector<HTMLInputElement>('input[aria-label="Preset name"]');
+    expect(nameInput).not.toBeNull();
+
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      setter?.call(nameInput, '1invalid');
+      nameInput?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain('Start with a letter');
+
+    await act(async () => {
+      setter?.call(nameInput, 'existing');
+      nameInput?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain('already exists');
+
+    await act(async () => {
+      setter?.call(nameInput, 'fast-review');
+      nameInput?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(document.body.querySelector('[role="alert"]')).toBeNull();
+
+    const showAllButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Show all roles'));
+    expect(showAllButton).toBeDefined();
+    await act(async () => showAllButton?.click());
+
+    const defaultRoleField = document.body.querySelector<HTMLElement>('[data-slot="dialog-content"] [data-slot="dropdown-menu-trigger"]');
+    expect(defaultRoleField).not.toBeNull();
+    await act(async () => {
+      defaultRoleField?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+      defaultRoleField?.click();
+    });
+    const modelOption = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'))
+      .find((el) => el.textContent?.includes('Fast Chat'));
+    expect(modelOption).toBeDefined();
+    await act(async () => modelOption?.click());
+
+    const createButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Create preset');
+    expect(createButton).toBeDefined();
+    await act(async () => createButton?.click());
+
+    expect(presetChanges).toEqual([{
+      id: 'modelPresets',
+      value: {
+        existing: { modelRoles: { default: 'provider/other' } },
+        'fast-review': {
+          modelRoles: { default: 'provider/fast-chat', smol: 'provider/small' },
+          defaultThinkingLevel: 'medium',
+        },
+      },
+    }]);
+  });
+
+  test('renders empty Presets state, active badge, invalid preset, edits/renames, deletes, and applies presets with CAS saves', async () => {
+    const emptyState: OmpSettingsState = {
+      workspaceId: 'workspace_1',
+      revision: '1',
+      totalCount: 2,
+      settings: [
+        modelRoles,
+        {
+          id: 'modelPresets',
+          type: 'record',
+          default: {},
+          configured: false,
+          value: {},
+          placement: { type: 'owned-by', owner: 'model-roles.section.presets' },
+        },
+      ],
+    };
+    const emptyOmp = spyOn(omp, 'useOmpPageSettings').mockReturnValue({
+      state: emptyState, form: {}, loading: false, saving: false, pageSettings: [], getSectionSettings: () => [],
+      updateSetting: async () => { },
+      updateSettings: async () => true,
+    });
+    restore.push(() => emptyOmp.mockRestore());
+
+    await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
+    expect(host.querySelector('[data-settings-item="model-roles.section.presets"]')?.textContent).toContain('No model presets yet.');
+    emptyOmp.mockRestore();
+
+    const toastError = spyOn(toast, 'error').mockImplementation(() => '');
+    restore.push(() => toastError.mockRestore());
+
+    const populatedState: OmpSettingsState = {
+      workspaceId: 'workspace_1',
+      revision: '1',
+      totalCount: 3,
+      settings: [
+        {
+          ...modelRoles,
+          value: { default: 'provider/main', smol: 'provider/small' },
+        },
+        {
+          id: 'defaultThinkingLevel',
+          type: 'enum',
+          default: 'high',
+          configured: true,
+          value: 'high',
+          placement: { type: 'owned-by', owner: 'sessions.default-thinking' },
+        },
+        {
+          id: 'modelPresets',
+          type: 'record',
+          default: {},
+          configured: true,
+          value: {
+            activeOne: { modelRoles: { default: 'provider/main', smol: 'provider/small' }, defaultThinkingLevel: 'high' },
+            coding: { modelRoles: { default: 'provider/coder' }, defaultThinkingLevel: 'xhigh' },
+            rolesOnly: { modelRoles: { smol: 'provider/tiny' } },
+            broken: { modelRoles: { default: 'provider/main' }, defaultThinkingLevel: 'off' },
+          },
+          placement: { type: 'owned-by', owner: 'model-roles.section.presets' },
+        },
+      ],
+    };
+
+    let failConflict = false;
+    const presetChanges: OmpSettingsChange[] = [];
+    const populatedOmp = spyOn(omp, 'useOmpPageSettings').mockReturnValue({
+      state: populatedState, form: {}, loading: false, saving: false, pageSettings: [], getSectionSettings: () => [],
+      updateSetting: async () => { },
+      updateSettings: async (build, options) => {
+        if (failConflict) {
+          options?.onProblem?.({
+            type: 'urn:ohpichamber:problem:CATALOG_CONFLICT',
+            title: 'Conflict',
+            status: 409,
+            detail: 'Native configuration overrides the shared setting',
+            code: 'CATALOG_CONFLICT',
+            retryable: false,
+          });
+          return false;
+        }
+        presetChanges.push(...build(populatedState));
+        return true;
+      },
+    });
+    restore.push(() => populatedOmp.mockRestore());
+
+    await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
+    const presetSection = host.querySelector('[data-settings-item="model-roles.section.presets"]');
+    expect(presetSection?.textContent).toContain('Active');
+    expect(presetSection?.textContent).toContain('Invalid');
+
+    const activeApply = presetSection?.querySelector<HTMLButtonElement>('button[aria-label="Apply preset activeOne"]');
+    expect(activeApply?.disabled).toBe(true);
+
+    const brokenApply = presetSection?.querySelector<HTMLButtonElement>('button[aria-label="Apply preset broken"]');
+    const brokenEdit = presetSection?.querySelector<HTMLButtonElement>('button[aria-label="Edit preset broken"]');
+    const brokenDelete = presetSection?.querySelector<HTMLButtonElement>('button[aria-label="Delete preset broken"]');
+    expect(brokenApply?.disabled).toBe(true);
+    expect(brokenEdit?.disabled).toBe(true);
+    expect(brokenDelete?.disabled).toBe(false);
+
+    const codingApply = presetSection?.querySelector<HTMLButtonElement>('button[aria-label="Apply preset coding"]');
+    expect(codingApply?.disabled).toBe(false);
+    await act(async () => codingApply?.click());
+    expect(presetChanges).toEqual([
+      { id: 'modelRoles', value: { default: 'provider/coder' } },
+      { id: 'defaultThinkingLevel', value: 'xhigh' },
+    ]);
+
+    presetChanges.length = 0;
+    const rolesOnlyApply = presetSection?.querySelector<HTMLButtonElement>('button[aria-label="Apply preset rolesOnly"]');
+    await act(async () => rolesOnlyApply?.click());
+    expect(presetChanges).toEqual([
+      { id: 'modelRoles', value: { smol: 'provider/tiny' } },
+    ]);
+
+    presetChanges.length = 0;
+    const codingEdit = presetSection?.querySelector<HTMLButtonElement>('button[aria-label="Edit preset coding"]');
+    await act(async () => codingEdit?.click());
+    const nameInput = document.body.querySelector<HTMLInputElement>('input[aria-label="Preset name"]');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      setter?.call(nameInput, 'coding-v2');
+      nameInput?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const saveButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Save changes');
+    await act(async () => saveButton?.click());
+    expect(presetChanges).toEqual([{
+      id: 'modelPresets',
+      value: {
+        activeOne: { modelRoles: { default: 'provider/main', smol: 'provider/small' }, defaultThinkingLevel: 'high' },
+        'coding-v2': { modelRoles: { default: 'provider/coder' }, defaultThinkingLevel: 'xhigh' },
+        rolesOnly: { modelRoles: { smol: 'provider/tiny' } },
+        broken: { modelRoles: { default: 'provider/main' }, defaultThinkingLevel: 'off' },
+      },
+    }]);
+
+    presetChanges.length = 0;
+    await act(async () => brokenDelete?.click());
+    const confirmDelete = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Delete');
+    await act(async () => confirmDelete?.click());
+    expect(presetChanges).toEqual([{
+      id: 'modelPresets',
+      value: {
+        activeOne: { modelRoles: { default: 'provider/main', smol: 'provider/small' }, defaultThinkingLevel: 'high' },
+        coding: { modelRoles: { default: 'provider/coder' }, defaultThinkingLevel: 'xhigh' },
+        rolesOnly: { modelRoles: { smol: 'provider/tiny' } },
+      },
+    }]);
+
+    failConflict = true;
+    await act(async () => brokenDelete?.click());
+    const confirmConflictDelete = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Delete');
+    await act(async () => confirmConflictDelete?.click());
+    expect(toastError).toHaveBeenCalledWith(
+      "This project's .omp/config.yml overrides this setting or another change conflicted. Refresh or update the project config.",
+    );
+  });
+
+  test('preserves unsaved add-mode preset dialog edits when settings state refreshes', async () => {
+    const initialState: OmpSettingsState = {
+      workspaceId: 'workspace_1',
+      revision: '1',
+      totalCount: 2,
+      settings: [
+        { ...modelRoles, value: { default: 'provider/initial' } },
+        {
+          id: 'modelPresets',
+          type: 'record',
+          default: {},
+          configured: false,
+          value: {},
+          placement: { type: 'owned-by', owner: 'model-roles.section.presets' },
+        },
+      ],
+    };
+    const refreshedState: OmpSettingsState = {
+      workspaceId: 'workspace_1',
+      revision: '2',
+      totalCount: 2,
+      settings: [
+        { ...modelRoles, value: { default: 'provider/updated-elsewhere' } },
+        {
+          id: 'modelPresets',
+          type: 'record',
+          default: {},
+          configured: false,
+          value: {},
+          placement: { type: 'owned-by', owner: 'model-roles.section.presets' },
+        },
+      ],
+    };
+    let activeState = initialState;
+    const addOmp = spyOn(omp, 'useOmpPageSettings').mockImplementation(() => ({
+      state: activeState,
+      form: {},
+      loading: false,
+      saving: false,
+      pageSettings: [],
+      getSectionSettings: () => [],
+      updateSetting: async () => { },
+      updateSettings: async () => true,
+    }));
+    restore.push(() => addOmp.mockRestore());
+
+    await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
+    const presetSection = host.querySelector('[data-settings-item="model-roles.section.presets"]');
+    const addButton = Array.from(presetSection?.querySelectorAll('button') ?? [])
+      .find((button) => button.textContent?.includes('Add preset'));
+    await act(async () => addButton?.click());
+
+    const nameInput = document.body.querySelector<HTMLInputElement>('input[aria-label="Preset name"]');
+    expect(nameInput).not.toBeNull();
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      setter?.call(nameInput, 'unsaved-draft');
+      nameInput?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(nameInput?.value).toBe('unsaved-draft');
+
+    activeState = refreshedState;
+    await act(async () => root.render(<I18nProvider><ModelRolesPage /></I18nProvider>));
+
+    const nameInputAfterRefresh = document.body.querySelector<HTMLInputElement>('input[aria-label="Preset name"]');
+    expect(nameInputAfterRefresh?.value).toBe('unsaved-draft');
   });
 });

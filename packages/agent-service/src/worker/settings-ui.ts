@@ -584,7 +584,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'modelRoles': 'owned-by model-roles.section.chat',
   'modelTags': 'owned-by model-roles.section.custom',
   'cycleOrder': 'tui-only',
-  'modelPresets': 'tui-only',
+  'modelPresets': 'owned-by model-roles.section.presets',
   'suggestion.generator': 'owned-by chat.suggestion-generator',
 };
 

@@ -1809,6 +1809,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   },
   MODEL_ROLES_CUSTOM_SECTION_SEARCH_ITEM,
   {
+    id: 'model-roles.section.presets',
+    page: 'model-roles',
+    titleKey: 'settings.omp.modelRoles.section.presets.title',
+    descriptionKey: 'settings.omp.modelRoles.section.presets.description',
+    keywords: ['model presets', 'presets', 'modelpreset', 'role assignments', 'thinking level', 'snapshot'],
+  },
+  {
     id: 'chat.section.thinking',
     page: 'chat',
     titleKey: 'settings.chat.section.thinking.title',
