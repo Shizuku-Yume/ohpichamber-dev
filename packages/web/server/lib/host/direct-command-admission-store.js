@@ -21,12 +21,17 @@ const parseAcknowledgment = (operation, acknowledgment, sessionId) => {
 };
 
 /** Pending admissions have no timeout: a lost native acceptance cannot authorize another dispatch. */
-export function createDirectCommandAdmissionStore({ database }) {
+const DIRECT_COMMAND_RETENTION_MS = 24 * 60 * 60 * 1000;
+export function createDirectCommandAdmissionStore({ database, now = Date.now }) {
   const lifecycle = createMetadataLifecycle(database, false);
   const write = (work) => lifecycle.run(() => withTransaction(database, work)).catch(error => {
     if (error instanceof OpenChamberControlError || error instanceof MetadataCorruptError || error instanceof z.ZodError) throw error;
     throw Object.assign(new MetadataWriteError('Could not persist direct command admission', error), { statusCode: 503, retryable: false });
   });
+  const sweepExpired = (timestamp) => {
+    database.prepare("DELETE FROM host_direct_command WHERE state = 'accepted' AND created_at > 0 AND created_at + ? <= ?").run(DIRECT_COMMAND_RETENTION_MS, timestamp);
+  };
+  sweepExpired(now());
   const rowFor = (scope, commandId) => {
     const row = database.prepare('SELECT * FROM host_direct_command WHERE session_id = ? AND command_id = ?').get(scope.sessionId, commandId);
     if (row && (row.project_id !== scope.projectId || row.workspace_id !== scope.workspaceId)) {
@@ -41,8 +46,11 @@ export function createDirectCommandAdmissionStore({ database }) {
       operation = OperationSchema.parse(operation);
       const parsed = PromptRequestSchema.parse(request);
       const fingerprint = createHash('sha256').update(stableJson(parsed)).digest('hex');
+      sweepExpired(now());
       const row = rowFor(scope, commandId);
-      if (row) {
+      if (row && row.state === 'accepted' && row.created_at > 0 && row.created_at + DIRECT_COMMAND_RETENTION_MS <= now()) {
+        database.prepare("DELETE FROM host_direct_command WHERE session_id = ? AND command_id = ? AND state = 'accepted'").run(scope.sessionId, commandId);
+      } else if (row) {
         if (row.operation !== operation || row.payload_hash !== fingerprint) {
           throw new OpenChamberControlError('Command key already identifies another request', 400, { code: 'IDEMPOTENCY_CONFLICT' });
         }
@@ -53,9 +61,9 @@ export function createDirectCommandAdmissionStore({ database }) {
       }
       const claimId = randomUUID();
       database.prepare(`INSERT INTO host_direct_command
-        (session_id, command_id, project_id, workspace_id, operation, payload_hash, claim_id, state, acknowledgment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL)`)
-        .run(scope.sessionId, commandId, scope.projectId, scope.workspaceId, operation, fingerprint, claimId);
+        (session_id, command_id, project_id, workspace_id, operation, payload_hash, claim_id, state, acknowledgment, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`)
+        .run(scope.sessionId, commandId, scope.projectId, scope.workspaceId, operation, fingerprint, claimId, now());
       return { state: 'claimed', claimId };
     }),
     accept: (scope, commandId, claimId, acknowledgment) => write(() => {
@@ -66,10 +74,16 @@ export function createDirectCommandAdmissionStore({ database }) {
       if (!row || row.state !== 'pending' || row.claim_id !== claimId) throw inFlight();
       const operation = OperationSchema.parse(row.operation);
       const parsed = parseAcknowledgment(operation, acknowledgment, scope.sessionId);
-      const result = database.prepare("UPDATE host_direct_command SET state = 'accepted', acknowledgment = ? WHERE session_id = ? AND command_id = ? AND claim_id = ? AND state = 'pending'")
-        .run(JSON.stringify(parsed), scope.sessionId, commandId, claimId);
+      const result = database.prepare("UPDATE host_direct_command SET state = 'accepted', acknowledgment = ?, created_at = ? WHERE session_id = ? AND command_id = ? AND claim_id = ? AND state = 'pending'")
+        .run(JSON.stringify(parsed), now(), scope.sessionId, commandId, claimId);
       if (result.changes !== 1) throw inFlight();
       return parsed;
+    }),
+    release: (scope, commandId) => write(() => {
+      scope = ScopeSchema.parse(scope);
+      commandId = EntityIdSchema.parse(commandId);
+      sweepExpired(now());
+      database.prepare("DELETE FROM host_direct_command WHERE session_id = ? AND command_id = ? AND state = 'pending'").run(scope.sessionId, commandId);
     }),
     flush: lifecycle.flush,
     close: lifecycle.close,

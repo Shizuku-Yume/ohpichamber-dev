@@ -4,7 +4,7 @@ import express from 'express';
 import { z } from 'zod';
 import { assertRootPromptAdmission } from '../message-queue/prompt-admission.js';
 import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SessionTitleRequestSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema, SessionControlRequestSchema, SessionControlAckSchema, EntityIdSchema } from '@openchamber/agent-contract';
-import { SessionBranchRequestSchema, SessionBranchResultSchema, SessionRelocateRequestSchema, SessionRelocateResultSchema } from '@openchamber/agent-contract';
+import { SessionBranchRequestSchema, SessionBranchResultSchema, SessionRelocateRequestSchema, SessionRelocateResultSchema, PromptReceiptResultSchema } from '@openchamber/agent-contract';
 import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema } from '@openchamber/agent-service/private-protocol';
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
 import { asNonEmptyString } from '../shared/guards.js';
@@ -140,7 +140,7 @@ const createCanonicalSessionService = (dependencies) => {
       relocationControls.add(owner.rootSessionId);
       try { await recoverRelocation(owner.rootSessionId); } finally { relocationControls.delete(owner.rootSessionId); }
     }
-    const resolved = (owner && liveRootSessions.has(owner.rootSessionId)) ? await resolveHostSessionScope(sessionId) : await resolveSessionScope(sessionId);
+    const resolved = await resolveSessionScope(sessionId);
     if (!resolved || resolved.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
     if (adopt) adoptPrepared(resolved);
     const scope = subagentSessions.has(sessionId) && resolved.parentSessionId === undefined
@@ -187,11 +187,11 @@ const createCanonicalSessionService = (dependencies) => {
   // id, so a listed root is registered. An absent root left at most an empty
   // native file, which every listing hides; a native file with content is
   // listed and registered by ordinary discovery.
-  const recoverPriorCreateAdmissions = (scope) => {
+  const recoverPriorSessionAdmissions = (scope) => {
     const running = admissionRecoveries.get(scope.workspaceId);
     if (running) return running;
     const recovery = (async () => {
-      for (const admission of await agentScopeStore.listPriorCreateAdmissions(scope.workspaceId)) {
+      for (const admission of await agentScopeStore.listPriorSessionAdmissions(scope.workspaceId)) {
         const owner = await resolveWorkspaceScope(admission.workspaceId);
         if (!owner) continue;
         const listed = NativeSessionListSchema.safeParse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(owner.workspaceId)}`).catch(() => null));
@@ -201,14 +201,14 @@ const createCanonicalSessionService = (dependencies) => {
         if (!(await Promise.all(roots.map(registerSessionScope))).every(Boolean)) continue;
         await agentScopeStore.releaseSessionAdmission(admission.id);
       }
-    })().catch(() => {}).finally(() => admissionRecoveries.delete(scope.workspaceId));
+    })().catch(() => { }).finally(() => admissionRecoveries.delete(scope.workspaceId));
     admissionRecoveries.set(scope.workspaceId, recovery);
     return recovery;
   };
   const withSessionAdmission = async (scope, operation, rootSessionId, work, readOnly = false) => {
     if (!agentScopeStore) throw new OpenChamberControlError('Host session admission authority is unavailable', 503);
     if (scope.checkoutRemoved && !readOnly) throw new OpenChamberControlError('This chat\'s worktree was deleted, so it is read-only', 409, { code: 'SESSION_READ_ONLY' });
-    await recoverPriorCreateAdmissions(scope);
+    await recoverPriorSessionAdmissions(scope);
     const admission = await agentScopeStore.reserveSessionAdmission(scope.workspaceId, operation, rootSessionId);
     let complete = false;
     let answered = false;
@@ -217,10 +217,8 @@ const createCanonicalSessionService = (dependencies) => {
       complete = true;
       return result;
     } catch (error) {
-      // A validated supervisor refusal is authoritative: no native admission
-      // was accepted, so it must not strand the Host scope fence.
-      if (error instanceof OpenChamberControlError && error.statusCode >= 400 && error.statusCode < 500) complete = true;
       answered = error instanceof OpenChamberControlError && error.refusalVerified === true;
+      if ((error instanceof OpenChamberControlError && error.statusCode >= 400 && error.statusCode < 500) || (answered && operation === 'reopen')) complete = true;
       if (!complete && !readOnly) throw new OpenChamberControlError('Native session admission outcome is uncertain; the worktree archive remains blocked until the admission is reconciled', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false, cause: error });
       throw error;
     } finally {
@@ -435,22 +433,25 @@ const createCanonicalSessionService = (dependencies) => {
     let receipt;
     try {
       const pathname = operation === 'send' ? 'runs' : operation === 'steer' ? 'steer' : 'follow-up';
-      const body = operation === 'send' ? { type: 'prompt', runId: deliveryRunId, request: capture.request, attachments: capture.attachments }
+      const body = operation === 'send'
+        ? { type: 'prompt', runId: deliveryRunId, request: capture.request, attachments: capture.attachments }
         : { request: capture.request, attachments: capture.attachments };
+      if (commandId !== undefined) body.correlationId = commandId;
       const dispatch = () => request(`/internal/sessions/${encodeURIComponent(sessionId)}/${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       let response;
       try {
         response = await dispatch();
       } catch (error) {
-        // Only a verified cold refusal retries: it proves native admission never
-        // accepted this command, so resending cannot duplicate an admitted run.
         if (operation !== 'send' || !isVerifiedColdRefusal(error)) throw error;
         await reopen(scope);
         response = await dispatch();
       }
       if (operation === 'send') {
         const run = RunSchema.parse(response?.run);
-        if (run.sessionId !== sessionId || run.runId !== deliveryRunId) throw new Error('Native run acknowledgement does not match the admitted command');
+        const admissionStamp = z.number().safeParse(response?.runCreatedAt);
+        const replayed = run.runId !== deliveryRunId && commandId !== undefined
+          && admissionStamp.success && run.createdAt < admissionStamp.data;
+        if (run.sessionId !== sessionId || (run.runId !== deliveryRunId && !replayed)) throw new Error('Native run acknowledgement does not match the admitted command');
         acknowledgment = { run };
         receipt = { runId: run.runId, deliveryRunId, run };
         rememberLive(scope.rootSessionId);
@@ -469,6 +470,7 @@ const createCanonicalSessionService = (dependencies) => {
       if (claim && !(error instanceof OpenChamberControlError && error.refusalVerified === true)) {
         throw new OpenChamberControlError('Command acceptance is uncertain; it will not be dispatched again', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false });
       }
+      if (claim) await directCommandAdmissionStore.release(scope, commandId);
       throw error;
     }
     try {
@@ -537,6 +539,14 @@ const createCanonicalSessionService = (dependencies) => {
   };
   const open = async (id, { signal }: { signal?: AbortSignal } = {}) => { const scope = await scopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`, { signal })); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
   const history = async (id, query = '') => { const scope = await scopeFor(id); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
+  const promptReceipt = async (id, correlationId) => {
+    await scopeFor(id);
+    if (!EntityIdSchema.safeParse(correlationId).success) throw new OpenChamberControlError('Prompt receipt correlation id is invalid', 400, { code: 'INVALID_REQUEST' });
+    const result = PromptReceiptResultSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/prompt-receipts/${encodeURIComponent(correlationId)}`));
+    const echoed = result.status === 'unknown' ? result : result.receipt;
+    if (echoed.sessionId !== id || echoed.correlationId !== correlationId) throw new OpenChamberControlError('Prompt receipt is outside the authorized scope', 502);
+    return result;
+  };
   const list = async (workspaceId?: string, { signal }: { signal?: AbortSignal } = {}) => {
     const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (listWorkspaceScopes instanceof Function ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
     const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), ProblemCodeSchema) }).parse(scopePage);
@@ -1141,7 +1151,7 @@ const createCanonicalSessionService = (dependencies) => {
     }
   };
 
-  return { create, prepare, discardPrepared, close, send, steer, followUp, fork, selectBranch, relocate, moveToWorktree, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
+  return { create, prepare, discardPrepared, close, send, steer, followUp, fork, selectBranch, relocate, moveToWorktree, delete: remove, open, history, promptReceipt, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
 };
 
 
@@ -1290,6 +1300,7 @@ export const registerCanonicalSessionRoutes = (router, service) => {
   router.get('/:sessionId/snapshot', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session snapshot'));
   router.get('/:sessionId', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session'));
   router.get('/:sessionId/history', (req, res) => call(res, () => service.history(req.params.sessionId, new URLSearchParams(req.query).toString()), 'Failed to read session history'));
+  router.get('/:sessionId/prompt-receipts/:correlationId', (req, res) => call(res, () => service.promptReceipt(req.params.sessionId, req.params.correlationId), 'Failed to read prompt receipt'));
   router.post('/:sessionId/runs', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.send(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to submit session run'));
   router.post('/:sessionId/steer', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.steer(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to steer session'));
   router.post('/:sessionId/follow-up', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.followUp(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to submit session follow-up'));

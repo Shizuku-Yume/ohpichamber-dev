@@ -14,7 +14,10 @@ import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { usePermissionStore } from '@/stores/permissionStore';
-import { optimisticSend, patchSessionMetadata, sendMessage, waitForConnectionOrThrow } from '@/sync/session-actions';
+import { AmbiguousSendAdoptedError, optimisticSend, patchSessionMetadata, sendMessage, waitForConnectionOrThrow } from '@/sync/session-actions';
+import { sendReconciliationOutcome } from '@/sync/send-reconciliation';
+import { problemMessage } from '@/lib/problemMessage';
+import { toast } from '@/components/ui';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getDirectoryState, getSyncMessages, registerSessionDirectory } from '@/sync/sync-refs';
@@ -227,31 +230,43 @@ const sendPlainMessage = async (
 
   markPendingUserSendAnimation(sessionID);
   let sentMessageID: string | null = null;
-  await optimisticSend({
-    runtimeKey,
-    runtimeRevision: owner.revision,
-    sessionId: sessionID,
-    content: text,
-    directory,
-    context,
-    onMessageID: (messageID) => {
-      sentMessageID = messageID;
-    },
-    beforeOptimisticInsert: assertCurrent,
-    onOptimisticInsert: () => requestChatForceScrollBottom(sessionID),
-    send: (_messageID, promptContext) => {
-      assertCurrent();
-      return sendMessage({
-        sessionId: sessionID,
-        runtimeKey,
-        runtimeRevision: owner.revision,
-        request: {
-          input: { text, attachments: [], context: promptContext.map((item) => ({ kind: 'synthetic' as const, text: item.text })) },
-          options: { providerId: resolved.providerId, modelId: resolved.modelId, agentId: null, variant: resolved.variant ?? null, reasoningEffort: null },
-        },
+  try {
+    await optimisticSend({
+      runtimeKey,
+      runtimeRevision: owner.revision,
+      sessionId: sessionID,
+      content: text,
+      directory,
+      context,
+      onMessageID: (messageID) => {
+        sentMessageID = messageID;
+      },
+      beforeOptimisticInsert: assertCurrent,
+      onOptimisticInsert: () => requestChatForceScrollBottom(sessionID),
+      send: (messageID, promptContext) => {
+        assertCurrent();
+        return sendMessage({
+          sessionId: sessionID,
+          runtimeKey,
+          runtimeRevision: owner.revision,
+          commandId: messageID,
+          request: {
+            input: { text, attachments: [], context: promptContext.map((item) => ({ kind: 'synthetic' as const, text: item.text })) },
+            options: { providerId: resolved.providerId, modelId: resolved.modelId, agentId: null, variant: resolved.variant ?? null, reasoningEffort: null },
+          },
+        });
+      },
+    });
+  } catch (error) {
+    if (error instanceof AmbiguousSendAdoptedError && error.correlationId) {
+      const outcome = sendReconciliationOutcome(sessionID, error.correlationId);
+      void outcome?.then((resolution) => {
+        if (resolution.outcome !== 'rejected') return;
+        toast.error((resolution.receipt?.outcome === 'rejected' ? resolution.receipt.detail.trim() : '') || problemMessage(error, 'Message send failed'));
       });
-    },
-  });
+    }
+    throw error;
+  }
   assertCurrent();
   if (!sentMessageID) throw new Error('Failed to prepare review flow message');
   return sentMessageID;

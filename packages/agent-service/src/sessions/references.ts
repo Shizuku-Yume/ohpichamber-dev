@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DisplayPathSchema, EntityIdSchema, JsonValueSchema, SubagentSchema, TimestampSchema } from '@openchamber/agent-contract';
-import type { JsonValue, ProblemCode } from '@openchamber/agent-contract';
+import { DisplayPathSchema, EntityIdSchema, JsonValueSchema, PromptReceiptSchema, SubagentSchema, TimestampSchema } from '@openchamber/agent-contract';
+import type { JsonValue, ProblemCode, PromptReceipt } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import { subagentKey } from './subagent-lifecycle.ts';
+
+export const PROMPT_RECEIPT_RETENTION_MS = 24 * 60 * 60 * 1000;
+const receiptKey = (sessionId: string, correlationId: string) => `${sessionId}:${correlationId}`;
 
 const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true, observationEpoch: true, catalogRevision: true, mcpConfiguration: true, skillSources: true, sessionWarmingMode: true }).required({ sessionFile: true })
   .extend({
@@ -31,10 +34,11 @@ const WorktreeDeleteSchema = z.strictObject({
   artifacts: z.strictObject({ device: z.string(), inode: z.string() }).nullable(), state: z.enum(['pending', 'completed']),
 });
 export type WorktreeDeleteIntent = z.infer<typeof WorktreeDeleteSchema>;
-const PersistedSchema = z.strictObject({ references: z.record(z.string(), JsonValueSchema), subagents: z.record(z.string(), z.array(ChildReferenceSchema)).default({}), relocations: z.record(z.string(), SessionRelocationIntentSchema).default({}), worktreeDeletes: z.record(z.string(), WorktreeDeleteSchema).default({}) })
+const PersistedSchema = z.strictObject({ references: z.record(z.string(), JsonValueSchema), subagents: z.record(z.string(), z.array(ChildReferenceSchema)).default({}), relocations: z.record(z.string(), SessionRelocationIntentSchema).default({}), worktreeDeletes: z.record(z.string(), WorktreeDeleteSchema).default({}), receipts: z.record(z.string(), JsonValueSchema).default({}) })
   .refine(state => Object.entries(state.relocations).every(([id, intent]) => id === intent.source.rootSessionId), 'Relocation index must retain its root owner')
   .refine(state => Object.entries(state.worktreeDeletes).every(([id, intent]) => id === intent.reference.rootSessionId), 'Delete intent must retain its root owner');
 type References = z.infer<typeof PersistedSchema>['references'];
+type ReceiptValues = z.infer<typeof PersistedSchema>['receipts'];
 const FileErrorSchema = z.object({ code: z.string() });
 
 export class SessionReferenceError extends Error {
@@ -62,14 +66,19 @@ export class SessionReferences {
   private subagentValues: Record<string, ChildReference[]> = {};
   private relocations: Record<string, SessionRelocationIntent> = {};
   private worktreeDeletes: Record<string, WorktreeDeleteIntent> = {};
+  private receiptValues: ReceiptValues = {};
   private readonly records = new Map<string, SessionReference>();
   private readonly childRecords = new Map<string, ChildReference>();
+  private readonly receiptRecords = new Map<string, PromptReceipt>();
   private readonly malformed = new Set<string>();
+  private readonly receiptMalformed = new Set<string>();
   private initialized = false;
   private closed = false;
   private tail: Promise<void> = Promise.resolve();
+  private readonly clock: () => number;
 
-  constructor(private readonly stateDirectory: string) { this.file = join(stateDirectory, 'session-references.json'); }
+  constructor(private readonly stateDirectory: string, clock?: () => number) { this.file = join(stateDirectory, 'session-references.json'); this.clock = clock ?? (() => Date.now()); }
+
 
   async initialize(): Promise<void> {
     this.ensureOpen();
@@ -90,6 +99,7 @@ export class SessionReferences {
     this.subagentValues = state.subagents;
     this.relocations = state.relocations;
     this.worktreeDeletes = state.worktreeDeletes;
+    this.receiptValues = state.receipts;
     for (const rows of Object.values(this.subagentValues)) for (const row of rows) {
       const parsed = ChildReferenceSchema.safeParse(row);
       if (parsed.success) this.childRecords.set(subagentKey(parsed.data.rootSessionId, parsed.data.subagentId), parsed.data);
@@ -99,6 +109,18 @@ export class SessionReferences {
       if (parsed.success && parsed.data.rootSessionId === id) this.records.set(id, parsed.data);
       else this.malformed.add(id);
     }
+    let expiredReceipts = false;
+    const now = this.clock();
+    for (const [key, value] of Object.entries(this.receiptValues)) {
+      const parsed = PromptReceiptSchema.safeParse(value);
+      if (!parsed.success || key !== receiptKey(parsed.data.sessionId, parsed.data.correlationId)) {
+        this.receiptMalformed.add(key);
+        continue;
+      }
+      if (parsed.data.expiresAt <= now) { expiredReceipts = true; delete this.receiptValues[key]; continue; }
+      this.receiptRecords.set(key, parsed.data);
+    }
+    if (expiredReceipts) await this.persist(this.values, this.relocations, this.subagentValues, undefined, this.worktreeDeletes, this.receiptValues);
     this.initialized = true;
   }
 
@@ -135,14 +157,92 @@ export class SessionReferences {
       }));
       delete subagents[previousSessionId];
       if (moved.length > 0) subagents[parsed.rootSessionId] = moved;
-      await this.persist(references, this.relocations, subagents);
+      const receipts = { ...this.receiptValues };
+      const movedReceipts: { key: string; receipt: PromptReceipt }[] = [];
+      for (const [key, receipt] of this.receiptRecords) {
+        if (receipt.sessionId !== previousSessionId) continue;
+        const next = { ...receipt, sessionId: parsed.rootSessionId };
+        delete receipts[key];
+        receipts[receiptKey(next.sessionId, next.correlationId)] = JsonValueSchema.parse(next);
+        movedReceipts.push({ key, receipt: next });
+      }
+      await this.persist(references, this.relocations, subagents, undefined, this.worktreeDeletes, receipts);
       this.values = references;
       this.subagentValues = subagents;
+      this.receiptValues = receipts;
       this.records.delete(previousSessionId);
       this.malformed.delete(previousSessionId);
       this.records.set(parsed.rootSessionId, parsed);
       for (const row of moved) { this.childRecords.delete(subagentKey(previousSessionId, row.subagentId)); this.childRecords.set(subagentKey(row.rootSessionId, row.subagentId), row); }
+      for (const movedReceipt of movedReceipts) {
+        this.receiptRecords.delete(movedReceipt.key);
+        this.receiptRecords.set(receiptKey(movedReceipt.receipt.sessionId, movedReceipt.receipt.correlationId), movedReceipt.receipt);
+      }
     });
+  }
+
+  receipt(sessionId: string, correlationId: string): PromptReceipt | null {
+    this.ensureReady();
+    const key = receiptKey(sessionId, correlationId);
+    if (this.receiptMalformed.has(key)) throw new SessionReferenceError(503, 'SESSION_RESTORE_FAILED', 'Prompt receipt is corrupt');
+    const receipt = this.receiptRecords.get(key);
+    if (!receipt) return null;
+    if (receipt.expiresAt <= this.clock()) return null;
+    return structuredClone(receipt);
+  }
+
+  putReceipt(receipt: PromptReceipt): Promise<PromptReceipt> {
+    this.ensureReady();
+    const parsed = PromptReceiptSchema.parse(receipt);
+    return this.enqueue(async () => {
+      const key = receiptKey(parsed.sessionId, parsed.correlationId);
+      const existing = this.receiptRecords.get(key);
+      if (existing && existing.expiresAt > this.clock() && (existing.outcome === 'accepted' || parsed.outcome !== 'accepted')) return;
+      const receipts = this.prunedReceipts();
+      receipts[key] = JsonValueSchema.parse(parsed);
+      await this.persist(this.values, this.relocations, this.subagentValues, undefined, this.worktreeDeletes, receipts);
+      this.receiptValues = receipts;
+      for (const stale of [...this.receiptRecords.keys()]) if (!Object.hasOwn(receipts, stale)) this.receiptRecords.delete(stale);
+      this.receiptRecords.set(key, parsed);
+    }).then(() => {
+      const current = this.receiptRecords.get(receiptKey(parsed.sessionId, parsed.correlationId));
+      if (!current) throw new SessionReferenceError(503, 'SESSION_RESTORE_FAILED', 'Prompt receipt did not survive its write');
+      return structuredClone(current);
+    });
+  }
+
+  private prunedReceipts(): ReceiptValues {
+    const now = this.clock();
+    const liveIds = new Set(this.records.keys());
+    for (const child of this.childRecords.values()) liveIds.add(child.childSessionId);
+    const receipts: ReceiptValues = {};
+    for (const [key, value] of Object.entries(this.receiptValues)) {
+      if (this.receiptMalformed.has(key)) { receipts[key] = value; continue; }
+      const record = this.receiptRecords.get(key);
+      if (!record) continue;
+      if (record.expiresAt <= now) continue;
+      if (!liveIds.has(record.sessionId)) continue;
+      receipts[key] = value;
+    }
+    return receipts;
+  }
+
+  private withoutSessionReceipts(sessionId: string): ReceiptValues {
+    const receipts: ReceiptValues = {};
+    for (const [key, value] of Object.entries(this.receiptValues)) {
+      const record = this.receiptRecords.get(key);
+      if (record?.sessionId === sessionId) continue;
+      receipts[key] = value;
+    }
+    return receipts;
+  }
+
+  private dropSessionReceiptRows(sessionId: string, receipts: ReceiptValues): void {
+    this.receiptValues = receipts;
+    for (const [key, record] of [...this.receiptRecords]) if (record.sessionId === sessionId) this.receiptRecords.delete(key);
+    for (const key of [...this.receiptMalformed]) {
+      if (!Object.hasOwn(receipts, key)) this.receiptMalformed.delete(key);
+    }
   }
 
   list(workspaceId?: string) {
@@ -291,9 +391,11 @@ export class SessionReferences {
       if (!this.records.get(sessionId)?.deletedSpace) throw new SessionReferenceError(400, 'INVALID_REQUEST', 'Not a deleted-space archive');
       const references = { ...this.values }; delete references[sessionId];
       const subagents = { ...this.subagentValues }; delete subagents[sessionId];
-      await this.persist(references, this.relocations, subagents);
+      const receipts = this.withoutSessionReceipts(sessionId);
+      await this.persist(references, this.relocations, subagents, undefined, this.worktreeDeletes, receipts);
       for (const child of this.subagentValues[sessionId] ?? []) this.childRecords.delete(subagentKey(child.rootSessionId, child.subagentId));
       this.values = references; this.subagentValues = subagents; this.records.delete(sessionId);
+      this.dropSessionReceiptRows(sessionId, receipts);
     });
   }
   worktreeDelete(sessionId: string): WorktreeDeleteIntent | null {
@@ -326,9 +428,11 @@ export class SessionReferences {
       const references = { ...this.values }; delete references[sessionId];
       const subagents = { ...this.subagentValues }; delete subagents[sessionId];
       const intents = { ...this.worktreeDeletes, [sessionId]: { ...intent, state: 'completed' as const } };
-      await this.persist(references, this.relocations, subagents, undefined, intents);
+      const receipts = this.withoutSessionReceipts(sessionId);
+      await this.persist(references, this.relocations, subagents, undefined, intents, receipts);
       for (const child of intent.children) this.childRecords.delete(subagentKey(child.rootSessionId, child.subagentId));
       this.values = references; this.subagentValues = subagents; this.records.delete(sessionId); this.worktreeDeletes = intents;
+      this.dropSessionReceiptRows(sessionId, receipts);
     });
   }
 
@@ -365,10 +469,12 @@ export class SessionReferences {
       this.assertWritable(sessionId);
       const draft = { ...this.values };
       delete draft[sessionId];
-      await this.persist(draft);
+      const receipts = this.withoutSessionReceipts(sessionId);
+      await this.persist(draft, this.relocations, this.subagentValues, undefined, this.worktreeDeletes, receipts);
       this.values = draft;
       this.records.delete(sessionId);
       this.malformed.delete(sessionId);
+      this.dropSessionReceiptRows(sessionId, receipts);
     });
   }
 
@@ -380,12 +486,12 @@ export class SessionReferences {
     return result;
   }
 
-  private async persist(references: References, relocations = this.relocations, subagents = this.subagentValues, signal?: AbortSignal, worktreeDeletes = this.worktreeDeletes): Promise<void> {
+  private async persist(references: References, relocations = this.relocations, subagents = this.subagentValues, signal?: AbortSignal, worktreeDeletes = this.worktreeDeletes, receipts = this.receiptValues): Promise<void> {
     const temporary = `${this.file}.${randomUUID()}.tmp`;
     try {
       await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
       const handle = await open(temporary, 'wx', 0o600);
-      try { await handle.writeFile(JSON.stringify({ references, relocations, subagents, worktreeDeletes }), 'utf8'); await handle.sync(); }
+      try { await handle.writeFile(JSON.stringify({ references, relocations, subagents, worktreeDeletes, receipts }), 'utf8'); await handle.sync(); }
       finally { await handle.close(); }
       if (signal?.aborted) throw new SessionReferenceError(503, 'SESSION_RESTORE_FAILED', 'Archive import was cancelled before publication');
       await rename(temporary, this.file);

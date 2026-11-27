@@ -3,7 +3,7 @@ import * as C from '@openchamber/agent-contract';
 import { runtimeFetch } from '../lib/runtime-fetch';
 import type {
   AgentCatalog, AgentCreateRequest, AgentDeleteRequest, AgentMutationResult, AgentUpdateRequest,
-  ApprovalReply, ApprovalRequest, CanonicalEvent, FollowUpRequest, HistoryPage, HistoryPageRequest,
+  ApprovalReply, ApprovalRequest, CanonicalEvent, FollowUpRequest, HistoryPage, HistoryPageRequest, PromptReceiptResult,
   ModelCatalog, ModelConfigureRequest, ModelDeleteRequest, ProviderCatalog, ProviderConfigureRequest,
   ProviderCredentialDeleteRequest, ProviderCredentialMutationResult, ProviderCredentialWriteRequest, ProviderDeleteRequest,
   ProviderMutationResult, QuestionReply, QuestionRequest, RunAbortAck, RunCreateRequest, Session, SessionCreateAck,
@@ -259,6 +259,13 @@ export class CanonicalClient {
   }
   getTurnDiff(sessionId: string, turnId: string): Promise<C.TurnDiff> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/turns/${id(turnId)}/diff`, scoped(C.TurnDiffSchema, result => result.sessionId === sessionId && result.turnId === turnId));
+  }
+  getPromptReceipt(sessionId: string, correlationId: string): Promise<PromptReceiptResult> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/prompt-receipts/${id(correlationId)}`, scoped(C.PromptReceiptResultSchema, result =>
+      result.status === 'unknown'
+        ? result.sessionId === sessionId && result.correlationId === correlationId
+        : result.receipt.sessionId === sessionId && result.receipt.correlationId === correlationId
+    ));
   }
   getSessionMetadata(sessionId: string): Promise<SessionMetadataState> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/metadata`, scoped(C.SessionMetadataStateSchema, result => result.sessionId === sessionId));

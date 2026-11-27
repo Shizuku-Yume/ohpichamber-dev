@@ -7,7 +7,7 @@ import type { SessionInfo } from '@oh-my-pi/pi-coding-agent/session/session-list
 import { FileSessionStorage } from '@oh-my-pi/pi-coding-agent/session/session-storage';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
-import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, SessionRecapEntry, SessionSnapshot, SessionToolsCatalog, Subagent, SubagentTranscriptResponse, SubagentTreeCostResponse, UsageQueryResult } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, PromptReceipt, PromptReceiptOperation, QuestionReply, Run, RuntimeSession, SessionBranchRequest, SessionRecapEntry, SessionSnapshot, SessionToolsCatalog, Subagent, SubagentTranscriptResponse, SubagentTreeCostResponse, UsageQueryResult } from '@openchamber/agent-contract';
 import { listSessionRecaps } from '@oh-my-pi/pi-coding-agent/session/session-index';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { UsageSessionReference, WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
@@ -19,7 +19,7 @@ import { ProjectionError, SessionJournal } from '../projection/journal.ts';
 import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad, type ApprovalPolicyLoadRequest, type ApprovalPolicyRecord, type PermissionAuthority } from '../interaction/manager.ts';
 import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
 import { assertArchiveActive, exportNativeArchive, importNativeArchive, type ArchiveImportRequest } from './archive.ts';
-import { SessionReferenceError, SessionReferences } from './references.ts';
+import { PROMPT_RECEIPT_RETENTION_MS, SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference, SessionRelocationIntent } from './references.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
 import { hasRunningSubagent, queueSubagentLifecycle, readSubagentIdentity, settleSubagentsForExit, subagentKey, type ChildRecord, type Opened, type SubagentLifecycleInput } from './subagent-lifecycle.ts';
@@ -57,6 +57,22 @@ const nativeTime = (value: Date, fallback: number): number => {
 const sameScope = (scope: Pick<SessionReference, 'workspaceId' | 'projectId' | 'cwd' | 'agentDirectory'>, workspace: SessionWorkspaceScope): boolean =>
   scope.workspaceId === workspace.workspaceId && scope.projectId === workspace.projectId
   && resolve(scope.cwd) === resolve(workspace.cwd) && resolve(scope.agentDirectory) === resolve(workspace.agentDirectory);
+
+const REJECTION_DETAIL = {
+  RUN_ACTIVE: 'The session already has an active or pending run',
+  RUN_NOT_FOUND: 'The session has no active run',
+  SERVICE_UNAVAILABLE: 'The session runtime is unavailable',
+  SESSION_READ_ONLY: 'The session is read-only',
+  COMMAND_IN_FLIGHT: 'A conflicting command is in flight for the session',
+  INVALID_REQUEST: 'The prompt request is invalid',
+  UNAUTHORIZED: 'The prompt is outside the authorized session scope',
+  SESSION_NOT_FOUND: 'The session is not registered',
+  CATALOG_CONFLICT: 'The session catalog is mid-mutation',
+} satisfies Partial<Record<ProblemCode, string>>;
+
+const REJECTION_DETAILS = new Map<string, string>(Object.entries(REJECTION_DETAIL));
+const rejectionDetailFor = (code: ProblemCode): string =>
+  REJECTION_DETAILS.get(code) ?? 'The prompt admission was refused';
 
 export class SessionRegistry {
   private readonly references: SessionReferences;
@@ -892,28 +908,44 @@ export class SessionRegistry {
   }
   async prompt(sessionId: string, operation: PromptOperation) {
     this.ensureOpen();
-    this.assertWritable(sessionId);
-    this.assertControlAvailable(sessionId);
+    if (operation.correlationId !== undefined) {
+      const existing = this.references.receipt(sessionId, operation.correlationId);
+      if (existing?.outcome === 'accepted') return this.replayedSendRun(sessionId, existing);
+    }
+    try {
+      this.assertWritable(sessionId);
+      this.assertControlAvailable(sessionId);
+    } catch (error) {
+      if (error instanceof WorkerOperationError || error instanceof SessionReferenceError) throw await this.receiptRejection(sessionId, operation.correlationId, 'send', error);
+      throw error;
+    }
     // Reserve admission before any runtime check or await. The idle predicate
     // reads this set, so a prompt that starts between an eviction probe and its
     // root-locked recheck is still observable as busy. Once the worker admits
     // the run it emits run.started before the prompt reply, so releasing this
     // reservation exposes the active run to the same predicate.
-    if (this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The same session already has a prompt in flight');
+    if (this.pendingRuns.has(sessionId)) throw await this.receiptRejection(sessionId, operation.correlationId, 'send', new WorkerOperationError(409, 'RUN_ACTIVE', 'The same session already has a prompt in flight'));
     this.pendingRuns.add(sessionId);
     try {
       const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
       const rootSessionId = child?.rootSessionId ?? sessionId;
       const pendingOpening = this.openings.get(rootSessionId);
       if (pendingOpening) await pendingOpening;
-      const runtime = this.runtime(sessionId);
+      let runtime;
+      try {
+        runtime = this.runtime(sessionId);
+      } catch (error) {
+        if (error instanceof WorkerOperationError || error instanceof SessionReferenceError) throw await this.receiptRejection(sessionId, operation.correlationId, 'send', error);
+        throw error;
+      }
       if (runtime.runtimeStatus === 'unavailable') {
         const reason = this.journal(sessionId).reasonUnavailable();
-        throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', reason ? `The session runtime is unavailable: ${reason}` : 'The session runtime is unavailable');
+        throw await this.receiptRejection(sessionId, operation.correlationId, 'send', new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', reason ? `The session runtime is unavailable: ${reason}` : 'The session runtime is unavailable'));
       }
-      if (runtime.activeRunId !== null || runtime.continuationPending === true) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session already has an active or continuation run');
+      if (runtime.activeRunId !== null || runtime.continuationPending === true) throw await this.receiptRejection(sessionId, operation.correlationId, 'send', new WorkerOperationError(409, 'RUN_ACTIVE', 'The session already has an active or continuation run'));
       const result = await this.workers.request(sessionId, operation);
       if (result.type !== 'prompt') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested prompt operation.');
+      await this.receiptAccepted(sessionId, operation.correlationId, 'send', result.run.runId);
       return result.run;
     } finally { this.pendingRuns.delete(sessionId); }
   }
@@ -973,16 +1005,112 @@ export class SessionRegistry {
   }
   async streamingPrompt(sessionId: string, operation: Extract<WorkerOperation, { type: 'steer' | 'follow-up' }>) {
     this.ensureOpen();
-    this.assertWritable(sessionId);
-    const runtime = this.runtime(sessionId);
-    if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The session runtime is unavailable');
-    if (runtime.activeRunId === null) throw new WorkerOperationError(404, 'RUN_NOT_FOUND', 'The session has no active run');
+    const receiptOperation = operation.type === 'steer' ? 'steer' as const : 'followUp' as const;
+    if (operation.correlationId !== undefined) {
+      const existing = this.references.receipt(sessionId, operation.correlationId);
+      if (existing?.outcome === 'accepted') {
+        if (operation.type === 'steer') return { sessionId, runId: existing.runId, acceptedAt: existing.acceptedAt };
+        return { sessionId, followUpId: existing.userMessageId ?? existing.correlationId, acceptedAt: existing.acceptedAt };
+      }
+    }
+    try {
+      this.assertWritable(sessionId);
+    } catch (error) {
+      if (error instanceof WorkerOperationError || error instanceof SessionReferenceError) throw await this.receiptRejection(sessionId, operation.correlationId, receiptOperation, error);
+      throw error;
+    }
+    let runtime;
+    try {
+      runtime = this.runtime(sessionId);
+    } catch (error) {
+      if (error instanceof WorkerOperationError || error instanceof SessionReferenceError) throw await this.receiptRejection(sessionId, operation.correlationId, receiptOperation, error);
+      throw error;
+    }
+    if (runtime.runtimeStatus === 'unavailable') throw await this.receiptRejection(sessionId, operation.correlationId, receiptOperation, new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The session runtime is unavailable'));
+    if (runtime.activeRunId === null) throw await this.receiptRejection(sessionId, operation.correlationId, receiptOperation, new WorkerOperationError(404, 'RUN_NOT_FOUND', 'The session has no active run'));
     const result = await this.workers.request(sessionId, operation);
     if (result.type !== 'steer' && result.type !== 'follow-up') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested steer or follow-up operation');
     if (result.type !== operation.type || result.ack.sessionId !== sessionId) throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested operation');
     if (result.type === 'steer' && result.ack.runId !== runtime.activeRunId) throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The steer reply named a different run');
+    await this.receiptAccepted(sessionId, operation.correlationId, receiptOperation, result.type === 'steer' ? result.ack.runId : runtime.activeRunId, result.type === 'follow-up' ? result.ack.followUpId : undefined);
     return result.ack;
   }
+  promptReceipt(sessionId: string, correlationId: string): PromptReceipt | null {
+    this.ensureOpen();
+    const child = [...this.subagents.values()].some(record => record.childSessionId === sessionId);
+    if (!this.entries.has(sessionId) && !child && !this.references.get(sessionId) && !this.nativeCold.has(sessionId)) {
+      throw new WorkerOperationError(404, 'SESSION_NOT_FOUND', 'The session is not registered');
+    }
+    this.assertControlAvailable(sessionId);
+    return this.references.receipt(sessionId, correlationId);
+  }
+
+  private async receiptAccepted(sessionId: string, correlationId: string | undefined, operation: PromptReceiptOperation, runId: string, userMessageId?: string): Promise<void> {
+    if (correlationId === undefined) return;
+    const now = Date.now();
+    const receipt: Extract<PromptReceipt, { outcome: 'accepted' }> = {
+      outcome: 'accepted', correlationId, sessionId, operation, runId,
+      acceptedAt: now, expiresAt: now + PROMPT_RECEIPT_RETENTION_MS,
+    };
+    if (userMessageId !== undefined) receipt.userMessageId = userMessageId;
+    try {
+      await this.references.putReceipt(receipt);
+    } catch (error) {
+      if (error instanceof SessionReferenceError) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The accepted prompt receipt could not be persisted');
+      throw error;
+    }
+  }
+
+  private async replayedSendRun(sessionId: string, existing: Extract<PromptReceipt, { outcome: 'accepted' }>) {
+    const entry = this.entries.get(existing.sessionId);
+    let known = entry?.state === 'live'
+      ? entry.opened.journal.run(existing.runId)
+      : this.coldJournals.get(existing.sessionId)?.run(existing.runId);
+    if (!known && entry?.state !== 'live') {
+      try {
+        const { reference } = this.coldRoot(existing.sessionId);
+        const { projection, manager } = await this.coldProjection(existing.sessionId);
+        try {
+          const journal = new SessionJournal({
+            sessionId: existing.sessionId,
+            rootSessionId: reference.rootSessionId,
+            projectId: reference.projectId, workspaceId: reference.workspaceId,
+            displayPath: reference.displayPath,
+          }, projection.seed());
+          known = journal.run(existing.runId);
+          journal.close();
+        } finally { await manager.close(); }
+      } catch (coldReadFailure) {
+        if (!(coldReadFailure instanceof Error && 'code' in coldReadFailure && coldReadFailure.code === 'ENOENT')) {
+          if (coldReadFailure instanceof WorkerOperationError) throw coldReadFailure;
+          throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session transcript could not be read for the receipt replay');
+        }
+      }
+    }
+    const run: Run = { runId: existing.runId, sessionId, origin: 'host', status: known?.status ?? 'running', createdAt: known?.createdAt ?? existing.acceptedAt };
+    if (known?.finishedAt !== undefined) run.finishedAt = known.finishedAt;
+    if (known?.error !== undefined) run.error = known.error;
+    return run;
+  }
+
+  private async receiptRejection(sessionId: string, correlationId: string | undefined, operation: PromptReceiptOperation, error: WorkerOperationError | SessionReferenceError): Promise<WorkerOperationError | SessionReferenceError> {
+    if (correlationId === undefined) return error;
+    if (this.references.receipt(sessionId, correlationId)?.outcome === 'accepted') return error;
+    if (error.code === 'SESSION_RESTORE_FAILED' || error.code === 'INTERNAL_ERROR') return error;
+    const now = Date.now();
+    try {
+      await this.references.putReceipt({
+        outcome: 'rejected', correlationId, sessionId, operation,
+        code: error.code, detail: rejectionDetailFor(error.code),
+        rejectedAt: now, expiresAt: now + PROMPT_RECEIPT_RETENTION_MS,
+      });
+    } catch (writeFailure) {
+      if (writeFailure instanceof SessionReferenceError) return new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The rejected prompt receipt could not be persisted');
+      throw writeFailure;
+    }
+    return error;
+  }
+
   async setMode(sessionId: string, mode: 'main' | 'plan' | 'vibe') {
     this.ensureOpen();
     this.assertWritable(sessionId);

@@ -51,16 +51,6 @@ claim that the carried-over bodies have been type-verified.
 - **Solution:** convert the retained modules by owner with real types and existing runtime tests, removing each path from the explicit list. Preserve the isolated-space release exclusion and Canonical/Host boundaries.
 - **Cost:** a separate server migration rather than mechanical renames or broad guard exemptions.
 
-## Interrupted sends lack durable Canonical receipts
-
-- **Where:** Canonical prompt submission and `packages/ui/src/sync/send-failure-classification.ts`.
-- **Added:** 2026-11-20
-- **Priority:** worth-doing
-- **Problem:** losing the response does not prove whether a prompt was accepted; there is no durable receipt query keyed by the caller's correlation/idempotency ID.
-- **Impact:** an unconfirmed send must remain pending. Automatically restoring its draft can duplicate an accepted turn.
-- **Solution:** persist Canonical interrupted-send receipts keyed by caller correlation/idempotency ID and expose authoritative reconciliation. Keep unconfirmed sends pending without auto-restore until then.
-- **Cost:** Agent Contract, service persistence, retry semantics and UI reconciliation tests.
-
 ## Chat transcript still renders through ChatContainer instead of upstream ChatViewport
 
 - **Where:** `packages/ui/src/components/chat/ChatContainer.tsx`, `MessageList.tsx`, `ChatMessage.tsx`, `message/MessageBody.tsx`, `message/parts/ToolPart.tsx`; upstream `column/ChatViewport.tsx`, `timeline/*`, `message/body/*`, `message/parts/toolRow/*`

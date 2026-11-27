@@ -258,4 +258,110 @@ describe('real SQLite direct command admission', () => {
     await expect(fixture.service.send('session-a', promptFor())).rejects.toThrow('native disconnected');
     expect(fixture.nativeCalls).toHaveLength(1);
   });
+
+  it('expires accepted rows 24 hours after acceptance and dispatches a stale key anew', async () => {
+    const fixture = await makeHarness();
+    const request = promptFor();
+    await fixture.service.send('session-a', request, 'expiring-command');
+    expect(fixture.nativeCalls).toHaveLength(1);
+    const db = new DatabaseSync(fixture.state.databasePath);
+    try {
+      const stale = Date.now() - 24 * 60 * 60 * 1000 - 1000;
+      db.prepare('UPDATE host_direct_command SET created_at = ? WHERE command_id = ?').run(stale, 'expiring-command');
+    } finally { db.close(); }
+    // The replay window is closed: the same key admits again instead of
+    // answering a response older than the Gateway's 24 hour retention.
+    await fixture.service.send('session-a', request, 'expiring-command');
+    expect(fixture.nativeCalls).toHaveLength(2);
+  });
+
+  it('keeps accepted rows inside the 24 hour window replayable', async () => {
+    const fixture = await makeHarness();
+    const request = promptFor();
+    const first = await fixture.service.send('session-a', request, 'fresh-command');
+    const db = new DatabaseSync(fixture.state.databasePath);
+    try {
+      const recent = Date.now() - 23 * 60 * 60 * 1000;
+      db.prepare('UPDATE host_direct_command SET created_at = ? WHERE command_id = ?').run(recent, 'fresh-command');
+    } finally { db.close(); }
+    await expect(fixture.service.send('session-a', request, 'fresh-command')).resolves.toEqual(first);
+    expect(fixture.nativeCalls).toHaveLength(1);
+  });
+
+  it('never expires pending rows: an uncertain acceptance stays ambiguous past the window', async () => {
+    const fixture = await makeHarness();
+    const scope = scopeFor('session-a');
+    const request = promptFor();
+    await fixture.state.directCommandAdmissionStore.claim(scope, 'stale-pending', 'send', request);
+    const db = new DatabaseSync(fixture.state.databasePath);
+    try {
+      const stale = Date.now() - 48 * 60 * 60 * 1000;
+      db.prepare('UPDATE host_direct_command SET created_at = ? WHERE command_id = ?').run(stale, 'stale-pending');
+    } finally { db.close(); }
+    await expectAdmissionError(fixture.state.directCommandAdmissionStore.claim(scope, 'stale-pending', 'send', request), 409, 'COMMAND_IN_FLIGHT');
+    expect(fixture.nativeCalls).toHaveLength(0);
+  });
+
+  it('sweeps expired accepted rows on open without touching pending or fresh rows', async () => {
+    const first = await makeHarness();
+    const request = promptFor();
+    await first.service.send('session-a', request, 'old-accepted');
+    await first.state.directCommandAdmissionStore.claim(scopeFor('session-a'), 'old-pending', 'send', request);
+    const db = new DatabaseSync(first.state.databasePath);
+    try {
+      const stale = Date.now() - 25 * 60 * 60 * 1000;
+      db.prepare('UPDATE host_direct_command SET created_at = ?').run(stale);
+    } finally { db.close(); }
+    expect(countAdmissionRows(first.state)).toBe(2);
+    await first.close();
+    // Reopening the same data dir sweeps the expired accepted row; the pending
+    // row survives because expiry never applies to uncertain acceptance.
+    const second = await makeHarness({ dataDir: first.dataDir });
+    expect(countAdmissionRows(second.state)).toBe(1);
+    await expectAdmissionError(second.state.directCommandAdmissionStore.claim(scopeFor('session-a'), 'old-pending', 'send', request), 409, 'COMMAND_IN_FLIGHT');
+    // The swept key admits as a fresh command rather than replaying.
+    await second.service.send('session-a', request, 'old-accepted');
+    expect(second.nativeCalls).toHaveLength(1);
+  });
+
+  it('release deletes a still-pending claim, leaves accepted rows untouched, and tolerates an absent key', async () => {
+    const fixture = await makeHarness();
+    const scope = scopeFor('session-a');
+    const request = promptFor();
+    const readRow = (commandId) => {
+      const db = new DatabaseSync(fixture.state.databasePath);
+      try { return db.prepare('SELECT state FROM host_direct_command WHERE command_id = ?').get(commandId); } finally { db.close(); }
+    };
+
+    await fixture.state.directCommandAdmissionStore.claim(scope, 'release-pending', 'send', request);
+    expect(readRow('release-pending')?.state).toBe('pending');
+    await fixture.state.directCommandAdmissionStore.release(scope, 'release-pending');
+    expect(readRow('release-pending')).toBeUndefined();
+    await expect(fixture.service.send('session-a', request, 'release-pending')).resolves.toMatchObject({ run: { sessionId: 'session-a' } });
+
+    await fixture.service.send('session-a', request, 'release-accepted');
+    expect(readRow('release-accepted')?.state).toBe('accepted');
+    await fixture.state.directCommandAdmissionStore.release(scope, 'release-accepted');
+    expect(readRow('release-accepted')?.state).toBe('accepted');
+    const calls = fixture.nativeCalls.length;
+    await fixture.service.send('session-a', request, 'release-accepted');
+    expect(fixture.nativeCalls.length).toBe(calls);
+
+    await fixture.state.directCommandAdmissionStore.release(scope, 'release-absent');
+    expect(readRow('release-absent')).toBeUndefined();
+  });
+
+  it('pre-migration rows without a timestamp are never swept', async () => {
+    const first = await makeHarness();
+    const request = promptFor();
+    const acknowledgment = await first.service.send('session-a', request, 'legacy-row');
+    const db = new DatabaseSync(first.state.databasePath);
+    try {
+      db.prepare('UPDATE host_direct_command SET created_at = 0 WHERE command_id = ?').run('legacy-row');
+    } finally { db.close(); }
+    await first.close();
+    const second = await makeHarness({ dataDir: first.dataDir });
+    await expect(second.service.send('session-a', request, 'legacy-row')).resolves.toEqual(acknowledgment);
+    expect(second.nativeCalls).toHaveLength(0);
+  });
 });

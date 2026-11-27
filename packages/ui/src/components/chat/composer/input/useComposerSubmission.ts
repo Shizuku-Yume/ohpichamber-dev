@@ -47,6 +47,7 @@ import { useLinkedReferenceDrafts } from '../../composer/linkedReferenceDrafts';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useInputStore } from '@/sync/input-store';
 import * as sessionActions from '@/sync/session-actions';
+import { sendReconciliationOutcome } from '@/sync/send-reconciliation';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
@@ -777,10 +778,25 @@ export function useComposerSubmission({
             updateLinkedReferencesFor(referenceOwner, (current) => current.filter((reference) => !sentKeys.has(composerReferenceKey(reference))));
         }).catch((error: unknown) => {
             transferDraftReferences();
+            const adopted = error instanceof sessionActions.AmbiguousSendAdoptedError;
             handleComposerSendFailure(error, {
                 allAttachments, chatDraftIdentity, restoreConsumedDrafts, restoreComposerText, t,
                 notifyError: (message) => { if (isAttachmentOwnerCurrent()) toast.error(message); },
+                reconciliationAdopted: adopted,
             });
+            if (adopted && error instanceof sessionActions.AmbiguousSendAdoptedError && error.correlationId) {
+                const receiptSessionId = error.sessionId ?? null;
+                const outcome = receiptSessionId ? sendReconciliationOutcome(receiptSessionId, error.correlationId) : null;
+                void outcome?.then((resolution) => {
+                    if (resolution.outcome !== 'rejected' || !isAttachmentOwnerCurrent()) return;
+                    restoreConsumedDrafts();
+                    restoreComposerText();
+                    if (allAttachments.length > 0) {
+                        useInputStore.getState().restoreAttachedFiles(allAttachments, chatDraftIdentity);
+                    }
+                    toast.error((resolution.receipt?.outcome === 'rejected' ? resolution.receipt.detail.trim() : '') || t('chat.chatInput.toast.messageSendFailed'));
+                });
+            }
         });
 
         if (!isMobile) {

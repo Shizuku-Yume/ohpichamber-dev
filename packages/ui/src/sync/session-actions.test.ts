@@ -24,8 +24,9 @@ import {
   getSessionLastAssistantModel, getSessionLiveActivity, patchSessionMetadata,
   moveSessionToDirectory, reconcileExternallyDeletedSession, refetchSessionMessages, replyToForm, revertToMessage,
   respondToPermission, sendMessage, setActionRefs, setSessionWorkState, optimisticSend, setOptimisticRefs,
-  unarchiveSession, unarchiveSessions, updateSessionTitle, setLinkedIssue, addLinkedIssues,
+  unarchiveSession, unarchiveSessions, updateSessionTitle, setLinkedIssue, addLinkedIssues, AmbiguousSendAdoptedError,
 } from "./session-actions"
+import { resetSendReconciliationForTests, sendReconciliationOutcome, setSendReconciliationTestClock } from "./send-reconciliation"
 import type { LinkedIssue } from "@/lib/linkedIssues"
 
 const originalRuntime = getRuntimeKey()
@@ -72,6 +73,16 @@ const unarchiveRequestSchema = z.object({ ids: z.array(z.string()) })
 
 beforeEach(() => {
   switchRuntimeEndpoint({ apiBaseUrl: "https://actions.test", runtimeKey: "actions" })
+  setSendReconciliationTestClock((() => {
+    let virtualNow = 0
+    return {
+      pollDelays: [1, 2, 4],
+      steadyDelay: 5,
+      retentionMs: 60_000,
+      sleep: async (ms) => { virtualNow += ms },
+      now: () => virtualNow,
+    }
+  })())
   resetWorkspaceDirectories()
   replaceGlobalSessionStatusById(new Map())
   resetSessionActionFailures()
@@ -96,6 +107,7 @@ beforeEach(() => {
 
 afterEach(() => {
   setOptimisticRefs(() => { }, () => { }, () => { })
+  resetSendReconciliationForTests()
   setImperativeSessionMessageLoader(null)
   loader?.dispose()
   manager.disposeAll()
@@ -1427,6 +1439,264 @@ describe("review-flow optimistic send", () => {
 
     expect(duringSend).toHaveLength(1)
     expect(store.getState().message["session-a"]).toEqual([])
+  })
+
+  test("ambiguous loss keeps the echo pending and an accepted receipt reconciles it without a duplicate", async () => {
+    const store = seed()
+    const error = new TypeError("Failed to fetch")
+    spyOn(canonicalClient, "createRun").mockRejectedValue(error)
+    const promptRequest: PromptRequest = {
+      input: { text: "Interrupted prompt", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    useOptimisticLoader(async () => nativeSnapshot("session-a", []))
+
+    const receiptQuery = spyOn(canonicalClient, "getPromptReceipt").mockImplementation(async (queriedSession, queriedCorrelation) => ({
+      status: "accepted",
+      receipt: {
+        outcome: "accepted", correlationId: queriedCorrelation, sessionId: queriedSession, operation: "send",
+        runId: "run-interrupted", acceptedAt: 10, expiresAt: 10 + 24 * 60 * 60 * 1000,
+      },
+    }))
+
+    await expect(sendMessage({
+      sessionId: "session-a",
+      directory,
+      request: promptRequest,
+      optimistic: true,
+    })).rejects.toBeInstanceOf(AmbiguousSendAdoptedError)
+
+    // The echo is still pending — nothing removed it, nothing restored.
+    const pending = store.getState().message["session-a"] ?? []
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.role).toBe("user")
+
+    // The reconciliation loop polled the receipt with the send's correlation id
+    // and reconciled through the accepted run, exactly like an acknowledged send.
+    const echoId = pending[0]!.messageId
+    const outcome = sendReconciliationOutcome("session-a", echoId)
+    expect(outcome).not.toBeNull()
+    const resolution = await outcome!
+    expect(resolution.outcome).toBe("accepted")
+    expect(receiptQuery).toHaveBeenCalled()
+    const [, queriedCorrelation] = receiptQuery.mock.calls[0] ?? []
+    expect(queriedCorrelation).toBe(pending[0]?.messageId)
+    expect(pending[0]?.messageId).toMatch(/^[0-9a-f-]{36}$/)
+
+    // The canonical turn arrives through the stream/snapshot path: the echo
+    // drops and the user message appears exactly once.
+    const interruptedRun: Run = { runId: "run-interrupted", sessionId: "session-a", status: "running", origin: "host", createdAt: 1 }
+    const canonical = canonicalUserMessage("session-a", "canonical-interrupted-user", "Interrupted prompt", 10)
+    const snapshot = snapshotWithRun(interruptedRun, canonical)
+    store.setState((state) => ({
+      message: { ...state.message, "session-a": [...(state.message["session-a"] ?? []), canonical] },
+      snapshot: { ...state.snapshot, "session-a": snapshot },
+    }))
+    expect(store.getState().message["session-a"]).toEqual([canonical])
+  })
+
+  test("a rejected receipt removes the pending echo through the receipt path", async () => {
+    const store = seed()
+    spyOn(canonicalClient, "createRun").mockRejectedValue(new TypeError("Failed to fetch"))
+    const promptRequest: PromptRequest = {
+      input: { text: "Refused prompt", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    useOptimisticLoader(async () => nativeSnapshot("session-a", []))
+    const receiptQuery = spyOn(canonicalClient, "getPromptReceipt").mockImplementation(async (queriedSession, queriedCorrelation) => ({
+      status: "rejected",
+      receipt: {
+        outcome: "rejected", correlationId: queriedCorrelation, sessionId: queriedSession, operation: "send",
+        code: "RUN_ACTIVE", detail: "A run is already active in this session",
+        rejectedAt: 10, expiresAt: 10 + 24 * 60 * 60 * 1000,
+      },
+    }))
+
+    await expect(sendMessage({
+      sessionId: "session-a",
+      directory,
+      request: promptRequest,
+      optimistic: true,
+    })).rejects.toBeInstanceOf(AmbiguousSendAdoptedError)
+
+    // The first receipt poll precedes any backoff, so the loop may already
+    // have settled: the echo id comes from the query itself, not the echo.
+    const resolution = await sendReconciliationOutcome("session-a", receiptQuery.mock.calls[0]?.[1] ?? "")!
+    expect(resolution.outcome).toBe("rejected")
+    expect(store.getState().message["session-a"] ?? []).toEqual([])
+  })
+
+  test("an unknown receipt leaves the echo pending and nothing is restored or removed", async () => {
+    const store = seed()
+    spyOn(canonicalClient, "createRun").mockRejectedValue(new TypeError("Failed to fetch"))
+    const promptRequest: PromptRequest = {
+      input: { text: "Maybe accepted prompt", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    useOptimisticLoader(async () => nativeSnapshot("session-a", []))
+    spyOn(canonicalClient, "getPromptReceipt").mockImplementation(async (queriedSession, queriedCorrelation) => ({
+      status: "unknown", correlationId: queriedCorrelation, sessionId: queriedSession,
+    }))
+
+    await expect(sendMessage({
+      sessionId: "session-a",
+      directory,
+      request: promptRequest,
+      optimistic: true,
+    })).rejects.toBeInstanceOf(AmbiguousSendAdoptedError)
+
+    // Several poll cycles pass: the echo is still there and nothing restored.
+    for (let turn = 0; turn < 30; turn += 1) await Promise.resolve()
+    expect(store.getState().message["session-a"]).toHaveLength(1)
+  })
+
+  test("a definite refusal removes the echo and never queries the receipt", async () => {
+    const store = seed()
+    spyOn(canonicalClient, "createRun").mockRejectedValue(new CanonicalApiError({
+      type: "urn:ohpichamber:problem:RUN_ACTIVE", title: "Run active", status: 409,
+      detail: "A run is already active in this session", code: "RUN_ACTIVE", retryable: false,
+    }))
+    const promptRequest: PromptRequest = {
+      input: { text: "Definite refusal", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    useOptimisticLoader(async () => nativeSnapshot("session-a", []))
+    const receiptQuery = spyOn(canonicalClient, "getPromptReceipt")
+
+    await expect(sendMessage({
+      sessionId: "session-a",
+      directory,
+      request: promptRequest,
+      optimistic: true,
+    })).rejects.toBeInstanceOf(CanonicalApiError)
+
+    expect(store.getState().message["session-a"]).toEqual([])
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
+    expect(receiptQuery).not.toHaveBeenCalled()
+  })
+
+  test("mints a UUIDv4 correlation id passed as the idempotency key for every send mode", async () => {
+    seed()
+    const mintRun: Run = { runId: "run-minted", sessionId: "session-a", status: "running", origin: "host", createdAt: 1 }
+    const create = spyOn(canonicalClient, "createRun").mockResolvedValue({ run: mintRun })
+    const steer = spyOn(canonicalClient, "steer").mockResolvedValue({ sessionId: "session-a", runId: mintRun.runId, acceptedAt: 2 })
+    const follow = spyOn(canonicalClient, "followUp").mockResolvedValue({ sessionId: "session-a", followUpId: "follow-a", acceptedAt: 2 })
+    const promptRequest: PromptRequest = {
+      input: { text: "Keyed prompt", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+    await sendMessage({ sessionId: "session-a", directory, request: promptRequest })
+    await sendMessage({ sessionId: "session-a", request: promptRequest, mode: "steer" })
+    await sendMessage({ sessionId: "session-a", request: promptRequest, mode: "follow-up" })
+
+    const createKey = create.mock.calls[0]?.[2]
+    const steerKey = steer.mock.calls[0]?.[2]
+    const followKey = follow.mock.calls[0]?.[2]
+    expect(createKey).toMatch(uuid)
+    expect(steerKey).toMatch(uuid)
+    expect(followKey).toMatch(uuid)
+    // Each logical send owns a fresh key.
+    expect(new Set([createKey, steerKey, followKey]).size).toBe(3)
+  })
+
+  test("a verified 409 COMMAND_IN_FLIGHT refusal is adopted: echo stays, receipt polled, nothing removed", async () => {
+    const store = seed()
+    spyOn(canonicalClient, "createRun").mockRejectedValue(new CanonicalApiError({
+      type: "urn:ohpichamber:problem:COMMAND_IN_FLIGHT", title: "Command in flight", status: 409,
+      detail: "Command acceptance is uncertain; it will not be dispatched again", code: "COMMAND_IN_FLIGHT", retryable: false,
+    }))
+    const promptRequest: PromptRequest = {
+      input: { text: "Uncertain prompt", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    useOptimisticLoader(async () => nativeSnapshot("session-a", []))
+    const receiptQuery = spyOn(canonicalClient, "getPromptReceipt").mockImplementation(async (queriedSession, queriedCorrelation) => ({
+      status: "unknown", correlationId: queriedCorrelation, sessionId: queriedSession,
+    }))
+
+    await expect(sendMessage({
+      sessionId: "session-a",
+      directory,
+      request: promptRequest,
+      optimistic: true,
+    })).rejects.toBeInstanceOf(AmbiguousSendAdoptedError)
+
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
+    expect(receiptQuery).toHaveBeenCalled()
+    expect(store.getState().message["session-a"]).toHaveLength(1)
+  })
+
+  test("an ambiguous steer failure is adopted without echo or draft restore and polls its receipt", async () => {
+    seed()
+    const steer = spyOn(canonicalClient, "steer").mockRejectedValue(new TypeError("Failed to fetch"))
+    const promptRequest: PromptRequest = {
+      input: { text: "Steer input", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    const receiptQuery = spyOn(canonicalClient, "getPromptReceipt").mockImplementation(async (queriedSession, queriedCorrelation) => ({
+      status: "accepted",
+      receipt: {
+        outcome: "accepted", correlationId: queriedCorrelation, sessionId: queriedSession, operation: "steer",
+        runId: "run-active", acceptedAt: 10, expiresAt: 10 + 24 * 60 * 60 * 1000,
+      },
+    }))
+
+    let caught: unknown
+    await sendMessage({ sessionId: "session-a", directory, request: promptRequest, mode: "steer" }).catch((error) => { caught = error })
+    if (!(caught instanceof AmbiguousSendAdoptedError)) throw new Error("expected an adopted ambiguous send")
+    expect(caught.sessionId).toBe("session-a")
+    const correlationId = caught.correlationId!
+    expect(steer.mock.calls[0]?.[2]).toBe(correlationId)
+    const resolution = await sendReconciliationOutcome("session-a", correlationId)!
+    expect(resolution.outcome).toBe("accepted")
+    expect(receiptQuery).toHaveBeenCalled()
+  })
+
+  test("a rejected steer receipt surfaces through the reconciliation outcome without touching the transcript", async () => {
+    const store = seed()
+    const existing = canonicalUserMessage("session-a", "existing", "Earlier prompt", 1)
+    store.setState({ message: { "session-a": [existing] } })
+    spyOn(canonicalClient, "followUp").mockRejectedValue(new TypeError("Failed to fetch"))
+    const promptRequest: PromptRequest = {
+      input: { text: "Follow-up input", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    spyOn(canonicalClient, "getPromptReceipt").mockImplementation(async (queriedSession, queriedCorrelation) => ({
+      status: "rejected",
+      receipt: {
+        outcome: "rejected", correlationId: queriedCorrelation, sessionId: queriedSession, operation: "followUp",
+        code: "RUN_NOT_FOUND", detail: "The session has no active run",
+        rejectedAt: 10, expiresAt: 10 + 24 * 60 * 60 * 1000,
+      },
+    }))
+
+    let caught: unknown
+    await sendMessage({ sessionId: "session-a", directory, request: promptRequest, mode: "follow-up" }).catch((error) => { caught = error })
+    if (!(caught instanceof AmbiguousSendAdoptedError)) throw new Error("expected an adopted ambiguous send")
+    const correlationId = caught.correlationId!
+    const resolution = await sendReconciliationOutcome("session-a", correlationId)!
+    expect(resolution.outcome).toBe("rejected")
+    expect(resolution.receipt?.outcome).toBe("rejected")
+    expect(store.getState().message["session-a"]).toEqual([existing])
+  })
+
+  test("a definite steer refusal propagates without any receipt query", async () => {
+    seed()
+    spyOn(canonicalClient, "steer").mockRejectedValue(new CanonicalApiError({
+      type: "urn:ohpichamber:problem:RUN_NOT_FOUND", title: "No active run", status: 404,
+      detail: "The session has no active run", code: "RUN_NOT_FOUND", retryable: false,
+    }))
+    const promptRequest: PromptRequest = {
+      input: { text: "Steer input", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+    const receiptQuery = spyOn(canonicalClient, "getPromptReceipt")
+
+    await expect(sendMessage({ sessionId: "session-a", directory, request: promptRequest, mode: "steer" })).rejects.toBeInstanceOf(CanonicalApiError)
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
+    expect(receiptQuery).not.toHaveBeenCalled()
   })
 })
 

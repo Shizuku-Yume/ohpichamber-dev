@@ -58,6 +58,7 @@ import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import {
   createSession as createSessionAction,
   sendMessage as sendMessageAction,
+  AmbiguousSendAdoptedError,
   optimisticAdd,
   optimisticRemove,
   type SessionCreateSelection,
@@ -2032,7 +2033,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       })
       assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
     })().catch((error) => {
-      if (createsDraftSession) {
+      if (createsDraftSession && !(error instanceof AmbiguousSendAdoptedError)) {
         if (temporaryDraftSessionId && temporaryCorrelationId) {
           optimisticRemove({
             sessionId: temporaryDraftSessionId,

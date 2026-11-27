@@ -36,3 +36,27 @@ test('Escape exits the current parent panel', async () => {
     await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(onExit).toHaveBeenCalledTimes(1);
 });
+test('injecting an aside answer keys the steer and the fallback run with distinct command ids', async () => {
+    const { spyOn } = await import('bun:test');
+    const { canonicalClient } = await import('@/api/canonicalClient');
+    const steer = spyOn(canonicalClient, 'steer').mockRejectedValue(Object.assign(new Error('RUN_NOT_ACTIVE'), { code: 'RUN_NOT_ACTIVE' }));
+    const createRun = spyOn(canonicalClient, 'createRun').mockResolvedValue({ run: { runId: 'run-inject', sessionId: 'parent', status: 'running', origin: 'host', createdAt: 1 } });
+    try {
+        await render({ ...panel, ephemeralText: 'Answer. <inject>Do the thing</inject>' });
+        const buttons = [...container.querySelectorAll('button')];
+        const inject = buttons.find((button) => button.textContent?.includes('Inject into Chat'));
+        if (!inject) throw new Error('Expected the inject control');
+        await act(async () => inject.click());
+        expect(steer).toHaveBeenCalledTimes(1);
+        expect(createRun).toHaveBeenCalledTimes(1);
+        const steerCommandId = steer.mock.calls[0]?.[2];
+        const runCommandId = createRun.mock.calls[0]?.[2];
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+        expect(steerCommandId).toMatch(uuid);
+        expect(runCommandId).toMatch(uuid);
+        expect(steerCommandId).not.toBe(runCommandId);
+    } finally {
+        steer.mockRestore();
+        createRun.mockRestore();
+    }
+});

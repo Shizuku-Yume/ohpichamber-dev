@@ -4,11 +4,27 @@ import { handleSessionFoldersChanged, handleSessionFoldersStreamReady } from '@/
 
 const RETURN_READ_THROTTLE_MS = 2_000;
 
-export const subscribeSessionFoldersSync = (runtimeKey: string): (() => void) => {
-  const unsubscribe = subscribeOpenchamberEvents((event) => {
+type SessionFoldersSyncHandlers = {
+  onFoldersChanged: (updatedAt: number) => void;
+  onStreamReady: () => void;
+};
+
+type SessionFoldersSyncDeps = SessionFoldersSyncHandlers & {
+  subscribeEvents?: (listener: Parameters<typeof subscribeOpenchamberEvents>[0]) => () => void;
+};
+
+const storeHandlers: SessionFoldersSyncHandlers = {
+  onFoldersChanged: handleSessionFoldersChanged,
+  onStreamReady: handleSessionFoldersStreamReady,
+};
+
+export const subscribeSessionFoldersSync = (runtimeKey: string, deps: SessionFoldersSyncDeps = storeHandlers): (() => void) => {
+  const handlers: SessionFoldersSyncHandlers = deps;
+  const subscribeEvents = deps.subscribeEvents ?? subscribeOpenchamberEvents;
+  const unsubscribe = subscribeEvents((event) => {
     if (runtimeKey !== getRuntimeKey()) return;
-    if (event.type === 'session-folders-changed') handleSessionFoldersChanged(event.updatedAt);
-    else if (event.type === 'event-stream-ready') handleSessionFoldersStreamReady();
+    if (event.type === 'session-folders-changed') handlers.onFoldersChanged(event.updatedAt);
+    else if (event.type === 'event-stream-ready') handlers.onStreamReady();
   });
 
   let lastReturnRead = Number.NEGATIVE_INFINITY;
@@ -17,7 +33,7 @@ export const subscribeSessionFoldersSync = (runtimeKey: string): (() => void) =>
     const now = Date.now();
     if (event.type !== 'online' && now - lastReturnRead < RETURN_READ_THROTTLE_MS) return;
     lastReturnRead = now;
-    handleSessionFoldersStreamReady();
+    handlers.onStreamReady();
   };
   document.addEventListener('visibilitychange', onReturn);
   const windowSignals = ['focus', 'pageshow', 'online', 'openchamber:system-resume'];
