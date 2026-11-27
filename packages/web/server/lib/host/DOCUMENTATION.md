@@ -302,7 +302,7 @@ The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/pe
   - `GET /health`: Health snapshot, uptime, version, runtime name, compatibility capabilities, and server ID.
   - `GET /api/version`: Basic version and server start metadata.
   - `POST /api/system/shutdown`: Authenticated graceful server shutdown (`exitProcess: true`).
-  - `POST /api/system/dev-shutdown`: Development escape hatch; terminates dev process group and loopback preview ports when `OPENCHAMBER_DEV_SHUTDOWN=true`.
+  - `POST /api/system/dev-shutdown`: Development escape hatch; terminates dev process group and loopback preview ports when `OPENCHAMBER_DEV_SHUTDOWN=true`. It passes the same shutdown authentication as `POST /api/system/shutdown` (tunnel session for tunnel-scoped requests, otherwise the UI session or client bearer token); with no auth controller configured only a loopback socket peer is admitted.
   - `GET /api/system/info`: Process ID, runtime name, version, and start time; includes active port and tunnel URL when request is authorized.
   - `GET /api/system/free-port`: Allocates a best-effort free loopback TCP port hint.
 - `registerAuthAndAccessRoutes(app, dependencies)`:

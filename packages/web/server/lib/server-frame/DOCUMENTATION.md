@@ -14,6 +14,21 @@ This module owns the frame around the feature runtimes: CLI options and the dire
 
 ## Decisions
 
+### Why shutdown routes bind the same auth as the `/api` gate plus a loopback floor
+
+`registerServerStatusRoutes` runs before the `/api` auth gate is mounted, so
+`POST /api/system/shutdown` and `POST /api/system/dev-shutdown` cannot rely on
+middleware ordering; each invokes `requireShutdownAuth` inside its own handler
+and only answers `{ ok: true }` after it passes. A tunnel-scoped request
+answers to the tunnel session, everything else to the UI session or client
+bearer token. When no auth controller is configured the control passes through,
+so the socket peer itself becomes the floor: a non-loopback peer is refused,
+because an unauthenticated kill of the host process group must never be
+reachable from the network. The dev shutdown keeps its opt-in environment flag
+and same-origin check ahead of the auth, and the peer check never trusts
+forwarding headers — a reverse proxy or relay that terminates elsewhere
+terminates on a non-loopback socket and is refused unless it authenticates.
+
 ### Why static assets and service workers use different cache lifetimes
 
 Vite asset filenames identify their content, so immutable caching avoids revalidation round trips for lazy chunks over remote connections. Service workers need short-lived responses so clients, including iOS, can discover updates.

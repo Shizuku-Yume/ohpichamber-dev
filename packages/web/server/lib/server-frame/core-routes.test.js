@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { createTunnelAuth } from '../tunnels/tunnel-auth.js';
+import { isString } from '../shared/object-guards.js';
 import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerServerStatusRoutes } from './core-routes.js';
 
 describe('core-routes', () => {
@@ -726,6 +727,140 @@ describe('core-routes', () => {
 
     expect(requireAuth).toHaveBeenCalledTimes(2);
   });
+  describe('/api/system/dev-shutdown', () => {
+    const devShutdownProcess = () => ({
+      env: { OPENCHAMBER_DEV_SHUTDOWN: 'true' },
+      platform: process.platform,
+      pid: process.pid,
+      ppid: process.ppid,
+      kill: vi.fn(),
+      exit: vi.fn(),
+    });
+
+    const createDevShutdownApp = (overrides = {}) => {
+      const app = express();
+      // The header is a test-only peer override: a non-loopback attacker cannot
+      // reach this hook, because it only exists in the test app composition.
+      app.use((req, _res, next) => {
+        const peer = req.headers['x-test-remote-address'];
+        if (isString(peer) && peer) {
+          Object.defineProperty(req.socket, 'remoteAddress', { value: peer, configurable: true });
+        }
+        next();
+      });
+      const dependencies = {
+        process: devShutdownProcess(),
+        serverStartedAt: '2026-01-01T00:00:00.000Z',
+        gracefulShutdown: vi.fn(async () => { }),
+        getHealthSnapshot: () => ({ status: 'ok' }),
+        openchamberVersion: '1.0.0',
+        runtimeName: 'test',
+        express,
+        ...overrides,
+      };
+      registerServerStatusRoutes(app, dependencies);
+      return { app, dependencies };
+    };
+
+    const postDevShutdown = (app, peer) => {
+      const pending = request(app)
+        .post('/api/system/dev-shutdown')
+        .set('Host', '127.0.0.1:2606')
+        .set('Origin', 'http://127.0.0.1:2606')
+        .send({});
+      return peer ? pending.set('x-test-remote-address', peer) : pending;
+    };
+
+    it('refuses an unauthenticated request with matching Origin and Host when auth is configured', async () => {
+      const { app, dependencies } = createDevShutdownApp({
+        tunnelAuthController: {
+          classifyRequestScope: () => 'local',
+          requireTunnelSession: vi.fn(),
+        },
+        uiAuthController: {
+          requireAuth: vi.fn((_req, res) => res.status(401).json({ error: 'Unauthorized' })),
+        },
+      });
+
+      await postDevShutdown(app).expect(401, { error: 'Unauthorized' });
+
+      expect(dependencies.uiAuthController.requireAuth).toHaveBeenCalledTimes(1);
+      expect(dependencies.gracefulShutdown).not.toHaveBeenCalled();
+      expect(dependencies.process.kill).not.toHaveBeenCalled();
+      expect(dependencies.process.exit).not.toHaveBeenCalled();
+    });
+
+    // `gracefulShutdown` runs inside the fire-and-forget kill sequence after the
+    // response, behind real lsof/ps probes; the assertion waits on the effect
+    // itself instead of guessing how long those probes take.
+    const expectGracefulShutdownCalled = async (shutdown) => {
+      await vi.waitFor(() => expect(shutdown).toHaveBeenCalledWith({ exitProcess: false }));
+    };
+
+    it('serves an authenticated request when the flag is set, without killing the test process', async () => {
+      const { app, dependencies } = createDevShutdownApp({
+        tunnelAuthController: {
+          classifyRequestScope: () => 'local',
+          requireTunnelSession: vi.fn(),
+        },
+        uiAuthController: {
+          requireAuth: vi.fn((_req, _res, next) => next()),
+        },
+      });
+
+      await postDevShutdown(app).expect(200, { ok: true });
+
+      expect(dependencies.uiAuthController.requireAuth).toHaveBeenCalledTimes(1);
+      await expectGracefulShutdownCalled(dependencies.gracefulShutdown);
+    });
+
+    it('requires tunnel auth for a tunneled dev-shutdown request', async () => {
+      const { app, dependencies } = createDevShutdownApp({
+        tunnelAuthController: {
+          classifyRequestScope: () => 'tunnel',
+          requireTunnelSession: vi.fn((_req, res) => res.status(401).json({ error: 'Tunnel auth required' })),
+        },
+        uiAuthController: {
+          requireAuth: vi.fn((_req, _res, next) => next()),
+        },
+      });
+
+      await postDevShutdown(app).expect(401, { error: 'Tunnel auth required' });
+
+      expect(dependencies.tunnelAuthController.requireTunnelSession).toHaveBeenCalledTimes(1);
+      expect(dependencies.uiAuthController.requireAuth).not.toHaveBeenCalled();
+      expect(dependencies.gracefulShutdown).not.toHaveBeenCalled();
+      expect(dependencies.process.kill).not.toHaveBeenCalled();
+    });
+
+    it('refuses a non-loopback peer when no auth is configured', async () => {
+      const { app, dependencies } = createDevShutdownApp();
+
+      await postDevShutdown(app, '203.0.113.10').expect(403);
+
+      expect(dependencies.gracefulShutdown).not.toHaveBeenCalled();
+      expect(dependencies.process.kill).not.toHaveBeenCalled();
+      expect(dependencies.process.exit).not.toHaveBeenCalled();
+    });
+
+    it('admits a loopback peer when no auth is configured', async () => {
+      const { app, dependencies } = createDevShutdownApp();
+
+      await postDevShutdown(app).expect(200, { ok: true });
+
+      await expectGracefulShutdownCalled(dependencies.gracefulShutdown);
+    });
+
+    it('still refuses every caller when the dev shutdown flag is unset', async () => {
+      const { app, dependencies } = createDevShutdownApp();
+      dependencies.process.env.OPENCHAMBER_DEV_SHUTDOWN = '';
+
+      await postDevShutdown(app).expect(403, { ok: false, error: 'Dev shutdown is disabled' });
+
+      expect(dependencies.gracefulShutdown).not.toHaveBeenCalled();
+    });
+  });
+
 });
 
 describe('client auth routes', () => {
