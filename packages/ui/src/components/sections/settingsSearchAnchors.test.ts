@@ -245,6 +245,8 @@ const OMP_PLACEMENT_PAGE_MAP = new Map<string, SettingsPageSlug>([
   ['tools', 'tools'],
   ['usage', 'usage'],
   ['omp', 'omp'],
+  ['providers', 'providers'],
+  ['voice', 'voice'],
 ]);
 
 function readOmpPageSettingOwners(): Map<string, SettingsPageSlug> {

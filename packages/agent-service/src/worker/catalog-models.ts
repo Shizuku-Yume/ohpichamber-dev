@@ -475,8 +475,12 @@ function toModelOverrideInput(
  return result;
 }
 
+function hasUsableTokenLimits(native: NativeCatalogModel): native is NativeCatalogModel & { contextWindow: number; maxTokens: number } {
+ return native.contextWindow !== null && native.maxTokens !== null && native.contextWindow > 0 && native.maxTokens > 0;
+}
+
 export function publicModel(native: NativeCatalogModel, configured?: Model, enabled?: boolean): Model {
- if (native.contextWindow === null || native.maxTokens === null || native.contextWindow <= 0 || native.maxTokens <= 0) {
+ if (!hasUsableTokenLimits(native)) {
   throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Native model has no published usable token limits');
  }
  const modalities: Model['modalities'] = [...native.input];
@@ -744,7 +748,8 @@ export class NativeModels {
   // from (`getAvailable()`), so the composer never offers a model the session
   // cannot start with. Image generators are a separate native kind and are asked
   // for by kind instead of being filtered out of that pool by token limits.
-  const chatModels = this.context.modelRegistry.getAvailable().filter(model => !Object.hasOwn(RETIRED_PROVIDER_IDS, model.provider));
+  const chatModels = this.context.modelRegistry.getAvailable()
+   .filter(model => !Object.hasOwn(RETIRED_PROVIDER_IDS, model.provider) && hasUsableTokenLimits(model));
   const allowedChat = new Set(filterAvailableModelsByEnabledPatterns(chatModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
   const disabledProviders = new Set(cfgDisabledProviders.get(this.context.settings));
   const models = chatModels
@@ -905,7 +910,7 @@ export class NativeModels {
     ...Object.keys(state.metadata.providerHeaders[providerId] ?? {}),
    ])],
    models: this.context.modelRegistry.getProviderModels(providerId)
-    .filter(model => model.contextWindow !== null && model.contextWindow > 0 && model.maxTokens !== null && model.maxTokens > 0)
+    .filter(hasUsableTokenLimits)
     .map(model => publicModel(model, state.metadata.models[modelKey({ providerId, modelId: model.id })])),
    imageModels: this.context.modelRegistry.getProviderModels(providerId)
     .filter(model => modelKind(model) === 'image')

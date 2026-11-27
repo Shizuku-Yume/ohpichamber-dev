@@ -41,6 +41,7 @@ import { useLocalTTS } from '@/hooks/useLocalTTS';
 import { disposePreviewAudio } from './voicePreviewAudio';
 import { TranscriptionPromptField } from './TranscriptionPromptField';
 import { TranscriptCorrectionRow } from './TranscriptCorrectionRow';
+import { AgentSpeechSettings } from './AgentSpeechSettings';
 import { toast } from '@/components/ui';
 import type { VoiceApiKeyKind } from '@/lib/voiceKeysApi';
 import { Spinner } from '@/components/ui/spinner';
@@ -1396,6 +1397,7 @@ export const VoiceSettings: React.FC = () => {
                     </>
                 )}
             </SettingsSection>
+            <AgentSpeechSettings />
         </>
     );
 };

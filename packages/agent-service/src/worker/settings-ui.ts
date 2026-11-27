@@ -24,8 +24,11 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'auth.unpausedProviders': 'boundary',
   'tui.renderEmbeds': 'tui-only',
   'encourageEdits': 'config-only',
+  // Internal: cache-economics tuning.
   'providers.cacheWarmingStrategy': 'config-only',
+  // Internal: cache-economics tuning.
   'providers.cacheWarmingCompactPercent': 'config-only',
+  // Internal: cache-economics tuning.
   'providers.cacheWarmingCompactTokens': 'config-only',
   'live.endpoint': 'boundary',
   'live.apiKey': 'boundary',
@@ -177,7 +180,9 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'skills.ignoredSkills': 'config-only',
   'skills.manualSkills': 'config-only',
   'skills.includeSkills': 'config-only',
+  // Duplicate of Voice page dictation controls; OMP's terminal STT never runs here.
   'stt.enabled': 'config-only',
+  // Duplicate of Voice page dictation controls; OMP's terminal STT never runs here.
   'stt.submitTrigger': 'config-only',
   'collab.relayUrl': 'boundary',
   'collab.webUrl': 'boundary',
@@ -364,11 +369,11 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'presencePenalty': 'engine',
   'repetitionPenalty': 'engine',
   'textVerbosity': 'engine',
-  'tier.openai': 'config-only',
-  'tier.anthropic': 'config-only',
-  'tier.google': 'config-only',
-  'tier.subagent': 'config-only',
-  'tier.advisor': 'config-only',
+  'tier.openai': 'providers:service-tier',
+  'tier.anthropic': 'providers:service-tier',
+  'tier.google': 'providers:service-tier',
+  'tier.subagent': 'agents:subagents',
+  'tier.advisor': 'agents:advisor',
   'retry.maxRetries': 'sessions:retry',
   'retry.maxDelayMs': 'sessions:retry',
   'retry.waitForUsageReset': 'sessions:retry',
@@ -438,29 +443,42 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'commands.enableOpencodeProject': 'config-only',
 
   // --- providers (41) ---
+  // Internal: per-provider record no generic row can draw.
   'providers.maxInFlightRequests': 'config-only',
+  // Internal: local concurrency tuning.
   'providers.ollama-cloud.maxConcurrency': 'config-only',
-  // The dedicated Web Search catalog owns these values and their revision.
+  // Duplicate of Web Search page web-search.timeout; owned by the dedicated Web Search catalog.
   'providers.webSearchTimeoutSeconds': 'config-only',
   'providers.antigravityEndpoint': 'boundary',
-  'providers.fireworksTier': 'config-only',
+  'providers.fireworksTier': 'providers:service-tier',
+  // Internal: local inference platform tuning.
   'providers.tinyModelDevice': 'config-only',
+  // Internal: local inference platform tuning.
   'providers.tinyModelDtype': 'config-only',
-  'providers.kimiApiFormat': 'config-only',
-  'providers.openaiWebsockets': 'config-only',
-  'providers.openaiResponsesWebsockets': 'config-only',
-  'providers.openaiLiveSteering': 'config-only',
-  'providers.muse-code.storeResponses': 'config-only',
-  'providers.openai-codex.daybreak': 'config-only',
+  'providers.kimiApiFormat': 'providers:protocol',
+  'providers.openaiWebsockets': 'providers:protocol',
+  'providers.openaiResponsesWebsockets': 'providers:protocol',
+  'providers.openaiLiveSteering': 'providers:protocol',
+  // Off-host data retention consent: stores prompts and outputs on Meta servers.
+  'providers.muse-code.storeResponses': 'boundary',
+  // Off-host data-use consent: OpenAI may use Daybreak Blue session content for training.
+  'providers.openai-codex.daybreak': 'boundary',
+  // Internal: cache-economics tuning.
   'providers.cacheRetention': 'config-only',
+  // Internal: cache-economics tuning.
   'providers.cacheWarming': 'config-only',
+  // Internal: watchdog tuning.
   'providers.streamFirstEventTimeoutSeconds': 'config-only',
+  // Internal: watchdog tuning.
   'providers.streamIdleTimeoutSeconds': 'config-only',
-  'providers.openrouterVariant': 'config-only',
+  'providers.openrouterVariant': 'providers:protocol',
+  // Internal: cache implementation detail.
   'provider.appendOnlyContext': 'config-only',
   'telemetry.otlpExportEnabled': 'boundary',
   'secrets.enabled': 'boundary',
+  // Duplicate: owned by the Web Search catalog.
   'exa.enabled': 'config-only',
+  // Internal: rate-limit pacing.
   'exa.searchDelayMs': 'config-only',
   'searxng.endpoint': 'boundary',
   'codexResets.minBlockedMinutes': 'omp:resets',
@@ -469,13 +487,19 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'claudeResets.minBlockedMinutes': 'omp:resets',
   'claudeResets.keepCredits': 'omp:resets',
   'claudeResets.salvageHorizonHours': 'omp:resets',
+  // No live-voice surface in the GUI.
   'live.voice': 'config-only',
-  'tts.localVoice': 'config-only',
-  'tts.localSpeed': 'config-only',
+  'tts.localVoice': 'voice:agent-speech',
+  'tts.localSpeed': 'voice:agent-speech',
+  // Terminal/host-speaker vocalization; Voice page owns browser playback.
   'speech.enabled': 'config-only',
+  // Terminal/host-speaker vocalization; Voice page owns browser playback.
   'speech.mode': 'config-only',
+  // Terminal/host-speaker vocalization; Voice page owns browser playback.
   'speech.enhanced': 'config-only',
+  // Terminal/host-speaker vocalization; Voice page owns browser playback.
   'speech.voice': 'config-only',
+  // Terminal/host-speaker vocalization; Voice page owns browser playback.
   'speech.speed': 'config-only',
   // Selecting an external URL reader can send fetched URLs to a third party.
   'providers.fetch': 'boundary',
@@ -614,6 +638,8 @@ const GUI_WRITTEN_PAGES: Readonly<Record<string, true>> = {
   omp: true,
   commands: true,
   skills: true,
+  providers: true,
+  voice: true,
 };
 
 /**
