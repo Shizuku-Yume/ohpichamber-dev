@@ -6,7 +6,7 @@
 **Files:** `.workflow/development.md`; `.workflow/done/release-hardening/closeout.md`; `.workflow/done/final-main-audit/closeout.md`; `.workflow/specs/release-hardening.md`; `.workflow/specs/final-main-audit.md`; `.workflow/tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md`
 **Read first:** `.workflow/specs/release-hardening.md`; `.workflow/specs/final-main-audit.md`; `.claude/skills/flow-verify/SKILL.md`; `.claude/skills/flow-close/SKILL.md`; `.agents/skills/chrome-devtools-cli/SKILL.md`
 **Check:** on the integration head: `bun install --frozen-lockfile && bun run brand:generate --check && bun run check && bun run type-check && bun run lint 2>&1 | tee <task tmp>/lint.log && ! grep -qE 'warning' <task tmp>/lint.log && bun run dead-code && bun run docs:validate && VITEST_MAX_WORKERS=2 bun run test && .workflow/bin/workflow validate` → every command exits 0; the rebuilt Linux AppImage passes `verify-linux-appimage` and reaches `/api/agent/v1/ready`; `task13/LIVE-REPORT.md` and `task13/FINAL-AUDIT-REPORT.md` record each W check.
-**Base commit:** 05bff088c5a711d08789ac0842faa48d42d1a39e
+**Base commit:** 383ec60edad189bf88b7f9d70e8ff9b087a8ca51
 **Status:** active
 
 - [ ] Run the full Check and record each command's output in `task13/`.

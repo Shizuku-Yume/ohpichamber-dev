@@ -337,7 +337,7 @@ await host.setMark({ sessionId }, null);
 
 Setting a target again replaces its mark, and `null` removes it. A row draws two marks at most, one per extension, and lists them all in its tooltip. On a one-line row the row's buttons cover the marks while the pointer is over it, so a click reaches a mark on two-line rows and on touch screens.
 
-A mark lives as long as your service process, so declare `service.keepRunning` and set the marks again when the service starts. A service holds up to 200 marks and changes them up to 60 times a minute. Marks ship in OhPiChamber 1.0, the fork's first release: declare `engines.openchamber` `>=1.0.0` when you use them. An upstream host that predates them ignores the key and refuses the call.
+A mark lives as long as your service process, so declare `service.keepRunning` and set the marks again when the service starts. A service holds up to 200 marks and changes them up to 60 times a minute. Marks ship in OhPiChamber 1.0.0, the fork's first release: declare `engines.openchamber` `>=1.0.0` when you use them. An upstream host that predates them ignores the key and refuses the call.
 
 ## Rows in the @ menu
 

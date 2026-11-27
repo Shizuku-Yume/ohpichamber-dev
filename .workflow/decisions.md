@@ -1,5 +1,15 @@
 # Decisions
 
+## 2026-11-28 - Shutdown routes fail closed without an auth controller
+
+- **Decided:** When no auth controller is configured, `POST /api/system/shutdown` and `POST /api/system/dev-shutdown` fail closed and refuse every peer with 403, loopback included. Production always wires the controllers, so a missing controller is a wiring defect and the one-shot kill primitive must stay closed rather than guess; the passwordless loopback case stays served because a controller exists then — `createUiAuth` is always constructed at bootstrap, and with no password configured its `requireAuth` passes the request through. No socket-peer carve-out remains on these routes, and forwarding headers never grant access or weaken the credential requirement: under an active tunnel they only feed the scope classification that selects which credential is required, and only toward stricter handling (a forwarded non-loopback address demotes the request to `unknown-public` and its tunnel-session requirement, never the reverse). Admission is decided by credentials alone.
+- **Instead of:** the loopback floor of the 2026-11-27 entry, which let an unauthenticated loopback peer kill the host process group whenever the controllers were not wired — exactly the state a wiring defect produces.
+- **Because:** an unauthenticated kill of the host process group must never be reachable, and a floor keyed on the socket peer exists to compensate for missing authentication; the correct answer to missing authentication on a kill primitive is refusal, not a weaker fallback check.
+- **Mine:** yes
+- **Revisit when:** the Host gains a unified pre-gate auth mount point, so the per-handler binding can move back into middleware.
+- **Effort:** release-hardening
+- **Supersedes:** 2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor
+
 ## 2026-11-28 - SDK example engine floors follow the fork's 1.0.0 numbering
 
 - **Decided:** every `engines.openchamber` floor in the fork names a version in the fork's own numbering, because the Host's install check compares the floor against the app version — `1.0.0` in this fork (2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only). The SDK example manifests (`agent-desk`, `wait-kit`, `notification-webhook`, `session-events-log`, `tracker-provider`, `quota-provider`, `source-control-provider`) declare `>=1.0.0` instead of the upstream-era floors `>=2.5.1` through `>=2.7.1` they inherited, since every capability those floors gated (the tracker, quota, source-control, notifications and session-events service roles, `waits`, `marks`, `login`, tool cards) ships in the fork's first release. The SDK documentation passages that advised floors "above 2.7.0" or `>=2.7.1` now state the 1.0.0 floor with the unchanged rule that a floor names the first app release shipping the capability; the English product docs and every locale copy say the same. A regression test in `packages/sdk/src/example-floors.test.ts` checks every example floor against the app version in `packages/web/package.json` through `hostMeetsOpenChamberEngine`.
@@ -35,16 +45,6 @@
 - **Mine:** yes
 - **Revisit when:** the retired surfaces are restored — the shared-page card is a recorded technical-debt item (the transcript-cutover entry in `.workflow/technical-debt.md` lists shared-page cards among the features blocked on the ChatViewport port) — and the restoration re-adds the caller and the export together, and the ledger row is removed when upstream and the fork agree again.
 - **Effort:** release-hardening
-
-## 2026-11-28 - Shutdown routes fail closed without an auth controller
-
-- **Decided:** When no auth controller is configured, `POST /api/system/shutdown` and `POST /api/system/dev-shutdown` fail closed and refuse every peer with 403, loopback included. Production always wires the controllers, so a missing controller is a wiring defect and the one-shot kill primitive must stay closed rather than guess; the passwordless loopback case stays served because a controller exists then — `createUiAuth` is always constructed at bootstrap, and with no password configured its `requireAuth` passes the request through. No socket-peer carve-out remains on these routes, and forwarding headers never grant access or weaken the credential requirement: under an active tunnel they only feed the scope classification that selects which credential is required, and only toward stricter handling (a forwarded non-loopback address demotes the request to `unknown-public` and its tunnel-session requirement, never the reverse). Admission is decided by credentials alone.
-- **Instead of:** the loopback floor of the 2026-11-27 entry, which let an unauthenticated loopback peer kill the host process group whenever the controllers were not wired — exactly the state a wiring defect produces.
-- **Because:** an unauthenticated kill of the host process group must never be reachable, and a floor keyed on the socket peer exists to compensate for missing authentication; the correct answer to missing authentication on a kill primitive is refusal, not a weaker fallback check.
-- **Mine:** yes
-- **Revisit when:** the Host gains a unified pre-gate auth mount point, so the per-handler binding can move back into middleware.
-- **Effort:** release-hardening
-- **Supersedes:** 2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor
 
 ## 2026-11-27 - Shutdown routes bind the API gate auth plus a loopback floor
 
